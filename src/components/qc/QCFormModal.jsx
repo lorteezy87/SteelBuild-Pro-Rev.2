@@ -1,51 +1,78 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-export default function QCFormModal({ projectId, onClose }) {
-  const qc = useQueryClient();
-  const [formData, setFormData] = useState({
-    project_id: projectId,
-    test_type: "Material Certificate",
-    test_date: new Date().toISOString().split("T")[0],
-    material_or_component: "",
-    location: "",
-    test_lab_or_inspector: "",
-    specification: "",
-    result: "Pass",
-    test_value: "",
-    acceptance_criteria: "",
-    quantity_tested: "1",
-    quantity_passed: "1",
-    notes: "",
-    status: "Pending",
-  });
+const emptyForm = {
+  project_id: "",
+  test_type: "Material Certificate",
+  test_date: new Date().toISOString().split("T")[0],
+  material_or_component: "",
+  location: "",
+  test_lab_or_inspector: "",
+  specification: "",
+  result: "Pass",
+  test_value: "",
+  acceptance_criteria: "",
+  quantity_tested: "1",
+  quantity_passed: "1",
+  notes: "",
+  status: "Pending",
+};
+
+/**
+ * Modal for create + edit of a quality_control_records row. Prior
+ * version only supported create and had its own inline mutation;
+ * the parent (QualityControl.jsx) was already passing `record` and
+ * `onSave`, so we now honour those to line up with the
+ * Inspections / Safety form pattern.
+ */
+export default function QCFormModal({
+  projectId,
+  record = null,        // when provided: edit mode
+  onClose,
+  onSave,               // parent's save handler — handles create vs update
+  isSaving = false,     // parent's mutation pending state
+}) {
+  const isEditing = !!record;
+  const [formData, setFormData] = useState({ ...emptyForm, project_id: projectId || "" });
+
+  useEffect(() => {
+    setFormData(
+      record
+        ? { ...emptyForm, ...record,
+            quantity_tested: String(record.quantity_tested ?? "1"),
+            quantity_passed: String(record.quantity_passed ?? "1"),
+          }
+        : { ...emptyForm, project_id: projectId || "" }
+    );
+  }, [record, projectId]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
-  });
-
-  const mutation = useMutation({
-    mutationFn: (data) =>
-      base44.entities.QualityControlRecord.create({
-        ...data,
-        quantity_tested: parseFloat(data.quantity_tested) || 1,
-        quantity_passed: parseFloat(data.quantity_passed) || 1,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["qc-records"] });
-      toast.success("Test record added");
-      onClose();
-    },
-    onError: (err) => toast.error(err.message),
+    staleTime: 5 * 60 * 1000,
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    mutation.mutate(formData);
+    if (isSaving) return;
+    // Explicit toasts so the user sees why a save was blocked —
+    // matches the Inspections / Safety form pattern.
+    if (!formData.project_id)            { toast.error("Select a project first."); return; }
+    if (!formData.test_date)             { toast.error("Test date is required.");   return; }
+    if (!formData.material_or_component?.trim()) { toast.error("Material / component is required."); return; }
+    const {
+      created_date: _cd, updated_date: _ud, created_at: _ca, updated_at: _ua,
+      is_deleted: _id, deleted_at: _da,
+      ...clean
+    } = formData;
+    onSave?.({
+      ...clean,
+      quantity_tested: parseFloat(clean.quantity_tested) || 1,
+      quantity_passed: parseFloat(clean.quantity_passed) || 1,
+    });
   };
 
   const types = [
@@ -67,7 +94,7 @@ export default function QCFormModal({ projectId, onClose }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "16px", padding: "24px", maxWidth: "700px", width: "90%", maxHeight: "90vh", overflowY: "auto" }}>
-        <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px 0", textTransform: "uppercase", letterSpacing: "0.10em" }}>Add Test Record</h2>
+        <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px 0", textTransform: "uppercase", letterSpacing: "0.10em" }}>{isEditing ? "Edit Test Record" : "Add Test Record"}</h2>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
@@ -152,7 +179,7 @@ export default function QCFormModal({ projectId, onClose }) {
 
           <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
             <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em" }}>Cancel</button>
-            <button type="submit" disabled={mutation.isPending} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "8px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: mutation.isPending ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending ? 0.5 : 1 }}>{mutation.isPending ? "Adding..." : "Add Record"}</button>
+            <button type="submit" disabled={isSaving} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "8px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.5 : 1 }}>{isSaving ? (isEditing ? "Saving..." : "Adding...") : (isEditing ? "Save Changes" : "Add Record")}</button>
           </div>
         </form>
       </div>

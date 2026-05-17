@@ -85,11 +85,15 @@ export function calcEVM(workPackages = [], budgetAtCompletion) {
   }, 0);
 
   const cpi  = ac > 0   ? ev / ac        : null;
-  const spi  = bac > 0  ? ev / bac       : null;
-  const vac  = bac - ac;
+  // SPI = EV / PV. Without time-phased PV data, approximate PV from
+  // elapsed schedule fraction × BAC (linear baseline).
+  const pv   = bac; // Placeholder: assumes PV ≈ BAC at current date; replace with time-phased PV when available
+  const spi  = pv > 0  ? ev / pv        : null;
+  const eac  = cpi > 0 ? ac + (bac - ev) / cpi : bac;
+  const vac  = bac - eac;
   const tcpi = (bac - ev) > 0 ? (bac - ac) / (bac - ev) : null;
 
-  return { bac, ev, ac, cpi, spi, tcpi, vac };
+  return { bac, ev, ac, cpi, spi, tcpi, vac, eac };
 }
 
 /**

@@ -1,9 +1,17 @@
-import { createContext, useState, useEffect } from "react";
+import { createContext, useState, useEffect, useContext } from "react";
 import { base44 } from "@/api/base44Client";
+import { AuthContext } from "@/lib/AuthContext";
 
 export const ProjectContext = createContext({
   activeProject: null,
   setActiveProject: () => {},
+  // Apply a shallow patch to the currently-active project (and to its
+  // entry in `projects` + the localStorage cache). Inline editors
+  // call this after a successful Project.update so the dashboard's
+  // `project` prop reflects the new value without waiting on a
+  // refetch. Returns the merged project so callers can react to it.
+  updateActiveProject: () => null,
+  removeProject: () => {},
   projects: [],
   loading: false,
   projectLoadError: null,
@@ -14,13 +22,38 @@ const PROJECTS_CACHE_KEY = "sbp_projects_cache";
 function readProjectsCache() {
   try {
     const raw = localStorage.getItem(PROJECTS_CACHE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const list = raw ? JSON.parse(raw) : [];
+    return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   } catch {
     return [];
   }
 }
 
+function writeProjectsCache(projects) {
+  try {
+    if (projects.length > 0) {
+      localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(projects));
+    } else {
+      localStorage.removeItem(PROJECTS_CACHE_KEY);
+    }
+  } catch {
+    /* ignore cache writes */
+  }
+}
+
 export function ProjectProvider({ children }) {
+  // Pull the user's saved prefs so we can honour `default_project_id`
+  // when localStorage doesn't already hold an explicit selection. We
+  // can't use `useAuth()` here (it throws when AuthProvider is missing
+  // in tests) — useContext returns undefined in that case and we just
+  // skip the default-project fallback.
+  const auth = useContext(AuthContext);
+  const authAllowsProjectLoad = !auth || (!auth.isLoadingAuth && auth.isAuthenticated);
+  const defaultProjectIdPref =
+    typeof auth?.user?.default_project_id === "string"
+      ? auth.user.default_project_id
+      : null;
+
   // Seed from cache so pages render immediately on hard refresh
   const [projects, setProjects] = useState(() => readProjectsCache());
   const [activeProject, setActiveProject] = useState(() => {
@@ -34,10 +67,19 @@ export function ProjectProvider({ children }) {
 
   // Load projects on mount — retries up to 3x in case SDK isn't ready yet
   useEffect(() => {
+    if (!authAllowsProjectLoad) {
+      if (auth?.isAuthenticated === false) {
+        setLoading(false);
+        setActiveProject(null);
+      }
+      return;
+    }
+
     let cancelled = false;
 
     const fetchProjects = async (attempt = 1) => {
-      const data = await base44.entities.Project.list("-created_at");
+      const raw = await base44.entities.Project.list("-created_at");
+      const data = [...raw].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       // If empty and we have retries left, wait and try again
       if (data.length === 0 && attempt < 3) {
         await new Promise((r) => setTimeout(r, attempt * 1500));
@@ -53,25 +95,47 @@ export function ProjectProvider({ children }) {
         const data = await fetchProjects();
         if (cancelled) return;
 
-        if (data.length > 0) {
-          setProjects(data);
-          // Persist to localStorage so next hard refresh is instant
-          try { localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(data)); } catch {}
-        }
+        setProjects(data);
+        // Persist only confirmed live projects. A successful empty response
+        // means the user has no active projects; never resurrect old cache.
+        writeProjectsCache(data);
 
-        // Only restore the project the user explicitly had selected — never auto-pick
+        // Resolution order for the active project:
+        //   1. localStorage `activeProjectId` (most-recent explicit pick)
+        //   2. user pref `default_project_id` from Settings → Dashboard
+        //   3. nothing → portfolio view
+        //
+        // When the localStorage pick references a project that's been
+        // deleted we fall through to the user pref; same when the user
+        // pref references a missing project we fall through to portfolio.
+        const list = data;
         const savedId = localStorage.getItem("activeProjectId");
         if (savedId) {
-          const list = data.length > 0 ? data : readProjectsCache();
           const saved = list.find((p) => p.id === savedId);
           if (saved) {
             setActiveProject(saved);
-          }
-          // If savedId no longer exists in the list, clear it so portfolio shows
-          else {
+          } else {
+            // savedId points to a deleted project — fall back to default pref
             localStorage.removeItem("activeProjectId");
-            setActiveProject(null);
+            const fallback = defaultProjectIdPref
+              ? list.find((p) => p.id === defaultProjectIdPref)
+              : null;
+            if (fallback) {
+              setActiveProject(fallback);
+              try { localStorage.setItem("activeProjectId", fallback.id); } catch {}
+            } else {
+              setActiveProject(null);
+            }
           }
+        } else if (defaultProjectIdPref) {
+          // No localStorage pick — honour the user's Settings default.
+          // We don't write the activeProjectId back to localStorage so
+          // that toggling the pref in Settings still takes effect on
+          // the next session start.
+          const def = list.find((p) => p.id === defaultProjectIdPref);
+          setActiveProject(def || null);
+        } else {
+          setActiveProject(null);
         }
       } catch (err) {
         console.error("Failed to load projects:", err);
@@ -84,7 +148,12 @@ export function ProjectProvider({ children }) {
 
     loadProjects();
     return () => { cancelled = true; };
-  }, []);
+    // defaultProjectIdPref is intentionally excluded from the dep list:
+    // we resolve it once at startup. Changing the pref later in the
+    // current session shouldn't yank the user out of whatever project
+    // they've since picked.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authAllowsProjectLoad, auth?.isAuthenticated]);
 
   const handleProjectSelect = (project) => {
     if (!project) {
@@ -96,9 +165,57 @@ export function ProjectProvider({ children }) {
     localStorage.setItem("activeProjectId", project.id);
   };
 
+  // Shallow-merge a patch into the active project AND the project
+  // record inside `projects` AND the localStorage cache, so every
+  // consumer of useProjectContext sees the new value immediately
+  // (no need to wait on a Supabase refetch). Idempotent — passing
+  // the same patch twice is a no-op.
+  const updateActiveProject = (patch) => {
+    if (!patch || typeof patch !== "object") return activeProject;
+    const id = activeProject?.id;
+    if (!id) return activeProject;
+    const merged = { ...activeProject, ...patch };
+    setActiveProject(merged);
+    setProjects((list) => list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    try {
+      const cache = readProjectsCache();
+      const next = cache.map((p) => (p.id === id ? { ...p, ...patch } : p));
+      writeProjectsCache(next);
+    } catch {}
+    return merged;
+  };
+
+  const removeProject = (projectId) => {
+    if (!projectId) return;
+    setProjects((list) => {
+      const next = list.filter((p) => p.id !== projectId);
+      writeProjectsCache(next);
+      return next;
+    });
+    if (activeProject?.id === projectId) {
+      handleProjectSelect(null);
+    }
+  };
+
   return (
-    <ProjectContext.Provider value={{ activeProject, setActiveProject: handleProjectSelect, projects, loading, projectLoadError }}>
+    <ProjectContext.Provider value={{
+      activeProject,
+      setActiveProject: handleProjectSelect,
+      updateActiveProject,
+      removeProject,
+      projects,
+      loading,
+      projectLoadError,
+    }}>
       {children}
     </ProjectContext.Provider>
   );
+}
+
+export function useProjectContext() {
+  const context = useContext(ProjectContext);
+  if (!context) {
+    throw new Error("useProjectContext must be used within ProjectProvider");
+  }
+  return context;
 }

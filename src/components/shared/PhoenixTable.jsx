@@ -3,16 +3,16 @@ import React from "react";
 // A fully Phoenix-styled table wrapper — drop-in for all data tables
 export default function PhoenixTable({ columns, children, loading, empty, colSpan }) {
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
             {columns.map((col, i) => (
               <th key={i} style={{
-                fontFamily: "var(--font-body)", fontSize: 10, letterSpacing: "0.12em",
+                fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em",
                 textTransform: "uppercase", color: "var(--text-muted)",
                 fontWeight: 700, padding: "12px 16px",
-                background: "var(--bg-sidebar)",
+                background: "color-mix(in srgb, var(--bg-surface-low) 90%, #000 10%)",
                 borderBottom: "1px solid var(--divider)",
                 textAlign: col.right ? "right" : "left",
                 whiteSpace: "nowrap"
@@ -43,7 +43,7 @@ export function PTR({ overdue, warn, onClick, children }) {
         cursor: onClick ? "pointer" : "default",
         transition: "background 0.1s",
       }}
-      onMouseEnter={e => { if (!overdue && !warn) e.currentTarget.style.background = "var(--bg-row-hover)"; }}
+      onMouseEnter={e => { if (!overdue && !warn) e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 5%, transparent)"; }}
       onMouseLeave={e => { e.currentTarget.style.background = overdue ? "var(--danger-muted)" : warn ? "var(--warning-muted)" : "transparent"; }}
     >
       {children}
@@ -58,7 +58,7 @@ export function PTD({ right, mono, accent, muted, bold, children, style = {} }) 
       fontSize: mono ? 12 : 13,
       color: accent ? "var(--accent-light)" : muted ? "var(--text-muted)" : "var(--text-secondary)",
       fontWeight: bold ? 700 : 400,
-      padding: "11px 16px",
+      padding: "12px 16px",
       textAlign: right ? "right" : "left",
       verticalAlign: "middle",
       maxWidth: style.maxWidth,

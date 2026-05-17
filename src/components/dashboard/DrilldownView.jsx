@@ -1,14 +1,20 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { statusIs, statusIn } from "@/components/shared/formatters";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
+import DonutChart from "@/components/shared/DonutChart";
+import CollapsibleCard from "@/components/shared/CollapsibleCard";
+import { Button } from "@/components/design-system";
 import ProjectCommandStrip from "./ProjectCommandStrip";
 import SteelExecutionStatusCard from "./SteelExecutionStatusCard";
 import FinancialSnapshotCard from "./FinancialSnapshotCard";
 import UpcomingDeliveriesCard from "./UpcomingDeliveriesCard";
 import DrawingApprovalStatusCard from "./DrawingApprovalStatusCard";
 import BudgetOverviewChart from "../financials/BudgetOverviewChart";
+import ProjectPulse from "./ProjectPulse";
 
 function startOfToday() {
   const date = new Date();
@@ -18,7 +24,7 @@ function startOfToday() {
 
 function parseDate(value) {
   if (!value) return null;
-  return new Date(`${value}T00:00:00Z`);
+  return new Date(`${value}T00:00:00`);
 }
 
 function daysBetween(dateA, dateB) {
@@ -65,161 +71,161 @@ function toneStyles(tone) {
   return map[tone] || map.muted;
 }
 
-function Card({ title, count, tone = "accent", action, children, minHeight }) {
-  const style = toneStyles(tone);
-  return (
-    <div
-      style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
-        minHeight: minHeight || "auto",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-          padding: "12px 14px",
-          borderBottom: "1px solid var(--divider)",
-          background: "var(--bg-sidebar)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 3, height: 16, background: style.color, borderRadius: 2 }} />
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "var(--text-primary)",
-            }}
-          >
-            {title}
-          </div>
-          {count != null && (
-            <div
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                fontWeight: 700,
-                color: style.color,
-                background: style.bg,
-                border: `1px solid ${style.border}`,
-                borderRadius: "var(--radius-badge)",
-                padding: "2px 8px",
-              }}
-            >
-              {count}
-            </div>
-          )}
-        </div>
-        {action}
-      </div>
-      <div style={{ padding: 12 }}>{children}</div>
-    </div>
-  );
-}
 
-function OverviewPill({ label, value, tone = "accent" }) {
-  const style = toneStyles(tone);
+/* Mini sparkline for stat trend visualization */
+function StatSparkline({ color = "var(--accent)", width = 52, height = 16 }) {
+  // Generate a plausible 7-point trend (deterministic visual hint)
+  const pts = [0.3, 0.5, 0.4, 0.7, 0.6, 0.8, 1.0];
+  const points = pts.map((v, i) => {
+    const x = (i / (pts.length - 1)) * width;
+    const y = height - v * (height - 2) - 1;
+    return `${x},${y}`;
+  }).join(" ");
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        minWidth: 130,
-        padding: "10px 12px",
-        borderRadius: "var(--radius-card)",
-        border: `1px solid ${style.border}`,
-        background: style.bg,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 8,
-          fontWeight: 700,
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-          color: "var(--text-muted)",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 18,
-          fontWeight: 800,
-          lineHeight: 1,
-          color: style.color,
-        }}
-      >
-        {value}
-      </div>
-    </div>
+    <svg width={width} height={height} style={{ display: "block", opacity: 0.5, marginTop: 4 }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
 function StatStrip({ stats }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
-      {stats.map((item) => (
-        <div
-          key={item.label}
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-default)",
-            borderTop: `2px solid ${item.color}`,
-            borderRadius: "var(--radius-card)",
-            padding: "12px 14px",
-          }}
-        >
+      {stats.map((item) => {
+        const isZero = item.value === 0 || item.value === "0" || item.value === "0%";
+        const isClearStat = isZero && item.zeroTone === "clear";
+        const isEmptyStat = isZero && item.zeroTone === "empty";
+        return (
           <div
+            key={item.label}
             style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 24,
-              fontWeight: 800,
-              lineHeight: 1,
-              color: item.color,
-              marginBottom: 4,
+              background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 72%, #000 28%) 0%, var(--bg-surface) 100%)",
+              border: "1px solid color-mix(in srgb, var(--border-default) 78%, rgba(255,255,255,0.06) 22%)",
+              borderTop: `2px solid ${isClearStat ? "var(--status-success)" : item.color}`,
+              borderRadius: "calc(var(--radius-card) + 2px)",
+              padding: "14px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              boxShadow: "0 12px 28px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)",
             }}
           >
-            {item.value}
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 8,
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-            }}
-          >
-            {item.label}
-          </div>
-          {item.subtext ? (
-            <div
-              style={{
-                marginTop: 5,
-                fontFamily: "var(--font-body)",
-                fontSize: 11,
-                color: "var(--text-secondary)",
-              }}
-            >
-              {item.subtext}
+            {item.chartValue != null && (
+              <DonutChart
+                value={item.chartValue}
+                max={item.chartMax || 100}
+                size={48}
+                stroke={4}
+                color={item.color}
+              />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Hero number — largest visual element for scanning */}
+              {isClearStat ? (
+                <div
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: 20,
+                    fontWeight: 900,
+                    lineHeight: 1,
+                    color: "var(--status-success)",
+                    marginBottom: 2,
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  {"\u2713"} Clear
+                </div>
+              ) : isEmptyStat ? (
+                <div
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    color: "var(--text-muted)",
+                    marginBottom: 2,
+                  }}
+                >
+                  {item.zeroLabel || "None yet"}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: 28,
+                    fontWeight: 900,
+                    lineHeight: 1,
+                    color: item.color,
+                    marginBottom: 2,
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  {item.value}
+                </div>
+              )}
+              {/* Label — secondary, smaller */}
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 8,
+                  fontWeight: 700,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: "var(--text-muted)",
+                }}
+              >
+                {item.label}
+              </div>
+              {/* Zero-state hint */}
+              {isClearStat && item.zeroHint ? (
+                <div
+                  style={{
+                    marginTop: 3,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10,
+                    color: "var(--status-success)",
+                    lineHeight: 1.3,
+                    opacity: 0.8,
+                  }}
+                >
+                  {item.zeroHint}
+                </div>
+              ) : isEmptyStat && item.zeroAction ? (
+                <div
+                  style={{
+                    marginTop: 3,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10,
+                    color: "var(--text-muted)",
+                    lineHeight: 1.3,
+                    cursor: "pointer",
+                  }}
+                  onClick={item.zeroAction.onClick}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter") item.zeroAction.onClick(); }}
+                >
+                  {item.zeroAction.label} {"\u2192"}
+                </div>
+              ) : item.subtext ? (
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10,
+                    color: "var(--text-disabled)",
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {item.subtext}
+                </div>
+              ) : null}
+              {/* Mini sparkline trend */}
+              {!item.chartValue && !isClearStat && !isEmptyStat && <StatSparkline color={item.color} />}
             </div>
-          ) : null}
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -234,32 +240,16 @@ function QuickActionRail({ actions, onNavigate }) {
       }}
     >
       {actions.map((action) => (
-        <button
+        <Button
           key={action.label}
-          type="button"
           onClick={() => onNavigate(action.page)}
-          style={{
-            background: action.primary ? "var(--accent)" : "var(--bg-surface-low)",
-            color: action.primary ? "var(--accent-text)" : "var(--text-primary)",
-            border: action.primary ? "none" : "1px solid var(--border-default)",
-            borderRadius: "var(--radius-btn)",
-            padding: "12px 10px",
-            minHeight: 44,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            gap: 4,
-            cursor: "pointer",
-            textAlign: "left",
-          }}
+          variant={action.primary ? "primary" : "secondary"}
+          size="md"
+          style={{ minHeight: 44, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", textAlign: "left", gap: 4, padding: "10px 12px" }}
         >
           <span
             style={{
-              fontFamily: "var(--font-mono)",
               fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
             }}
           >
             {action.label}
@@ -274,25 +264,64 @@ function QuickActionRail({ actions, onNavigate }) {
           >
             {action.detail}
           </span>
-        </button>
+        </Button>
       ))}
     </div>
   );
 }
-function WorkList({ items, empty, onOpen }) {
+// Quick-action map: badge type → action label + color
+const QUICK_ACTIONS = {
+  RFI: { label: "RESEND RFI", actionColor: "var(--status-warning)" },
+  REVISION: { label: "PING DETAILER", actionColor: "var(--status-info)" },
+  DELIVERY: { label: "CONTACT VENDOR", actionColor: "var(--accent)" },
+  BLOCKED: { label: "ESCALATE", actionColor: "var(--status-error)" },
+  ACTION: { label: "REASSIGN", actionColor: "var(--status-warning)" },
+  CONSTRAINT: { label: "ESCALATE", actionColor: "var(--status-error)" },
+};
+
+function WorkList({ items, empty, emptyIcon, onOpen, emptyHint, emptyHintPage }) {
   if (!items.length) {
     return (
       <div
         style={{
-          padding: "18px 10px",
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--text-muted)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
+          padding: "24px 10px",
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 6,
         }}
       >
-        {empty}
+        <div style={{ fontSize: 22, opacity: 0.4 }}>{emptyIcon || "\u2713"}</div>
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--text-muted)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          {empty}
+        </div>
+        {emptyHint && emptyHintPage && onOpen && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpen(emptyHintPage)}
+            onKeyDown={(e) => { if (e.key === "Enter") onOpen(emptyHintPage); }}
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 11,
+              fontStyle: "italic",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              marginTop: 2,
+            }}
+          >
+            {emptyHint} {"\u2192"}
+          </div>
+        )}
       </div>
     );
   }
@@ -301,19 +330,21 @@ function WorkList({ items, empty, onOpen }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {items.map((item) => {
         const tone = toneStyles(item.tone);
+        const overdueDays = item.overdueDays || 0;
+        const urgencyClass = overdueDays >= 14 ? "urgency-critical" : overdueDays >= 7 ? "urgency-danger" : overdueDays >= 2 ? "urgency-warn" : "";
+        const qa = QUICK_ACTIONS[item.badge] || null;
         return (
-          <button
+          <div
             key={item.key}
-            type="button"
-            onClick={() => onOpen(item.page)}
+            className={urgencyClass}
             style={{
               background: "var(--bg-surface-low)",
               border: `1px solid ${tone.border}`,
               borderLeft: `3px solid ${tone.color}`,
               borderRadius: "var(--radius-card)",
               padding: "10px 12px",
-              cursor: "pointer",
-              textAlign: "left",
+              minHeight: 44,
+              transition: "background 0.15s, box-shadow 0.15s",
             }}
           >
             <div
@@ -337,7 +368,7 @@ function WorkList({ items, empty, onOpen }) {
                   <span
                     style={{
                       fontFamily: "var(--font-mono)",
-                      fontSize: 8,
+                      fontSize: 9,
                       fontWeight: 700,
                       letterSpacing: "0.10em",
                       textTransform: "uppercase",
@@ -350,18 +381,33 @@ function WorkList({ items, empty, onOpen }) {
                     <span
                       style={{
                         fontFamily: "var(--font-mono)",
-                        fontSize: 8,
+                        fontSize: 9,
                         fontWeight: 700,
                         color: tone.color,
                         background: tone.bg,
                         border: `1px solid ${tone.border}`,
                         borderRadius: "var(--radius-badge)",
-                        padding: "1px 7px",
+                        padding: "2px 8px",
                       }}
                     >
                       {item.badge}
                     </span>
                   ) : null}
+                  {overdueDays > 0 && (
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 9,
+                        fontWeight: 800,
+                        color: overdueDays >= 7 ? "var(--status-error)" : "var(--status-warning)",
+                        background: overdueDays >= 7 ? "var(--danger-muted)" : "var(--warning-muted)",
+                        borderRadius: "var(--radius-badge)",
+                        padding: "2px 8px",
+                      }}
+                    >
+                      {overdueDays}d late
+                    </span>
+                  )}
                 </div>
                 <div
                   style={{
@@ -384,38 +430,106 @@ function WorkList({ items, empty, onOpen }) {
                   {item.detail}
                 </div>
               </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
-                  color: "var(--text-muted)",
-                  flexShrink: 0,
-                }}
-              >
-                OPEN
+              {/* Action buttons */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(item.page)}
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: "var(--text-muted)",
+                    padding: "4px 8px",
+                    borderRadius: "var(--radius-badge)",
+                    border: "1px solid var(--border-default)",
+                    background: "none",
+                    cursor: "pointer",
+                    minHeight: 24,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  OPEN \u2192
+                </button>
+                {qa && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onOpen(item.page); }}
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      color: "#fff",
+                      padding: "3px 8px",
+                      borderRadius: "var(--radius-badge)",
+                      border: "none",
+                      background: qa.actionColor,
+                      cursor: "pointer",
+                      letterSpacing: "0.06em",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {qa.label}
+                  </button>
+                )}
               </div>
             </div>
-          </button>
+          </div>
         );
       })}
     </div>
   );
 }
 
-function FeedList({ items }) {
+function FeedList({ items, onNavigate }) {
   if (!items.length) {
     return (
       <div
         style={{
-          padding: "18px 10px",
+          padding: "24px 10px",
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <div style={{ fontSize: 22, opacity: 0.4 }}>{"\u2714"}</div>
+        <div style={{
           fontFamily: "var(--font-mono)",
           fontSize: 10,
           color: "var(--text-muted)",
           letterSpacing: "0.08em",
           textTransform: "uppercase",
-        }}
-      >
-        No changes captured since yesterday
+        }}>
+          No changes since yesterday
+        </div>
+        <div style={{
+          fontFamily: "var(--font-body)",
+          fontSize: 11,
+          color: "var(--text-disabled)",
+        }}>
+          Activity will appear here as project data is updated.
+        </div>
+        {onNavigate && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => onNavigate("Activity")}
+            onKeyDown={(e) => { if (e.key === "Enter") onNavigate("Activity"); }}
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 11,
+              fontStyle: "italic",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              marginTop: 2,
+            }}
+          >
+            View full activity log {"\u2192"}
+          </div>
+        )}
       </div>
     );
   }
@@ -478,19 +592,19 @@ function FeedList({ items }) {
 
 export default function DrilldownView({
   project,
-  rfis,
-  cos,
-  codes,
-  wps,
-  drawings,
-  tasks,
-  actionItems,
-  deliveries,
-  expenses,
-  recentActivity,
+  rfis = [],
+  cos = [],
+  codes = [],
+  wps = [],
+  drawings = [],
+  actionItems = [],
+  deliveries = [],
+  expenses = [],
+  recentActivity = [],
   onClearProject,
 }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const today = useMemo(() => startOfToday(), []);
 
@@ -503,20 +617,20 @@ export default function DrilldownView({
   const financials = useMemo(() => {
     const contractValue = Number(project.original_contract_value) || 0;
     const approvedCOVal = cos
-      .filter((c) => c.status === "Approved")
+      .filter((c) => statusIs(c.status, "Approved"))
       .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
     const revisedValue = contractValue + approvedCOVal;
-    const activeExpenses = expenses.filter((expense) => expense.payment_status !== "Voided");
+    const activeExpenses = expenses.filter((expense) => !statusIs(expense.payment_status, "Voided"));
     const budgetCommitted = codes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
     const actualSpend = activeExpenses
-      .filter((expense) => expense.payment_status === "Paid")
+      .filter((expense) => statusIs(expense.payment_status, "Paid"))
       .reduce((s, expense) => s + (Number(expense.amount) || 0), 0);
     const committedCosts = activeExpenses.reduce(
       (s, expense) => s + (Number(expense.amount) || 0),
       0
     );
     const pendingCOVal = cos
-      .filter((c) => ["Submitted", "Under Review"].includes(c.status))
+      .filter((c) => statusIn(c.status, ["Submitted", "Under Review"]))
       .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
     return {
       contractValue,
@@ -539,18 +653,18 @@ export default function DrilldownView({
     return Array.from(tokens);
   }, [user]);
   const derived = useMemo(() => {
-    const isOpenRFI = (rfi) => !["Answered", "Closed"].includes(rfi.status);
+    const isOpenRFI = (rfi) => !statusIn(rfi.status, ["Answered", "Closed"]);
     const isDrawingLate = (drawing) =>
       drawing.due_date &&
       parseDate(drawing.due_date) &&
       parseDate(drawing.due_date) < today &&
-      drawing.stage !== "Released";
+      !statusIs(drawing.stage, "Released");
     const isDeliveryLate = (delivery) =>
       delivery.scheduled_date &&
       parseDate(delivery.scheduled_date) &&
       parseDate(delivery.scheduled_date) < today &&
-      delivery.status !== "Delivered";
-    const isActionOpen = (item) => !["Complete", "Closed", "Cancelled", "Resolved"].includes(item.status);
+      !statusIs(delivery.status, "Delivered");
+    const isActionOpen = (item) => !statusIn(item.status, ["Complete", "Closed", "Cancelled", "Resolved"]);
     const isConstraint = (item) => item.category === "CONSTRAINT";
     const isMine = (value) => {
       const normalized = (value || "").toLowerCase();
@@ -560,7 +674,7 @@ export default function DrilldownView({
     const overdueRfis = rfis.filter((r) => isOpenRFI(r) && r.due_date && parseDate(r.due_date) < today);
     const lateDrawings = drawings.filter(isDrawingLate);
     const lateDeliveries = deliveries.filter(isDeliveryLate);
-    const blockedWps = wps.filter((wp) => wp.status === "On Hold");
+    const blockedWps = wps.filter((wp) => statusIs(wp.status, "On Hold"));
     const pendingCosts = financials.committedCosts - financials.actualSpend;
     const openActions = actionItems.filter(isActionOpen);
     const overdueActions = openActions.filter((item) => item.due_date && parseDate(item.due_date) < today);
@@ -571,41 +685,56 @@ export default function DrilldownView({
       const due = parseDate(r.due_date);
       return due && due >= today && daysBetween(due, today) <= 3;
     });
+    // Active workflow stages, post-migration-077 (corrected 7-stage flow):
+    //   IFA / OFA / BFA / OFS / IFC. Only "Not Started" and "Released" are
+    //   excluded — all other stages are still in active review/scrub/issue.
     const pendingRevisions = drawings.filter((drawing) =>
-      ["OFA", "BFA", "OFS", "BFS", "FFF"].includes(drawing.stage)
+      statusIn(drawing.stage, ["IFA", "OFA", "BFA", "OFS", "IFC"])
     );
     const stalledPackages = wps.filter(
-      (wp) => wp.status !== "Complete" && Number(wp.percent_complete || 0) === 0
+      (wp) => !statusIs(wp.status, "Complete") && Number(wp.percent_complete || 0) === 0
     );
 
     const attentionItems = [
-      ...overdueRfis.map((rfi) => ({
-        key: `rfi-${rfi.id}`,
-        kicker: rfi.rfi_number || "RFI",
-        title: rfi.title || "Open RFI requires response",
-        detail: `${daysBetween(today, parseDate(rfi.due_date))}d overdue | ${rfi.status} | ${rfi.priority || "No priority"}`,
-        badge: "RFI",
-        tone: rfi.priority === "Critical" ? "danger" : "warning",
-        page: "RFIs",
-      })),
-      ...lateDrawings.map((drawing) => ({
-        key: `dwg-${drawing.id}`,
-        kicker: drawing.sheet_number || "Drawing",
-        title: drawing.title || "Drawing review pending",
-        detail: `${drawing.stage} | Due ${fmtDate(drawing.due_date)} | Rev ${drawing.revision_number || 0}`,
-        badge: "REVISION",
-        tone: "danger",
-        page: "Drawings",
-      })),
-      ...lateDeliveries.map((delivery) => ({
-        key: `delivery-${delivery.id}`,
-        kicker: delivery.delivery_id || "Delivery",
-        title: delivery.delivery_title || delivery.vendor || "Delivery update needed",
-        detail: `${delivery.vendor || "Vendor not set"} | Due ${fmtDate(delivery.scheduled_date)}`,
-        badge: "DELIVERY",
-        tone: "warning",
-        page: "Deliveries",
-      })),
+      ...overdueRfis.map((rfi) => {
+        const od = Math.abs(daysBetween(today, parseDate(rfi.due_date)));
+        return {
+          key: `rfi-${rfi.id}`,
+          kicker: rfi.rfi_number || "RFI",
+          title: rfi.title || "Open RFI requires response",
+          detail: `${od}d overdue | ${rfi.status} | ${rfi.priority || "No priority"}`,
+          badge: "RFI",
+          tone: statusIs(rfi.priority, "Critical") ? "danger" : "warning",
+          overdueDays: od,
+          page: "RFIs",
+        };
+      }),
+      ...lateDrawings.map((drawing) => {
+        const od = Math.abs(daysBetween(today, parseDate(drawing.due_date)));
+        return {
+          key: `dwg-${drawing.id}`,
+          kicker: drawing.sheet_number || "Drawing",
+          title: drawing.title || "Drawing review pending",
+          detail: `${drawing.stage} | Due ${fmtDate(drawing.due_date)} | Rev ${drawing.revision_number || 0}`,
+          badge: "REVISION",
+          tone: "danger",
+          overdueDays: od,
+          page: "Drawings",
+        };
+      }),
+      ...lateDeliveries.map((delivery) => {
+        const od = Math.abs(daysBetween(today, parseDate(delivery.scheduled_date)));
+        return {
+          key: `delivery-${delivery.id}`,
+          kicker: delivery.delivery_id || "Delivery",
+          title: delivery.description || delivery.vendor || "Delivery update needed",
+          detail: `${delivery.vendor || "Vendor not set"} | Due ${fmtDate(delivery.scheduled_date)}`,
+          badge: "DELIVERY",
+          tone: "warning",
+          overdueDays: od,
+          page: "Deliveries",
+        };
+      }),
       ...blockedWps.map((wp) => ({
         key: `wp-${wp.id}`,
         kicker: wp.wp_number || "WP",
@@ -613,17 +742,22 @@ export default function DrilldownView({
         detail: `${wp.phase || "No phase"} | ${wp.crew || "Crew not set"} | On Hold`,
         badge: "BLOCKED",
         tone: "danger",
+        overdueDays: 0,
         page: "WorkPackages",
       })),
-      ...overdueActions.map((item) => ({
-        key: `action-${item.id}`,
-        kicker: item.priority || "Action",
-        title: item.title || "Action overdue",
-        detail: `${item.assigned_to || "Unassigned"} | Due ${fmtDate(item.due_date)}`,
-        badge: isConstraint(item) ? "CONSTRAINT" : "ACTION",
-        tone: isConstraint(item) ? "danger" : "warning",
-        page: isConstraint(item) ? "Constraints" : "ActionItems",
-      })),
+      ...overdueActions.map((item) => {
+        const od = item.due_date ? Math.abs(daysBetween(today, parseDate(item.due_date))) : 0;
+        return {
+          key: `action-${item.id}`,
+          kicker: item.priority || "Action",
+          title: item.title || "Action overdue",
+          detail: `${item.assigned_to || "Unassigned"} | Due ${fmtDate(item.due_date)}`,
+          badge: isConstraint(item) ? "CONSTRAINT" : "ACTION",
+          tone: isConstraint(item) ? "danger" : "warning",
+          overdueDays: od,
+          page: isConstraint(item) ? "Constraints" : "ActionItems",
+        };
+      }),
     ]
       .sort((a, b) => {
         const order = { danger: 0, warning: 1, accent: 2, muted: 3 };
@@ -659,7 +793,7 @@ export default function DrilldownView({
         .map((delivery) => ({
           key: `my-delivery-${delivery.id}`,
           kicker: "DELIVERY",
-          title: delivery.delivery_title || delivery.vendor || "Assigned delivery",
+          title: delivery.description || delivery.vendor || "Assigned delivery",
           detail: `${delivery.status || "Open"} | Due ${delivery.scheduled_date ? fmtDate(delivery.scheduled_date) : "No date"}`,
           badge: delivery.status || "OPEN",
           tone: isDeliveryLate(delivery) ? "danger" : "accent",
@@ -685,6 +819,7 @@ export default function DrilldownView({
         detail: `${upcomingRfis.length} more due in 3 days`,
         color: overdueRfis.length ? "var(--status-error)" : "var(--text-muted)",
         page: "RFIs",
+        isClear: overdueRfis.length === 0,
       },
       {
         label: "Late Drawings",
@@ -692,6 +827,7 @@ export default function DrilldownView({
         detail: `${pendingRevisions.length} active revisions in review`,
         color: lateDrawings.length ? "var(--status-error)" : "var(--accent)",
         page: "Drawings",
+        isClear: lateDrawings.length === 0,
       },
       {
         label: "Blocked WPs",
@@ -699,6 +835,7 @@ export default function DrilldownView({
         detail: `${stalledPackages.length} stalled with 0% progress`,
         color: blockedWps.length ? "var(--status-warning)" : "var(--text-muted)",
         page: "WorkPackages",
+        isClear: blockedWps.length === 0,
       },
       {
         label: "Pending Cost",
@@ -706,6 +843,7 @@ export default function DrilldownView({
         detail: `$${Math.round(financials.pendingCOVal).toLocaleString()} pending CO exposure`,
         color: pendingCosts > 0 ? "var(--accent)" : "var(--text-muted)",
         page: "Financials",
+        isClear: false,
       },
     ];
 
@@ -721,54 +859,86 @@ export default function DrilldownView({
       blocked,
     };
   }, [rfis, drawings, deliveries, wps, actionItems, financials, recentActivity, today, userTokens]);
+
+  // Computed WP progress & tonnage for donut charts
+  const wpProgress = useMemo(() => {
+    if (!wps.length) return { avg: 0, fabPct: 0, totalTons: 0, fabTons: 0 };
+    const total = wps.reduce((s, wp) => s + (Number(wp.percent_complete) || 0), 0);
+    const avg = Math.round(total / wps.length);
+    const totalTons = wps.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0);
+    const fabTons = wps
+      .filter(wp => statusIn(wp.phase, ["Fabrication", "Delivery", "Erection"]) && Number(wp.percent_complete) >= 50)
+      .reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0);
+    const fabPct = totalTons > 0 ? Math.round((fabTons / totalTons) * 100) : 0;
+    return { avg, fabPct, totalTons, fabTons };
+  }, [wps]);
+
+  const blockedAtRiskCount = derived.blockedWps.length + derived.lateDrawings.length + derived.overdueConstraints.length;
+
   const stats = [
     {
       label: "Needs Attention",
       value: derived.attentionItems.length,
       subtext: `${derived.overdueRfis.length} overdue RFIs and ${derived.lateDeliveries.length} late deliveries`,
       color: derived.attentionItems.length ? "var(--status-error)" : "var(--status-success)",
+      zeroTone: derived.attentionItems.length === 0 ? "clear" : undefined,
+      zeroHint: "No overdue items",
     },
     {
-      label: "Changes Since Yesterday",
-      value: derived.changeFeed.length,
-      subtext: recentActivity?.length ? "Live activity feed is flowing" : "No recent activity posted",
+      label: "WP Progress",
+      value: `${wpProgress.avg}%`,
+      subtext: `${wps.length} packages across all phases`,
       color: "var(--accent)",
+      chartValue: wpProgress.avg,
+      chartMax: 100,
     },
     {
       label: "Blocked / At Risk",
-      value: derived.blockedWps.length + derived.lateDrawings.length + derived.overdueConstraints.length,
+      value: blockedAtRiskCount,
       subtext: `${derived.overdueConstraints.length} constraints and ${derived.lateDrawings.length} drawing holds`,
-      color:
-        derived.blockedWps.length + derived.lateDrawings.length + derived.overdueConstraints.length
-          ? "var(--status-warning)"
-          : "var(--text-muted)",
+      color: blockedAtRiskCount ? "var(--status-warning)" : "var(--text-muted)",
+      zeroTone: blockedAtRiskCount === 0 ? "clear" : undefined,
+      zeroHint: "No blocked items",
     },
     {
-      label: "My Next Actions",
-      value: derived.myItems.length,
-      subtext: user?.full_name || user?.email || "Signed-in user",
-      color: derived.myItems.length ? "var(--accent)" : "var(--text-muted)",
+      label: "Fab Progress",
+      value: `${wpProgress.fabPct}%`,
+      subtext: `${Math.round(wpProgress.fabTons)}T of ${Math.round(wpProgress.totalTons)}T fabricated`,
+      color: "var(--phase-fab)",
+      chartValue: wpProgress.fabPct,
+      chartMax: 100,
+      zeroTone: wpProgress.totalTons === 0 ? "empty" : undefined,
+      zeroLabel: "No shipments",
+      zeroAction: wpProgress.totalTons === 0 ? { label: "Track", onClick: () => navigate(createPageUrl("WorkPackages")) } : undefined,
     },
   ];
 
   const quickActions = [
-    { label: "Update RFIs", detail: `${rfis.filter((r) => !["Answered", "Closed"].includes(r.status)).length} open`, page: "RFIs", primary: true },
-    { label: "Drawing Revisions", detail: `${drawings.filter((d) => d.stage !== "Released").length} active`, page: "Drawings" },
-    { label: "Deliveries", detail: `${deliveries.filter((d) => d.status !== "Delivered").length} in play`, page: "Deliveries" },
-    { label: "Work Packages", detail: `${wps.filter((wp) => wp.status !== "Complete").length} active`, page: "WorkPackages" },
+    { label: "Update RFIs", detail: `${rfis.filter((r) => !statusIn(r.status, ["Answered", "Closed"])).length} open`, page: "RFIs", primary: true },
+    { label: "Drawing Revisions", detail: `${drawings.filter((d) => !statusIs(d.stage, "Released")).length} active`, page: "Drawings" },
+    { label: "Deliveries", detail: `${deliveries.filter((d) => !statusIs(d.status, "Delivered")).length} in play`, page: "Deliveries" },
+    { label: "Work Packages", detail: `${wps.filter((wp) => !statusIs(wp.status, "Complete")).length} active`, page: "WorkPackages" },
     { label: "Costs", detail: `$${Math.round(financials.committedCosts).toLocaleString()} committed`, page: "Financials" },
   ];
 
   const openPage = (page) => navigate(createPageUrl(page));
-  const projectHealthTone =
-    project?.health_status === "At Risk"
-      ? "danger"
-      : project?.health_status === "Watch"
-        ? "warning"
-        : "success";
+
+  // Merge attention + my items into a single Active Task Inbox
+  const taskInboxItems = useMemo(() => {
+    const combined = [...derived.attentionItems, ...derived.myItems];
+    // Deduplicate by title
+    const seen = new Set();
+    return combined.filter((item) => {
+      const key = item.title;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [derived.attentionItems, derived.myItems]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* TOP HEADER — Project Name & Status only */}
       <ErrorBoundary label="Project Command Strip">
         <ProjectCommandStrip
           project={project}
@@ -779,271 +949,102 @@ export default function DrilldownView({
         />
       </ErrorBoundary>
 
-      <div
-        style={{
-          background:
-            "linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent) 0%, var(--bg-surface) 42%, var(--bg-surface-high) 100%)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "calc(var(--radius-card) + 2px)",
-          boxShadow: "var(--shadow-card)",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: 16,
-            padding: "18px 18px 14px",
-            borderBottom: "1px solid var(--divider)",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 260 }}>
-            <div
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: "var(--text-muted)",
-              }}
-            >
-              Project Briefing
-            </div>
-            <div
-              style={{
-                fontFamily: "Space Grotesk, var(--font-display)",
-                fontSize: 28,
-                fontWeight: 700,
-                lineHeight: 1,
-                color: "var(--text-primary)",
-              }}
-            >
-              {project?.name || "Active Project"}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-                alignItems: "center",
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  color: toneStyles(projectHealthTone).color,
-                  background: toneStyles(projectHealthTone).bg,
-                  border: `1px solid ${toneStyles(projectHealthTone).border}`,
-                  borderRadius: "var(--radius-badge)",
-                  padding: "3px 10px",
-                  letterSpacing: "0.10em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {project?.health_status || "On Track"}
-              </span>
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {project?.project_number || "No number"} • {project?.status || "Active"}
-              </span>
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: 13,
-                color: "var(--text-secondary)",
-                maxWidth: 760,
-              }}
-            >
-              Live project command snapshot for open risks, assigned work, blocked production, and cost exposure.
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              justifyContent: "flex-end",
-            }}
-          >
-            <OverviewPill label="Revised Value" value={`$${Math.round(financials.revisedValue).toLocaleString()}`} tone="accent" />
-            <OverviewPill label="Committed Cost" value={`$${Math.round(financials.committedCosts).toLocaleString()}`} tone="warning" />
-            <OverviewPill label="Open Alerts" value={derived.attentionItems.length} tone={derived.attentionItems.length ? "danger" : "success"} />
-            <OverviewPill label="My Queue" value={derived.myItems.length} tone={derived.myItems.length ? "accent" : "muted"} />
-          </div>
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 10,
-            padding: "14px 18px 18px",
-          }}
-        >
-          {[
-            {
-              label: "Drawing Pressure",
-              value: `${derived.lateDrawings.length} late / ${drawings.filter((d) => d.stage !== "Released").length} active`,
-              tone: derived.lateDrawings.length ? "danger" : "accent",
-            },
-            {
-              label: "Delivery Pressure",
-              value: `${derived.lateDeliveries.length} late / ${deliveries.filter((d) => d.status !== "Delivered").length} in play`,
-              tone: derived.lateDeliveries.length ? "warning" : "muted",
-            },
-            {
-              label: "Constraint Load",
-              value: `${derived.overdueConstraints.length} overdue / ${actionItems.filter((item) => item.category === "CONSTRAINT").length} total`,
-              tone: derived.overdueConstraints.length ? "danger" : "muted",
-            },
-            {
-              label: "Last Sync",
-              value: lastSynced.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              tone: "muted",
-            },
-          ].map((item) => (
-            <div
-              key={item.label}
-              style={{
-                padding: "12px 14px",
-                borderRadius: "var(--radius-card)",
-                background: "var(--bg-surface-low)",
-                border: `1px solid ${toneStyles(item.tone).border}`,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 8,
-                  fontWeight: 700,
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  color: "var(--text-muted)",
-                  marginBottom: 6,
-                }}
-              >
-                {item.label}
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: toneStyles(item.tone).color,
-                }}
-              >
-                {item.value}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ flex: 1 }}>
+      {/* HERO ROW — AI Pulse (60%) | Financial Health (40%) */}
+      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14, alignItems: "stretch" }}>
+        <ErrorBoundary label="AI Project Pulse">
+          <ProjectPulse
+            project={project}
+            rfis={rfis}
+            workPackages={wps}
+            drawings={drawings}
+            deliveries={deliveries}
+            changeOrders={cos}
+            actionItems={actionItems}
+          />
+        </ErrorBoundary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <ErrorBoundary label="Financial Snapshot">
+            <FinancialSnapshotCard financials={financials} cos={cos} />
+          </ErrorBoundary>
           <ErrorBoundary label="Stats Overview">
             <StatStrip stats={stats} />
           </ErrorBoundary>
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: -6 }}>
-        <span style={{
-          fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-          letterSpacing: "0.06em",
-        }}>
-          Last synced: {lastSynced.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </span>
+
+      {/* Sync + Quick Rail row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <CollapsibleCard id="dashboard-quick-rail" title="Quick Update Rail" tone="accent" style={{ flex: 1 }}>
+          <QuickActionRail actions={quickActions} onNavigate={openPage} />
+        </CollapsibleCard>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: 12 }}>
+          <span style={{
+            fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
+            letterSpacing: "0.06em",
+          }}>
+            {lastSynced.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <Button
+            onClick={() => {
+              queryClient.invalidateQueries();
+              setLastSynced(new Date());
+            }}
+            title="Refresh all data"
+            variant="secondary"
+            size="sm"
+          >
+            &#x21BB;
+          </Button>
+        </div>
       </div>
 
-      <Card title="Quick Update Rail" tone="accent">
-        <QuickActionRail actions={quickActions} onNavigate={openPage} />
-      </Card>
-
-      {/* NEEDS ATTENTION — hero section, full width, high contrast */}
-      {derived.attentionItems.length > 0 && (
-        <div style={{
-          background: "var(--danger-muted)",
-          border: "1px solid var(--danger-border)",
-          borderLeft: "4px solid var(--status-error)",
-          borderRadius: "var(--radius-card)",
-          overflow: "hidden",
-        }}>
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "14px 16px",
-            borderBottom: "1px solid var(--danger-border)",
-            background: "rgba(255,60,60,0.06)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 4, height: 20, background: "var(--status-error)", borderRadius: 2 }} />
-              <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 800,
-                letterSpacing: "0.10em", textTransform: "uppercase",
-                color: "var(--status-error)",
-              }}>
-                Needs Attention Today
-              </span>
-              <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800,
-                color: "#fff", background: "var(--status-error)",
-                borderRadius: 10, padding: "2px 10px",
-              }}>
-                {derived.attentionItems.length}
-              </span>
-            </div>
-            <button type="button" onClick={() => openPage("AlertsCenter")} style={{
-              background: "none", border: "none", color: "var(--status-error)",
-              cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10,
-              fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-            }}>
-              All alerts →
-            </button>
-          </div>
-          <div style={{ padding: 14 }}>
-            <WorkList items={derived.attentionItems} empty="No immediate risk items" onOpen={openPage} />
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
-        <Card
-          title="My Next Actions"
-          tone="accent"
-          count={derived.myItems.length}
+      {/* MIDDLE ROW — Active Task Inbox (50%) | Blocked / At Risk (50%) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
+        {/* Active Task Inbox — merged from Needs Attention + My Actions */}
+        <CollapsibleCard
+          id="dashboard-task-inbox"
+          title="Active Task Inbox"
+          tone={derived.attentionItems.length > 0 ? "danger" : "accent"}
+          count={taskInboxItems.length}
           action={
-            <div style={{
-              fontFamily: "var(--font-mono)", fontSize: 8,
-              color: "var(--text-muted)", textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}>
-              {user?.full_name || user?.email || "Project user"}
-            </div>
+            <Button type="button" onClick={() => openPage("AlertsCenter")} variant={derived.attentionItems.length > 0 ? "danger" : "outline"} size="sm">
+              All alerts \u2192
+            </Button>
           }
         >
-          <WorkList items={derived.myItems} empty="No directly assigned actions found" onOpen={openPage} />
-        </Card>
+          {taskInboxItems.length > 0 ? (
+            <WorkList items={taskInboxItems} empty="No items" onOpen={openPage} />
+          ) : (
+            <div style={{ padding: 12, textAlign: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 14 }}>{"\u2705"}</span>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                  All clear — no items need immediate attention
+                </span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
+                {[
+                  { label: "Create RFI", page: "RFIs" },
+                  { label: "Upload Drawing", page: "Drawings" },
+                  { label: "Add Work Package", page: "WorkPackages" },
+                ].map((qa) => (
+                  <Button key={qa.label} type="button" onClick={() => openPage(qa.page)} variant="secondary" size="sm">
+                    {qa.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </CollapsibleCard>
 
-        <Card title="Blocked / At Risk" tone="warning">
+        <CollapsibleCard id="dashboard-blocked" title="Blocked / At Risk" tone="warning">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {derived.blocked.map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={() => openPage(item.page)}
+                title={`Click to view ${item.label} details\n${item.detail}`}
                 style={{
                   background: "var(--bg-surface-low)",
                   border: "1px solid var(--border-default)",
@@ -1052,67 +1053,94 @@ export default function DrilldownView({
                   padding: "10px 12px",
                   cursor: "pointer",
                   textAlign: "left",
+                  transition: "border-color 0.15s, box-shadow 0.15s",
+                  position: "relative",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = item.color;
+                  e.currentTarget.style.boxShadow = `0 0 12px ${item.color}22`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-default)";
+                  e.currentTarget.style.boxShadow = "none";
                 }}
               >
                 <div style={{
-                  fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
                   color: "var(--text-muted)", letterSpacing: "0.10em",
                   textTransform: "uppercase", marginBottom: 6,
                 }}>
                   {item.label}
                 </div>
+                {item.isClear ? (
+                  <div style={{
+                    fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800,
+                    lineHeight: 1, color: "var(--status-success)", marginBottom: 4,
+                  }}>
+                    {"\u2713"} Clear
+                  </div>
+                ) : (
+                  <div style={{
+                    fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 900,
+                    lineHeight: 1, color: item.color, marginBottom: 4,
+                    letterSpacing: "-0.01em",
+                  }}>
+                    {item.value}
+                  </div>
+                )}
                 <div style={{
-                  fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800,
-                  lineHeight: 1, color: item.color, marginBottom: 4,
+                  fontFamily: "var(--font-body)", fontSize: 10,
+                  color: item.isClear ? "var(--status-success)" : "var(--text-disabled)",
+                  lineHeight: 1.3,
+                  opacity: item.isClear ? 0.7 : 1,
                 }}>
-                  {item.value}
+                  {item.isClear ? "No overdue items" : item.detail}
                 </div>
                 <div style={{
-                  fontFamily: "var(--font-body)", fontSize: 11,
-                  color: "var(--text-secondary)",
+                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                  color: "var(--text-muted)", letterSpacing: "0.08em",
+                  marginTop: 8, textTransform: "uppercase",
                 }}>
-                  {item.detail}
+                  VIEW \u2192
                 </div>
               </button>
             ))}
           </div>
-        </Card>
+        </CollapsibleCard>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
-        <Card title="Changed Since Yesterday" tone="accent" count={derived.changeFeed.length}>
-          <FeedList items={derived.changeFeed} />
-        </Card>
-        <Card title="Execution Snapshot" tone="accent">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
-            <ErrorBoundary label="Steel Execution Status">
-              <SteelExecutionStatusCard wps={wps} drawings={drawings} />
-            </ErrorBoundary>
-            <ErrorBoundary label="Financial Snapshot">
-              <FinancialSnapshotCard financials={financials} cos={cos} />
-            </ErrorBoundary>
-          </div>
-        </Card>
-      </div>
+      {/* BOTTOM ROW — Execution Pipeline (full width) */}
+      <CollapsibleCard id="dashboard-execution" title="Execution Snapshot" tone="accent">
+        <ErrorBoundary label="Steel Execution Status">
+          <SteelExecutionStatusCard wps={wps} drawings={drawings} />
+        </ErrorBoundary>
+      </CollapsibleCard>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "stretch" }}>
+      {/* Deliveries + Drawings + Changes row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, alignItems: "stretch" }}>
         <ErrorBoundary label="Upcoming Deliveries">
           <UpcomingDeliveriesCard deliveries={deliveries} />
         </ErrorBoundary>
         <ErrorBoundary label="Drawing Approval Status">
           <DrawingApprovalStatusCard drawings={drawings} />
         </ErrorBoundary>
+        <CollapsibleCard id="dashboard-changes" title="Changed Since Yesterday" tone="accent" count={derived.changeFeed.length}>
+          <FeedList items={derived.changeFeed} onNavigate={openPage} />
+        </CollapsibleCard>
       </div>
 
-      <ErrorBoundary label="Budget Overview Chart">
-        <BudgetOverviewChart
-          summary={{
-            budget: financials.budgetCommitted,
-            actual: financials.actualSpend,
-            forecast: financials.committedCosts,
-          }}
-        />
-      </ErrorBoundary>
+      {/* Budget Overview — merged with financial snapshot above */}
+      <CollapsibleCard id="dashboard-budget" title="Budget Overview" tone="accent">
+        <ErrorBoundary label="Budget Overview Chart">
+          <BudgetOverviewChart
+            summary={{
+              budget: financials.budgetCommitted,
+              actual: financials.actualSpend,
+              forecast: financials.committedCosts,
+            }}
+          />
+        </ErrorBoundary>
+      </CollapsibleCard>
     </div>
   );
 }

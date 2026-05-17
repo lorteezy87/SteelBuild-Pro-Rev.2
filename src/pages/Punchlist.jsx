@@ -1,17 +1,19 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import PunchlistList from "@/components/punchlist/PunchlistList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import { CommandBar, KpiTile, ProgressBar, BulkActionBar } from "@/components/design-system";
+import { Plus } from "lucide-react";
+import { logActivity } from "@/services/auditLogger";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 export default function Punchlist() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -19,8 +21,22 @@ export default function Punchlist() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  // C4 — multi-select + signed close-out
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [closeoutOpen, setCloseoutOpen] = useState(false);
+  const [closeoutSignature, setCloseoutSignature] = useState("");
 
-  const { data: punchlist = [] } = useQuery({
+  useAutoOpenCreate(() => {
+    setEditing(null);
+    setShowForm(true);
+  });
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+  const clearSelection = () => setSelectedIds([]);
+
+  const { data: rawPunchlist = [] } = useQuery({
     queryKey: ["punchlist", projectId],
     queryFn: () =>
       projectId
@@ -28,9 +44,14 @@ export default function Punchlist() {
         : base44.entities.PunchlistItem.list(),
   });
 
+  useRealtimeInvalidation("punchlist_items", projectId, [["punchlist", projectId]]);
+
+  const punchlist = React.useMemo(() => rawPunchlist.filter((r) => !r.is_deleted), [rawPunchlist]);
+
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const selectedProject = projectId
@@ -40,22 +61,46 @@ export default function Punchlist() {
   const createMut = useMutation({
     mutationFn: (data) =>
       base44.entities.PunchlistItem.create({ ...data, project_id: data.project_id || projectId }),
-    onSuccess: () => {
+    onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       setShowForm(false);
       setEditing(null);
       toast.success("Item created");
+      logActivity("punchlist_item", "created", created, {
+        projectId,
+        description: created?.description?.slice(0, 80) || "",
+      });
     },
     onError: (err) => toast.error(err.message),
   });
 
+  // Update mutation receives { ...data, id, _prevStatus } so we can fire a
+  // status_changed activity (and a "Completed" close event) deterministically
+  // from the page rather than guessing on the backend.
   const updateMut = useMutation({
-    mutationFn: (data) => base44.entities.PunchlistItem.update(data.id, data),
-    onSuccess: () => {
+    mutationFn: ({ _prevStatus, ...data }) => base44.entities.PunchlistItem.update(data.id, data),
+    onSuccess: (updated, vars) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       setShowForm(false);
       setEditing(null);
       toast.success("Item updated");
+
+      const prev = vars?._prevStatus;
+      const next = updated?.status;
+      if (prev && next && prev !== next) {
+        logActivity("punchlist_item", "status_changed", updated, {
+          projectId,
+          description: `${prev} → ${next}`,
+        });
+        if (next === "Completed") {
+          logActivity("punchlist_item", "updated", updated, {
+            projectId,
+            description: `Closed (was ${prev})`,
+          });
+        }
+      } else {
+        logActivity("punchlist_item", "updated", updated, { projectId });
+      }
     },
     onError: (err) => toast.error(err.message),
   });
@@ -70,13 +115,58 @@ export default function Punchlist() {
       }
       setDeleteTarget(null);
       toast.success("Item deleted");
+      logActivity("punchlist_item", "deleted", { id: deletedId }, { projectId });
     },
     onError: () => toast.error("Delete failed"),
   });
 
+  // C4 — Batch close-out with text signature.
+  // Stamps each selected row with status=Completed, percent_complete=100,
+  // closed_by + closed_at, and metadata.close_signature so the audit
+  // trail captures *who* signed off (text, not a drawn signature — per
+  // brief explicit guidance "keep it simple").
+  const closeoutMut = useMutation({
+    mutationFn: async ({ ids, signature }) => {
+      if (!signature || !signature.trim()) throw new Error("Signature required");
+      const stamp = new Date().toISOString();
+      const updated = [];
+      for (const id of ids) {
+        const row = await base44.entities.PunchlistItem.update(id, {
+          status: "Completed",
+          percent_complete: 100,
+          closed_by: signature.trim(),
+          closed_at: stamp,
+          metadata: {
+            close_signature: {
+              by: signature.trim(),
+              at: stamp,
+              method: "text",
+            },
+          },
+        });
+        updated.push(row);
+        logActivity("punchlist_item", "status_changed", row, {
+          projectId,
+          description: `Closed via batch · signature: ${signature.trim()}`,
+        });
+      }
+      return updated;
+    },
+    onSuccess: (rows) => {
+      qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
+      qc.invalidateQueries({ queryKey: ["punchlist-all"] });
+      qc.invalidateQueries({ queryKey: ["field-hub-punchlist", projectId] });
+      toast.success(`Closed ${rows.length} item${rows.length === 1 ? "" : "s"}`);
+      setCloseoutOpen(false);
+      setCloseoutSignature("");
+      setSelectedIds([]);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const handleSave = (data) => {
     if (editing) {
-      updateMut.mutate({ ...data, id: editing.id });
+      updateMut.mutate({ ...data, id: editing.id, _prevStatus: editing.status });
     } else {
       createMut.mutate(data);
     }
@@ -105,48 +195,55 @@ export default function Punchlist() {
   const priorities = ["Critical", "High", "Medium", "Low"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-body)", fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>Punchlist</h1>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>{selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Items</p>
-        </div>
-
-        <button onClick={() => {setEditing(null); setShowForm(true);}} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}>+ Add Item</button>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Punchlist"
+        count={filtered.length}
+        unit=" · ITEMS"
+        subtitle={`${completionRate}% complete · ${stats.critical} critical · close-out checklist`}
+      >
+        <button
+          onClick={() => { setEditing(null); setShowForm(true); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> Add Item
+        </button>
+      </CommandBar>
 
       {/* Completion Progress */}
-      <div style={{ background: "var(--bg-surface)", border: "none", borderRadius: "var(--radius-card)", padding: "16px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Project Completion</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, color: "var(--accent)" }}>{completionRate}%</span>
+      <div className="sbd-card" style={{ padding: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.10em" }}>
+            Project Completion
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--accent)" }}>
+            {completionRate}%
+          </span>
         </div>
-        <div style={{ height: "4px", background: "var(--bg-surface-highest)", borderRadius: "2px", overflow: "hidden" }}>
-          <div style={{ height: "100%", background: "linear-gradient(90deg, var(--accent), var(--status-success))", width: `${completionRate}%`, transition: "width 0.5s ease" }} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: "12px", marginTop: "12px" }}>
-          <div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Total</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 600, color: "var(--text-primary)" }}>{stats.total}</div>
-          </div>
-          <div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Completed</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 600, color: "var(--status-success)" }}>{stats.completed}</div>
-          </div>
-          <div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>In Progress</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 600, color: "var(--status-warning)" }}>{stats.inProgress}</div>
-          </div>
-          <div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Open</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 600, color: "var(--status-error)" }}>{stats.open}</div>
-          </div>
-          <div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Critical</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 600, color: "var(--status-error)" }}>{stats.critical}</div>
-          </div>
-        </div>
+        <ProgressBar value={completionRate} color="var(--status-success)" height={6} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total"       value={stats.total}      color="var(--accent)" />
+        <KpiTile compact label="Completed"   value={stats.completed}  color="var(--status-success)"
+                 active={filterStatus === "Completed"} onClick={() => setFilterStatus(filterStatus === "Completed" ? "all" : "Completed")} />
+        <KpiTile compact label="In Progress" value={stats.inProgress} color="var(--status-warning)"
+                 active={filterStatus === "In Progress"} onClick={() => setFilterStatus(filterStatus === "In Progress" ? "all" : "In Progress")} />
+        <KpiTile compact label="Open"        value={stats.open}       color="var(--status-error)"
+                 active={filterStatus === "Open"} onClick={() => setFilterStatus(filterStatus === "Open" ? "all" : "Open")} />
+        <KpiTile compact label="On Hold"     value={stats.onHold}     color="var(--status-review)"
+                 active={filterStatus === "On Hold"} onClick={() => setFilterStatus(filterStatus === "On Hold" ? "all" : "On Hold")} />
+        <KpiTile compact label="Critical"    value={stats.critical}   color="var(--status-error)"
+                 active={filterPriority === "Critical"} onClick={() => setFilterPriority(filterPriority === "Critical" ? "all" : "Critical")} />
       </div>
 
       {/* Filters */}
@@ -183,10 +280,148 @@ export default function Punchlist() {
       {showForm && <PunchlistFormModal projectId={projectId} item={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
 
       {/* Punchlist */}
-      <PunchlistList items={filtered} onEdit={(item) => {setEditing(item); setShowForm(true);}} onDelete={setDeleteTarget} />
+      <PunchlistList
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onEdit={(item) => { setEditing(item); setShowForm(true); }}
+        onDelete={setDeleteTarget}
+      />
 
       {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Item" description="Delete this record? This cannot be undone." />
+
+      {/* C4 — Bulk action bar (only renders with selection) */}
+      <BulkActionBar
+        count={selectedIds.length}
+        onClear={clearSelection}
+        actions={[
+          {
+            label: "Close Selected",
+            icon: "check",
+            variant: "primary",
+            onClick: () => setCloseoutOpen(true),
+            disabled: closeoutMut.isPending,
+          },
+        ]}
+      />
+
+      {/* C4 — Signature confirm modal */}
+      {closeoutOpen && (
+        <CloseoutSignatureModal
+          count={selectedIds.length}
+          signature={closeoutSignature}
+          onSignatureChange={setCloseoutSignature}
+          onCancel={() => { setCloseoutOpen(false); setCloseoutSignature(""); }}
+          onConfirm={() => closeoutMut.mutate({ ids: selectedIds, signature: closeoutSignature })}
+          isSaving={closeoutMut.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Close-out signature modal (C4) ─────────────────────────────────
+// Plain text signature line — explicit per the brief ("keep it simple
+// — text-based name, not actual signature capture"). Records the typed
+// name into `closed_by` + metadata.close_signature so the audit trail
+// shows who batch-closed which items when.
+function CloseoutSignatureModal({ count, signature, onSignatureChange, onCancel, onConfirm, isSaving }) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100,
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget && !isSaving) onCancel(); }}
+    >
+      <div style={{
+        background: "var(--bg-surface-secondary)",
+        border: "1px solid var(--border-default)",
+        borderRadius: 16,
+        padding: 24,
+        maxWidth: 480,
+        width: "92%",
+      }}>
+        <h3 style={{
+          fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700,
+          margin: "0 0 14px", color: "var(--text-primary)",
+          textTransform: "uppercase", letterSpacing: "0.10em",
+        }}>
+          Close {count} Item{count === 1 ? "" : "s"}
+        </h3>
+        <p style={{
+          fontFamily: "var(--font-body)", fontSize: 12,
+          color: "var(--text-secondary)", margin: "0 0 14px", lineHeight: 1.5,
+        }}>
+          This will mark all {count} selected item{count === 1 ? "" : "s"} as Completed (100%) and stamp
+          your typed name as the close-out signature. Type your name to confirm.
+        </p>
+        <input
+          type="text"
+          autoFocus
+          value={signature}
+          onChange={(e) => onSignatureChange(e.target.value)}
+          placeholder="Your name (text signature)"
+          style={{
+            width: "100%",
+            background: "var(--bg-input)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 8,
+            padding: "10px 12px",
+            color: "var(--text-primary)",
+            fontFamily: "var(--font-body)",
+            fontSize: 13,
+            outline: "none",
+            boxSizing: "border-box",
+            marginBottom: 16,
+          }}
+          disabled={isSaving}
+        />
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSaving}
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 8,
+              padding: "8px 16px",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: isSaving ? "not-allowed" : "pointer",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isSaving || !signature.trim()}
+            style={{
+              background: "var(--accent)",
+              color: "var(--bg-base)",
+              border: "none",
+              borderRadius: 8,
+              padding: "8px 16px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: isSaving || !signature.trim() ? "not-allowed" : "pointer",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              opacity: isSaving || !signature.trim() ? 0.5 : 1,
+            }}
+          >
+            {isSaving ? "Closing…" : "Sign & Close"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

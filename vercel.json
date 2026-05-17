@@ -8,11 +8,17 @@
       "headers": [
         { "key": "Content-Type", "value": "application/wasm" }
       ]
+    },
+    {
+      "source": "(.*)\\.wasm",
+      "headers": [
+        { "key": "Content-Type", "value": "application/wasm" }
+      ]
     }
   ],
   "rewrites": [
-    { "source": "/wasm/(.*)", "destination": "/wasm/$1" },
-    { "source": "/assets/(.*)", "destination": "/assets/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/wasm/:path*", "destination": "/wasm/:path*" },
+    { "source": "/assets/:path*", "destination": "/assets/:path*" },
+    { "source": "/((?!wasm/)(?!assets/).*)", "destination": "/index.html" }
   ]
 }

@@ -1,7 +1,7 @@
 import React from "react";
 import { Trash2 } from "lucide-react";
 
-const COLORS = ["var(--accent)", "#FF3D3D", "var(--status-warning)", "#FFE600", "var(--status-success)", "var(--accent)", "#8B5CF6", "#FFFFFF"];
+const COLORS = ["var(--accent)", "#FF3D3D", "var(--status-warning)", "#FFE600", "var(--status-success)", "var(--accent)", "#0D9488", "#FFFFFF"];
 
 export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
   if (!markup) return null;
@@ -15,19 +15,22 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
   );
 
   return (
-    <div style={{
+    <div className="sbd-sidebar" style={{
       width: 260,
-      background: "var(--bg-sidebar)",
-      borderLeft: "1px solid rgba(255,255,255,0.08)",
+      background: "var(--bg-surface-low)",
+      borderLeft: "1px solid var(--bg-surface-high)",
+      borderRight: "none",
       display: "flex",
       flexDirection: "column",
       overflow: "hidden",
       flexShrink: 0,
+      padding: 0,
+      minWidth: 0,
     }}>
       {/* Header */}
       <div style={{
         padding: "10px 14px",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        borderBottom: "1px solid var(--bg-surface-high)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <span style={{
@@ -42,7 +45,7 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
           title="Delete markup"
           style={{
             background: "rgba(255,61,61,0.10)", border: "1px solid rgba(255,61,61,0.20)",
-            borderRadius: 5, color: "#FF3D3D", cursor: "pointer",
+            borderRadius: 5, color: "var(--status-error-bright)", cursor: "pointer",
             width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >
@@ -62,7 +65,7 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
                 style={{
                   width: 26, height: 26, borderRadius: 5,
                   background: color,
-                  border: markup.color === color ? "2px solid #fff" : "1px solid rgba(255,255,255,0.18)",
+                  border: markup.color === color ? "2px solid var(--border-strong)" : "1px solid var(--border-strong)",
                   cursor: "pointer",
                   transform: markup.color === color ? "scale(1.12)" : "scale(1)",
                   transition: "transform 0.1s",
@@ -94,8 +97,8 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
                   onClick={() => onUpdate({ lineWidth: w })}
                   style={{
                     flex: 1, padding: "5px 0",
-                    background: markup.lineWidth === w ? "var(--accent-muted)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${markup.lineWidth === w ? "var(--accent-border)" : "rgba(255,255,255,0.10)"}`,
+                    background: markup.lineWidth === w ? "var(--accent-muted)" : "var(--hover-bg)",
+                    border: `1px solid ${markup.lineWidth === w ? "var(--accent-border)" : "var(--border-default)"}`,
                     color: markup.lineWidth === w ? "var(--accent)" : "var(--text-secondary)",
                     borderRadius: 5, cursor: "pointer",
                     fontFamily: "var(--font-mono)", fontSize: 9,
@@ -119,8 +122,8 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
                   onClick={() => onUpdate({ fontSize: fs })}
                   style={{
                     flex: 1, padding: "5px 0",
-                    background: markup.fontSize === fs ? "var(--accent-muted)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${markup.fontSize === fs ? "var(--accent-border)" : "rgba(255,255,255,0.10)"}`,
+                    background: markup.fontSize === fs ? "var(--accent-muted)" : "var(--hover-bg)",
+                    border: `1px solid ${markup.fontSize === fs ? "var(--accent-border)" : "var(--border-default)"}`,
                     color: markup.fontSize === fs ? "var(--accent)" : "var(--text-secondary)",
                     borderRadius: 5, cursor: "pointer",
                     fontFamily: "var(--font-mono)", fontSize: 9,
@@ -143,8 +146,8 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
               onChange={(e) => onUpdate({ text: e.target.value })}
               style={{
                 width: "100%", padding: "6px 8px",
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.12)",
+                background: "var(--hover-bg)",
+                border: "1px solid var(--border-default)",
                 color: markup.color || "var(--accent)",
                 borderRadius: 5,
                 fontFamily: "var(--font-body)", fontSize: 12,
@@ -162,8 +165,8 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
               onClick={() => onUpdate({ arrow: !markup.arrow })}
               style={{
                 padding: "5px 12px",
-                background: markup.arrow ? "var(--accent-muted)" : "rgba(255,255,255,0.05)",
-                border: `1px solid ${markup.arrow ? "var(--accent-border)" : "rgba(255,255,255,0.10)"}`,
+                background: markup.arrow ? "var(--accent-muted)" : "var(--hover-bg)",
+                border: `1px solid ${markup.arrow ? "var(--accent-border)" : "var(--border-default)"}`,
                 color: markup.arrow ? "var(--accent)" : "var(--text-secondary)",
                 borderRadius: 5, cursor: "pointer",
                 fontFamily: "var(--font-mono)", fontSize: 9,
@@ -184,8 +187,8 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
             rows={3}
             style={{
               width: "100%", padding: "6px 8px",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.12)",
+              background: "var(--hover-bg)",
+              border: "1px solid var(--border-default)",
               color: "var(--text-primary)",
               borderRadius: 5,
               fontFamily: "var(--font-body)", fontSize: 11,
@@ -202,8 +205,8 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
             onChange={(e) => onUpdate({ status: e.target.value })}
             style={{
               width: "100%", padding: "6px 8px",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.12)",
+              background: "var(--hover-bg)",
+              border: "1px solid var(--border-default)",
               color: "var(--text-primary)", borderRadius: 5,
               fontFamily: "var(--font-body)", fontSize: 11,
             }}

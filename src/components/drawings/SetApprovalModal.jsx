@@ -15,12 +15,16 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
   const [notes, setNotes] = useState("");
 
   const handleConfirm = () => {
+    // Locking is no longer triggered by the document-side approval.
+    // Drawing sets are locked automatically when a submittal linked to
+    // them reaches a terminal-approved status (Approved / Approved as
+    // Noted / Released for Fabrication). See useSubmittals.ts.
     onConfirm({ status, revision, approvedBy, approvalDate, applyToSheets, notes });
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent style={{ maxWidth: 480, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 16 }}>
+      <DialogContent className="sbd-card-strong" style={{ maxWidth: 480, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 16 }}>
         <DialogHeader>
           <DialogTitle style={{ fontFamily: "var(--font-body)", fontSize: 18, color: "var(--text-primary)", letterSpacing: "0.06em" }}>
             Approve Drawing Set
@@ -29,6 +33,15 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
             {setName} · {sheetCount} SHEETS
           </p>
         </DialogHeader>
+
+        <div style={{ background: "var(--info-muted)", border: "1px solid var(--info-border)", borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "var(--accent)" }}>
+            APPROVAL WORKFLOW MOVED
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-primary)", marginTop: 4, lineHeight: 1.4 }}>
+            Approval status now lives on the <strong>Submittals</strong> page. Use this dialog to record paper-trail metadata (revision, approved-by, notes) on the document set; the active workflow status is driven by the linked submittal.
+          </div>
+        </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
           {/* Status */}
@@ -43,10 +56,10 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
                     flex: 1, padding: "7px 0", borderRadius: 7, cursor: "pointer",
                     background: status === s
                        ? s === "approved" ? "rgba(0,230,118,0.12)" : s === "rejected" ? "rgba(255,23,68,0.12)" : "var(--info-muted)"
-                       : "rgba(255,255,255,0.04)",
+                       : "var(--hover-bg)",
                      border: `1px solid ${status === s
                        ? s === "approved" ? "rgba(0,230,118,0.25)" : s === "rejected" ? "rgba(255,23,68,0.25)" : "var(--info-border)"
-                       : "rgba(255,255,255,0.08)"}`,
+                       : "var(--bg-surface-high)"}`,
                      color: status === s
                        ? s === "approved" ? "var(--status-success)" : s === "rejected" ? "var(--status-error)" : "var(--accent)"
                        : "var(--text-muted)",
@@ -76,7 +89,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
           </div>
 
           {/* Toggle: apply to sheets */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, padding: "10px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--hover-bg)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, padding: "10px 14px" }}>
             <div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", fontWeight: 500 }}>
                 Apply to all sheets in this set
@@ -89,7 +102,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
               onClick={() => setApplyToSheets(v => !v)}
               style={{
                 width: 40, height: 22, borderRadius: 11, cursor: "pointer",
-                background: applyToSheets ? "var(--accent)" : "rgba(255,255,255,0.10)",
+                background: applyToSheets ? "var(--accent)" : "var(--border-default)",
                 border: "none", position: "relative", flexShrink: 0, transition: "background 0.2s"
               }}
             >
@@ -115,7 +128,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
           <button onClick={onClose} style={{
             padding: "8px 16px", borderRadius: 8, cursor: "pointer",
-            background: "transparent", border: "1px solid rgba(255,255,255,0.12)",
+            background: "transparent", border: "1px solid var(--border-default)",
             color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em"
           }}>Cancel</button>
           <button onClick={handleConfirm} disabled={saving} style={{

@@ -12,13 +12,21 @@ export default function BudgetForecastChart({ costCodes = [], projectStartDate, 
 
     const totalBudget = costCodes.reduce((sum, cc) => sum + (cc.budget_amount || 0), 0);
     const totalActual = costCodes.reduce((sum, cc) => sum + (cc.actual_cost || 0), 0);
-    const totalCommitted = costCodes.reduce((sum, cc) => sum + (cc.committed_cost || 0), 0);
     const totalForecast = costCodes.reduce((sum, cc) => sum + (cc.forecast_to_complete || 0), 0);
+
+    // Weighted physical progress: sum(budget_i × pct_complete_i) / totalBudget
+    const weightedEV = costCodes.reduce((sum, cc) => {
+      const bud = cc.budget_amount || 0;
+      const pct = (cc.percent_complete ?? cc.used_pct ?? 0) / 100;
+      return sum + bud * Math.min(1, pct);
+    }, 0);
+    // Current earned fraction (0-1) based on physical completion
+    const earnedFraction = totalBudget > 0 ? weightedEV / totalBudget : 0;
 
     // Generate monthly data points
     const start = new Date(projectStartDate);
     const end = new Date(projectEndDate);
-    const monthCount = Math.ceil((end - start) / (1000 * 60 * 60 * 24 * 30));
+    const monthCount = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24 * 30)));
 
     const chartData = [];
     for (let i = 0; i <= monthCount; i++) {
@@ -26,16 +34,15 @@ export default function BudgetForecastChart({ costCodes = [], projectStartDate, 
       month.setMonth(month.getMonth() + i);
       const monthStr = month.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 
-      // Simple S-curve distribution (realistic for construction)
+      // S-curve projection (modeled baseline — not sourced from time-phased actuals)
       const progress = i / monthCount;
       const sCurve = progress < 0.5 ? 0.5 * Math.pow(progress * 2, 1.5) : 1 - 0.5 * Math.pow(2 - progress * 2, 1.5);
 
       chartData.push({
         month: monthStr,
-        PV: totalBudget * sCurve, // Planned Value
-        EV: (totalActual + totalCommitted) * sCurve, // Earned Value
-        AC: totalActual * (i / monthCount), // Actual Cost (linear for demo)
-        EAC: totalBudget + totalForecast, // Estimate at Completion (line)
+        PV: totalBudget * sCurve, // Planned Value (modeled S-curve baseline)
+        EV: totalBudget * earnedFraction * sCurve, // Earned Value = budget × physical progress
+        AC: totalActual * (i / monthCount), // Actual Cost (linear distribution of spend to date)
       });
     }
 

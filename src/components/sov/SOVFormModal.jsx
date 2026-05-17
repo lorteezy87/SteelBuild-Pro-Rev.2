@@ -12,6 +12,7 @@ const empty = {
   description: "", scheduled_value: 0,
   previous_percent_complete: 0, current_percent_complete: 0,
   retainage_percent: 10, status: "Draft",
+  submitted_date: null, payment_received_date: null,
 };
 
 export default function SOVFormModal({ open, onClose, onSave, sov, projects = [], nextId, activeProject }) {
@@ -45,6 +46,12 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
     } else if (Number(form.current_percent_complete) < Number(form.previous_percent_complete)) {
       e.current_percent_complete = "Cannot be less than previous %";
     }
+    // payment_received_date must not precede submitted_date
+    if (form.payment_received_date && form.submitted_date) {
+      if (new Date(form.payment_received_date) < new Date(form.submitted_date)) {
+        e.payment_received_date = "Cannot be before Date Submitted";
+      }
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -59,13 +66,31 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
       previous_percent_complete: Number(form.previous_percent_complete) || 0,
       current_percent_complete: Number(form.current_percent_complete) || 0,
       retainage_percent: Number(form.retainage_percent) || 0,
+      submitted_date: form.submitted_date || null,
+      payment_received_date: form.payment_received_date || null,
     };
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
     onSave(data);
   };
 
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const today = () => new Date().toISOString().split("T")[0];
+
+  const set = (k, v) => {
+    setForm(p => {
+      const next = { ...p, [k]: v };
+      // Auto-populate billing dates on status transitions (editable, not locked)
+      if (k === "status") {
+        if (v === "Submitted" && !next.submitted_date) {
+          next.submitted_date = today();
+        }
+        if (v === "Paid" && !next.payment_received_date) {
+          next.payment_received_date = today();
+        }
+      }
+      return next;
+    });
+  };
 
   // Calculated fields
   const sv = Number(form.scheduled_value) || 0;
@@ -144,6 +169,30 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
               <SelectContent>{["Draft", "Submitted", "Certified", "Paid"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+          {/* ── Billing Workflow ── */}
+          <div className="sm:col-span-2" style={{ borderLeft: "3px solid var(--accent)", paddingLeft: 10, marginTop: 8 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--accent)", textTransform: "uppercase", fontWeight: 700 }}>Billing Workflow</span>
+          </div>
+          <div>
+            <Label>Date Submitted to GC</Label>
+            <Input type="date" value={form.submitted_date || ""} onChange={e => set("submitted_date", e.target.value)} />
+          </div>
+          <div>
+            <Label>Date Payment Received</Label>
+            <Input type="date" value={form.payment_received_date || ""} onChange={e => set("payment_received_date", e.target.value)} />
+            {errors.payment_received_date && <p className="text-xs text-rose-500 mt-1">{errors.payment_received_date}</p>}
+          </div>
+          {/* DSO helper — read-only, shows days to payment or days outstanding */}
+          {form.submitted_date && (
+            <div className="sm:col-span-2">
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
+                {form.payment_received_date
+                  ? `Days to payment: ${Math.max(0, Math.round((new Date(form.payment_received_date) - new Date(form.submitted_date)) / 86400000))}`
+                  : `Days outstanding: ${Math.max(0, Math.round((Date.now() - new Date(form.submitted_date)) / 86400000))}`
+                }
+              </span>
+            </div>
+          )}
           {/* Calculated fields display */}
           <div className="sm:col-span-2 rounded-lg p-4 grid grid-cols-2 sm:grid-cols-4 gap-3" style={{ background: "var(--info-muted)", border: "1px solid var(--info-border)" }}>
             <div>

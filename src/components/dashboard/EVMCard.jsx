@@ -13,7 +13,7 @@ function EVMKpi({ label, value, subtext, color, formula }) {
       flex: 1,
       minWidth: 0,
     }}>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
         {label}
       </div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color, lineHeight: 1, marginBottom: 3 }}>
@@ -22,7 +22,7 @@ function EVMKpi({ label, value, subtext, color, formula }) {
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
         {subtext}
       </div>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginTop: 6, fontStyle: "italic" }}>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 6, fontStyle: "italic" }}>
         {formula}
       </div>
     </div>
@@ -160,10 +160,10 @@ export default function EVMCard({ wps, project }) {
               ];
               return (
                 <div style={{ marginTop: 14 }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>EV / AC Curve</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>EV / AC Curve <span style={{ fontStyle: "italic", opacity: 0.7 }}>(Projected)</span></div>
                   <ResponsiveContainer width="100%" height={80}>
                     <LineChart data={pts} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                      <XAxis dataKey="x" tick={{ fontFamily: "var(--font-mono)", fontSize: 7, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="x" tick={{ fontFamily: "var(--font-mono)", fontSize: 9, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
                       <Tooltip
                         contentStyle={{ background: "var(--bg-surface-high)", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10 }}
                         formatter={v => formatCurrency(v).replace(/\.\d+/, "")}
@@ -175,7 +175,7 @@ export default function EVMCard({ wps, project }) {
                   </ResponsiveContainer>
                   <div style={{ display: "flex", gap: 14, marginTop: 4 }}>
                     {[["var(--border-strong)", "BAC", true], ["var(--accent)", "EV"], ["var(--status-warning)", "AC"]].map(([color, label, dashed]) => (
-                      <span key={label} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color, display: "flex", alignItems: "center", gap: 3 }}>
+                      <span key={label} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color, display: "flex", alignItems: "center", gap: 3 }}>
                         <span style={{ width: 12, height: dashed ? 1 : 2, background: color, borderTop: dashed ? "1px dashed" : "none", display: "inline-block" }} />
                         {label}
                       </span>

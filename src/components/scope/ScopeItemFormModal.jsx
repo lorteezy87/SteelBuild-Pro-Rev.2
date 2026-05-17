@@ -1,10 +1,13 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Paperclip, Upload, X as XIcon } from "lucide-react";
 
 export default function ScopeItemFormModal({ projectId, editing, onClose, onSave }) {
   const qc = useQueryClient();
+  const fileInput = useRef(null);
+  const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState(editing ? { ...editing } : {
     project_id: projectId,
     item_type: "Scope",
@@ -12,12 +15,16 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
     description: "",
     added_by: "",
     notes: "",
+    file_url: "",
+    storage_path: "",
+    file_name: "",
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const createMut = useMutation({
@@ -37,6 +44,32 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
     } else {
       createMut.mutate(formData);
     }
+  };
+
+  const handleAttachFile = async (file) => {
+    if (!file) return;
+    if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
+      toast.error("Attachment must be a PDF.");
+      return;
+    }
+    if (file.size > 32 * 1024 * 1024) {
+      toast.error("PDF exceeds 32 MB limit.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const { file_url, path } = await base44.integrations.Core.UploadFile({ file });
+      setFormData(prev => ({ ...prev, file_url, storage_path: path || "", file_name: file.name }));
+      toast.success("PDF attached");
+    } catch (err) {
+      toast.error("Upload failed: " + (err?.message || "Unknown error"));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAttachment = () => {
+    setFormData(prev => ({ ...prev, file_url: "", storage_path: "", file_name: "" }));
   };
 
   const saving = createMut.isPending;
@@ -318,6 +351,102 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
                   resize: "vertical",
                 }}
               />
+            </div>
+          </div>
+
+          {/* PDF Attachment */}
+          <div>
+            <label
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                color: "var(--text-muted)",
+                letterSpacing: "0.10em",
+                textTransform: "uppercase",
+                display: "block",
+                marginBottom: "4px",
+              }}
+            >
+              PDF Attachment
+            </label>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 12px",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 8,
+            }}>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="application/pdf,.pdf"
+                style={{ display: "none" }}
+                onChange={(e) => handleAttachFile(e.target.files?.[0])}
+              />
+              {formData.file_url ? (
+                <>
+                  <Paperclip size={14} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                  <a
+                    href={formData.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      flex: 1, minWidth: 0,
+                      color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12,
+                      textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
+                  >
+                    {formData.file_name || "Attached PDF"}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => fileInput.current?.click()}
+                    disabled={uploading}
+                    style={{
+                      background: "transparent", border: "1px solid var(--border-default)",
+                      borderRadius: 4, padding: "4px 10px",
+                      color: "var(--text-secondary)",
+                      fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                      letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
+                    }}
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={removeAttachment}
+                    aria-label="Remove attachment"
+                    style={{
+                      background: "transparent", border: "none",
+                      color: "var(--status-error)", cursor: "pointer", display: "flex", alignItems: "center", padding: 2,
+                    }}
+                  >
+                    <XIcon size={14} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => fileInput.current?.click()}
+                    disabled={uploading}
+                    style={{
+                      background: "transparent", border: "1px solid var(--border-default)",
+                      borderRadius: 4, padding: "6px 12px",
+                      color: "var(--text-primary)",
+                      fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                      letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                    }}
+                  >
+                    <Upload size={12} strokeWidth={2.5} />
+                    {uploading ? "Uploading…" : "Attach PDF"}
+                  </button>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
+                    Bid scope page, contract excerpt, clarification letter, etc. (32 MB max)
+                  </span>
+                </>
+              )}
             </div>
           </div>
 

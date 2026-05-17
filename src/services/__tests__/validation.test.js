@@ -53,7 +53,7 @@ describe("Drawing validation", () => {
 describe("Delivery validation", () => {
   const validDelivery = {
     project_id: "p1",
-    delivery_title: "Anchor Bolts Phase 1",
+    description: "Anchor Bolts Phase 1",
     vendor: "Fastenal",
     scheduled_date: "2026-05-01",
   };
@@ -62,9 +62,9 @@ describe("Delivery validation", () => {
     expect(validate("delivery", validDelivery)).toEqual([]);
   });
 
-  it("fails without delivery_title", () => {
-    const errors = validate("delivery", { ...validDelivery, delivery_title: "" });
-    expect(errors.some((e) => e.field === "delivery_title")).toBe(true);
+  it("fails without description", () => {
+    const errors = validate("delivery", { ...validDelivery, description: "" });
+    expect(errors.some((e) => e.field === "description")).toBe(true);
   });
 
   it("fails without vendor", () => {
@@ -202,6 +202,148 @@ describe("Schedule Task validation", () => {
       end_date: "2026-06-01",
     });
     expect(errors.some((e) => e.rule === "DATE_ORDER")).toBe(true);
+  });
+});
+
+// ─── Action Item validation ────────────────────────────────────────────
+
+describe("Action Item validation", () => {
+  const validAI = {
+    project_id: "p1",
+    title: "Fix anchor bolts",
+    due_date: "2026-06-01",
+  };
+
+  it("passes with required fields", () => {
+    expect(validate("action_item", validAI)).toEqual([]);
+    expect(isValid("action_item", validAI)).toBe(true);
+  });
+
+  it("fails without project_id", () => {
+    const errors = validate("action_item", { ...validAI, project_id: "" });
+    expect(errors.some((e) => e.field === "project_id")).toBe(true);
+  });
+
+  it("fails without title", () => {
+    const errors = validate("action_item", { ...validAI, title: "" });
+    expect(errors.some((e) => e.field === "title")).toBe(true);
+  });
+
+  it("fails with invalid due_date", () => {
+    const errors = validate("action_item", { ...validAI, due_date: "nope" });
+    expect(errors.some((e) => e.field === "due_date")).toBe(true);
+  });
+
+  it("fails with overly long title", () => {
+    const errors = validate("action_item", { ...validAI, title: "X".repeat(201) });
+    expect(errors.some((e) => e.rule === "MAX_LENGTH")).toBe(true);
+  });
+});
+
+// ─── Inspection validation ─────────────────────────────────────────────
+
+describe("Inspection validation", () => {
+  const validInsp = {
+    project_id: "p1",
+    inspection_type: "Welds",
+    scheduled_date: "2026-07-01",
+  };
+
+  it("passes with required fields", () => {
+    expect(validate("inspection", validInsp)).toEqual([]);
+  });
+
+  it("fails without inspection_type", () => {
+    const errors = validate("inspection", { ...validInsp, inspection_type: "" });
+    expect(errors.some((e) => e.field === "inspection_type")).toBe(true);
+  });
+
+  it("fails when completed_date is before scheduled_date", () => {
+    const errors = validate("inspection", {
+      ...validInsp,
+      completed_date: "2026-06-01",
+    });
+    expect(errors.some((e) => e.rule === "DATE_ORDER")).toBe(true);
+    expect(errors.some((e) => e.field === "completed_date")).toBe(true);
+  });
+
+  it("passes when completed_date equals scheduled_date", () => {
+    expect(
+      validate("inspection", { ...validInsp, completed_date: "2026-07-01" })
+    ).toEqual([]);
+  });
+});
+
+// ─── Safety Incident validation ────────────────────────────────────────
+
+describe("Safety Incident validation", () => {
+  const validSI = {
+    project_id: "p1",
+    incident_type: "Near Miss",
+    severity: "Low",
+    incident_date: "2026-05-10",
+  };
+
+  it("passes with required fields", () => {
+    expect(validate("safety_incident", validSI)).toEqual([]);
+  });
+
+  it("fails without incident_type", () => {
+    const errors = validate("safety_incident", { ...validSI, incident_type: "" });
+    expect(errors.some((e) => e.field === "incident_type")).toBe(true);
+  });
+
+  it("fails without severity", () => {
+    const errors = validate("safety_incident", { ...validSI, severity: null });
+    expect(errors.some((e) => e.field === "severity")).toBe(true);
+  });
+
+  it("fails with overly long description", () => {
+    const errors = validate("safety_incident", {
+      ...validSI,
+      description: "A".repeat(2001),
+    });
+    expect(errors.some((e) => e.field === "description" && e.rule === "MAX_LENGTH")).toBe(true);
+  });
+
+  it("passes with description at max length", () => {
+    expect(
+      validate("safety_incident", { ...validSI, description: "A".repeat(2000) })
+    ).toEqual([]);
+  });
+});
+
+// ─── Punchlist Item validation ─────────────────────────────────────────
+
+describe("Punchlist Item validation", () => {
+  const validPL = {
+    project_id: "p1",
+    title: "Touch-up paint on Column B4",
+    due_date: "2026-08-01",
+  };
+
+  it("passes with required fields", () => {
+    expect(validate("punchlist_item", validPL)).toEqual([]);
+  });
+
+  it("fails without project_id", () => {
+    const errors = validate("punchlist_item", { ...validPL, project_id: "" });
+    expect(errors.some((e) => e.field === "project_id")).toBe(true);
+  });
+
+  it("fails without title", () => {
+    const errors = validate("punchlist_item", { ...validPL, title: "" });
+    expect(errors.some((e) => e.field === "title")).toBe(true);
+  });
+
+  it("fails with overly long title", () => {
+    const errors = validate("punchlist_item", { ...validPL, title: "Z".repeat(201) });
+    expect(errors.some((e) => e.rule === "MAX_LENGTH")).toBe(true);
+  });
+
+  it("fails with invalid due_date", () => {
+    const errors = validate("punchlist_item", { ...validPL, due_date: "bad" });
+    expect(errors.some((e) => e.field === "due_date")).toBe(true);
   });
 });
 

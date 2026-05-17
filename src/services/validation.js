@@ -80,7 +80,7 @@ const RULES = {
   delivery: (data, mode) => {
     const errors = [];
     errors.push(required(data.project_id, "project_id", "Project"));
-    errors.push(required(data.delivery_title, "delivery_title", "Delivery Title"));
+    errors.push(required(data.description, "description", "Delivery Title"));
     errors.push(required(data.vendor, "vendor", "Vendor"));
     errors.push(required(data.scheduled_date, "scheduled_date", "Scheduled Date"));
     errors.push(validDate(data.scheduled_date, "scheduled_date", "Scheduled Date"));
@@ -110,6 +110,13 @@ const RULES = {
     if (data.co_amount !== undefined && data.co_amount !== null) {
       const num = Number(data.co_amount);
       if (isNaN(num)) errors.push({ field: "co_amount", message: "CO Amount must be a number.", rule: "NUMBER" });
+    }
+    // Margin % must be 0–100 when provided
+    if (data.margin_percent !== undefined && data.margin_percent !== null && data.margin_percent !== "") {
+      const mp = Number(data.margin_percent);
+      if (isNaN(mp) || mp < 0 || mp > 100) {
+        errors.push({ field: "margin_percent", message: "Margin % must be between 0 and 100.", rule: "RANGE" });
+      }
     }
     errors.push(validDate(data.submitted_date, "submitted_date", "Submitted Date"));
     errors.push(validDate(data.approved_date, "approved_date", "Approved Date"));
@@ -158,6 +165,10 @@ const RULES = {
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.description, "description", "Description"));
     errors.push(nonNegativeNumber(data.scheduled_value || 0, "scheduled_value", "Scheduled Value"));
+    errors.push(validDate(data.submitted_date, "submitted_date", "Date Submitted"));
+    errors.push(validDate(data.payment_received_date, "payment_received_date", "Date Payment Received"));
+    // Payment can't be received before submission
+    errors.push(dateNotBefore(data.payment_received_date, data.submitted_date, "payment_received_date", "Date Payment Received", "Date Submitted"));
     return errors.filter(Boolean);
   },
 
@@ -168,6 +179,101 @@ const RULES = {
     errors.push(validDate(data.start_date, "start_date", "Start Date"));
     errors.push(validDate(data.end_date, "end_date", "End Date"));
     errors.push(dateNotBefore(data.end_date, data.start_date, "end_date", "End Date", "Start Date"));
+    return errors.filter(Boolean);
+  },
+
+  submittal: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.submittal_number, "submittal_number", "Submittal #"));
+    errors.push(required(data.title, "title", "Title"));
+    errors.push(validDate(data.submitted_date, "submitted_date", "Submitted Date"));
+    errors.push(validDate(data.required_date, "required_date", "Required Date"));
+    errors.push(validDate(data.returned_date, "returned_date", "Returned Date"));
+    errors.push(validDate(data.approved_date, "approved_date", "Approved Date"));
+    errors.push(maxLength(data.submittal_number, 50, "submittal_number", "Submittal #"));
+    errors.push(maxLength(data.title, 200, "title", "Title"));
+    if (data.round_number !== undefined && data.round_number !== null) {
+      const rn = Number(data.round_number);
+      if (isNaN(rn) || rn < 1) {
+        errors.push({ field: "round_number", message: "Round must be 1 or greater.", rule: "POSITIVE_INTEGER" });
+      }
+    }
+    return errors.filter(Boolean);
+  },
+
+  submittal_round: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.submittal_id, "submittal_id", "Submittal"));
+    errors.push(validDate(data.submitted_date, "submitted_date", "Submitted Date"));
+    errors.push(validDate(data.returned_date, "returned_date", "Returned Date"));
+    if (data.round_number !== undefined && data.round_number !== null) {
+      const rn = Number(data.round_number);
+      if (isNaN(rn) || rn < 1) {
+        errors.push({ field: "round_number", message: "Round must be 1 or greater.", rule: "POSITIVE_INTEGER" });
+      }
+    }
+    return errors.filter(Boolean);
+  },
+
+  action_item: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.title, "title", "Title"));
+    errors.push(validDate(data.due_date, "due_date", "Due Date"));
+    errors.push(maxLength(data.title, 200, "title", "Title"));
+    return errors.filter(Boolean);
+  },
+
+  inspection: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.inspection_type, "inspection_type", "Inspection Type"));
+    errors.push(validDate(data.scheduled_date, "scheduled_date", "Scheduled Date"));
+    errors.push(validDate(data.completed_date, "completed_date", "Completed Date"));
+    errors.push(dateNotBefore(data.completed_date, data.scheduled_date, "completed_date", "Completed Date", "Scheduled Date"));
+    return errors.filter(Boolean);
+  },
+
+  safety_incident: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.incident_type, "incident_type", "Incident Type"));
+    errors.push(required(data.severity, "severity", "Severity"));
+    errors.push(validDate(data.incident_date, "incident_date", "Incident Date"));
+    errors.push(maxLength(data.description, 2000, "description", "Description"));
+    return errors.filter(Boolean);
+  },
+
+  punchlist_item: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.title, "title", "Title"));
+    errors.push(validDate(data.due_date, "due_date", "Due Date"));
+    errors.push(maxLength(data.title, 200, "title", "Title"));
+    return errors.filter(Boolean);
+  },
+
+  project: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_number, "project_number", "Project Number"));
+    errors.push(required(data.name, "name", "Project Name"));
+    errors.push(required(data.client, "client", "Client"));
+    errors.push(maxLength(data.name, 150, "name", "Project Name"));
+    errors.push(maxLength(data.project_number, 50, "project_number", "Project Number"));
+    if (data.original_contract_value !== undefined && data.original_contract_value !== null && data.original_contract_value !== "") {
+      errors.push(nonNegativeNumber(data.original_contract_value, "original_contract_value", "Contract Value"));
+    }
+    if (data.retainage_percent !== undefined && data.retainage_percent !== null && data.retainage_percent !== "") {
+      const ret = Number(data.retainage_percent);
+      if (isNaN(ret) || ret < 0 || ret > 100) {
+        errors.push({ field: "retainage_percent", message: "Retainage must be between 0% and 100%.", rule: "RANGE" });
+      }
+    }
+    errors.push(validDate(data.start_date, "start_date", "Start Date"));
+    errors.push(validDate(data.target_completion_date, "target_completion_date", "Target Completion Date"));
+    errors.push(dateNotBefore(data.target_completion_date, data.start_date, "target_completion_date", "Target Completion", "Start Date"));
     return errors.filter(Boolean);
   },
 };

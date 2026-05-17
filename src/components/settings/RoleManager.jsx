@@ -123,8 +123,8 @@ export default function RoleManager() {
     roleRow: {
       display: 'flex', alignItems: 'center',
       justifyContent: 'space-between',
-      background: 'rgba(255,255,255,0.03)',
-      border: '1px solid rgba(255,255,255,0.06)',
+      background: 'var(--hover-bg)',
+      border: '1px solid var(--divider)',
       borderRadius: 6, padding: '8px 12px',
       marginBottom: 6,
     },
@@ -152,20 +152,20 @@ export default function RoleManager() {
       fontStyle: 'italic', padding: '8px 0',
     },
     divider: {
-      borderTop: '1px solid rgba(255,255,255,0.06)',
+      borderTop: '1px solid var(--divider)',
       margin: '20px 0',
     },
     auditToggle: {
       background: 'transparent',
-      border: '1px solid rgba(255,255,255,0.10)',
+      border: '1px solid var(--border-default)',
       borderRadius: 6, padding: '6px 14px',
       fontFamily: 'var(--font-mono)', fontSize: 8,
       color: 'var(--text-muted)',
       cursor: 'pointer', letterSpacing: '0.08em',
     },
     auditEntry: {
-      background: 'rgba(255,255,255,0.02)',
-      border: '1px solid rgba(255,255,255,0.05)',
+      background: 'var(--hover-bg)',
+      border: '1px solid var(--hover-bg)',
       borderRadius: 6, padding: '8px 12px',
       marginBottom: 6,
     },
@@ -206,8 +206,8 @@ export default function RoleManager() {
       }}>
         {ROLES.map(r => (
           <div key={r} style={{
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255,255,255,0.05)',
+            background: 'var(--hover-bg)',
+            border: '1px solid var(--hover-bg)',
             borderRadius: 6, padding: '6px 10px',
           }}>
             <span style={S.roleBadge(r)}>{r}</span>

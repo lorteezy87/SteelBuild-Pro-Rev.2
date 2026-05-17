@@ -19,7 +19,7 @@ function FinRow({ label, value, valueColor, isTotal = false }) {
   );
 }
 
-export default function FinancialSnapshotCard({ financials, cos }) {
+export default function FinancialSnapshotCard({ financials = {} }) {
   const navigate = useNavigate();
   const contractValue = Number(financials.contractValue) || 0;
   const approvedCOVal = Number(financials.approvedCOVal) || 0;
@@ -57,7 +57,7 @@ export default function FinancialSnapshotCard({ financials, cos }) {
         {/* Financial content — only when data exists */}
         {(contractValue > 0 || budgetCommitted > 0 || actualSpend > 0) && <>
           <div style={{ padding: "12px 0 10px", borderBottom: "1px solid var(--divider)", marginBottom: 8 }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>Revised Contract Value</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>Revised Contract Value</div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>
               {formatCurrency(revisedValue).replace(/\.\d+/, "")}
             </div>
@@ -77,7 +77,7 @@ export default function FinancialSnapshotCard({ financials, cos }) {
           {budgetCommitted > 0 && (
             <div style={{ marginTop: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Budget Burn</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Budget Burn</span>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: costPct > 100 ? "var(--status-error)" : "var(--status-success)", fontWeight: 700 }}>{costPct}%</span>
               </div>
               <div style={{ height: 7, background: "var(--border-default)", borderRadius: 4, overflow: "hidden" }}>
@@ -86,7 +86,7 @@ export default function FinancialSnapshotCard({ financials, cos }) {
 
               {/* Mini spend breakdown bar chart */}
               <div style={{ marginTop: 14 }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Spend Breakdown</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Spend Breakdown</span>
                 <ResponsiveContainer width="100%" height={70}>
                   <BarChart
                     layout="vertical"
@@ -94,12 +94,12 @@ export default function FinancialSnapshotCard({ financials, cos }) {
                     margin={{ top: 6, right: 0, left: -32, bottom: 0 }}
                     barSize={10}
                   >
-                    <XAxis type="number" tick={{ fontFamily: "var(--font-mono)", fontSize: 7, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                    <XAxis type="number" tick={{ fontFamily: "var(--font-mono)", fontSize: 9, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="name" hide />
                     <Tooltip
                       contentStyle={{ background: "var(--bg-surface-high)", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10 }}
                       formatter={(v, n) => [`$${v}K`, n.charAt(0).toUpperCase() + n.slice(1)]}
-                      cursor={{ fill: "rgba(255,255,255,0.02)" }}
+                      cursor={{ fill: "var(--hover-bg)" }}
                     />
                     <Bar dataKey="actual" name="actual" fill="var(--accent)" radius={[2, 2, 2, 2]} />
                     <Bar dataKey="committed" name="committed" fill="var(--status-warning)" radius={[2, 2, 2, 2]} />
@@ -108,7 +108,7 @@ export default function FinancialSnapshotCard({ financials, cos }) {
                 </ResponsiveContainer>
                 <div style={{ display: "flex", gap: 12, marginTop: 2 }}>
                   {[["var(--accent)", "Actual"], ["var(--status-warning)", "Committed"], ...(pendingCOVal > 0 ? [["var(--status-error)", "Pending CO"]] : [])].map(([color, label]) => (
-                    <span key={label} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 3 }}>
+                    <span key={label} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 3 }}>
                       <span style={{ width: 8, height: 2, background: color, display: "inline-block", borderRadius: 1 }} />
                       {label}
                     </span>

@@ -3,32 +3,34 @@ import React from "react";
 // Phoenix standard panel with orange left-border header
 export function PhoenixPanel({ title, count, actions, children, style = {} }) {
   return (
-    <div style={{
-      background: "var(--bg-surface)",
-      border: "none",
-      borderRadius: "var(--radius-card)",
+    <div className="sbd-card sbp-phoenix-panel" style={{
+      background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 90%, #000 10%) 0%, color-mix(in srgb, var(--bg-surface-low) 86%, #000 14%) 100%)",
+      border: "1px solid color-mix(in srgb, var(--border-default) 88%, white 12%)",
+      borderRadius: "16px",
       overflow: "hidden",
+      padding: 0,
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 28px rgba(0,0,0,0.28)",
       ...style
     }}>
       {(title || actions) && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "12px 18px",
+          padding: "14px 18px",
           borderBottom: "1px solid var(--divider)",
-          background: "var(--bg-sidebar)",
+          background: "color-mix(in srgb, var(--bg-surface-low) 88%, #000 12%)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {title && (
               <span style={{
-                fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700,
-                color: "var(--text-primary)", letterSpacing: "0.12em", textTransform: "uppercase"
+                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                color: "var(--text-primary)", letterSpacing: "0.14em", textTransform: "uppercase"
               }}>{title}</span>
             )}
             {count != null && (
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
                 background: "var(--accent-muted)", border: "1px solid var(--accent-border)",
-                color: "var(--accent)", borderRadius: 4, padding: "1px 6px", letterSpacing: "0.06em"
+                color: "var(--accent)", borderRadius: 999, padding: "2px 7px", letterSpacing: "0.08em"
               }}>{count}</span>
             )}
           </div>
@@ -54,7 +56,7 @@ export function DataPair({ label, value, mono = false }) {
 export const phoenixTH = {
   fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em",
   textTransform: "uppercase", color: "var(--text-muted)",
-  fontWeight: 700, padding: "8px 12px", background: "var(--hover-bg)",
+  fontWeight: 700, padding: "10px 12px", background: "color-mix(in srgb, var(--bg-surface-low) 90%, #000 10%)",
   borderBottom: "1px solid var(--divider)"
 };
 

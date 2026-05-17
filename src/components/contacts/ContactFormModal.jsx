@@ -3,32 +3,34 @@ import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+const INITIAL_FORM = {
+  first_name: "",
+  last_name: "",
+  company: "",
+  role: "",
+  contact_type: "GC",
+  email: "",
+  phone: "",
+  notes: "",
+};
+
 export default function ContactFormModal({ projectId, contact = null, onClose, onSave }) {
   const qc = useQueryClient();
   const isEdit = !!contact;
 
-  const emptyForm = {
-    project_id: projectId || "",
-    first_name: "",
-    last_name: "",
-    company: "",
-    role: "",
-    contact_type: "GC",
-    email: "",
-    phone: "",
-    notes: "",
-  };
-
-  const [formData, setFormData] = useState(contact ? { ...emptyForm, ...contact } : emptyForm);
+  const [formData, setFormData] = useState(() => (
+    contact ? { ...INITIAL_FORM, project_id: projectId || "", ...contact } : { ...INITIAL_FORM, project_id: projectId || "" }
+  ));
 
   useEffect(() => {
-    setFormData(contact ? { ...emptyForm, ...contact } : { ...emptyForm, project_id: projectId || "" });
+    setFormData(contact ? { ...INITIAL_FORM, project_id: projectId || "", ...contact } : { ...INITIAL_FORM, project_id: projectId || "" });
   }, [contact, projectId]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const createMut = useMutation({

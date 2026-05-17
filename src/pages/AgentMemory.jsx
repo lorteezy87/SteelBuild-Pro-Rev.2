@@ -1,57 +1,49 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
+import { formatDate } from '@/components/shared/formatters';
 
 export default function AgentMemory() {
-  const [memories, setMemories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
   const [newMemory, setNewMemory] = useState('');
   const [category, setCategory] = useState('general');
-  const [adding, setAdding] = useState(false);
 
-  const fetchMemories = async () => {
-    try {
+  const { data: memories = [], isLoading } = useQuery({
+    queryKey: ['agent-memory'],
+    queryFn: async () => {
       const { data } = await base44.functions.invoke('agentMemory', {});
-      setMemories(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to fetch memories:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    fetchMemories();
-  }, []);
-
-  const handleAddMemory = async () => {
-    if (!newMemory.trim()) return;
-    setAdding(true);
-    try {
-      await base44.functions.invoke('agentMemory', {
-        method: 'POST',
-        content: newMemory,
-        category: category
-      });
+  const addMut = useMutation({
+    mutationFn: ({ content, category }) =>
+      base44.functions.invoke('agentMemory', { method: 'POST', content, category }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agent-memory'] });
       setNewMemory('');
       setCategory('general');
-      fetchMemories();
-    } catch (err) {
-      console.error('Failed to add memory:', err);
-    } finally {
-      setAdding(false);
-    }
-  };
+      toast.success('Memory added');
+    },
+    onError: (err) => toast.error('Failed to add memory: ' + (err?.message || 'Unknown error')),
+  });
 
-  const handleDeleteMemory = async (memoryId) => {
-    try {
-      await base44.functions.invoke('agentMemory', {
-        method: 'DELETE',
-        memoryId
-      });
-      fetchMemories();
-    } catch (err) {
-      console.error('Failed to delete memory:', err);
-    }
+  const deleteMut = useMutation({
+    mutationFn: (memoryId) =>
+      base44.functions.invoke('agentMemory', { method: 'DELETE', memoryId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agent-memory'] });
+      toast.success('Memory deleted');
+    },
+    onError: (err) => toast.error('Failed to delete memory: ' + (err?.message || 'Unknown error')),
+  });
+
+  const handleAdd = () => {
+    if (!newMemory.trim()) return;
+    addMut.mutate({ content: newMemory, category });
   };
 
   return (
@@ -89,7 +81,8 @@ export default function AgentMemory() {
             fontFamily: 'var(--font-body)',
             fontSize: 12,
             resize: 'vertical',
-            marginBottom: 10
+            marginBottom: 10,
+            boxSizing: 'border-box',
           }}
         />
         <div style={{ display: 'flex', gap: 10 }}>
@@ -112,8 +105,8 @@ export default function AgentMemory() {
             <option value="decision">Decision</option>
           </select>
           <button
-            onClick={handleAddMemory}
-            disabled={adding || !newMemory.trim()}
+            onClick={handleAdd}
+            disabled={addMut.isPending || !newMemory.trim()}
             style={{
               flex: 1,
               background: 'var(--accent)',
@@ -125,10 +118,10 @@ export default function AgentMemory() {
               fontSize: 12,
               fontWeight: 600,
               cursor: 'pointer',
-              opacity: adding || !newMemory.trim() ? 0.5 : 1
+              opacity: addMut.isPending || !newMemory.trim() ? 0.5 : 1
             }}
           >
-            {adding ? 'Adding...' : '+ Add Memory'}
+            {addMut.isPending ? 'Adding...' : '+ Add Memory'}
           </button>
         </div>
       </div>
@@ -139,8 +132,8 @@ export default function AgentMemory() {
           Stored Items ({memories.length})
         </h2>
 
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '20px 0', color: 'rgba(160,175,210,0.4)' }}>Loading...</div>
+        {isLoading ? (
+          <LoadingSkeleton variant="table" rows={3} />
         ) : memories.length === 0 ? (
           <div style={{
             background: 'var(--bg-surface-low)',
@@ -148,7 +141,7 @@ export default function AgentMemory() {
             borderRadius: 8,
             padding: 20,
             textAlign: 'center',
-            color: 'rgba(160,175,210,0.5)'
+            color: 'var(--text-muted)',
           }}>
             No memories stored yet
           </div>
@@ -190,13 +183,14 @@ export default function AgentMemory() {
                         {mem.category}
                       </span>
                     )}
-                    <span style={{ color: 'rgba(160,175,210,0.4)' }}>
-                      {mem.created_at ? new Date(mem.created_at).toLocaleDateString() : ''}
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      {mem.created_at ? formatDate(mem.created_at) : ''}
                     </span>
                   </div>
                 </div>
                 <button
-                  onClick={() => handleDeleteMemory(mem.id)}
+                  onClick={() => deleteMut.mutate(mem.id)}
+                  disabled={deleteMut.isPending}
                   style={{
                     background: 'var(--danger-muted)',
                     border: '1px solid var(--danger-border)',

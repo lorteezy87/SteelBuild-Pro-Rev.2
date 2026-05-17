@@ -19,8 +19,8 @@ const ACTIVITY_CHIPS = [
 
 const nativeSelectStyle = {
   width: "100%",
-  background: "var(--bg-sidebar)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "var(--bg-surface-low)",
+  border: "1px solid var(--bg-surface-high)",
   borderRadius: 8,
   padding: "10px 12px",
   color: "var(--text-primary)",
@@ -72,14 +72,13 @@ export default function DailyLogFormModal({
 
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [expandDelays, setExpandDelays] = useState(false);
-  const [expandPhotos, setExpandPhotos] = useState(false);
 
   useEffect(() => {
     if (log) {
       setForm({
         ...log,
         wp_progress: log.wp_progress
-          ? (typeof log.wp_progress === "string" ? JSON.parse(log.wp_progress) : log.wp_progress)
+          ? (typeof log.wp_progress === "string" ? (() => { try { return JSON.parse(log.wp_progress); } catch { return []; } })() : log.wp_progress)
           : [],
       });
     } else {
@@ -101,7 +100,6 @@ export default function DailyLogFormModal({
   const fetchWeather = async () => {
     setWeatherLoading(true);
     try {
-      const now = new Date();
       const lat = 33.4484; // Phoenix, AZ default
       const lon = -112.0742;
       const res = await fetch(
@@ -190,7 +188,7 @@ export default function DailyLogFormModal({
         {/* Sticky header */}
         <div style={{
           position: "sticky", top: 0, zIndex: 10,
-          background: "var(--bg-surface-low)", borderBottom: "1px solid rgba(255,255,255,0.06)",
+          background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)",
           padding: "12px 0 10px", marginBottom: 4,
         }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>

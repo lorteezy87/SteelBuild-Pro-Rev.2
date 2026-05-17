@@ -16,7 +16,7 @@ import { formatCurrencyShort } from "../shared/formatters";
  *        AC  (actual cost)          — coloured red/amber/green by CPI
  * Line:  CPI per project            — right axis
  */
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   if (!d) return null;

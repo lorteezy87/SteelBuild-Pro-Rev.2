@@ -4,6 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatPercent } from "@/components/shared/formatters";
+import { CommandBar } from "@/components/design-system";
+import { ArrowLeft } from "lucide-react";
+import ProjectHandoffChecklist from "@/components/projects/ProjectHandoffChecklist";
+import ProjectKickoffChecklist, { KickoffPill } from "@/components/projects/ProjectKickoffChecklist";
 
 const HEALTH_COLORS = {
   "On Track": "var(--status-success)",
@@ -13,6 +17,8 @@ const HEALTH_COLORS = {
 
 const tabs = [
   { id: "overview", label: "Overview" },
+  { id: "kickoff", label: "Kickoff" },
+  { id: "handoff", label: "Handoff" },
   { id: "schedule", label: "Schedule" },
   { id: "documents", label: "Documents" },
   { id: "rfis", label: "RFIs" },
@@ -78,152 +84,67 @@ export default function ProjectDetail() {
         ).toFixed(0)
       : 0;
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              marginBottom: "8px",
-            }}
-          >
-            <button
-              onClick={() => navigate(createPageUrl("Projects"))}
-              style={{
-                background: "none",
-                border: "none",
-                color: "var(--accent)",
-                cursor: "pointer",
-                fontFamily: "var(--font-mono)",
-                fontSize: "12px",
-                padding: 0,
-              }}
-            >
-              ← Projects
-            </button>
-          </div>
-          <h1
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 24,
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            {project.name}
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              color: "var(--text-muted)",
-              marginTop: 4,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
-            {project.project_number}
-          </p>
-        </div>
+  const healthColor = HEALTH_COLORS[project.health_status] || "var(--text-muted)";
 
-        {/* Quick Stats */}
-        <div
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ marginBottom: -8 }}>
+        <button
+          onClick={() => navigate(createPageUrl("Projects"))}
           style={{
-            display: "flex",
-            gap: "16px",
-            alignItems: "flex-start",
+            display: "inline-flex", alignItems: "center", gap: 4,
+            background: "none",
+            border: "none",
+            color: "var(--accent)",
+            cursor: "pointer",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            padding: 0,
           }}
         >
-          <div style={{ textAlign: "right" }}>
-            <div
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "9px",
-                color: "var(--text-muted)",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                marginBottom: "4px",
-              }}
-            >
-              Progress
-            </div>
-            <div
-              style={{
-                fontSize: "20px",
-                fontWeight: 700,
-                color: "var(--accent)",
-              }}
-            >
-              {formatPercent(progress)}
-            </div>
-          </div>
+          <ArrowLeft size={12} /> Projects
+        </button>
+      </div>
 
-          <div style={{ textAlign: "right" }}>
-            <div
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "9px",
-                color: "var(--text-muted)",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                marginBottom: "4px",
-              }}
-            >
-              Health
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                justifyContent: "flex-end",
-              }}
-            >
-              <div
-                style={{
-                  width: "10px",
-                  height: "10px",
-                  borderRadius: "50%",
-                  background:
-                    HEALTH_COLORS[project.health_status] ||
-                    "var(--text-muted)",
-                  boxShadow: `0 0 8px ${
-                    HEALTH_COLORS[project.health_status] ||
-                    "var(--text-muted)"
-                  }66`,
-                }}
-              />
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "10px",
-                  fontWeight: 600,
-                  color:
-                    HEALTH_COLORS[project.health_status] ||
-                    "var(--text-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                {project.health_status}
-              </span>
-            </div>
+      <CommandBar
+        eyebrow={project.project_number || "PROJECT"}
+        title={project.name}
+        subtitle={`${project.client || "Client"} · ${project.address || "Location"}`}
+      >
+        <div style={{ textAlign: "right", marginRight: 8 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>
+            Progress
+          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 700, color: "var(--accent)", lineHeight: 1 }}>
+            {formatPercent(progress)}
           </div>
         </div>
-      </div>
+
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>
+            Health
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+            <div
+              style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: healthColor,
+                boxShadow: `0 0 8px ${healthColor}`,
+              }}
+            />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: healthColor, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              {project.health_status}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "flex-end" }}>
+          <KickoffPill complete={!!project.kickoff_complete} />
+        </div>
+      </CommandBar>
 
       {/* Info Grid */}
       <div
@@ -445,6 +366,14 @@ export default function ProjectDetail() {
           </div>
         )}
 
+        {activeTab === "kickoff" && (
+          <ProjectKickoffChecklist project={project} />
+        )}
+
+        {activeTab === "handoff" && (
+          <ProjectHandoffChecklist projectId={projectId} />
+        )}
+
         {activeTab === "rfis" && (
           <div>
             <h3
@@ -601,7 +530,7 @@ export default function ProjectDetail() {
           </div>
         )}
 
-        {!["overview", "rfis", "materials"].includes(activeTab) && (
+        {!["overview", "kickoff", "handoff", "rfis", "materials"].includes(activeTab) && (
           <p style={{ color: "var(--text-muted)" }}>
             {tabs.find((t) => t.id === activeTab)?.label} content coming soon.
           </p>

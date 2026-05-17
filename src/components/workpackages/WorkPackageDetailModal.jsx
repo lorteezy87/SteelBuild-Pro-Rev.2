@@ -14,13 +14,15 @@ const STATUS_COLORS = {
   "On Hold": "var(--status-error)",
 };
 
+// Corrected 7-stage flow (migration 077): Not Started → IFA → OFA → BFA
+// → OFS → IFC → Released.
 const STAGE_STYLES = {
   "Not Started": { bg: "rgba(144,144,149,0.12)", color: "var(--text-muted)" },
+  IFA: { bg: "rgba(96,165,250,0.12)", color: "var(--status-info)" },
   OFA: { bg: "rgba(0,229,255,0.12)", color: "var(--status-info)" },
   BFA: { bg: "rgba(255,185,95,0.12)", color: "var(--status-warning)" },
   OFS: { bg: "rgba(68,226,205,0.12)", color: "var(--secondary)" },
-  BFS: { bg: "rgba(68,226,205,0.12)", color: "var(--secondary)" },
-  FFF: { bg: "rgba(255,185,95,0.15)", color: "var(--tertiary)" },
+  IFC: { bg: "rgba(52,211,153,0.15)", color: "var(--status-success)" },
   Released: { bg: "rgba(168,240,203,0.12)", color: "var(--status-success)" },
 };
 
@@ -36,7 +38,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
   if (!wp) return null;
 
   const phaseColor = PHASE_COLORS[wp.phase] || "var(--text-muted)";
-  const statusColor = STATUS_COLORS[wp.status] || "var(--text-muted)";
+  const statusColorVal = STATUS_COLORS[wp.status] || "var(--text-muted)";
   const percent = Math.min(100, Math.max(0, Number(wp.percent_complete) || 0));
 
   return (
@@ -51,6 +53,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
         }}
       />
       <div
+        className="sbd-card-strong"
         style={{
           position: "fixed",
           top: 0,
@@ -67,7 +70,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
       >
         <div
           style={{
-            background: "var(--bg-sidebar)",
+            background: "var(--bg-surface-low)",
             padding: "20px 24px",
             borderBottom: "1px solid var(--divider)",
           }}
@@ -82,7 +85,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                 <Pill text={wp.phase || "—"} color={phaseColor} />
-                <Pill text={wp.status || "—"} color={statusColor} />
+                <Pill text={wp.status || "—"} color={statusColorVal} />
               </div>
             </div>
             <button
@@ -138,7 +141,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-          {tab === "overview" && <OverviewTab wp={wp} phaseColor={phaseColor} statusColor={statusColor} percent={percent} />}
+          {tab === "overview" && <OverviewTab wp={wp} phaseColor={phaseColor} statusColor={statusColorVal} percent={percent} />}
           {tab === "drawings" && <DrawingsTab wp={wp} drawingMap={drawingMap} />}
           {tab === "hours" && <HoursTab wp={wp} />}
           {tab === "notes" && <NotesTab notes={wp.notes} />}
@@ -288,6 +291,7 @@ function NotesTab({ notes }) {
 function MiniCard({ label, value, color }) {
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",

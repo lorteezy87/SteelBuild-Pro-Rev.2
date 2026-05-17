@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import ScopeItemFormModal from "@/components/scope/ScopeItemFormModal";
 import ScopeItemList from "@/components/scope/ScopeItemList";
+import BulkScopeModal from "@/components/scope/BulkScopeModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
-import { Check, X, Info, Layers, Search, Plus } from "lucide-react";
+import { Check, X, Info, Search, Plus, Upload } from "lucide-react";
+import { CommandBar, KpiTile } from "@/components/design-system";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -16,13 +17,14 @@ const TYPE_META = {
 };
 
 export default function ScopeExclusions() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkActionBusy, setBulkActionBusy] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -39,6 +41,7 @@ export default function ScopeExclusions() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const updateMut = useMutation({
@@ -49,11 +52,25 @@ export default function ScopeExclusions() {
 
   // Lightweight checkbox toggle — does not open the form modal. Writes the
   // completed flag + timestamp so we have a record of when each item closed.
+  // Completing a row also clears any in-progress flag so the UI stays tidy.
   const toggleCompleteMut = useMutation({
     mutationFn: ({ id, is_completed }) =>
       base44.entities.ScopeItem.update(id, {
         is_completed,
         completed_at: is_completed ? new Date().toISOString() : null,
+        ...(is_completed ? { in_progress: false, in_progress_at: null } : {}),
+      }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+  });
+
+  // Toggle the in-progress flag. If the row is complete, this is a no-op at
+  // the UI level (the button is hidden), so we don't guard against it here.
+  const toggleInProgressMut = useMutation({
+    mutationFn: ({ id, in_progress }) =>
+      base44.entities.ScopeItem.update(id, {
+        in_progress,
+        in_progress_at: in_progress ? new Date().toISOString() : null,
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
     onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
@@ -68,6 +85,48 @@ export default function ScopeExclusions() {
   const handleSave = (data) => {
     if (editing) updateMut.mutate({ id: editing.id, data });
     // create is handled by ScopeItemFormModal internally
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const applyBulk = async (patch) => {
+    if (selectedIds.size === 0) return;
+    setBulkActionBusy(true);
+    try {
+      await Promise.all([...selectedIds].map(id => base44.entities.ScopeItem.update(id, patch)));
+      qc.invalidateQueries({ queryKey: ["scope-items"] });
+      toast.success(`Updated ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
+      clearSelection();
+    } catch (e) {
+      toast.error("Bulk update failed: " + (e?.message || "Unknown error"));
+    } finally {
+      setBulkActionBusy(false);
+    }
+  };
+
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} selected scope item${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    setBulkActionBusy(true);
+    try {
+      await Promise.all([...selectedIds].map(id => base44.entities.ScopeItem.delete(id)));
+      qc.invalidateQueries({ queryKey: ["scope-items"] });
+      toast.success(`Deleted ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
+      clearSelection();
+    } catch (e) {
+      toast.error("Bulk delete failed: " + (e?.message || "Unknown error"));
+    } finally {
+      setBulkActionBusy(false);
+    }
   };
 
   const selectedProject = projectId
@@ -104,100 +163,68 @@ export default function ScopeExclusions() {
   const openCreate = () => { setEditing(null); setShowForm(true); };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 24,
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Scope & Exclusions
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              color: "var(--text-secondary)",
-              marginTop: 4,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
-            {selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} of {stats.total} Items
-            {stats.total > 0 && (
-              <> • <span style={{ color: "var(--status-success)" }}>{stats.completed} Complete</span></>
-            )}
-          </p>
-        </div>
-
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Scope & Exclusions"
+        count={filtered.length}
+        unit={` OF ${stats.total}`}
+        subtitle={`Contract-defined scope · exclusions · clarifications${stats.completed > 0 ? ` · ${stats.completed} complete` : ""}`}
+      >
+        <button
+          onClick={() => setShowBulk(true)}
+          disabled={!projectId}
+          title={!projectId ? "Select a project first" : "Bulk import scope items"}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--bg-surface)",
+            color: "var(--text-secondary)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-btn)",
+            padding: "8px 12px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            cursor: projectId ? "pointer" : "not-allowed",
+            opacity: projectId ? 1 : 0.5,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          <Upload size={12} /> Bulk Import
+        </button>
         <button
           onClick={openCreate}
           style={{
+            display: "flex", alignItems: "center", gap: 6,
             background: "var(--accent)",
-            color: "white",
+            color: "var(--bg-base)",
             border: "none",
-            borderRadius: "8px",
-            padding: "8px 16px",
+            borderRadius: "var(--radius-btn)",
+            padding: "8px 14px",
             fontFamily: "var(--font-mono)",
-            fontSize: "10px",
+            fontSize: 10,
             fontWeight: 700,
             cursor: "pointer",
-            transition: "background 0.15s",
             textTransform: "uppercase",
             letterSpacing: "0.08em",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
         >
-          <Plus size={12} strokeWidth={3} /> New Item
+          <Plus size={12} /> New Item
         </button>
-      </div>
+      </CommandBar>
 
-      {/* Stats — clickable filters */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
-        <StatCard
-          label="Total"
-          value={stats.total}
-          color="var(--accent)"
-          Icon={Layers}
-          active={filterType === "all"}
-          onClick={() => setFilterType("all")}
-        />
-        <StatCard
-          label="Scope"
-          value={stats.scope}
-          color="var(--status-success)"
-          Icon={Check}
-          active={filterType === "Scope"}
-          onClick={() => setFilterType(filterType === "Scope" ? "all" : "Scope")}
-        />
-        <StatCard
-          label="Exclusion"
-          value={stats.exclusion}
-          color="var(--status-error)"
-          Icon={X}
-          active={filterType === "Exclusion"}
-          onClick={() => setFilterType(filterType === "Exclusion" ? "all" : "Exclusion")}
-        />
-        <StatCard
-          label="Clarification"
-          value={stats.clarification}
-          color="var(--status-info)"
-          Icon={Info}
-          active={filterType === "Clarification"}
-          onClick={() => setFilterType(filterType === "Clarification" ? "all" : "Clarification")}
-        />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total"         value={stats.total}         color="var(--accent)"
+                 active={filterType === "all"} onClick={() => setFilterType("all")} />
+        <KpiTile compact label="Scope"         value={stats.scope}         color="var(--status-success)"
+                 active={filterType === "Scope"} onClick={() => setFilterType(filterType === "Scope" ? "all" : "Scope")} />
+        <KpiTile compact label="Exclusion"     value={stats.exclusion}     color="var(--status-error)"
+                 active={filterType === "Exclusion"} onClick={() => setFilterType(filterType === "Exclusion" ? "all" : "Exclusion")} />
+        <KpiTile compact label="Clarification" value={stats.clarification} color="var(--status-info)"
+                 active={filterType === "Clarification"} onClick={() => setFilterType(filterType === "Clarification" ? "all" : "Clarification")} />
       </div>
 
       {/* Local search */}
@@ -388,6 +415,74 @@ export default function ScopeExclusions() {
         <ScopeItemFormModal projectId={projectId} editing={editing} onClose={() => { setShowForm(false); setEditing(null); }} onSave={handleSave} />
       )}
 
+      {/* Bulk Import Modal */}
+      {showBulk && (
+        <BulkScopeModal
+          projectId={projectId}
+          onClose={() => setShowBulk(false)}
+          onCreated={() => setShowBulk(false)}
+        />
+      )}
+
+      {/* Bulk-edit action bar — appears when any rows are selected */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          position: "sticky", top: 60, zIndex: 20,
+          background: "var(--bg-surface)",
+          border: "1px solid var(--accent)",
+          borderLeft: "3px solid var(--accent)",
+          borderRadius: 4,
+          padding: "10px 14px",
+          display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            {selectedIds.size} SELECTED
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Set Type:
+          </span>
+          {types.map(t => (
+            <button key={t} onClick={() => applyBulk({ item_type: t })} disabled={bulkActionBusy} style={chipBtn}>
+              {t}
+            </button>
+          ))}
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Set Category:
+          </span>
+          <select
+            disabled={bulkActionBusy}
+            onChange={(e) => { if (e.target.value) applyBulk({ category: e.target.value }); e.target.value = ""; }}
+            style={{
+              background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 2,
+              padding: "4px 8px", color: "var(--text-primary)",
+              fontFamily: "var(--font-mono)", fontSize: 10,
+            }}
+            defaultValue=""
+          >
+            <option value="">—</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button onClick={() => applyBulk({ in_progress: true, in_progress_at: new Date().toISOString() })} disabled={bulkActionBusy} style={chipBtn}>
+            Mark In Progress
+          </button>
+          <button onClick={() => applyBulk({ in_progress: false, in_progress_at: null })} disabled={bulkActionBusy} style={chipBtn}>
+            Clear In Progress
+          </button>
+          <button onClick={() => applyBulk({ is_completed: true, completed_at: new Date().toISOString(), in_progress: false, in_progress_at: null })} disabled={bulkActionBusy} style={chipBtn}>
+            Mark Complete
+          </button>
+          <button onClick={() => applyBulk({ is_completed: false, completed_at: null })} disabled={bulkActionBusy} style={chipBtn}>
+            Mark Incomplete
+          </button>
+          <button onClick={bulkDelete} disabled={bulkActionBusy} style={{ ...chipBtn, color: "var(--status-error)", borderColor: "var(--status-error)" }}>
+            Delete
+          </button>
+          <button onClick={clearSelection} style={{ ...chipBtn, marginLeft: "auto" }}>
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Scope Items List */}
       <ScopeItemList
         items={filtered}
@@ -400,6 +495,11 @@ export default function ScopeExclusions() {
         onToggleComplete={(item) =>
           toggleCompleteMut.mutate({ id: item.id, is_completed: !item.is_completed })
         }
+        onToggleInProgress={(item) =>
+          toggleInProgressMut.mutate({ id: item.id, in_progress: !item.in_progress })
+        }
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
       />
 
       {/* Delete Dialog */}
@@ -414,73 +514,16 @@ export default function ScopeExclusions() {
   );
 }
 
-function StatCard({ label, value, color, Icon, active, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        background: active ? `${color}14` : "var(--bg-surface)",
-        border: `1px solid ${active ? color : "var(--border-default)"}`,
-        borderTop: `2px solid ${color}`,
-        borderRadius: "10px",
-        padding: "12px 14px",
-        textAlign: "left",
-        cursor: "pointer",
-        transition: "all 0.15s",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        boxShadow: active ? `0 0 0 1px ${color}40` : "none",
-      }}
-      onMouseEnter={(e) => {
-        if (!active) e.currentTarget.style.borderColor = `${color}80`;
-      }}
-      onMouseLeave={(e) => {
-        if (!active) e.currentTarget.style.borderColor = "var(--border-default)";
-      }}
-    >
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 8,
-          background: `${color}20`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: color,
-          flexShrink: 0,
-        }}
-      >
-        {Icon && <Icon size={16} strokeWidth={2.5} />}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: "20px",
-            fontWeight: 700,
-            color: color,
-            lineHeight: 1,
-            marginBottom: 4,
-            fontFamily: "var(--font-mono)",
-          }}
-        >
-          {value}
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "9px",
-            color: active ? color : "var(--text-secondary)",
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-            fontWeight: 700,
-          }}
-        >
-          {label}
-        </div>
-      </div>
-    </button>
-  );
-}
+const chipBtn = {
+  background: "var(--bg-page)",
+  color: "var(--text-primary)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 2,
+  padding: "4px 10px",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};

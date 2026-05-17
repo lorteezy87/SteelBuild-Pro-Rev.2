@@ -1,6 +1,8 @@
 import React from "react";
 
-export default function WeeklySummary({ weekLogs, weekStats }) {
+export default function WeeklySummary({ weekStats }) {
+  if (!weekStats) return null;
+
   const kpis = [
     { 
       label: "Crew-Days", 
@@ -10,7 +12,7 @@ export default function WeeklySummary({ weekLogs, weekStats }) {
     { 
       label: "Field Hours", 
       value: weekStats.totalHours, 
-      color: "#8B5CF6" 
+      color: "#0D9488" 
     },
     { 
       label: "Delay Hours", 

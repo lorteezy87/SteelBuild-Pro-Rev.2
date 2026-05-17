@@ -1,22 +1,21 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import ProjectCloseoutForm from "@/components/closeout/ProjectCloseoutForm";
 import ProjectCloseoutChecklist from "@/components/closeout/ProjectCloseoutChecklist";
 import ProjectCloseoutSummary from "@/components/closeout/ProjectCloseoutSummary";
+import { CommandBar } from "@/components/design-system";
 
 export default function ProjectCloseout() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const [activeTab, setActiveTab] = useState("checklist");
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: closeouts = [] } = useQuery({
@@ -67,34 +66,34 @@ export default function ProjectCloseout() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div>
-        <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>Project Closeout</h1>
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>{selectedProject ? selectedProject.name : "Select Project"}</p>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "SELECT PROJECT"}
+        title="Project Closeout"
+        subtitle="Handover checklist · final billing summary · lessons learned"
+      />
 
       {!projectCloseout ? (
-        <ProjectCloseoutForm projectId={projectId} selectedProject={selectedProject} onSave={handleSave} />
+        <ProjectCloseoutForm projectId={projectId} onSave={handleSave} />
       ) : (
         <>
           {/* Tabs */}
-          <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border-default)", paddingBottom: "12px" }}>
-            {tabs.map((tab) => (
+          <div style={{ display: "flex", gap: 0, border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden", width: "fit-content" }}>
+            {tabs.map((tab, i) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: "10px",
+                  fontSize: 10,
                   fontWeight: 700,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  background: activeTab === tab.id ? "var(--accent)" : "transparent",
-                  color: activeTab === tab.id ? "white" : "var(--text-muted)",
-                  border: activeTab === tab.id ? `1px solid var(--accent)` : "1px solid var(--border-default)",
-                  borderRadius: "6px",
-                  padding: "6px 14px",
+                  background: activeTab === tab.id ? "var(--accent-muted)" : "transparent",
+                  color: activeTab === tab.id ? "var(--accent)" : "var(--text-secondary)",
+                  border: "none",
+                  borderRight: i < tabs.length - 1 ? "1px solid var(--border-default)" : "none",
+                  padding: "8px 14px",
                   cursor: "pointer",
                   transition: "all 0.15s",
                 }}

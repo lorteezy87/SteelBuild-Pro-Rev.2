@@ -3,7 +3,7 @@ import { RefreshCw, Plus } from "lucide-react";
 
 export default function PageHeader({ title, subtitle, onAdd, onRefresh, addLabel }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+    <div className="page-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ width: 3, height: 20, background: "var(--accent)", borderRadius: 2 }} />
         <div>
@@ -11,7 +11,7 @@ export default function PageHeader({ title, subtitle, onAdd, onRefresh, addLabel
           {subtitle && <p style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", margin: "2px 0 0", letterSpacing: "0.14em", textTransform: "uppercase" }}>{subtitle}</p>}
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="page-header-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {onRefresh && (
           <button onClick={onRefresh} style={{
             display: "flex", alignItems: "center", gap: 6,

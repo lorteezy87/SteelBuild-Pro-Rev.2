@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Trash2, X } from "lucide-react";
+import { STAGE_ORDER as CANONICAL_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
-const STAGES = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+// Imported from drawingsConfig so this dropdown follows the canonical
+// 7-stage flow (Not Started → IFA → OFA → BFA → OFS → IFC → Released).
+const STAGES = CANONICAL_STAGE_ORDER;
 const IFC_STATUSES = ["IFR", "IFC", "IFA", "Void"];
 
 function DropPopover({ label, options, onApply, count }) {
@@ -30,8 +33,8 @@ function DropPopover({ label, options, onApply, count }) {
         onClick={() => setOpen(o => !o)}
         style={{
           padding: "2px 8px", height: 22, borderRadius: 5, cursor: "pointer",
-          background: open ? "var(--accent-muted)" : "rgba(255,255,255,0.05)",
-          border: `1px solid ${open ? "var(--accent-border)" : "rgba(255,255,255,0.10)"}`,
+          background: open ? "var(--accent-muted)" : "var(--hover-bg)",
+          border: `1px solid ${open ? "var(--accent-border)" : "var(--border-default)"}`,
           color: open ? "var(--accent)" : "var(--text-secondary)", fontFamily: "var(--font-mono)",
           fontSize: 8, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 3
         }}
@@ -59,19 +62,19 @@ function DropPopover({ label, options, onApply, count }) {
             >
               <span style={{
                 width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                background: selected === opt ? "var(--accent)" : "rgba(255,255,255,0.12)",
-                border: selected === opt ? "none" : "1px solid rgba(255,255,255,0.25)"
+                background: selected === opt ? "var(--accent)" : "var(--border-default)",
+                border: selected === opt ? "none" : "1px solid var(--border-strong)"
               }} />
               {opt}
             </div>
           ))}
-          <div style={{ padding: "8px 10px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ padding: "8px 10px", borderTop: "1px solid var(--divider)" }}>
             <button
               onClick={handleApply}
               disabled={!selected}
               style={{
                 width: "100%", padding: "6px 0", borderRadius: 6, cursor: selected ? "pointer" : "not-allowed",
-                background: selected ? "var(--accent)" : "rgba(255,255,255,0.04)",
+                background: selected ? "var(--accent)" : "var(--hover-bg)",
                 border: "none", color: selected ? "#fff" : "var(--text-muted)",
                 fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em"
               }}
@@ -103,8 +106,8 @@ function RevisionPopover({ onApply, count }) {
         onClick={() => setOpen(o => !o)}
         style={{
           padding: "2px 8px", height: 22, borderRadius: 5, cursor: "pointer",
-          background: open ? "var(--accent-muted)" : "rgba(255,255,255,0.05)",
-          border: `1px solid ${open ? "var(--accent-border)" : "rgba(255,255,255,0.10)"}`,
+          background: open ? "var(--accent-muted)" : "var(--hover-bg)",
+          border: `1px solid ${open ? "var(--accent-border)" : "var(--border-default)"}`,
           color: open ? "var(--accent)" : "var(--text-secondary)", fontFamily: "var(--font-mono)",
           fontSize: 8, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 3
         }}
@@ -130,8 +133,8 @@ function RevisionPopover({ onApply, count }) {
             disabled={!val.trim()}
             style={{
               width: "100%", padding: "6px 0", borderRadius: 6, cursor: val.trim() ? "pointer" : "not-allowed",
-              background: val.trim() ? "var(--accent)" : "rgba(255,255,255,0.04)",
-              border: "none", color: val.trim() ? "#fff" : "rgba(160,175,210,0.30)",
+              background: val.trim() ? "var(--accent)" : "var(--hover-bg)",
+              border: "none", color: val.trim() ? "#fff" : "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em"
             }}
           >
@@ -144,7 +147,7 @@ function RevisionPopover({ onApply, count }) {
 }
 
 const bulkBtn = {
-  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)",
+  background: "var(--hover-bg)", border: "1px solid var(--border-default)",
   borderRadius: 5, padding: "2px 8px", height: 22, cursor: "pointer",
   color: "var(--text-secondary)", fontFamily: "var(--font-mono)",
   fontSize: 8, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 3
@@ -160,10 +163,10 @@ export default function BulkActionBar({ count, onBulkUpdate, onBulkDelete, onCle
       <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", fontWeight: 700, letterSpacing: "0.08em", flexShrink: 0 }}>
         ☑ {count} SELECTED
       </span>
-      <button onClick={onClear} style={{ ...bulkBtn, background: "none", border: "none", color: "rgba(160,175,210,0.50)", gap: 2 }}>
+      <button onClick={onClear} style={{ ...bulkBtn, background: "none", border: "none", color: "var(--text-secondary)", gap: 2 }}>
         <X style={{ width: 9, height: 9 }} /> CLEAR
       </button>
-      <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.10)", flexShrink: 0 }} />
+      <div style={{ width: 1, height: 14, background: "var(--border-default)", flexShrink: 0 }} />
       <DropPopover label="STAGE" options={STAGES} onApply={v => onBulkUpdate("stage", v)} count={count} compact />
       <RevisionPopover onApply={v => onBulkUpdate("revision_number", v)} count={count} compact />
       <DropPopover label="DISCIPLINE" options={DISCIPLINES} onApply={v => onBulkUpdate("discipline", v)} count={count} compact />

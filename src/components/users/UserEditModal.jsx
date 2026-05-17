@@ -90,7 +90,7 @@ export default function UserEditModal({ open, onClose, user }) {
         )}
 
         <DialogFooter style={{ display: "flex", gap: 8, marginTop: 24 }}>
-          <Button variant="outline" onClick={onClose} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)", color: "var(--text-secondary)" }}>
+          <Button variant="outline" onClick={onClose} style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", color: "var(--text-secondary)" }}>
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={updateMut.isPending} style={{ background: "var(--accent)", color: "#fff", fontWeight: 700 }}>

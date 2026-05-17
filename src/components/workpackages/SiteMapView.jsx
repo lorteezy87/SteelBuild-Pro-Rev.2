@@ -1,18 +1,19 @@
 import React, { useState, useMemo } from "react";
 import { X, AlertTriangle, Pause } from "lucide-react";
+import { GANTT_PHASE_HEX, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
 
 const PHASE_COLOR = {
-  Detailing: "#8B5CF6",
-  Fabrication: "var(--accent)",
-  Delivery: "#00B8D9",
-  Erection: "#00D68F",
+  Detailing: GANTT_PHASE_HEX.Detailing,
+  Fabrication: GANTT_PHASE_HEX.Fabrication,
+  Delivery: GANTT_PHASE_HEX.Delivery,
+  Erection: GANTT_PHASE_HEX.Erection,
 };
 
 const STATUS_COLOR = {
-  "Complete":    "#00D68F",
-  "In Progress": "var(--status-warning)",
-  "On Hold":     "#FF3D3D",
-  "Not Started": "var(--text-muted)",
+  "Complete":    GANTT_STATUS_HEX.complete,
+  "In Progress": GANTT_STATUS_HEX.inProgress,
+  "On Hold":     GANTT_STATUS_HEX.delayed,
+  "Not Started": GANTT_STATUS_HEX.notStarted,
 };
 
 function mono(style = {}) {
@@ -22,7 +23,7 @@ function mono(style = {}) {
 function MiniBar({ value = 0, color = "var(--accent)", height = 4 }) {
   const pct = Math.min(100, Math.max(0, value));
   return (
-    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 2, height, overflow: "hidden", width: "100%" }}>
+    <div style={{ background: "var(--border-default)", borderRadius: 2, height, overflow: "hidden", width: "100%" }}>
       <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2, transition: "width 0.4s" }} />
     </div>
   );
@@ -83,7 +84,7 @@ function deriveZones(wps) {
 // Compute zone health
 function zoneHealth(zone) {
   const { wps } = zone;
-  if (!wps.length) return { color: "rgba(255,255,255,0.06)", label: "Empty", issues: [] };
+  if (!wps.length) return { color: "var(--bg-surface-high)", label: "Empty", issues: [] };
 
   const onHold = wps.filter(w => w.status === "On Hold");
   const noDrawings = wps.filter(w => !(w.linked_drawing_ids || "").split(",").some(s => s.trim()));
@@ -122,7 +123,7 @@ function ZoneCell({ zone, isSelected, onClick }) {
   const [hovered, setHovered] = useState(false);
   const health = zoneHealth(zone);
   const borderColor = zone.wps.length === 0
-    ? "rgba(255,255,255,0.05)"
+    ? "var(--hover-bg)"
     : health.label === "Blocked"   ? "rgba(255,61,61,0.50)"
     : health.label === "Warning"   ? "rgba(255,179,0,0.50)"
     : health.label === "Complete"  ? "rgba(0,214,143,0.50)"
@@ -136,7 +137,7 @@ function ZoneCell({ zone, isSelected, onClick }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         background: isSelected ? health.color.replace("0.15", "0.30").replace("0.18", "0.30").replace("0.07", "0.18") : health.color,
-        border: `1px solid ${isSelected ? borderColor : hovered ? borderColor : "rgba(255,255,255,0.07)"}`,
+        border: `1px solid ${isSelected ? borderColor : hovered ? borderColor : "var(--border-default)"}`,
         borderLeft: `3px solid ${borderColor}`,
         borderRadius: 10,
         padding: "12px 14px",
@@ -154,7 +155,7 @@ function ZoneCell({ zone, isSelected, onClick }) {
     >
       {/* Zone label */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 4 }}>
-        <div style={mono({ fontSize: 9, color: "rgba(220,225,240,0.85)", fontWeight: 700, letterSpacing: "0.06em", lineHeight: 1.3, flex: 1 })}>
+        <div style={mono({ fontSize: 9, color: "var(--text-primary)", fontWeight: 700, letterSpacing: "0.06em", lineHeight: 1.3, flex: 1 })}>
           {zone.label.toUpperCase()}
         </div>
         {health.issues.length > 0 && (
@@ -165,15 +166,15 @@ function ZoneCell({ zone, isSelected, onClick }) {
       </div>
 
       {zone.wps.length === 0 ? (
-        <div style={mono({ fontSize: 8, color: "rgba(160,175,210,0.25)" })}>NO WPS</div>
+        <div style={mono({ fontSize: 8, color: "var(--text-muted)" })}>NO WPS</div>
       ) : (
         <>
           {/* Progress bar */}
           <MiniBar
             value={health.avgProgress || 0}
             color={
-              health.label === "Blocked" ? "#FF3D3D" :
-              health.label === "Complete" ? "#00D68F" :
+              health.label === "Blocked" ? "var(--status-error-bright)" :
+              health.label === "Complete" ? "var(--status-success-bright)" :
               health.label === "Active" ? "var(--status-warning)" : "var(--accent)"
             }
             height={4}
@@ -181,15 +182,15 @@ function ZoneCell({ zone, isSelected, onClick }) {
           {/* Stats row */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", gap: 6 }}>
-              <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.55)" })}>{zone.wps.length} WP{zone.wps.length !== 1 ? "s" : ""}</span>
+              <span style={mono({ fontSize: 8, color: "var(--text-secondary)" })}>{zone.wps.length} WP{zone.wps.length !== 1 ? "s" : ""}</span>
               {health.inProgress?.length > 0 && (
                 <span style={mono({ fontSize: 8, color: "var(--status-warning)" })}>▶ {health.inProgress.length}</span>
               )}
               {health.onHold?.length > 0 && (
-                <span style={mono({ fontSize: 8, color: "#FF3D3D" })}>⏸ {health.onHold.length}</span>
+                <span style={mono({ fontSize: 8, color: "var(--status-error-bright)" })}>⏸ {health.onHold.length}</span>
               )}
             </div>
-            <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.45)" })}>{Math.round(health.avgProgress || 0)}%</span>
+            <span style={mono({ fontSize: 8, color: "var(--text-muted)" })}>{Math.round(health.avgProgress || 0)}%</span>
           </div>
         </>
       )}
@@ -209,9 +210,9 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
   };
 
   const borderColor =
-    health.label === "Blocked" ? "#FF3D3D" :
-    health.label === "Warning" ? "#FFB300" :
-    health.label === "Complete" ? "#00D68F" :
+    health.label === "Blocked" ? "var(--status-error-bright)" :
+    health.label === "Warning" ? "var(--status-warning-bright)" :
+    health.label === "Complete" ? "var(--status-success-bright)" :
     health.label === "Active" ? "var(--status-warning)" : "var(--accent)";
 
   const totalTonnage = zone.wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
@@ -229,15 +230,15 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
       overflowY: "auto",
     }}>
       {/* Header */}
-      <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)", flexShrink: 0 }}>
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-default)", flexShrink: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <div style={mono({ fontSize: 8, color: "rgba(160,175,210,0.45)", letterSpacing: "0.14em", marginBottom: 4 })}>ZONE / AREA</div>
+            <div style={mono({ fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.14em", marginBottom: 4 })}>ZONE / AREA</div>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.1 }}>
               {zone.label}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.07)", border: "none", borderRadius: 6, width: 28, height: 28, cursor: "pointer", color: "rgba(255,255,255,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button onClick={onClose} style={{ background: "var(--border-default)", border: "none", borderRadius: 6, width: 28, height: 28, cursor: "pointer", color: "var(--text-secondary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <X size={14} />
           </button>
         </div>
@@ -247,11 +248,11 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
           <span style={{ background: `${borderColor}22`, border: `1px solid ${borderColor}55`, borderRadius: 4, padding: "2px 8px", ...mono({ fontSize: 8, color: borderColor }) }}>
             {health.label}
           </span>
-          <span style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 4, padding: "2px 8px", ...mono({ fontSize: 8, color: "rgba(160,175,210,0.65)" }) }}>
+          <span style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "2px 8px", ...mono({ fontSize: 8, color: "var(--text-secondary)" }) }}>
             {zone.wps.length} Work Packages
           </span>
           {totalTonnage > 0 && (
-            <span style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 4, padding: "2px 8px", ...mono({ fontSize: 8, color: "rgba(160,175,210,0.65)" }) }}>
+            <span style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "2px 8px", ...mono({ fontSize: 8, color: "var(--text-secondary)" }) }}>
               {totalTonnage.toLocaleString()} T
             </span>
           )}
@@ -260,7 +261,7 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
         {/* Overall progress */}
         <div style={{ marginTop: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-            <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.45)", letterSpacing: "0.10em" })}>ZONE PROGRESS</span>
+            <span style={mono({ fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" })}>ZONE PROGRESS</span>
             <span style={mono({ fontSize: 10, color: borderColor, fontWeight: 700 })}>{Math.round(health.avgProgress || 0)}%</span>
           </div>
           <MiniBar value={health.avgProgress || 0} color={borderColor} height={6} />
@@ -271,7 +272,7 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
         {/* Issues / Alerts */}
         {health.issues.length > 0 && (
           <div>
-            <div style={mono({ fontSize: 8, letterSpacing: "0.14em", color: "rgba(160,175,210,0.40)", textTransform: "uppercase", marginBottom: 6 })}>
+            <div style={mono({ fontSize: 8, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 })}>
               ⚠ High-Priority Issues ({health.issues.length})
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -289,18 +290,18 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
                 onClick={() => onSelectWP(issue.wp)}
                 >
                   {issue.type === "hold"
-                    ? <Pause size={12} color="#FF3D3D" />
-                    : <AlertTriangle size={12} color="#FFB300" />
+                    ? <Pause size={12} color="var(--status-error-bright)" />
+                    : <AlertTriangle size={12} color="var(--status-warning-bright)" />
                   }
                   <div style={{ flex: 1 }}>
-                    <div style={mono({ fontSize: 9, color: issue.type === "hold" ? "#FF3D3D" : "#FFB300", fontWeight: 700 })}>
+                    <div style={mono({ fontSize: 9, color: issue.type === "hold" ? "var(--status-error-bright)" : "var(--status-warning-bright)", fontWeight: 700 })}>
                       {issue.label}
                     </div>
-                    <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "rgba(160,175,210,0.55)", marginTop: 1 }}>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", marginTop: 1 }}>
                       {issue.wp.name}
                     </div>
                   </div>
-                  <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.35)" })}>→</span>
+                  <span style={mono({ fontSize: 8, color: "var(--text-muted)" })}>→</span>
                 </div>
               ))}
             </div>
@@ -310,13 +311,13 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
         {/* Work Packages by Status */}
         {Object.entries(statusGroups).map(([status, wps]) => {
           if (!wps.length) return null;
-          const sc = STATUS_COLOR[status] || "rgba(160,175,210,0.5)";
+          const sc = STATUS_COLOR[status] || "var(--text-secondary)";
           return (
             <div key={status}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: sc }} />
                 <span style={mono({ fontSize: 8, color: sc, letterSpacing: "0.10em", textTransform: "uppercase" })}>{status}</span>
-                <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.35)" })}>({wps.length})</span>
+                <span style={mono({ fontSize: 8, color: "var(--text-muted)" })}>({wps.length})</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {wps.map(wp => {
@@ -328,35 +329,35 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
                       onClick={() => onSelectWP(wp)}
                       style={{
                         background: "var(--bg-surface-low)",
-                        border: `1px solid rgba(255,255,255,0.07)`,
+                        border: `1px solid var(--border-default)`,
                         borderLeft: `3px solid ${phColor}`,
                         borderRadius: 8,
                         padding: "8px 10px",
                         cursor: "pointer",
                         transition: "all 0.1s",
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+                      onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
                       onMouseLeave={e => e.currentTarget.style.background = "var(--bg-surface-low)"}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                         <span style={mono({ fontSize: 9, color: phColor })}>{wp.wp_number}</span>
                         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                          {noDrawings && <span title="No drawings linked" style={mono({ fontSize: 8, color: "#FFB300" })}>⚠</span>}
-                          <span style={mono({ fontSize: 9, color: "rgba(160,175,210,0.45)" })}>{wp.percent_complete || 0}%</span>
+                          {noDrawings && <span title="No drawings linked" style={mono({ fontSize: 8, color: "var(--status-warning-bright)" })}>⚠</span>}
+                          <span style={mono({ fontSize: 9, color: "var(--text-muted)" })}>{wp.percent_complete || 0}%</span>
                         </div>
                       </div>
-                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(220,225,240,0.80)", marginBottom: 5, fontWeight: 500, lineHeight: 1.2 }}>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", marginBottom: 5, fontWeight: 500, lineHeight: 1.2 }}>
                         {wp.name}
                       </div>
                       <MiniBar
                         value={wp.percent_complete || 0}
-                        color={wp.status === "Complete" ? "#00D68F" : wp.status === "On Hold" ? "#FF3D3D" : phColor}
+                        color={wp.status === "Complete" ? "var(--status-success-bright)" : wp.status === "On Hold" ? "var(--status-error-bright)" : phColor}
                         height={3}
                       />
                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                        <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.40)" })}>{wp.phase}</span>
-                        {wp.crew && <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.40)" })}>👷 {wp.crew}</span>}
-                        {wp.tonnage && <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.40)" })}>{Number(wp.tonnage).toLocaleString()} T</span>}
+                        <span style={mono({ fontSize: 8, color: "var(--text-muted)" })}>{wp.phase}</span>
+                        {wp.crew && <span style={mono({ fontSize: 8, color: "var(--text-muted)" })}>👷 {wp.crew}</span>}
+                        {wp.tonnage && <span style={mono({ fontSize: 8, color: "var(--text-muted)" })}>{Number(wp.tonnage).toLocaleString()} T</span>}
                       </div>
                     </div>
                   );
@@ -384,7 +385,7 @@ function Legend() {
       {items.map(item => (
         <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <div style={{ width: 10, height: 10, borderRadius: 2, background: item.color, border: `1px solid ${item.color}` }} />
-          <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.50)" })}>{item.label}</span>
+          <span style={mono({ fontSize: 8, color: "var(--text-secondary)" })}>{item.label}</span>
         </div>
       ))}
     </div>
@@ -413,7 +414,7 @@ export default function SiteMapView({ wps, onSelectWP }) {
       {/* Header bar */}
       <div style={{
         background: "var(--bg-surface-low)",
-        border: "1px solid rgba(255,255,255,0.07)",
+        border: "1px solid var(--border-default)",
         borderRadius: 10,
         padding: "10px 16px",
         marginBottom: 14,
@@ -424,14 +425,14 @@ export default function SiteMapView({ wps, onSelectWP }) {
         gap: 8,
       }}>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.45)", letterSpacing: "0.12em" })}>
+          <span style={mono({ fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em" })}>
             SITE MAP · {zones.length} ZONES
           </span>
           {[
             { label: "ACTIVE", value: activeZones, color: "var(--status-warning)" },
-            { label: "BLOCKED", value: blockedZones, color: "#FF3D3D" },
-            { label: "COMPLETE", value: completeZones, color: "#00D68F" },
-            { label: "ISSUES", value: totalIssues, color: "#FFB300" },
+            { label: "BLOCKED", value: blockedZones, color: "var(--status-error-bright)" },
+            { label: "COMPLETE", value: completeZones, color: "var(--status-success-bright)" },
+            { label: "ISSUES", value: totalIssues, color: "var(--status-warning-bright)" },
           ].map(s => (
             <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: s.color }} />
@@ -439,7 +440,7 @@ export default function SiteMapView({ wps, onSelectWP }) {
             </div>
           ))}
         </div>
-        <span style={mono({ fontSize: 8, color: "rgba(160,175,210,0.30)" })}>
+        <span style={mono({ fontSize: 8, color: "var(--text-muted)" })}>
           Click a zone to inspect
         </span>
       </div>
@@ -449,7 +450,7 @@ export default function SiteMapView({ wps, onSelectWP }) {
       {zones.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 24px" }}>
           <div style={{ fontSize: 36, marginBottom: 10, opacity: 0.3 }}>🗺</div>
-          <div style={mono({ fontSize: 10, color: "rgba(160,175,210,0.35)" })}>NO WORK PACKAGES TO MAP</div>
+          <div style={mono({ fontSize: 10, color: "var(--text-muted)" })}>NO WORK PACKAGES TO MAP</div>
         </div>
       ) : (
         <div style={{

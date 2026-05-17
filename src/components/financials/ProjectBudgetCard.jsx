@@ -4,6 +4,7 @@ export default function ProjectBudgetCard({ project, summary }) {
   if (!project) {
     return (
       <div
+        className="sbd-card"
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
@@ -20,16 +21,18 @@ export default function ProjectBudgetCard({ project, summary }) {
     );
   }
 
-  const budgetHealth =
-    summary.budget > 0
-      ? ((summary.variance / summary.budget) * 100).toFixed(1)
-      : 0;
+  // Support both useFinancials summary shape (revisedBudget, exposure, totalRemaining)
+  // and legacy shape (budget, actual, variance).
+  const safeBudget = Number(summary.revisedBudget ?? summary.budget) || 0;
+  const safeExposure = Number(summary.exposure ?? summary.committed ?? summary.actual) || 0;
+  const safeVariance = Number(summary.totalRemaining ?? summary.variance ?? (safeBudget - safeExposure)) || 0;
 
-  const isOverBudget = summary.variance < 0;
-  const percentUsed = summary.budget > 0 ? ((summary.actual / summary.budget) * 100).toFixed(0) : 0;
+  const isOverBudget = safeVariance < 0;
+  const percentUsed = safeBudget > 0 ? ((safeExposure / safeBudget) * 100).toFixed(0) : 0;
 
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",
@@ -117,7 +120,7 @@ export default function ProjectBudgetCard({ project, summary }) {
             Contract Value
           </span>
           <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>
-            ${(project.revised_contract_value / 1000).toFixed(0)}K
+            ${((Number(project.revised_contract_value) || 0) / 1000).toFixed(0)}K
           </span>
         </div>
 
@@ -133,7 +136,7 @@ export default function ProjectBudgetCard({ project, summary }) {
             Total Cost
           </span>
           <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent)" }}>
-            ${(summary.actual / 1000).toFixed(0)}K
+            ${(safeExposure / 1000).toFixed(0)}K
           </span>
         </div>
 
@@ -163,7 +166,7 @@ export default function ProjectBudgetCard({ project, summary }) {
               color: isOverBudget ? "var(--status-error)" : "var(--status-success)",
             }}
           >
-            {isOverBudget ? "−" : "+"}${Math.abs(summary.variance / 1000).toFixed(0)}K
+            {isOverBudget ? "−" : "+"}${Math.abs(safeVariance / 1000).toFixed(0)}K
           </span>
         </div>
       </div>

@@ -9,10 +9,11 @@ const CATEGORY_COLORS = {
   Erection: "var(--status-success)",
 };
 
-export default function ProductionNoteList({ notes, onEdit, onDelete }) {
+export default function ProductionNoteList({ notes = [], onEdit, onDelete }) {
   if (notes.length === 0) {
     return (
       <div
+        className="sbd-card"
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
@@ -41,6 +42,7 @@ export default function ProductionNoteList({ notes, onEdit, onDelete }) {
       {notes.map((note) => (
         <div
           key={note.id}
+          className="sbd-card sbd-card-hover"
           style={{
             background: "var(--bg-surface)",
             border: note.is_high_priority ? "1px solid var(--status-error)" : "1px solid var(--border-default)",
@@ -109,7 +111,7 @@ export default function ProductionNoteList({ notes, onEdit, onDelete }) {
               {note.is_resolved && (
                 <span style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: 7,
+                  fontSize: 9,
                   fontWeight: 700,
                   color: "var(--status-success)",
                   background: "var(--success-muted)",
@@ -126,7 +128,7 @@ export default function ProductionNoteList({ notes, onEdit, onDelete }) {
               {note.is_high_priority && (
                 <span style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: 7,
+                  fontSize: 9,
                   fontWeight: 700,
                   color: "var(--status-error)",
                   background: "var(--danger-muted)",

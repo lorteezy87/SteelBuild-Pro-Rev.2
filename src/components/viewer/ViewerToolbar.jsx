@@ -1,5 +1,5 @@
 import React from "react";
-import { Zap, Share2, Download } from "lucide-react";
+import { Zap, Download } from "lucide-react";
 
 export default function ViewerToolbar({
   document,
@@ -23,8 +23,8 @@ export default function ViewerToolbar({
     <div
       style={{
         height: 48,
-        background: "var(--bg-sidebar)",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        background: "var(--bg-surface-low)",
+        borderBottom: "1px solid var(--bg-surface-high)",
         padding: "0 16px",
         display: "flex",
         alignItems: "center",
@@ -65,7 +65,7 @@ export default function ViewerToolbar({
             display: "flex",
             alignItems: "center",
             gap: 4,
-            background: "rgba(255,255,255,0.06)",
+            background: "var(--bg-surface-high)",
             borderRadius: 6,
             padding: 4
           }}
@@ -76,7 +76,7 @@ export default function ViewerToolbar({
               padding: "4px 8px",
               background: "none",
               border: "none",
-              color: "rgba(220,225,240,0.70)",
+              color: "var(--text-secondary)",
               cursor: "pointer",
               fontSize: 12,
               fontWeight: 600
@@ -91,7 +91,7 @@ export default function ViewerToolbar({
               padding: "4px 6px",
               background: "transparent",
               border: "none",
-              color: "rgba(220,225,240,0.70)",
+              color: "var(--text-secondary)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               cursor: "pointer"
@@ -109,7 +109,7 @@ export default function ViewerToolbar({
               padding: "4px 8px",
               background: "none",
               border: "none",
-              color: "rgba(220,225,240,0.70)",
+              color: "var(--text-secondary)",
               cursor: "pointer",
               fontSize: 12,
               fontWeight: 600
@@ -160,7 +160,7 @@ export default function ViewerToolbar({
           style={{
             padding: "6px 12px",
             background: markupMode ? "var(--accent-muted)" : "transparent",
-            border: "1px solid rgba(255,255,255,0.12)",
+            border: "1px solid var(--border-default)",
             color: markupMode ? "var(--accent)" : "var(--text-secondary)",
             borderRadius: 6,
             fontFamily: "var(--font-mono)",
@@ -178,7 +178,7 @@ export default function ViewerToolbar({
           disabled={analysisRunning}
           style={{
             padding: "6px 12px",
-            background: "linear-gradient(135deg,#8B5CF6,#6D40D4)",
+            background: "linear-gradient(135deg,#0D9488,#0B7F74)",
             border: "none",
             color: "#fff",
             borderRadius: 6,
@@ -200,7 +200,7 @@ export default function ViewerToolbar({
           <button
             onClick={onFitWidth}
             title="Fit to width"
-            style={{ padding: "6px 10px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-secondary)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}
+            style={{ padding: "6px 10px", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-secondary)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}
           >
             ⊞ FIT
           </button>
@@ -209,7 +209,7 @@ export default function ViewerToolbar({
         {onDownload && (
           <button
             onClick={onDownload}
-            style={{ padding: "6px 10px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-secondary)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+            style={{ padding: "6px 10px", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-secondary)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
           >
             <Download size={13} />
             PDF

@@ -11,20 +11,20 @@ const TYPE_ICON = {
 };
 
 const STATUS_COLOR = {
-  accepted: "#00D68F",
-  rejected: "#FF3D3D",
-  pending:  "#FFB020",
+  accepted: "var(--status-success-bright)",
+  rejected: "var(--status-error-bright)",
+  pending:  "var(--status-warning-bright)",
   none:     "rgba(160,175,210,0.30)",
 };
 
-export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, onDelete, currentPage, totalPages }) {
+export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, onDelete, currentPage }) {
   const otherPageCount = allMarkups.length - markups.length;
 
   return (
     <div style={{
       width: 260,
-      background: "var(--bg-sidebar)",
-      borderLeft: "1px solid rgba(255,255,255,0.08)",
+      background: "var(--bg-surface-low)",
+      borderLeft: "1px solid var(--bg-surface-high)",
       display: "flex",
       flexDirection: "column",
       overflow: "hidden",
@@ -33,7 +33,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
       {/* Header */}
       <div style={{
         padding: "10px 14px",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        borderBottom: "1px solid var(--bg-surface-high)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <span style={{
@@ -85,7 +85,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
               onClick={() => onSelectMarkup(markup)}
               style={{
                 padding: "10px 14px",
-                borderBottom: "1px solid rgba(255,255,255,0.04)",
+                borderBottom: "1px solid var(--hover-bg)",
                 cursor: "pointer",
                 transition: "background 0.12s",
               }}
@@ -120,7 +120,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
                     </span>
                     {markup.status && markup.status !== "none" && (
                       <span style={{
-                        fontFamily: "var(--font-mono)", fontSize: 7,
+                        fontFamily: "var(--font-mono)", fontSize: 9,
                         color: STATUS_COLOR[markup.status] || STATUS_COLOR.none,
                         letterSpacing: "0.06em",
                       }}>
@@ -138,7 +138,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
                     padding: 2, flexShrink: 0, lineHeight: 1,
                     transition: "color 0.1s",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#FF3D3D")}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--status-error-bright)")}
                   onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(160,175,210,0.30)")}
                 >
                   <Trash2 size={13} />
@@ -153,8 +153,8 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
       {markups.length === 0 && (
         <div style={{
           padding: "8px 14px",
-          borderTop: "1px solid rgba(255,255,255,0.05)",
-          fontFamily: "var(--font-mono)", fontSize: 7,
+          borderTop: "1px solid var(--hover-bg)",
+          fontFamily: "var(--font-mono)", fontSize: 9,
           color: "var(--text-muted)", textAlign: "center", letterSpacing: "0.10em",
         }}>
           CLICK "MARKUP" TO START ANNOTATING

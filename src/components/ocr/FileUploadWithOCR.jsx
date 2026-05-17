@@ -41,17 +41,10 @@ const OCR_PROMPTS = {
 };
 
 async function runOCR(file, fileType) {
-  const base64 = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
-  const mediaType = file.type || 'image/jpeg';
   const prompt = OCR_PROMPTS[fileType] || OCR_PROMPTS.site_photo;
 
   const raw = await base44.integrations.Core.InvokeLLM({
+    useCase: 'photo-ocr',
     prompt,
     system: 'You are an OCR data extraction engine for a structural steel construction management app. Extract data accurately from construction documents and photos. Always return valid JSON only. Use null for missing numeric fields. Use empty string for missing text fields.',
     file_urls: [await new Promise((resolve) => {
@@ -62,7 +55,12 @@ async function runOCR(file, fileType) {
   });
 
   const clean = (raw || '{}').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  return JSON.parse(clean);
+  try {
+    return JSON.parse(clean);
+  } catch {
+    console.error("OCR returned malformed JSON:", clean.slice(0, 200));
+    return {};
+  }
 }
 
 function OCRResultCard({ result, fileType }) {
@@ -91,13 +89,13 @@ function OCRResultCard({ result, fileType }) {
             ['Truck #', result.truckNumber],
           ].filter(([, v]) => v != null && v !== '').map(([label, value]) => (
             <div key={label}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>{label.toUpperCase()}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>{label.toUpperCase()}</div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)', fontWeight: 600 }}>{String(value)}</div>
             </div>
           ))}
           {result.materialDescription && (
             <div style={{ gridColumn: '1 / -1' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>MATERIAL</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>MATERIAL</div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)' }}>{result.materialDescription}</div>
             </div>
           )}
@@ -108,7 +106,7 @@ function OCRResultCard({ result, fileType }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {result.suggestedCaption && (
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: '0.12em', marginBottom: 3 }}>SUGGESTED CAPTION</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.12em', marginBottom: 3 }}>SUGGESTED CAPTION</div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)' }}>{result.suggestedCaption}</div>
             </div>
           )}
@@ -122,14 +120,14 @@ function OCRResultCard({ result, fileType }) {
               ['Progress', result.estimatedPercentComplete != null ? `${result.estimatedPercentComplete}%` : null],
             ].filter(([, v]) => v != null && v !== '').map(([label, value]) => (
               <div key={label}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>{label.toUpperCase()}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>{label.toUpperCase()}</div>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)', fontWeight: 600 }}>{String(value)}</div>
               </div>
             ))}
           </div>
           {result.issuesVisible?.length > 0 && (
             <div style={{ background: 'rgba(255,61,61,0.08)', border: '1px solid rgba(255,61,61,0.2)', borderRadius: 6, padding: '6px 10px' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--status-error)', marginBottom: 4 }}>ISSUES DETECTED</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--status-error)', marginBottom: 4 }}>ISSUES DETECTED</div>
               {result.issuesVisible.map((issue, i) => (
                 <div key={i} style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--status-warning)' }}>• {issue}</div>
               ))}
@@ -259,7 +257,7 @@ export default function FileUploadWithOCR({ fileType, linkedEntityId, linkedEnti
       />
 
       {uploadError && (
-        <div style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(255,61,61,0.08)', border: '1px solid rgba(255,61,61,0.25)', borderRadius: 8, color: '#FF7A7A', fontFamily: 'var(--font-body)', fontSize: 11 }}>
+        <div style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(255,61,61,0.08)', border: '1px solid rgba(255,61,61,0.25)', borderRadius: 8, color: 'var(--status-error)', fontFamily: 'var(--font-body)', fontSize: 11 }}>
           ⚠ {uploadError}
         </div>
       )}

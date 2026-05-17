@@ -1,12 +1,14 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import InspectionFormModal from "@/components/inspections/InspectionFormModal";
 import InspectionList from "@/components/inspections/InspectionList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus } from "lucide-react";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 const TYPES = [
   "Steel Fabrication",
@@ -38,14 +40,12 @@ const STATUS_COLORS = {
 };
 
 export default function Inspections() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data: inspections = [], isLoading } = useQuery({
+  const { data: rawInspections = [], isLoading } = useQuery({
     queryKey: ["inspections", projectId],
     queryFn: () =>
       projectId
@@ -53,9 +53,14 @@ export default function Inspections() {
         : base44.entities.Inspection.list("-inspection_date"),
   });
 
+  useRealtimeInvalidation("inspections", projectId, [["inspections", projectId]]);
+
+  const inspections = React.useMemo(() => rawInspections.filter((r) => !r.is_deleted), [rawInspections]);
+
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const selectedProject = projectId
@@ -102,6 +107,63 @@ export default function Inspections() {
     onError: () => toast.error("Delete failed"),
   });
 
+  // C3 — Convert inspection deficiencies into punchlist items.
+  // Creates one punchlist row per deficiency (count from deficiencies_count),
+  // FK-linked back via punchlist_items.inspection_id and metadata trail.
+  // Stamps inspection.metadata.punchlist_converted so the button hides
+  // after conversion (idempotent — clicking again is a no-op).
+  const convertMut = useMutation({
+    mutationFn: async (inspection) => {
+      const count = Math.max(1, parseInt(inspection.deficiencies_count, 10) || 1);
+      const baseDescription = inspection.findings || inspection.corrective_actions || inspection.description || "Deficiency from inspection";
+      const inspNumber = inspection.id ? `INSP-${String(inspection.id).slice(0, 8)}` : "Inspection";
+      const items = [];
+      for (let i = 0; i < count; i++) {
+        const desc = count > 1
+          ? `[${inspNumber} #${i + 1}/${count}] ${baseDescription}`
+          : `[${inspNumber}] ${baseDescription}`;
+        items.push(await base44.entities.PunchlistItem.create({
+          project_id: inspection.project_id,
+          description: desc,
+          category: "Other",
+          location: inspection.location || "",
+          assigned_to: "",
+          priority: inspection.sign_off_status === "Rejected" ? "High" : "Medium",
+          status: "Open",
+          percent_complete: 0,
+          notes: inspection.corrective_actions || "",
+          inspection_id: inspection.id,
+          metadata: {
+            inspection_id: inspection.id,
+            inspection_number: inspNumber,
+            inspection_type: inspection.inspection_type,
+            deficiency_index: i + 1,
+            deficiency_count: count,
+          },
+        }));
+      }
+      // Stamp the inspection so the convert button hides on re-render
+      await base44.entities.Inspection.update(inspection.id, {
+        metadata: {
+          ...(inspection.metadata || {}),
+          punchlist_converted: {
+            count,
+            at: new Date().toISOString(),
+            ids: items.map((i) => i.id),
+          },
+        },
+      });
+      return { count };
+    },
+    onSuccess: ({ count }) => {
+      qc.invalidateQueries({ queryKey: ["inspections", projectId] });
+      qc.invalidateQueries({ queryKey: ["punchlist"] });
+      qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
+      toast.success(`Created ${count} punchlist item${count === 1 ? "" : "s"} from inspection`);
+    },
+    onError: (err) => toast.error(`Convert failed: ${err.message}`),
+  });
+
   const handleSave = (data) => {
     if (editing) {
       updateMut.mutate({ ...data, id: editing.id });
@@ -135,118 +197,41 @@ export default function Inspections() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Breadcrumb */}
-      <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-        letterSpacing: "0.10em", textTransform: "uppercase",
-      }}>
-        {selectedProject ? (
-          <>{selectedProject.name} <span style={{ opacity: 0.4 }}>/</span> Inspections</>
-        ) : (
-          <>All Projects <span style={{ opacity: 0.4 }}>/</span> Inspections</>
-        )}
-      </div>
-
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-display, var(--font-body))",
-              fontSize: 22,
-              fontWeight: 800,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Inspections
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 600,
-              color: "var(--text-muted)",
-              marginTop: 4,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-            }}
-          >
-            {filtered.length} of {inspections.length} inspections
-            {filterType !== "all" || filterStatus !== "all" ? " (filtered)" : ""}
-          </p>
-        </div>
-
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Inspections"
+        count={filtered.length}
+        unit={` OF ${inspections.length}`}
+        subtitle={`Welds · material · connections · coatings${filterType !== "all" || filterStatus !== "all" ? " · (filtered)" : ""}`}
+      >
         <button
           onClick={() => { setEditing(null); setShowForm(true); }}
           style={{
-            background: "var(--accent)",
-            color: "#07090E",
-            border: "none",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 16px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 800,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            transition: "all 0.15s",
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
         >
-          + New Inspection
+          <Plus size={12} /> New Inspection
         </button>
-      </div>
+      </CommandBar>
 
-      {/* Stats Grid — clickable, color-coded */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
-        <StatCard
-          label="Total"
-          value={stats.total}
-          color="var(--accent)"
-          active={filterStatus === "all"}
-          onClick={() => setFilterStatus("all")}
-        />
-        <StatCard
-          label="Scheduled"
-          value={stats.scheduled}
-          color={STATUS_COLORS.Scheduled}
-          active={filterStatus === "Scheduled"}
-          onClick={() => handleStatClick("Scheduled")}
-        />
-        <StatCard
-          label="In Progress"
-          value={stats.inProgress}
-          color={STATUS_COLORS["In Progress"]}
-          active={filterStatus === "In Progress"}
-          onClick={() => handleStatClick("In Progress")}
-        />
-        <StatCard
-          label="Completed"
-          value={stats.completed}
-          color={STATUS_COLORS.Completed}
-          active={filterStatus === "Completed"}
-          onClick={() => handleStatClick("Completed")}
-        />
-        <StatCard
-          label="Approved"
-          value={stats.approved}
-          color="var(--status-success, #10B981)"
-          active={false}
-          onClick={null}
-        />
-        <StatCard
-          label="Rejected"
-          value={stats.rejected}
-          color="var(--status-error, #FF3B3B)"
-          active={false}
-          onClick={null}
-        />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total"       value={stats.total}      color="var(--accent)"
+                 active={filterStatus === "all"} onClick={() => setFilterStatus("all")} />
+        <KpiTile compact label="Scheduled"   value={stats.scheduled}  color={STATUS_COLORS.Scheduled}
+                 active={filterStatus === "Scheduled"} onClick={() => handleStatClick("Scheduled")} />
+        <KpiTile compact label="In Progress" value={stats.inProgress} color={STATUS_COLORS["In Progress"]}
+                 active={filterStatus === "In Progress"} onClick={() => handleStatClick("In Progress")} />
+        <KpiTile compact label="Completed"   value={stats.completed}  color={STATUS_COLORS.Completed}
+                 active={filterStatus === "Completed"} onClick={() => handleStatClick("Completed")} />
+        <KpiTile compact label="Approved"    value={stats.approved}   color="var(--status-success)" />
+        <KpiTile compact label="Rejected"    value={stats.rejected}   color="var(--status-error)" />
       </div>
 
       {/* Filters — full labels, no truncation */}
@@ -291,7 +276,7 @@ export default function Inspections() {
           ))}
         </div>
 
-        <div style={{ width: 1, height: 20, background: "var(--divider, rgba(255,255,255,0.08))" }} />
+        <div style={{ width: 1, height: 20, background: "var(--divider)" }} />
 
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <span
@@ -378,11 +363,10 @@ export default function Inspections() {
 
       {/* Empty State */}
       {!isLoading && filtered.length === 0 ? (
-        <div style={{
+        <div className="sbd-card" style={{
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
           padding: "60px 20px", gap: 16,
-          background: "var(--bg-surface)", border: "1px dashed var(--border-default)",
-          borderRadius: "var(--radius-card)",
+          borderStyle: "dashed",
         }}>
           <div style={{
             width: 56, height: 56, borderRadius: "50%",
@@ -445,6 +429,7 @@ export default function Inspections() {
           inspections={filtered}
           onEdit={(inspection) => { setEditing(inspection); setShowForm(true); }}
           onDelete={setDeleteTarget}
+          onConvertToPunchlist={(inspection) => convertMut.mutate(inspection)}
         />
       )}
 
@@ -460,54 +445,6 @@ export default function Inspections() {
         title="Delete Inspection"
         description="Delete this record? This cannot be undone."
       />
-    </div>
-  );
-}
-
-function StatCard({ label, value, color, active, onClick }) {
-  const isClickable = !!onClick;
-  return (
-    <div
-      onClick={onClick}
-      role={isClickable ? "button" : undefined}
-      tabIndex={isClickable ? 0 : undefined}
-      aria-pressed={isClickable ? active : undefined}
-      onKeyDown={isClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
-      style={{
-        background: active ? `${color}10` : "var(--bg-surface)",
-        border: active ? `1px solid ${color}40` : "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
-        padding: "14px 14px 12px",
-        borderLeft: `3px solid ${color}`,
-        cursor: isClickable ? "pointer" : "default",
-        transition: "all 0.15s",
-        outline: "none",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 22,
-          fontWeight: 800,
-          color: color,
-          marginBottom: 4,
-          lineHeight: 1,
-        }}
-      >
-        {value}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 8,
-          fontWeight: 700,
-          color: "var(--text-muted)",
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
     </div>
   );
 }

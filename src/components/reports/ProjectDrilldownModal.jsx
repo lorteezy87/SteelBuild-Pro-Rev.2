@@ -92,43 +92,43 @@ export default function ProjectDrilldownModal({ project, onClose }) {
   const { data: wps = [], isLoading: wpsLoading } = useQuery({
     queryKey: ["modal-wps", pid],
     queryFn: () => base44.entities.WorkPackage.filter({ project_id: pid }),
-    initialData: [],
     enabled: !!pid,
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: cos = [], isLoading: cosLoading } = useQuery({
     queryKey: ["modal-cos", pid],
     queryFn: () => base44.entities.ChangeOrder.filter({ project_id: pid }),
-    initialData: [],
     enabled: !!pid,
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: rfis = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["modal-rfis", pid],
     queryFn: () => base44.entities.RFI.filter({ project_id: pid }),
-    initialData: [],
     enabled: !!pid,
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: codes = [], isLoading: codesLoading } = useQuery({
     queryKey: ["modal-codes", pid],
     queryFn: () => base44.entities.CostCode.filter({ project_id: pid }),
-    initialData: [],
     enabled: !!pid,
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: logs = [], isLoading: logsLoading } = useQuery({
     queryKey: ["modal-logs", pid],
     queryFn: () => base44.entities.DailyLog.filter({ project_id: pid }, "-date", 20),
-    initialData: [],
     enabled: !!pid,
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["modal-deliveries", pid],
     queryFn: () => base44.entities.Delivery.filter({ project_id: pid }, "-scheduled_date", 10),
-    initialData: [],
     enabled: !!pid,
+    staleTime: 2 * 60 * 1000,
   });
 
   const isLoading = wpsLoading || cosLoading || rfisLoading || codesLoading || logsLoading;
@@ -201,7 +201,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
     s + (Number(wp.actual_labor_cost_to_date) || 0) + (Number(wp.actual_material_cost_to_date) || 0), 0);
   const cpi = ac > 0 ? ev / ac : null;
 
-  const health = HEALTH_CFG[project.health_status] || { color: "var(--text-muted)", bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)" };
+  const health = HEALTH_CFG[project.health_status] || { color: "var(--text-muted)", bg: "var(--hover-bg)", border: "var(--bg-surface-high)" };
 
   // ── Team assignments from WPs ──────────────────────────────────────
   const teamMap = {};
@@ -247,7 +247,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
           borderBottom: "1px solid var(--border)",
           display: "flex", alignItems: "flex-start", justifyContent: "space-between",
           flexShrink: 0,
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
         }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
@@ -321,7 +321,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                   sub={cpi == null ? "No EVM data" : cpi >= 1 ? "On / Under budget" : cpi >= 0.9 ? "Slight overrun" : "Significant overrun"}
                   color={cpi == null ? "var(--text-muted)" : cpi >= 1 ? "var(--status-success)" : cpi >= 0.9 ? "var(--status-warning)" : "var(--status-error)"} />
                 <KPITile label="Work Packages" value={`${wpsComplete}/${wps.length}`}
-                  sub={`${avgComplete}% avg complete`} color="#A78BFA" />
+                  sub={`${avgComplete}% avg complete`} color="#0891B2" />
               </div>
 
               {/* Budget Trend + Cost by Phase */}
@@ -367,7 +367,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                     <ResponsiveContainer width="100%" height={160}>
                       <BarChart data={costByPhase} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                        <XAxis dataKey="phase" tick={{ fill: "var(--text-muted)", fontSize: 7, fontFamily: "'IBM Plex Mono'" }} axisLine={false} tickLine={false} />
+                        <XAxis dataKey="phase" tick={{ fill: "var(--text-muted)", fontSize: 9, fontFamily: "'IBM Plex Mono'" }} axisLine={false} tickLine={false} />
                         <YAxis tickFormatter={(v) => fmtShort$(v)} tick={{ fill: "var(--text-muted)", fontSize: 8, fontFamily: "'IBM Plex Mono'" }} axisLine={false} tickLine={false} width={44} />
                         <Tooltip content={<CustomTooltipBudget />} />
                         <Bar dataKey="budget" name="Budget" fill="var(--accent)" radius={[3,3,0,0]} opacity={0.6} />
@@ -430,10 +430,10 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                               </div>
                             </div>
                             <div style={{ textAlign: "right", flexShrink: 0 }}>
-                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "#A78BFA" }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "#0891B2" }}>
                                 {member.packages}
                               </div>
-                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
                                 PKGS
                               </div>
                             </div>
@@ -451,7 +451,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                         border: "none",
                         borderRadius: "var(--radius-card)",
                     }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>OPEN RFIs</div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>OPEN RFIs</div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: openRFIs > 0 ? "var(--warning)" : "var(--success)" }}>
                         {openRFIs}
                       </div>
@@ -465,7 +465,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                       padding: "8px 10px", background: "var(--bg-surface-low)",
                       border: "none", borderRadius: "var(--radius-card)",
                     }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>CHANGE ORDERS</div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>CHANGE ORDERS</div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--accent)" }}>
                         {cos.length}
                       </div>
@@ -555,7 +555,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                   {/* Upcoming deliveries */}
                   {deliveries.filter(d => !["Delivered"].includes(d.status)).length > 0 && (
                     <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>
                         UPCOMING DELIVERIES
                       </div>
                       {deliveries.filter(d => !["Delivered"].includes(d.status)).slice(0, 3).map((d, idx) => (

@@ -1,23 +1,24 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import SafetyIncidentFormModal from "@/components/safety/SafetyIncidentFormModal";
 import SafetyIncidentList from "@/components/safety/SafetyIncidentList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus } from "lucide-react";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 export default function Safety() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data: incidents = [] } = useQuery({
+  const { data: rawIncidents = [] } = useQuery({
     queryKey: ["safety-incidents", projectId],
     queryFn: () =>
       projectId
@@ -25,9 +26,14 @@ export default function Safety() {
         : base44.entities.SafetyIncident.list("-incident_date"),
   });
 
+  useRealtimeInvalidation("safety_incidents", projectId, [["safety-incidents", projectId]]);
+
+  const incidents = React.useMemo(() => rawIncidents.filter((r) => !r.is_deleted), [rawIncidents]);
+
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const selectedProject = projectId
@@ -37,6 +43,11 @@ export default function Safety() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  useAutoOpenCreate(() => {
+    setEditing(null);
+    setShowForm(true);
+  });
 
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.SafetyIncident.create({ ...data, project_id: data.project_id || projectId }),
@@ -101,29 +112,46 @@ export default function Safety() {
 
   const types = ["Injury", "Near Miss", "Hazard", "Property Damage", "Environmental", "Behavioral", "Equipment Failure", "Other"];
   const severities = ["Critical", "High", "Medium", "Low"];
-  const statuses = ["Open", "Under Investigation", "Action Plan", "In Progress", "Completed", "Closed"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-body)", fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>Safety & Hazards</h1>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>{selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Incidents</p>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Safety & Hazards"
+        count={filtered.length}
+        unit=" · INCIDENTS"
+        subtitle={`${stats.open} open · ${stats.critical} critical · injuries / near-misses / hazards`}
+      >
+        <button
+          onClick={() => { setEditing(null); setShowForm(true); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> Report Incident
+        </button>
+      </CommandBar>
 
-        <button onClick={() => {setEditing(null); setShowForm(true);}} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}>+ Report Incident</button>
-      </div>
-
-      {/* Stats Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
-        <StatCard label="Total" value={stats.total} color="var(--accent)" />
-        <StatCard label="Critical" value={stats.critical} color="var(--status-error)" />
-        <StatCard label="High" value={stats.high} color="var(--status-warning)" />
-        <StatCard label="Injuries" value={stats.injuries} color="var(--status-error)" />
-        <StatCard label="Near Misses" value={stats.nearMisses} color="var(--status-warning)" />
-        <StatCard label="Hazards" value={stats.hazards} color="var(--status-info)" />
-        <StatCard label="Open" value={stats.open} color="var(--accent)" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total"       value={stats.total}      color="var(--accent)" />
+        <KpiTile compact label="Critical"    value={stats.critical}   color="var(--status-error)"
+                 active={filterSeverity === "Critical"} onClick={() => setFilterSeverity(filterSeverity === "Critical" ? "all" : "Critical")} />
+        <KpiTile compact label="High"        value={stats.high}       color="var(--status-warning)"
+                 active={filterSeverity === "High"} onClick={() => setFilterSeverity(filterSeverity === "High" ? "all" : "High")} />
+        <KpiTile compact label="Injuries"    value={stats.injuries}   color="var(--status-error)"
+                 active={filterType === "Injury"} onClick={() => setFilterType(filterType === "Injury" ? "all" : "Injury")} />
+        <KpiTile compact label="Near Misses" value={stats.nearMisses} color="var(--status-warning)"
+                 active={filterType === "Near Miss"} onClick={() => setFilterType(filterType === "Near Miss" ? "all" : "Near Miss")} />
+        <KpiTile compact label="Hazards"     value={stats.hazards}    color="var(--status-info)"
+                 active={filterType === "Hazard"} onClick={() => setFilterType(filterType === "Hazard" ? "all" : "Hazard")} />
+        <KpiTile compact label="Open"        value={stats.open}       color="var(--phase-fabrication)"
+                 active={filterStatus === "Open"} onClick={() => setFilterStatus(filterStatus === "Open" ? "all" : "Open")} />
       </div>
 
       {/* Filters */}
@@ -164,15 +192,6 @@ export default function Safety() {
 
       {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Incident" description="Delete this record? This cannot be undone." />
-    </div>
-  );
-}
-
-function StatCard({ label, value, color }) {
-  return (
-    <div style={{ background: "var(--bg-surface)", border: "none", borderRadius: "var(--radius-card)", padding: "12px", borderTop: `2px solid ${color}` }}>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 600, color: color, marginBottom: "4px" }}>{value}</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</div>
     </div>
   );
 }

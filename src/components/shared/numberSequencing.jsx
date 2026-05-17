@@ -1,39 +1,59 @@
 import { supabase } from '@/lib/supabase';
 import { entities } from '@/api/supabaseClient';
 
+const MAX_RETRIES = 3;
+
 /**
  * Get the next sequence number for a project + record type.
- * Uses a dedicated number_sequences table for atomic incrementing.
+ * Uses optimistic concurrency: reads the current value then conditionally
+ * updates only if the value hasn't changed, retrying on collision.
  */
 export const getNextNumber = async (projectId, recordType) => {
   if (!projectId) throw new Error("projectId is required");
   if (!recordType) throw new Error("recordType is required");
 
-  // Try to increment an existing sequence row
-  const { data: existing } = await supabase
-    .from('number_sequences')
-    .select('next_value')
-    .eq('project_id', projectId)
-    .eq('record_type', recordType)
-    .single();
-
-  if (existing) {
-    const current = existing.next_value || 1;
-    await supabase
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const { data: existing } = await supabase
       .from('number_sequences')
-      .update({ next_value: current + 1, updated_at: new Date().toISOString() })
+      .select('next_value')
       .eq('project_id', projectId)
-      .eq('record_type', recordType);
-    return current;
-  } else {
-    // Create row starting at 1, return 1
-    await supabase.from('number_sequences').insert({
-      project_id: projectId,
-      record_type: recordType,
-      next_value: 2,
-    });
-    return 1;
+      .eq('record_type', recordType)
+      .single();
+
+    if (existing) {
+      const current = existing.next_value || 1;
+      // Conditional update: only succeeds if next_value still equals what we read
+      const { data: updated } = await supabase
+        .from('number_sequences')
+        .update({ next_value: current + 1, updated_at: new Date().toISOString() })
+        .eq('project_id', projectId)
+        .eq('record_type', recordType)
+        .eq('next_value', current)
+        .select();
+
+      if (updated && updated.length > 0) {
+        return current;
+      }
+      // Another call incremented first — retry
+      continue;
+    } else {
+      // Create row starting at 1, return 1.
+      // If two calls race to insert, one will fail on the unique constraint;
+      // the retry loop will then find the existing row.
+      const { error } = await supabase.from('number_sequences').insert({
+        project_id: projectId,
+        record_type: recordType,
+        next_value: 2,
+      });
+      if (!error) return 1;
+      // Insert conflict — another call created the row first, retry
+      continue;
+    }
   }
+
+  throw new Error(
+    `Failed to allocate sequence number for ${recordType} after ${MAX_RETRIES} retries`
+  );
 };
 
 const extractNumericSuffix = (value) => {
@@ -79,6 +99,7 @@ export const getNextFormattedNumber = async (...rawArgs) => {
 
   // Always scan existing records to find the real max — prevents duplicates
   // when the sequence table is out of sync with actual data.
+  // Only scans active rows — deleted numbers are reusable (partial unique index).
   const existing = await entities[entityName]?.filter({ project_id: projectId }) || [];
   const maxFromRecords = existing.reduce((max, item) => {
     const numericValue = extractNumericSuffix(item?.[fieldName]);
@@ -90,13 +111,16 @@ export const getNextFormattedNumber = async (...rawArgs) => {
     // Use whichever is higher: sequence value or (max from existing records + 1)
     const actualNext = Math.max(seqValue, maxFromRecords + 1);
 
-    // Self-heal: if the sequence was behind, fast-forward it
+    // Self-heal: if the sequence was behind, fast-forward it.
+    // Use conditional update to avoid regressing a value that another call
+    // may have already advanced past our target.
     if (actualNext > seqValue) {
       await supabase
         .from('number_sequences')
         .update({ next_value: actualNext + 1, updated_at: new Date().toISOString() })
         .eq('project_id', projectId)
-        .eq('record_type', recordType);
+        .eq('record_type', recordType)
+        .lt('next_value', actualNext + 1);
     }
 
     return `${prefix}${String(actualNext).padStart(padLength, "0")}`;

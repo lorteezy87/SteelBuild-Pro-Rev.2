@@ -32,7 +32,7 @@ function SketchCanvas({ value, onChange, height = 200 }) {
       img.onload = () => ctx.drawImage(img, 0, 0);
       img.src = value;
     }
-  }, []);
+  }, [value]);
 
   const getPos = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
@@ -188,6 +188,7 @@ export default function ProductionNoteFormModal({ projectId, onClose, note = nul
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const mutation = useMutation({
@@ -226,6 +227,7 @@ export default function ProductionNoteFormModal({ projectId, onClose, note = nul
       }}
     >
       <div
+        className="sbd-card-strong"
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
@@ -452,7 +454,7 @@ export default function ProductionNoteFormModal({ projectId, onClose, note = nul
           <div>
             <label style={LABEL_STYLE}>
               Sketch / Handwritten Notes
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginLeft: 8, letterSpacing: "0.08em" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: 8, letterSpacing: "0.08em" }}>
                 OPTIONAL
               </span>
             </label>

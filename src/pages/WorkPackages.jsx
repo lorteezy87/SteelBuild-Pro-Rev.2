@@ -1,93 +1,144 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
+/**
+ * WorkPackages - production control surface for fabrication, delivery,
+ * and erection packages.
+ *
+ * This page owns data access and mutations. Presentation is organized
+ * around real execution questions: what is ready, what is blocked, what
+ * is slipping, and what needs a human update next.
+ */
+
 import React, { useMemo, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import {
+  AlertTriangle,
+  CalendarDays,
+  Columns3,
+  Gauge,
+  Hammer,
+  LayoutGrid,
+  List,
+  MapPinned,
+  Package,
+  Pencil,
+  Search,
+  ShieldCheck,
+  ShipWheel,
+  Trash2,
+  Truck,
+  Users,
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import WorkPackageList from "@/components/workpackages/WorkPackageList";
+import { base44 } from "@/api/base44Client";
+import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import DeleteDialog from "@/components/shared/DeleteDialog";
 import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
 import WPFormModal from "@/components/workpackages/WPFormModal";
-import DeleteDialog from "@/components/shared/DeleteDialog";
+import WPBulkAddModal from "@/components/workpackages/WPBulkAddModal";
 import { getNextNumber } from "@/components/shared/numberSequencing";
+import { batchProcess } from "@/utils/batchProcess";
+import { BulkActionBar, Button, EmptyState, ProgressBar, StatusPill } from "@/components/design-system";
+import { formatDateShort } from "@/components/shared/formatters";
+import { exportWorkPackagesCSV } from "./workPackages/utils";
+import {
+  PHASE_ORDER,
+  buildWorkPackageMetrics,
+  sortWorkPackagesForExecution,
+} from "./workPackages/analytics";
 
-const PHASE_COLORS = {
-  Detailing: "var(--status-info)",
-  Fabrication: "var(--status-warning)",
-  Delivery: "var(--accent)",
-  Erection: "var(--status-success)",
+const PHASE_META = {
+  Detailing: {
+    label: "Detailing",
+    short: "Detail",
+    color: "var(--phase-detailing)",
+    icon: ShieldCheck,
+    description: "Drawings, VIF, and release readiness.",
+  },
+  Fabrication: {
+    label: "Fabrication",
+    short: "Fab",
+    color: "var(--phase-fab)",
+    icon: Hammer,
+    description: "Shop work, labor burn, and load prep.",
+  },
+  Delivery: {
+    label: "Delivery",
+    short: "Ship",
+    color: "var(--phase-delivery)",
+    icon: Truck,
+    description: "Loads, delivery readiness, and shipped material.",
+  },
+  Erection: {
+    label: "Erection",
+    short: "Erect",
+    color: "var(--phase-erection)",
+    icon: MapPinned,
+    description: "Field install sequence, crew, and closeout.",
+  },
 };
 
-const STATUS_COLORS = {
+const STATUS_OPTIONS = ["Not Started", "In Progress", "Complete", "On Hold"];
+const STATUS_TONE = {
   "Not Started": "var(--text-muted)",
   "In Progress": "var(--status-warning)",
   Complete: "var(--status-success)",
   "On Hold": "var(--status-error)",
 };
 
-const PHASE_COLORS_BAR = { ...PHASE_COLORS };
-
-const DRAWING_STAGES = [
-  { id: "Not Started", label: "NOT STARTED", color: "var(--text-muted)" },
-  { id: "OFA", label: "OFA", color: "var(--status-info)" },
-  { id: "BFA", label: "BFA", color: "var(--status-warning)" },
-  { id: "OFS", label: "OFS", color: "var(--secondary)" },
-  { id: "BFS", label: "BFS", color: "var(--secondary)" },
-  { id: "FFF", label: "FFF", color: "var(--tertiary)" },
-  { id: "Released", label: "RELEASED", color: "var(--status-success)" },
-];
-
-const STAGE_STYLES = {
-  "Not Started": { bg: "rgba(144,144,149,0.12)", color: "var(--text-muted)" },
-  OFA: { bg: "rgba(0,229,255,0.12)", color: "var(--status-info)" },
-  BFA: { bg: "rgba(255,185,95,0.12)", color: "var(--status-warning)" },
-  OFS: { bg: "rgba(68,226,205,0.12)", color: "var(--secondary)" },
-  BFS: { bg: "rgba(68,226,205,0.12)", color: "var(--secondary)" },
-  FFF: { bg: "rgba(255,185,95,0.15)", color: "var(--tertiary)" },
-  Released: { bg: "rgba(168,240,203,0.12)", color: "var(--status-success)" },
-};
-
-const STATUS_COLUMNS = ["Not Started", "In Progress", "Complete", "On Hold"];
-
 const VIEW_OPTIONS = [
-  { id: "list", label: "≡ List" },
-  { id: "board", label: "⊞ Board" },
-  { id: "drawings", label: "⊟ Drawings" },
+  { id: "flow", label: "Flow", icon: Columns3 },
+  { id: "board", label: "Board", icon: LayoutGrid },
+  { id: "register", label: "Register", icon: List },
 ];
 
-const formatDate = (d) =>
-  d
-    ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "—";
+const RISK_FILTERS = [
+  { id: "all", label: "All" },
+  { id: "high", label: "Exceptions" },
+  { id: "medium", label: "Warnings" },
+  { id: "clear", label: "Clear" },
+];
+
+const mono = { fontFamily: "var(--font-mono)" };
+const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
+
+function num(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatTons(value) {
+  return `${num(value).toFixed(1)}T`;
+}
+
+function formatHours(value) {
+  return `${Math.round(num(value)).toLocaleString()}h`;
+}
+
+function phaseColor(phase) {
+  return PHASE_META[phase]?.color || "var(--accent)";
+}
 
 export default function WorkPackages() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const qc = useQueryClient();
 
-  const [view, setView] = useState("list");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterPhase, setFilterPhase] = useState("all");
+  const [view, setView] = useState("flow");
+  const [phaseFilter, setPhaseFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [riskFilter, setRiskFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [editingWP, setEditingWP] = useState(null);
   const [wpModalOpen, setWPModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [expandedWP, setExpandedWP] = useState(null);
-  const [drawingStageFilter, setDrawingStageFilter] = useState("all");
-  const [selectedBoardWP, setSelectedBoardWP] = useState(null);
-  const [compact, setCompact] = useState(false);
+  const [detailWP, setDetailWP] = useState(null);
   const [selectedWPs, setSelectedWPs] = useState(new Set());
+  const [bulkAddOpen, setBulkAddOpen] = useState(false);
 
-  const { data: workPackages = [] } = useQuery({
+  const { data: rawWorkPackages = [], isLoading: wpLoading } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: async () => {
-      if (projectId) {
-        return base44.entities.WorkPackage.filter({ project_id: projectId });
-      }
+      if (projectId) return base44.entities.WorkPackage.filter({ project_id: projectId });
       const all = await base44.entities.WorkPackage.list();
       return all.sort((a, b) => (a.project_name || "").localeCompare(b.project_name || ""));
     },
@@ -96,19 +147,46 @@ export default function WorkPackages() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
+
+  const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
+  const selectedProject = projects.find((p) => p.id === projectId) || null;
+  const effectiveProjectId = selectedProject?.id || null;
+  const workPackages = useMemo(
+    () => projectId
+      ? (selectedProject ? rawWorkPackages : [])
+      : rawWorkPackages.filter((wp) => wp?.project_id && liveProjectIds.has(wp.project_id)),
+    [liveProjectIds, projectId, rawWorkPackages, selectedProject]
+  );
 
   const { data: drawings = [] } = useQuery({
     queryKey: ["drawings", projectId],
-    queryFn: () => (projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : []),
-    enabled: !!projectId,
+    queryFn: async () => {
+      if (projectId) return base44.entities.Drawing.filter({ project_id: projectId });
+      return base44.entities.Drawing.list();
+    },
+    staleTime: 30 * 1000,
   });
+
+  const { data: projectDeliveries = [] } = useQuery({
+    queryKey: ["deliveries-for-wps", projectId],
+    queryFn: () => projectId
+      ? base44.entities.Delivery.filter({ project_id: projectId })
+      : [],
+    enabled: !!projectId,
+    staleTime: 30 * 1000,
+  });
+
+  const invalidateWps = () => {
+    qc.invalidateQueries({ queryKey: ["work-packages"] });
+    qc.invalidateQueries({ queryKey: ["wps-all"] });
+  };
 
   const updateWPMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.WorkPackage.update(id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["work-packages"] });
-      qc.invalidateQueries({ queryKey: ["wps-all"] });
+      invalidateWps();
       setWPModalOpen(false);
       setEditingWP(null);
       toast.success("Work package updated");
@@ -119,8 +197,7 @@ export default function WorkPackages() {
   const createWPMut = useMutation({
     mutationFn: (data) => base44.entities.WorkPackage.create(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["work-packages"] });
-      qc.invalidateQueries({ queryKey: ["wps-all"] });
+      invalidateWps();
       setWPModalOpen(false);
       setEditingWP(null);
       toast.success("Work package created");
@@ -128,923 +205,293 @@ export default function WorkPackages() {
     onError: (err) => toast.error(err.message),
   });
 
-  const quickCompleteMut = useMutation({
-    mutationFn: (id) =>
-      base44.entities.WorkPackage.update(id, {
-        status: "Complete",
-        percent_complete: 100,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["work-packages"] });
-      qc.invalidateQueries({ queryKey: ["wps-all"] });
-      toast.success("Work package marked complete");
-    },
-    onError: () => toast.error("Update failed"),
-  });
-
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.WorkPackage.delete(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["work-packages"] });
-      qc.invalidateQueries({ queryKey: ["wps-all"] });
+      invalidateWps();
       setDeleteTarget(null);
       toast.success("Work package deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => {
+      console.error("WP delete failed", err);
+      toast.error(`Delete failed: ${err?.message || "unknown error"}`);
+    },
+  });
+
+  const bulkCreateMut = useMutation({
+    mutationFn: async (rows) => {
+      if (!rows?.length) throw new Error("No rows to add");
+      if (!effectiveProjectId) throw new Error("Select a project first");
+      const needsNumbers = rows.filter((row) => !row.wp_number);
+      let nextStart = null;
+      if (needsNumbers.length > 0) {
+        try {
+          nextStart = await getNextNumber(effectiveProjectId, "wp_number");
+        } catch (err) {
+          console.warn("[WorkPackages] getNextNumber fallback:", err?.message);
+          const maxNum = workPackages
+            .map((wp) => parseInt((wp.wp_number || "").replace(/\D/g, ""), 10))
+            .filter((n) => !Number.isNaN(n))
+            .reduce((max, n) => Math.max(max, n), 0);
+          nextStart = maxNum + 1;
+        }
+      }
+      let cursor = nextStart;
+      const prepared = rows.map((row) => {
+        let wpNumber = row.wp_number;
+        if (!wpNumber && cursor != null) {
+          wpNumber = `WP-${String(cursor).padStart(3, "0")}`;
+          cursor += 1;
+        }
+        return { ...row, wp_number: wpNumber, project_id: effectiveProjectId, project_name: row.project_name || undefined };
+      });
+      return batchProcess(prepared, (data) => base44.entities.WorkPackage.create(data), 5);
+    },
+    onSuccess: (results) => {
+      invalidateWps();
+      const ok = results.succeeded.length;
+      const fail = results.failed.length;
+      if (fail === 0) {
+        toast.success(`Added ${ok} work package${ok === 1 ? "" : "s"}`);
+        setBulkAddOpen(false);
+      } else if (ok === 0) {
+        toast.error(`All ${fail} failed: ${results.failed[0]?.error || "unknown error"}`);
+      } else {
+        toast.warning(`${ok} added, ${fail} failed`);
+        setBulkAddOpen(false);
+      }
+    },
+    onError: (err) => toast.error(err.message || "Bulk create failed"),
   });
 
   const bulkStatusMut = useMutation({
-    mutationFn: ({ ids, status }) =>
-      Promise.all(ids.map((id) => base44.entities.WorkPackage.update(id, { status }))),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["work-packages"] });
-      qc.invalidateQueries({ queryKey: ["wps-all"] });
+    mutationFn: async ({ ids, status }) => {
+      const results = await batchProcess(ids, (id) => base44.entities.WorkPackage.update(id, { status }));
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} updates failed.`);
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      invalidateWps();
       setSelectedWPs(new Set());
-      toast.success("Status updated");
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
+      } else {
+        toast.success("Status updated");
+      }
     },
     onError: () => toast.error("Bulk update failed"),
   });
 
-  const exportCSV = () => {
-    const toExport = selectedWPs.size > 0 ? filtered.filter((w) => selectedWPs.has(w.id)) : filtered;
-    const headers = ["WP #", "Name", "Phase", "Status", "Tonnage", "% Complete", "Crew", "Shop Hrs Budget", "Shop Hrs Actual", "Notes"];
-    const rows = toExport.map((w) =>
-      [w.wp_number, w.name, w.phase, w.status, (Number(w.tonnage) || 0).toFixed(1),
-       `${Number(w.percent_complete) || 0}%`, w.crew || "",
-       w.shop_hours_budget || 0, w.shop_hours_actual || 0, w.notes || ""]
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(",")
-    );
-    const csv = [headers.join(","), ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `work-packages-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const toggleSelectWP = (id) =>
-    setSelectedWPs((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-
-  const toggleSelectAll = () =>
-    setSelectedWPs(selectedWPs.size === filtered.length ? new Set() : new Set(filtered.map((w) => w.id)));
-
-  const filtered = useMemo(() => {
-    return workPackages.filter((wp) => {
-      const statusMatch = filterStatus === "all" || wp.status === filterStatus;
-      const phaseMatch = filterPhase === "all" || wp.phase === filterPhase;
-      const q = search.toLowerCase();
-      const searchMatch =
-        !q ||
-        (wp.name || "").toLowerCase().includes(q) ||
-        (wp.wp_number || "").toLowerCase().includes(q) ||
-        (wp.crew || "").toLowerCase().includes(q);
-      return statusMatch && phaseMatch && searchMatch;
-    });
-  }, [workPackages, filterStatus, filterPhase, search]);
-
-  const stats = useMemo(() => {
-    const totalTons = workPackages.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-    return {
-      total: workPackages.length,
-      notStarted: workPackages.filter((w) => w.status === "Not Started").length,
-      inProgress: workPackages.filter((w) => w.status === "In Progress").length,
-      complete: workPackages.filter((w) => w.status === "Complete").length,
-      onHold: workPackages.filter((w) => w.status === "On Hold").length,
-      totalTons,
-      fabTons: workPackages
-        .filter((w) => w.phase === "Fabrication")
-        .reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
-      erectedTons: workPackages
-        .filter((w) => w.phase === "Erection" && w.status === "Complete")
-        .reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
-      avgProgress:
-        workPackages.length > 0
-          ? Math.round(
-              workPackages.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / workPackages.length
-            )
-          : 0,
-    };
-  }, [workPackages]);
-
-  const phaseTons = useMemo(() => {
-    return ["Detailing", "Fabrication", "Delivery", "Erection"].map((phase) => ({
-      phase,
-      tons: workPackages.filter((w) => w.phase === phase).reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
-      color: PHASE_COLORS_BAR[phase],
-    }));
-  }, [workPackages]);
-
-  const drawingsByStage = useMemo(() => {
-    const m = {};
-    DRAWING_STAGES.forEach((s) => (m[s.id] = 0));
-    drawings.forEach((d) => {
-      if (m.hasOwnProperty(d.stage)) m[d.stage] += 1;
-    });
-    return m;
-  }, [drawings]);
-
-  const drawingTotal = drawings.length || 1;
-  const overdueDrawings = drawings.filter(
-    (d) => d.due_date && new Date(`${d.due_date}T00:00:00Z`) < new Date() && d.stage !== "Released"
+  const metrics = useMemo(
+    () => buildWorkPackageMetrics(workPackages, drawings, projectDeliveries),
+    [workPackages, drawings, projectDeliveries]
   );
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return metrics.enriched
+      .filter((wp) => {
+        if (phaseFilter !== "all" && wp._signals.phase !== phaseFilter) return false;
+        if (statusFilter !== "all" && wp._signals.status !== statusFilter) return false;
+        if (riskFilter !== "all" && wp._signals.risk !== riskFilter) return false;
+        if (!q) return true;
+        return [
+          wp.wp_number,
+          wp.name,
+          wp.project_name,
+          wp.crew,
+          wp.phase,
+          wp.status,
+          wp.notes,
+        ].some((value) => String(value || "").toLowerCase().includes(q));
+      })
+      .sort(sortWorkPackagesForExecution);
+  }, [metrics.enriched, phaseFilter, statusFilter, riskFilter, search]);
+
+  const selectedRows = useMemo(
+    () => filtered.filter((wp) => selectedWPs.has(wp.id)),
+    [filtered, selectedWPs]
+  );
+
+  const projectName = selectedProject?.name || (projectId ? "No active project" : "All Projects");
+
+  const toggleSelect = (id) =>
+    setSelectedWPs((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
   const handleWPEdit = (wp) => {
-    if (wp?._quickComplete) {
-      quickCompleteMut.mutate(wp.id);
-      return;
-    }
     setEditingWP(wp);
     setWPModalOpen(true);
   };
 
-  const handleWPCreate = () => {
-    const nextNum = getNextNumber(workPackages, "wp_number", "WP-");
-    setEditingWP({ wp_number: nextNum, project_id: projectId });
-    setWPModalOpen(true);
-  };
-
-  const pill = (active, label, onClick, color) => (
-    <button
-      onClick={onClick}
-      style={{
-        padding: "6px 10px",
-        border: "none",
-        borderRadius: "var(--radius-btn)",
-        background: active ? color : "var(--bg-surface-low)",
-        color: active ? "var(--accent-text)" : "var(--text-secondary)",
-        fontFamily: "var(--font-mono)",
-        fontSize: 9,
-        fontWeight: 700,
-        letterSpacing: "0.08em",
-        cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
-  );
-
-  const renderKPI = (label, value, color) => (
-    <div
-      style={{
-        background: "var(--bg-surface)",
-        borderRadius: "var(--radius-card)",
-        borderTop: `2px solid ${color}`,
-        padding: 12,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 22,
-          fontWeight: 600,
-          color,
-          marginBottom: 4,
-        }}
-      >
-        {value}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-body)",
-          fontSize: 8,
-          fontWeight: 700,
-          color: "var(--text-muted)",
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
-    </div>
-  );
-
-  const renderTonnageBar = () => {
-    const total = Math.max(phaseTons.reduce((s, p) => s + p.tons, 0), 1);
-    return (
-      <div
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
-          padding: 12,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            color: "var(--text-muted)",
-            letterSpacing: "0.1em",
-            marginBottom: 8,
-          }}
-        >
-          TONNAGE PIPELINE
-        </div>
-        <div style={{ display: "flex", height: 10, overflow: "hidden", borderRadius: 4, marginBottom: 8 }}>
-          {phaseTons.map((p) => {
-            const width = Math.max(4, (p.tons / total) * 100);
-            return <div key={p.phase} style={{ width: `${width}%`, background: p.color, transition: "width 0.2s" }} />;
-          })}
-        </div>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {phaseTons.map((p) => (
-            <div
-              key={p.phase}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                color: "var(--text-secondary)",
-              }}
-            >
-              <span style={{ width: 10, height: 10, borderRadius: 6, background: p.color, display: "inline-block" }} />
-              {p.phase}: {(Number(p.tons) || 0).toFixed(1)}T
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderBoard = () => (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, alignItems: "start" }}>
-      {STATUS_COLUMNS.map((col) => {
-        const items = filtered.filter((w) => w.status === col);
-        const color = STATUS_COLORS[col];
-        return (
-          <div
-            key={col}
-            style={{
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-default)",
-              borderRadius: "var(--radius-card)",
-              padding: 10,
-              borderTop: `3px solid ${color}`,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 8,
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                color,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-              }}
-            >
-              <span>{col.toUpperCase()}</span>
-              <span
-                style={{
-                  background: "var(--bg-surface-low)",
-                  border: "1px solid var(--divider)",
-                  borderRadius: "var(--radius-badge)",
-                  padding: "2px 8px",
-                  fontSize: 9,
-                }}
-              >
-                {items.length}
-              </span>
-            </div>
-
-            {items.map((wp) => {
-              const phaseColor = PHASE_COLORS[wp.phase] || "var(--text-muted)";
-              return (
-                <div
-                  key={wp.id}
-                  style={{
-                    background: "var(--bg-surface)",
-                    border: "1px solid var(--border-default)",
-                    borderRadius: "var(--radius-card)",
-                    padding: 12,
-                    marginBottom: 8,
-                    borderLeft: `3px solid ${phaseColor}`,
-                    cursor: "pointer",
-                    transition: "background 0.1s",
-                  }}
-                  onClick={() => setSelectedBoardWP(wp)}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-mid)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface)")}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
-                      {wp.wp_number}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 7,
-                        fontWeight: 700,
-                        padding: "2px 7px",
-                        borderRadius: "var(--radius-badge)",
-                        background: `${phaseColor}22`,
-                        color: phaseColor,
-                        letterSpacing: "0.08em",
-                      }}
-                    >
-                      {wp.phase}
-                    </span>
-                  </div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
-                    {wp.name}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                    <div style={{ flex: 1, height: 4, background: "var(--bg-surface-high)", borderRadius: 2 }}>
-                      <div
-                        style={{
-                          width: `${Math.min(100, Math.max(0, Number(wp.percent_complete) || 0))}%`,
-                          height: "100%",
-                          background: phaseColor,
-                          borderRadius: 2,
-                        }}
-                      />
-                    </div>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: phaseColor }}>
-                      {Math.min(100, Math.max(0, Number(wp.percent_complete) || 0))}%
-                    </span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-                      {(Number(wp.tonnage) || 0).toFixed(1)}T
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)" }}>
-                      Crew: {wp.crew || "—"}
-                    </span>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleWPEdit(wp);
-                        }}
-                        style={{
-                          padding: "3px 8px",
-                          borderRadius: "var(--radius-btn)",
-                          border: "1px solid var(--border-default)",
-                          background: "var(--bg-surface-high)",
-                          color: "var(--text-secondary)",
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 8,
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        EDIT
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteTarget(wp);
-                        }}
-                        style={{
-                          padding: "3px 8px",
-                          borderRadius: "var(--radius-btn)",
-                          border: "1px solid var(--danger-border)",
-                          background: "rgba(255,61,61,0.08)",
-                          color: "var(--status-error)",
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 8,
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {items.length === 0 && (
-              <div
-                style={{
-                  padding: 16,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  color: "var(--text-muted)",
-                  textAlign: "center",
-                }}
-              >
-                No packages
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const renderDrawingTracker = () => {
-    if (!projectId) {
-      return (
-        <div style={{ padding: 32, textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
-          Select a project to view drawing tracker
-        </div>
-      );
+  const handleWPCreate = React.useCallback(async () => {
+    let wpNumber = "";
+    try {
+      if (effectiveProjectId) {
+        const n = await getNextNumber(effectiveProjectId, "wp_number");
+        wpNumber = `WP-${String(n).padStart(3, "0")}`;
+      }
+    } catch (err) {
+      console.warn("[WorkPackages] getNextNumber fallback:", err?.message);
+      const maxNum = workPackages
+        .map((wp) => parseInt((wp.wp_number || "").replace(/\D/g, ""), 10))
+        .filter((n) => !Number.isNaN(n))
+        .reduce((max, n) => Math.max(max, n), 0);
+      wpNumber = `WP-${String(maxNum + 1).padStart(3, "0")}`;
     }
+    setEditingWP({ wp_number: wpNumber, project_id: effectiveProjectId });
+    setWPModalOpen(true);
+  }, [effectiveProjectId, workPackages]);
 
-    const filteredDrawings =
-      drawingStageFilter === "all" ? drawings : drawings.filter((d) => d.stage === drawingStageFilter);
+  useAutoOpenCreate(handleWPCreate, { enabled: !!effectiveProjectId });
 
-    const sortedDrawings = [...filteredDrawings].sort((a, b) => {
-      if (a.stage === "Released" && b.stage !== "Released") return 1;
-      if (b.stage === "Released" && a.stage !== "Released") return -1;
-      const da = a.due_date ? new Date(`${a.due_date}T00:00:00Z`) : new Date("2100-01-01");
-      const db = b.due_date ? new Date(`${b.due_date}T00:00:00Z`) : new Date("2100-01-01");
-      return da - db;
-    });
-
-    const stageBar = DRAWING_STAGES.map((s) => ({
-      ...s,
-      count: drawingsByStage[s.id] || 0,
-    }));
-
+  if (wpLoading) {
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16, marginTop: 12 }}>
-        <div
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-default)",
-            borderRadius: "var(--radius-card)",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              padding: "12px 14px",
-              borderBottom: "1px solid var(--divider)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              color: "var(--text-secondary)",
-              letterSpacing: "0.08em",
-            }}
-          >
-            DRAWING PIPELINE
-          </div>
-          <div style={{ padding: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>STAGE</span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>COUNT</span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>COVERAGE</span>
-            </div>
-            {DRAWING_STAGES.map((stage) => {
-              const count = drawingsByStage[stage.id] || 0;
-              const pct = ((count / drawingTotal) * 100).toFixed(1);
-              return (
-                <div
-                  key={stage.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "110px 40px 1fr",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "6px 0",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => setDrawingStageFilter(drawingStageFilter === stage.id ? "all" : stage.id)}
-                >
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 9,
-                      color: stage.color,
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    {stage.label}
-                  </span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)" }}>{count}</span>
-                  <div style={{ height: 6, background: "var(--bg-surface-high)", borderRadius: 2 }}>
-                    <div
-                      style={{
-                        width: `${pct}%`,
-                        height: "100%",
-                        background: stage.color,
-                        borderRadius: 2,
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-            <div style={{ marginTop: 10, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>
-              Total: {drawings.length} · Released: {drawingsByStage["Released"] || 0} (
-              {(((drawingsByStage["Released"] || 0) / drawingTotal) * 100).toFixed(1)}%)
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-default)",
-            borderRadius: "var(--radius-card)",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              padding: "12px 14px",
-              borderBottom: "1px solid var(--divider)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-            }}
-          >
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)", letterSpacing: "0.08em" }}>
-              DRAWING LOG
-            </div>
-            {drawingStageFilter !== "all" && (
-              <div
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: "var(--radius-badge)",
-                  border: "1px solid var(--border-default)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  color: "var(--text-secondary)",
-                }}
-              >
-                Filter: {drawingStageFilter}
-              </div>
-            )}
-          </div>
-
-          <div style={{ padding: 12 }}>
-            <div style={{ display: "flex", height: 8, overflow: "hidden", borderRadius: 4, marginBottom: 10 }}>
-              {stageBar.map((s) => {
-                const width = drawingTotal ? (s.count / drawingTotal) * 100 : 0;
-                return <div key={s.id} style={{ width: `${width}%`, background: s.color }} />;
-              })}
-            </div>
-
-            {overdueDrawings.length > 0 && (
-              <div
-                style={{
-                  background: "var(--danger-muted)",
-                  border: "1px solid var(--danger-border)",
-                  borderLeft: "4px solid var(--status-error)",
-                  borderRadius: "var(--radius-card)",
-                  padding: "8px 10px",
-                  marginBottom: 10,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  color: "var(--status-error)",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                ⚠ {overdueDrawings.length} DRAWINGS OVERDUE — SUBMITTAL DEADLINE PASSED
-              </div>
-            )}
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "80px 1fr 80px 70px 90px 80px 80px",
-                gap: 8,
-                padding: "6px 0",
-                borderBottom: "1px solid var(--divider)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                color: "var(--text-muted)",
-                letterSpacing: "0.08em",
-              }}
-            >
-              <span>SHEET</span>
-              <span>TITLE</span>
-              <span>DISC</span>
-              <span>REV</span>
-              <span>STAGE</span>
-              <span>DUE</span>
-              <span>WP</span>
-            </div>
-
-            {sortedDrawings.map((d) => {
-              const style = STAGE_STYLES[d.stage] || STAGE_STYLES["Not Started"];
-              const overdue = d.due_date && new Date(`${d.due_date}T00:00:00Z`) < new Date() && d.stage !== "Released";
-              const linkedWP = workPackages.find((wp) =>
-                (wp.linked_drawing_ids || "")
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-                  .includes(d.id)
-              );
-
-              return (
-                <div
-                  key={d.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "80px 1fr 80px 70px 90px 80px 80px",
-                    gap: 8,
-                    padding: "10px 0",
-                    borderBottom: "1px solid var(--divider)",
-                    alignItems: "center",
-                    fontSize: 11,
-                  }}
-                >
-                  <div style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 700, fontSize: 10 }}>
-                    {d.sheet_number || "—"}
-                  </div>
-                  <div style={{ color: "var(--text-primary)", fontFamily: "var(--font-body)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {d.title || "—"}
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-                    {(d.discipline || "—").toUpperCase().slice(0, 6)}
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
-                    {d.revision_number || "0"}
-                  </div>
-                  <div
-                    style={{
-                      background: style.bg,
-                      color: style.color,
-                      padding: "2px 7px",
-                      borderRadius: "var(--radius-badge)",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 8,
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {d.stage || "Not Started"}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 10,
-                      color: overdue ? "var(--status-error)" : "var(--text-muted)",
-                      fontWeight: overdue ? 700 : 500,
-                    }}
-                  >
-                    {d.due_date ? formatDate(d.due_date).replace(", 2026", "") : "—"}
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", fontWeight: 700 }}>
-                    {linkedWP ? linkedWP.wp_number : "—"}
-                  </div>
-                </div>
-              );
-            })}
-
-            {sortedDrawings.length === 0 && (
-              <div style={{ padding: 16, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
-                No drawings match this filter.
-              </div>
-            )}
-          </div>
-        </div>
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
-  };
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16, height: "calc(100vh - 92px)", overflow: "auto" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 24,
-              fontWeight: 800,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              color: "var(--text-primary)",
-            }}
-          >
-            WORK PACKAGES
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              color: "var(--text-muted)",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
-            {projectId ? projects.find((p) => p.id === projectId)?.name || "Project" : "All Projects"} · {workPackages.length} packages ·{" "}
-            {stats.totalTons.toFixed(1)}T
-          </div>
-        </div>
+    <div style={pageStyle}>
+      <style>{RESPONSIVE_CSS}</style>
+      <Hero
+        projectName={projectName}
+        metrics={metrics}
+        view={view}
+        onViewChange={setView}
+        onExport={() => exportWorkPackagesCSV(filtered)}
+        onBulkAdd={() => setBulkAddOpen(true)}
+        onCreate={handleWPCreate}
+        canCreate={!!effectiveProjectId}
+      />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ position: "relative", maxWidth: 260, width: "100%" }}>
-            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "var(--text-muted)" }}>
-              🔍
-            </span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search packages..."
-              style={{
-                width: "100%",
-                padding: "8px 12px 8px 30px",
-                background: "var(--bg-input)",
-                border: "1px solid var(--border-default)",
-                borderRadius: "var(--radius-input)",
-                color: "var(--text-primary)",
-                fontFamily: "var(--font-body)",
-                fontSize: 12,
-                outline: "none",
-              }}
-            />
-          </div>
+      <SummaryStrip metrics={metrics} onPhaseFilter={setPhaseFilter} phaseFilter={phaseFilter} />
 
-          <div style={{ display: "flex", gap: 6 }}>
-            {VIEW_OPTIONS.map((v) => (
-              <button
-                key={v.id}
-                onClick={() => setView(v.id)}
-                style={{
-                  padding: "7px 12px",
-                  borderRadius: "var(--radius-btn)",
-                  border: "none",
-                  background: view === v.id ? "var(--accent)" : "var(--bg-surface-low)",
-                  color: view === v.id ? "var(--accent-text)" : "var(--text-secondary)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  cursor: "pointer",
-                }}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
+      <ControlPanel
+        search={search}
+        onSearch={setSearch}
+        phaseFilter={phaseFilter}
+        onPhaseFilter={setPhaseFilter}
+        statusFilter={statusFilter}
+        onStatusFilter={setStatusFilter}
+        riskFilter={riskFilter}
+        onRiskFilter={setRiskFilter}
+        filteredCount={filtered.length}
+        totalCount={metrics.totalCount}
+        onClear={() => {
+          setSearch("");
+          setPhaseFilter("all");
+          setStatusFilter("all");
+          setRiskFilter("all");
+        }}
+      />
 
-          <button
-            onClick={() => setCompact((v) => !v)}
-            title={compact ? "Normal view" : "Compact view — more rows visible"}
-            style={{
-              padding: "7px 12px", borderRadius: "var(--radius-btn)",
-              border: "1px solid var(--border-default)",
-              background: compact ? "var(--bg-surface-high)" : "var(--bg-surface-low)",
-              color: compact ? "var(--accent)" : "var(--text-secondary)",
-              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: "pointer",
-            }}
-          >
-            ⊟ {compact ? "COMPACT" : "COMPACT"}
-          </button>
-
-          <button
-            onClick={exportCSV}
-            title="Export filtered work packages as CSV"
-            style={{
-              padding: "7px 12px", borderRadius: "var(--radius-btn)",
-              border: "1px solid var(--border-default)",
-              background: "var(--bg-surface-low)", color: "var(--text-secondary)",
-              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: "pointer",
-            }}
-          >
-            ↓ CSV
-          </button>
-
-          <button
-            onClick={handleWPCreate}
-            style={{
-              background: "var(--accent)",
-              color: "var(--accent-text)",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 16px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              cursor: "pointer",
-            }}
-          >
-            + NEW WP
-          </button>
-        </div>
-      </div>
-
-      {/* KPI strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10 }}>
-        {renderKPI("TOTAL WPS", stats.total, "var(--accent)")}
-        {renderKPI("NOT STARTED", stats.notStarted, "var(--text-muted)")}
-        {renderKPI("IN PROGRESS", stats.inProgress, "var(--status-warning)")}
-        {renderKPI("COMPLETE", stats.complete, "var(--status-success)")}
-        {renderKPI("ON HOLD", stats.onHold, "var(--status-error)")}
-        {renderKPI("TOTAL TONNAGE", `${stats.totalTons.toFixed(1)}T`, "var(--status-info)")}
-        {renderKPI("AVG PROGRESS", `${stats.avgProgress}%`, "var(--accent)")}
-      </div>
-
-      {renderTonnageBar()}
-
-      {/* Filters */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {pill(filterPhase === "all", "ALL PHASES", () => setFilterPhase("all"), "var(--accent)")}
-          {["Detailing", "Fabrication", "Delivery", "Erection"].map((p) =>
-            pill(filterPhase === p, p, () => setFilterPhase(p), "var(--accent)")
-          )}
-          <span style={{ width: 8 }} />
-          {pill(filterStatus === "all", "ALL STATUS", () => setFilterStatus("all"), "var(--accent)")}
-          {STATUS_COLUMNS.map((s) => pill(filterStatus === s, s.toUpperCase(), () => setFilterStatus(s), "var(--accent)"))}
-        </div>
-      </div>
-
-      {/* Bulk action bar */}
-      {selectedWPs.size > 0 && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 10, padding: "8px 14px",
-          background: "rgba(99,102,241,0.10)", border: "1px solid var(--accent)",
-          borderRadius: "var(--radius-card)", flexWrap: "wrap",
-        }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
-            {selectedWPs.size} selected
-          </span>
-          <span style={{ color: "var(--divider)" }}>|</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>SET STATUS →</span>
-          {STATUS_COLUMNS.map((s) => (
-            <button key={s} disabled={bulkStatusMut.isPending}
-              onClick={() => bulkStatusMut.mutate({ ids: [...selectedWPs], status: s })}
-              style={{
-                padding: "4px 10px", borderRadius: "var(--radius-btn)",
-                border: `1px solid ${STATUS_COLORS[s]}`,
-                background: `${STATUS_COLORS[s]}18`,
-                color: STATUS_COLORS[s],
-                fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
-                cursor: "pointer", textTransform: "uppercase",
-              }}
-            >
-              {s}
-            </button>
-          ))}
-          <button onClick={exportCSV}
-            style={{ padding: "4px 10px", borderRadius: "var(--radius-btn)", border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer" }}>
-            ↓ Export {selectedWPs.size}
-          </button>
-          <button onClick={() => setSelectedWPs(new Set())}
-            style={{ padding: "4px 10px", borderRadius: "var(--radius-btn)", border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer", marginLeft: "auto" }}>
-            ✕ Clear
-          </button>
-        </div>
-      )}
-
-      {/* Views */}
-      {view === "list" && (
-        <WorkPackageList
-          workPackages={filtered}
-          drawings={drawings}
-          expandedWP={expandedWP}
-          onExpand={(wp) => setExpandedWP(expandedWP?.id === wp.id ? null : wp)}
-          onEdit={handleWPEdit}
-          onDelete={setDeleteTarget}
-          showProject={!projectId}
-          compact={compact}
-          selected={selectedWPs}
-          onToggleSelect={toggleSelectWP}
-          onSelectAll={toggleSelectAll}
+      <div className="wp-content-grid" style={contentGridStyle}>
+        <ExceptionPanel
+          metrics={metrics}
+          onRiskFilter={setRiskFilter}
+          onStatusFilter={setStatusFilter}
+          onPhaseFilter={setPhaseFilter}
+          onOpen={setDetailWP}
         />
-      )}
 
-      {view === "board" && renderBoard()}
+        <main style={{ minWidth: 0 }}>
+          {view === "flow" && (
+            <PhaseFlowView
+              rows={filtered}
+              phaseRollup={metrics.phaseRollup}
+              onOpen={setDetailWP}
+              onEdit={handleWPEdit}
+              onDelete={setDeleteTarget}
+              selectedWPs={selectedWPs}
+              onToggleSelect={toggleSelect}
+            />
+          )}
 
-      {view === "drawings" && renderDrawingTracker()}
+          {view === "board" && (
+            <StatusBoardView
+              rows={filtered}
+              onOpen={setDetailWP}
+              onEdit={handleWPEdit}
+              onDelete={setDeleteTarget}
+            />
+          )}
+
+          {view === "register" && (
+            <RegisterView
+              rows={filtered}
+              selectedWPs={selectedWPs}
+              onToggleSelect={toggleSelect}
+              onOpen={setDetailWP}
+              onEdit={handleWPEdit}
+              onDelete={setDeleteTarget}
+            />
+          )}
+        </main>
+      </div>
+
+      <BulkActionBar
+        count={selectedWPs.size}
+        onClear={() => setSelectedWPs(new Set())}
+        actions={[
+          {
+            label: "SET COMPLETE",
+            icon: "check",
+            onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "Complete" }),
+            disabled: bulkStatusMut.isPending,
+          },
+          {
+            label: "SET IN PROGRESS",
+            icon: "arrow",
+            onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "In Progress" }),
+            disabled: bulkStatusMut.isPending,
+          },
+          {
+            label: "EXPORT",
+            icon: "download",
+            onClick: () => exportWorkPackagesCSV(selectedRows),
+          },
+        ]}
+      />
+
+      <WPBulkAddModal
+        open={bulkAddOpen}
+        onClose={() => setBulkAddOpen(false)}
+        onCommit={(rows) => bulkCreateMut.mutate(rows)}
+        projectId={effectiveProjectId}
+        projectName={projectName}
+        existingWPs={workPackages}
+        isSaving={bulkCreateMut.isPending}
+      />
 
       {(wpModalOpen || editingWP) && (
         <WPFormModal
           open={wpModalOpen || !!editingWP}
-          onClose={() => {
-            setWPModalOpen(false);
-            setEditingWP(null);
-          }}
+          onClose={() => { setWPModalOpen(false); setEditingWP(null); }}
           onSave={(data) => {
-            if (editingWP?.id) {
-              updateWPMut.mutate({ id: editingWP.id, data });
-            } else {
-              createWPMut.mutate(data);
-            }
+            if (editingWP?.id) updateWPMut.mutate({ id: editingWP.id, data });
+            else createWPMut.mutate(data);
           }}
           wp={editingWP}
           projects={projects}
-          nextNumber={getNextNumber(workPackages, "wp_number", "WP-")}
+          nextNumber={editingWP?.wp_number || ""}
           allDrawings={drawings}
         />
       )}
 
-      {selectedBoardWP && (
+      {detailWP && (
         <WorkPackageDetailModal
-          wp={selectedBoardWP}
+          wp={detailWP}
           drawings={drawings}
-          onClose={() => setSelectedBoardWP(null)}
-          onEdit={(wp) => {
-            setSelectedBoardWP(null);
-            handleWPEdit(wp);
-          }}
+          onClose={() => setDetailWP(null)}
+          onEdit={(wp) => { setDetailWP(null); handleWPEdit(wp); }}
         />
       )}
 
@@ -1058,3 +505,1104 @@ export default function WorkPackages() {
     </div>
   );
 }
+
+function Hero({ projectName, metrics, view, onViewChange, onExport, onBulkAdd, onCreate, canCreate }) {
+  return (
+    <section className="wp-hero" style={heroStyle}>
+      <div style={{ minWidth: 0 }}>
+        <div style={eyebrowStyle}>Work Package Control</div>
+        <div style={heroTitleStyle}>Production Flow</div>
+        <div style={heroMetaStyle}>
+          <span>{projectName}</span>
+          <span>{metrics.totalCount} packages</span>
+          <span>{formatTons(metrics.totalTons)}</span>
+          <span>{metrics.progress}% weighted progress</span>
+        </div>
+      </div>
+
+      <div style={heroActionStyle}>
+        <div style={viewToggleStyle}>
+          {VIEW_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const active = view === option.id;
+            return (
+              <button key={option.id} type="button" onClick={() => onViewChange(option.id)} style={viewButtonStyle(active)}>
+                <Icon size={13} />
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <Button variant="secondary" icon="download" onClick={onExport}>CSV</Button>
+          <Button variant="outline" icon="upload" onClick={onBulkAdd} disabled={!canCreate}>Bulk Add</Button>
+          <Button variant="primary" icon="plus" onClick={onCreate} disabled={!canCreate}>New WP</Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SummaryStrip({ metrics, phaseFilter, onPhaseFilter }) {
+  return (
+    <section style={summaryGridStyle}>
+      <MetricCard icon={Package} label="Total Tons" value={formatTons(metrics.totalTons)} sub={`${metrics.totalCount} packages`} tone="var(--accent)" />
+      <MetricCard icon={Gauge} label="Labor Burn" value={`${metrics.laborBurn}%`} sub={`${formatHours(metrics.totalActualHours)} / ${formatHours(metrics.totalBudgetHours)}`} tone={metrics.laborBurn > 100 ? "var(--status-error)" : "var(--status-info)"} />
+      <MetricCard icon={AlertTriangle} label="Exceptions" value={metrics.highRisk.length} sub={`${metrics.mediumRisk.length} warnings`} tone={metrics.highRisk.length ? "var(--status-error)" : "var(--status-success)"} />
+      <MetricCard icon={ShipWheel} label="Ready To Ship" value={metrics.readyForShip.length} sub={`${metrics.fieldReady.length} field ready`} tone="var(--phase-delivery)" />
+      {metrics.phaseRollup.map((row) => (
+        <button key={row.phase} type="button" onClick={() => onPhaseFilter(phaseFilter === row.phase ? "all" : row.phase)} style={phaseMetricStyle(row.phase, phaseFilter === row.phase)}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+            <span style={metricLabelStyle}>{PHASE_META[row.phase].short}</span>
+            <span style={{ color: phaseColor(row.phase), ...mono, fontSize: 10, fontWeight: 800 }}>{row.count}</span>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <ProgressBar value={row.progress} color={phaseColor(row.phase)} height={5} sub={`${formatTons(row.tons)} - ${row.progress}%`} />
+          </div>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function ControlPanel({
+  search,
+  onSearch,
+  phaseFilter,
+  onPhaseFilter,
+  statusFilter,
+  onStatusFilter,
+  riskFilter,
+  onRiskFilter,
+  filteredCount,
+  totalCount,
+  onClear,
+}) {
+  const activeCount = [search, phaseFilter !== "all", statusFilter !== "all", riskFilter !== "all"].filter(Boolean).length;
+  return (
+    <section style={controlPanelStyle}>
+      <div style={searchBoxStyle}>
+        <Search size={14} color="var(--text-muted)" />
+        <input
+          value={search}
+          onChange={(event) => onSearch(event.target.value)}
+          placeholder="Search WP #, package, crew, status, notes..."
+          style={searchInputStyle}
+        />
+      </div>
+
+      <FilterGroup label="Phase">
+        <FilterButton active={phaseFilter === "all"} onClick={() => onPhaseFilter("all")}>All</FilterButton>
+        {PHASE_ORDER.map((phase) => (
+          <FilterButton key={phase} active={phaseFilter === phase} tone={phaseColor(phase)} onClick={() => onPhaseFilter(phase)}>
+            {PHASE_META[phase].short}
+          </FilterButton>
+        ))}
+      </FilterGroup>
+
+      <FilterGroup label="Status">
+        <FilterButton active={statusFilter === "all"} onClick={() => onStatusFilter("all")}>All</FilterButton>
+        {STATUS_OPTIONS.map((status) => (
+          <FilterButton key={status} active={statusFilter === status} tone={STATUS_TONE[status]} onClick={() => onStatusFilter(status)}>
+            {status}
+          </FilterButton>
+        ))}
+      </FilterGroup>
+
+      <FilterGroup label="Risk">
+        {RISK_FILTERS.map((risk) => (
+          <FilterButton
+            key={risk.id}
+            active={riskFilter === risk.id}
+            tone={risk.id === "high" ? "var(--status-error)" : risk.id === "medium" ? "var(--status-warning)" : risk.id === "clear" ? "var(--status-success)" : "var(--accent)"}
+            onClick={() => onRiskFilter(risk.id)}
+          >
+            {risk.label}
+          </FilterButton>
+        ))}
+      </FilterGroup>
+
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={countLabelStyle}>{filteredCount} of {totalCount}</span>
+        {activeCount > 0 && (
+          <button type="button" onClick={onClear} style={clearButtonStyle}>Clear</button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ExceptionPanel({ metrics, onRiskFilter, onStatusFilter, onPhaseFilter, onOpen }) {
+  const watchList = [
+    ...metrics.highRisk,
+    ...metrics.mediumRisk.filter((wp) => !metrics.highRisk.some((h) => h.id === wp.id)),
+  ].slice(0, 6);
+
+  return (
+    <aside style={sideRailStyle}>
+      <div style={panelHeaderStyle}>
+        <div>
+          <div style={eyebrowStyle}>Next Attention</div>
+          <div style={panelTitleStyle}>Exceptions</div>
+        </div>
+        <AlertTriangle size={18} color={metrics.highRisk.length ? "var(--status-error)" : "var(--status-success)"} />
+      </div>
+
+      <button type="button" onClick={() => onRiskFilter("high")} style={railStatStyle("var(--status-error)")}>
+        <span>High risk</span>
+        <strong>{metrics.highRisk.length}</strong>
+      </button>
+      <button type="button" onClick={() => onStatusFilter("On Hold")} style={railStatStyle("var(--status-error)")}>
+        <span>On hold</span>
+        <strong>{metrics.onHold.length}</strong>
+      </button>
+      <button type="button" onClick={() => onRiskFilter("high")} style={railStatStyle("var(--status-warning)")}>
+        <span>Drawing gaps</span>
+        <strong>{metrics.drawingGaps.length}</strong>
+      </button>
+      <button type="button" onClick={() => onPhaseFilter("Detailing")} style={railStatStyle("var(--status-success)")}>
+        <span>Ready for fab</span>
+        <strong>{metrics.readyForFab.length}</strong>
+      </button>
+
+      <div style={{ borderTop: "1px solid var(--divider)", paddingTop: 12 }}>
+        <div style={miniLabelStyle}>Watch list</div>
+        <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+          {watchList.length ? watchList.map((wp) => (
+            <button key={wp.id} type="button" onClick={() => onOpen(wp)} style={watchItemStyle(wp._signals.risk)}>
+              <span style={{ minWidth: 0 }}>
+                <span style={watchTitleStyle}>{wp.wp_number || "WP"} - {wp.name || "Unnamed package"}</span>
+                <span style={watchMetaStyle}>
+                  {wp._signals.flags[0]?.label || "Review"} / {wp._signals.phase} / {formatTons(wp.tonnage)}
+                </span>
+              </span>
+              <span style={riskDotStyle(wp._signals.risk)} />
+            </button>
+          )) : (
+            <div style={emptyRailStyle}>No active package exceptions.</div>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function PhaseFlowView({ rows, phaseRollup, onOpen, onEdit, onDelete, selectedWPs, onToggleSelect }) {
+  if (!rows.length) return <NoPackages />;
+
+  return (
+    <div className="wp-phase-flow" style={phaseFlowStyle}>
+      {PHASE_ORDER.map((phase) => {
+        const items = rows.filter((wp) => wp._signals.phase === phase);
+        const rollup = phaseRollup.find((row) => row.phase === phase);
+        const Icon = PHASE_META[phase].icon;
+        return (
+          <section key={phase} style={laneStyle(phase)}>
+            <div style={laneHeaderStyle}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <span style={laneIconStyle(phase)}><Icon size={15} /></span>
+                <div>
+                  <div style={{ ...display, fontSize: 15, fontWeight: 900, color: "var(--text-primary)" }}>{PHASE_META[phase].label}</div>
+                  <div style={laneDescriptionStyle}>{PHASE_META[phase].description}</div>
+                </div>
+              </div>
+              <div style={laneCountStyle(phase)}>{items.length}</div>
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <ProgressBar value={rollup?.progress || 0} color={phaseColor(phase)} height={5} sub={`${formatTons(rollup?.tons || 0)} - ${rollup?.progress || 0}%`} />
+            </div>
+
+            <div style={{ display: "grid", gap: 9 }}>
+              {items.map((wp) => (
+                <WorkPackageCard
+                  key={wp.id}
+                  wp={wp}
+                  selected={selectedWPs.has(wp.id)}
+                  onToggle={() => onToggleSelect(wp.id)}
+                  onOpen={() => onOpen(wp)}
+                  onEdit={() => onEdit(wp)}
+                  onDelete={() => onDelete(wp)}
+                />
+              ))}
+              {!items.length && <div style={laneEmptyStyle}>No packages in this phase</div>}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function StatusBoardView({ rows, onOpen, onEdit, onDelete }) {
+  if (!rows.length) return <NoPackages />;
+
+  return (
+    <div style={statusBoardStyle}>
+      {STATUS_OPTIONS.map((status) => {
+        const items = rows.filter((wp) => wp._signals.status === status);
+        const tons = items.reduce((sum, wp) => sum + num(wp.tonnage), 0);
+        return (
+          <section key={status} style={statusColumnStyle(status)}>
+            <div style={statusColumnHeaderStyle}>
+              <span>{status}</span>
+              <strong>{items.length} / {formatTons(tons)}</strong>
+            </div>
+            <div style={{ display: "grid", gap: 9 }}>
+              {items.map((wp) => (
+                <CompactPackageCard key={wp.id} wp={wp} onOpen={() => onOpen(wp)} onEdit={() => onEdit(wp)} onDelete={() => onDelete(wp)} />
+              ))}
+              {!items.length && <div style={laneEmptyStyle}>No packages</div>}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function RegisterView({ rows, selectedWPs, onToggleSelect, onOpen, onEdit, onDelete }) {
+  if (!rows.length) return <NoPackages />;
+
+  return (
+    <section style={registerShellStyle}>
+      <div style={registerHeaderStyle}>
+        <span />
+        <span>WP</span>
+        <span>Package</span>
+        <span>Phase</span>
+        <span>Status</span>
+        <span>Progress</span>
+        <span>Readiness</span>
+        <span>Labor</span>
+        <span />
+      </div>
+      {rows.map((wp) => (
+        <div key={wp.id} onClick={() => onOpen(wp)} style={registerRowStyle(wp._signals.risk)}>
+          <input
+            type="checkbox"
+            checked={selectedWPs.has(wp.id)}
+            onClick={(event) => event.stopPropagation()}
+            onChange={() => onToggleSelect(wp.id)}
+            aria-label={`Select ${wp.wp_number || "work package"}`}
+          />
+          <span style={wpNumberStyle}>{wp.wp_number || "-"}</span>
+          <span style={{ minWidth: 0 }}>
+            <span style={packageNameStyle}>{wp.name || "Unnamed package"}</span>
+            <span style={subLineStyle}>{wp.crew || "No crew"} / {formatTons(wp.tonnage)}</span>
+          </span>
+          <PhaseBadge phase={wp._signals.phase} />
+          <StatusPill label={wp._signals.status} />
+          <ProgressBar value={wp._signals.progress} color={phaseColor(wp._signals.phase)} height={4} sub={`${wp._signals.progress}%`} />
+          <Readiness value={wp._signals.readinessScore} />
+          <span style={laborLabelStyle(wp._signals.hourBurn)}>{wp._signals.totalBudgetHours ? `${wp._signals.hourBurn}%` : "-"}</span>
+          <RowActions onEdit={(event) => { event.stopPropagation(); onEdit(wp); }} onDelete={(event) => { event.stopPropagation(); onDelete(wp); }} />
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function WorkPackageCard({ wp, selected, onToggle, onOpen, onEdit, onDelete }) {
+  const signals = wp._signals;
+  return (
+    <article onClick={onOpen} style={packageCardStyle(signals.risk, selected)}>
+      <div style={cardTopStyle}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onClick={(event) => event.stopPropagation()}
+          onChange={onToggle}
+          aria-label={`Select ${wp.wp_number || "work package"}`}
+        />
+        <span style={wpNumberStyle}>{wp.wp_number || "WP"}</span>
+        <div style={{ flex: 1 }} />
+        <StatusPill label={signals.status} size="xs" />
+      </div>
+      <div style={packageNameStyle}>{wp.name || "Unnamed package"}</div>
+      <div style={cardMetaGridStyle}>
+        <Fact icon={Package} label="Tons" value={formatTons(wp.tonnage)} />
+        <Fact icon={Users} label="Crew" value={wp.crew || "Open"} />
+        <Fact icon={CalendarDays} label="Plan" value={formatDateShort(wp.scheduled_end_date || wp.due_date)} />
+      </div>
+      <ProgressBar value={signals.progress} color={phaseColor(signals.phase)} height={5} sub={`${signals.progress}% complete`} />
+      <div style={flagWrapStyle}>
+        <Readiness value={signals.readinessScore} />
+        {signals.flags.slice(0, 2).map((flag) => <Flag key={flag.key} flag={flag} />)}
+        {!signals.flags.length && <Flag flag={{ label: "No blockers", severity: "clear" }} />}
+      </div>
+      <div style={cardFooterStyle}>
+        <span style={subLineStyle}>{signals.drawing.approvedCount}/{signals.drawing.linkedCount || 0} drawings released</span>
+        <RowActions onEdit={(event) => { event.stopPropagation(); onEdit(); }} onDelete={(event) => { event.stopPropagation(); onDelete(); }} />
+      </div>
+    </article>
+  );
+}
+
+function CompactPackageCard({ wp, onOpen, onEdit, onDelete }) {
+  const signals = wp._signals;
+  return (
+    <article onClick={onOpen} style={compactCardStyle(signals.risk)}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span style={wpNumberStyle}>{wp.wp_number || "WP"}</span>
+        <PhaseBadge phase={signals.phase} />
+      </div>
+      <div style={packageNameStyle}>{wp.name || "Unnamed package"}</div>
+      <ProgressBar value={signals.progress} color={phaseColor(signals.phase)} height={4} sub={`${formatTons(wp.tonnage)} - ${signals.progress}%`} />
+      <div style={cardFooterStyle}>
+        <span style={subLineStyle}>{signals.flags[0]?.label || wp.crew || "No blockers"}</span>
+        <RowActions onEdit={(event) => { event.stopPropagation(); onEdit(); }} onDelete={(event) => { event.stopPropagation(); onDelete(); }} />
+      </div>
+    </article>
+  );
+}
+
+function MetricCard({ icon: Icon, label, value, sub, tone }) {
+  return (
+    <div style={metricCardStyle(tone)}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+        <span style={metricLabelStyle}>{label}</span>
+        <Icon size={15} color={tone} />
+      </div>
+      <div style={{ ...mono, fontSize: 25, lineHeight: 1, fontWeight: 900, color: tone, marginTop: 10 }}>{value}</div>
+      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 6 }}>{sub}</div>
+    </div>
+  );
+}
+
+function FilterGroup({ label, children }) {
+  return (
+    <div style={filterGroupStyle}>
+      <span style={filterLabelStyle}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function FilterButton({ active, tone = "var(--accent)", onClick, children }) {
+  return (
+    <button type="button" onClick={onClick} style={filterButtonStyle(active, tone)}>
+      {children}
+    </button>
+  );
+}
+
+function Fact({ icon: Icon, label, value }) {
+  return (
+    <div style={factStyle}>
+      <Icon size={12} color="var(--text-muted)" />
+      <span>
+        <span style={factLabelStyle}>{label}</span>
+        <span style={factValueStyle}>{value}</span>
+      </span>
+    </div>
+  );
+}
+
+function PhaseBadge({ phase }) {
+  const Icon = PHASE_META[phase]?.icon || Package;
+  return (
+    <span style={phaseBadgeStyle(phase)}>
+      <Icon size={10} />
+      {PHASE_META[phase]?.short || phase || "Phase"}
+    </span>
+  );
+}
+
+function Readiness({ value }) {
+  const tone = value >= 80 ? "var(--status-success)" : value >= 55 ? "var(--status-warning)" : "var(--status-error)";
+  return <span style={readinessStyle(tone)}>{value}% ready</span>;
+}
+
+function Flag({ flag }) {
+  const tone = flag.severity === "high"
+    ? "var(--status-error)"
+    : flag.severity === "medium"
+      ? "var(--status-warning)"
+      : "var(--status-success)";
+  return <span style={flagStyle(tone)}>{flag.label}</span>;
+}
+
+function RowActions({ onEdit, onDelete }) {
+  return (
+    <span style={{ display: "inline-flex", gap: 5 }}>
+      <button type="button" onClick={onEdit} title="Edit" aria-label="Edit work package" style={iconButtonStyle}>
+        <Pencil size={12} />
+      </button>
+      <button type="button" onClick={onDelete} title="Delete" aria-label="Delete work package" style={iconButtonStyle}>
+        <Trash2 size={12} />
+      </button>
+    </span>
+  );
+}
+
+function NoPackages() {
+  return (
+    <EmptyState
+      icon="wp"
+      title="No work packages match this view"
+      body="Adjust the search, phase, status, or risk filters to bring packages back into view."
+    />
+  );
+}
+
+const pageStyle = {
+  padding: 18,
+  display: "flex",
+  flexDirection: "column",
+  gap: 14,
+  minWidth: 0,
+};
+
+const heroStyle = {
+  border: "1px solid color-mix(in srgb, var(--border-default) 84%, white 16%)",
+  borderRadius: 18,
+  background: "linear-gradient(135deg, color-mix(in srgb, var(--bg-surface-high) 94%, #000 6%), color-mix(in srgb, var(--bg-surface) 86%, #000 14%))",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 18px 42px rgba(0,0,0,0.30)",
+  padding: 18,
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: 18,
+  alignItems: "end",
+};
+
+const eyebrowStyle = {
+  ...mono,
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: "0.18em",
+  textTransform: "uppercase",
+  color: "var(--accent)",
+};
+
+const heroTitleStyle = {
+  ...display,
+  fontSize: 34,
+  lineHeight: 1,
+  fontWeight: 900,
+  color: "var(--text-primary)",
+  marginTop: 6,
+};
+
+const heroMetaStyle = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  marginTop: 12,
+  ...mono,
+  fontSize: 9,
+  fontWeight: 800,
+  color: "var(--text-muted)",
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+};
+
+const heroActionStyle = {
+  display: "grid",
+  gap: 10,
+  justifyItems: "end",
+};
+
+const viewToggleStyle = {
+  display: "inline-flex",
+  gap: 5,
+  padding: 5,
+  border: "1px solid var(--border-default)",
+  borderRadius: 14,
+  background: "var(--bg-surface-low)",
+};
+
+const viewButtonStyle = (active) => ({
+  height: 30,
+  padding: "0 10px",
+  border: `1px solid ${active ? "var(--accent)" : "transparent"}`,
+  borderRadius: 10,
+  background: active ? "var(--accent-muted)" : "transparent",
+  color: active ? "var(--accent)" : "var(--text-secondary)",
+  ...mono,
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  cursor: "pointer",
+});
+
+const summaryGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: 10,
+};
+
+const metricCardStyle = (tone) => ({
+  minHeight: 114,
+  border: `1px solid color-mix(in srgb, ${tone} 28%, var(--border-default))`,
+  borderRadius: 14,
+  padding: 13,
+  background: `linear-gradient(145deg, color-mix(in srgb, ${tone} 8%, var(--bg-surface-high)), var(--bg-surface-low))`,
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 24px rgba(0,0,0,0.24)",
+});
+
+const metricLabelStyle = {
+  ...mono,
+  fontSize: 8,
+  fontWeight: 900,
+  letterSpacing: "0.13em",
+  textTransform: "uppercase",
+  color: "var(--text-muted)",
+};
+
+const phaseMetricStyle = (phase, active) => ({
+  textAlign: "left",
+  minHeight: 114,
+  border: `1px solid ${active ? phaseColor(phase) : "var(--border-default)"}`,
+  borderRadius: 14,
+  padding: 13,
+  background: active
+    ? `linear-gradient(145deg, color-mix(in srgb, ${phaseColor(phase)} 14%, var(--bg-surface-high)), var(--bg-surface-low))`
+    : "var(--bg-surface)",
+  cursor: "pointer",
+});
+
+const controlPanelStyle = {
+  border: "1px solid var(--border-default)",
+  borderRadius: 14,
+  padding: 10,
+  background: "var(--bg-surface)",
+  display: "flex",
+  gap: 10,
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const searchBoxStyle = {
+  minWidth: 240,
+  flex: "1 1 300px",
+  height: 34,
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "0 10px",
+  border: "1px solid var(--border-default)",
+  borderRadius: 10,
+  background: "var(--bg-input)",
+};
+
+const searchInputStyle = {
+  flex: 1,
+  minWidth: 0,
+  border: "none",
+  outline: "none",
+  background: "transparent",
+  color: "var(--text-primary)",
+  fontSize: 12,
+  fontFamily: "var(--font-body)",
+};
+
+const filterGroupStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  flexWrap: "wrap",
+};
+
+const filterLabelStyle = {
+  ...mono,
+  fontSize: 8,
+  fontWeight: 900,
+  color: "var(--text-muted)",
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+  marginRight: 2,
+};
+
+const filterButtonStyle = (active, tone) => ({
+  minHeight: 26,
+  padding: "0 8px",
+  borderRadius: 8,
+  border: `1px solid ${active ? tone : "var(--border-default)"}`,
+  background: active ? `color-mix(in srgb, ${tone} 14%, transparent)` : "var(--bg-surface-low)",
+  color: active ? tone : "var(--text-secondary)",
+  ...mono,
+  fontSize: 8,
+  fontWeight: 900,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+});
+
+const countLabelStyle = {
+  ...mono,
+  fontSize: 9,
+  color: "var(--text-muted)",
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+};
+
+const clearButtonStyle = {
+  border: "1px solid var(--accent-border)",
+  borderRadius: 8,
+  background: "var(--accent-muted)",
+  color: "var(--accent)",
+  ...mono,
+  fontSize: 8,
+  fontWeight: 900,
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+  padding: "6px 9px",
+  cursor: "pointer",
+};
+
+const contentGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "300px minmax(0, 1fr)",
+  gap: 14,
+  alignItems: "start",
+};
+
+const sideRailStyle = {
+  position: "sticky",
+  top: 12,
+  border: "1px solid var(--border-default)",
+  borderRadius: 16,
+  background: "linear-gradient(180deg, var(--bg-surface-high), var(--bg-surface))",
+  padding: 14,
+  display: "grid",
+  gap: 10,
+  boxShadow: "0 14px 34px rgba(0,0,0,0.24)",
+};
+
+const panelHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 10,
+  paddingBottom: 4,
+};
+
+const panelTitleStyle = {
+  ...display,
+  fontSize: 18,
+  fontWeight: 900,
+  color: "var(--text-primary)",
+};
+
+const railStatStyle = (tone) => ({
+  width: "100%",
+  border: `1px solid color-mix(in srgb, ${tone} 28%, var(--border-default))`,
+  borderRadius: 12,
+  background: `linear-gradient(90deg, color-mix(in srgb, ${tone} 9%, transparent), transparent)`,
+  padding: "9px 10px",
+  color: "var(--text-secondary)",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  cursor: "pointer",
+  ...mono,
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+});
+
+const miniLabelStyle = {
+  ...mono,
+  fontSize: 8,
+  fontWeight: 900,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  color: "var(--text-muted)",
+};
+
+const watchItemStyle = (risk) => {
+  const tone = risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--status-success)";
+  return {
+    border: `1px solid color-mix(in srgb, ${tone} 26%, var(--border-default))`,
+    borderRadius: 11,
+    background: "var(--bg-surface-low)",
+    padding: "8px 9px",
+    color: "inherit",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 8px",
+    gap: 8,
+    alignItems: "center",
+    textAlign: "left",
+    cursor: "pointer",
+  };
+};
+
+const watchTitleStyle = {
+  display: "block",
+  color: "var(--text-primary)",
+  fontSize: 12,
+  fontWeight: 850,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const watchMetaStyle = {
+  display: "block",
+  ...mono,
+  fontSize: 8,
+  color: "var(--text-muted)",
+  marginTop: 3,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+};
+
+const riskDotStyle = (risk) => ({
+  width: 8,
+  height: 8,
+  borderRadius: 8,
+  background: risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--status-success)",
+});
+
+const emptyRailStyle = {
+  border: "1px dashed var(--border-default)",
+  borderRadius: 10,
+  padding: 12,
+  color: "var(--text-muted)",
+  fontSize: 12,
+  textAlign: "center",
+};
+
+const phaseFlowStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+  gap: 12,
+  alignItems: "start",
+  overflowX: "visible",
+  paddingBottom: 4,
+};
+
+const laneStyle = (phase) => ({
+  minWidth: 0,
+  border: `1px solid color-mix(in srgb, ${phaseColor(phase)} 30%, var(--border-default))`,
+  borderRadius: 16,
+  background: "linear-gradient(180deg, var(--bg-surface), var(--bg-surface-low))",
+  padding: 12,
+});
+
+const laneHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  marginBottom: 12,
+};
+
+const laneIconStyle = (phase) => ({
+  width: 30,
+  height: 30,
+  borderRadius: 10,
+  display: "grid",
+  placeItems: "center",
+  color: phaseColor(phase),
+  background: `color-mix(in srgb, ${phaseColor(phase)} 12%, transparent)`,
+  border: `1px solid color-mix(in srgb, ${phaseColor(phase)} 32%, transparent)`,
+  flexShrink: 0,
+});
+
+const laneDescriptionStyle = {
+  color: "var(--text-muted)",
+  fontSize: 11,
+  lineHeight: 1.35,
+  marginTop: 2,
+};
+
+const laneCountStyle = (phase) => ({
+  ...mono,
+  fontSize: 13,
+  fontWeight: 900,
+  color: phaseColor(phase),
+});
+
+const laneEmptyStyle = {
+  border: "1px dashed var(--border-default)",
+  borderRadius: 12,
+  padding: 16,
+  color: "var(--text-muted)",
+  textAlign: "center",
+  ...mono,
+  fontSize: 9,
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+};
+
+const statusBoardStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+  gap: 12,
+};
+
+const statusColumnStyle = (status) => ({
+  border: `1px solid color-mix(in srgb, ${STATUS_TONE[status]} 28%, var(--border-default))`,
+  borderTop: `3px solid ${STATUS_TONE[status]}`,
+  borderRadius: 16,
+  background: "var(--bg-surface)",
+  padding: 12,
+});
+
+const statusColumnHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 10,
+  marginBottom: 10,
+  ...mono,
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+  color: "var(--text-secondary)",
+};
+
+const packageCardStyle = (risk, selected) => {
+  const tone = risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--border-default)";
+  return {
+    border: `1px solid ${selected ? "var(--accent)" : tone}`,
+    borderRadius: 13,
+    padding: 10,
+    background: selected ? "var(--accent-muted)" : "var(--bg-surface-high)",
+    display: "grid",
+    gap: 9,
+    cursor: "pointer",
+    boxShadow: selected ? "0 0 0 1px var(--accent-border)" : "inset 0 1px 0 rgba(255,255,255,0.04)",
+  };
+};
+
+const compactCardStyle = (risk) => {
+  const tone = risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--border-default)";
+  return {
+    border: `1px solid ${tone}`,
+    borderRadius: 13,
+    padding: 10,
+    background: "var(--bg-surface-high)",
+    display: "grid",
+    gap: 8,
+    cursor: "pointer",
+  };
+};
+
+const cardTopStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+};
+
+const wpNumberStyle = {
+  ...mono,
+  color: "var(--accent)",
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: "0.08em",
+  whiteSpace: "nowrap",
+};
+
+const packageNameStyle = {
+  display: "block",
+  color: "var(--text-primary)",
+  fontSize: 13,
+  lineHeight: 1.3,
+  fontWeight: 850,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const subLineStyle = {
+  display: "block",
+  color: "var(--text-muted)",
+  fontSize: 10,
+  lineHeight: 1.35,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const cardMetaGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: 6,
+};
+
+const factStyle = {
+  minWidth: 0,
+  border: "1px solid var(--border-default)",
+  borderRadius: 9,
+  padding: "6px 7px",
+  display: "flex",
+  gap: 6,
+  alignItems: "center",
+  background: "var(--bg-surface)",
+};
+
+const factLabelStyle = {
+  display: "block",
+  ...mono,
+  fontSize: 7,
+  color: "var(--text-muted)",
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+};
+
+const factValueStyle = {
+  display: "block",
+  ...mono,
+  fontSize: 9,
+  color: "var(--text-primary)",
+  fontWeight: 900,
+  marginTop: 1,
+};
+
+const flagWrapStyle = {
+  display: "flex",
+  gap: 5,
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const flagStyle = (tone) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 20,
+  padding: "0 7px",
+  borderRadius: 7,
+  border: `1px solid color-mix(in srgb, ${tone} 32%, transparent)`,
+  background: `color-mix(in srgb, ${tone} 10%, transparent)`,
+  color: tone,
+  ...mono,
+  fontSize: 7,
+  fontWeight: 900,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+});
+
+const readinessStyle = (tone) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 20,
+  padding: "0 7px",
+  borderRadius: 7,
+  border: `1px solid color-mix(in srgb, ${tone} 35%, transparent)`,
+  background: `color-mix(in srgb, ${tone} 10%, transparent)`,
+  color: tone,
+  ...mono,
+  fontSize: 7,
+  fontWeight: 900,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+});
+
+const cardFooterStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 8,
+  alignItems: "center",
+};
+
+const iconButtonStyle = {
+  width: 24,
+  height: 24,
+  border: "1px solid var(--border-default)",
+  borderRadius: 7,
+  background: "var(--bg-surface)",
+  color: "var(--text-muted)",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  cursor: "pointer",
+};
+
+const phaseBadgeStyle = (phase) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  width: "fit-content",
+  minHeight: 22,
+  padding: "0 7px",
+  borderRadius: 8,
+  border: `1px solid color-mix(in srgb, ${phaseColor(phase)} 36%, transparent)`,
+  background: `color-mix(in srgb, ${phaseColor(phase)} 12%, transparent)`,
+  color: phaseColor(phase),
+  ...mono,
+  fontSize: 8,
+  fontWeight: 900,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+});
+
+const registerShellStyle = {
+  border: "1px solid var(--border-default)",
+  borderRadius: 16,
+  background: "var(--bg-surface)",
+  overflowX: "auto",
+  overflowY: "hidden",
+};
+
+const registerHeaderStyle = {
+  display: "grid",
+  gridTemplateColumns: "26px 86px minmax(220px, 1.4fr) 110px 116px 132px 92px 70px 58px",
+  gap: 10,
+  alignItems: "center",
+  minWidth: 900,
+  padding: "9px 12px",
+  borderBottom: "1px solid var(--divider)",
+  background: "var(--bg-surface-low)",
+  ...mono,
+  fontSize: 8,
+  fontWeight: 900,
+  color: "var(--text-muted)",
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+};
+
+const registerRowStyle = (risk) => {
+  const tone = risk === "high" ? "var(--status-error)" : risk === "medium" ? "var(--status-warning)" : "var(--divider)";
+  return {
+    display: "grid",
+    gridTemplateColumns: "26px 86px minmax(220px, 1.4fr) 110px 116px 132px 92px 70px 58px",
+    gap: 10,
+    alignItems: "center",
+    minWidth: 900,
+    padding: "10px 12px",
+    borderBottom: "1px solid var(--divider)",
+    borderLeft: `3px solid ${tone}`,
+    cursor: "pointer",
+  };
+};
+
+const laborLabelStyle = (burn) => ({
+  ...mono,
+  fontSize: 10,
+  fontWeight: 900,
+  color: burn > 100 ? "var(--status-error)" : burn >= 85 ? "var(--status-warning)" : "var(--text-secondary)",
+});
+
+const RESPONSIVE_CSS = `
+@media (max-width: 1180px) {
+  .wp-content-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .wp-phase-flow {
+    grid-template-columns: repeat(2, minmax(260px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .wp-hero {
+    grid-template-columns: 1fr !important;
+  }
+  .wp-phase-flow {
+    grid-template-columns: 1fr !important;
+    overflow-x: visible !important;
+  }
+}
+`;

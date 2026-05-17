@@ -1,622 +1,710 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  Bot,
+  CalendarClock,
+  GitBranch,
+  Layers3,
+  PackageCheck,
+  Route,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  Truck,
+  Zap,
+} from "lucide-react";
+import { Button } from "@/components/design-system";
+import { formatCurrencyShort, formatDate } from "@/components/shared/formatters";
 
-const CURRENCY = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 0,
-});
+const CLOSED_TASK_STATUSES = ["complete", "completed", "closed", "cancelled", "canceled"];
+const RISK_RED = "var(--status-error)";
+const WARNING = "var(--status-warning)";
+const SUCCESS = "var(--status-success)";
+const INFO = "var(--status-info)";
 
-const NUMBER = new Intl.NumberFormat("en-US");
-
-const VIEWS = [
-  {
-    id: "executive",
-    title: "Executive Pulse",
-    eyebrow: "Portfolio command view",
-    description: "Leadership summary across schedule drift, cost pressure, and active blockers.",
-    actionPage: "Dashboard",
-    accent: "var(--accent)",
-  },
-  {
-    id: "schedule",
-    title: "Schedule Recovery",
-    eyebrow: "Critical path attention",
-    description: "Highlights overdue tasks, unscheduled work, and projects most likely to slip next.",
-    actionPage: "Schedule",
-    accent: "var(--status-warning)",
-  },
-  {
-    id: "risk",
-    title: "Risk Radar",
-    eyebrow: "Issue escalation map",
-    description: "Focuses on overdue RFIs, waiting-on blockers, and leadership-level action items.",
-    actionPage: "ProjectControlCenter",
-    accent: "var(--status-error)",
-  },
-  {
-    id: "commercial",
-    title: "Commercial Watch",
-    eyebrow: "Cost and change signal",
-    description: "Pairs over-budget codes, pending change orders, and late vendor flow into one surface.",
-    actionPage: "Financials",
-    accent: "var(--chart-4)",
-  },
-];
-
-const PROMPTS = [
-  { id: "leadership", label: "What needs leadership attention?" },
-  { id: "schedule", label: "Where are we slipping on schedule?" },
-  { id: "cost", label: "What is putting margin at risk?" },
-  { id: "week", label: "What should the PM team do this week?" },
-];
-
-function compactCurrency(value) {
-  if (!value) return "$0";
-  if (Math.abs(value) >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1000) return `$${(value / 1000).toFixed(0)}k`;
-  return CURRENCY.format(value);
+function num(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function MetricPill({ label, value, tone = "var(--accent)" }) {
-  return (
-    <div
-      style={{
-        minWidth: 120,
-        borderRadius: 12,
-        border: "1px solid color-mix(in srgb, var(--border-default) 78%, transparent)",
-        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-secondary) 86%, transparent), color-mix(in srgb, var(--bg-surface) 94%, transparent))",
-        padding: "10px 12px",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 8,
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          color: "var(--text-muted)",
-          marginBottom: 6,
-        }}
-      >
-        {label}
-      </div>
-      <div style={{ fontSize: 22, lineHeight: 1, fontWeight: 800, color: tone }}>{value}</div>
-    </div>
-  );
+function dateValue(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function AssistantSection({ title, items, tone }) {
-  if (!items?.length) return null;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 8,
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          color: tone || "var(--text-muted)",
-        }}
-      >
-        {title}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {items.map((item) => (
-          <div
-            key={item}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 10,
-              background: "color-mix(in srgb, var(--bg-surface-secondary) 88%, transparent)",
-              border: "1px solid color-mix(in srgb, var(--border-default) 72%, transparent)",
-              color: "var(--text-secondary)",
-              fontSize: 13,
-            }}
-          >
-            {item}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function daysFromToday(value) {
+  const parsed = dateValue(value);
+  if (!parsed) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  parsed.setHours(0, 0, 0, 0);
+  return Math.round((parsed - today) / 86400000);
 }
 
-function buildInsightPack({
-  focusedProjectName,
-  openRFIs,
-  overdueRFIs,
-  criticalRFIs,
-  pendingCOs,
-  pendingCOValue,
-  overBudgetCodes,
-  lateDeliveries,
-  overdueActions,
-  overdueTasks,
-  unscheduledTasks,
-  atRiskProjects,
-}) {
-  const projectLabel = focusedProjectName || "the portfolio";
-  const highestRiskProject = atRiskProjects[0]?.name || "your at-risk jobs";
+function isTaskOpen(task) {
+  const status = String(task?.status || "").toLowerCase();
+  return !CLOSED_TASK_STATUSES.some((closed) => status.includes(closed));
+}
+
+function taskLabel(task) {
+  return task?.task_name || task?.name || task?.title || "Unnamed schedule task";
+}
+
+function workPackageLabel(workPackage) {
+  return workPackage?.name || workPackage?.package_name || workPackage?.wp_number || "Unnamed work package";
+}
+
+function deliveryLabel(delivery) {
+  return delivery?.load_number || delivery?.truck_number || delivery?.name || delivery?.destination || "Delivery";
+}
+
+function riskColor(value, warningAt, dangerAt) {
+  if (value >= dangerAt) return RISK_RED;
+  if (value >= warningAt) return WARNING;
+  return SUCCESS;
+}
+
+function buildInsightList(project) {
+  if (!project) return [];
+  const insights = [];
+  if (project.overdueRfis) insights.push(`${project.overdueRfis} overdue RFI${project.overdueRfis === 1 ? "" : "s"} can block detailing, fabrication release, or field decisions.`);
+  if (project.lateDeliveries) insights.push(`${project.lateDeliveries} late deliver${project.lateDeliveries === 1 ? "y" : "ies"} should be checked against erection readiness.`);
+  if (project.delayedTasks) insights.push(`${project.delayedTasks} schedule task${project.delayedTasks === 1 ? "" : "s"} already show delay status.`);
+  if (project.overdueActions) insights.push(`${project.overdueActions} overdue action item${project.overdueActions === 1 ? "" : "s"} need owner follow-up.`);
+  if (project.pendingCo) insights.push(`${formatCurrencyShort(project.pendingCo)} in pending change exposure is not yet reflected as approved contract value.`);
+  if (!insights.length) insights.push("No urgent blocker pattern is visible from RFIs, deliveries, actions, cost, and schedule records.");
+  return insights;
+}
+
+function buildScenario(project, delayDays) {
+  if (!project) {
+    return {
+      pressure: 0,
+      forecastSlip: delayDays,
+      affectedTasks: [],
+      affectedPackages: [],
+      affectedDeliveries: [],
+    };
+  }
+
+  const pressure = project.overdueRfis * 2
+    + project.lateDeliveries * 2
+    + project.delayedTasks * 2
+    + project.overdueActions
+    + (project.pendingCo > 0 ? 2 : 0);
+  const multiplier = 1 + Math.min(1.25, pressure / 12);
+  const forecastSlip = Math.max(delayDays, Math.ceil(delayDays * multiplier));
+  const upcomingTasks = [...(project.projectTasks || [])]
+    .filter(isTaskOpen)
+    .map((task) => ({
+      task,
+      days: daysFromToday(task.start_date || task.end_date),
+      duration: num(task.duration_days || task.duration || task.duration_work_days),
+    }))
+    .filter((entry) => entry.days == null || entry.days <= 60)
+    .sort((a, b) => (a.days ?? 999) - (b.days ?? 999) || b.duration - a.duration)
+    .slice(0, 5)
+    .map((entry) => entry.task);
+
+  const atRiskPackages = [...(project.projectWps || [])]
+    .filter((wp) => !String(wp.status || "").toLowerCase().includes("complete"))
+    .sort((a, b) => num(b.tonnage) - num(a.tonnage))
+    .slice(0, 4);
+
+  const upcomingDeliveries = [...(project.projectDeliveries || [])]
+    .filter((delivery) => !String(delivery.status || "").toLowerCase().includes("delivered"))
+    .map((delivery) => ({ delivery, days: daysFromToday(delivery.scheduled_date || delivery.delivery_date) }))
+    .filter((entry) => entry.days == null || entry.days <= 45)
+    .sort((a, b) => (a.days ?? 999) - (b.days ?? 999))
+    .slice(0, 4)
+    .map((entry) => entry.delivery);
 
   return {
-    leadership: {
-      title: `SteelBuild Copilot briefing for ${projectLabel}`,
-      summary:
-        overdueTasks > 0 || overdueRFIs > 0 || lateDeliveries > 0
-          ? `${projectLabel} has multiple live execution signals that can compound if they are not owned this week.`
-          : `${projectLabel} is relatively stable right now, with the biggest opportunity coming from proactive cleanup before small issues stack up.`,
-      priorities: [
-        `${NUMBER.format(overdueTasks)} schedule tasks are overdue${unscheduledTasks ? ` and ${NUMBER.format(unscheduledTasks)} more still have TBD dates` : ""}.`,
-        `${NUMBER.format(overdueRFIs)} RFIs are overdue and ${NUMBER.format(criticalRFIs)} are marked critical.`,
-        `${NUMBER.format(lateDeliveries)} deliveries and ${NUMBER.format(overdueActions)} action items need direct owner follow-up.`,
-      ],
-      watchouts: [
-        `${highestRiskProject} is a good candidate for an executive unblock review.`,
-        pendingCOs > 0
-          ? `${NUMBER.format(pendingCOs)} pending change orders worth ${compactCurrency(pendingCOValue)} could affect cash flow timing.`
-          : "Change-order flow is quiet enough that schedule recovery should stay the main focus.",
-      ],
-      actions: [
-        "Run a 15-minute recovery huddle on overdue schedule tasks and assign one owner per blocker.",
-        "Escalate any overdue RFI tied to field, detailing, or fabrication release dates.",
-        "Use the Risk Radar view to confirm nothing high-severity is waiting without an accountable person.",
-      ],
-      tone: "var(--accent)",
-    },
-    schedule: {
-      title: "Schedule recovery view",
-      summary:
-        overdueTasks > 0
-          ? `The schedule is telling us where coordination is leaking: overdue tasks plus TBD work are the main drag right now.`
-          : `There is no broad overdue-task surge right now, so the focus should be preventing TBD work from becoming hidden delay.`,
-      priorities: [
-        `${NUMBER.format(overdueTasks)} overdue tasks should be triaged first by phase and by owner.`,
-        `${NUMBER.format(unscheduledTasks)} tasks are still unscheduled/TBD, which weakens forecast reliability.`,
-        `${NUMBER.format(lateDeliveries)} late deliveries can quietly re-create critical path pressure even when task status looks healthy.`,
-      ],
-      watchouts: [
-        "If drawing, procurement, and field handoff tasks keep appearing as TBD, schedule confidence will drop before the dashboard shows it.",
-        "Recovery work should prioritize tasks tied to upcoming dependencies rather than only the oldest late items.",
-      ],
-      actions: [
-        "Open Schedule and sort the task list by overdue then by phase.",
-        "Convert the highest-risk TBD tasks into dated commitments or explicit waiting-on records.",
-        "Cross-check late deliveries against near-term installation and closeout tasks.",
-      ],
-      tone: "var(--status-warning)",
-    },
-    cost: {
-      title: "Commercial risk view",
-      summary:
-        pendingCOs > 0 || overBudgetCodes > 0
-          ? `Commercial pressure is present, and the combination of pending COs with over-budget codes is where margin can erode quietly.`
-          : `Commercial signals are relatively calm, which gives room to tighten forecasting before pressure grows.`,
-      priorities: [
-        `${NUMBER.format(overBudgetCodes)} cost codes are currently over budget.`,
-        `${NUMBER.format(pendingCOs)} change orders are still pending approval, totaling ${compactCurrency(pendingCOValue)}.`,
-        `${NUMBER.format(openRFIs)} open RFIs may contain hidden scope or pricing consequences if they stay unresolved.`,
-      ],
-      watchouts: [
-        "Pending scope decisions that are not tied to budget exposure tend to age badly.",
-        "Repeated schedule drift usually shows up in cost before it shows up in revenue.",
-      ],
-      actions: [
-        "Review over-budget codes beside the pending CO register, not as separate reports.",
-        "Flag RFIs with commercial impact for PM and estimating follow-up.",
-        "Use Financials to spot whether cost growth is isolated or phase-wide.",
-      ],
-      tone: "var(--chart-4)",
-    },
-    week: {
-      title: "This-week operating plan",
-      summary: `If we want a Brena-style assistant behavior, the useful version is not generic chat. It is a weekly operating brief that converts current data into concrete next moves.`,
-      priorities: [
-        `Clear ${NUMBER.format(overdueRFIs)} overdue RFIs and ${NUMBER.format(overdueActions)} overdue action items from the queue.`,
-        `Decide owner and date strategy for ${NUMBER.format(unscheduledTasks)} TBD schedule tasks.`,
-        `Review ${NUMBER.format(lateDeliveries)} late deliveries against the next 14 days of schedule demand.`,
-      ],
-      watchouts: [
-        "Unscheduled work is often the earliest sign of future misses, especially when the schedule still looks visually calm.",
-        "Action items without due dates or owners will undercut every other dashboard you build.",
-      ],
-      actions: [
-        "Use Project Control Center to assign ownership on waiting-on blockers.",
-        "Use Schedule Recovery to convert vague work into dated commitments.",
-        "Close the loop in Dashboard or Financials so executive reporting reflects the same decisions.",
-      ],
-      tone: "var(--status-success)",
-    },
+    pressure,
+    forecastSlip,
+    affectedTasks: upcomingTasks,
+    affectedPackages: atRiskPackages,
+    affectedDeliveries: upcomingDeliveries,
   };
 }
 
-export default function PlanningStudio({
-  projects = [],
-  tasks = [],
-  rfis = [],
-  cos = [],
-  deliveries = [],
-  actionItems = [],
-  codes = [],
-  activeProject = null,
-}) {
-  const navigate = useNavigate();
-  const [activeView, setActiveView] = useState("executive");
-  const [activePrompt, setActivePrompt] = useState("leadership");
+function buildActionPlan(project) {
+  if (!project) return [];
+  const actions = [
+    {
+      label: "Open Schedule",
+      page: "Schedule",
+      icon: Route,
+      tone: INFO,
+      reason: project.delayedTasks ? "Review delay flags and resequence successors." : "Check the next release path before changing dates.",
+    },
+    {
+      label: "Review RFIs",
+      page: "RFIs",
+      icon: AlertTriangle,
+      tone: project.overdueRfis ? RISK_RED : SUCCESS,
+      reason: project.overdueRfis ? "Resolve overdue technical decisions before they hit fabrication or field work." : "Confirm there are no hidden design blockers.",
+    },
+    {
+      label: "Work Packages",
+      page: "WorkPackages",
+      icon: PackageCheck,
+      tone: project.avgProgress < 70 ? WARNING : SUCCESS,
+      reason: "Validate release, shop status, tonnage, and owner responsibility by package.",
+    },
+    {
+      label: "Deliveries",
+      page: "Deliveries",
+      icon: Truck,
+      tone: project.lateDeliveries ? RISK_RED : INFO,
+      reason: project.lateDeliveries ? "Late loads may affect crane windows and erection sequence." : "Confirm near-term loads are aligned with field need dates.",
+    },
+  ];
 
-  const focusedProjectId = activeProject?.id || null;
-
-  const model = useMemo(() => {
-    const scopedProjects = focusedProjectId ? projects.filter((project) => project.id === focusedProjectId) : projects;
-    const scopedTasks = focusedProjectId ? tasks.filter((task) => task.project_id === focusedProjectId) : tasks;
-    const scopedRFIs = focusedProjectId ? rfis.filter((item) => item.project_id === focusedProjectId) : rfis;
-    const scopedCOs = focusedProjectId ? cos.filter((item) => item.project_id === focusedProjectId) : cos;
-    const scopedDeliveries = focusedProjectId ? deliveries.filter((item) => item.project_id === focusedProjectId) : deliveries;
-    const scopedActions = focusedProjectId ? actionItems.filter((item) => item.project_id === focusedProjectId) : actionItems;
-    const scopedCodes = focusedProjectId ? codes.filter((item) => item.project_id === focusedProjectId) : codes;
-    const now = new Date();
-
-    const overdueTasks = scopedTasks.filter(
-      (task) => task.end_date && new Date(task.end_date) < now && !["Complete", "Cancelled"].includes(task.status)
-    );
-    const unscheduledTasks = scopedTasks.filter((task) => !task.start_date || !task.end_date);
-    const openRFIs = scopedRFIs.filter((item) => !["Answered", "Closed"].includes(item.status));
-    const overdueRFIs = openRFIs.filter((item) => item.due_date && new Date(item.due_date) < now);
-    const criticalRFIs = openRFIs.filter((item) => item.priority === "Critical");
-    const pendingCOs = scopedCOs.filter((item) => ["Submitted", "Under Review"].includes(item.status));
-    const pendingCOValue = pendingCOs.reduce((sum, item) => sum + (Number(item.co_amount) || 0), 0);
-    const lateDeliveries = scopedDeliveries.filter(
-      (item) => item.scheduled_date && new Date(item.scheduled_date) < now && item.status !== "Delivered"
-    );
-    const overdueActions = scopedActions.filter(
-      (item) => item.due_date && new Date(item.due_date) < now && !["Complete", "Cancelled"].includes(item.status)
-    );
-    const overBudgetCodes = scopedCodes.filter((item) => {
-      const budget = Number(item.budget_amount) || 0;
-      const actual = Number(item.actual_cost) || 0;
-      return budget > 0 && actual > budget;
+  if (project.pendingCo > 0 || project.margin < 0) {
+    actions.push({
+      label: "Change Orders",
+      page: "ChangeOrders",
+      icon: ShieldCheck,
+      tone: project.margin < 0 ? RISK_RED : WARNING,
+      reason: "Review unresolved commercial exposure before approving recovery options.",
     });
-    const atRiskProjects = scopedProjects
-      .filter((project) => project.health_status === "At Risk" || project.health_status === "Watch")
-      .sort((a, b) => {
-        const rank = { "At Risk": 0, Watch: 1, "On Track": 2 };
-        return (rank[a.health_status] ?? 3) - (rank[b.health_status] ?? 3);
-      });
+  }
 
-    return {
-      focusedProjectName: activeProject?.name || null,
-      scopedProjects,
-      overdueTasks,
-      unscheduledTasks,
-      openRFIs,
-      overdueRFIs,
-      criticalRFIs,
-      pendingCOs,
-      pendingCOValue,
-      lateDeliveries,
-      overdueActions,
-      overBudgetCodes,
-      atRiskProjects,
-    };
-  }, [activeProject?.id, activeProject?.name, actionItems, codes, cos, deliveries, focusedProjectId, projects, rfis, tasks]);
+  return actions;
+}
 
-  const insights = useMemo(() => buildInsightPack(model), [model]);
-  const currentInsight = insights[activePrompt];
-  const activeTemplate = VIEWS.find((view) => view.id === activeView) || VIEWS[0];
+function buildVisualizations(project, portfolio) {
+  const rows = portfolio?.rows || [];
+  return [
+    {
+      key: "schedule",
+      title: "Schedule Recovery",
+      icon: CalendarClock,
+      tone: riskColor(project?.delayedTasks || 0, 1, 3),
+      value: `${project?.delayedTasks || 0}`,
+      label: "Delayed tasks",
+      text: "Gantter-style recovery board for critical path, phase-gate dates, and lookahead pressure.",
+    },
+    {
+      key: "risk",
+      title: "Risk Radar",
+      icon: Target,
+      tone: riskColor((project?.overdueRfis || 0) + (project?.overdueActions || 0), 2, 5),
+      value: `${(project?.overdueRfis || 0) + (project?.overdueActions || 0)}`,
+      label: "Open blockers",
+      text: "Shows design decisions, owner tasks, and late commitments that can cascade into the schedule.",
+    },
+    {
+      key: "production",
+      title: "Production Flow",
+      icon: Layers3,
+      tone: project?.avgProgress >= 75 ? SUCCESS : WARNING,
+      value: `${Math.round(project?.avgProgress || 0)}%`,
+      label: "WP progress",
+      text: "Turns work packages into a release-to-fabrication-to-delivery readiness view.",
+    },
+    {
+      key: "portfolio",
+      title: "Executive Pulse",
+      icon: Sparkles,
+      tone: INFO,
+      value: `${rows.filter((row) => row.health === "At Risk").length}`,
+      label: "At-risk jobs",
+      text: "Portfolio rollup of the jobs Brena would pull into the morning planning brief.",
+    },
+  ];
+}
 
-  const previewMetrics = {
-    executive: [
-      { label: "At-Risk Projects", value: NUMBER.format(model.atRiskProjects.length), tone: "var(--accent)" },
-      { label: "Overdue Tasks", value: NUMBER.format(model.overdueTasks.length), tone: "var(--status-warning)" },
-      { label: "Pending CO Value", value: compactCurrency(model.pendingCOValue), tone: "var(--chart-4)" },
-      { label: "Late Deliveries", value: NUMBER.format(model.lateDeliveries.length), tone: "var(--status-error)" },
-    ],
-    schedule: [
-      { label: "Overdue Tasks", value: NUMBER.format(model.overdueTasks.length), tone: "var(--status-warning)" },
-      { label: "TBD Tasks", value: NUMBER.format(model.unscheduledTasks.length), tone: "var(--accent)" },
-      { label: "Overdue RFIs", value: NUMBER.format(model.overdueRFIs.length), tone: "var(--status-error)" },
-      { label: "Late Deliveries", value: NUMBER.format(model.lateDeliveries.length), tone: "var(--status-error)" },
-    ],
-    risk: [
-      { label: "Critical RFIs", value: NUMBER.format(model.criticalRFIs.length), tone: "var(--status-error)" },
-      { label: "Overdue Actions", value: NUMBER.format(model.overdueActions.length), tone: "var(--status-warning)" },
-      { label: "Watch Projects", value: NUMBER.format(model.atRiskProjects.length), tone: "var(--accent)" },
-      { label: "Open RFIs", value: NUMBER.format(model.openRFIs.length), tone: "var(--chart-4)" },
-    ],
-    commercial: [
-      { label: "Pending COs", value: NUMBER.format(model.pendingCOs.length), tone: "var(--chart-4)" },
-      { label: "CO Value", value: compactCurrency(model.pendingCOValue), tone: "var(--chart-4)" },
-      { label: "Over Budget Codes", value: NUMBER.format(model.overBudgetCodes.length), tone: "var(--status-error)" },
-      { label: "Open RFIs", value: NUMBER.format(model.openRFIs.length), tone: "var(--status-warning)" },
-    ],
-  };
+export default function PlanningStudio({ portfolio, selected, onNavigatePage }) {
+  const [activeView, setActiveView] = useState("schedule");
+  const [delayDays, setDelayDays] = useState(7);
 
-  const previewNotes = {
-    executive: [
-      `${NUMBER.format(model.atRiskProjects.length)} projects are flagged watch or at risk.`,
-      `${NUMBER.format(model.overdueTasks.length)} tasks already need recovery action.`,
-      `${NUMBER.format(model.pendingCOs.length)} pending COs should stay in the same executive conversation as cost and schedule drift.`,
-    ],
-    schedule: [
-      `${NUMBER.format(model.unscheduledTasks.length)} tasks are still TBD and should be dated or explicitly blocked.`,
-      `${NUMBER.format(model.lateDeliveries.length)} deliveries could re-create path pressure downstream.`,
-      "Use this as the weekly recovery board before the look-ahead meeting.",
-    ],
-    risk: [
-      `${NUMBER.format(model.overdueRFIs.length)} overdue RFIs are already affecting coordination speed.`,
-      `${NUMBER.format(model.overdueActions.length)} action items have missed their due dates.`,
-      "This is the best handoff view for PM, detailing, and field leadership alignment.",
-    ],
-    commercial: [
-      `${NUMBER.format(model.overBudgetCodes.length)} cost codes are currently burning above budget.`,
-      `${compactCurrency(model.pendingCOValue)} is still waiting inside the change-order pipeline.`,
-      "Use this to keep schedule discussions tied to actual commercial consequence.",
-    ],
-  };
+  const insights = useMemo(() => buildInsightList(selected), [selected]);
+  const scenario = useMemo(() => buildScenario(selected, delayDays), [selected, delayDays]);
+  const actions = useMemo(() => buildActionPlan(selected), [selected]);
+  const visualizations = useMemo(() => buildVisualizations(selected, portfolio), [selected, portfolio]);
+  const activeVisualization = visualizations.find((item) => item.key === activeView) || visualizations[0];
+
+  if (!selected) {
+    return (
+      <section style={studioStyle}>
+        <div style={studioHeaderStyle}>
+          <div>
+            <div style={eyebrowStyle}>Planning Studio</div>
+            <h2 style={titleStyle}>Brena</h2>
+          </div>
+          <span style={badgeStyle}>No project selected</span>
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <Card
-        className="overflow-hidden"
-        style={{
-          background:
-            "radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 24%, transparent), transparent 38%), radial-gradient(circle at bottom right, color-mix(in srgb, var(--chart-4) 18%, transparent), transparent 34%), linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-secondary) 92%, transparent), var(--bg-surface))",
-        }}
-      >
-        <CardContent style={{ padding: 0 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.3fr) minmax(320px, 0.9fr)", gap: 0 }}>
-            <div style={{ padding: "24px 24px 22px", display: "flex", flexDirection: "column", gap: 18 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 9,
-                    letterSpacing: "0.16em",
-                    textTransform: "uppercase",
-                    color: "var(--accent)",
-                  }}
-                >
-                  Planning Studio
-                </div>
-                <div style={{ fontSize: 30, lineHeight: 1.05, fontWeight: 800, color: "var(--text-primary)" }}>
-                  Visualization gallery plus a Brena-style planning copilot for SteelBuild.
-                </div>
-                <div style={{ maxWidth: 720, fontSize: 14, lineHeight: 1.6, color: "var(--text-secondary)" }}>
-                  This turns your existing dashboards, schedule signals, RFIs, deliveries, and commercial data into one operating surface.
-                  {activeProject?.name
-                    ? ` Right now it is focused on ${activeProject.name}.`
-                    : " Right now it is looking across the full portfolio."}
-                </div>
-              </div>
+    <section style={studioStyle}>
+      <div style={studioHeaderStyle}>
+        <div>
+          <div style={eyebrowStyle}>GantterAI-style Planning Studio</div>
+          <h2 style={titleStyle}>Brena Command Brief</h2>
+          <p style={subtitleStyle}>
+            Read-only schedule intelligence for {selected.name || "selected project"}. Suggestions explain the source signals and require human action before anything changes.
+          </p>
+        </div>
+        <div style={healthPillStyle(selected.health)}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: statusTone(selected.health), boxShadow: `0 0 14px ${statusTone(selected.health)}` }} />
+          {selected.score} / {selected.health}
+        </div>
+      </div>
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                <MetricPill label="Overdue Tasks" value={NUMBER.format(model.overdueTasks.length)} tone="var(--status-warning)" />
-                <MetricPill label="Open RFIs" value={NUMBER.format(model.openRFIs.length)} tone="var(--status-error)" />
-                <MetricPill label="Pending CO Value" value={compactCurrency(model.pendingCOValue)} tone="var(--chart-4)" />
-                <MetricPill label="Late Deliveries" value={NUMBER.format(model.lateDeliveries.length)} tone="var(--accent)" />
-              </div>
-
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                <Button variant="secondary" onClick={() => navigate(createPageUrl(activeTemplate.actionPage))}>
-                  Open {activeTemplate.title}
-                </Button>
-                <Button variant="outline" onClick={() => navigate(createPageUrl("Schedule"))}>
-                  Recovery in Schedule
-                </Button>
-                <Button variant="outline" onClick={() => navigate(createPageUrl("ProjectControlCenter"))}>
-                  Open PCC
-                </Button>
-              </div>
-            </div>
-
-            <div
-              style={{
-                borderLeft: "1px solid color-mix(in srgb, var(--border-default) 72%, transparent)",
-                padding: "24px 24px 22px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 16,
-                background: "color-mix(in srgb, var(--bg-surface-secondary) 55%, transparent)",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    letterSpacing: "0.14em",
-                    textTransform: "uppercase",
-                    color: currentInsight.tone,
-                    marginBottom: 8,
-                  }}
-                >
-                  SteelBuild Copilot
-                </div>
-                <div style={{ fontSize: 22, lineHeight: 1.15, fontWeight: 800, color: "var(--text-primary)", marginBottom: 8 }}>
-                  {currentInsight.title}
-                </div>
-                <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--text-secondary)" }}>{currentInsight.summary}</div>
-              </div>
-
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {PROMPTS.map((prompt) => (
-                  <button
-                    key={prompt.id}
-                    type="button"
-                    onClick={() => setActivePrompt(prompt.id)}
-                    style={{
-                      borderRadius: 999,
-                      border:
-                        activePrompt === prompt.id
-                          ? "1px solid var(--accent-border)"
-                          : "1px solid color-mix(in srgb, var(--border-default) 72%, transparent)",
-                      background:
-                        activePrompt === prompt.id
-                          ? "color-mix(in srgb, var(--accent-muted) 90%, transparent)"
-                          : "color-mix(in srgb, var(--bg-surface) 94%, transparent)",
-                      color: activePrompt === prompt.id ? "var(--accent)" : "var(--text-secondary)",
-                      padding: "8px 12px",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 10,
-                      letterSpacing: "0.05em",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {prompt.label}
-                  </button>
-                ))}
-              </div>
-
-              <AssistantSection title="Priority Signals" items={currentInsight.priorities} tone={currentInsight.tone} />
-              <AssistantSection title="Watchouts" items={currentInsight.watchouts} />
-              <AssistantSection title="Recommended Actions" items={currentInsight.actions} tone="var(--status-success)" />
+      <div style={studioGridStyle}>
+        <div style={brenaPanelStyle}>
+          <div style={panelTitleRowStyle}>
+            <div style={avatarStyle}><Bot size={18} /></div>
+            <div>
+              <div style={panelTitleStyle}>Brena</div>
+              <div style={panelMetaStyle}>Assistant, not autopilot</div>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.1fr) minmax(320px, 0.9fr)", gap: 18 }}>
-        <Card>
-          <CardContent style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-              <div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    letterSpacing: "0.14em",
-                    textTransform: "uppercase",
-                    color: "var(--text-muted)",
-                    marginBottom: 6,
-                  }}
-                >
-                  Visualization Gallery
-                </div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)" }}>Choose the operating view you want to lead from.</div>
+          <div style={briefBlockStyle}>
+            <div style={miniLabelStyle}>Current Read</div>
+            <p style={briefTextStyle}>
+              {selected.health === "At Risk"
+                ? "This project needs recovery attention before schedule and commercial exposure compound."
+                : selected.health === "Watch"
+                  ? "This project is not failing, but the next planning cycle should clear blockers and confirm releases."
+                  : "This project is generally healthy. Keep monitoring near-term decisions, releases, and delivery commitments."}
+            </p>
+          </div>
+
+          <div style={{ display: "grid", gap: 9 }}>
+            {insights.map((insight) => (
+              <div key={insight} style={insightRowStyle}>
+                <Zap size={13} color={INFO} />
+                <span>{insight}</span>
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", maxWidth: 260 }}>
-                This is the SteelBuild version of Gantter’s dashboard-picker idea, but tuned to schedule, fabrication, logistics, and commercial control.
-              </div>
-            </div>
+            ))}
+          </div>
+        </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-              {VIEWS.map((view) => {
-                const selected = view.id === activeView;
-                return (
-                  <button
-                    key={view.id}
-                    type="button"
-                    onClick={() => setActiveView(view.id)}
-                    style={{
-                      textAlign: "left",
-                      borderRadius: 14,
-                      border: selected ? `1px solid ${view.accent}` : "1px solid var(--border-default)",
-                      background:
-                        selected
-                          ? `linear-gradient(180deg, color-mix(in srgb, ${view.accent} 14%, var(--bg-surface-secondary)), var(--bg-surface))`
-                          : "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-secondary) 88%, transparent), var(--bg-surface))",
-                      padding: 16,
-                      cursor: "pointer",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10,
-                      minHeight: 176,
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: 72,
-                        borderRadius: 10,
-                        border: "1px solid color-mix(in srgb, var(--border-default) 76%, transparent)",
-                        background: `radial-gradient(circle at 20% 20%, color-mix(in srgb, ${view.accent} 24%, transparent), transparent 34%), linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-secondary) 86%, transparent), color-mix(in srgb, var(--bg-surface) 96%, transparent))`,
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: 8,
-                        padding: 10,
-                      }}
-                    >
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <div style={{ height: 8, width: "46%", borderRadius: 999, background: "color-mix(in srgb, var(--text-muted) 24%, transparent)" }} />
-                        <div style={{ flex: 1, borderRadius: 8, background: "color-mix(in srgb, var(--bg-surface) 78%, transparent)", border: "1px solid color-mix(in srgb, var(--border-default) 60%, transparent)" }} />
-                      </div>
-                      <div style={{ display: "grid", gridTemplateRows: "1fr 1fr", gap: 8 }}>
-                        <div style={{ borderRadius: 8, background: "color-mix(in srgb, var(--bg-surface) 78%, transparent)", border: "1px solid color-mix(in srgb, var(--border-default) 60%, transparent)" }} />
-                        <div style={{ borderRadius: 8, background: `color-mix(in srgb, ${view.accent} 18%, var(--bg-surface))`, border: "1px solid color-mix(in srgb, var(--border-default) 60%, transparent)" }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: view.accent, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>
-                        {view.eyebrow}
-                      </div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>{view.title}</div>
-                      <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--text-secondary)" }}>{view.description}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-            <div>
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 8,
-                  letterSpacing: "0.14em",
-                  textTransform: "uppercase",
-                  color: activeTemplate.accent,
-                  marginBottom: 6,
-                }}
+        <div style={galleryStyle}>
+          {visualizations.map((item) => {
+            const Icon = item.icon;
+            const active = activeView === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setActiveView(item.key)}
+                style={visualCardStyle(item.tone, active)}
               >
-                {activeTemplate.eyebrow}
-              </div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>{activeTemplate.title}</div>
-              <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--text-secondary)" }}>{activeTemplate.description}</div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-              {previewMetrics[activeTemplate.id].map((metric) => (
-                <MetricPill key={metric.label} label={metric.label} value={metric.value} tone={metric.tone} />
-              ))}
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {previewNotes[activeTemplate.id].map((note) => (
-                <div
-                  key={note}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    background: "color-mix(in srgb, var(--bg-surface-secondary) 90%, transparent)",
-                    border: "1px solid color-mix(in srgb, var(--border-default) 72%, transparent)",
-                    color: "var(--text-secondary)",
-                    fontSize: 13,
-                    lineHeight: 1.55,
-                  }}
-                >
-                  {note}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <Icon size={18} color={item.tone} />
+                  <span style={miniLabelStyle}>{item.label}</span>
                 </div>
-              ))}
-            </div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 900, color: item.tone, lineHeight: 1 }}>{item.value}</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>{item.title}</div>
+                <p style={cardTextStyle}>{item.text}</p>
+              </button>
+            );
+          })}
+        </div>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Button variant="secondary" onClick={() => navigate(createPageUrl(activeTemplate.actionPage))}>
-                Open this workflow
-              </Button>
-              <Button variant="outline" onClick={() => setActivePrompt(activeTemplate.id === "commercial" ? "cost" : activeTemplate.id === "schedule" ? "schedule" : "leadership")}>
-                Ask copilot about this
-              </Button>
+        <div style={scenarioPanelStyle}>
+          <div style={panelTitleRowStyle}>
+            <GitBranch size={18} color={activeVisualization.tone} />
+            <div>
+              <div style={panelTitleStyle}>{activeVisualization.title}</div>
+              <div style={panelMetaStyle}>Scenario impact model</div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+
+          <div style={scenarioHeroStyle(activeVisualization.tone)}>
+            <div>
+              <div style={miniLabelStyle}>If a release slips</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 38, fontWeight: 900, color: "var(--text-primary)", lineHeight: 1 }}>
+                +{scenario.forecastSlip}d
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", marginTop: 7 }}>
+                Estimated forecast movement from a {delayDays}-day planning delay.
+              </div>
+            </div>
+            <label style={sliderWrapStyle}>
+              <span style={miniLabelStyle}>Delay days</span>
+              <input
+                type="range"
+                min="1"
+                max="30"
+                value={delayDays}
+                onChange={(event) => setDelayDays(Number(event.target.value))}
+                style={{ width: "100%", accentColor: "var(--status-info)" }}
+              />
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 900, color: "var(--text-primary)" }}>{delayDays} days</span>
+            </label>
+          </div>
+
+          <div style={impactGridStyle}>
+            <ImpactList title="Likely schedule touchpoints" empty="No upcoming open tasks found." items={scenario.affectedTasks.map((task) => ({
+              id: task.id || taskLabel(task),
+              title: taskLabel(task),
+              meta: `${task.phase || "No phase"} / ${task.status || "No status"} / ${task.end_date ? formatDate(task.end_date) : "TBD"}`,
+            }))} />
+            <ImpactList title="Package readiness" empty="No open work packages found." items={scenario.affectedPackages.map((wp) => ({
+              id: wp.id || workPackageLabel(wp),
+              title: workPackageLabel(wp),
+              meta: `${wp.status || "No status"} / ${num(wp.tonnage).toFixed(1)}T / ${Math.round(num(wp.percent_complete))}%`,
+            }))} />
+            <ImpactList title="Delivery watch" empty="No upcoming deliveries found." items={scenario.affectedDeliveries.map((delivery) => ({
+              id: delivery.id || deliveryLabel(delivery),
+              title: deliveryLabel(delivery),
+              meta: `${delivery.status || "No status"} / ${formatDate(delivery.scheduled_date || delivery.delivery_date)}`,
+            }))} />
+          </div>
+        </div>
+
+        <div style={actionPanelStyle}>
+          <div style={panelTitleStyle}>Recommended Human Actions</div>
+          <div style={panelMetaStyle}>Brena can suggest. The user decides and records changes.</div>
+          <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+            {actions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => onNavigatePage?.(action.page)}
+                  style={actionRowStyle(action.tone)}
+                >
+                  <Icon size={15} color={action.tone} />
+                  <span style={{ minWidth: 0 }}>
+                    <span style={actionLabelStyle}>{action.label}</span>
+                    <span style={actionReasonStyle}>{action.reason}</span>
+                  </span>
+                  <ArrowUpRight size={14} color="var(--text-muted)" />
+                </button>
+              );
+            })}
+          </div>
+          <Button variant="primary" icon="arrow-up-right" onClick={() => onNavigatePage?.("Schedule")}>
+            Open Recovery Schedule
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ImpactList({ title, items, empty }) {
+  return (
+    <div style={impactListStyle}>
+      <div style={miniLabelStyle}>{title}</div>
+      <div style={{ display: "grid", gap: 7, marginTop: 10 }}>
+        {items.length ? items.map((item) => (
+          <div key={item.id} style={impactItemStyle}>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 800, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>{item.meta}</div>
+          </div>
+        )) : (
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>{empty}</div>
+        )}
       </div>
     </div>
   );
 }
+
+function statusTone(health) {
+  if (health === "At Risk") return RISK_RED;
+  if (health === "Watch") return WARNING;
+  return SUCCESS;
+}
+
+function healthPillStyle(health) {
+  const tone = statusTone(health);
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    height: 34,
+    padding: "0 12px",
+    borderRadius: 999,
+    border: `1px solid color-mix(in srgb, ${tone} 45%, transparent)`,
+    background: `color-mix(in srgb, ${tone} 13%, var(--bg-surface-high))`,
+    color: tone,
+    fontFamily: "var(--font-mono)",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    whiteSpace: "nowrap",
+  };
+}
+
+function visualCardStyle(tone, active) {
+  return {
+    minHeight: 164,
+    border: `1px solid ${active ? tone : "var(--border-default)"}`,
+    borderRadius: 16,
+    background: active
+      ? `linear-gradient(145deg, color-mix(in srgb, ${tone} 18%, var(--bg-surface-high)) 0%, var(--bg-surface-low) 100%)`
+      : "linear-gradient(180deg, var(--bg-surface-high), var(--bg-surface-low))",
+    boxShadow: active ? `0 0 0 1px color-mix(in srgb, ${tone} 25%, transparent), 0 18px 38px rgba(0,0,0,0.35)` : "inset 0 1px 0 rgba(255,255,255,0.04)",
+    color: "inherit",
+    padding: 14,
+    textAlign: "left",
+    display: "grid",
+    gap: 10,
+    cursor: "pointer",
+  };
+}
+
+const studioStyle = {
+  border: "1px solid color-mix(in srgb, var(--border-default) 82%, white 18%)",
+  borderRadius: 24,
+  padding: 18,
+  background: "linear-gradient(135deg, rgba(3, 8, 18, 0.96) 0%, rgba(7, 17, 31, 0.94) 48%, rgba(2, 8, 16, 0.98) 100%)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 60px rgba(0,0,0,0.42)",
+  overflow: "hidden",
+  position: "relative",
+};
+
+const studioHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 18,
+  marginBottom: 16,
+};
+
+const studioGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "minmax(280px, 0.85fr) minmax(360px, 1.25fr)",
+  gap: 16,
+};
+
+const brenaPanelStyle = {
+  border: "1px solid var(--border-default)",
+  borderRadius: 18,
+  background: "rgba(7, 13, 24, 0.88)",
+  padding: 16,
+  display: "grid",
+  gap: 14,
+};
+
+const galleryStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 12,
+};
+
+const scenarioPanelStyle = {
+  gridColumn: "1 / -1",
+  border: "1px solid var(--border-default)",
+  borderRadius: 18,
+  background: "linear-gradient(180deg, rgba(13, 22, 36, 0.92), rgba(5, 10, 19, 0.96))",
+  padding: 16,
+  display: "grid",
+  gap: 14,
+};
+
+const actionPanelStyle = {
+  gridColumn: "1 / -1",
+  border: "1px solid var(--border-default)",
+  borderRadius: 18,
+  background: "rgba(5, 10, 19, 0.94)",
+  padding: 16,
+  display: "grid",
+  gap: 12,
+};
+
+const panelTitleRowStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+};
+
+const avatarStyle = {
+  width: 38,
+  height: 38,
+  borderRadius: 13,
+  display: "grid",
+  placeItems: "center",
+  color: "white",
+  background: "linear-gradient(135deg, var(--status-info), #0369a1)",
+  boxShadow: "0 0 22px color-mix(in srgb, var(--status-info) 45%, transparent)",
+};
+
+const eyebrowStyle = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: "0.18em",
+  textTransform: "uppercase",
+  color: "var(--status-info)",
+};
+
+const titleStyle = {
+  margin: "5px 0 0",
+  fontFamily: "var(--font-display)",
+  fontSize: 30,
+  lineHeight: 1,
+  color: "var(--text-primary)",
+};
+
+const subtitleStyle = {
+  margin: "8px 0 0",
+  maxWidth: 760,
+  fontFamily: "var(--font-body)",
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: "var(--text-secondary)",
+};
+
+const panelTitleStyle = {
+  fontFamily: "var(--font-display)",
+  fontSize: 16,
+  fontWeight: 900,
+  color: "var(--text-primary)",
+};
+
+const panelMetaStyle = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  color: "var(--text-muted)",
+};
+
+const briefBlockStyle = {
+  border: "1px solid var(--border-default)",
+  borderRadius: 14,
+  background: "rgba(255,255,255,0.035)",
+  padding: 12,
+};
+
+const briefTextStyle = {
+  margin: "8px 0 0",
+  fontFamily: "var(--font-body)",
+  fontSize: 13,
+  lineHeight: 1.55,
+  color: "var(--text-primary)",
+};
+
+const insightRowStyle = {
+  display: "grid",
+  gridTemplateColumns: "16px minmax(0, 1fr)",
+  gap: 8,
+  alignItems: "start",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  lineHeight: 1.45,
+  color: "var(--text-secondary)",
+};
+
+const cardTextStyle = {
+  margin: 0,
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  lineHeight: 1.45,
+  color: "var(--text-secondary)",
+};
+
+function scenarioHeroStyle(tone) {
+  return {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(200px, 0.55fr)",
+    gap: 16,
+    alignItems: "center",
+    border: `1px solid color-mix(in srgb, ${tone} 32%, var(--border-default))`,
+    borderRadius: 16,
+    padding: 16,
+    background: `linear-gradient(135deg, color-mix(in srgb, ${tone} 14%, rgba(255,255,255,0.035)) 0%, rgba(255,255,255,0.025) 100%)`,
+  };
+}
+
+const sliderWrapStyle = {
+  display: "grid",
+  gap: 8,
+  border: "1px solid var(--border-default)",
+  borderRadius: 14,
+  padding: 12,
+  background: "rgba(0,0,0,0.22)",
+};
+
+const impactGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: 12,
+};
+
+const impactListStyle = {
+  border: "1px solid var(--border-default)",
+  borderRadius: 14,
+  background: "rgba(255,255,255,0.03)",
+  padding: 12,
+  minHeight: 150,
+};
+
+const impactItemStyle = {
+  borderTop: "1px solid var(--border-default)",
+  paddingTop: 8,
+};
+
+const actionRowStyle = (tone) => ({
+  width: "100%",
+  border: "1px solid var(--border-default)",
+  borderRadius: 14,
+  background: `linear-gradient(90deg, color-mix(in srgb, ${tone} 10%, transparent), rgba(255,255,255,0.025))`,
+  color: "inherit",
+  padding: 12,
+  display: "grid",
+  gridTemplateColumns: "18px minmax(0, 1fr) 16px",
+  gap: 10,
+  alignItems: "center",
+  textAlign: "left",
+  cursor: "pointer",
+});
+
+const actionLabelStyle = {
+  display: "block",
+  fontFamily: "var(--font-body)",
+  fontSize: 13,
+  fontWeight: 900,
+  color: "var(--text-primary)",
+};
+
+const actionReasonStyle = {
+  display: "block",
+  fontFamily: "var(--font-body)",
+  fontSize: 11,
+  color: "var(--text-muted)",
+  marginTop: 3,
+  lineHeight: 1.35,
+};
+
+const miniLabelStyle = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  color: "var(--text-muted)",
+};
+
+const badgeStyle = {
+  height: 30,
+  padding: "0 10px",
+  borderRadius: 999,
+  display: "inline-flex",
+  alignItems: "center",
+  border: "1px solid var(--border-default)",
+  background: "var(--bg-surface-high)",
+  color: "var(--text-muted)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 900,
+  textTransform: "uppercase",
+  letterSpacing: "0.10em",
+};

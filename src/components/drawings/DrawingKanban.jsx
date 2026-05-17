@@ -3,19 +3,25 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { FileText, Flag, PenLine, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { batchProcess } from "@/utils/batchProcess";
+import { resolveFileUrl } from "@/api/base44Client";
 
-const STAGES = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+// Canonical 7-stage flow (corrected May 2026):
+//   Not Started → IFA → OFA → BFA → OFS → IFC → Released
+// Imported from drawingsConfig so this file doesn't drift.
+import { STAGE_ORDER as CANONICAL_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+const STAGES = CANONICAL_STAGE_ORDER;
 
 // Stage priority — higher index = further along
 const STAGE_ORDER = Object.fromEntries(STAGES.map((s, i) => [s, i]));
 
 const STAGE_ACCENT = {
-  "Not Started": { color: "var(--text-muted)", bg: "rgba(160,175,210,0.06)", border: "rgba(160,175,210,0.15)" },
+  "Not Started": { color: "var(--text-muted)", bg: "var(--bg-surface-high)", border: "var(--border-strong)" },
+  IFA:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
   OFA:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
   BFA:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
   OFS:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
-  BFS:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
-  FFF:           { color: "var(--status-success)", bg: "var(--success-muted)", border: "var(--success-border)" },
+  IFC:           { color: "var(--status-success)", bg: "var(--success-muted)", border: "var(--success-border)" },
   Released:      { color: "var(--status-success)", bg: "var(--success-muted)", border: "var(--success-border)" },
 };
 
@@ -77,8 +83,8 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
           onMouseLeave={() => setHovered(false)}
           style={{
             background: snapshot.isDragging ? "var(--bg-surface-high)" : hovered ? "var(--bg-surface-mid)" : "var(--bg-surface-low)",
-            border: `1px solid ${snapshot.isDragging ? "var(--warning-border)" : hasRejected ? "rgba(255,61,61,0.30)" : isOverdue ? "rgba(255,61,61,0.20)" : "rgba(255,255,255,0.07)"}`,
-            borderLeft: hasRejected ? "3px solid var(--status-error)" : allApproved ? `3px solid var(--status-success)` : `1px solid rgba(255,255,255,0.07)`,
+            border: `1px solid ${snapshot.isDragging ? "var(--warning-border)" : hasRejected ? "rgba(255,61,61,0.30)" : isOverdue ? "rgba(255,61,61,0.20)" : "var(--bg-surface-high)"}`,
+            borderLeft: hasRejected ? "3px solid var(--status-error)" : allApproved ? `3px solid var(--status-success)` : `1px solid var(--bg-surface-high)`,
             borderRadius: 8,
             padding: "9px 10px",
             marginBottom: 7,
@@ -104,7 +110,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
             <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
               {overallApproval && (
                 <span style={{
-                  fontFamily: "var(--font-mono)", fontSize: 7,
+                  fontFamily: "var(--font-mono)", fontSize: 9,
                   background: `${APPROVAL_COLOR[overallApproval]}18`,
                   border: `1px solid ${APPROVAL_COLOR[overallApproval]}40`,
                   color: APPROVAL_COLOR[overallApproval],
@@ -115,20 +121,23 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
                 </span>
               )}
               {fileUrl && (
-                <a
-                  href={fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      const url = await resolveFileUrl(fileUrl);
+                      if (url) window.open(url, "_blank", "noopener,noreferrer");
+                    } catch { /* silently fail */ }
+                  }}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 16, height: 16, borderRadius: 3,
                     background: "var(--accent-muted)", border: "1px solid var(--accent-border)",
-                    color: "var(--accent)", textDecoration: "none"
+                    color: "var(--accent)", cursor: "pointer"
                   }}
                 >
                   <FileText style={{ width: 8, height: 8 }} />
-                </a>
+                </button>
               )}
             </div>
           </div>
@@ -141,7 +150,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
               borderRadius: 4, padding: "3px 6px"
             }}>
               <AlertTriangle style={{ width: 8, height: 8, color: "var(--status-error)", flexShrink: 0 }} />
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", letterSpacing: "0.04em" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", letterSpacing: "0.04em" }}>
                 PACKAGE REJECTED — ALL SHEETS FAIL
               </span>
             </div>
@@ -154,7 +163,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
               style={{
                 display: "flex", alignItems: "center", gap: 3,
                 background: "none", border: "none", cursor: "pointer", padding: 0,
-                fontFamily: "var(--font-mono)", fontSize: 7,
+                fontFamily: "var(--font-mono)", fontSize: 9,
                 color: "var(--text-muted)", letterSpacing: "0.08em"
               }}
             >
@@ -162,11 +171,11 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
               {sheets.length} SHEET{sheets.length !== 1 ? "S" : ""}
             </button>
             {isOverdue && !hasRejected && (
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", fontWeight: 700 }}>⚠ OVERDUE</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", fontWeight: 700 }}>⚠ OVERDUE</span>
             )}
             {/* Stage of bottleneck */}
             <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.06em",
+              fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.06em",
               color: a.color, background: a.bg, border: `1px solid ${a.border}`,
               borderRadius: 3, padding: "1px 5px"
             }}>{effectiveStage.toUpperCase()}</span>
@@ -174,13 +183,13 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
 
           {/* Expanded sheet list */}
           {expanded && (
-            <div style={{ marginTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 6 }}>
+            <div style={{ marginTop: 6, borderTop: "1px solid var(--divider)", paddingTop: 6 }}>
               {sheets.map(s => {
                 const sa = STAGE_ACCENT[s.stage] || STAGE_ACCENT["Not Started"];
                 return (
                   <div key={s.id} style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.04)"
+                    padding: "3px 0", borderBottom: "1px solid var(--hover-bg)"
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
                       {s.priority_flag && <Flag style={{ width: 7, height: 7, color: "var(--status-error)", flexShrink: 0 }} />}
@@ -194,7 +203,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
                       }}>{s.title}</span>
                     </div>
                     <span style={{
-                      fontFamily: "var(--font-mono)", fontSize: 7, color: sa.color,
+                      fontFamily: "var(--font-mono)", fontSize: 9, color: sa.color,
                       flexShrink: 0, marginLeft: 4
                     }}>{s.stage}</span>
                   </div>
@@ -212,7 +221,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
                   flex: 1, padding: "3px 0",
                   background: "var(--accent-muted)", border: "1px solid var(--accent-border)",
                   borderRadius: 4, color: "var(--accent)",
-                  fontFamily: "var(--font-mono)", fontSize: 7,
+                  fontFamily: "var(--font-mono)", fontSize: 9,
                   letterSpacing: "0.08em", cursor: "pointer"
                 }}
               >EDIT SET</button>
@@ -221,9 +230,9 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
                   onClick={(e) => { e.stopPropagation(); onAnnotate(sheets[0]); }}
                   style={{
                     flex: 1, padding: "3px 0",
-                    background: "rgba(139,92,246,0.10)", border: "1px solid rgba(139,92,246,0.22)",
-                    borderRadius: 4, color: "#A78BFA",
-                    fontFamily: "var(--font-mono)", fontSize: 7,
+                    background: "rgba(13,148,136,0.10)", border: "1px solid rgba(13,148,136,0.22)",
+                    borderRadius: 4, color: "#0891B2",
+                    fontFamily: "var(--font-mono)", fontSize: 9,
                     letterSpacing: "0.08em", cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 3
                   }}
@@ -262,12 +271,12 @@ function KanbanColumn({ stage, setGroups, onEdit, onAnnotate }) {
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             <span style={{
               fontFamily: "var(--font-mono)", fontSize: 8,
-              background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)",
+              background: "var(--bg-surface-high)", border: "1px solid var(--bg-surface-high)",
               borderRadius: 10, padding: "1px 7px", color: "var(--text-muted)"
             }}>{setGroups.length} sets</span>
             {totalSheets > 0 && setGroups.length !== totalSheets && (
               <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 7,
+                fontFamily: "var(--font-mono)", fontSize: 9,
                 color: "var(--text-muted)"
               }}>{totalSheets} sheets</span>
             )}
@@ -285,8 +294,8 @@ function KanbanColumn({ stage, setGroups, onEdit, onAnnotate }) {
               flex: 1,
               overflowY: "auto",
               padding: "8px 6px",
-              background: snapshot.isDraggingOver ? "var(--accent-muted)" : "rgba(255,255,255,0.015)",
-              border: `1px solid ${snapshot.isDraggingOver ? a.border : "rgba(255,255,255,0.06)"}`,
+              background: snapshot.isDraggingOver ? "var(--accent-muted)" : "var(--hover-bg)",
+              border: `1px solid ${snapshot.isDraggingOver ? a.border : "var(--divider)"}`,
               borderTop: "none",
               borderRadius: "0 0 8px 8px",
               minHeight: 80,
@@ -348,8 +357,8 @@ export default function DrawingKanban({ drawings, onStageChange, onEdit, onAnnot
       })
     );
 
-    // Persist all sheets in the set
-    await Promise.all(setGroup.sheets.map(d => onStageChange(d, newStage)));
+    // Persist all sheets in the set (batched to avoid overwhelming server)
+    await batchProcess(setGroup.sheets, (d) => onStageChange(d, newStage));
   };
 
   return (

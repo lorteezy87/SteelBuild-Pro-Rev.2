@@ -55,11 +55,15 @@ async function fetchUserRole() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { role: "viewer", email: null, id: null };
 
-  // user_profiles is the server source of truth
+  // user_profiles is the server source of truth.
+  // Pre-existing bug: this was `.eq("user_id", user.id)`, but the table's
+  // primary key column is `id` (mirrors auth.users.id) — there is no
+  // `user_profiles.user_id` column, so the previous lookup always returned
+  // null and the hook silently fell through to "viewer". Fixed in RBAC Phase B.
   const { data: profile } = await supabase
     .from("user_profiles")
     .select("role")
-    .eq("user_id", user.id)
+    .eq("id", user.id)
     .maybeSingle();
 
   return {
@@ -76,7 +80,6 @@ export function usePermissions() {
     queryKey: ["user-permissions"],
     queryFn: fetchUserRole,
     staleTime: 5 * 60 * 1000, // re-fetch every 5 minutes
-    refetchOnWindowFocus: true,
     initialData: { role: "viewer", email: null, id: null },
   });
 

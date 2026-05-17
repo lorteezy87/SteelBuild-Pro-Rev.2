@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { useFormValidation } from "@/hooks/useFormValidation";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 const emptyForm = {
   project_id: "",
@@ -47,6 +50,8 @@ const labelStyle = {
 };
 
 export default function SafetyIncidentFormModal({ projectId, incident = null, onClose, onSave, isSaving = false }) {
+  const { fieldErrors, runValidation, clearField } = useFormValidation("safety_incident");
+  const trapRef = useFocusTrap(true);
   const [formData, setFormData] = useState({ ...emptyForm, project_id: projectId || "" });
   const isEditing = !!incident;
 
@@ -58,27 +63,38 @@ export default function SafetyIncidentFormModal({ projectId, incident = null, on
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const handleSubmit = () => {
-    if (isSaving || !formData.project_id || !formData.incident_date || !formData.description?.trim()) return;
-    onSave?.(formData);
+    if (isSaving) return;
+    if (!runValidation(formData)) {
+      toast.error("Please fix the highlighted fields.");
+      return;
+    }
+    const {
+      created_date: _cd, updated_date: _ud, created_at: _ca, updated_at: _ua,
+      is_deleted: _id, deleted_at: _da,
+      ...clean
+    } = formData;
+    onSave?.(clean);
   };
 
   const types = ["Injury", "Near Miss", "Hazard", "Property Damage", "Environmental", "Behavioral", "Equipment Failure", "Other"];
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget && !isSaving) onClose(); }}>
-      <div style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "16px", padding: "24px", maxWidth: "700px", width: "90%", maxHeight: "90vh", overflowY: "auto" }}>
+      <div ref={trapRef} role="dialog" aria-modal="true" style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "16px", padding: "24px", maxWidth: "700px", width: "90%", maxHeight: "90vh", overflowY: "auto" }}>
         <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px 0", textTransform: "uppercase", letterSpacing: "0.10em" }}>{isEditing ? "Edit Safety Incident" : "Report Safety Incident"}</h2>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
             <label style={labelStyle}>Project</label>
-            <select value={formData.project_id} onChange={(e) => setFormData({ ...formData, project_id: e.target.value })} style={inputStyle}>
+            <select value={formData.project_id} onChange={(e) => { setFormData({ ...formData, project_id: e.target.value }); clearField("project_id"); }} style={{ ...inputStyle, borderColor: fieldErrors.project_id ? "var(--status-error)" : undefined }}>
               <option value="">Select project...</option>
               {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
             </select>
+            {fieldErrors.project_id && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", marginTop: 2, display: "block" }}>{fieldErrors.project_id}</span>}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>

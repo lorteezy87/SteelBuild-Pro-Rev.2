@@ -2,32 +2,45 @@ import React, { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "../shared/formatters";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
+// `inputDisabledStyle` is no longer used for CO Number — it stays imported for
+// the read-only Margin $ helper / Original Contract Value fields below.
+import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 
 const empty = {
   project_id: "", project_name: "", title: "", description: "",
   reason_code: "Owner Request", status: "Draft", cost_code_id: "",
   submitted_date: new Date().toISOString().split("T")[0],
-  approved_date: null, co_amount: 0, approved_by: "", notes: "", attachments: "",
+  approved_date: null, co_amount: 0, margin_percent: 0, schedule_impact_days: 0,
+  approved_by: "", notes: "", attachments: "",
   co_number: "",
 };
 
-export default function COFormModal({ open, onClose, onSave, co, projects = [], nextNumber }) {
+export default function COFormModal({ open, onClose, onSave, isSaving, co, projects = [], nextNumber }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (co) setForm({ ...empty, ...co });
-    else setForm({ ...empty, co_number: nextNumber || "" });
+    // For new COs, leave co_number BLANK so the "Auto-assigned …"
+    // placeholder is visible. The createMut on the parent page fills
+    // in a fresh "CO #NNN" via getNextFormattedNumber if the user
+    // saves without typing one in.
+    else setForm({ ...empty });
     setErrors({});
-  }, [co, open, nextNumber]);
+  }, [co, open]);
 
   const validate = () => {
     const e = {};
     if (!form.project_id) e.project_id = "Required";
     if (!form.title?.trim()) e.title = "Required";
     if (!form.reason_code) e.reason_code = "Required";
-    if (form.co_amount !== 0 && form.co_amount !== "" && (isNaN(Number(form.co_amount)) || Number(form.co_amount) < 0)) {
-      e.co_amount = "Must be a valid non-negative number";
+    // Negative values are allowed — they represent deducts / credits back to the GC/owner.
+    if (form.co_amount !== 0 && form.co_amount !== "" && isNaN(Number(form.co_amount))) {
+      e.co_amount = "Must be a valid number";
+    }
+    const mp = Number(form.margin_percent);
+    if (isNaN(mp) || mp < 0 || mp > 100) {
+      e.margin_percent = "Must be between 0 and 100";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -35,7 +48,12 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
 
   const handleSave = () => {
     if (!validate()) return;
-    const data = { ...form, co_amount: Number(form.co_amount) || 0 };
+    const data = {
+      ...form,
+      co_amount: Number(form.co_amount) || 0,
+      margin_percent: Number(form.margin_percent) || 0,
+      schedule_impact_days: Number(form.schedule_impact_days) || 0,
+    };
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
     onSave(data);
@@ -52,12 +70,33 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
       title={co ? `Edit ${co.co_number || "CO"}` : "New Change Order"}
       footer={<>
         <button style={btnSecondary} onClick={onClose}>Cancel</button>
-        <button style={btnPrimary} onClick={handleSave}>{co ? "Update" : "Create"}</button>
+        <button style={btnPrimary} onClick={handleSave} disabled={isSaving}>
+          {isSaving ? "Saving…" : co ? "Update" : "Create"}
+        </button>
       </>}
     >
       <div style={grid}>
         <FormField label="CO Number">
-          <input style={inputDisabledStyle} value={form.co_number || nextNumber || ""} disabled readOnly />
+          {/* User-assignable, RFI-style. Edit mode shows the existing
+              number; new mode shows blank with "Auto-assigned if blank"
+              placeholder so the user can either type their own or leave
+              empty to let the createMut auto-format the next free
+              "CO #NNN" via getNextFormattedNumber. */}
+          {co ? (
+            <input
+              style={inputStyle}
+              value={form.co_number || ""}
+              onChange={(e) => set("co_number", e.target.value)}
+              placeholder="CO #001"
+            />
+          ) : (
+            <input
+              style={{ ...inputStyle, opacity: 0.7 }}
+              value={form.co_number || ""}
+              onChange={(e) => set("co_number", e.target.value)}
+              placeholder={nextNumber ? `Auto-assigned: ${nextNumber}` : "Auto-assigned if blank"}
+            />
+          )}
         </FormField>
         <FormField label="Project *" error={errors.project_id}>
           <Select value={form.project_id} onValueChange={v => set("project_id", v)} disabled={false}>
@@ -88,6 +127,21 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
         <FormField label="CO Amount ($)" error={errors.co_amount}>
           <input type="number" style={inputStyle} value={form.co_amount} onChange={e => set("co_amount", e.target.value)} />
         </FormField>
+        <FormField label="Margin %" error={errors.margin_percent}>
+          <input type="number" style={inputStyle} value={form.margin_percent} onChange={e => set("margin_percent", e.target.value)} min="0" max="100" step="0.1" placeholder="0" />
+        </FormField>
+        {/* Live-calculated Margin $ — read-only helper, not persisted */}
+        <FormField label="Margin $">
+          <input
+            style={inputDisabledStyle}
+            value={formatCurrency((Number(form.co_amount) || 0) * (Number(form.margin_percent) || 0) / 100)}
+            disabled
+            readOnly
+          />
+        </FormField>
+        <FormField label="Schedule Impact (days)">
+          <input type="number" style={inputStyle} value={form.schedule_impact_days || 0} onChange={e => set("schedule_impact_days", e.target.value)} min="0" placeholder="0" />
+        </FormField>
         {selectedProject && (
           <FormField label="Original Contract Value">
             <input style={inputDisabledStyle} value={formatCurrency(selectedProject.original_contract_value)} disabled readOnly />
@@ -109,6 +163,18 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
           <input style={inputStyle} value={form.attachments} onChange={e => set("attachments", e.target.value)} placeholder="file1.pdf, file2.pdf" />
         </FormField>
       </div>
+      {/* Inbound chips — schedule tasks that link to this CO. Read-only;
+          edit the link from the schedule task's LINKS tab. Only renders
+          when we're editing an existing CO. */}
+      {co?.id && form.project_id && (
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--divider)" }}>
+          <RelatedScheduleTasksChips
+            projectId={form.project_id}
+            relatedField="related_change_order_ids"
+            targetId={co.id}
+          />
+        </div>
+      )}
     </PhoenixModal>
   );
 }
