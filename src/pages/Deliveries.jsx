@@ -40,6 +40,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { batchProcess } from "@/utils/batchProcess";
 import { BulkActionBar, Button, EmptyState, ProgressBar, StatusPill } from "@/components/design-system";
+import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { exportDeliveriesCSV, isFabComplete } from "./deliveries/utils";
 import {
   buildDeliveryMetrics,
@@ -132,6 +133,7 @@ export default function Deliveries() {
   const [scheduleFilter, setScheduleFilter] = useState("all");
   const [riskFilter, setRiskFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [seqFilter, setSeqFilter] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -281,6 +283,7 @@ export default function Deliveries() {
         if (scheduleFilter === "ready" && !metrics.readyToReceive.some((item) => item.id === delivery.id)) return false;
         if (scheduleFilter === "unscheduled" && !signals.unscheduled) return false;
         if (scheduleFilter === "longLead" && !signals.longLead) return false;
+        if (!matchesSequenceFilter(delivery, seqFilter)) return false;
         if (!q) return true;
         const wp = workPackageMap[delivery.work_package_id];
         const haystack = [
@@ -303,7 +306,7 @@ export default function Deliveries() {
         return haystack.includes(q);
       })
       .sort(sortDeliveriesForDispatch);
-  }, [metrics, projectMap, riskFilter, scheduleFilter, search, statusFilter, workPackageMap]);
+  }, [metrics, projectMap, riskFilter, scheduleFilter, seqFilter, search, statusFilter, workPackageMap]);
 
   const laneGroups = useMemo(() => {
     const groups = Object.fromEntries(LANE_ORDER.map((lane) => [lane, []]));
@@ -577,6 +580,8 @@ export default function Deliveries() {
         </div>
       </section>
 
+      <SequenceFilter items={activeDeliveries} value={seqFilter} onChange={setSeqFilter} />
+
       <section className="delivery-layout">
         <ExceptionRail
           metrics={metrics}
@@ -608,6 +613,7 @@ export default function Deliveries() {
                   setStatusFilter("all");
                   setScheduleFilter("all");
                   setRiskFilter("all");
+                  setSeqFilter(null);
                   setSearch("");
                 }}
               >

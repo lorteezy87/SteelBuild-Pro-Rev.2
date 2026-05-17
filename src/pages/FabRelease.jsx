@@ -52,6 +52,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import WPFormModal from "@/components/workpackages/WPFormModal";
 import { Button, EmptyState, ProgressBar, StatusPill } from "@/components/design-system";
 import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import {
   BOARD_LANES,
   FAB_STAGES,
@@ -198,6 +199,7 @@ export default function FabRelease() {
   const [stageFilter, setStageFilter] = useState("all");
   const [riskFilter, setRiskFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [seqFilter, setSeqFilter] = useState(null);
   const [detailWP, setDetailWP] = useState(null);
   const [editingWP, setEditingWP] = useState(null);
   const [wpModalOpen, setWPModalOpen] = useState(false);
@@ -257,6 +259,13 @@ export default function FabRelease() {
     queryKey: ["deliveries", projectId],
     queryFn: () => (projectId ? base44.entities.Delivery.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
+    staleTime: 30000,
+  });
+
+  const { data: submittals = [] } = useQuery({
+    queryKey: ["submittals", projectId],
+    queryFn: () => (projectId ? base44.entities.Submittal.filter({ project_id: projectId }) : Promise.resolve([])),
+    enabled: Boolean(projectId),
     staleTime: 30000,
   });
 
@@ -348,9 +357,22 @@ export default function FabRelease() {
     return map;
   }, [deliveries]);
 
+  const submittalsByDrawingSetId = useMemo(() => {
+    const map = new Map();
+    for (const sub of submittals) {
+      const dsIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
+      for (const dsId of dsIds) {
+        const key = String(dsId);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(sub);
+      }
+    }
+    return map;
+  }, [submittals]);
+
   const metrics = useMemo(
-    () => buildFabReleaseMetrics(workPackages, drawings, drawingSets, { rfisByWpId, deliveriesByWpId }),
-    [drawingSets, drawings, workPackages, rfisByWpId, deliveriesByWpId]
+    () => buildFabReleaseMetrics(workPackages, drawings, drawingSets, { rfisByWpId, deliveriesByWpId, submittalsByDrawingSetId }),
+    [drawingSets, drawings, workPackages, rfisByWpId, deliveriesByWpId, submittalsByDrawingSetId]
   );
 
   const filtered = useMemo(() => {
@@ -360,6 +382,7 @@ export default function FabRelease() {
         const signals = wp._signals;
         if (stageFilter !== "all" && signals.stage !== stageFilter) return false;
         if (riskFilter !== "all" && signals.risk !== riskFilter) return false;
+        if (!matchesSequenceFilter(wp, seqFilter)) return false;
         if (!q) return true;
         const haystack = [
           wp.wp_number,
@@ -376,7 +399,7 @@ export default function FabRelease() {
         return haystack.includes(q);
       })
       .sort(sortFabPackagesForRelease);
-  }, [metrics.enriched, riskFilter, search, stageFilter]);
+  }, [metrics.enriched, riskFilter, search, seqFilter, stageFilter]);
 
   const laneGroups = useMemo(() => {
     const groups = Object.fromEntries(BOARD_LANES.map((lane) => [lane, []]));
@@ -452,6 +475,7 @@ export default function FabRelease() {
     setSearch("");
     setStageFilter("all");
     setRiskFilter("all");
+    setSeqFilter(null);
     localStorage.setItem("fabReleaseStage", "all");
   };
 
@@ -510,6 +534,8 @@ export default function FabRelease() {
         totalCount={metrics.totalCount}
         onClear={clearFilters}
       />
+
+      <SequenceFilter items={workPackages} value={seqFilter} onChange={setSeqFilter} />
 
       <section className="fab-release-layout">
         <ExceptionRail
@@ -1217,6 +1243,49 @@ function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompleting }
             <div className="fab-detail-empty">No blockers currently flagged.</div>
           )}
         </section>
+
+        {signals.readinessBreakdown && (
+          <section className="fab-detail-section">
+            <div className="fab-section-label">Release Readiness Breakdown</div>
+            <div style={{ marginTop: 10, display: "grid", gap: 4 }}>
+              {signals.readinessBreakdown.map((gate) => (
+                <div key={gate.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{
+                    width: 16, height: 16, borderRadius: 4, display: "flex", alignItems: "center",
+                    justifyContent: "center", fontSize: 9, fontWeight: 900, flexShrink: 0,
+                    background: gate.pass ? "var(--status-success)" : "var(--status-error)", color: "#fff",
+                  }}>
+                    {gate.pass ? "✓" : "✗"}
+                  </span>
+                  <span style={{
+                    flex: 1, fontSize: 11,
+                    color: gate.pass ? "var(--text-secondary)" : "var(--text-primary)",
+                  }}>
+                    {gate.label}
+                  </span>
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 900,
+                    color: gate.pass ? "var(--status-success)" : "var(--text-muted)",
+                  }}>
+                    {gate.earned}/{gate.weight}
+                  </span>
+                </div>
+              ))}
+              <div style={{
+                display: "flex", justifyContent: "flex-end", marginTop: 4, paddingTop: 6,
+                borderTop: "1px solid var(--divider)",
+              }}>
+                <span style={{
+                  fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 900,
+                  color: signals.readinessScore >= 80 ? "var(--status-success)"
+                    : signals.readinessScore >= 55 ? "var(--status-warning)" : "var(--status-error)",
+                }}>
+                  {signals.readinessScore}/100
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="fab-detail-section">
           <div className="fab-section-label">Shop Hours</div>

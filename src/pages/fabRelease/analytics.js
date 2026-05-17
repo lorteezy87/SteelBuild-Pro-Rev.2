@@ -286,32 +286,47 @@ export function getFabReleaseSignals(wp, options = {}) {
   if (!hasDeliveryPath && stageRank >= stageIndex("material_on_hand") && !complete) {
     flags.push({ key: "no_delivery_path", label: "No delivery defined", severity: "medium" });
   }
+  if (hasUnapprovedSubmittals && stageRank < stageIndex("shop_released")) {
+    flags.push({ key: "submittals_pending", label: "Submittals not approved", severity: "medium" });
+  }
 
-  const readinessChecks = [
-    // 1. Drawings approved
-    drawing.hasReleased || stageRank >= stageIndex("shop_released"),
-    // 2. VIF confirmed
-    Boolean(wp.vif_confirmed) || stageRank >= stageIndex("in_fabrication"),
-    // 3. Load list complete
-    Boolean(wp.load_list_complete) || stageRank >= stageIndex("in_fabrication"),
-    // 4. Crew assigned
-    Boolean(String(wp.crew || "").trim()) || stageRank < stageIndex("shop_released") || complete,
-    // 5. Release date set
-    Boolean(releasedDate) || stageRank < stageIndex("shop_released"),
-    // 6. Not on hold
-    status !== "On Hold",
-    // 7. No critical open RFIs blocking this WP
-    !hasCriticalRfis || stageRank >= stageIndex("shop_released"),
-    // 8. Budget hours assigned
-    (num(wp.shop_hours_budget) > 0 || num(wp.field_hours_budget) > 0) || stageRank < stageIndex("shop_released") || complete,
-    // 9. Sequence confirmed
-    Boolean(wp.sequence_confirmed) || stageRank < stageIndex("shop_released") || complete,
-    // 10. Delivery path defined
-    hasDeliveryPath || stageRank < stageIndex("material_on_hand") || complete,
-  ];
-  const readinessScore = Math.round(
-    (readinessChecks.filter(Boolean).length / readinessChecks.length) * 100
+  // S&H submittal gate — check submittals linked to this WP's drawing sets
+  const wpDrawingSetIds = new Set(
+    (drawing.linkedDrawings || [])
+      .map((d) => d.drawing_set_id)
+      .filter(Boolean)
+      .map(String)
   );
+  const wpSubmittals = [];
+  for (const dsId of wpDrawingSetIds) {
+    const subs = options.submittalsByDrawingSetId?.get(dsId) || [];
+    wpSubmittals.push(...subs);
+  }
+  const hasUnapprovedSubmittals = wpSubmittals.length > 0 && wpSubmittals.some((s) => {
+    const st = normalize(s.status || s.review_status || s.submittal_status || "");
+    return st.includes("revise") || st.includes("resubmit") || st.includes("rejected") || st === "pending" || st === "submitted";
+  });
+
+  // S&H Weighted Release Readiness Score
+  const readinessGates = [
+    { key: "drawings_approved", weight: 25, pass: drawing.hasReleased || stageRank >= stageIndex("shop_released") },
+    { key: "material_ready", weight: 20, pass: (Boolean(wp.vif_confirmed) && Boolean(wp.load_list_complete)) || stageRank >= stageIndex("in_fabrication") },
+    { key: "rfis_clear", weight: 15, pass: !hasCriticalRfis || stageRank >= stageIndex("shop_released") },
+    { key: "submittals_approved", weight: 15, pass: !hasUnapprovedSubmittals || stageRank >= stageIndex("shop_released") },
+    { key: "budget_assigned", weight: 10, pass: (num(wp.shop_hours_budget) > 0 || num(wp.field_hours_budget) > 0) || stageRank < stageIndex("shop_released") || complete },
+    { key: "schedule_clear", weight: 10, pass: (Boolean(wp.sequence_confirmed) && status !== "On Hold") || stageRank < stageIndex("shop_released") || complete },
+    { key: "crew_available", weight: 5, pass: Boolean(String(wp.crew || "").trim()) || stageRank < stageIndex("shop_released") || complete },
+  ];
+
+  const readinessScore = readinessGates.reduce((sum, gate) => sum + (gate.pass ? gate.weight : 0), 0);
+
+  const readinessBreakdown = readinessGates.map((g) => ({
+    key: g.key,
+    label: g.key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    weight: g.weight,
+    pass: g.pass,
+    earned: g.pass ? g.weight : 0,
+  }));
   const high = flags.some((flag) => flag.severity === "high");
   const medium = flags.some((flag) => flag.severity === "medium");
   const readyForRelease = needsRelease && readinessScore >= 80 && !high;
@@ -333,6 +348,7 @@ export function getFabReleaseSignals(wp, options = {}) {
     flags,
     risk: high ? "high" : medium ? "medium" : "clear",
     readinessScore,
+    readinessBreakdown,
     totalBudgetHours,
     totalActualHours,
     hourBurn,
@@ -351,6 +367,7 @@ export function buildFabReleaseMetrics(workPackages = [], drawings = [], drawing
       today: options.today,
       rfisByWpId: options.rfisByWpId,
       deliveriesByWpId: options.deliveriesByWpId,
+      submittalsByDrawingSetId: options.submittalsByDrawingSetId,
     }),
   }));
 

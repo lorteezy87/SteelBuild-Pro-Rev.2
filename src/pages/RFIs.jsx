@@ -38,6 +38,7 @@ import {
 } from "@/components/design-system";
 
 import { compareRfisByNumber, isOverdue, exportRFIsToCSV } from "./rfis/utils";
+import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import RfiRow, { RFI_ROW_GRID } from "./rfis/RfiRow";
 import RfiDetailModal from "./rfis/RfiDetailModal";
 import RfiInsightsStrip from "./rfis/RfiInsightsStrip";
@@ -84,6 +85,7 @@ export default function RFIs() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [seqFilter, setSeqFilter] = useState(null);
   const [density, setDensity] = useState(loadDensity);
   const [insightsCollapsed, setInsightsCollapsed] = useState(loadInsightsCollapsed);
   const [savingAttachments, setSavingAttachments] = useState(false);
@@ -242,6 +244,7 @@ export default function RFIs() {
         if (disciplineFilter === "All") return true;
         return (r.discipline || "").toLowerCase().trim() === disciplineFilter.toLowerCase().trim();
       })
+      .filter((r) => matchesSequenceFilter(r, seqFilter))
       .filter((r) => {
         if (!q) return true;
         return (
@@ -254,7 +257,7 @@ export default function RFIs() {
         );
       })
       .sort(compareRfisByNumber);
-  }, [rfis, filter, disciplineFilter, search]);
+  }, [rfis, filter, disciplineFilter, seqFilter, search]);
 
   /* ── Overdue → Alert background effect ── */
   const projectMap = useMemo(() => {
@@ -440,6 +443,8 @@ export default function RFIs() {
             </button>
           ))}
         </div>
+
+        <SequenceFilter items={rfis} value={seqFilter} onChange={setSeqFilter} />
 
         <span className="rfi-toolbar-count">{filtered.length} of {rfis.length}</span>
       </div>
