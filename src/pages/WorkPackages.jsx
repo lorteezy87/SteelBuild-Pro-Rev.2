@@ -49,6 +49,7 @@ import { getNextNumber } from "@/components/shared/numberSequencing";
 import { batchProcess } from "@/utils/batchProcess";
 import { BulkActionBar, Button, EmptyState, ProgressBar, StatusPill } from "@/components/design-system";
 import { formatDateShort } from "@/components/shared/formatters";
+import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { exportWorkPackagesCSV } from "./workPackages/utils";
 import {
   PHASE_ORDER,
@@ -138,6 +139,7 @@ export default function WorkPackages() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [riskFilter, setRiskFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [seqFilter, setSeqFilter] = useState(null);
   const [editingWP, setEditingWP] = useState(null);
   const [wpModalOpen, setWPModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -312,6 +314,7 @@ export default function WorkPackages() {
         if (phaseFilter !== "all" && wp._signals.phase !== phaseFilter) return false;
         if (statusFilter !== "all" && wp._signals.status !== statusFilter) return false;
         if (riskFilter !== "all" && wp._signals.risk !== riskFilter) return false;
+        if (!matchesSequenceFilter(wp, seqFilter)) return false;
         if (!q) return true;
         return [
           wp.wp_number,
@@ -324,7 +327,7 @@ export default function WorkPackages() {
         ].some((value) => String(value || "").toLowerCase().includes(q));
       })
       .sort(sortWorkPackagesForExecution);
-  }, [metrics.enriched, phaseFilter, statusFilter, riskFilter, search]);
+  }, [metrics.enriched, phaseFilter, statusFilter, riskFilter, seqFilter, search]);
 
   const selectedRows = useMemo(
     () => filtered.filter((wp) => selectedWPs.has(wp.id)),
@@ -406,8 +409,11 @@ export default function WorkPackages() {
           setPhaseFilter("all");
           setStatusFilter("all");
           setRiskFilter("all");
+          setSeqFilter(null);
         }}
       />
+
+      <SequenceFilter items={workPackages} value={seqFilter} onChange={setSeqFilter} />
 
       <div className="wp-content-grid" style={contentGridStyle}>
         <ExceptionPanel

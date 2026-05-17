@@ -29,6 +29,7 @@ import ListView from "./constraints/ListView";
 import BoardView from "./constraints/BoardView";
 import ConstraintFormModal from "./constraints/ConstraintFormModal";
 import { CONSTRAINT_TYPES, TYPE_COLORS, inputStyle } from "./constraints/constants";
+import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus, Search } from "lucide-react";
 import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
@@ -58,6 +59,7 @@ export default function Constraints() {
   const [filterStatus, setFilterStatus] = useState("open");
   const [filterPriority, setFilterPriority] = useState("all");
   const [search, setSearch] = useState("");
+  const [seqFilter, setSeqFilter] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
   // -- Data ----------------------------------------------------------------------
@@ -198,6 +200,7 @@ export default function Constraints() {
         if (filterStatus === "open" && RESOLVED_STATUSES.includes(c.status)) return false;
         if (filterStatus !== "all" && filterStatus !== "open" && c.status !== filterStatus) return false;
         if (filterPriority !== "all" && c.priority !== filterPriority) return false;
+        if (!matchesSequenceFilter(c, seqFilter)) return false;
         if (
           q &&
           ![c.title, c.description, c.project_area, c.assigned_to, c.constraint_number, c._source_ref, c._source_type]
@@ -222,7 +225,7 @@ export default function Constraints() {
         if (a.due_date && b.due_date) return new Date(a.due_date) - new Date(b.due_date);
         return 0;
       });
-  }, [allConstraints, filterType, filterStatus, filterPriority, search]);
+  }, [allConstraints, filterType, filterStatus, filterPriority, seqFilter, search]);
 
   const openCount = kpis.open.length;
   const overdueCount = kpis.overdue.length;
@@ -365,6 +368,8 @@ export default function Constraints() {
         setFilterPriority={setFilterPriority}
         setFilterType={setFilterType}
       />
+
+      <SequenceFilter items={allConstraints} value={seqFilter} onChange={setSeqFilter} />
 
       {filtered.length === 0 ? (
         <EmptyState hasOpen={filterStatus === "open"} />
