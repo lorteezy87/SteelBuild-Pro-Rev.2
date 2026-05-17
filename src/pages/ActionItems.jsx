@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -7,7 +7,7 @@ import ActionItemFormModal from "@/components/actionitems/ActionItemFormModal";
 import ActionItemList from "@/components/actionitems/ActionItemList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { CommandBar, KpiTile, BulkActionBar } from "@/components/design-system";
 import { Plus, Search } from "lucide-react";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 import { daysUntil } from "@/lib/dateMath";
@@ -26,6 +26,21 @@ const PRIORITY_COLORS = {
   [PRIORITY.LOW]: "var(--text-muted)",
 };
 
+/**
+ * Shift a YYYY-MM-DD date string forward by N days, returning a new
+ * YYYY-MM-DD string. Uses local date math (no TZ surprises).
+ */
+function shiftDate(dateStr, days) {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export default function ActionItems() {
   const projectId = useProjectId();
   const qc = useQueryClient();
@@ -36,6 +51,33 @@ export default function ActionItems() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
 
+  // ─── Bulk selection state ────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showAssignDropdown, setShowAssignDropdown] = useState(false);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setShowAssignDropdown(false);
+  }, []);
+
+  const handleToggleSelect = useCallback((id, checked) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback((checked, items) => {
+    if (checked) {
+      setSelectedIds(new Set(items.map((item) => item.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  }, []);
+
+  // ─── Mutations ───────────────────────────────────────────────────────────
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.ActionItem.create(data),
     onSuccess: () => {
@@ -70,6 +112,32 @@ export default function ActionItems() {
     onError: (e) => toast.error("Failed: " + (e?.message || "Delete failed")),
   });
 
+  // ─── Bulk mutation — runs parallel updates then invalidates once ─────────
+  const bulkUpdateMut = useMutation({
+    mutationFn: async (updates) => {
+      // updates is an array of { id, data } objects
+      const results = await Promise.allSettled(
+        updates.map(({ id, data }) => base44.entities.ActionItem.update(id, data))
+      );
+      const failed = results.filter((r) => r.status === "rejected");
+      if (failed.length > 0) {
+        throw new Error(`${failed.length} of ${updates.length} updates failed`);
+      }
+      return results.length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ["action-items"] });
+      qc.invalidateQueries({ queryKey: ["action-items-all"] });
+      toast.success(`${count} item${count === 1 ? "" : "s"} updated`);
+      clearSelection();
+    },
+    onError: (e) => {
+      qc.invalidateQueries({ queryKey: ["action-items"] });
+      toast.error(e?.message || "Bulk update failed");
+    },
+  });
+
+  // ─── Queries ─────────────────────────────────────────────────────────────
   const { data: actionItems = [], isLoading } = useQuery({
     queryKey: ["action-items", projectId],
     queryFn: () =>
@@ -87,6 +155,15 @@ export default function ActionItems() {
   });
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : null;
+
+  // ─── Derived: unique assignees (for bulk-assign dropdown) ────────────────
+  const knownAssignees = useMemo(() => {
+    const names = new Set();
+    for (const ai of actionItems) {
+      if (ai.assigned_to) names.add(ai.assigned_to);
+    }
+    return Array.from(names).sort();
+  }, [actionItems]);
 
   const stats = useMemo(() => ({
     total:      actionItems.length,
@@ -129,6 +206,7 @@ export default function ActionItems() {
       .slice(0, 8);
   }, [actionItems]);
 
+  // ─── Handlers ────────────────────────────────────────────────────────────
   const handleResolve = (item) => {
     const isComplete = item.status === ACTION_ITEM_STATUS.COMPLETE;
     updateMut.mutate({
@@ -139,6 +217,34 @@ export default function ActionItems() {
     });
   };
 
+  // ─── Bulk action handlers ────────────────────────────────────────────────
+  const handleBulkBumpDay = () => {
+    const selectedItems = actionItems.filter((ai) => selectedIds.has(ai.id));
+    const updates = selectedItems.map((ai) => ({
+      id: ai.id,
+      data: { due_date: shiftDate(ai.due_date, 1) || shiftDate(new Date().toISOString().slice(0, 10), 1) },
+    }));
+    bulkUpdateMut.mutate(updates);
+  };
+
+  const handleBulkComplete = () => {
+    const updates = Array.from(selectedIds).map((id) => ({
+      id,
+      data: { status: ACTION_ITEM_STATUS.COMPLETE },
+    }));
+    bulkUpdateMut.mutate(updates);
+  };
+
+  const handleBulkAssign = (assignee) => {
+    const updates = Array.from(selectedIds).map((id) => ({
+      id,
+      data: { assigned_to: assignee },
+    }));
+    bulkUpdateMut.mutate(updates);
+    setShowAssignDropdown(false);
+  };
+
+  // ─── Stat cards ──────────────────────────────────────────────────────────
   const statCards = [
     { label: "Total",       value: stats.total,       color: "var(--accent)",         filterKey: null },
     { label: "Open",        value: stats.open,        color: "var(--status-warning)", filterKey: ACTION_ITEM_STATUS.OPEN },
@@ -331,7 +437,7 @@ export default function ActionItems() {
                   transition: "all 0.12s",
                 }}
               >
-                {priority === "all" ? "All" : priority === "Critical" ? `🔥 ${priority}` : priority}
+                {priority === "all" ? "All" : priority === "Critical" ? `\u{1F525} ${priority}` : priority}
               </button>
             );
           })}
@@ -363,6 +469,7 @@ export default function ActionItems() {
         />
       )}
 
+      {/* List — with loading, empty, and populated states */}
       {isLoading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "24px 0" }}>
           {[1, 2, 3].map(i => (
@@ -371,7 +478,7 @@ export default function ActionItems() {
         </div>
       ) : actionItems.length === 0 ? (
         <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "64px 24px", textAlign: "center" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>{"✅"}</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>No Action Items Yet</div>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 24, maxWidth: 360, margin: "0 auto 24px" }}>
             Track tasks, follow-ups, and field issues. Assign them to your crew and monitor due dates in one place.
@@ -393,7 +500,117 @@ export default function ActionItems() {
           onEdit={(item) => setEditingItem(item)}
           onResolve={handleResolve}
           onDelete={(item) => setDeleteTarget(item)}
+          selectionEnabled={true}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onSelectAll={(checked) => handleSelectAll(checked, filtered)}
         />
+      )}
+
+      {/* Bulk Action Bar — appears when 1+ items selected */}
+      <BulkActionBar
+        count={selectedIds.size}
+        onClear={clearSelection}
+        actions={[
+          {
+            label: "Bump +1 Day",
+            icon: "schedule",
+            variant: "secondary",
+            onClick: handleBulkBumpDay,
+            disabled: bulkUpdateMut.isPending,
+          },
+          {
+            label: "Assign To",
+            icon: "crew",
+            variant: "secondary",
+            onClick: () => setShowAssignDropdown((v) => !v),
+            disabled: bulkUpdateMut.isPending,
+          },
+          {
+            label: "Mark Complete",
+            icon: "check",
+            variant: "primary",
+            onClick: handleBulkComplete,
+            disabled: bulkUpdateMut.isPending,
+          },
+        ]}
+      />
+
+      {/* Assign-to dropdown — positioned above the bulk bar */}
+      {showAssignDropdown && selectedIds.size > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 64,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "var(--bg-surface-high)",
+            backdropFilter: "blur(20px) saturate(140%)",
+            WebkitBackdropFilter: "blur(20px) saturate(140%)",
+            border: "1px solid var(--accent-border)",
+            borderRadius: "var(--radius-card)",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.55), 0 0 20px color-mix(in srgb, var(--accent) 15%, transparent)",
+            padding: "8px 4px",
+            zIndex: 210,
+            minWidth: 200,
+            maxHeight: 240,
+            overflowY: "auto",
+          }}
+        >
+          <div style={{ padding: "6px 12px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase" }}>
+            Assign to
+          </div>
+          {knownAssignees.length === 0 && (
+            <div style={{ padding: "10px 12px", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)" }}>
+              No assignees found. Add assignees to items first.
+            </div>
+          )}
+          {knownAssignees.map((name) => (
+            <button
+              key={name}
+              onClick={() => handleBulkAssign(name)}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                padding: "8px 12px",
+                background: "transparent",
+                border: "none",
+                borderRadius: 6,
+                color: "var(--text-primary)",
+                fontFamily: "var(--font-body)",
+                fontSize: 12,
+                cursor: "pointer",
+                transition: "background 0.1s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              {name}
+            </button>
+          ))}
+          <div style={{ borderTop: "1px solid var(--divider)", margin: "4px 0" }} />
+          <button
+            onClick={() => setShowAssignDropdown(false)}
+            style={{
+              display: "block",
+              width: "100%",
+              textAlign: "left",
+              padding: "6px 12px",
+              background: "transparent",
+              border: "none",
+              color: "var(--text-muted)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+        </div>
       )}
 
       <DeleteDialog
@@ -403,6 +620,9 @@ export default function ActionItems() {
         title="Delete Action Item"
         description={`Delete "${deleteTarget?.title}"? This cannot be undone.`}
       />
+
+      {/* Spacer so the bulk bar doesn't overlap the last item */}
+      {selectedIds.size > 0 && <div style={{ height: 72 }} />}
     </div>
   );
 }
