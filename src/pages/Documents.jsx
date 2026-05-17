@@ -27,7 +27,7 @@ import UploadModal from "@/components/dms/UploadModal";
 import DocumentEditModal from "@/components/dms/DocumentEditModal";
 import FolderPicker, { collectFolderAndDescendants } from "@/components/dms/FolderPicker";
 import { batchProcess } from "@/utils/batchProcess";
-import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import EmptyStateAction from "@/components/shared/EmptyStateAction";
 
 import { STATUS_TABS } from "./documents/constants";
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
@@ -92,8 +92,6 @@ export default function Documents() {
         : [],
     enabled: !!activeProject?.id,
   });
-
-  useRealtimeInvalidation("documents", activeProject?.id, [["documents", activeProject?.id]]);
 
   const allDocuments = useMemo(() => (rawDocuments || []).map(normalizeDocument), [rawDocuments]);
 
@@ -603,15 +601,20 @@ export default function Documents() {
           ) : allDocuments.length === 0 ? (
             <EmptyState onUploadOpen={() => setUploadOpen(true)} />
           ) : filteredDocs.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: "var(--text-secondary)", fontFamily: "var(--font-body)", fontSize: 13 }}>
-              No documents match the current filters.{" "}
-              <button
-                onClick={handleClearAllFilters}
-                style={{ color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700 }}
-              >
-                CLEAR FILTERS
-              </button>
-            </div>
+            <EmptyStateAction
+              icon="⊘"
+              message={
+                statusTab !== "all"
+                  ? `No documents with status "${statusTab}" in this ${currentFolderId ? "folder" : "view"}`
+                  : searchQuery.trim()
+                    ? `No documents matching "${searchQuery.trim()}"`
+                    : "No documents match the current filters"
+              }
+              actions={[
+                { label: "Clear Filters", onClick: handleClearAllFilters },
+                { label: "+ Upload Document", onClick: () => setUploadOpen(true), secondary: true },
+              ]}
+            />
           ) : viewMode === "grid" ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12, overflowY: "auto" }}>
               {filteredDocs.map((doc) => (

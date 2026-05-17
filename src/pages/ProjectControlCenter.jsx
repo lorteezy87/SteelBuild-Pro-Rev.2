@@ -5,9 +5,9 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { useProjectContext } from "../components/shared/ProjectContext";
-import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import DonutChart from "@/components/shared/DonutChart";
 import TrendIndicator from "@/components/shared/TrendIndicator";
+import EmptyStateAction from "@/components/shared/EmptyStateAction";
 import { Download } from "lucide-react";
 import {
   mapRFIsToPCCItems,
@@ -27,10 +27,6 @@ import {
   SEVERITY,
   IMPACT_TAGS,
 } from "../utils/pccEngine";
-import {
-  buildOperationalGraphHealth,
-  GRAPH_SEVERITY,
-} from "../utils/operationalGraph";
 
 // ─── Type → page routing map ──────────────────────────────────────────────────
 const TYPE_PAGE_MAP = {
@@ -487,13 +483,19 @@ function DetailDrawer({ item, onClose, onNavigate }) {
 }
 
 // ─── Morning Scan ─────────────────────────────────────────────────────────────
-function MorningScan({ items, onSelect }) {
+function MorningScan({ items, onSelect, onViewBriefing, onViewFeed }) {
   const top = items.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").slice(0, 10);
   if (!top.length) {
     return (
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, color: "rgba(0,214,143,0.20)" }}>✓</div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.12em" }}>ALL CLEAR — NO CRITICAL OR HIGH-RISK ITEMS</div>
+        <EmptyStateAction
+          message="All clear — no critical or high-risk items need attention right now"
+          actions={[
+            ...(onViewBriefing ? [{ label: "View Daily Brief", onClick: onViewBriefing }] : []),
+            ...(onViewFeed ? [{ label: "Browse Full Feed", onClick: onViewFeed, secondary: true }] : []),
+          ]}
+        />
       </div>
     );
   }
@@ -552,12 +554,14 @@ function MorningScan({ items, onSelect }) {
 }
 
 // ─── Waiting-On Board ─────────────────────────────────────────────────────────
-function WaitingOnBoard({ board }) {
+function WaitingOnBoard({ board, onViewRFIs }) {
   if (!board.length) {
     return (
-      <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-        No items waiting on external parties
-      </div>
+      <EmptyStateAction
+        icon="◎"
+        message="No items waiting on external parties — all responses are in-hand"
+        actions={onViewRFIs ? [{ label: "Review Open RFIs", onClick: onViewRFIs }] : []}
+      />
     );
   }
   return (
@@ -595,13 +599,15 @@ function WaitingOnBoard({ board }) {
 }
 
 // ─── Risk Watchlist (high severity items grouped by impact) ───────────────────
-function RiskWatchlist({ items, onSelect }) {
+function RiskWatchlist({ items, onSelect, onViewSchedule }) {
   const high = items.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").slice(0, 8);
   if (!high.length) {
     return (
-      <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-        No high-risk items
-      </div>
+      <EmptyStateAction
+        icon="◇"
+        message="No high-risk items — nothing is currently flagged as critical or high severity"
+        actions={onViewSchedule ? [{ label: "Check Schedule", onClick: onViewSchedule }] : []}
+      />
     );
   }
   return (
@@ -845,14 +851,16 @@ function ReleaseGateActionDrafts({ drafts, onCreate, creatingKey }) {
   );
 }
 
-function ExecutionWindow({ title, subtitle, items, empty, onSelect, beforeList = null }) {
+function ExecutionWindow({ title, subtitle, items, empty, onSelect, beforeList = null, emptyActions = [] }) {
   if (!items.length) {
     return (
       <div style={{ flex: 1, overflowY: "auto" }}>
         {beforeList}
-        <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-          {empty}
-        </div>
+        <EmptyStateAction
+          icon="◎"
+          message={empty}
+          actions={emptyActions}
+        />
       </div>
     );
   }
@@ -901,12 +909,14 @@ function ExecutionWindow({ title, subtitle, items, empty, onSelect, beforeList =
   );
 }
 
-function OwnerLoadBoard({ rows }) {
+function OwnerLoadBoard({ rows, onCreateActionItem }) {
   if (!rows.length) {
     return (
-      <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-        No owner workload items
-      </div>
+      <EmptyStateAction
+        icon="◫"
+        message="No workload data — assign owners to RFIs, drawings, and tasks to populate this board"
+        actions={onCreateActionItem ? [{ label: "+ Create Action Item", onClick: onCreateActionItem }] : []}
+      />
     );
   }
   return (
@@ -964,140 +974,7 @@ function AISummaryBanner({ kpis }) {
 }
 
 // ─── Health Summary Panel ────────────────────────────────────────────────────
-function ProductionGraphHealth({ graphHealth }) {
-  if (!graphHealth) return null;
-
-  const score = graphHealth.score ?? 100;
-  const scoreColor =
-    score < 60 ? "var(--status-error)"
-    : score < 85 ? "var(--status-warning-bright)"
-    : "var(--status-success)";
-  const topOwner = Object.entries(graphHealth.countsByOwner || {})
-    .sort((a, b) => b[1] - a[1])[0];
-  const topDomains = Object.entries(graphHealth.countsByDomain || {})
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3);
-  const topGaps = graphHealth.topGaps || [];
-
-  return (
-    <div style={{
-      border: "1px solid var(--divider)",
-      borderRadius: 8,
-      background: "var(--bg-surface-low)",
-      padding: 12,
-      display: "flex",
-      flexDirection: "column",
-      gap: 12,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            Production Graph Health
-          </div>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginTop: 3, lineHeight: 1.35 }}>
-            S&H single-source linkage and no-duplicate-entry discipline.
-          </div>
-        </div>
-        <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 900, color: scoreColor, lineHeight: 1 }}>
-            {score}%
-          </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", marginTop: 3 }}>
-            {graphHealth.recordsReviewed || 0} RECORDS
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-        <div style={{ padding: "8px 10px", border: "1px solid var(--divider)", borderRadius: 6, background: "var(--hover-bg)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>GAPS</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: graphHealth.gapCount > 0 ? "var(--status-warning)" : "var(--status-success)" }}>
-            {graphHealth.gapCount}
-          </div>
-        </div>
-        <div style={{ padding: "8px 10px", border: "1px solid var(--divider)", borderRadius: 6, background: "var(--hover-bg)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>HIGH</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: graphHealth.highImpactCount > 0 ? "var(--status-error)" : "var(--text-muted)" }}>
-            {graphHealth.highImpactCount}
-          </div>
-        </div>
-        <div style={{ padding: "8px 10px", border: "1px solid var(--divider)", borderRadius: 6, background: "var(--hover-bg)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>DUP RISK</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: graphHealth.duplicateRiskCount > 0 ? "var(--status-review)" : "var(--text-muted)" }}>
-            {graphHealth.duplicateRiskCount}
-          </div>
-        </div>
-      </div>
-
-      {topOwner && (
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4 }}>
-          Most cleanup sits in <strong style={{ color: "var(--text-primary)" }}>{topOwner[0]}</strong> with {topOwner[1]} open linkage {topOwner[1] === 1 ? "gap" : "gaps"}.
-        </div>
-      )}
-
-      {topDomains.length > 0 && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {topDomains.map(([domain, count]) => (
-            <span key={domain} style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 8,
-              fontWeight: 800,
-              letterSpacing: "0.08em",
-              color: "var(--accent)",
-              background: "var(--accent-muted)",
-              border: "1px solid rgba(200,155,32,0.22)",
-              borderRadius: 4,
-              padding: "3px 6px",
-            }}>
-              {domain.toUpperCase()}: {count}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {topGaps.length > 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {topGaps.slice(0, 5).map((gap) => {
-            const sev = GRAPH_SEVERITY[gap.severity] || GRAPH_SEVERITY.Medium;
-            return (
-              <div key={gap.id} style={{
-                display: "grid",
-                gridTemplateColumns: "4px 1fr",
-                gap: 8,
-                padding: "8px 0",
-                borderTop: "1px solid var(--divider)",
-              }}>
-                <div style={{ background: sev.color, borderRadius: 3 }} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: sev.color, fontWeight: 800, letterSpacing: "0.10em" }}>
-                      {gap.severity.toUpperCase()}
-                    </span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
-                      {gap.ownerSystem}
-                    </span>
-                  </div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3 }}>
-                    {gap.title}
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {gap.sourceLabel}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div style={{ padding: "10px 12px", border: "1px solid var(--divider)", borderRadius: 6, background: "var(--hover-bg)", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>
-          No source-of-truth linkage gaps detected in the loaded project data.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis, operationalGraphHealth }) {
+function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
   const total = scoredFeed.length;
   const critCount = scoredFeed.filter((i) => i.severityKey === "CRITICAL").length;
   const highCount = scoredFeed.filter((i) => i.severityKey === "HIGH").length;
@@ -1168,8 +1045,6 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis, operationalGraphHe
         </div>
       </div>
 
-      <ProductionGraphHealth graphHealth={operationalGraphHealth} />
-
       {/* Top waiting-on parties */}
       {topWaiting.length > 0 && (
         <div>
@@ -1210,7 +1085,7 @@ export default function ProjectControlCenter() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
   const [drawerItem, setDrawerItem] = useState(null);
-  const [lastRefresh] = useState(new Date());
+  const [lastRefresh, setLastRefresh] = useState(new Date());
   const [creatingReleaseGateKey, setCreatingReleaseGateKey] = useState(null);
 
   const enabled = !!activeProject?.id;
@@ -1223,40 +1098,14 @@ export default function ProjectControlCenter() {
   const coQ   = useQuery({ queryKey: ["pcc-cos",        activeProject?.id], queryFn: () => base44.entities.ChangeOrder.filter({ project_id: activeProject.id }), enabled });
   const taskQ = useQuery({ queryKey: ["pcc-schedule-tasks", activeProject?.id], queryFn: () => base44.entities.ScheduleTask.filter({ project_id: activeProject.id }), enabled });
   const actionQ = useQuery({ queryKey: ["pcc-action-items", activeProject?.id], queryFn: () => base44.entities.ActionItem.filter({ project_id: activeProject.id }), enabled });
-  const drawingSetQ = useQuery({ queryKey: ["pcc-drawing-sets", activeProject?.id], queryFn: () => base44.entities.DrawingSet.filter({ project_id: activeProject.id }), enabled });
-  const submittalQ = useQuery({ queryKey: ["pcc-submittals", activeProject?.id], queryFn: () => base44.entities.Submittal.filter({ project_id: activeProject.id }, "-submitted_date"), enabled });
-  const dailyLogQ = useQuery({ queryKey: ["pcc-daily-logs", activeProject?.id], queryFn: () => base44.entities.DailyLog.filter({ project_id: activeProject.id }, "-date"), enabled });
-  const rfis = useMemo(() => rfiQ.data ?? [], [rfiQ.data]);
-  const drawings = useMemo(() => dwgQ.data ?? [], [dwgQ.data]);
-  const workPackages = useMemo(() => wpQ.data ?? [], [wpQ.data]);
-  const deliveries = useMemo(() => delQ.data ?? [], [delQ.data]);
-  const changeOrders = useMemo(() => coQ.data ?? [], [coQ.data]);
-  const scheduleTasks = useMemo(() => taskQ.data ?? [], [taskQ.data]);
-  const actionItems = useMemo(() => actionQ.data ?? [], [actionQ.data]);
-  const drawingSets = useMemo(() => drawingSetQ.data ?? [], [drawingSetQ.data]);
-  const submittals = useMemo(() => submittalQ.data ?? [], [submittalQ.data]);
-  const dailyLogs = useMemo(() => dailyLogQ.data ?? [], [dailyLogQ.data]);
-  const isLoading = enabled && (
-    rfiQ.isLoading ||
-    dwgQ.isLoading ||
-    wpQ.isLoading ||
-    delQ.isLoading ||
-    coQ.isLoading ||
-    taskQ.isLoading ||
-    actionQ.isLoading ||
-    drawingSetQ.isLoading ||
-    submittalQ.isLoading ||
-    dailyLogQ.isLoading
-  );
-
-  const pid = activeProject?.id;
-  useRealtimeInvalidation("rfis", pid, [["pcc-rfis", pid]]);
-  useRealtimeInvalidation("drawings", pid, [["pcc-drawings", pid]]);
-  useRealtimeInvalidation("work_packages", pid, [["pcc-wps", pid]]);
-  useRealtimeInvalidation("deliveries", pid, [["pcc-deliveries", pid]]);
-  useRealtimeInvalidation("change_orders", pid, [["pcc-cos", pid]]);
-  useRealtimeInvalidation("schedule_tasks", pid, [["pcc-schedule-tasks", pid]]);
-  useRealtimeInvalidation("action_items", pid, [["pcc-action-items", pid]]);
+  const rfis = rfiQ.data ?? [];
+  const drawings = dwgQ.data ?? [];
+  const workPackages = wpQ.data ?? [];
+  const deliveries = delQ.data ?? [];
+  const changeOrders = coQ.data ?? [];
+  const scheduleTasks = taskQ.data ?? [];
+  const actionItems = actionQ.data ?? [];
+  const isLoading = enabled && (rfiQ.isLoading || dwgQ.isLoading || wpQ.isLoading || delQ.isLoading || coQ.isLoading || taskQ.isLoading || actionQ.isLoading);
 
   // ── Build scored feed ──────────────────────────────────────────
   const allRaw = useMemo(() => [
@@ -1287,19 +1136,6 @@ export default function ProjectControlCenter() {
   const releaseGateActionDrafts = useMemo(
     () => buildReleaseGateActionDrafts(scoredFeed, actionItems),
     [scoredFeed, actionItems]
-  );
-  const operationalGraphHealth = useMemo(
-    () => buildOperationalGraphHealth({
-      drawingSets,
-      drawings,
-      submittals,
-      rfis,
-      workPackages,
-      deliveries,
-      dailyLogs,
-      scheduleTasks,
-    }),
-    [drawingSets, drawings, submittals, rfis, workPackages, deliveries, dailyLogs, scheduleTasks]
   );
 
   const createReleaseGateActionMut = useMutation({
@@ -1438,7 +1274,6 @@ export default function ProjectControlCenter() {
 
   const noProject = !activeProject;
   const isEmpty   = scoredFeed.length === 0;
-  const hasOperationalGraphData = operationalGraphHealth.recordsReviewed > 0 || operationalGraphHealth.gapCount > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", background: "var(--bg-page)" }}>
@@ -1569,12 +1404,6 @@ export default function ProjectControlCenter() {
           previous={previousKpis?.coExposure != null ? (previousKpis.coExposure > 0 ? parseInt((previousKpis.coExposure / 1000).toFixed(0), 10) : 0) : undefined}
           invertTrend
         />
-        <SignalCard
-          label="GRAPH HEALTH"
-          value={`${operationalGraphHealth.score}%`}
-          color={operationalGraphHealth.highImpactCount > 0 ? "var(--status-warning-bright)" : "var(--status-success)"}
-          sub={`${operationalGraphHealth.gapCount} gaps`}
-        />
       </div>
 
       {/* ═══ SPLIT-PANE: Left (tabs+content) / Right (health summary) ═══ */}
@@ -1653,7 +1482,13 @@ export default function ProjectControlCenter() {
             {!noProject && !isLoading && isEmpty && (
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, color: "rgba(0,214,143,0.20)" }}>✓</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.12em" }}>NO OPEN ITEMS — PROJECT IS CLEAR</div>
+                <EmptyStateAction
+                  message="No open items — project is clear. Add RFIs, drawings, deliveries, or tasks to populate the control center."
+                  actions={[
+                    { label: "+ Add RFI", onClick: () => navigate(createPageUrl("RFIs")) },
+                    { label: "Upload Documents", onClick: () => navigate(createPageUrl("Documents")), secondary: true },
+                  ]}
+                />
               </div>
             )}
 
@@ -1663,7 +1498,12 @@ export default function ProjectControlCenter() {
                 <div style={{ padding: "0 20px", flexShrink: 0 }}>
                   <AISummaryBanner kpis={kpis} />
                 </div>
-                <MorningScan items={scoredFeed} onSelect={(item) => setDrawerItem(item)} />
+                <MorningScan
+                  items={scoredFeed}
+                  onSelect={(item) => setDrawerItem(item)}
+                  onViewBriefing={() => setActiveTab("briefing")}
+                  onViewFeed={() => setActiveTab("feed")}
+                />
               </div>
             )}
 
@@ -1676,7 +1516,11 @@ export default function ProjectControlCenter() {
                 title="48-HOUR RELEASE GATE"
                 subtitle="Release-blocking confirmations before fabrication, shipping, delivery, or installation."
                 items={executionWindows.releaseGate}
-                empty="No release-gate blockers detected"
+                empty="No release-gate blockers in the next 48 hours — fabrication and shipping are unblocked"
+                emptyActions={[
+                  { label: "View 10-Day Watch", onClick: () => setActiveTab("next10") },
+                  { label: "Check Deliveries", onClick: () => navigate(createPageUrl("Deliveries")), secondary: true },
+                ]}
                 onSelect={setDrawerItem}
                 beforeList={(
                   <ReleaseGateActionDrafts
@@ -1693,7 +1537,11 @@ export default function ProjectControlCenter() {
                 title="NEXT 10-DAY RISK WATCH"
                 subtitle="Near-term work that can disrupt fabrication, shipping, erection, or cost."
                 items={executionWindows.next10}
-                empty="No 10-day risk-window items detected"
+                empty="No risk-window items in the next 10 days — near-term schedule is clear"
+                emptyActions={[
+                  { label: "View Full Schedule", onClick: () => navigate(createPageUrl("Schedule")) },
+                  { label: "Review Work Packages", onClick: () => navigate(createPageUrl("WorkPackages")), secondary: true },
+                ]}
                 onSelect={setDrawerItem}
               />
             )}
@@ -1702,9 +1550,13 @@ export default function ProjectControlCenter() {
             {!noProject && !isLoading && !isEmpty && activeTab === "feed" && (
               <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
                 {filteredFeed.length === 0 ? (
-                  <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                    No items match current filters
-                  </div>
+                  <EmptyStateAction
+                    icon="⊘"
+                    message="No items match the current type and severity filters"
+                    actions={[
+                      { label: "Clear Filters", onClick: () => { setTypeFilter("all"); setSeverityFilter("all"); } },
+                    ]}
+                  />
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 12px" }}>
                     {filteredFeed.map((item) => (
@@ -1725,24 +1577,28 @@ export default function ProjectControlCenter() {
             {/* Waiting On Board */}
             {!noProject && !isLoading && activeTab === "waiting" && (
               <div style={{ flex: 1, overflowY: "auto" }}>
-                {waitingBoard.length === 0 ? (
-                  <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                    No items waiting on external parties
-                  </div>
-                ) : (
-                  <WaitingOnBoard board={waitingBoard} />
-                )}
+                <WaitingOnBoard
+                  board={waitingBoard}
+                  onViewRFIs={() => navigate(createPageUrl("RFIs"))}
+                />
               </div>
             )}
 
             {!noProject && !isLoading && activeTab === "owners" && (
-              <OwnerLoadBoard rows={ownerLoad} />
+              <OwnerLoadBoard
+                rows={ownerLoad}
+                onCreateActionItem={() => navigate(createPageUrl("ActionItems"))}
+              />
             )}
 
             {/* Risk Watchlist */}
             {!noProject && !isLoading && activeTab === "risk" && (
               <div style={{ flex: 1, overflowY: "auto" }}>
-                <RiskWatchlist items={scoredFeed} onSelect={setDrawerItem} />
+                <RiskWatchlist
+                  items={scoredFeed}
+                  onSelect={setDrawerItem}
+                  onViewSchedule={() => navigate(createPageUrl("Schedule"))}
+                />
               </div>
             )}
           </div>
@@ -1750,13 +1606,8 @@ export default function ProjectControlCenter() {
 
         {/* ─── RIGHT COLUMN: Health Summary ─── */}
         <div className="pcc-split-right" style={{ overflow: "auto", padding: 12 }}>
-          {!noProject && !isLoading && (!isEmpty || hasOperationalGraphData) ? (
-            <HealthSummaryPanel
-              scoredFeed={scoredFeed}
-              waitingBoard={waitingBoard}
-              kpis={kpis}
-              operationalGraphHealth={operationalGraphHealth}
-            />
+          {!noProject && !isLoading && !isEmpty ? (
+            <HealthSummaryPanel scoredFeed={scoredFeed} waitingBoard={waitingBoard} kpis={kpis} />
           ) : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em" }}>
