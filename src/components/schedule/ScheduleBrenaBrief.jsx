@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, GitBranch, Route, ShieldAlert, Sparkles, Target, TrendingUp, Users, Zap } from "lucide-react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import { AlertTriangle, CalendarClock, CheckCircle2, ChevronDown, GitBranch, Route, ShieldAlert, Sparkles, Target, TrendingUp, Users, Zap } from "lucide-react";
 import { computeEffectiveDates } from "@/services/scheduleCascade";
 import { PHASES } from "@/utils/phases";
 import { Button } from "@/components/design-system";
 import { formatDateShort } from "@/components/shared/formatters";
+
+const BRENA_COLLAPSED_KEY = "steelbuild:schedule-brief-collapsed";
 
 const CLOSED_STATUSES = ["complete", "completed", "closed", "cancelled", "canceled"];
 
@@ -545,6 +547,40 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
   const primaryPhase = brief.phaseRows[0]?.phase || null;
   const healthTone = brief.riskScore >= 70 ? "var(--status-error)" : brief.riskScore >= 35 ? "var(--status-warning)" : "var(--status-success)";
 
+  // Collapsible state — default COLLAPSED (data-first for enterprise schedulers)
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const stored = localStorage.getItem(BRENA_COLLAPSED_KEY);
+      // Default to collapsed if no stored preference
+      return stored === null ? true : stored === "true";
+    } catch { return true; }
+  });
+  const contentRef = useRef(null);
+  const [contentHeight, setContentHeight] = useState(0);
+
+  // Measure content height for smooth CSS transition
+  useEffect(() => {
+    if (contentRef.current) {
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          setContentHeight(entry.contentRect.height);
+        }
+      });
+      observer.observe(contentRef.current);
+      // Initial measurement
+      setContentHeight(contentRef.current.scrollHeight);
+      return () => observer.disconnect();
+    }
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(BRENA_COLLAPSED_KEY, String(next)); } catch {}
+      return next;
+    });
+  }, []);
+
   const recommendation = brief.delayed.length
     ? "Start with delayed tasks, then check their predecessors and downstream release dates."
     : brief.overdue.length
@@ -587,13 +623,49 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
             <div style={titleStyle}>{project?.name || "Selected Project"}</div>
           </div>
         </div>
-        <div style={riskPillStyle(healthTone)}>
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: healthTone, boxShadow: `0 0 12px ${healthTone}` }} />
-          {brief.riskScore}% pressure
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={riskPillStyle(healthTone)}>
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: healthTone, boxShadow: `0 0 12px ${healthTone}` }} />
+            {brief.riskScore}% pressure
+          </div>
+          {collapsed && (
+            <span style={collapsedMetricsStyle}>
+              <span style={{ color: brief.delayed.length ? "var(--status-error)" : "var(--text-muted)" }}>{brief.delayed.length} delayed</span>
+              <span style={{ color: brief.overdue.length ? "var(--status-warning)" : "var(--text-muted)" }}>{brief.overdue.length} overdue</span>
+              <span style={{ color: brief.critical.length ? "var(--status-warning)" : "var(--text-muted)" }}>{brief.critical.length} critical</span>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            style={toggleButtonStyle}
+            title={collapsed ? "Expand BRENA brief" : "Collapse BRENA brief"}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand schedule brief" : "Collapse schedule brief"}
+          >
+            <ChevronDown
+              size={14}
+              style={{
+                transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                transition: "transform 0.25s ease",
+              }}
+            />
+          </button>
         </div>
       </div>
 
-      <div style={gridStyle}>
+      <div
+        style={{
+          maxHeight: collapsed ? 0 : (contentHeight || 4000),
+          overflow: "hidden",
+          transition: "max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
+          opacity: collapsed ? 0 : 1,
+          transitionProperty: "max-height, opacity",
+          transitionDuration: "0.35s, 0.25s",
+          transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1), ease",
+        }}
+      >
+      <div ref={contentRef} style={{ ...gridStyle, paddingTop: 12 }}>
         <ScheduleAiRiskCard insight={brief.aiNarrative} />
 
         <Metric icon={AlertTriangle} label="Delayed" value={brief.delayed.length} tone={brief.delayed.length ? "var(--status-error)" : "var(--status-success)"} />
@@ -870,6 +942,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
           </div>
         </div>
       </div>
+      </div>
     </section>
   );
 }
@@ -1109,12 +1182,37 @@ const shellStyle = {
   padding: 14,
 };
 
+const toggleButtonStyle = {
+  display: "grid",
+  placeItems: "center",
+  width: 28,
+  height: 28,
+  borderRadius: 8,
+  border: "1px solid var(--border-default)",
+  background: "rgba(255,255,255,0.04)",
+  color: "var(--text-muted)",
+  cursor: "pointer",
+  transition: "background 0.15s, border-color 0.15s, color 0.15s",
+  flexShrink: 0,
+};
+
+const collapsedMetricsStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 12,
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
 const headerStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   gap: 14,
-  marginBottom: 12,
+  marginBottom: 0,
 };
 
 const titleWrapStyle = {
