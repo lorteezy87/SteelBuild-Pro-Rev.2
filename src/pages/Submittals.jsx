@@ -25,6 +25,7 @@ import { batchProcess } from "@/utils/batchProcess";
 import { submittalStatusToStage, isRRStatus } from "@/lib/submittalStageMapping";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { compareDrawingSetPackages, formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
+import SubmittalReviewStrip from "@/components/submittals/SubmittalReviewStrip";
 
 /**
  * Submittals — formal transmittal register.
@@ -526,10 +527,12 @@ export default function Submittals() {
           {/* Detail panel */}
           <SubmittalDetail
             submittal={selected}
+            allSubmittals={rows}
             drawingSets={drawingSets}
             rounds={selected ? (roundsBySubmittal[selected.id] || []) : []}
             allRfis={allRfis}
             allTasks={allTasks}
+            projectName={activeProject?.project_name || activeProject?.name || "Project"}
             onClose={() => setSelectedId(null)}
             onEdit={() => selected && setEditingId(selected.id)}
             onDelete={() => selected && setToDelete(selected.id)}
@@ -845,7 +848,7 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
 
 // ── Detail panel ─────────────────────────────────────────────────────
 
-function SubmittalDetail({ submittal, drawingSets = [], rounds = [], allRfis = [], allTasks = [], onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound }) {
+function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound }) {
   // Wrap onFieldChange so a no-op edit (typing the same value back)
   // doesn't fire a network update — small UX nicety, also stops
   // accidental "Updated" toasts when the user just tabs through.
@@ -906,6 +909,16 @@ function SubmittalDetail({ submittal, drawingSets = [], rounds = [], allRfis = [
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "14px 20px" }}>
+        {/* Review engine strip — 5-stage deterministic pipeline */}
+        <SubmittalReviewStrip
+          submittal={submittal}
+          allSubmittals={allSubmittals}
+          drawingSets={drawingSets}
+          rfis={allRfis}
+          rounds={rounds}
+          projectName={projectName}
+        />
+
         {/* Status pills — click to transition */}
         <DetailSection title="Status workflow">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>

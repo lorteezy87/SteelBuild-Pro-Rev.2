@@ -130,6 +130,13 @@ export function recommendNextAction(item) {
     if (status === "Submitted") return "FOLLOW UP";
     return "REVIEW";
   }
+  if (type === "Submittal") {
+    if (item.review_recommendation) return item.review_recommendation;
+    if (status === "Draft") return "Complete submittal and submit for review";
+    if (status === "Revise and Resubmit") return "Address reviewer comments and resubmit";
+    if (status === "Under Review") return `Follow up with ${item.waiting_on || "reviewer"}`;
+    return "Review submittal status";
+  }
   if (type === "ScheduleTask") {
     if (blocksPhase === "Delivery") return "CLEAR RELEASE GATE";
     if (blocksPhase === "Erection") return "VERIFY FIELD READY";
@@ -166,6 +173,7 @@ export function scoreItem(item) {
   const typeBase = {
     RFI: 30,
     Drawing: 25,
+    Submittal: 26,
     WorkPackage: 28,
     Delivery: 32,
     ChangeOrder: 20,
@@ -236,10 +244,19 @@ export function scoreItem(item) {
     if (item.priority === "Critical" || item.priority === "High") { score += 15; reasons.push("High priority"); }
   }
 
-  // 5. Drawing / Submittal scoring
+  // 5a. Drawing scoring
   if (item.type === "Drawing") {
     if (item.stage === "OFA" || item.stage === "BFA") { score += 10; reasons.push("Pending engineer review"); tags.push("BLOCKS_DETAILING"); }
     if (item.priority_flag) { score += 12; reasons.push("Priority flagged"); }
+  }
+
+  // 5b. Submittal scoring (review engine integration)
+  if (item.type === "Submittal") {
+    if (item.review_risk === "critical") { score += 25; reasons.push("Critical review flags"); tags.push("BLOCKS_FAB"); }
+    else if (item.review_risk === "warning") { score += 12; reasons.push("Review warnings"); }
+    if (item.review_flag_count > 3) { score += 8; reasons.push(`${item.review_flag_count} review flags`); }
+    if (item.status === "Revise and Resubmit") { score += 15; tags.push("BLOCKS_DETAILING"); reasons.push("R&R — needs detailer action"); }
+    if (item.status === "Under Review") { score += 5; tags.push("EXTERNAL_WAIT"); reasons.push("Under external review"); }
   }
 
   // 6. Work package scoring
