@@ -50,6 +50,9 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     cost_impact: false, cost_impact_amount: "",
     schedule_impact: false, schedule_impact_days: "",
     distribution_list: "",
+    work_package_id: "",
+    drawing_set_id: "",
+    area_sequence: "",
   };
 
   // Pre-fill drawing_reference when the modal is opened for a NEW
@@ -83,6 +86,25 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     enabled: !!rfi?.id,
     initialData: [],
     staleTime: 30 * 1000,
+  });
+
+  // Work packages for the active project — used in the Linking section
+  const activeProjectId = formData.project_id || projectId;
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work_packages", activeProjectId],
+    queryFn: () => base44.entities.WorkPackage.filter({ project_id: activeProjectId }),
+    enabled: !!activeProjectId,
+    initialData: [],
+    staleTime: 60 * 1000,
+  });
+
+  // Drawing sets for the active project — used in the Linking section
+  const { data: drawingSets = [] } = useQuery({
+    queryKey: ["drawing_sets", activeProjectId],
+    queryFn: () => base44.entities.DrawingSet.filter({ project_id: activeProjectId }),
+    enabled: !!activeProjectId,
+    initialData: [],
+    staleTime: 60 * 1000,
   });
 
   // Fallback internal mutation — only used when parent does NOT supply onSave
@@ -292,6 +314,36 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 ))}
               </select>
             </Field>
+            {/* Section — Linking (work package + drawing set) */}
+            <SectionLabel>Linking</SectionLabel>
+            <Field label="Work Package" span={1}>
+              <DarkSelect
+                value={formData.work_package_id || ""}
+                onChange={(value) => set("work_package_id", value || null)}
+                placeholder="None"
+                options={workPackages.map((wp) => ({
+                  value: wp.id,
+                  label: [wp.wp_number, wp.name].filter(Boolean).join(" — ") || wp.id.slice(0, 8),
+                }))}
+              />
+            </Field>
+            <Field label="Drawing Set" span={1}>
+              <DarkSelect
+                value={formData.drawing_set_id || ""}
+                onChange={(value) => set("drawing_set_id", value || null)}
+                placeholder="None"
+                options={drawingSets
+                  .filter((ds) => !ds.is_deleted)
+                  .map((ds) => ({
+                    value: ds.id,
+                    label: [ds.set_name, ds.revision ? `Rev ${ds.revision}` : null].filter(Boolean).join(" — ") || ds.id.slice(0, 8),
+                  }))}
+              />
+            </Field>
+            <Field label="Area / Sequence" span={1}>
+              <input style={iStyle} value={formData.area_sequence || ""} onChange={(e) => set("area_sequence", e.target.value)} placeholder="e.g. Area A, Seq 3" />
+            </Field>
+
             <Field label="Description" span={3}>
               <textarea style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.description} onChange={(e) => set("description", e.target.value)} />
             </Field>

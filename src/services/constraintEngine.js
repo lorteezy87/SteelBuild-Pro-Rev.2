@@ -91,6 +91,7 @@ function projectArea(row) {
   return (
     row?.project_area ||
     row?.area ||
+    row?.area_sequence ||
     row?.zone ||
     row?.sequence ||
     row?.location ||
