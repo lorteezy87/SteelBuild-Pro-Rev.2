@@ -184,19 +184,34 @@ async function parseJsonPayload(body: Record<string, any>): Promise<ParsedEmail>
   // ── Body — Power Automate nested { content, contentType } vs flat ──
   let bodyText = "";
   let bodyHtml = "";
-  const bodyField = body.body;
-  if (bodyField && typeof bodyField === "object" && bodyField.content) {
-    // Power Automate / Microsoft Graph format
-    const content = String(bodyField.content || "");
-    if (bodyField.contentType?.toLowerCase() === "html" || content.includes("<")) {
+  const bodyField = body.body || body.Body;
+  if (bodyField && typeof bodyField === "object" && (bodyField.content || bodyField.Content)) {
+    // Power Automate / Microsoft Graph format: { contentType: "HTML", content: "..." }
+    const content = String(bodyField.content || bodyField.Content || "");
+    const contentType = String(bodyField.contentType || bodyField.ContentType || "").toLowerCase();
+    if (contentType === "html" || content.includes("<")) {
       bodyHtml = content;
       bodyText = stripHtml(content);
     } else {
       bodyText = content;
     }
   } else {
-    bodyText = String(body.text || body.body_text || body.bodyText || body.body || "");
-    bodyHtml = String(body.html || body.body_html || body.bodyHtml || body.BodyHtml || "");
+    // Flat fields — check for dedicated text/html fields first
+    const rawText = body.text || body.body_text || body.bodyText || "";
+    const rawHtml = body.html || body.body_html || body.bodyHtml || body.BodyHtml || "";
+
+    if (rawText || rawHtml) {
+      bodyText = String(rawText);
+      bodyHtml = String(rawHtml);
+    } else if (typeof bodyField === "string" && bodyField) {
+      // body is a flat string — could be HTML or plain text
+      if (bodyField.trim().startsWith("<") || bodyField.includes("<html") || bodyField.includes("<body")) {
+        bodyHtml = bodyField;
+        bodyText = stripHtml(bodyField);
+      } else {
+        bodyText = bodyField;
+      }
+    }
   }
 
   // If we still have no bodyText but have bodyPreview (Graph), use it

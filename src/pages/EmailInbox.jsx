@@ -710,7 +710,20 @@ function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, onStar, a
   const labels = Array.isArray(message.labels) ? message.labels : [];
 
   const bodyPreview = useMemo(() => {
-    const text = message.body_text || "";
+    let text = message.body_text || "";
+    // Strip HTML tags if body_text contains raw HTML (happens when body_html was empty)
+    if (/^\s*<|<html|<body|<div|<table/i.test(text)) {
+      text = text
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'");
+    }
     return text.replace(/\s+/g, " ").trim().slice(0, 120);
   }, [message.body_text]);
 
@@ -1098,10 +1111,40 @@ function EmailDetail({
 function EmailBodyContent({ message, attachments }) {
   const iframeRef = useRef(null);
 
+  // Determine the best HTML content to render:
+  // 1. Use body_html if available
+  // 2. If body_text contains HTML tags (starts with < or contains <html), treat it as HTML
+  // 3. Otherwise fallback to plain text
+  const rawHtml = message.body_html
+    || (message.body_text && /^\s*<|<html|<body|<div|<table|<p[\s>]/i.test(message.body_text) ? message.body_text : null);
+
+  // Strip HTML client-side for plain-text fallback
+  const plainText = useMemo(() => {
+    if (!rawHtml && message.body_text) return message.body_text;
+    if (rawHtml && !message.body_text) {
+      return rawHtml
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>/gi, "\n\n")
+        .replace(/<\/div>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+    return message.body_text || "";
+  }, [rawHtml, message.body_text]);
+
   // Resize iframe to fit content
   useEffect(() => {
     const iframe = iframeRef.current;
-    if (!iframe || !message.body_html) return;
+    if (!iframe || !rawHtml) return;
     const onLoad = () => {
       try {
         const doc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -1113,9 +1156,9 @@ function EmailBodyContent({ message, attachments }) {
     };
     iframe.addEventListener("load", onLoad);
     return () => iframe.removeEventListener("load", onLoad);
-  }, [message.body_html]);
+  }, [rawHtml]);
 
-  const htmlDoc = message.body_html
+  const htmlDoc = rawHtml
     ? `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
         body { margin: 0; padding: 12px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
           font-size: 13px; line-height: 1.5; color: #d4d4d8; background: transparent; }
@@ -1125,7 +1168,7 @@ function EmailBodyContent({ message, attachments }) {
         td, th { padding: 4px 8px; }
         pre, code { font-family: var(--font-mono, monospace); font-size: 12px;
           background: rgba(255,255,255,0.06); padding: 2px 4px; border-radius: 3px; }
-      </style></head><body>${message.body_html}</body></html>`
+      </style></head><body>${rawHtml}</body></html>`
     : null;
 
   return (
@@ -1142,13 +1185,13 @@ function EmailBodyContent({ message, attachments }) {
           }}
           title="Email body"
         />
-      ) : message.body_text ? (
+      ) : plainText ? (
         <div style={{
           fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)",
           lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
           padding: 12, background: "var(--bg-surface-low)", borderRadius: 8,
         }}>
-          {message.body_text}
+          {plainText}
         </div>
       ) : (
         <div style={{
