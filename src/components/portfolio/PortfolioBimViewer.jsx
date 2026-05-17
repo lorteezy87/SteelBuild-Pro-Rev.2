@@ -702,6 +702,31 @@ export default function PortfolioBimViewer({
       grid.position.y = -0.02;
       scene.add(grid);
 
+      // Procedural environment map for metallic reflections
+      try {
+        const pmremGen = new THREE.PMREMGenerator(renderer);
+        pmremGen.compileEquirectangularShader();
+        const envScene = new THREE.Scene();
+        envScene.background = new THREE.Color("#071017");
+        const envTopLight = new THREE.Mesh(
+          new THREE.PlaneGeometry(8, 8),
+          new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
+        );
+        envTopLight.position.set(0, 6, 0);
+        envTopLight.rotation.x = Math.PI / 2;
+        envScene.add(envTopLight);
+        const envSideLight = new THREE.Mesh(
+          new THREE.PlaneGeometry(5, 5),
+          new THREE.MeshBasicMaterial({ color: 0x6688bb, side: THREE.DoubleSide }),
+        );
+        envSideLight.position.set(6, 2, 0);
+        envSideLight.rotation.y = -Math.PI / 2;
+        envScene.add(envSideLight);
+        const envTex = pmremGen.fromScene(envScene, 0.04).texture;
+        scene.environment = envTex;
+        envScene.traverse((c) => { c.geometry?.dispose?.(); c.material?.dispose?.(); });
+      } catch { /* env map generation is optional */ }
+
       const slab = new THREE.Mesh(
         new THREE.BoxGeometry(18, 0.08, 14),
         new THREE.MeshStandardMaterial({ color: "#0b111a", roughness: 0.62, metalness: 0.18 })
@@ -743,7 +768,7 @@ export default function PortfolioBimViewer({
       const addEdgesForMesh = (mesh) => {
         const edge = new THREE.LineSegments(
           new THREE.EdgesGeometry(mesh.geometry),
-          new THREE.LineBasicMaterial({ color: "#d9e6f2", transparent: true, opacity: 0.14 })
+          new THREE.LineBasicMaterial({ color: "#8ba8c8", transparent: true, opacity: 0.35 })
         );
         edge.position.copy(mesh.position);
         edge.rotation.copy(mesh.rotation);
@@ -815,9 +840,10 @@ export default function PortfolioBimViewer({
         pieces.forEach((piece, index) => {
           const material = new THREE.MeshStandardMaterial({
             color: new THREE.Color(mode === "material" ? piece.specColor : piece.baseColor),
-            roughness: 0.42,
-            metalness: 0.62,
+            roughness: 0.32,
+            metalness: 0.75,
             emissive: "#000000",
+            envMapIntensity: 0.6,
           });
           const mesh = new THREE.Mesh(makeGeometry(piece), material);
           mesh.position.set(piece.position.x, piece.position.y, piece.position.z);

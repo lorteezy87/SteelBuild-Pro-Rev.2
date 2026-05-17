@@ -110,16 +110,30 @@ function normalizeMaterials(root) {
         }
       }
       m.side = THREE.DoubleSide;
+      // Lift near-white colors to a light steel tone so they don't blow out
       if (m.color && m.color.r > 0.97 && m.color.g > 0.97 && m.color.b > 0.97) {
-        m.color.setHex(0xc8c8cc);
+        m.color.setHex(0xb0b8c0);
+      }
+      // Set PBR metallic properties for realistic steel look — if the material
+      // supports metalness/roughness (MeshStandardMaterial or MeshPhysicalMaterial)
+      if ("metalness" in m) {
+        m.metalness = Math.max(m.metalness || 0, 0.55);
+      }
+      if ("roughness" in m) {
+        m.roughness = Math.min(m.roughness || 1, 0.45);
+      }
+      // Turn off flat shading that some IFC exporters bake in
+      if (m.flatShading) {
+        m.flatShading = false;
       }
       m.needsUpdate = true;
     }
   });
 }
 
-// Default steel-blue color applied to meshes that have no meaningful color
-const DEFAULT_STEEL_COLOR = new THREE.Color(0.45, 0.52, 0.58); // blue-grey steel
+// Default steel color — a warm grey that reads as shop-primer steel under
+// ACES tone mapping with our studio environment map.
+const DEFAULT_STEEL_COLOR = new THREE.Color(0.52, 0.55, 0.58); // warm blue-grey
 const GREY_THRESHOLD = 0.08; // how close r/g/b must be to count as "grey"
 
 function isUncoloredMaterial(mat) {
@@ -132,9 +146,11 @@ function isUncoloredMaterial(mat) {
   return spread < GREY_THRESHOLD;
 }
 
-// Apply default steel-blue color to any mesh whose material is uncolored
-// (near-black, near-white, or pure grey). Called during model load before
-// status-based coloring so the baseline isn't white/black ghosts.
+// Apply default steel color + PBR metallic properties to any mesh whose
+// material is uncolored (near-black, near-white, or pure grey). Called
+// during model load before status-based coloring so the baseline isn't
+// white/black ghosts. With the ACES tone mapping + env map, these
+// properties produce realistic brushed-steel reflections.
 function applyDefaultSteelColor(root) {
   if (!root?.traverse) return;
   root.traverse((child) => {
@@ -143,6 +159,8 @@ function applyDefaultSteelColor(root) {
     for (const mat of mats) {
       if (mat?.color?.copy && isUncoloredMaterial(mat)) {
         mat.color.copy(DEFAULT_STEEL_COLOR);
+        if ("metalness" in mat) mat.metalness = 0.65;
+        if ("roughness" in mat) mat.roughness = 0.35;
         mat.needsUpdate = true;
       }
     }
@@ -178,12 +196,15 @@ function applyStatusBasedColor(root, workPackages, currentMembers = []) {
   });
 }
 
-// Shadow-pass helper — no-op unless the renderer has shadowMap enabled.
-// We leave the tree-walk in so we can flip shadows back on in one line if
-// the renderer config is ever re-hardened.
-function enableShadows(/* root */) {
-  // intentionally no-op; shadow maps caused blurry output with the OBC
-  // SimpleRenderer, so we ship without casting shadows for now.
+// Shadow-pass helper — enable cast/receive on renderable meshes so the
+// shadow ground plane catches them and model self-shadowing works.
+function enableShadows(root) {
+  if (!root?.traverse) return;
+  root.traverse((child) => {
+    if (!child.isMesh) return;
+    child.castShadow = true;
+    child.receiveShadow = true;
+  });
 }
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────
@@ -287,36 +308,91 @@ export default function ModelViewer() {
         // 4. Setup scene (adds default lighting)
         world.scene.setup();
 
-        // 5. Scene appearance — minimal & reliable.
+        // 5. Scene appearance — dark professional studio look.
         //
-        // History: tried tone mapping + sRGB output + PBR env map, both
-        // caused render issues. The OBC SimpleRenderer has a specific
-        // initialization sequence that doesn't tolerate those overrides.
-        // Stripped back to: neutral background + standard lights + grid.
-        // The model is visible and legible in both themes, which is the
-        // primary requirement. Env-map / IBL is a future upgrade.
+        // Dark background + ACES tone mapping + sRGB output makes steel
+        // models pop with realistic metallic sheen. Previous attempts with
+        // a LIGHT background + these settings looked blown-out; the dark
+        // background provides the contrast range that makes them work.
         const threeScene = world.scene.three;
-        threeScene.background = new THREE.Color(0xf1f5f9); // light slate-50
+        threeScene.background = new THREE.Color(0x0a1628); // deep navy
+        threeScene.fog = new THREE.Fog(0x0a1628, 600, 1800);
 
-        // Direct lights — bright and neutral, no shadow maps.
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xa8a8b0, 0.55);
+        // Configure the underlying WebGL renderer for PBR fidelity.
+        const renderer3 = world.renderer.three;
+        renderer3.outputColorSpace = THREE.SRGBColorSpace;
+        renderer3.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer3.toneMappingExposure = 1.15;
+        renderer3.shadowMap.enabled = true;
+        renderer3.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // Studio-style lighting — key/fill/rim + hemisphere ambient.
+        const hemiLight = new THREE.HemisphereLight(0xe8f0ff, 0x1a2a40, 0.9);
         threeScene.add(hemiLight);
-        const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
         keyLight.position.set(80, 120, 60);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.set(2048, 2048);
+        keyLight.shadow.camera.near = 1;
+        keyLight.shadow.camera.far = 500;
+        keyLight.shadow.camera.left = -150;
+        keyLight.shadow.camera.right = 150;
+        keyLight.shadow.camera.top = 150;
+        keyLight.shadow.camera.bottom = -150;
+        keyLight.shadow.bias = -0.001;
         threeScene.add(keyLight);
-        const fillLight = new THREE.DirectionalLight(0xb0c4de, 0.35);
+        keyShadowLightRef.current = keyLight;
+        const fillLight = new THREE.DirectionalLight(0x8db7ff, 0.75);
         fillLight.position.set(-80, 60, -60);
         threeScene.add(fillLight);
-        const rimLight = new THREE.DirectionalLight(0xffe0b0, 0.25);
+        const rimLight = new THREE.DirectionalLight(0xfff0d4, 0.55);
         rimLight.position.set(0, -40, -100);
         threeScene.add(rimLight);
-        envMapRef.current = null;
-        keyShadowLightRef.current = null;
-        shadowPlaneRef.current = null;
 
-        // CAD-style grid with two line weights so major axes stand out.
-        const grid = new THREE.GridHelper(400, 80, 0x94a3b8, 0xcbd5e1);
-        grid.material.opacity = 0.65;
+        // Ground plane receives shadows for grounding the model visually.
+        const groundGeom = new THREE.PlaneGeometry(2000, 2000);
+        const groundMat = new THREE.ShadowMaterial({ opacity: 0.25 });
+        const groundMesh = new THREE.Mesh(groundGeom, groundMat);
+        groundMesh.rotation.x = -Math.PI / 2;
+        groundMesh.position.y = -0.05;
+        groundMesh.receiveShadow = true;
+        threeScene.add(groundMesh);
+        shadowPlaneRef.current = groundMesh;
+
+        // Procedural environment map for metallic reflections — makes
+        // steel materials look like real metal instead of flat paint.
+        try {
+          const pmremGen = new THREE.PMREMGenerator(renderer3);
+          pmremGen.compileEquirectangularShader();
+          const envScene = new THREE.Scene();
+          envScene.background = new THREE.Color(0x1a2a40);
+          // Simulate a studio with overhead light panels
+          const envLightTop = new THREE.Mesh(
+            new THREE.PlaneGeometry(10, 10),
+            new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
+          );
+          envLightTop.position.set(0, 5, 0);
+          envLightTop.rotation.x = Math.PI / 2;
+          envScene.add(envLightTop);
+          const envLightSide = new THREE.Mesh(
+            new THREE.PlaneGeometry(6, 6),
+            new THREE.MeshBasicMaterial({ color: 0x8888cc, side: THREE.DoubleSide }),
+          );
+          envLightSide.position.set(5, 2, 0);
+          envLightSide.rotation.y = -Math.PI / 2;
+          envScene.add(envLightSide);
+          const envTex = pmremGen.fromScene(envScene, 0.04).texture;
+          threeScene.environment = envTex;
+          envMapRef.current = { envTex, pmrem: pmremGen };
+          envScene.traverse((c) => { c.geometry?.dispose?.(); c.material?.dispose?.(); });
+        } catch (e) {
+          console.warn("Env map generation skipped:", e);
+          envMapRef.current = null;
+        }
+
+        // CAD-style grid — subtle on dark background.
+        const grid = new THREE.GridHelper(400, 80, 0x1e3a5f, 0x162d4a);
+        grid.material.opacity = 0.55;
         grid.material.transparent = true;
         grid.material.depthWrite = false;
         threeScene.add(grid);
@@ -524,6 +600,34 @@ export default function ModelViewer() {
     ctrl.maxDistance = Math.max(1000, diagonal * 25);
     ctrl.truckSpeed  = Math.max(1.5, Math.min(20, diagonal / 12));
     ctrl.dollySpeed  = Math.max(1.0, Math.min(3.0, diagonal / 60));
+
+    // Move shadow ground plane + key light to track the model
+    if (shadowPlaneRef.current) {
+      shadowPlaneRef.current.position.y = box.min.y - 0.05;
+    }
+    if (keyShadowLightRef.current) {
+      keyShadowLightRef.current.position.set(
+        center.x + diagonal * 0.6,
+        center.y + diagonal * 0.9,
+        center.z + diagonal * 0.5,
+      );
+      keyShadowLightRef.current.target.position.copy(center);
+      keyShadowLightRef.current.target.updateMatrixWorld();
+      // Scale shadow camera to cover the model
+      const halfDiag = diagonal * 0.65;
+      keyShadowLightRef.current.shadow.camera.left = -halfDiag;
+      keyShadowLightRef.current.shadow.camera.right = halfDiag;
+      keyShadowLightRef.current.shadow.camera.top = halfDiag;
+      keyShadowLightRef.current.shadow.camera.bottom = -halfDiag;
+      keyShadowLightRef.current.shadow.camera.far = diagonal * 3;
+      keyShadowLightRef.current.shadow.camera.updateProjectionMatrix();
+    }
+
+    // Update fog to match model scale
+    if (world.scene?.three?.fog) {
+      world.scene.three.fog.near = diagonal * 4;
+      world.scene.three.fog.far = diagonal * 12;
+    }
 
     // Isometric offset
     const offset = new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(dist);
@@ -1548,24 +1652,25 @@ export default function ModelViewer() {
               pointerEvents: "none",
             }}>
               <div style={{
-                background: "rgba(20,20,22,0.85)", border: `2px dashed ${isDragging ? "var(--accent)" : "rgba(245,158,11,0.4)"}`,
-                borderRadius: 16, padding: 40, textAlign: "center", maxWidth: 400,
+                background: "rgba(10,22,40,0.92)", backdropFilter: "blur(8px)",
+                border: `2px dashed ${isDragging ? "var(--accent)" : "rgba(100,160,250,0.3)"}`,
+                borderRadius: 16, padding: 48, textAlign: "center", maxWidth: 420,
                 transform: isDragging ? "scale(1.02)" : "scale(1)", transition: "all 0.2s",
-                pointerEvents: "auto",
+                pointerEvents: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
               }}>
-                <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.6 }}>&#11014;</div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#F2F4F8", marginBottom: 8 }}>
-                  Drop GLTF / GLB / IFC here
+                <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.5 }}>&#11014;</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "#f8fafc", marginBottom: 6 }}>
+                  Drop a 3D Model
                 </div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
-                  or click to browse
-                </div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", marginBottom: 16 }}>
-                  Supported: .gltf .glb .ifc
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#94a3b8", marginBottom: 20 }}>
+                  GLTF, GLB, or IFC files
                 </div>
                 <label htmlFor="model-upload" style={{
-                  padding: "6px 14px", borderRadius: 8, background: engineReady ? "var(--accent)" : "rgba(128,128,128,0.5)", color: "#fff",
-                  fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, cursor: engineReady ? "pointer" : "not-allowed",
+                  padding: "8px 20px", borderRadius: 8,
+                  background: engineReady ? "linear-gradient(135deg, #3b82f6, #6366f1)" : "rgba(128,128,128,0.5)",
+                  color: "#fff", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,
+                  cursor: engineReady ? "pointer" : "not-allowed",
+                  boxShadow: engineReady ? "0 4px 12px rgba(59,130,246,0.4)" : "none",
                 }}>
                   {engineReady ? "Browse Files" : "Engine Loading..."}
                 </label>
@@ -1576,16 +1681,16 @@ export default function ModelViewer() {
           {/* Loading overlay */}
           {loadingModel.active && (
             <div style={{
-              position: "absolute", inset: 0, background: "rgba(8,11,18,0.95)", backdropFilter: "blur(8px)",
+              position: "absolute", inset: 0, background: "rgba(10,22,40,0.96)", backdropFilter: "blur(8px)",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, zIndex: 100,
             }}>
-              <div style={{ width: 60, height: 60, border: "2px solid rgba(245,158,11,0.2)", borderTop: "3px solid var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-primary)" }}>{loadingModel.status}</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>{loadingModel.fileName}</div>
-              <div style={{ width: 360, height: 6, background: "rgba(255,255,255,0.08)", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ width: `${loadingModel.progress}%`, height: "100%", background: "var(--accent)", borderRadius: 3, transition: "width 0.3s ease" }} />
+              <div style={{ width: 56, height: 56, border: "2px solid rgba(59,130,246,0.2)", borderTop: "3px solid #3b82f6", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#f8fafc" }}>{loadingModel.status}</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "#64748b" }}>{loadingModel.fileName}</div>
+              <div style={{ width: 360, height: 5, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ width: `${loadingModel.progress}%`, height: "100%", background: "linear-gradient(90deg, #3b82f6, #6366f1)", borderRadius: 3, transition: "width 0.3s ease" }} />
               </div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", fontWeight: 700 }}>{loadingModel.progress}%</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "#60a5fa", fontWeight: 700 }}>{loadingModel.progress}%</div>
             </div>
           )}
 
@@ -1645,14 +1750,14 @@ export default function ModelViewer() {
           {/* Error overlay */}
           {uploadError && (
             <div style={{
-              position: "absolute", inset: 0, background: "rgba(13,17,23,0.95)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
+              position: "absolute", inset: 0, background: "rgba(10,22,40,0.96)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
             }}>
-              <div style={{ background: "var(--bg-surface-low)", border: "1px solid rgba(255,61,61,0.3)", borderRadius: 12, padding: 20, maxWidth: 400, textAlign: "center" }}>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 16, color: "var(--status-error)", fontWeight: 700, marginBottom: 8 }}>Load Error</div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(220,225,240,0.72)", marginBottom: 16, whiteSpace: "pre-wrap" }}>{uploadError}</div>
+              <div style={{ background: "rgba(15,23,42,0.95)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 12, padding: 24, maxWidth: 420, textAlign: "center", boxShadow: "0 16px 48px rgba(0,0,0,0.4)" }}>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 16, color: "#ef4444", fontWeight: 700, marginBottom: 8 }}>Load Error</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#94a3b8", marginBottom: 16, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{uploadError}</div>
                 <button onClick={() => setUploadError(null)} style={{
-                  padding: "6px 12px", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.4)",
-                  borderRadius: 6, color: "var(--accent)", fontFamily: "var(--font-body)", fontSize: 11, cursor: "pointer",
+                  padding: "6px 14px", background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.4)",
+                  borderRadius: 6, color: "#60a5fa", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, cursor: "pointer",
                 }}>
                   Dismiss
                 </button>
