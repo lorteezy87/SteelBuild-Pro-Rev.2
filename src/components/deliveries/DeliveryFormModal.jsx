@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 
 export default function DeliveryFormModal({ projectId, onClose, delivery = null }) {
   const qc = useQueryClient();
@@ -57,6 +58,22 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     queryKey: ["work-packages", formData.project_id],
     queryFn: () =>
       formData.project_id ? base44.entities.WorkPackage.filter({ project_id: formData.project_id }) : Promise.resolve([]),
+  });
+
+  const { data: projectDrawings = [] } = useQuery({
+    queryKey: ["drawings", formData.project_id],
+    queryFn: () =>
+      formData.project_id ? base44.entities.Drawing.filter({ project_id: formData.project_id }) : Promise.resolve([]),
+    enabled: Boolean(formData.project_id),
+    staleTime: 60_000,
+  });
+
+  const { data: projectRfis = [] } = useQuery({
+    queryKey: ["rfis", formData.project_id],
+    queryFn: () =>
+      formData.project_id ? base44.entities.RFI.filter({ project_id: formData.project_id }) : Promise.resolve([]),
+    enabled: Boolean(formData.project_id),
+    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -267,6 +284,24 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
                 required
               />
             </div>
+            <AutoLinkSuggestions
+              entity={formData}
+              sources={{ drawings: projectDrawings, workPackages, rfis: projectRfis }}
+              onLink={(suggestion) => {
+                if (suggestion.type === "work_package" || suggestion.type === "sequence") {
+                  set("work_package_id", suggestion.entityId);
+                  const wp = suggestion.matchedEntity;
+                  if (wp) {
+                    if (wp.area) set("area", wp.area);
+                    if (wp.sequence_number) set("sequence_number", wp.sequence_number);
+                  }
+                }
+                if (suggestion.type === "drawing") {
+                  const drawing = suggestion.matchedEntity;
+                  if (drawing?.drawing_set_id) set("drawing_set_id", drawing.drawing_set_id);
+                }
+              }}
+            />
 
             <SectionLabel>Project & Assignment</SectionLabel>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
