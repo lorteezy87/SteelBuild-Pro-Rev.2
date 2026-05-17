@@ -17,7 +17,7 @@ export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
   { label: "PCC",         pages: ["ProjectControlCenter"] },
   { label: "PROJECTS",    pages: ["Projects", "Onboarding", "DataExchange", "Integrations", "ExecutiveView"] },
-  { label: "RFIs",        pages: ["RFIs"] },
+  { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingAnalysis", "DrawingViewer", "Documents"] },
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "BudgetHours", "Procurement", "LookAheadSchedule"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
@@ -67,6 +67,7 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDCDD", name: "Production Notes",   group: "Comms",         page: "ProductionNotes" },
   { icon: "\uD83D\uDC65", name: "Meetings",           group: "Comms",         page: "Meetings" },
   { icon: "\u2713", name: "Action Items",             group: "Comms",         page: "ActionItems" },
+  { icon: "\u2709", name: "Email Inbox",              group: "Comms",         page: "EmailInbox" },
   { icon: "\u25A6", name: "Work Packages",            group: "Fab",           page: "WorkPackages" },
   { icon: "\uD83D\uDEA7", name: "Constraints",        group: "Fab",           page: "Constraints" },
   { icon: "\uD83C\uDFED", name: "Fab Release",        group: "Fabrication",   page: "FabRelease" },
@@ -155,6 +156,7 @@ export const NAV_GROUPS = [
       { label: "RFI Hub",          icon: "\u2691", page: "RFIs", badgeKey: "rfi" },
       { label: "Meetings",         icon: "\uD83D\uDC65", page: "Meetings" },
       { label: "Action Items",     icon: "\u2611", page: "ActionItems" },
+      { label: "Email Inbox",      icon: "\u2709", page: "EmailInbox" },
       { label: "Production Notes", icon: "\uD83D\uDCDD", page: "ProductionNotes" },
     ],
   },
@@ -255,6 +257,7 @@ export const SIDEBAR_GROUPS = [
       { label: "Project Calendar", icon: "📅", page: "ProjectCalendar" },
       { label: "Schedule",       icon: "\u25A5", page: "Schedule" },
       { label: "Action Items",   icon: "\u2611", page: "ActionItems" },
+      { label: "Email Inbox",   icon: "\u2709", page: "EmailInbox" },
       { label: "RFIs",                icon: "\u2691", page: "RFIs" },
       { label: "Change Orders",  icon: "$",  page: "ChangeOrders" },
       { label: "Mitigations",    icon: "\u2696", page: "Mitigations" },
@@ -360,6 +363,7 @@ export const PAGE_LABELS = (() => {
     ProjectMembers:  "Project Members",
     FeatureFlagsAdmin: "Feature Flags",
     Expenses:        "Expenses",
+    EmailInbox:      "Email Inbox",
   });
   return labels;
 })();
