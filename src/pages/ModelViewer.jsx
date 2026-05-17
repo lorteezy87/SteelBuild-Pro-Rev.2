@@ -151,6 +151,61 @@ function isUncoloredMaterial(mat) {
 // during model load before status-based coloring so the baseline isn't
 // white/black ghosts. With the ACES tone mapping + env map, these
 // properties produce realistic brushed-steel reflections.
+// Extract a meaningful name from an IFC/GLTF mesh by checking multiple
+// metadata sources before falling back to a generic "Element N" label.
+function extractElementName(child, index) {
+  // Direct mesh name (set by some IFC exporters / GLTF)
+  if (child.name && !/^(Mesh|mesh|Object|Group|root|Scene)\d*$/i.test(child.name)) {
+    return child.name;
+  }
+  // Check userData for IFC properties
+  const ud = child.userData || {};
+  const candidates = [ud.Name, ud.name, ud.ObjectType, ud.Tag, ud.type, ud.ifcType, ud.GlobalId];
+  for (const c of candidates) {
+    if (c && String(c).trim() && !/^\d+$/.test(String(c).trim())) {
+      return String(c).trim();
+    }
+  }
+  // expressID — prefix with parent type or "IFC Element"
+  const eid = ud.expressID || ud.globalId || ud.guid;
+  if (eid) {
+    let parent = child.parent;
+    let depth = 0;
+    while (parent && depth < 3) {
+      if (parent.name && !/^(Mesh|mesh|Object|Group|root|Scene)\d*$/i.test(parent.name)) {
+        return `${parent.name} #${eid}`;
+      }
+      parent = parent.parent;
+      depth++;
+    }
+    return `IFC Element #${eid}`;
+  }
+  // Check parent names for hierarchy context
+  let parent = child.parent;
+  let depth = 0;
+  while (parent && depth < 3) {
+    if (parent.name && !/^(Mesh|mesh|Object|Group|root|Scene)\d*$/i.test(parent.name)) {
+      return `${parent.name} part ${index + 1}`;
+    }
+    parent = parent.parent;
+    depth++;
+  }
+  // Geometry-based descriptive name
+  try {
+    const box = new THREE.Box3().setFromObject(child);
+    if (!box.isEmpty()) {
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const minDim = Math.min(size.x, size.y, size.z);
+      const ratio = maxDim / Math.max(minDim, 0.001);
+      if (ratio > 8) return `Linear Member ${index + 1}`;
+      if (ratio > 3) return `Frame Member ${index + 1}`;
+      if (size.y < size.x * 0.15 && size.y < size.z * 0.15) return `Plate ${index + 1}`;
+    }
+  } catch { /* ignore geometry errors */ }
+  return `Element ${index + 1}`;
+}
+
 function applyDefaultSteelColor(root) {
   if (!root?.traverse) return;
   root.traverse((child) => {
@@ -397,14 +452,16 @@ export default function ModelViewer() {
         grid.material.depthWrite = false;
         threeScene.add(grid);
 
-        // 6. Tune camera controls for a tight, direct CAD-viewport feel.
+        // 6. Tune camera controls for a smooth, deliberate CAD-viewport feel.
+        // Previous values (0.35 dolly, 2.5 truck, 0.05 smooth) felt twitchy
+        // and "too fast" for a steel model — small scroll/drag overshoots.
         const ctrl = world.camera.controls;
-        ctrl.smoothTime = 0.05;
-        ctrl.draggingSmoothTime = 0.02;
-        ctrl.azimuthRotateSpeed = 1.1;
-        ctrl.polarRotateSpeed = 1.1;
-        ctrl.dollySpeed = 0.35; // slower scroll zoom — deliberate without being sluggish
-        ctrl.truckSpeed = 2.5;
+        ctrl.smoothTime = 0.2;
+        ctrl.draggingSmoothTime = 0.1;
+        ctrl.azimuthRotateSpeed = 0.8;
+        ctrl.polarRotateSpeed = 0.8;
+        ctrl.dollySpeed = 0.15;
+        ctrl.truckSpeed = 1.0;
         ctrl.dollyToCursor = true;
         // infinityDolly + dollyToCursor was producing a "snap back" feel
         // on wheel zoom on some IFC packages — wheel events that crossed
@@ -466,7 +523,12 @@ export default function ModelViewer() {
           try { fragmentsManager.initialized && fragmentsManager.core.update(); } catch { /* ignore */ }
         };
         const onCtrlRest = () => {
-          try { fragmentsManager.initialized && fragmentsManager.core.update(true); } catch { /* ignore */ }
+          // Only stream tiles in — do NOT call update(true) which evicts
+          // tiles from the frustum. Eviction was causing "model pops in
+          // and out" because tiles loaded on one frame got evicted the
+          // next. For structural steel models (< 100 MB typically), keeping
+          // all tiles in memory is fine.
+          try { fragmentsManager.initialized && fragmentsManager.core.update(); } catch { /* ignore */ }
         };
         try {
           ctrl.addEventListener("control", onCtrlChange);
@@ -474,31 +536,17 @@ export default function ModelViewer() {
           ctrl.addEventListener("rest",    onCtrlRest);
         } catch { /* camera-controls API drift guard */ }
 
-        // 7b. Periodic forced tile-eviction pass.
+        // 7b. Tile eviction DISABLED.
         //
-        // The "rest" event handler above fires `update(true)` (the heavy
-        // pass that evicts BIMMesh tiles outside the current frustum) —
-        // but only when the user STOPS interacting. If the user keeps
-        // panning/zooming continuously, rest never fires, no tiles are
-        // ever evicted, and the engine accumulates tiles every frame.
-        // Symptom: starts fast, slows down progressively, eventually
-        // unresponsive — "out of juice."
-        //
-        // Fix: kick `update(true)` every 2 seconds regardless of camera
-        // state. Cheap when the frustum hasn't moved; restorative when
-        // the user has been spinning the model.
-        try {
-          if (tileEvictIntervalRef.current) {
-            clearInterval(tileEvictIntervalRef.current);
-          }
-          tileEvictIntervalRef.current = setInterval(() => {
-            try {
-              if (fragmentsManager.initialized) {
-                fragmentsManager.core.update(true);
-              }
-            } catch { /* swallow eviction-pass errors */ }
-          }, 2000);
-        } catch { /* setInterval API drift guard — should never trip */ }
+        // Previous code called `fragmentsManager.core.update(true)` every
+        // 2 seconds to evict tiles outside the frustum. This caused the
+        // model to "pop in and out" — tiles loaded, evicted, reloaded in
+        // an infinite cycle. For structural steel models (typically < 100
+        // MB), keeping all tiles in memory is fine. The RAF loop above
+        // calls `update()` (no eviction) to stream tiles in; once loaded,
+        // they stay loaded. This eliminates the popping entirely and also
+        // fixes measurement/pick failures (the raycast target geometry
+        // was disappearing between clicks).
 
         // 8. Setup IFC loader
         const ifcLoader = components.get(OBC.IfcLoader);
@@ -530,6 +578,8 @@ export default function ModelViewer() {
         cancelAnimationFrame(rafHandleRef.current);
         rafHandleRef.current = 0;
       }
+      // tileEvictIntervalRef no longer used (eviction disabled), but clear
+      // defensively in case it was set by old code paths.
       if (tileEvictIntervalRef.current) {
         clearInterval(tileEvictIntervalRef.current);
         tileEvictIntervalRef.current = null;
@@ -593,13 +643,13 @@ export default function ModelViewer() {
 
     // Adapt control bounds + step sizes to model scale so zoom/pan feel
     // right regardless of whether the model is a 2m bracket or a 200m
-    // building. The previous clamps (min 0.8, cap 8) made big models still
-    // feel molasses — we raise both so pan/dolly cover real distance.
+    // building. Keep speeds moderate — previous high caps (truck 20,
+    // dolly 3.0) made big models feel out of control.
     const ctrl = world.camera.controls;
     ctrl.minDistance = Math.max(0.05, diagonal * 0.002);
     ctrl.maxDistance = Math.max(1000, diagonal * 25);
-    ctrl.truckSpeed  = Math.max(1.5, Math.min(20, diagonal / 12));
-    ctrl.dollySpeed  = Math.max(1.0, Math.min(3.0, diagonal / 60));
+    ctrl.truckSpeed  = Math.max(0.8, Math.min(3.5, diagonal / 50));
+    ctrl.dollySpeed  = Math.max(0.1, Math.min(0.6, diagonal / 250));
 
     // Move shadow ground plane + key light to track the model
     if (shadowPlaneRef.current) {
@@ -979,12 +1029,12 @@ export default function ModelViewer() {
       world.scene.three.add(model);
       gltfSceneRef.current = model;
 
-      // Extract members
+      // Extract members — use extractElementName for meaningful labels
       const extracted = [];
       let idx = 0;
       model.traverse((child) => {
         if (isRenderableMesh(child)) {
-          const name = child.name || `Element ${idx + 1}`;
+          const name = extractElementName(child, idx);
           const type = inferType(name);
           extracted.push({ id: idx, name, type, color: TYPE_COLORS[type], mesh: child });
           idx++;
@@ -1065,16 +1115,18 @@ export default function ModelViewer() {
         });
       } catch (e) { console.warn("onViewUpdated hook failed", e); }
 
-      // Force the FragmentsModels system to flush a full update so geometry
-      // tiles are streamed in immediately rather than waiting for view changes.
+      // Flush a streaming update so geometry tiles begin arriving immediately.
+      // Do NOT use update(true) — that evicts tiles and causes popping.
       setLoadingModel((prev) => ({ ...prev, progress: 80, status: "Streaming geometry..." }));
-      try { await fragmentsManager.core.update(true); } catch (e) { console.warn("core.update failed", e); }
+      try { await fragmentsManager.core.update(); } catch (e) { console.warn("core.update failed", e); }
       if (modelObject) {
         normalizeMaterials(modelObject);
         applyDefaultSteelColor(modelObject);
       }
 
-      // Extract mesh members for the sidebar list
+      // Extract mesh members for the sidebar list — use extractElementName()
+      // to pull meaningful labels from IFC metadata / mesh hierarchy instead
+      // of the generic "Element 1, Element 2" fallback.
       setLoadingModel((prev) => ({ ...prev, progress: 85, status: "Extracting elements..." }));
       const extracted = [];
       let idx = 0;
@@ -1082,7 +1134,7 @@ export default function ModelViewer() {
       const traverseTarget = modelObject || world.scene.three;
       traverseTarget.traverse((child) => {
         if (isRenderableMesh(child)) {
-          const name = child.name || `Element ${idx + 1}`;
+          const name = extractElementName(child, idx);
           const type = inferType(name);
           const workPackage = matchElementToWorkPackage(name, workPackages);
           const statusColor = workPackage ? getStatusColor(workPackage.status, workPackage.percent_complete) : TYPE_COLORS[type];
@@ -1146,7 +1198,7 @@ export default function ModelViewer() {
         let i = 0;
         modelObject.traverse((child) => {
           if (isRenderableMesh(child)) {
-            const name = child.name || `Element ${i + 1}`;
+            const name = extractElementName(child, i);
             const type = inferType(name);
             const workPackage = matchElementToWorkPackage(name, workPackages);
             const statusColor = workPackage ? getStatusColor(workPackage.status, workPackage.percent_complete) : TYPE_COLORS[type];
@@ -1181,12 +1233,13 @@ export default function ModelViewer() {
           }
         };
         try { model.onViewUpdated?.add?.(onUpdate); } catch { /* ignore */ }
-        // Safety net: poll for ~10s, forcing tile updates each tick in case
-        // the per-frame onAfterUpdate hook hasn't streamed everything yet.
+        // Safety net: poll for ~10s, streaming tile updates each tick in case
+        // the per-frame RAF hook hasn't streamed everything yet.
+        // Do NOT use update(true) — that evicts tiles and causes popping.
         let polled = 0;
         const poll = setInterval(async () => {
           polled++;
-          try { await fragmentsManager.core.update(true); } catch { /* ignore */ }
+          try { await fragmentsManager.core.update(); } catch { /* ignore */ }
           if (tryFit() || polled > 50) clearInterval(poll);
         }, 200);
       }
