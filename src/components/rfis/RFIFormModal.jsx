@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNextFormattedNumber } from "../shared/numberSequencing";
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
+import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 
 /** @type {import('react').CSSProperties} */
 const iStyle = {
@@ -105,6 +106,22 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     enabled: !!activeProjectId,
     initialData: [],
     staleTime: 60 * 1000,
+  });
+
+  // Drawings for the active project — used by AutoLinkSuggestions
+  const { data: projectDrawings = [] } = useQuery({
+    queryKey: ["drawings", activeProjectId],
+    queryFn: () => activeProjectId ? base44.entities.Drawing.filter({ project_id: activeProjectId }) : Promise.resolve([]),
+    enabled: Boolean(activeProjectId),
+    staleTime: 60_000,
+  });
+
+  // Existing RFIs for the active project — used by AutoLinkSuggestions
+  const { data: existingRfis = [] } = useQuery({
+    queryKey: ["rfis", activeProjectId],
+    queryFn: () => activeProjectId ? base44.entities.RFI.filter({ project_id: activeProjectId }) : Promise.resolve([]),
+    enabled: Boolean(activeProjectId),
+    staleTime: 60_000,
   });
 
   // Fallback internal mutation — only used when parent does NOT supply onSave
@@ -316,6 +333,21 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             </Field>
             {/* Section — Linking (work package + drawing set) */}
             <SectionLabel>Linking</SectionLabel>
+            <div style={{ gridColumn: "span 3" }}>
+              <AutoLinkSuggestions
+                entity={formData}
+                sources={{ drawings: projectDrawings, workPackages: workPackages, rfis: existingRfis }}
+                onLink={(suggestion) => {
+                  if (suggestion.type === "work_package" || suggestion.type === "sequence") {
+                    set("work_package_id", suggestion.entityId);
+                  }
+                  if (suggestion.type === "drawing") {
+                    const drawing = suggestion.matchedEntity;
+                    if (drawing.drawing_set_id) set("drawing_set_id", drawing.drawing_set_id);
+                  }
+                }}
+              />
+            </div>
             <Field label="Work Package" span={1}>
               <DarkSelect
                 value={formData.work_package_id || ""}
