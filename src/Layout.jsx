@@ -20,6 +20,7 @@ import { createPageUrl } from "@/utils";
 import BellDropdown from "./components/nav/BellDropdown";
 import HamburgerMenu from "./components/nav/HamburgerMenu";
 import ThemeToggleButton from "./components/nav/ThemeToggleButton";
+import HighContrastToggleButton from "./components/nav/HighContrastToggleButton";
 import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
 import TopBarSearchButton from "./components/nav/TopBarSearchButton";
 import DensityToggle from "./components/nav/DensityToggle";
@@ -245,8 +246,9 @@ export default function Layout({ children, currentPageName }) {
               </div>
             )}
 
-            {/* Theme Toggle */}
+            {/* Theme + Contrast Toggles */}
             {!isMobile && <ThemeToggleButton />}
+            {!isMobile && <HighContrastToggleButton />}
 
             {/* Bell */}
             <BellDropdown

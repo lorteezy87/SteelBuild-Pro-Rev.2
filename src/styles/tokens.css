@@ -25,15 +25,75 @@ html {
   scroll-behavior: auto !important;
 }
 
-/* High-contrast mode: lift text + borders one tier so AAA contrast
-   targets are met without overhauling the rest of the palette. */
+/* High-contrast mode: lift text + borders so WCAG AA (4.5:1 small,
+   3:1 large) is met on all dark-theme surfaces. Field-tablet optimised
+   — readable in direct sunlight without washing out the palette.
+   ──────────────────────────────────────────────────────────────── */
 [data-contrast="high"] {
+  /* Text: every tier bumped to pass 4.5:1 against --bg-surface (#161B22) */
   --text-primary:   #FFFFFF;
-  --text-secondary: #DCE3F0;
+  --text-secondary: #D6DEF0;
   --text-muted:     #A8B4C8;
+  --text-disabled:  rgba(168, 180, 200, 0.68);
+
+  /* Borders: visible in sunlight (meets 3:1 against adjacent surfaces) */
   --border-default: #5A6677;
+  --border-strong:  #7A8899;
+  --border:         #5A6677;
   --divider:        rgba(120, 132, 150, 0.85);
   --outline:        rgba(255, 255, 255, 0.65);
+
+  /* NC legacy tokens */
+  --nc-border-default: rgba(255, 255, 255, 0.18);
+  --nc-text-muted:     var(--text-muted);
+
+  /* Status text — bump to ensure legibility over muted bg chips */
+  --status-success: #4ADE80;
+  --status-warning: #FCD34D;
+  --status-error:   #FCA5A5;
+  --status-info:    #7DD3FC;
+}
+
+/* Font-weight bump for small text in high-contrast mode.
+   Thin strokes at <=11px disappear under glare; 500→600 fixes this
+   without looking heavy at normal DPI. */
+[data-contrast="high"] .sbd-nav-section,
+[data-contrast="high"] .sbd-label,
+[data-contrast="high"] .sbd-kpi-label,
+[data-contrast="high"] .sbd-badge,
+[data-contrast="high"] .sbd-topbar-eyebrow,
+[data-contrast="high"] [style*="fontSize: 10"],
+[data-contrast="high"] [style*="fontSize: 9"],
+[data-contrast="high"] [style*="fontSize: 8"] {
+  font-weight: 700 !important;
+}
+[data-contrast="high"] .sbd-text-muted,
+[data-contrast="high"] .sbd-text-secondary {
+  color: var(--text-muted) !important;
+}
+
+/* High-contrast + SteelBuild Dark: override the SBD text tokens
+   which are normally translucent white at 42%/72%. */
+[data-contrast="high"].steelbuild-dark,
+[data-contrast="high"] .steelbuild-dark {
+  --sbd-text:           rgba(255, 255, 255, 1);
+  --sbd-text-secondary: rgba(255, 255, 255, 0.88);
+  --sbd-text-muted:     rgba(255, 255, 255, 0.62);
+  --sbd-border:         rgba(255, 255, 255, 0.18);
+  --sbd-border-strong:  rgba(255, 255, 255, 0.30);
+  --sbd-divider:        rgba(255, 255, 255, 0.12);
+}
+
+/* High-contrast + Light theme: deepen muted text further */
+[data-contrast="high"][data-theme="light"] {
+  --text-primary:   #000000;
+  --text-secondary: #1E293B;
+  --text-muted:     #334155;
+  --text-disabled:  rgba(51, 65, 85, 0.72);
+  --border-default: #94A3B8;
+  --border-strong:  #64748B;
+  --border:         #94A3B8;
+  --divider:        #CBD5E1;
 }
 
 /* Accent color presets — override the gold/teal/blue/amber/slate
