@@ -102,8 +102,8 @@ export default function EmailAccountSettings({ projectId }) {
     deleteMut.mutate(account.id);
   };
 
-  // Placeholder webhook URL — actual Edge Function URL would go here
-  const webhookUrl = `https://${window.location.host}/api/email-ingest/${projectId}`;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const webhookUrl = `${supabaseUrl}/functions/v1/email-ingest/${projectId}`;
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(webhookUrl).then(() => {
