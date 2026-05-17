@@ -26,6 +26,7 @@ import {
   SummaryBar,
   StageGateMilestones,
   TaskBar,
+  BaselineGhostBar,
   SubmittalBar,
   DeliveryBar,
 } from "./scheduleGanttBars";
@@ -147,6 +148,20 @@ function getTaskMetadata(task) {
   return {};
 }
 
+function getTaskBaseline(task) {
+  const metadata = getTaskMetadata(task);
+  const bs = metadata.baseline_start || null;
+  const be = metadata.baseline_end || null;
+  if (!bs && !be) return null;
+  return { start: bs, end: be };
+}
+
+function hasBaselineDrift(task, effStartDate, effEndDate) {
+  const baseline = getTaskBaseline(task);
+  if (!baseline) return false;
+  return baseline.start !== effStartDate || baseline.end !== effEndDate;
+}
+
 function isCriticalTask(task) {
   const metadata = getTaskMetadata(task);
   return Boolean(
@@ -236,6 +251,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const [collapsedTasks, setCollapsedTasks] = useState({});
   const [searchText, setSearchText] = useState("");
+  const [showBaseline, setShowBaseline] = useState(true);
   const [quickFilter, setQuickFilter] = useState("all");
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [showLegend, setShowLegend] = useState(true);
@@ -964,6 +980,48 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     avgProgress,
   } = scheduleStats;
 
+  // ── Baseline stats & handler ─────────────────────────────────────────
+  const baselineTaskCount = useMemo(
+    () => allTasks.filter((t) => getTaskBaseline(t) !== null).length,
+    [allTasks]
+  );
+
+  const handleSetBaseline = async () => {
+    if (!onSave) return;
+    const tasksWithDates = allTasks.filter((t) => effStart(t) || effEnd(t));
+    if (tasksWithDates.length === 0) {
+      toast.info("No tasks with dates to baseline.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Set baseline for ${tasksWithDates.length} task${tasksWithDates.length === 1 ? "" : "s"}?\n\n` +
+      "This will snapshot the current effective dates as the planned schedule. " +
+      "Existing baseline data will be overwritten."
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    try {
+      const updates = tasksWithDates.map((task) => {
+        const metadata = getTaskMetadata(task);
+        const newMetadata = {
+          ...metadata,
+          baseline_start: effStart(task) || null,
+          baseline_end: effEnd(task) || null,
+          baseline_set_at: new Date().toISOString(),
+        };
+        return onSave({ id: task.id, metadata: newMetadata });
+      });
+      for (let i = 0; i < updates.length; i += 10) {
+        await Promise.all(updates.slice(i, i + 10));
+      }
+      toast.success(`Baseline set for ${tasksWithDates.length} tasks`);
+    } catch (err) {
+      toast.error("Failed to set baseline: " + (err?.message || "unknown error"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const successorCountById = useMemo(() => {
     const out = {};
     allTasks.forEach((task) => {
@@ -1373,6 +1431,37 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             🚛 Deliveries ({deliveries.length})
           </button>
         )}
+        {baselineTaskCount > 0 && (
+          <button
+            onClick={() => setShowBaseline(v => !v)}
+            style={{
+              padding: "4px 10px", borderRadius: 4,
+              border: showBaseline ? "1px solid rgba(100,116,139,0.7)" : "1px solid var(--divider)",
+              background: showBaseline ? "rgba(100,116,139,0.14)" : "transparent",
+              color: showBaseline ? "#94A3B8" : "var(--text-muted)",
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
+            }}
+          >
+            Baseline {showBaseline ? "ON" : "OFF"}
+          </button>
+        )}
+        {onSave && (
+          <button
+            onClick={handleSetBaseline}
+            title="Snapshot current schedule dates as the baseline for variance tracking"
+            style={{
+              padding: "4px 10px", borderRadius: 4,
+              border: "1px solid var(--divider)",
+              background: "transparent",
+              color: "var(--text-muted)",
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
+            }}
+          >
+            Set Baseline
+          </button>
+        )}
         <button onClick={scrollToToday} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--accent-border)", background: "transparent", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
           Today
         </button>
@@ -1510,6 +1599,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           <span><strong style={{ color: "var(--accent)" }}>Tab / Shift+Tab</strong> indent</span>
           <span><strong style={{ color: "var(--status-warning)" }}>Variance</strong> effective dates differ from stored dates</span>
           <span><strong style={{ color: "var(--status-info)" }}>Linked</strong> predecessor or successor exists</span>
+          {baselineTaskCount > 0 && (
+            <span><strong style={{ color: "#94A3B8" }}>Ghost bar</strong> baseline (original plan) position</span>
+          )}
         </div>
       )}
 
@@ -2351,6 +2443,19 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                     onMouseMove={e => { if (!taskDrag) setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null); }}
                     onMouseLeave={() => { setHoveredRowId(null); setTooltip(null); }}
                   >
+                    {/* Baseline ghost bar — rendered behind the current bar */}
+                    {showBaseline && !task._hasChildren && (() => {
+                      const baseline = getTaskBaseline(task);
+                      if (!baseline) return null;
+                      const taskStart = displayStart;
+                      const taskEnd = displayEnd;
+                      if (baseline.start === taskStart && baseline.end === taskEnd) return null;
+                      const ghostLeft = px(baseline.start);
+                      const ghostWidth = spanPx(baseline.start, baseline.end);
+                      const direction = baseline.start && taskStart && baseline.start < taskStart ? "right"
+                        : baseline.start && taskStart && baseline.start > taskStart ? "left" : null;
+                      return <BaselineGhostBar leftPx={ghostLeft} widthPx={ghostWidth} direction={direction} />;
+                    })()}
                     {task._hasChildren ? (
                       <SummaryBar phase={row.phase} leftPx={barLeft} widthPx={barWidth} pctComplete={task.percent_complete || 0} />
                     ) : (
@@ -2487,6 +2592,11 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 No owner
               </span>
             )}
+            {hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task)) && (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#94A3B8", background: "rgba(100,116,139,0.14)", border: "1px solid rgba(100,116,139,0.40)", borderRadius: 999, padding: "2px 6px" }}>
+                Baseline drift
+              </span>
+            )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor(tooltip.task.status), flexShrink: 0 }} />
@@ -2500,6 +2610,16 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 2 }}>
             Effective {fmtDate(effStart(tooltip.task))} to {fmtDate(effEnd(tooltip.task))} / {calcDuration(effStart(tooltip.task), effEnd(tooltip.task)) || 0}d
           </div>
+          {(() => {
+            const bl = getTaskBaseline(tooltip.task);
+            if (!bl) return null;
+            const drifted = hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task));
+            return (
+              <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: drifted ? "var(--status-warning)" : "var(--text-muted)", marginBottom: 2 }}>
+                Baseline {fmtDate(bl.start)} to {fmtDate(bl.end)}{drifted ? " (drifted)" : ""}
+              </div>
+            );
+          })()}
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isOverdue(tooltip.task) ? GANTT_STATUS_HEX.delayed : "var(--text-secondary)" }}>
             {displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}
           </div>
