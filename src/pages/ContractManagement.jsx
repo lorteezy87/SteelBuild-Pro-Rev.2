@@ -1,10 +1,22 @@
 import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { getQueryKey } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { formatDate, formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
 import { CommandBar } from "@/components/design-system";
+import DeleteDialog from "@/components/shared/DeleteDialog";
+import SOVFormModal from "@/components/sov/SOVFormModal";
+import { Pencil, Trash2 } from "lucide-react";
+import {
+  appendRecordToCaches,
+  replaceRecordInCaches,
+  removeRecordFromCaches,
+  invalidateCrudQueries,
+  toastCrudError,
+} from "@/components/shared/crudFeedback";
 
 // Local aliases so the ~30 call sites below don't need to change. Both
 // now delegate to the shared design-system formatters.
@@ -108,20 +120,52 @@ const FlowArrow = () => (
 );
 
 // ─── Contract Overview Panel ────────────────────────────────────────────────
-function ContractOverviewPanel({ project, approvedCOTotal, pendingCOTotal, revisedValue }) {
+function ContractOverviewPanel({ project, approvedCOTotal, pendingCOTotal, revisedValue, editingContract, contractForm, setContractForm, onEditContract, onSaveContract, onCancelContract, isSaving }) {
   const originalValue = Number(project?.original_contract_value) || 0;
 
   return (
     <div style={{
       background: "var(--bg-surface)", border: "1px solid var(--border-default)",
       borderRadius: "var(--radius-card)", padding: 20, marginBottom: 18,
-      boxShadow: "var(--shadow-card)",
+      boxShadow: "var(--shadow-card)", position: "relative",
     }}>
+      {/* Edit button */}
+      {!editingContract && (
+        <button
+          onClick={onEditContract}
+          title="Edit contract details"
+          style={{
+            position: "absolute", top: 12, right: 12,
+            background: "transparent", border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-btn)", padding: "4px 10px", cursor: "pointer",
+            color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: 4,
+            fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+            letterSpacing: "0.10em", textTransform: "uppercase",
+          }}
+        >
+          <Pencil size={11} /> Edit
+        </button>
+      )}
+
       {/* Value flow row */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 4 }}>Original Contract</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 800, color: "var(--text-primary)" }}>{fmtShort(originalValue)}</div>
+          {editingContract ? (
+            <input
+              type="number"
+              value={contractForm.original_contract_value ?? ""}
+              onChange={(e) => setContractForm((p) => ({ ...p, original_contract_value: e.target.value }))}
+              style={{
+                fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800,
+                color: "var(--text-primary)", background: "var(--bg-surface-low)",
+                border: "1px solid var(--accent)", borderRadius: 6, padding: "4px 10px",
+                width: 160, textAlign: "center",
+              }}
+            />
+          ) : (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 800, color: "var(--text-primary)" }}>{fmtShort(originalValue)}</div>
+          )}
         </div>
         <FlowArrow />
         <div style={{ textAlign: "center" }}>
@@ -137,19 +181,84 @@ function ContractOverviewPanel({ project, approvedCOTotal, pendingCOTotal, revis
 
       {/* Contract details row */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 24, justifyContent: "center", borderTop: "1px solid var(--divider)", paddingTop: 14 }}>
-        {[
-          { label: "Contract Type", value: project?.contract_type || "N/A" },
-          { label: "Start Date", value: formatDate(project?.start_date) },
-          { label: "Target Completion", value: formatDate(project?.target_completion_date) },
-          { label: "Project Manager", value: project?.project_manager || "N/A" },
-          { label: "Superintendent", value: project?.superintendent || "N/A" },
-        ].map((item) => (
-          <div key={item.label} style={{ textAlign: "center", minWidth: 100 }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 2 }}>{item.label}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>{item.value}</div>
-          </div>
-        ))}
+        {editingContract ? (
+          <>
+            <div style={{ textAlign: "center", minWidth: 100 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 2 }}>Contract Type</div>
+              <select
+                value={contractForm.contract_type || ""}
+                onChange={(e) => setContractForm((p) => ({ ...p, contract_type: e.target.value }))}
+                style={{
+                  fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600,
+                  color: "var(--text-primary)", background: "var(--bg-surface-low)",
+                  border: "1px solid var(--accent)", borderRadius: 6, padding: "3px 8px",
+                }}
+              >
+                <option value="">Select...</option>
+                {["Lump Sum", "GMP", "Cost Plus", "Unit Price", "Design-Build", "Time & Materials"].map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            {[
+              { label: "Start Date", value: formatDate(project?.start_date) },
+              { label: "Target Completion", value: formatDate(project?.target_completion_date) },
+              { label: "Project Manager", value: project?.project_manager || "N/A" },
+              { label: "Superintendent", value: project?.superintendent || "N/A" },
+            ].map((item) => (
+              <div key={item.label} style={{ textAlign: "center", minWidth: 100 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 2 }}>{item.label}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>{item.value}</div>
+              </div>
+            ))}
+          </>
+        ) : (
+          [
+            { label: "Contract Type", value: project?.contract_type || "N/A" },
+            { label: "Start Date", value: formatDate(project?.start_date) },
+            { label: "Target Completion", value: formatDate(project?.target_completion_date) },
+            { label: "Project Manager", value: project?.project_manager || "N/A" },
+            { label: "Superintendent", value: project?.superintendent || "N/A" },
+          ].map((item) => (
+            <div key={item.label} style={{ textAlign: "center", minWidth: 100 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 2 }}>{item.label}</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>{item.value}</div>
+            </div>
+          ))
+        )}
       </div>
+
+      {/* Edit action row */}
+      {editingContract && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--divider)" }}>
+          <button
+            onClick={onCancelContract}
+            style={{
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              letterSpacing: "0.10em", textTransform: "uppercase",
+              padding: "6px 16px", background: "transparent",
+              color: "var(--text-muted)", border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-btn)", cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSaveContract}
+            disabled={isSaving}
+            style={{
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              letterSpacing: "0.10em", textTransform: "uppercase",
+              padding: "6px 16px", background: "var(--accent)",
+              color: "#fff", border: "none",
+              borderRadius: "var(--radius-btn)", cursor: isSaving ? "wait" : "pointer",
+              opacity: isSaving ? 0.6 : 1,
+            }}
+          >
+            {isSaving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      )}
 
       {/* Pending COs indicator */}
       {pendingCOTotal > 0 && (
@@ -251,7 +360,7 @@ function ChangeOrdersTab({ changeOrders }) {
 }
 
 // ─── Billing & SOV Tab ──────────────────────────────────────────────────────
-function BillingSOVTab({ sovItems, expenses }) {
+function BillingSOVTab({ sovItems, expenses, onAddSOV, onEditSOV, onDeleteSOV }) {
   const items = useMemo(() => [...(sovItems || [])].sort((a, b) => (Number(a.line_item_number) || 0) - (Number(b.line_item_number) || 0)), [sovItems]);
 
   const totals = useMemo(() => {
@@ -294,12 +403,13 @@ function BillingSOVTab({ sovItems, expenses }) {
                 <th style={{ ...thStyle, textAlign: "right" }}>Retainage</th>
                 <th style={{ ...thStyle, textAlign: "right" }}>Balance</th>
                 <th style={thStyle}>Status</th>
+                <th style={{ ...thStyle, textAlign: "center", width: 80 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ ...tdStyle, textAlign: "center", padding: 40, color: "var(--text-muted)", fontFamily: "var(--font-body)" }}>
+                  <td colSpan={9} style={{ ...tdStyle, textAlign: "center", padding: 40, color: "var(--text-muted)", fontFamily: "var(--font-body)" }}>
                     No SOV line items found for this project.
                   </td>
                 </tr>
@@ -331,6 +441,24 @@ function BillingSOVTab({ sovItems, expenses }) {
                     <td style={tdStyle}>
                       <COStatusBadge status={item.certification_status || "Draft"} />
                     </td>
+                    <td style={{ ...tdStyle, textAlign: "center" }}>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <button
+                          onClick={() => onEditSOV(item)}
+                          title="Edit line item"
+                          style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "4px 6px", cursor: "pointer", color: "var(--text-muted)", display: "inline-flex", alignItems: "center" }}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => onDeleteSOV(item)}
+                          title="Delete line item"
+                          style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "4px 6px", cursor: "pointer", color: "var(--status-error)", display: "inline-flex", alignItems: "center" }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -345,6 +473,7 @@ function BillingSOVTab({ sovItems, expenses }) {
                   <td style={{ ...totalsStyle, textAlign: "right" }}>{fmt(totals.billed)}</td>
                   <td style={{ ...totalsStyle, textAlign: "right", color: "var(--status-warning)" }}>{fmt(totals.retainage)}</td>
                   <td style={{ ...totalsStyle, textAlign: "right" }}>{fmt(totals.scheduled - totals.billed)}</td>
+                  <td style={totalsStyle} />
                   <td style={totalsStyle} />
                 </tr>
               )}
@@ -514,6 +643,16 @@ export default function ContractManagement() {
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
   const [activeTab, setActiveTab] = useState("CHANGE ORDERS");
+  const qc = useQueryClient();
+
+  // SOV CRUD state
+  const [showSOVForm, setShowSOVForm] = useState(false);
+  const [editingSOV, setEditingSOV] = useState(null);
+  const [deleteSOVTarget, setDeleteSOVTarget] = useState(null);
+
+  // Contract edit state
+  const [editingContract, setEditingContract] = useState(false);
+  const [contractForm, setContractForm] = useState({});
 
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: project, isLoading: projectLoading } = useQuery({
@@ -544,6 +683,99 @@ export default function ContractManagement() {
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
+
+  // ── Query key arrays for cache management ────────────────────────────────
+  const sovQueryKeys = [getQueryKey("sov_item", projectId), ["sov_items"]];
+  const coQueryKeys = [getQueryKey("change_order", projectId), ["change-orders"]];
+
+  // ── Realtime invalidation ────────────────────────────────────────────────
+  useRealtimeInvalidation("sov_items", projectId, sovQueryKeys);
+  useRealtimeInvalidation("change_orders", projectId, coQueryKeys);
+
+  // ── SOV Item Mutations ───────────────────────────────────────────────────
+  const createSOVMut = useMutation({
+    mutationFn: (data) => base44.entities.SOVItem.create({ ...data, project_id: projectId }),
+    onSuccess: async (created) => {
+      appendRecordToCaches(qc, sovQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
+      await invalidateCrudQueries(qc, sovQueryKeys);
+      toast.success("SOV line item created");
+      setShowSOVForm(false);
+    },
+    onError: (e) => toastCrudError(e, "Failed to create SOV item"),
+  });
+
+  const updateSOVMut = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.SOVItem.update(id, data),
+    onSuccess: async (updated) => {
+      replaceRecordInCaches(qc, sovQueryKeys, updated);
+      await invalidateCrudQueries(qc, sovQueryKeys);
+      toast.success("SOV line item updated");
+      setEditingSOV(null);
+      setShowSOVForm(false);
+    },
+    onError: (e) => toastCrudError(e, "Failed to update SOV item"),
+  });
+
+  const deleteSOVMut = useMutation({
+    mutationFn: (id) => base44.entities.SOVItem.delete(id),
+    onSuccess: async (_, deletedId) => {
+      removeRecordFromCaches(qc, sovQueryKeys, deletedId);
+      await invalidateCrudQueries(qc, sovQueryKeys);
+      toast.success("SOV line item deleted");
+      setDeleteSOVTarget(null);
+    },
+    onError: (e) => toastCrudError(e, "Failed to delete SOV item"),
+  });
+
+  // ── Contract detail update mutation ──────────────────────────────────────
+  const updateContractMut = useMutation({
+    mutationFn: (data) => base44.entities.Project.update(projectId, data),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: getQueryKey("project", projectId) });
+      toast.success("Contract details updated");
+      setEditingContract(false);
+    },
+    onError: (e) => toastCrudError(e, "Failed to update contract details"),
+  });
+
+  // ── SOV handlers ─────────────────────────────────────────────────────────
+  const handleSOVSave = (data) => {
+    if (editingSOV) {
+      updateSOVMut.mutate({ id: editingSOV.id, data });
+    } else {
+      createSOVMut.mutate(data);
+    }
+  };
+
+  const handleSOVEdit = (item) => {
+    setEditingSOV(item);
+    setShowSOVForm(true);
+  };
+
+  const handleSOVDelete = (item) => {
+    setDeleteSOVTarget(item);
+  };
+
+  // ── Contract edit handlers ───────────────────────────────────────────────
+  const handleEditContract = () => {
+    setContractForm({
+      original_contract_value: project?.original_contract_value || 0,
+      contract_type: project?.contract_type || "",
+    });
+    setEditingContract(true);
+  };
+
+  const handleSaveContract = () => {
+    updateContractMut.mutate({
+      original_contract_value: Number(contractForm.original_contract_value) || 0,
+      contract_type: contractForm.contract_type || null,
+    });
+  };
+
+  const handleCancelContract = () => {
+    setEditingContract(false);
+    setContractForm({});
+  };
 
   // ── Derived values ────────────────────────────────────────────────────────
   const approvedCOTotal = useMemo(() =>
@@ -597,13 +829,36 @@ export default function ContractManagement() {
         count={changeOrders?.length || 0}
         unit=" · CHANGE ORDERS"
         subtitle={`${fmtShort(revisedValue || 0)} revised contract · ${fmtShort(pendingCOTotal || 0)} pending CO value`}
-      />
+      >
+        {activeTab === "BILLING & SOV" && (
+          <button
+            onClick={() => { setEditingSOV(null); setShowSOVForm(true); }}
+            className="sbd-btn"
+            style={{
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              letterSpacing: "0.10em", textTransform: "uppercase",
+              padding: "6px 16px", background: "var(--accent)",
+              color: "#fff", border: "none",
+              borderRadius: "var(--radius-btn)", cursor: "pointer",
+            }}
+          >
+            + Add Line Item
+          </button>
+        )}
+      </CommandBar>
 
       <ContractOverviewPanel
         project={project}
         approvedCOTotal={approvedCOTotal}
         pendingCOTotal={pendingCOTotal}
         revisedValue={revisedValue}
+        editingContract={editingContract}
+        contractForm={contractForm}
+        setContractForm={setContractForm}
+        onEditContract={handleEditContract}
+        onSaveContract={handleSaveContract}
+        onCancelContract={handleCancelContract}
+        isSaving={updateContractMut.isPending}
       />
 
       {/* Tab bar */}
@@ -618,7 +873,13 @@ export default function ContractManagement() {
         <ChangeOrdersTab changeOrders={changeOrders} />
       )}
       {activeTab === "BILLING & SOV" && (
-        <BillingSOVTab sovItems={sovItems} expenses={expenses} />
+        <BillingSOVTab
+          sovItems={sovItems}
+          expenses={expenses}
+          onAddSOV={() => { setEditingSOV(null); setShowSOVForm(true); }}
+          onEditSOV={handleSOVEdit}
+          onDeleteSOV={handleSOVDelete}
+        />
       )}
       {activeTab === "CONTRACT SUMMARY" && (
         <ContractSummaryTab
@@ -628,6 +889,25 @@ export default function ContractManagement() {
           revisedValue={revisedValue}
         />
       )}
+
+      {/* SOV Form Modal */}
+      <SOVFormModal
+        open={showSOVForm}
+        onClose={() => { setShowSOVForm(false); setEditingSOV(null); }}
+        onSave={handleSOVSave}
+        sov={editingSOV}
+        projects={[project].filter(Boolean)}
+        activeProject={project || activeProject}
+      />
+
+      {/* Delete Confirmation */}
+      <DeleteDialog
+        open={!!deleteSOVTarget}
+        onClose={() => setDeleteSOVTarget(null)}
+        onConfirm={() => deleteSOVMut.mutate(deleteSOVTarget.id)}
+        title="Delete SOV Line Item"
+        description={`Delete line item "${deleteSOVTarget?.description || ""}"? This cannot be undone.`}
+      />
     </div>
   );
 }
