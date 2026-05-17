@@ -93,7 +93,7 @@ export default function CostCodeSelect({
 
       {/* Dropdown panel */}
       {open && (
-        <div style={{
+        <div className="sbp-opaque-popout" style={{
           position: "absolute",
           top: "calc(100% + 4px)",
           left: 0,
