@@ -273,23 +273,6 @@ export function getFabReleaseSignals(wp, options = {}) {
       severity: hourBurn >= 115 ? "high" : "medium",
     });
   }
-  // S&H gates — flags
-  if (hasCriticalRfis && stageRank < stageIndex("shop_released")) {
-    flags.push({ key: "critical_rfis", label: "Critical RFIs open", severity: "high" });
-  }
-  if (num(wp.shop_hours_budget) <= 0 && num(wp.field_hours_budget) <= 0 && stageRank >= stageIndex("shop_released") && !complete) {
-    flags.push({ key: "no_budget", label: "No budget hours", severity: "medium" });
-  }
-  if (!wp.sequence_confirmed && stageRank >= stageIndex("material_on_hand") && stageRank < stageIndex("shop_released")) {
-    flags.push({ key: "sequence_not_confirmed", label: "Sequence not confirmed", severity: "medium" });
-  }
-  if (!hasDeliveryPath && stageRank >= stageIndex("material_on_hand") && !complete) {
-    flags.push({ key: "no_delivery_path", label: "No delivery defined", severity: "medium" });
-  }
-  if (hasUnapprovedSubmittals && stageRank < stageIndex("shop_released")) {
-    flags.push({ key: "submittals_pending", label: "Submittals not approved", severity: "medium" });
-  }
-
   // S&H submittal gate — check submittals linked to this WP's drawing sets
   const wpDrawingSetIds = new Set(
     (drawing.linkedDrawings || [])
@@ -306,6 +289,23 @@ export function getFabReleaseSignals(wp, options = {}) {
     const st = normalize(s.status || s.review_status || s.submittal_status || "");
     return st.includes("revise") || st.includes("resubmit") || st.includes("rejected") || st === "pending" || st === "submitted";
   });
+
+  // S&H gates — flags
+  if (hasCriticalRfis && stageRank < stageIndex("shop_released")) {
+    flags.push({ key: "critical_rfis", label: "Critical RFIs open", severity: "high" });
+  }
+  if (num(wp.shop_hours_budget) <= 0 && num(wp.field_hours_budget) <= 0 && stageRank >= stageIndex("shop_released") && !complete) {
+    flags.push({ key: "no_budget", label: "No budget hours", severity: "medium" });
+  }
+  if (!wp.sequence_confirmed && stageRank >= stageIndex("material_on_hand") && stageRank < stageIndex("shop_released")) {
+    flags.push({ key: "sequence_not_confirmed", label: "Sequence not confirmed", severity: "medium" });
+  }
+  if (!hasDeliveryPath && stageRank >= stageIndex("material_on_hand") && !complete) {
+    flags.push({ key: "no_delivery_path", label: "No delivery defined", severity: "medium" });
+  }
+  if (hasUnapprovedSubmittals && stageRank < stageIndex("shop_released")) {
+    flags.push({ key: "submittals_pending", label: "Submittals not approved", severity: "medium" });
+  }
 
   // S&H Weighted Release Readiness Score
   const readinessGates = [
