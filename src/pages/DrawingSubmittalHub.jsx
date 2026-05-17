@@ -18,8 +18,9 @@ import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
 import { useSubmittals } from "@/hooks/useSubmittals";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
+import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile } from "@/components/design-system";
@@ -32,16 +33,17 @@ import {
   AlertTriangle,
   ArrowRight,
   CalendarClock,
+  CalendarDays,
   CheckCircle2,
   ClipboardList,
   Clock3,
-  Factory,
   FileStack,
   Gauge,
   Layers3,
   Link2,
   Search,
   ShieldCheck,
+  User,
   Workflow,
 } from "lucide-react";
 
@@ -94,6 +96,14 @@ const CLOSED_SUBMITTAL_STATUSES = new Set([
   "Released for Fabrication",
   "Void",
 ]);
+
+// Ball-in-court choices — matches the canonical list used in submittal modals
+// (src/components/submittals/NewRoundModal.jsx).
+const BIC_CHOICES = [
+  "Detailer", "S&H", "Contractor", "Subcontractor",
+  "EOR", "Architect", "AOR",
+  "GC", "Owner",
+];
 
 const ACTION_STATUSES = new Set([
   "Rejected",
@@ -281,6 +291,7 @@ function getActionTone(item) {
 export default function DrawingSubmittalHub() {
   const { activeProject } = useProjectContext();
   const [searchParams, setSearchParams] = useSearchParams();
+  const qc = useQueryClient();
   const projectId = activeProject?.id;
   const projectName = activeProject?.name || activeProject?.project_number || "";
 
@@ -378,6 +389,10 @@ export default function DrawingSubmittalHub() {
         closed,
         needsAction,
         routeTab: "drawings",
+        // Entity references for inline editing
+        _submittalId: latestSubmittal?.id || null,
+        _drawingSetId: pkg.setId || null,
+        _firstSheetId: pkg.sheets[0]?.id || null,
       };
     });
 
@@ -405,6 +420,10 @@ export default function DrawingSubmittalHub() {
         closed,
         needsAction,
         routeTab: "submittals",
+        // Entity references for inline editing
+        _submittalId: submittal.id,
+        _drawingSetId: null,
+        _firstSheetId: null,
       };
     });
 
@@ -439,9 +458,8 @@ export default function DrawingSubmittalHub() {
       overdueUnlinkedSubmittals: overdue.filter((item) => item.kind === "Unlinked Submittal").length,
       dueSoonDrawingSets: dueSoon.filter((item) => item.kind === "Drawing Set").length,
       noDateDrawingSets: noDate.filter((item) => item.kind === "Drawing Set").length,
-      fabReady,
     };
-  }, [submittals, setPackages, fabReady]);
+  }, [submittals, setPackages]);
 
   const tabCounts = useMemo(() => ({
     overview: triage.openItems.length,
@@ -450,6 +468,47 @@ export default function DrawingSubmittalHub() {
     submittals: kpis.total,
     matrix: drawingSets.filter((set) => !set?.is_deleted).length,
   }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSets, kpis.total, drawingSets]);
+
+  // ── Inline quick-action mutations (Next Decision card) ────────────────
+  const invalidateHub = () => {
+    qc.invalidateQueries({ queryKey: ["drawing-sets", projectId] });
+    qc.invalidateQueries({ queryKey: ["drawings", projectId] });
+    qc.invalidateQueries({ queryKey: ["submittals", projectId] });
+  };
+
+  const updateOwnerMut = useMutation({
+    mutationFn: async ({ item, owner }) => {
+      if (item._submittalId) {
+        await base44.entities.Submittal.update(item._submittalId, { ball_in_court: owner });
+      } else if (item._firstSheetId) {
+        await base44.entities.Drawing.update(item._firstSheetId, { assigned_to: owner });
+      } else {
+        throw new Error("No entity available to assign owner");
+      }
+    },
+    onSuccess: (_data, { owner }) => {
+      invalidateHub();
+      toast.success(`Owner assigned: ${owner}`);
+    },
+    onError: (err) => toast.error("Failed to assign owner: " + (err?.message || "Unknown")),
+  });
+
+  const updateDueDateMut = useMutation({
+    mutationFn: async ({ item, date }) => {
+      if (item._submittalId) {
+        await base44.entities.Submittal.update(item._submittalId, { required_date: date });
+      } else if (item._firstSheetId) {
+        await base44.entities.Drawing.update(item._firstSheetId, { due_date: date });
+      } else {
+        throw new Error("No entity available to set due date");
+      }
+    },
+    onSuccess: () => {
+      invalidateHub();
+      toast.success("Due date set");
+    },
+    onError: (err) => toast.error("Failed to set due date: " + (err?.message || "Unknown")),
+  });
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (
@@ -477,10 +536,10 @@ export default function DrawingSubmittalHub() {
           tone={triage.overdue.length ? error : success}
         />
         <HeaderSignal
-          icon={Factory}
-          label="Fab ready"
-          value={`${fabReady.percent}%`}
-          tone={success}
+          icon={Gauge}
+          label="In Review"
+          value={drawingKpis.inReview}
+          tone={drawingKpis.inReview > 0 ? info : textMuted}
         />
         <HeaderSignal
           icon={Link2}
@@ -577,8 +636,13 @@ export default function DrawingSubmittalHub() {
             {activeTab === "overview" && (
               <TriageBoard
                 triage={triage}
+                kpis={kpis}
+                drawingKpis={drawingKpis}
                 isLoading={isLoading}
                 onOpenTab={setActiveTab}
+                onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
+                onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
+                isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending}
               />
             )}
             {activeTab === "process" && (
@@ -638,7 +702,7 @@ function HeaderSignal({ icon: Icon, label, value, tone }) {
   );
 }
 
-function TriageBoard({ triage, isLoading, onOpenTab }) {
+function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, isSaving }) {
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
@@ -703,7 +767,7 @@ function TriageBoard({ triage, isLoading, onOpenTab }) {
             <RiskPill icon={Clock3} label="Due this week" value={triage.dueSoon.length} color={warning} />
             <RiskPill icon={AlertTriangle} label="Needs action" value={triage.needsAction.length} color={review} />
             <RiskPill icon={CalendarClock} label="Missing dates" value={triage.noDate.length} color={textMuted} />
-            <RiskPill icon={Factory} label="Fab ready" value={`${triage.fabReady.percent}%`} color={success} />
+            <RiskPill icon={CheckCircle2} label="Sets Released" value={drawingKpis.released} color={success} />
           </div>
         </div>
 
@@ -724,9 +788,19 @@ function TriageBoard({ triage, isLoading, onOpenTab }) {
               <div style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.45 }}>
                 {focusItem.group} - {focusItem.status}
               </div>
+              {/* ── Inline Quick-Action Controls ──────────────────────── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
-                <MiniMeta label="Owner" value={focusItem.owner} />
-                <MiniMeta label="Required" value={fmtDate(focusItem.dueDate)} warn={focusItem.due.overdue} />
+                <InlineOwnerControl
+                  currentOwner={focusItem.owner}
+                  onAssign={(owner) => onUpdateOwner(focusItem, owner)}
+                  disabled={isSaving}
+                />
+                <InlineDateControl
+                  currentDate={focusItem.dueDate}
+                  isOverdue={focusItem.due.overdue}
+                  onSetDate={(date) => onUpdateDueDate(focusItem, date)}
+                  disabled={isSaving}
+                />
               </div>
               <button
                 type="button"
@@ -749,7 +823,7 @@ function TriageBoard({ triage, isLoading, onOpenTab }) {
         <TriageMetric icon={Clock3} label="Due This Week" value={triage.dueSoonDrawingSets} color={warning} sub="Next 7 days" />
         <TriageMetric icon={ShieldCheck} label="Needs Action" value={triage.needsAction.length} color={review} sub="Rejected / resubmit" />
         <TriageMetric icon={CalendarClock} label="Missing Dates" value={triage.noDateDrawingSets} color={textMuted} sub="Needs cleanup" />
-        <TriageMetric icon={Factory} label="Fab Ready" value={`${triage.fabReady.numerator}/${triage.fabReady.denominator}`} color={success} sub={`${triage.fabReady.percent}% released`} />
+        <TriageMetric icon={ClipboardList} label="Pending Review" value={kpis.pending} color={warning} sub={`${kpis.total} total submittals`} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 16 }}>
@@ -783,6 +857,172 @@ function TriageBoard({ triage, isLoading, onOpenTab }) {
   );
 }
 
+// ── Inline Quick-Action Controls ────────────────────────────────────────────
+// Compact controls shown directly on the "Next Decision" card so users can
+// assign an owner or set a due date without navigating away.
+
+function InlineOwnerControl({ currentOwner, onAssign, disabled }) {
+  const [open, setOpen] = useState(false);
+  const isUnassigned = !currentOwner || currentOwner === "Unassigned";
+
+  return (
+    <div style={{
+      padding: "10px 12px",
+      borderRadius: 10,
+      background: surface1,
+      border: `1px solid ${isUnassigned ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
+      position: "relative",
+    }}>
+      <div style={{
+        fontFamily: mono, fontSize: 8, color: textMuted,
+        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4,
+        display: "flex", alignItems: "center", gap: 5,
+      }}>
+        <User size={10} />
+        Owner
+      </div>
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          disabled={disabled}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            width: "100%",
+            background: "transparent",
+            border: "none",
+            padding: 0,
+            cursor: disabled ? "not-allowed" : "pointer",
+            color: isUnassigned ? warning : textPrimary,
+            fontSize: 12,
+            fontWeight: 700,
+            fontFamily: "inherit",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            textAlign: "left",
+          }}
+          title="Click to assign owner"
+        >
+          {isUnassigned ? "Assign..." : currentOwner}
+        </button>
+      ) : (
+        <select
+          autoFocus
+          value=""
+          disabled={disabled}
+          onChange={(e) => {
+            if (e.target.value) {
+              onAssign(e.target.value);
+              setOpen(false);
+            }
+          }}
+          onBlur={() => setOpen(false)}
+          style={{
+            width: "100%",
+            background: surface2,
+            border: `1px solid ${accent}`,
+            borderRadius: 6,
+            padding: "3px 6px",
+            color: textPrimary,
+            fontFamily: mono,
+            fontSize: 11,
+            fontWeight: 700,
+            outline: "none",
+            cursor: "pointer",
+          }}
+        >
+          <option value="" disabled>Select owner...</option>
+          {BIC_CHOICES.map((choice) => (
+            <option key={choice} value={choice}>{choice}</option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
+
+function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }) {
+  const [open, setOpen] = useState(false);
+  const hasDate = !!currentDate;
+
+  return (
+    <div style={{
+      padding: "10px 12px",
+      borderRadius: 10,
+      background: surface1,
+      border: `1px solid ${isOverdue ? "color-mix(in srgb, var(--status-error) 46%, transparent)" : !hasDate ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
+      position: "relative",
+    }}>
+      <div style={{
+        fontFamily: mono, fontSize: 8, color: textMuted,
+        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4,
+        display: "flex", alignItems: "center", gap: 5,
+      }}>
+        <CalendarDays size={10} />
+        Required
+      </div>
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          disabled={disabled}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            width: "100%",
+            background: "transparent",
+            border: "none",
+            padding: 0,
+            cursor: disabled ? "not-allowed" : "pointer",
+            color: isOverdue ? error : !hasDate ? warning : textPrimary,
+            fontSize: 12,
+            fontWeight: 700,
+            fontFamily: "inherit",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            textAlign: "left",
+          }}
+          title="Click to set due date"
+        >
+          {hasDate ? fmtDate(currentDate) : "Set date..."}
+        </button>
+      ) : (
+        <input
+          type="date"
+          autoFocus
+          disabled={disabled}
+          defaultValue={currentDate ? new Date(currentDate).toISOString().split("T")[0] : ""}
+          onChange={(e) => {
+            if (e.target.value) {
+              onSetDate(e.target.value);
+              setOpen(false);
+            }
+          }}
+          onBlur={() => setOpen(false)}
+          style={{
+            width: "100%",
+            background: surface2,
+            border: `1px solid ${accent}`,
+            borderRadius: 6,
+            padding: "3px 6px",
+            color: textPrimary,
+            fontFamily: mono,
+            fontSize: 11,
+            fontWeight: 700,
+            outline: "none",
+            cursor: "pointer",
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 function RiskPill({ icon: Icon, label, value, color }) {
   return (
     <div style={{
@@ -803,31 +1043,6 @@ function RiskPill({ icon: Icon, label, value, color }) {
       <Icon size={13} />
       <span>{label}</span>
       <span className="sbd-num" style={{ color: textPrimary }}>{value}</span>
-    </div>
-  );
-}
-
-function MiniMeta({ label, value, warn = false }) {
-  return (
-    <div style={{
-      padding: "10px 12px",
-      borderRadius: 10,
-      background: surface1,
-      border: `1px solid ${warn ? "color-mix(in srgb, var(--status-error) 46%, transparent)" : border}`,
-    }}>
-      <div style={{ fontFamily: mono, fontSize: 8, color: textMuted, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
-        {label}
-      </div>
-      <div style={{
-        color: warn ? error : textPrimary,
-        fontSize: 12,
-        fontWeight: 700,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-      }}>
-        {value || "-"}
-      </div>
     </div>
   );
 }
