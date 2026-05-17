@@ -18,12 +18,19 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
   const qc = useQueryClient();
   const isEdit = !!contact;
 
-  const [formData, setFormData] = useState(() => (
-    contact ? { ...INITIAL_FORM, project_id: projectId || "", ...contact } : { ...INITIAL_FORM, project_id: projectId || "" }
-  ));
+  const [formData, setFormData] = useState(() => {
+    if (!contact) return { ...INITIAL_FORM, project_id: projectId || "" };
+    const { projects, id, created_at, updated_at, created_date, updated_date, is_deleted, deleted_at, ...fields } = contact;
+    return { ...INITIAL_FORM, project_id: projectId || "", ...fields };
+  });
 
   useEffect(() => {
-    setFormData(contact ? { ...INITIAL_FORM, project_id: projectId || "", ...contact } : { ...INITIAL_FORM, project_id: projectId || "" });
+    if (!contact) {
+      setFormData({ ...INITIAL_FORM, project_id: projectId || "" });
+      return;
+    }
+    const { projects, id, created_at, updated_at, created_date, updated_date, is_deleted, deleted_at, ...fields } = contact;
+    setFormData({ ...INITIAL_FORM, project_id: projectId || "", ...fields });
   }, [contact, projectId]);
 
   const { data: projects = [] } = useQuery({
