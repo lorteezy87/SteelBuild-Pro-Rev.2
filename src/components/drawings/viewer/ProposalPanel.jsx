@@ -197,7 +197,7 @@ export default function ProposalPanel({
           right: 0,
           height: "100vh",
           width: 420,
-          background: "var(--bg-surface)",
+          background: "var(--bg-base, #0D1117)",
           borderLeft: "1px solid var(--border-default)",
           display: "flex",
           flexDirection: "column",
@@ -384,7 +384,7 @@ function ProposalRow({ proposal, onHover, onAccept, onReject, onMerge }) {
       onMouseLeave={() => onHover?.(false)}
       style={{
         padding: 10,
-        background: "var(--bg-card)",
+        background: "var(--bg-input, #161B22)",
         border: "1px solid var(--divider)",
         borderRadius: 4,
         display: "flex",
@@ -528,7 +528,7 @@ function ModalShell({ title, children, onClose, width = 360 }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width, maxWidth: "92vw",
-          background: "var(--bg-surface)",
+          background: "var(--bg-base, #0D1117)",
           border: "1px solid var(--border-default)",
           borderRadius: 6,
           boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
@@ -723,7 +723,7 @@ const modalInput = {
   fontSize: 11,
   width: "100%",
   padding: "6px 8px",
-  background: "var(--bg-card)",
+  background: "var(--bg-input, #161B22)",
   color: "var(--text-primary)",
   border: "1px solid var(--border-default)",
   borderRadius: 3,
