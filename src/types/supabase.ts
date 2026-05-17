@@ -2789,6 +2789,167 @@ export type Database = {
           },
         ]
       }
+      linked_folders: {
+        Row: {
+          id: string
+          project_id: string
+          provider: string
+          folder_name: string
+          folder_path: string | null
+          external_folder_id: string | null
+          external_site_id: string | null
+          external_drive_id: string | null
+          sync_enabled: boolean
+          sync_frequency: string
+          last_sync_at: string | null
+          last_sync_status: string | null
+          last_sync_error: string | null
+          tenant_id: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+          created_by: string | null
+          is_deleted: boolean
+          deleted_at: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          provider: string
+          folder_name: string
+          folder_path?: string | null
+          external_folder_id?: string | null
+          external_site_id?: string | null
+          external_drive_id?: string | null
+          sync_enabled?: boolean
+          sync_frequency?: string
+          last_sync_at?: string | null
+          last_sync_status?: string | null
+          last_sync_error?: string | null
+          tenant_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+          is_deleted?: boolean
+          deleted_at?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          provider?: string
+          folder_name?: string
+          folder_path?: string | null
+          external_folder_id?: string | null
+          external_site_id?: string | null
+          external_drive_id?: string | null
+          sync_enabled?: boolean
+          sync_frequency?: string
+          last_sync_at?: string | null
+          last_sync_status?: string | null
+          last_sync_error?: string | null
+          tenant_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+          is_deleted?: boolean
+          deleted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linked_folders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_import_queue: {
+        Row: {
+          id: string
+          project_id: string
+          linked_folder_id: string | null
+          provider: string
+          external_file_id: string
+          external_file_url: string | null
+          file_name: string
+          file_size: number | null
+          mime_type: string | null
+          external_last_modified: string | null
+          import_status: string
+          reviewed_by: string | null
+          reviewed_at: string | null
+          target_folder_id: string | null
+          created_document_id: string | null
+          metadata: Json | null
+          created_at: string
+          updated_at: string
+          is_deleted: boolean
+          deleted_at: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          linked_folder_id?: string | null
+          provider: string
+          external_file_id: string
+          external_file_url?: string | null
+          file_name: string
+          file_size?: number | null
+          mime_type?: string | null
+          external_last_modified?: string | null
+          import_status?: string
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          target_folder_id?: string | null
+          created_document_id?: string | null
+          metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+          is_deleted?: boolean
+          deleted_at?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          linked_folder_id?: string | null
+          provider?: string
+          external_file_id?: string
+          external_file_url?: string | null
+          file_name?: string
+          file_size?: number | null
+          mime_type?: string | null
+          external_last_modified?: string | null
+          import_status?: string
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          target_folder_id?: string | null
+          created_document_id?: string | null
+          metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+          is_deleted?: boolean
+          deleted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_import_queue_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_import_queue_linked_folder_id_fkey"
+            columns: ["linked_folder_id"]
+            isOneToOne: false
+            referencedRelation: "linked_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           amount: number | null

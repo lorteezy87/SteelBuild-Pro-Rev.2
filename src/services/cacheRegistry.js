@@ -509,6 +509,26 @@ const REGISTRY = {
       ["email-attachments"],
     ],
   },
+
+  // ── Document Storage integration ──────────────────────────────────
+
+  linked_folder: {
+    primary:  (pid) => ["linked-folders", pid],
+    families: (pid) => [
+      ["linked-folders", pid],
+      ["linked-folders"],
+      ["documents", pid],
+    ],
+  },
+
+  document_import: {
+    primary:  (pid) => ["document-import-queue", pid],
+    families: (pid) => [
+      ["document-import-queue", pid],
+      ["document-import-queue"],
+      ["documents", pid],
+    ],
+  },
 };
 
 // ─── Public API ─────────────────────────────────────────────────────────

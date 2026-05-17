@@ -249,6 +249,8 @@ const SOFT_DELETE_TABLES = new Set<string>([
   'budget_hour_items', 'risks',
   // Email integration: messages support soft-delete for audit trail.
   'email_messages',
+  // Document Storage integration: linked folders and import queue.
+  'linked_folders', 'document_import_queue',
 ]);
 
 /**
@@ -273,6 +275,8 @@ const PROJECT_SCOPED_TABLES = new Set<string>([
   'budget_hour_items', 'risks',
   // Email integration: all three tables are project-scoped.
   'email_accounts', 'email_messages', 'email_attachments',
+  // Document Storage integration: linked folders + import queue.
+  'linked_folders', 'document_import_queue',
 ]);
 
 const projectScopedSelect = (tableName: string): string =>
@@ -820,6 +824,9 @@ export const entities = {
   EmailAccount:          createEntityClient('email_accounts'),
   EmailMessage:          createEntityClient('email_messages'),
   EmailAttachment:       createEntityClient('email_attachments'),
+  // Document Storage integration
+  LinkedFolder:          createEntityClient('linked_folders'),
+  DocumentImportQueue:   createEntityClient('document_import_queue'),
 };
 
 export type Entities = typeof entities;
