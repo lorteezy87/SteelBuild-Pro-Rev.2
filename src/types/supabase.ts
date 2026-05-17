@@ -2565,6 +2565,230 @@ export type Database = {
           },
         ]
       }
+      email_accounts: {
+        Row: {
+          id: string
+          project_id: string
+          provider: string
+          email_address: string
+          display_name: string | null
+          connection_type: string
+          access_token: string | null
+          refresh_token: string | null
+          token_expires_at: string | null
+          is_active: boolean
+          last_sync_at: string | null
+          created_at: string
+          updated_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          provider?: string
+          email_address: string
+          display_name?: string | null
+          connection_type?: string
+          access_token?: string | null
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          is_active?: boolean
+          last_sync_at?: string | null
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          provider?: string
+          email_address?: string
+          display_name?: string | null
+          connection_type?: string
+          access_token?: string | null
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          is_active?: boolean
+          last_sync_at?: string | null
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_accounts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_attachments: {
+        Row: {
+          id: string
+          message_id: string
+          project_id: string
+          filename: string
+          content_type: string | null
+          size_bytes: number | null
+          content_hash: string | null
+          storage_path: string | null
+          storage_bucket: string | null
+          document_id: string | null
+          is_filed: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          project_id: string
+          filename: string
+          content_type?: string | null
+          size_bytes?: number | null
+          content_hash?: string | null
+          storage_path?: string | null
+          storage_bucket?: string | null
+          document_id?: string | null
+          is_filed?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          project_id?: string
+          filename?: string
+          content_type?: string | null
+          size_bytes?: number | null
+          content_hash?: string | null
+          storage_path?: string | null
+          storage_bucket?: string | null
+          document_id?: string | null
+          is_filed?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "email_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_attachments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_messages: {
+        Row: {
+          id: string
+          project_id: string
+          account_id: string | null
+          external_id: string | null
+          conversation_id: string | null
+          subject: string | null
+          sender_email: string
+          sender_name: string | null
+          recipients: Json | null
+          cc: Json | null
+          body_text: string | null
+          body_html: string | null
+          received_at: string
+          has_attachments: boolean
+          attachment_count: number
+          parsed_type: string | null
+          parsed_confidence: number | null
+          parsed_metadata: Json | null
+          import_status: string
+          reviewed_by: string | null
+          reviewed_at: string | null
+          linked_entity_type: string | null
+          linked_entity_id: string | null
+          is_deleted: boolean
+          deleted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          account_id?: string | null
+          external_id?: string | null
+          conversation_id?: string | null
+          subject?: string | null
+          sender_email: string
+          sender_name?: string | null
+          recipients?: Json | null
+          cc?: Json | null
+          body_text?: string | null
+          body_html?: string | null
+          received_at: string
+          has_attachments?: boolean
+          attachment_count?: number
+          parsed_type?: string | null
+          parsed_confidence?: number | null
+          parsed_metadata?: Json | null
+          import_status?: string
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          linked_entity_type?: string | null
+          linked_entity_id?: string | null
+          is_deleted?: boolean
+          deleted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          account_id?: string | null
+          external_id?: string | null
+          conversation_id?: string | null
+          subject?: string | null
+          sender_email?: string
+          sender_name?: string | null
+          recipients?: Json | null
+          cc?: Json | null
+          body_text?: string | null
+          body_html?: string | null
+          received_at?: string
+          has_attachments?: boolean
+          attachment_count?: number
+          parsed_type?: string | null
+          parsed_confidence?: number | null
+          parsed_metadata?: Json | null
+          import_status?: string
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          linked_entity_type?: string | null
+          linked_entity_id?: string | null
+          is_deleted?: boolean
+          deleted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_messages_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           amount: number | null

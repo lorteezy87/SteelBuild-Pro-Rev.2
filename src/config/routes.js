@@ -70,6 +70,7 @@ const ROUTE_DOMAINS = {
     Meetings:         r(lazyWithRetry(() => import("@/pages/Meetings")),         "Meetings",            { projectScoped: true }),
     ActionItems:      r(lazyWithRetry(() => import("@/pages/ActionItems")),      "Action Items",        { projectScoped: true }),
     ProductionNotes:  r(lazyWithRetry(() => import("@/pages/ProductionNotes")),  "Production Notes",    { projectScoped: true }),
+    EmailInbox:       r(lazyWithRetry(() => import("@/pages/EmailInbox")),       "Email Inbox",         { projectScoped: true }),
   },
 
   // ── Design & Documents ──

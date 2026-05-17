@@ -247,6 +247,8 @@ const SOFT_DELETE_TABLES = new Set<string>([
   // by default. Registering here makes list/filter/get auto-skip
   // tombstoned rows and routes delete() through the is_deleted flag.
   'budget_hour_items', 'risks',
+  // Email integration: messages support soft-delete for audit trail.
+  'email_messages',
 ]);
 
 /**
@@ -269,6 +271,8 @@ const PROJECT_SCOPED_TABLES = new Set<string>([
   'drawing_signoffs', 'task_dependencies', 'submittals', 'submittal_rounds',
   'submittal_sheet_responses', 'submittal_activity', 'comments',
   'budget_hour_items', 'risks',
+  // Email integration: all three tables are project-scoped.
+  'email_accounts', 'email_messages', 'email_attachments',
 ]);
 
 const projectScopedSelect = (tableName: string): string =>
@@ -809,6 +813,13 @@ export const entities = {
   // the AdminRoute on FeatureFlagsAdmin and the isAdmin check in
   // useAppSecurity.
   FeatureFlag:           createEntityClient('feature_flags'),
+  // Email integration: inbound email processing pipeline.
+  // email_accounts: per-project mailbox connections (manual forward / OAuth).
+  // email_messages: cached/parsed inbound emails with triage status.
+  // email_attachments: files extracted from parsed emails with dedup hash.
+  EmailAccount:          createEntityClient('email_accounts'),
+  EmailMessage:          createEntityClient('email_messages'),
+  EmailAttachment:       createEntityClient('email_attachments'),
 };
 
 export type Entities = typeof entities;

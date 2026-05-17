@@ -483,6 +483,32 @@ const REGISTRY = {
       ["mitigations", pid],
     ],
   },
+  // ── Email integration ────────────────────────────────────────────────
+
+  email_account: {
+    primary:  (pid) => ["email-accounts", pid],
+    families: (pid) => [
+      ["email-accounts", pid],
+      ["email-accounts"],
+    ],
+  },
+
+  email_message: {
+    primary:  (pid) => ["email-messages", pid],
+    families: (pid) => [
+      ["email-messages", pid],
+      ["email-messages"],
+      ["email-messages-stats", pid],
+    ],
+  },
+
+  email_attachment: {
+    primary:  (pid) => ["email-attachments", pid],
+    families: (pid) => [
+      ["email-attachments", pid],
+      ["email-attachments"],
+    ],
+  },
 };
 
 // ─── Public API ─────────────────────────────────────────────────────────

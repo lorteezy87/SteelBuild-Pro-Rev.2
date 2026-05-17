@@ -21,6 +21,7 @@ import {
   LayoutDashboard, Terminal, Sparkles, Grid3x3, Briefcase, BarChart3,
   // Project management
   CalendarRange, CalendarDays, CheckSquare, HelpCircle, DollarSign, Scale, Users,
+  Mail,
   // Design & drawings
   FileText, Eye, Box, ScanLine,
   // Production
@@ -74,6 +75,7 @@ const PAGE_ICON = {
   ChangeRequests:               DollarSign,
   Mitigations:                  Scale,
   Meetings:                     Users,
+  EmailInbox:                   Mail,
   ProjectControlCenter:         Grid3x3,
   ProjectCloseout:              Box,
   ProductionNotes:              FileText,
