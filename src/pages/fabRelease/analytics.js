@@ -234,6 +234,17 @@ export function getFabReleaseSignals(wp, options = {}) {
   const needsRelease = stageRank < stageIndex("shop_released");
   const inShop = stageRank >= stageIndex("shop_released") && stageRank < stageIndex("ready_to_ship");
 
+  // S&H release gate data — cross-entity lookups from options
+  const wpRfis = options.rfisByWpId?.get(String(wp.id)) || [];
+  const hasCriticalRfis = wpRfis.some((rfi) => {
+    const s = normalize(rfi.status);
+    return !["answered", "closed", "draft"].includes(s) &&
+           (rfi.priority === "Critical" || rfi.priority === "High");
+  });
+
+  const wpDeliveries = options.deliveriesByWpId?.get(String(wp.id)) || [];
+  const hasDeliveryPath = wpDeliveries.length > 0;
+
   const flags = [];
   if (status === "On Hold") flags.push({ key: "on_hold", label: "On hold", severity: "high" });
   if (!drawing.hasAny && (wp.phase === "Fabrication" || stageRank >= stageIndex("material_on_hand"))) {
@@ -262,14 +273,41 @@ export function getFabReleaseSignals(wp, options = {}) {
       severity: hourBurn >= 115 ? "high" : "medium",
     });
   }
+  // S&H gates — flags
+  if (hasCriticalRfis && stageRank < stageIndex("shop_released")) {
+    flags.push({ key: "critical_rfis", label: "Critical RFIs open", severity: "high" });
+  }
+  if (num(wp.shop_hours_budget) <= 0 && num(wp.field_hours_budget) <= 0 && stageRank >= stageIndex("shop_released") && !complete) {
+    flags.push({ key: "no_budget", label: "No budget hours", severity: "medium" });
+  }
+  if (!wp.sequence_confirmed && stageRank >= stageIndex("material_on_hand") && stageRank < stageIndex("shop_released")) {
+    flags.push({ key: "sequence_not_confirmed", label: "Sequence not confirmed", severity: "medium" });
+  }
+  if (!hasDeliveryPath && stageRank >= stageIndex("material_on_hand") && !complete) {
+    flags.push({ key: "no_delivery_path", label: "No delivery defined", severity: "medium" });
+  }
 
   const readinessChecks = [
+    // 1. Drawings approved
     drawing.hasReleased || stageRank >= stageIndex("shop_released"),
+    // 2. VIF confirmed
     Boolean(wp.vif_confirmed) || stageRank >= stageIndex("in_fabrication"),
+    // 3. Load list complete
     Boolean(wp.load_list_complete) || stageRank >= stageIndex("in_fabrication"),
+    // 4. Crew assigned
     Boolean(String(wp.crew || "").trim()) || stageRank < stageIndex("shop_released") || complete,
+    // 5. Release date set
     Boolean(releasedDate) || stageRank < stageIndex("shop_released"),
+    // 6. Not on hold
     status !== "On Hold",
+    // 7. No critical open RFIs blocking this WP
+    !hasCriticalRfis || stageRank >= stageIndex("shop_released"),
+    // 8. Budget hours assigned
+    (num(wp.shop_hours_budget) > 0 || num(wp.field_hours_budget) > 0) || stageRank < stageIndex("shop_released") || complete,
+    // 9. Sequence confirmed
+    Boolean(wp.sequence_confirmed) || stageRank < stageIndex("shop_released") || complete,
+    // 10. Delivery path defined
+    hasDeliveryPath || stageRank < stageIndex("material_on_hand") || complete,
   ];
   const readinessScore = Math.round(
     (readinessChecks.filter(Boolean).length / readinessChecks.length) * 100
@@ -307,7 +345,13 @@ export function buildFabReleaseMetrics(workPackages = [], drawings = [], drawing
   const activeWorkPackages = workPackages.filter((wp) => !wp?.is_deleted);
   const enriched = activeWorkPackages.map((wp) => ({
     ...wp,
-    _signals: getFabReleaseSignals(wp, { drawingsById, drawingSetsById, today: options.today }),
+    _signals: getFabReleaseSignals(wp, {
+      drawingsById,
+      drawingSetsById,
+      today: options.today,
+      rfisByWpId: options.rfisByWpId,
+      deliveriesByWpId: options.deliveriesByWpId,
+    }),
   }));
 
   const totalTons = enriched.reduce((sum, wp) => sum + num(wp.tonnage), 0);

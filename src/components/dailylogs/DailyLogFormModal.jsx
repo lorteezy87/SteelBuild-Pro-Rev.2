@@ -40,6 +40,7 @@ export default function DailyLogFormModal({
   lastLog,
   activeProject,
   workPackages = [],
+  deliveries = [],
 }) {
   const today = new Date().toISOString().split('T')[0];
   const isMobile = window.innerWidth < 640;
@@ -68,6 +69,7 @@ export default function DailyLogFormModal({
     status: "Draft",
     photos: [],
     wp_progress: [],
+    delivery_ids: [],
   });
 
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -80,6 +82,7 @@ export default function DailyLogFormModal({
         wp_progress: log.wp_progress
           ? (typeof log.wp_progress === "string" ? (() => { try { return JSON.parse(log.wp_progress); } catch { return []; } })() : log.wp_progress)
           : [],
+        delivery_ids: Array.isArray(log.delivery_ids) ? log.delivery_ids : [],
       });
     } else {
       setForm(prev => ({
@@ -397,6 +400,57 @@ export default function DailyLogFormModal({
               })}
               {(form.wp_progress || []).length === 0 && (
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.25)", padding: "10px 0" }}>No WP progress entries. Click + ADD WP to track progress.</div>
+              )}
+            </div>
+          )}
+
+          {/* LINKED DELIVERIES */}
+          {deliveries.length > 0 && (
+            <div>
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9,
+                color: 'rgba(160,175,210,0.40)', letterSpacing: '0.12em',
+                textTransform: 'uppercase', marginBottom: 10,
+              }}>
+                Linked Deliveries
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {deliveries.map(d => {
+                  const selected = (form.delivery_ids || []).includes(d.id);
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => {
+                        const ids = form.delivery_ids || [];
+                        if (selected) {
+                          set("delivery_ids", ids.filter(id => id !== d.id));
+                        } else {
+                          set("delivery_ids", [...ids, d.id]);
+                        }
+                      }}
+                      style={{
+                        padding: "8px 12px",
+                        minHeight: 36,
+                        background: selected ? "var(--accent-border)" : "var(--bg-surface-low)",
+                        border: selected ? "1px solid var(--accent)" : "1px solid var(--bg-surface-high)",
+                        borderRadius: 6,
+                        color: selected ? "var(--accent)" : "var(--text-secondary)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 9,
+                        cursor: "pointer",
+                        fontWeight: selected ? 700 : 400,
+                      }}
+                    >
+                      {selected ? "- " : "+ "}{d.description || d.delivery_number || `Delivery ${d.id?.slice(0, 6)}`}
+                    </button>
+                  );
+                })}
+              </div>
+              {(form.delivery_ids || []).length > 0 && (
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", marginTop: 6 }}>
+                  {(form.delivery_ids || []).length} delivery(ies) linked
+                </div>
               )}
             </div>
           )}

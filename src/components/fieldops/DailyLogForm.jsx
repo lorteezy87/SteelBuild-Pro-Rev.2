@@ -136,6 +136,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
     photos: [],
     related_action_item_ids: [],
     related_rfi_ids: [],
+    delivery_ids: [],
     metadata: { manning: emptyManning() },
   });
 
@@ -154,6 +155,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
         photos: asArray(log.photos),
         related_action_item_ids: asArray(log.related_action_item_ids),
         related_rfi_ids: asArray(log.related_rfi_ids),
+        delivery_ids: asArray(log.delivery_ids),
         metadata: { ...asObject(log.metadata), manning: { ...emptyManning(), ...asObject(asObject(log.metadata).manning) } },
       });
       // If this row was created with an auto-pull, surface the banner so
@@ -271,6 +273,26 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
     [actionItems]
   );
 
+  const { data: deliveriesForLink = [] } = useQuery({
+    queryKey: ["deliveries-for-link", formData.project_id],
+    queryFn: () =>
+      formData.project_id
+        ? base44.entities.Delivery.filter({ project_id: formData.project_id })
+        : Promise.resolve([]),
+    enabled: !!formData.project_id,
+    staleTime: 60 * 1000,
+  });
+
+  const deliveryOptions = useMemo(
+    () =>
+      deliveriesForLink.map((d) => ({
+        id: d.id,
+        label: d.delivery_number || d.description || `Delivery ${d.id?.slice(0, 6)}`,
+        sublabel: d.status || "",
+      })),
+    [deliveriesForLink]
+  );
+
   const rfiOptions = useMemo(
     () =>
       rfis.map((r) => ({
@@ -361,6 +383,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
       photos: asArray(formData.photos),
       related_action_item_ids: asArray(formData.related_action_item_ids),
       related_rfi_ids: asArray(formData.related_rfi_ids),
+      delivery_ids: asArray(formData.delivery_ids),
       metadata: asObject(formData.metadata),
     });
   };
@@ -505,8 +528,8 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
           </div>
         </div>
 
-        {/* Related links — Action Items + RFIs */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        {/* Related links — Action Items + RFIs + Deliveries */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
           <MultiSelectChips
             label="Related Action Items"
             value={formData.related_action_item_ids}
@@ -520,6 +543,13 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
             options={rfiOptions}
             onChange={(v) => setField("related_rfi_ids", v)}
             placeholder={rfiOptions.length === 0 ? "No RFIs in project" : "Add RFI..."}
+          />
+          <MultiSelectChips
+            label="Linked Deliveries"
+            value={formData.delivery_ids}
+            options={deliveryOptions}
+            onChange={(v) => setField("delivery_ids", v)}
+            placeholder={deliveryOptions.length === 0 ? "No deliveries in project" : "Add delivery..."}
           />
         </div>
 

@@ -38,6 +38,9 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     inspection_required: false,
     delivery_type: "",
     procurement_category: "",
+    area: "",
+    sequence_number: "",
+    delivery_number: "",
   };
 
   const [formData, setFormData] = useState(delivery ? { ...emptyForm, ...delivery } : emptyForm);
@@ -286,7 +289,21 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
               </div>
               <div>
                 <label style={labelStyle}>Work Package</label>
-                <select value={formData.work_package_id} onChange={(e) => set("work_package_id", e.target.value)} style={inputStyle}>
+                <select
+                  value={formData.work_package_id}
+                  onChange={(e) => {
+                    const wpId = e.target.value;
+                    set("work_package_id", wpId);
+                    if (wpId) {
+                      const wp = workPackages.find(w => w.id === wpId);
+                      if (wp) {
+                        if (wp.area) set("area", wp.area);
+                        if (wp.sequence_number) set("sequence_number", wp.sequence_number);
+                      }
+                    }
+                  }}
+                  style={inputStyle}
+                >
                   <option value="">Optional</option>
                   {workPackages.map((wp) => (
                     <option key={wp.id} value={wp.id}>
@@ -406,6 +423,20 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
             </div>
 
             <SectionLabel>Logistics</SectionLabel>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={labelStyle}>Delivery Number</label>
+                <input type="text" value={formData.delivery_number || ""} onChange={(e) => set("delivery_number", e.target.value)} style={inputStyle} placeholder="e.g. DEL-001" />
+              </div>
+              <div>
+                <label style={labelStyle}>Area</label>
+                <input type="text" value={formData.area || ""} onChange={(e) => set("area", e.target.value)} style={inputStyle} placeholder="Inherited from WP" />
+              </div>
+              <div>
+                <label style={labelStyle}>Sequence</label>
+                <input type="text" value={formData.sequence_number || ""} onChange={(e) => set("sequence_number", e.target.value)} style={inputStyle} placeholder="Inherited from WP" />
+              </div>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
                 <label style={labelStyle}>Carrier</label>
