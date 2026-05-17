@@ -99,29 +99,132 @@ function parseRecipientList(raw: string | undefined): string[] {
   return raw.split(",").map((r) => extractEmailAddress(r.trim())).filter(Boolean);
 }
 
+/** Strip HTML tags and decode common HTML entities to produce clean text. */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Extract sender email from Power Automate nested format or flat string.
+ * Power Automate: { emailAddress: { name: "...", address: "..." } }
+ * Generic/SendGrid: "Name <email@example.com>" or plain "email@example.com"
+ */
+// deno-lint-ignore no-explicit-any
+function extractSenderEmail(from: any): string {
+  if (!from) return "";
+  if (typeof from === "object" && from.emailAddress?.address) {
+    return String(from.emailAddress.address).trim();
+  }
+  return extractEmailAddress(String(from));
+}
+
+// deno-lint-ignore no-explicit-any
+function extractSenderName(from: any): string {
+  if (!from) return "";
+  if (typeof from === "object" && from.emailAddress) {
+    return String(from.emailAddress.name || from.emailAddress.address || "").trim();
+  }
+  return extractDisplayName(String(from));
+}
+
+/**
+ * Parse recipients from Power Automate array or flat comma-separated string.
+ * Power Automate: [{ emailAddress: { name: "...", address: "..." } }, ...]
+ * Generic: "a@b.com, c@d.com"
+ */
+// deno-lint-ignore no-explicit-any
+function parseRecipientsField(raw: any): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((r) => {
+        if (typeof r === "object" && r.emailAddress?.address) {
+          return String(r.emailAddress.address).trim();
+        }
+        return typeof r === "string" ? extractEmailAddress(r) : "";
+      })
+      .filter(Boolean);
+  }
+  if (typeof raw === "object") return [];
+  return parseRecipientList(String(raw));
+}
+
 // deno-lint-ignore no-explicit-any
 async function parseJsonPayload(body: Record<string, any>): Promise<ParsedEmail> {
   const subject = String(body.subject || body.Subject || "");
-  const from = String(body.from || body.From || body.sender || body.Sender || "");
-  const to = String(body.to || body.To || body.recipients || "");
-  const cc = String(body.cc || body.Cc || "");
-  const text = String(body.text || body.body_text || body.Body || body.bodyText || body.body || "");
-  const html = String(body.html || body.body_html || body.bodyHtml || body.BodyHtml || "");
-  const messageId = String(
-    body.message_id || body.messageId || body["Message-ID"] ||
-    (body.headers && body.headers.messageId) || ""
+
+  // ── Sender — Power Automate nested vs flat string ───────────────────
+  const fromRaw = body.from || body.From || body.sender || body.Sender || "";
+  const senderEmail = extractSenderEmail(fromRaw);
+  const senderName = extractSenderName(fromRaw);
+
+  // ── Recipients — Power Automate array vs flat string ────────────────
+  const recipients = parseRecipientsField(
+    body.toRecipients || body.to || body.To || body.recipients
   );
-  const date = String(body.date || body.Date || body.received_at || body.receivedAt || "");
+  const cc = parseRecipientsField(
+    body.ccRecipients || body.cc || body.Cc
+  );
+
+  // ── Body — Power Automate nested { content, contentType } vs flat ──
+  let bodyText = "";
+  let bodyHtml = "";
+  const bodyField = body.body;
+  if (bodyField && typeof bodyField === "object" && bodyField.content) {
+    // Power Automate / Microsoft Graph format
+    const content = String(bodyField.content || "");
+    if (bodyField.contentType?.toLowerCase() === "html" || content.includes("<")) {
+      bodyHtml = content;
+      bodyText = stripHtml(content);
+    } else {
+      bodyText = content;
+    }
+  } else {
+    bodyText = String(body.text || body.body_text || body.bodyText || body.body || "");
+    bodyHtml = String(body.html || body.body_html || body.bodyHtml || body.BodyHtml || "");
+  }
+
+  // If we still have no bodyText but have bodyPreview (Graph), use it
+  if (!bodyText && body.bodyPreview) {
+    bodyText = String(body.bodyPreview);
+  }
+
+  // ── Message ID — Power Automate internetMessageId vs flat ───────────
+  const messageId = String(
+    body.internetMessageId || body.message_id || body.messageId ||
+    body["Message-ID"] || (body.headers && body.headers.messageId) || ""
+  );
+
+  // ── Date — Power Automate receivedDateTime vs flat ──────────────────
+  const date = String(
+    body.receivedDateTime || body.date || body.Date ||
+    body.received_at || body.receivedAt || ""
+  );
 
   return {
     externalId: messageId || generateMessageId(),
     subject,
-    senderEmail: extractEmailAddress(from),
-    senderName: extractDisplayName(from),
-    recipients: parseRecipientList(to),
-    cc: parseRecipientList(cc),
-    bodyText: text,
-    bodyHtml: html,
+    senderEmail,
+    senderName,
+    recipients,
+    cc,
+    bodyText,
+    bodyHtml,
     receivedAt: date ? new Date(date).toISOString() : new Date().toISOString(),
     attachments: [],
     headers: {},
