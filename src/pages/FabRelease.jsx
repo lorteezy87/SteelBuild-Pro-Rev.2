@@ -27,6 +27,7 @@ import {
   Pencil,
   Search,
   ShieldCheck,
+  Trash2,
   Truck,
   Users,
   Wrench,
@@ -35,7 +36,16 @@ import {
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
-import { invalidateEntity } from "@/services/cacheRegistry";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { invalidateEntity, getQueryKey } from "@/services/cacheRegistry";
+import DeleteDialog from "@/components/shared/DeleteDialog";
+import {
+  appendRecordToCaches,
+  replaceRecordInCaches,
+  removeRecordFromCaches,
+  invalidateCrudQueries,
+  toastCrudError,
+} from "@/components/shared/crudFeedback";
 import { getNextNumber } from "@/components/shared/numberSequencing";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import WPFormModal from "@/components/workpackages/WPFormModal";
@@ -189,6 +199,7 @@ export default function FabRelease() {
   const [detailWP, setDetailWP] = useState(null);
   const [editingWP, setEditingWP] = useState(null);
   const [wpModalOpen, setWPModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
     const savedView = localStorage.getItem("fabReleaseView");
@@ -242,29 +253,46 @@ export default function FabRelease() {
   const project = projects.find((item) => item.id === projectId) || activeProject || null;
   const projectName = project?.project_name || project?.name || "Project";
 
+  const wpQueryKeys = [["work-packages", projectId], ["work_packages", projectId], getQueryKey("work_package", projectId)];
+  useRealtimeInvalidation("work_packages", projectId, wpQueryKeys);
+
   const invalidateWorkPackages = () => invalidateEntity(qc, "work_package", projectId);
+
+  const createWPMut = useMutation({
+    mutationFn: (data) => base44.entities.WorkPackage.create(data),
+    onSuccess: async (created) => {
+      appendRecordToCaches(qc, wpQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
+      await invalidateWorkPackages();
+      setWPModalOpen(false);
+      setEditingWP(null);
+      toast.success("Fab package created");
+    },
+    onError: (e) => toastCrudError(e, "Failed to create fab package"),
+  });
 
   const updateWPMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.WorkPackage.update(id, data),
-    onSuccess: async (_result, variables) => {
+    onSuccess: async (updated, variables) => {
+      replaceRecordInCaches(qc, wpQueryKeys, updated);
       await invalidateWorkPackages();
       setWPModalOpen(false);
       setEditingWP(null);
       setDetailWP((prev) => (prev?.id === variables.id ? null : prev));
       toast.success("Fab package updated");
     },
-    onError: (err) => toast.error(err?.message || "Update failed"),
+    onError: (e) => toastCrudError(e, "Failed to update fab package"),
   });
 
-  const createWPMut = useMutation({
-    mutationFn: (data) => base44.entities.WorkPackage.create(data),
-    onSuccess: async () => {
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.WorkPackage.delete(id),
+    onSuccess: async (_, deletedId) => {
+      removeRecordFromCaches(qc, wpQueryKeys, deletedId);
       await invalidateWorkPackages();
-      setWPModalOpen(false);
-      setEditingWP(null);
-      toast.success("Fab package created");
+      setDetailWP((prev) => (prev?.id === deletedId ? null : prev));
+      setDeleteTarget(null);
+      toast.success("Fab package deleted");
     },
-    onError: (err) => toast.error(err?.message || "Create failed"),
+    onError: (e) => toastCrudError(e, "Failed to delete fab package"),
   });
 
   const completeMut = useMutation({
@@ -273,12 +301,13 @@ export default function FabRelease() {
         status: "Complete",
         percent_complete: 100,
       }),
-    onSuccess: async (_result, id) => {
+    onSuccess: async (updated, id) => {
+      replaceRecordInCaches(qc, wpQueryKeys, updated);
       await invalidateWorkPackages();
       setDetailWP((prev) => (prev?.id === id ? null : prev));
       toast.success("Package marked ready to ship");
     },
-    onError: () => toast.error("Update failed"),
+    onError: (e) => toastCrudError(e, "Failed to update package"),
   });
 
   const metrics = useMemo(
@@ -522,6 +551,7 @@ export default function FabRelease() {
           wp={detailWP}
           onClose={() => setDetailWP(null)}
           onEdit={() => handleEdit(detailWP)}
+          onDelete={() => { setDeleteTarget(detailWP); setDetailWP(null); }}
           onComplete={() => completeMut.mutate(detailWP.id)}
           isCompleting={completeMut.isPending}
         />
@@ -541,6 +571,14 @@ export default function FabRelease() {
           allDrawings={drawings}
         />
       )}
+
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        title="Delete Fab Package"
+        description={`Delete "${getWorkPackageDisplayName(deleteTarget || {})}"? This action cannot be undone.`}
+      />
     </div>
   );
 }
@@ -1075,7 +1113,7 @@ function Fact({ icon: Icon, label, value }) {
   );
 }
 
-function DetailPanel({ wp, onClose, onEdit, onComplete, isCompleting }) {
+function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompleting }) {
   const signals = wp._signals;
   const packageLabels = signals.drawing.packages.map(drawingPackageLabel);
   return (
@@ -1157,6 +1195,19 @@ function DetailPanel({ wp, onClose, onEdit, onComplete, isCompleting }) {
           {signals.stage !== "ready_to_ship" && (
             <Button variant="primary" icon="check" onClick={onComplete} disabled={isCompleting}>Mark RTS</Button>
           )}
+          <button
+            type="button"
+            onClick={onDelete}
+            style={{
+              background: "var(--danger-muted)", border: "1px solid var(--danger-border)",
+              color: "var(--status-error)", borderRadius: "var(--radius-btn)",
+              padding: "6px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            <Trash2 size={13} /> Delete
+          </button>
         </div>
       </aside>
     </div>
