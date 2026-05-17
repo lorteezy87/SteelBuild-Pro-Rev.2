@@ -55,6 +55,7 @@ function SignalCard({ label, value, color, sub, onClick, active, previous, inver
   const numericValue = typeof value === "number" ? value : parseInt(value, 10);
   const hasValue = !isNaN(numericValue) && numericValue > 0;
   const isCritical = hasValue && (label === "CRITICAL" || label === "OVERDUE") && numericValue >= 3;
+  const isClickable = !!onClick && hasValue;
 
   // Multi-layer glow: subtle ambient + focused edge glow
   const glowShadow = hasValue
@@ -63,7 +64,7 @@ function SignalCard({ label, value, color, sub, onClick, active, previous, inver
 
   return (
     <div
-      onClick={onClick}
+      onClick={isClickable ? onClick : undefined}
       className={isCritical ? "signal-card-pulse" : undefined}
       style={{
         flex: 1,
@@ -73,16 +74,29 @@ function SignalCard({ label, value, color, sub, onClick, active, previous, inver
         background: active ? "rgba(200,155,32,0.07)" : "var(--bg-surface)",
         border: `1px solid ${active ? "rgba(200,155,32,0.30)" : hasValue ? `${color}45` : "var(--divider)"}`,
         borderRadius: "var(--radius-card, 10px)",
-        cursor: onClick ? "pointer" : "default",
+        cursor: isClickable ? "pointer" : "default",
         boxShadow: glowShadow,
         transition: "box-shadow 0.4s ease, border-color 0.3s ease, background 0.15s ease, transform 0.15s ease",
+        position: "relative",
       }}
+      title={isClickable ? `Click to filter: ${label}` : undefined}
     >
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.14em", marginBottom: 4 }}>
-        {label}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.14em", marginBottom: 4 }}>
+          {label}
+        </div>
+        {isClickable && (
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: active ? "var(--accent)" : "var(--text-muted)", opacity: active ? 1 : 0.5, transition: "opacity 0.15s" }}>
+            {active ? "✕" : "→"}
+          </span>
+        )}
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 700, color: color || "var(--text-primary)", lineHeight: 1 }}>
+        <div style={{
+          fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 700, color: color || "var(--text-primary)", lineHeight: 1,
+          borderBottom: isClickable ? `1px dashed ${color}40` : "none",
+          paddingBottom: isClickable ? 2 : 0,
+        }}>
           {value}
         </div>
         <TrendIndicator current={numericValue} previous={previous} invert={!!invertTrend} />
@@ -947,10 +961,18 @@ function LoadCell({ value, tone }) {
 }
 
 // ─── AI Summary Banner ───────────────────────────────────────────────────────
-function AISummaryBanner({ kpis }) {
+function AISummaryBanner({ kpis, onClickCritical, onClickOverdue, onClickBlocksFab, onClickCO }) {
   const coDisplay = kpis.coExposure >= 1000
     ? `$${(kpis.coExposure / 1000).toFixed(0)}k`
     : `$${kpis.coExposure}`;
+
+  const linkStyle = {
+    cursor: "pointer",
+    borderBottom: "1px dashed currentColor",
+    paddingBottom: 1,
+    transition: "opacity 0.15s",
+  };
+
   return (
     <div style={{
       margin: "12px 0 8px 0",
@@ -963,18 +985,49 @@ function AISummaryBanner({ kpis }) {
       color: "var(--text-secondary)",
       lineHeight: 1.55,
     }}>
-      You have <strong style={{ color: SEVERITY.CRITICAL?.color || "var(--status-error)" }}>{kpis.critical} critical</strong> items
-      and <strong style={{ color: "var(--status-error)" }}>{kpis.overdueAll} overdue</strong>.
+      You have{" "}
+      <strong
+        onClick={onClickCritical}
+        style={{ ...linkStyle, color: SEVERITY.CRITICAL?.color || "var(--status-error)" }}
+        title="View critical items"
+      >
+        {kpis.critical} critical
+      </strong>{" "}
+      items and{" "}
+      <strong
+        onClick={onClickOverdue}
+        style={{ ...linkStyle, color: "var(--status-error)" }}
+        title="View overdue items"
+      >
+        {kpis.overdueAll} overdue
+      </strong>.
       {kpis.blocksFab > 0 && (
-        <> <strong style={{ color: "var(--status-review)" }}>{kpis.blocksFab}</strong> items are blocking fabrication.</>
+        <>
+          {" "}
+          <strong
+            onClick={onClickBlocksFab}
+            style={{ ...linkStyle, color: "var(--status-review)" }}
+            title="View items blocking fabrication"
+          >
+            {kpis.blocksFab}
+          </strong>{" "}
+          items are blocking fabrication.
+        </>
       )}
-      {" "}CO exposure: <strong style={{ color: kpis.coExposure > 10000 ? "var(--status-warning)" : "var(--text-primary)" }}>{coDisplay}</strong>.
+      {" "}CO exposure:{" "}
+      <strong
+        onClick={onClickCO}
+        style={{ ...linkStyle, color: kpis.coExposure > 10000 ? "var(--status-warning)" : "var(--text-primary)" }}
+        title="View change orders"
+      >
+        {coDisplay}
+      </strong>.
     </div>
   );
 }
 
 // ─── Health Summary Panel ────────────────────────────────────────────────────
-function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
+function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis, onClickOverdue, onClickBlocksFab, onClickSeverity }) {
   const total = scoredFeed.length;
   const critCount = scoredFeed.filter((i) => i.severityKey === "CRITICAL").length;
   const highCount = scoredFeed.filter((i) => i.severityKey === "HIGH").length;
@@ -1037,9 +1090,21 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
         </div>
         <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
           {segments.map((seg) => (
-            <div key={seg.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div
+              key={seg.key}
+              onClick={() => seg.count > 0 && onClickSeverity?.(seg.key)}
+              style={{ display: "flex", alignItems: "center", gap: 4, cursor: seg.count > 0 ? "pointer" : "default", borderRadius: 3, padding: "2px 4px", transition: "background 0.1s" }}
+              onMouseEnter={(e) => { if (seg.count > 0) e.currentTarget.style.background = "var(--hover-bg)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              title={seg.count > 0 ? `Filter to ${seg.key} items` : undefined}
+            >
               <div style={{ width: 6, height: 6, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{seg.key}: {seg.count}</span>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
+                borderBottom: seg.count > 0 ? `1px dashed ${seg.color}50` : "none",
+              }}>
+                {seg.key}: {seg.count}
+              </span>
             </div>
           ))}
         </div>
@@ -1062,13 +1127,47 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
 
       {/* Key metrics */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <div style={{ padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
+        <div
+          onClick={() => kpis.blocksFab > 0 && onClickBlocksFab?.()}
+          style={{
+            padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6,
+            cursor: kpis.blocksFab > 0 ? "pointer" : "default", transition: "border-color 0.15s, background 0.1s",
+          }}
+          onMouseEnter={(e) => { if (kpis.blocksFab > 0) e.currentTarget.style.borderColor = "var(--status-review)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--divider)"; }}
+          title={kpis.blocksFab > 0 ? "View items blocking fabrication" : undefined}
+        >
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>BLOCKS FAB</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.blocksFab > 0 ? "var(--status-review)" : "var(--text-muted)" }}>{kpis.blocksFab}</div>
+          <div style={{
+            fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800,
+            color: kpis.blocksFab > 0 ? "var(--status-review)" : "var(--text-muted)",
+            borderBottom: kpis.blocksFab > 0 ? "1px dashed var(--status-review)" : "none",
+            display: "inline-block",
+          }}>
+            {kpis.blocksFab}
+          </div>
+          {kpis.blocksFab > 0 && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: 4, opacity: 0.6 }}>→</span>}
         </div>
-        <div style={{ padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
+        <div
+          onClick={() => kpis.overdueAll > 0 && onClickOverdue?.()}
+          style={{
+            padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6,
+            cursor: kpis.overdueAll > 0 ? "pointer" : "default", transition: "border-color 0.15s, background 0.1s",
+          }}
+          onMouseEnter={(e) => { if (kpis.overdueAll > 0) e.currentTarget.style.borderColor = "var(--status-error)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--divider)"; }}
+          title={kpis.overdueAll > 0 ? "View overdue items" : undefined}
+        >
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>OVERDUE</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.overdueAll > 0 ? "var(--status-error)" : "var(--text-muted)" }}>{kpis.overdueAll}</div>
+          <div style={{
+            fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800,
+            color: kpis.overdueAll > 0 ? "var(--status-error)" : "var(--text-muted)",
+            borderBottom: kpis.overdueAll > 0 ? "1px dashed var(--status-error)" : "none",
+            display: "inline-block",
+          }}>
+            {kpis.overdueAll}
+          </div>
+          {kpis.overdueAll > 0 && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: 4, opacity: 0.6 }}>→</span>}
         </div>
       </div>
     </div>
@@ -1083,6 +1182,7 @@ export default function ProjectControlCenter() {
   const [activeTab, setActiveTab] = useState("morning");
   const [typeFilter, setTypeFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
   const [drawerItem, setDrawerItem] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -1124,9 +1224,11 @@ export default function ProjectControlCenter() {
     return scoredFeed.filter((item) => {
       const matchType = typeFilter === "all" || item.type === typeFilter;
       const matchSev  = severityFilter === "all" || item.severityKey === severityFilter;
-      return matchType && matchSev;
+      const matchTag  = tagFilter === "all"
+        || (tagFilter === "OVERDUE" ? item.overdueDays > 0 : (Array.isArray(item.tags) && item.tags.includes(tagFilter)));
+      return matchType && matchSev && matchTag;
     });
-  }, [scoredFeed, typeFilter, severityFilter]);
+  }, [scoredFeed, typeFilter, severityFilter, tagFilter]);
 
   const kpis        = useMemo(() => buildSignalKPIs(scoredFeed, deliveries), [scoredFeed, deliveries]);
   const waitingBoard = useMemo(() => buildWaitingOnBoard(scoredFeed), [scoredFeed]);
@@ -1348,7 +1450,7 @@ export default function ProjectControlCenter() {
           value={kpis.critical}
           color={kpis.critical > 0 ? SEVERITY.CRITICAL.color : "var(--text-muted)"}
           sub="items"
-          onClick={() => setSeverityFilter(severityFilter === "CRITICAL" ? "all" : "CRITICAL")}
+          onClick={() => { setSeverityFilter(severityFilter === "CRITICAL" ? "all" : "CRITICAL"); setTagFilter("all"); setActiveTab("feed"); }}
           active={severityFilter === "CRITICAL"}
           previous={previousKpis?.critical}
           invertTrend
@@ -1358,7 +1460,7 @@ export default function ProjectControlCenter() {
           value={kpis.highRisk}
           color={kpis.highRisk > 0 ? SEVERITY.HIGH.color : "var(--text-muted)"}
           sub="items"
-          onClick={() => setSeverityFilter(severityFilter === "HIGH" ? "all" : "HIGH")}
+          onClick={() => { setSeverityFilter(severityFilter === "HIGH" ? "all" : "HIGH"); setTagFilter("all"); setActiveTab("feed"); }}
           active={severityFilter === "HIGH"}
           previous={previousKpis?.highRisk}
           invertTrend
@@ -1368,6 +1470,8 @@ export default function ProjectControlCenter() {
           value={kpis.overdueAll}
           color={kpis.overdueAll > 0 ? "var(--status-error)" : "var(--text-muted)"}
           sub="items"
+          onClick={() => { setTagFilter(tagFilter === "OVERDUE" ? "all" : "OVERDUE"); setTypeFilter("all"); setSeverityFilter("all"); setActiveTab("feed"); }}
+          active={tagFilter === "OVERDUE"}
           previous={previousKpis?.overdueAll}
           invertTrend
         />
@@ -1376,7 +1480,7 @@ export default function ProjectControlCenter() {
           value={kpis.external}
           color={kpis.external > 0 ? "#8898A8" : "var(--text-muted)"}
           sub="items"
-          onClick={() => setActiveTab("waiting")}
+          onClick={() => { setActiveTab("waiting"); setTagFilter("all"); }}
           previous={previousKpis?.external}
           invertTrend
         />
@@ -1385,6 +1489,8 @@ export default function ProjectControlCenter() {
           value={kpis.blocksFab}
           color={kpis.blocksFab > 0 ? "var(--status-review)" : "var(--text-muted)"}
           sub="items"
+          onClick={() => { setTagFilter(tagFilter === "BLOCKS_FAB" ? "all" : "BLOCKS_FAB"); setTypeFilter("all"); setSeverityFilter("all"); setActiveTab("feed"); }}
+          active={tagFilter === "BLOCKS_FAB"}
           previous={previousKpis?.blocksFab}
           invertTrend
         />
@@ -1393,6 +1499,8 @@ export default function ProjectControlCenter() {
           value={kpis.blocksErec}
           color={kpis.blocksErec > 0 ? "#06B6D4" : "var(--text-muted)"}
           sub="items"
+          onClick={() => { setTagFilter(tagFilter === "BLOCKS_ERECTION" ? "all" : "BLOCKS_ERECTION"); setTypeFilter("all"); setSeverityFilter("all"); setActiveTab("feed"); }}
+          active={tagFilter === "BLOCKS_ERECTION"}
           previous={previousKpis?.blocksErec}
           invertTrend
         />
@@ -1401,6 +1509,8 @@ export default function ProjectControlCenter() {
           value={kpis.coExposure > 0 ? `$${(kpis.coExposure / 1000).toFixed(0)}k` : "$0"}
           color={kpis.coExposure > 50000 ? "var(--status-error)" : kpis.coExposure > 10000 ? "var(--status-warning)" : "var(--text-muted)"}
           sub="open COs"
+          onClick={() => { setTypeFilter(typeFilter === "ChangeOrder" ? "all" : "ChangeOrder"); setSeverityFilter("all"); setTagFilter("all"); setActiveTab("feed"); }}
+          active={typeFilter === "ChangeOrder"}
           previous={previousKpis?.coExposure != null ? (previousKpis.coExposure > 0 ? parseInt((previousKpis.coExposure / 1000).toFixed(0), 10) : 0) : undefined}
           invertTrend
         />
@@ -1419,6 +1529,9 @@ export default function ProjectControlCenter() {
           @media (max-width: 900px) {
             .pcc-split-pane { grid-template-columns: 1fr !important; }
           }
+        `}</style>
+        <style>{`
+          .pcc-split-pane [title*="Click to filter"]:hover { transform: translateY(-1px); filter: brightness(1.05); }
         `}</style>
 
         {/* ─── LEFT COLUMN: Tab bar + Tab content ─── */}
@@ -1496,7 +1609,13 @@ export default function ProjectControlCenter() {
             {!noProject && !isLoading && activeTab === "morning" && (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                 <div style={{ padding: "0 20px", flexShrink: 0 }}>
-                  <AISummaryBanner kpis={kpis} />
+                  <AISummaryBanner
+                    kpis={kpis}
+                    onClickCritical={() => { setSeverityFilter("CRITICAL"); setTagFilter("all"); setActiveTab("feed"); }}
+                    onClickOverdue={() => { setTagFilter("OVERDUE"); setSeverityFilter("all"); setTypeFilter("all"); setActiveTab("feed"); }}
+                    onClickBlocksFab={() => { setTagFilter("BLOCKS_FAB"); setSeverityFilter("all"); setTypeFilter("all"); setActiveTab("feed"); }}
+                    onClickCO={() => { setTypeFilter("ChangeOrder"); setSeverityFilter("all"); setTagFilter("all"); setActiveTab("feed"); }}
+                  />
                 </div>
                 <MorningScan
                   items={scoredFeed}
@@ -1549,12 +1668,38 @@ export default function ProjectControlCenter() {
             {/* Priority Feed — card layout (no grid header) */}
             {!noProject && !isLoading && !isEmpty && activeTab === "feed" && (
               <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
+                {/* Active tag filter chip */}
+                {tagFilter !== "all" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderBottom: "1px solid var(--divider)" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em" }}>SHOWING:</span>
+                    <span style={{
+                      fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+                      padding: "3px 10px", borderRadius: 4,
+                      background: "rgba(200,155,32,0.10)", color: "var(--accent)",
+                      border: "1px solid rgba(200,155,32,0.25)",
+                    }}>
+                      {tagFilter === "OVERDUE" ? "OVERDUE ITEMS" : IMPACT_TAGS[tagFilter]?.label || tagFilter}
+                    </span>
+                    <button
+                      onClick={() => setTagFilter("all")}
+                      style={{
+                        background: "none", border: "1px solid var(--border-default)", borderRadius: 4,
+                        padding: "2px 8px", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9,
+                        color: "var(--text-muted)", letterSpacing: "0.06em",
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = "var(--text-primary)"}
+                      onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-muted)"}
+                    >
+                      CLEAR
+                    </button>
+                  </div>
+                )}
                 {filteredFeed.length === 0 ? (
                   <EmptyStateAction
                     icon="⊘"
-                    message="No items match the current type and severity filters"
+                    message="No items match the current filters"
                     actions={[
-                      { label: "Clear Filters", onClick: () => { setTypeFilter("all"); setSeverityFilter("all"); } },
+                      { label: "Clear Filters", onClick: () => { setTypeFilter("all"); setSeverityFilter("all"); setTagFilter("all"); } },
                     ]}
                   />
                 ) : (
@@ -1607,7 +1752,14 @@ export default function ProjectControlCenter() {
         {/* ─── RIGHT COLUMN: Health Summary ─── */}
         <div className="pcc-split-right" style={{ overflow: "auto", padding: 12 }}>
           {!noProject && !isLoading && !isEmpty ? (
-            <HealthSummaryPanel scoredFeed={scoredFeed} waitingBoard={waitingBoard} kpis={kpis} />
+            <HealthSummaryPanel
+              scoredFeed={scoredFeed}
+              waitingBoard={waitingBoard}
+              kpis={kpis}
+              onClickOverdue={() => { setTagFilter("OVERDUE"); setSeverityFilter("all"); setTypeFilter("all"); setActiveTab("feed"); }}
+              onClickBlocksFab={() => { setTagFilter("BLOCKS_FAB"); setSeverityFilter("all"); setTypeFilter("all"); setActiveTab("feed"); }}
+              onClickSeverity={(sev) => { setSeverityFilter(sev); setTagFilter("all"); setTypeFilter("all"); setActiveTab("feed"); }}
+            />
           ) : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em" }}>
