@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
 import { formatBudgetPercent } from "../shared/formatters";
 import { getDraftDrawingsWarning } from "../shared/workflowValidation";
+import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
 
 const empty = {
@@ -37,6 +40,14 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const [linkedDrawingIds, setLinkedDrawingIds] = useState([]);
   const [drawingSearch, setDrawingSearch] = useState("");
   const [showDrawingDropdown, setShowDrawingDropdown] = useState(false);
+
+  const activeProjectId = form.project_id || (wp && wp.project_id);
+  const { data: projectRfis = [] } = useQuery({
+    queryKey: ["rfis", activeProjectId],
+    queryFn: () => activeProjectId ? base44.entities.RFI.filter({ project_id: activeProjectId }) : [],
+    enabled: Boolean(activeProjectId),
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     if (wp) {
@@ -164,6 +175,26 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         <FormField label="Name *" error={errors.name} span2>
           <input style={inputStyle} value={form.name} onChange={e => set("name", e.target.value)} placeholder="Work package name..." />
         </FormField>
+        <div style={{ gridColumn: "span 2" }}>
+          <AutoLinkSuggestions
+            entity={form}
+            sources={{ drawings: projectDrawings, workPackages: [], rfis: projectRfis }}
+            onLink={(suggestion) => {
+              if (suggestion.type === "drawing") {
+                const drawingId = suggestion.entityId;
+                if (!linkedDrawingIds.includes(drawingId)) {
+                  setLinkedDrawingIds(prev => [...prev, drawingId]);
+                }
+              }
+              if (suggestion.type === "rfi") {
+                const currentIds = (form.linked_rfi_ids || "").split(",").map(s => s.trim()).filter(Boolean);
+                if (!currentIds.includes(suggestion.entityId)) {
+                  set("linked_rfi_ids", [...currentIds, suggestion.entityId].join(","));
+                }
+              }
+            }}
+          />
+        </div>
         <FormField label="Phase" error={errors.phase}>
           <select style={selectStyle} value={form.phase} onChange={e => set("phase", e.target.value)}>
             {["Detailing", "Fabrication", "Delivery", "Erection"].map(o => <option key={o} value={o}>{o}</option>)}

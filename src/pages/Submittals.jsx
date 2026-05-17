@@ -26,6 +26,7 @@ import { submittalStatusToStage, isRRStatus } from "@/lib/submittalStageMapping"
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { compareDrawingSetPackages, formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 import SubmittalReviewStrip from "@/components/submittals/SubmittalReviewStrip";
+import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import { usePermissions } from "@/services/permissions";
 
 /**
@@ -565,6 +566,8 @@ export default function Submittals() {
           projectId={projectId}
           projectName={activeProject?.project_name || activeProject?.name || ""}
           availableSets={drawingSets}
+          allDrawings={allDrawings}
+          allRfis={allRfis}
           onClose={() => { setShowCreate(false); setEditingId(null); }}
           onSubmit={async (data) => {
             if (editing) await updateMut.mutateAsync({ id: editing.id, ...data });
@@ -1554,7 +1557,7 @@ function EditableMeta({ label, value, displayValue, kind = "text", choices, allo
 
 // ── Create/edit modal ───────────────────────────────────────────────
 
-function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], onClose, onSubmit }) {
+function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], onClose, onSubmit }) {
   const [form, setForm] = useState({
     submittal_number: initial.submittal_number || "",
     title:            initial.title            || "",
@@ -1610,6 +1613,20 @@ function SubmittalFormModal({ open, initial, projectId, projectName, availableSe
           <div style={{ gridColumn: "1 / span 2" }}>
             <Label>Title *</Label>
             <Input value={form.title} onChange={(e) => setField("title", e.target.value)} placeholder="Structural steel shop drawings - Area A" />
+          </div>
+          <div style={{ gridColumn: "1 / span 2" }}>
+            <AutoLinkSuggestions
+              entity={form}
+              sources={{ drawings: allDrawings, workPackages: [], rfis: allRfis }}
+              onLink={(suggestion) => {
+                if (suggestion.type === "drawing") {
+                  const drawing = suggestion.matchedEntity;
+                  if (drawing?.drawing_set_id && !form.drawing_set_ids.includes(drawing.drawing_set_id)) {
+                    setField("drawing_set_ids", [...form.drawing_set_ids, drawing.drawing_set_id]);
+                  }
+                }
+              }}
+            />
           </div>
           <div style={{ gridColumn: "1 / span 2" }}>
             <Label>Linked Drawing Sets</Label>
