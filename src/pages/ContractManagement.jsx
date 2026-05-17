@@ -17,6 +17,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { usePermissions } from "@/services/permissions";
 
 // Local aliases so the ~30 call sites below don't need to change. Both
 // now delegate to the shared design-system formatters.
@@ -130,7 +131,7 @@ function ContractOverviewPanel({ project, approvedCOTotal, pendingCOTotal, revis
       boxShadow: "var(--shadow-card)", position: "relative",
     }}>
       {/* Edit button */}
-      {!editingContract && (
+      {!editingContract && onEditContract && (
         <button
           onClick={onEditContract}
           title="Edit contract details"
@@ -443,20 +444,24 @@ function BillingSOVTab({ sovItems, expenses, onAddSOV, onEditSOV, onDeleteSOV })
                     </td>
                     <td style={{ ...tdStyle, textAlign: "center" }}>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                        <button
-                          onClick={() => onEditSOV(item)}
-                          title="Edit line item"
-                          style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "4px 6px", cursor: "pointer", color: "var(--text-muted)", display: "inline-flex", alignItems: "center" }}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          onClick={() => onDeleteSOV(item)}
-                          title="Delete line item"
-                          style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "4px 6px", cursor: "pointer", color: "var(--status-error)", display: "inline-flex", alignItems: "center" }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {onEditSOV && (
+                          <button
+                            onClick={() => onEditSOV(item)}
+                            title="Edit line item"
+                            style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "4px 6px", cursor: "pointer", color: "var(--text-muted)", display: "inline-flex", alignItems: "center" }}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {onDeleteSOV && (
+                          <button
+                            onClick={() => onDeleteSOV(item)}
+                            title="Delete line item"
+                            style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "4px 6px", cursor: "pointer", color: "var(--status-error)", display: "inline-flex", alignItems: "center" }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -644,6 +649,7 @@ export default function ContractManagement() {
   const projectId = activeProject?.id;
   const [activeTab, setActiveTab] = useState("CHANGE ORDERS");
   const qc = useQueryClient();
+  const { can } = usePermissions();
 
   // SOV CRUD state
   const [showSOVForm, setShowSOVForm] = useState(false);
@@ -830,7 +836,7 @@ export default function ContractManagement() {
         unit=" · CHANGE ORDERS"
         subtitle={`${fmtShort(revisedValue || 0)} revised contract · ${fmtShort(pendingCOTotal || 0)} pending CO value`}
       >
-        {activeTab === "BILLING & SOV" && (
+        {activeTab === "BILLING & SOV" && can("create", "sov_item") && (
           <button
             onClick={() => { setEditingSOV(null); setShowSOVForm(true); }}
             className="sbd-btn"
@@ -855,7 +861,7 @@ export default function ContractManagement() {
         editingContract={editingContract}
         contractForm={contractForm}
         setContractForm={setContractForm}
-        onEditContract={handleEditContract}
+        onEditContract={can("edit", "contract") ? handleEditContract : null}
         onSaveContract={handleSaveContract}
         onCancelContract={handleCancelContract}
         isSaving={updateContractMut.isPending}
@@ -876,9 +882,9 @@ export default function ContractManagement() {
         <BillingSOVTab
           sovItems={sovItems}
           expenses={expenses}
-          onAddSOV={() => { setEditingSOV(null); setShowSOVForm(true); }}
-          onEditSOV={handleSOVEdit}
-          onDeleteSOV={handleSOVDelete}
+          onAddSOV={can("create", "sov_item") ? () => { setEditingSOV(null); setShowSOVForm(true); } : null}
+          onEditSOV={can("edit", "sov_item") ? handleSOVEdit : null}
+          onDeleteSOV={can("delete", "sov_item") ? handleSOVDelete : null}
         />
       )}
       {activeTab === "CONTRACT SUMMARY" && (

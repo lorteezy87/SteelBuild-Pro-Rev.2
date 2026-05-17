@@ -19,6 +19,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { usePermissions } from "@/services/permissions";
 
 function getDateCutoff(preset) {
   const now = new Date();
@@ -44,6 +45,7 @@ function getDateCutoff(preset) {
 
 export default function DailyLogs() {
   const projectId = useProjectId();
+  const { can } = usePermissions();
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -245,48 +247,52 @@ export default function DailyLogs() {
         unit=" · ENTRIES"
         subtitle="Field superintendent journal · man-hours · safety · delays"
       >
-        <button
-          onClick={handleCopyFromYesterday}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--bg-surface)",
-            color: "var(--text-secondary)",
-            border: "1px solid var(--border-default)",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 12px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-          onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
-        >
-          <Copy size={12} /> Copy Yesterday
-        </button>
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--accent)",
-            color: "var(--bg-base)",
-            border: "none",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 14px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> New Log
-        </button>
+        {can("create", "daily_log") && (
+          <button
+            onClick={handleCopyFromYesterday}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "var(--bg-surface)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 12px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
+          >
+            <Copy size={12} /> Copy Yesterday
+          </button>
+        )}
+        {can("create", "daily_log") && (
+          <button
+            onClick={() => { setEditing(null); setShowForm(true); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "var(--accent)",
+              color: "var(--bg-base)",
+              border: "none",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 14px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+          >
+            <Plus size={12} /> New Log
+          </button>
+        )}
       </CommandBar>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
@@ -345,8 +351,8 @@ export default function DailyLogs() {
       ) : (
         <DailyLogsList
           logs={filteredLogs}
-          onEdit={(log) => { setEditing(log); setShowForm(true); }}
-          onDelete={(log) => setDeleteTarget(log)}
+          onEdit={can("edit", "daily_log") ? (log) => { setEditing(log); setShowForm(true); } : null}
+          onDelete={can("delete", "daily_log") ? (log) => setDeleteTarget(log) : null}
         />
       )}
 

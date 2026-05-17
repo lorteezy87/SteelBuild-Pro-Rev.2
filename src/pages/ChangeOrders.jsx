@@ -33,6 +33,7 @@ import {
   removeRecordFromCaches,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { usePermissions } from "@/services/permissions";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 
 import {
@@ -55,6 +56,7 @@ export default function ChangeOrders() {
   const qc = useQueryClient();
   const projectId = useProjectId();
   const { activeProject } = useProjectContext();
+  const { can } = usePermissions();
 
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -307,7 +309,7 @@ export default function ChangeOrders() {
         { label: "At Risk", value: formatMoney(atRiskValue), sub: "Draft + pending", color: "var(--status-review)" },
         { label: "Base Contract", value: formatMoney(baseContract), sub: "Original value" },
       ]}
-      actions={(
+      actions={can("create", "change_order") ? (
         <>
           <OpsActionButton
             onClick={() => setImportOpen(true)}
@@ -322,7 +324,7 @@ export default function ChangeOrders() {
             New CO
           </OpsActionButton>
         </>
-      )}
+      ) : null}
     >
       {/* CO status filter tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
@@ -490,7 +492,7 @@ export default function ChangeOrders() {
               setSelectedIds(new Set());
             },
           },
-          {
+          ...(can("delete", "change_order") ? [{
             label: "DELETE",
             icon: "x",
             variant: "danger",
@@ -501,7 +503,7 @@ export default function ChangeOrders() {
                 setSelectedIds(new Set());
               }
             },
-          },
+          }] : []),
         ]}
       />
 

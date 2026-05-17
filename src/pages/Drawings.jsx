@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { batchProcess } from "@/utils/batchProcess";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
+import { usePermissions } from "@/services/permissions";
 
 // ── Domain config & utils ───────────────────────────────────────────────────
 import {
@@ -68,6 +69,7 @@ export default function Drawings() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const projectId = activeProject?.id;
+  const { can } = usePermissions();
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [view, setView] = useState("list");
@@ -730,9 +732,11 @@ export default function Drawings() {
         <Button variant="secondary" icon="download" onClick={() => setExportPkgKind("claims")}>
           CLAIMS PACKAGE
         </Button>
-        <Button variant="secondary" icon="plus" onClick={() => { setEditing(null); setShowModal(true); }}>
-          ADD SHEET
-        </Button>
+        {can("create", "drawing") && (
+          <Button variant="secondary" icon="plus" onClick={() => { setEditing(null); setShowModal(true); }}>
+            ADD SHEET
+          </Button>
+        )}
         <Button
           variant="outline"
           icon="arrow"
@@ -902,13 +906,13 @@ export default function Drawings() {
             selected={selected}
             onToggleSelect={toggleSelect}
             onToggleAll={toggleSelectAll}
-            onEdit={d => { setEditing(d); setShowModal(true); }}
-            onDelete={handleDelete}
+            onEdit={can("edit", "drawing") ? d => { setEditing(d); setShowModal(true); } : null}
+            onDelete={can("delete", "drawing") ? handleDelete : null}
             onAdvance={handleAdvanceStage}
             onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
             setContextMenu={setContextMenu}
             onSetApproval={openSetApproval}
-            onDeleteSet={handleDeleteSet}
+            onDeleteSet={can("delete", "drawing") ? handleDeleteSet : null}
             onRenameSet={openRenameSet}
             onMarkTitleblock={openMarkTitleblock}
             rfiMap={rfiMap}
@@ -921,13 +925,13 @@ export default function Drawings() {
             drawingSets={drawingSetRecords}
             selected={selected}
             onToggleSelect={toggleSelect}
-            onEdit={d => { setEditing(d); setShowModal(true); }}
-            onDelete={handleDelete}
+            onEdit={can("edit", "drawing") ? d => { setEditing(d); setShowModal(true); } : null}
+            onDelete={can("delete", "drawing") ? handleDelete : null}
             onAdvance={handleAdvanceStage}
             onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
             onSetApproval={openSetApproval}
             onRenameSet={openRenameSet}
-            onDeleteSet={handleDeleteSet}
+            onDeleteSet={can("delete", "drawing") ? handleDeleteSet : null}
             rfiMap={rfiMap}
           />
         )}
@@ -938,10 +942,10 @@ export default function Drawings() {
         contextMenu={contextMenu}
         contextRef={contextRef}
         onView={(d) => navigate(`/DrawingViewer?id=${d.id}`)}
-        onEdit={(d) => { setEditing(d); setShowModal(true); }}
+        onEdit={can("edit", "drawing") ? (d) => { setEditing(d); setShowModal(true); } : null}
         onAdvance={handleAdvanceStage}
         onSetApproval={openSetApproval}
-        onDelete={handleDelete}
+        onDelete={can("delete", "drawing") ? handleDelete : null}
         onDismiss={() => setContextMenu(null)}
       />
 

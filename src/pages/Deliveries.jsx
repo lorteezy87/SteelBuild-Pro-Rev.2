@@ -33,6 +33,7 @@ import {
   removeRecordFromCaches,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { usePermissions } from "@/services/permissions";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -123,6 +124,7 @@ export default function Deliveries() {
   const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const receiveMode = searchParams.get("receive") === "1";
 
   const [view, setView] = useState("dispatch");
@@ -438,20 +440,24 @@ export default function Deliveries() {
             >
               CSV
             </Button>
-            <Button variant="outline" icon="upload" onClick={() => setShowImport(true)}>
-              Import Ticket
-            </Button>
-            <Button
-              variant="primary"
-              icon="plus"
-              onClick={() => {
-                setEditing(null);
-                setDetail(null);
-                setShowForm(true);
-              }}
-            >
-              Schedule Load
-            </Button>
+            {can("create", "delivery") && (
+              <Button variant="outline" icon="upload" onClick={() => setShowImport(true)}>
+                Import Ticket
+              </Button>
+            )}
+            {can("create", "delivery") && (
+              <Button
+                variant="primary"
+                icon="plus"
+                onClick={() => {
+                  setEditing(null);
+                  setDetail(null);
+                  setShowForm(true);
+                }}
+              >
+                Schedule Load
+              </Button>
+            )}
           </div>
         </div>
         <div className="delivery-hero-grid">
@@ -685,14 +691,14 @@ export default function Deliveries() {
         projectMap={projectMap}
         workPackageMap={workPackageMap}
         onClose={() => setDetail(null)}
-        onEdit={(delivery) => {
+        onEdit={can("edit", "delivery") ? (delivery) => {
           setEditing(delivery);
           setDetail(null);
-        }}
-        onDelete={(delivery) => {
+        } : null}
+        onDelete={can("delete", "delivery") ? (delivery) => {
           setDeleteTarget(delivery);
           setDetail(null);
-        }}
+        } : null}
         onSetStatus={setDeliveryStatus}
       />
 
