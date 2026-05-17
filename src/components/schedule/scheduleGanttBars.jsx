@@ -409,6 +409,50 @@ export function TaskBar({ task, leftPx, widthPx }) {
   );
 }
 
+// ── Baseline ghost bar ───────────────────────────────────────────────────
+// Semi-transparent grey bar rendered BELOW the current task bar to show
+// where the task was originally planned (the "baseline"). Smaller than the
+// main bar (60% height), dashed border, muted colour. Only rendered when
+// baseline dates differ from current effective dates — i.e. when drift is
+// visible. An optional shift-direction indicator (small arrow) connects
+// the ghost to the current bar when the task has moved forward/backward.
+export function BaselineGhostBar({ leftPx, widthPx, direction }) {
+  const GHOST_HEIGHT = 11;
+  const w = Math.max(widthPx, 4);
+  return (
+    <div style={{
+      position: "absolute",
+      left: leftPx,
+      width: w,
+      height: GHOST_HEIGHT,
+      top: "50%",
+      transform: "translateY(5px)",
+      background: "rgba(100,116,139,0.18)",
+      border: "1.5px dashed rgba(100,116,139,0.50)",
+      borderRadius: 3,
+      pointerEvents: "none",
+      zIndex: 0,
+    }}>
+      {direction && (
+        <span style={{
+          position: "absolute",
+          top: "50%",
+          transform: "translateY(-50%)",
+          ...(direction === "right"
+            ? { right: -10, color: "var(--status-warning)" }
+            : { left: -10, color: "var(--status-info)" }),
+          fontSize: 9,
+          fontWeight: 900,
+          lineHeight: 1,
+          opacity: 0.8,
+        }}>
+          {direction === "right" ? "→" : "←"}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── Submittal bar ─────────────────────────────────────────────────────────
 export function SubmittalBar({ submittal, leftPx, widthPx }) {
   const statusColors = {
