@@ -675,11 +675,11 @@ export default function PortfolioBimViewer({
 
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      controls.dampingFactor = 0.12;
-      controls.rotateSpeed = 0.42;
-      controls.zoomSpeed = 0.52;
-      controls.panSpeed = 0.48;
-      controls.keyPanSpeed = 5;
+      controls.dampingFactor = 0.14;
+      controls.rotateSpeed = 0.35;
+      controls.zoomSpeed = 0.35;
+      controls.panSpeed = 0.35;
+      controls.keyPanSpeed = 3;
       controls.target.set(0, 2, 0);
       controls.maxPolarAngle = Math.PI * 0.48;
       controls.minDistance = 1.2;
@@ -976,7 +976,9 @@ export default function PortfolioBimViewer({
               }
             };
 
-            try { await fragmentsManager.core.update(true); } catch { /* ignore initial streaming errors */ }
+            // Stream tiles in — do NOT use update(true) which evicts tiles
+            // and causes the model to "pop in and out" of the frame.
+            try { await fragmentsManager.core.update(); } catch { /* ignore initial streaming errors */ }
             registerIfcMeshes();
             try {
               ifcModel.onViewUpdated?.add?.(() => {
@@ -986,7 +988,8 @@ export default function PortfolioBimViewer({
             let pollCount = 0;
             streamPoll = window.setInterval(async () => {
               pollCount++;
-              try { await fragmentsManager?.core?.update?.(true); } catch { /* ignore */ }
+              // Stream only — no eviction (update without `true`)
+              try { await fragmentsManager?.core?.update?.(); } catch { /* ignore */ }
               registerIfcMeshes();
               if (meshes.length > 0 || pollCount > 30) window.clearInterval(streamPoll);
             }, 250);
