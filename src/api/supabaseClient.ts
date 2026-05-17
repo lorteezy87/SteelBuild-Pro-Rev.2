@@ -306,7 +306,7 @@ const softDeleteProjectChildren = async (projectId: string, deletedAt: string): 
  * (created_date, updated_date) — they are not real DB columns and will cause
  * a PostgREST "column not found" error if sent back on update/create.
  */
-const VIRTUAL_FIELDS = new Set(['created_date', 'updated_date']);
+const VIRTUAL_FIELDS = new Set(['created_date', 'updated_date', 'projects']);
 const cleanRecord = (record: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(
     Object.entries(record)
