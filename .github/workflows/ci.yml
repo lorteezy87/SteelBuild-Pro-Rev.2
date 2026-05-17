@@ -86,6 +86,8 @@ jobs:
 
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
-        # don't see. Output is discarded â€” we just want the failure
+        # don't see. Output is discarded — we just want the failure
         # signal.
         run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
