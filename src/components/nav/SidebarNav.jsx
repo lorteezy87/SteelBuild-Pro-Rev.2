@@ -15,7 +15,7 @@
  * means editing the registry + the PAGE_ICON map below.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   // Overview
   LayoutDashboard, Terminal, Sparkles, Grid3x3, Briefcase, BarChart3,
@@ -39,6 +39,8 @@ import {
   BookOpen,
   // Chrome
   ChevronsLeft, ChevronsRight, Search, Clock, ChevronRight as ChevronRightIcon,
+  // Favorites
+  Star,
 } from "lucide-react";
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
 import { prefetchRoute } from "@/lib/routePrefetch";
@@ -156,6 +158,19 @@ function saveRecents(pages) {
   try { localStorage.setItem(RECENTS_LS_KEY, JSON.stringify(pages)); } catch { /* noop */ }
 }
 
+// ── Favorites persistence ───────────────────────────────────────────
+const FAVORITES_LS_KEY = "sbp-sidebar-favorites";
+
+function loadFavorites() {
+  try {
+    const raw = localStorage.getItem(FAVORITES_LS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function saveFavorites(pages) {
+  try { localStorage.setItem(FAVORITES_LS_KEY, JSON.stringify(pages)); } catch { /* noop */ }
+}
+
 // ── Component ───────────────────────────────────────────────────────
 export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   const { theme } = useTheme();
@@ -164,6 +179,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   const [railModeState, setRailMode] = useState(loadRailState);
   const [recents, setRecents]     = useState(loadRecents);
   const [showRecents, setShowRecents] = useState(true);
+  const [favorites, setFavorites] = useState(loadFavorites);
   const railMode = isLightTheme ? false : railModeState;
 
   // Recent-pages tracking — kept here so reloads remember the last
@@ -203,6 +219,26 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
     setCollapsed(newState);
     saveSidebarState(newState);
   };
+
+  // ── Favorites logic ──────────────────────────────────────────────
+  const toggleFavorite = useCallback((page) => {
+    setFavorites((prev) => {
+      const next = prev.includes(page)
+        ? prev.filter((p) => p !== page)
+        : [...prev, page];
+      saveFavorites(next);
+      return next;
+    });
+  }, []);
+
+  const favoriteItems = useMemo(() => {
+    const flat = SIDEBAR_GROUPS.flatMap((g) =>
+      g.items.map((it) => ({ ...it, _group: g.label }))
+    );
+    return favorites
+      .map((p) => flat.find((it) => it.page === p))
+      .filter(Boolean);
+  }, [favorites]);
 
   // Recents filtered against the flat registry so a deleted/renamed
   // page falls out cleanly instead of rendering a dead entry.
@@ -414,10 +450,29 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
           position: "relative",
         }}
       >
+        {/* ── Favorites section ─────────────────────────────────── */}
+        {!railMode && favoriteItems.length > 0 && (
+          <FavoritesSection
+            items={favoriteItems}
+            currentPageName={currentPageName}
+            onNavigate={onNavigate}
+            onUnpin={toggleFavorite}
+          />
+        )}
+        {railMode && favoriteItems.length > 0 && (
+          <FavoritesSectionRail
+            items={favoriteItems}
+            currentPageName={currentPageName}
+            onNavigate={onNavigate}
+            onUnpin={toggleFavorite}
+          />
+        )}
+
         {SIDEBAR_GROUPS.map((group, groupIdx) => {
           const isCollapsed = group.collapsible && collapsed[group.label];
+          const hasFavs = favoriteItems.length > 0;
           return (
-            <div key={group.label} style={{ marginTop: groupIdx === 0 ? 0 : (railMode ? 8 : 12) }}>
+            <div key={group.label} style={{ marginTop: (groupIdx === 0 && !hasFavs) ? 0 : (groupIdx === 0 && hasFavs) ? 0 : (railMode ? 8 : 12) }}>
               {railMode ? (
                 // Rail mode: minimalist divider between groups
                 groupIdx > 0 && (
@@ -499,6 +554,8 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
                     active={currentPageName === item.page}
                     railMode={railMode}
                     onClick={() => onNavigate(item.page)}
+                    isFavorite={favorites.includes(item.page)}
+                    onToggleFavorite={toggleFavorite}
                   />
                 ))}
               </div>
@@ -589,8 +646,324 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   );
 }
 
+// ── Favorites section (expanded mode) ──────────────────────────────
+function FavoritesSection({ items, currentPageName, onNavigate, onUnpin }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <button
+        onClick={() => setCollapsed((v) => !v)}
+        style={{
+          width: "100%",
+          padding: "6px 14px 4px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          cursor: "pointer",
+          background: "none",
+          border: "none",
+          userSelect: "none",
+          textAlign: "left",
+        }}
+        onMouseEnter={(e) => {
+          const label = e.currentTarget.querySelector("[data-label]");
+          if (label) label.style.color = "var(--text-secondary)";
+        }}
+        onMouseLeave={(e) => {
+          const label = e.currentTarget.querySelector("[data-label]");
+          if (label) label.style.color = "var(--accent)";
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <Star size={9} strokeWidth={2.5} style={{ color: "var(--accent)", fill: "var(--accent)" }} />
+          <span
+            data-label
+            className="sbd-nav-section"
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.16em",
+              color: "var(--accent)",
+              transition: "color 140ms",
+            }}
+          >
+            FAVORITES
+          </span>
+        </span>
+        <ChevronRightIcon
+          size={12}
+          strokeWidth={2}
+          style={{
+            color: "var(--text-muted)",
+            transform: collapsed ? "rotate(0deg)" : "rotate(90deg)",
+            transition: "transform 180ms cubic-bezier(0.25, 0.85, 0.35, 1)",
+          }}
+        />
+      </button>
+      {!collapsed && (
+        <div style={{ marginTop: 2 }}>
+          {items.map((item) => (
+            <FavoriteLink
+              key={item.page}
+              item={item}
+              active={currentPageName === item.page}
+              onClick={() => onNavigate(item.page)}
+              onUnpin={() => onUnpin(item.page)}
+            />
+          ))}
+        </div>
+      )}
+      {/* Divider beneath favorites */}
+      <div
+        style={{
+          height: 1,
+          margin: collapsed ? "6px 14px 4px" : "8px 14px 4px",
+          background: "var(--divider)",
+          opacity: 0.6,
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Favorites section (rail mode) ─────────────────────────────────
+function FavoritesSectionRail({ items, currentPageName, onNavigate, onUnpin }) {
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          padding: "4px 0 2px",
+        }}
+      >
+        <Star size={10} strokeWidth={2.5} style={{ color: "var(--accent)", fill: "var(--accent)" }} />
+      </div>
+      {items.map((item) => {
+        const Icon = PAGE_ICON[item.page] || FallbackIcon;
+        const active = currentPageName === item.page;
+        return (
+          <FavoriteRailLink
+            key={item.page}
+            item={item}
+            active={active}
+            onClick={() => onNavigate(item.page)}
+          />
+        );
+      })}
+      <div
+        style={{
+          height: 1,
+          margin: "4px 12px 8px",
+          background: "var(--divider)",
+          opacity: 0.6,
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Single favorite link (expanded) ───────────────────────────────
+function FavoriteLink({ item, active, onClick, onUnpin }) {
+  const [hovered, setHovered] = useState(false);
+  const Icon = PAGE_ICON[item.page] || FallbackIcon;
+  const warmRoute = () => prefetchRoute(item.page);
+
+  const iconColor = active
+    ? "var(--accent)"
+    : hovered ? "var(--text-primary)" : "var(--text-secondary)";
+  const textColor = active
+    ? "var(--text-primary)"
+    : hovered ? "var(--text-primary)" : "var(--text-secondary)";
+
+  return (
+    <div
+      style={{ position: "relative" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        onClick={onClick}
+        aria-current={active ? "page" : undefined}
+        className={`sbd-nav-item${active ? " is-active" : ""}`}
+        onFocus={warmRoute}
+        style={{
+          position: "relative",
+          width: "calc(100% - 12px)",
+          height: 32,
+          margin: "1px 6px",
+          padding: "0 10px 0 30px",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          background: active
+            ? "color-mix(in srgb, var(--accent) 10%, transparent)"
+            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+          border: "none",
+          borderRadius: 6,
+          cursor: "pointer",
+          transition: "background 140ms",
+          userSelect: "none",
+          textAlign: "left",
+        }}
+      >
+        {active && (
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: -6,
+              top: 6, bottom: 6,
+              width: 2,
+              background: "var(--accent)",
+              borderRadius: "0 2px 2px 0",
+              boxShadow: "0 0 6px var(--accent)",
+            }}
+          />
+        )}
+        <Icon
+          size={15}
+          strokeWidth={1.75}
+          color={iconColor}
+          style={{ flexShrink: 0, transition: "color 140ms" }}
+        />
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 12.5,
+            fontWeight: active ? 600 : 500,
+            color: textColor,
+            flex: 1,
+            lineHeight: 1.2,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            letterSpacing: active ? "0.005em" : "0",
+            transition: "color 140ms",
+          }}
+        >
+          {item.label}
+        </span>
+      </button>
+      {/* Unpin star — visible on hover */}
+      {hovered && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onUnpin(); }}
+          title="Remove from favorites"
+          aria-label={`Unpin ${item.label}`}
+          style={{
+            position: "absolute",
+            right: 10,
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: 20,
+            height: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            borderRadius: 4,
+            color: "var(--accent)",
+            transition: "opacity 120ms",
+            zIndex: 2,
+          }}
+        >
+          <Star size={11} strokeWidth={2} fill="var(--accent)" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Single favorite rail link ─────────────────────────────────────
+function FavoriteRailLink({ item, active, onClick }) {
+  const [hovered, setHovered] = useState(false);
+  const Icon = PAGE_ICON[item.page] || FallbackIcon;
+  const warmRoute = () => prefetchRoute(item.page);
+
+  const iconColor = active
+    ? "var(--accent)"
+    : hovered ? "var(--text-primary)" : "var(--text-secondary)";
+
+  return (
+    <div style={{ position: "relative", padding: "1px 6px" }}>
+      <button
+        onClick={onClick}
+        title={item.label}
+        aria-label={item.label}
+        aria-current={active ? "page" : undefined}
+        className={`sbd-nav-item${active ? " is-active" : ""}`}
+        onMouseEnter={() => { setHovered(true); warmRoute(); }}
+        onMouseLeave={() => setHovered(false)}
+        onFocus={warmRoute}
+        style={{
+          width: 44, height: 36,
+          margin: "0 auto",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: active
+            ? "color-mix(in srgb, var(--accent) 14%, transparent)"
+            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+          border: active
+            ? "1px solid color-mix(in srgb, var(--accent) 40%, transparent)"
+            : "1px solid transparent",
+          borderRadius: 8,
+          cursor: "pointer",
+          transition: "all 140ms",
+          position: "relative",
+        }}
+      >
+        <Icon size={16} strokeWidth={1.75} color={iconColor} style={{ transition: "color 140ms" }} />
+        {active && (
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: -8, top: 8, bottom: 8,
+              width: 2,
+              background: "var(--accent)",
+              borderRadius: "0 2px 2px 0",
+              boxShadow: "0 0 6px var(--accent)",
+            }}
+          />
+        )}
+      </button>
+      {hovered && (
+        <div
+          role="tooltip"
+          style={{
+            position: "absolute",
+            left: 52,
+            top: "50%",
+            transform: "translateY(-50%)",
+            background: "var(--bg-elevated, var(--bg-surface))",
+            border: "1px solid var(--border-default)",
+            borderRadius: 6,
+            padding: "5px 10px",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "var(--text-primary)",
+            whiteSpace: "nowrap",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+            zIndex: 1000,
+            pointerEvents: "none",
+          }}
+        >
+          {item.label}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Single nav link ─────────────────────────────────────────────────
-function SidebarLink({ item, active, railMode, onClick }) {
+function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavorite }) {
   const [hovered, setHovered] = useState(false);
   const Icon = PAGE_ICON[item.page] || FallbackIcon;
   const warmRoute = () => prefetchRoute(item.page);
@@ -679,73 +1052,109 @@ function SidebarLink({ item, active, railMode, onClick }) {
   }
 
   return (
-    <button
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-      className={`sbd-nav-item${active ? " is-active" : ""}`}
-      onMouseEnter={() => { setHovered(true); warmRoute(); }}
+    <div
+      style={{ position: "relative" }}
+      onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onFocus={warmRoute}
-      style={{
-        position: "relative",
-        width: "calc(100% - 12px)",
-        height: 32,
-        margin: "1px 6px",
-        padding: "0 10px 0 30px",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        background: active
-          ? "color-mix(in srgb, var(--accent) 10%, transparent)"
-          : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
-        border: "none",
-        borderRadius: 6,
-        cursor: "pointer",
-        transition: "background 140ms",
-        userSelect: "none",
-        textAlign: "left",
-      }}
     >
-      {/* 2px active indicator — a consistent fixed marker, not a sliding
-          bar, which felt too aggressive. Anchored to the left edge
-          of the row so the eye locks onto it cleanly. */}
-      {active && (
-        <span
-          aria-hidden
-          style={{
-            position: "absolute",
-            left: -6,
-            top: 6, bottom: 6,
-            width: 2,
-            background: "var(--accent)",
-            borderRadius: "0 2px 2px 0",
-            boxShadow: "0 0 6px var(--accent)",
-          }}
-        />
-      )}
-      <Icon
-        size={15}
-        strokeWidth={1.75}
-        color={iconColor}
-        style={{ flexShrink: 0, transition: "color 140ms" }}
-      />
-      <span
+      <button
+        onClick={onClick}
+        aria-current={active ? "page" : undefined}
+        className={`sbd-nav-item${active ? " is-active" : ""}`}
+        onFocus={warmRoute}
         style={{
-          fontFamily: "var(--font-body)",
-          fontSize: 12.5,
-          fontWeight: active ? 600 : 500,
-          color: textColor,
-          flex: 1,
-          lineHeight: 1.2,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          letterSpacing: active ? "0.005em" : "0",
-          transition: "color 140ms",
+          position: "relative",
+          width: "calc(100% - 12px)",
+          height: 32,
+          margin: "1px 6px",
+          padding: "0 10px 0 30px",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          background: active
+            ? "color-mix(in srgb, var(--accent) 10%, transparent)"
+            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+          border: "none",
+          borderRadius: 6,
+          cursor: "pointer",
+          transition: "background 140ms",
+          userSelect: "none",
+          textAlign: "left",
         }}
       >
-        {item.label}
-      </span>
-    </button>
+        {/* 2px active indicator — a consistent fixed marker, not a sliding
+            bar, which felt too aggressive. Anchored to the left edge
+            of the row so the eye locks onto it cleanly. */}
+        {active && (
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: -6,
+              top: 6, bottom: 6,
+              width: 2,
+              background: "var(--accent)",
+              borderRadius: "0 2px 2px 0",
+              boxShadow: "0 0 6px var(--accent)",
+            }}
+          />
+        )}
+        <Icon
+          size={15}
+          strokeWidth={1.75}
+          color={iconColor}
+          style={{ flexShrink: 0, transition: "color 140ms" }}
+        />
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 12.5,
+            fontWeight: active ? 600 : 500,
+            color: textColor,
+            flex: 1,
+            lineHeight: 1.2,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            letterSpacing: active ? "0.005em" : "0",
+            transition: "color 140ms",
+          }}
+        >
+          {item.label}
+        </span>
+      </button>
+      {/* Pin/star toggle — appears on hover */}
+      {hovered && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.page); }}
+          title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          aria-label={isFavorite ? `Unpin ${item.label}` : `Pin ${item.label}`}
+          style={{
+            position: "absolute",
+            right: 10,
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: 20,
+            height: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            borderRadius: 4,
+            color: isFavorite ? "var(--accent)" : "var(--text-muted)",
+            transition: "color 120ms",
+            zIndex: 2,
+          }}
+        >
+          <Star
+            size={11}
+            strokeWidth={2}
+            fill={isFavorite ? "var(--accent)" : "none"}
+          />
+        </button>
+      )}
+    </div>
   );
 }
