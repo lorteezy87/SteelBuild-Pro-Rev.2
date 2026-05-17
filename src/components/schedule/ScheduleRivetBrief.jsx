@@ -5,7 +5,7 @@ import { PHASES } from "@/utils/phases";
 import { Button } from "@/components/design-system";
 import { formatDateShort } from "@/components/shared/formatters";
 
-const BRENA_COLLAPSED_KEY = "steelbuild:schedule-brief-collapsed";
+const RIVET_COLLAPSED_KEY = "steelbuild:schedule-brief-collapsed";
 
 const CLOSED_STATUSES = ["complete", "completed", "closed", "cancelled", "canceled"];
 
@@ -115,21 +115,61 @@ function shiftedByDays(effective) {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
+/** Phase-aware fix suggestions for steel construction workflows */
+function phaseSpecificFix(task, context) {
+  const phase = phaseOf(task).toLowerCase();
+  const owner = taskOwner(task);
+  const ownerNote = owner ? ` (${owner})` : "";
+
+  if (context === "start_delay") {
+    switch (phase) {
+      case "detailing":
+        return `Check if the modeling team${ownerNote} has the approved-for-detailing drawings and connection design. Confirm modeling hours are allocated and the detailer has current revision docs.`;
+      case "fabrication":
+        return `Verify that shop drawings are approved and material is procured${ownerNote}. Check if the fab shop has open capacity and the steel release package is complete.`;
+      case "delivery":
+        return `Confirm PO status and vendor lead times${ownerNote}. Check whether trucking is scheduled, and verify the site has a clear laydown area with crane access for unloading.`;
+      case "erection":
+        return `Verify crew availability and crane schedule${ownerNote}. Confirm anchor bolt surveys are done, base plates are set, and the erection sequence drawing is issued.`;
+      default:
+        return `Confirm the root cause with the responsible party${ownerNote}, and either mobilize the work or re-baseline the start/finish dates.`;
+    }
+  }
+
+  if (context === "overdue") {
+    switch (phase) {
+      case "detailing":
+        return `Check if the model is complete but approvals are pending${ownerNote}. Verify submittal status in the approval log — a stalled GC review can silently block this.`;
+      case "fabrication":
+        return `Confirm shop floor status${ownerNote} — is this piece welded, blasted, painted, or waiting on material? Update % complete or push the finish date and flag the delay to the field PM.`;
+      case "delivery":
+        return `Verify shipping status with the vendor${ownerNote}. If material shipped, confirm receipt and update to complete. If not, get a revised ETA and notify the erection crew.`;
+      case "erection":
+        return `Check field status${ownerNote} — is this piece set, bolted, or waiting on connections? If work is done, mark complete. If blocked, identify the hold (weather, crane, access) and communicate to the PM.`;
+      default:
+        return `Update the status if the work is done, or reset the finish date and notify downstream task owners${ownerNote}.`;
+    }
+  }
+
+  return `Review owner, dates, dependencies, and current field/shop status${ownerNote} before publishing the schedule.`;
+}
+
 function buildAtRiskEntry(task, effectiveDates) {
   const name = taskName(task);
   const startLag = daysFromToday(task?.start_date);
   const finishLag = daysFromToday(task?.end_date);
   const effective = effectiveDates[task?.id];
   const shiftDays = shiftedByDays(effective);
-  const criticalLabel = isCriticalTask(task) ? "critical path " : "";
+  const criticalLabel = isCriticalTask(task) ? "critical-path " : "";
+  const phase = phaseOf(task);
 
   if (startLag != null && startLag < 0 && progressValue(task) === 0) {
     const lateDays = Math.abs(startLag);
     return {
       task,
       label: name,
-      why: `This ${criticalLabel}task was scheduled to start on ${formatDateShort(task.start_date)} but has not begun, creating a ${lateDays}-day start delay.`,
-      fix: `Confirm the root cause, assign an owner, and either mobilize ${phaseOf(task).toLowerCase()} work or re-baseline the start/finish dates.`,
+      why: `This ${criticalLabel}${phase} task was scheduled to start on ${formatDateShort(task.start_date)} but has not begun, creating a ${lateDays}-day start delay${lateDays > 7 ? " that is likely cascading to downstream work" : ""}.`,
+      fix: phaseSpecificFix(task, "start_delay"),
     };
   }
 
@@ -138,8 +178,8 @@ function buildAtRiskEntry(task, effectiveDates) {
     return {
       task,
       label: name,
-      why: `This open task was due to finish on ${formatDateShort(task.end_date)} and is now ${lateDays} day${lateDays === 1 ? "" : "s"} late.`,
-      fix: "Update the status if the work is complete, or reset the finish date and notify downstream owners.",
+      why: `This ${criticalLabel}${phase} task was due on ${formatDateShort(task.end_date)} and is now ${lateDays} day${lateDays === 1 ? "" : "s"} past due${isCriticalTask(task) ? ", directly impacting the critical path" : ""}.`,
+      fix: phaseSpecificFix(task, "overdue"),
     };
   }
 
@@ -147,8 +187,8 @@ function buildAtRiskEntry(task, effectiveDates) {
     return {
       task,
       label: name,
-      why: `Dependency logic is pushing this task ${shiftDays} day${shiftDays === 1 ? "" : "s"} later than its stored dates.`,
-      fix: "Review predecessor links, lag, and whether the stored dates need to be re-baselined.",
+      why: `Dependency logic is pushing this ${phase} task ${shiftDays} day${shiftDays === 1 ? "" : "s"} later than its stored dates${isCriticalTask(task) ? " — this shift is on the critical path" : ""}.`,
+      fix: `Review the predecessor chain for '${name}' and verify whether the upstream ${phase.toLowerCase()} work has actually slipped or if the link/lag needs to be corrected. ${shiftDays > 5 ? "A shift this large usually means a predecessor finish date was not updated after the work completed." : ""}`,
     };
   }
 
@@ -156,16 +196,16 @@ function buildAtRiskEntry(task, effectiveDates) {
     return {
       task,
       label: name,
-      why: "This task is still missing a start date, finish date, or both, so it cannot reliably drive downstream planning.",
-      fix: "Define the work window or keep it intentionally marked TBD until the responsible team can commit dates.",
+      why: `This ${phase} task is missing ${!task?.start_date && !task?.end_date ? "both start and finish dates" : !task?.start_date ? "a start date" : "a finish date"}, so it cannot drive downstream planning.`,
+      fix: `Work with the ${phase.toLowerCase()} lead to define the work window. ${phase === "Detailing" ? "Check when the detailer can begin and how many modeling hours are needed." : phase === "Fabrication" ? "Confirm material lead time and shop capacity to set realistic dates." : phase === "Delivery" ? "Get vendor-committed ship dates and trucking lead times." : phase === "Erection" ? "Check crane availability and crew schedule to set erection windows." : "Define scope and duration based on the responsible team's capacity."}`,
     };
   }
 
   return {
     task,
     label: name,
-    why: "This task carries schedule risk based on current status, dates, dependencies, or critical-path metadata.",
-    fix: "Review owner, dates, dependencies, and current field/shop status before publishing the schedule.",
+    why: `This ${criticalLabel}${phase} task carries schedule risk based on its current status, dates, and dependency position.`,
+    fix: phaseSpecificFix(task, "general"),
   };
 }
 
@@ -226,11 +266,24 @@ function buildScheduleAiNarrative({
   const undefinedPct = openTasks.length ? Math.round((tbd.length / openTasks.length) * 100) : 0;
   const primaryAtRisk = atRisk[0];
   const hasPrimaryDelay = Boolean(primaryAtRisk && forecastDelayDays > 0);
+
+  // Count issues by phase for narrative context
+  const phaseIssues = {};
+  [...delayed, ...overdue, ...stalled].forEach(t => {
+    const p = phaseOf(t);
+    phaseIssues[p] = (phaseIssues[p] || 0) + 1;
+  });
+  const topIssuePhases = Object.entries(phaseIssues)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([phase, count]) => `${phase} (${count})`);
+  const phaseContext = topIssuePhases.length ? ` Issue concentration: ${topIssuePhases.join(", ")}.` : "";
+
   const summary = riskLevel === "HIGH"
-    ? `The project is at high risk because ${primaryAtRisk ? `'${primaryAtRisk.label}' is driving the current schedule pressure` : "multiple schedule controls are outside tolerance"}. ${tbd.length ? `${undefinedPct}% of open tasks still have TBD dates, which limits reliable downstream planning.` : "The next step is to verify the critical path and publish recovery dates."}`
+    ? `High schedule risk — ${delayed.length + overdue.length + stalled.length} tasks are delayed, overdue, or stalled across ${openTasks.length} open items.${primaryAtRisk ? ` '${primaryAtRisk.label}' is the primary pressure point.` : ""}${phaseContext} ${forecastDelayDays > 0 ? `Current forecast shows +${forecastDelayDays}d pressure on the critical path.` : ""} ${tbd.length ? `${undefinedPct}% of open tasks still have TBD dates, limiting downstream planning reliability.` : "Verify the critical path and publish recovery dates."}`
     : riskLevel === "MEDIUM"
-      ? `The project has moderate schedule risk. ${primaryAtRisk ? `'${primaryAtRisk.label}' needs attention first.` : "The main work is to clean up dates, owners, and dependency logic before the lookahead hardens."}`
-      : "The project has low visible schedule risk. Keep the lookahead clean by confirming dates, owners, and dependency links before they become blockers.";
+      ? `Moderate schedule risk across ${openTasks.length} open tasks.${primaryAtRisk ? ` '${primaryAtRisk.label}' needs attention first.` : ""}${phaseContext} ${forecastDelayDays > 0 ? `Forecast pressure: +${forecastDelayDays}d.` : ""} Clean up dates, owners, and dependency logic before the lookahead hardens.`
+      : `Low schedule risk across ${openTasks.length} open tasks.${phaseContext} ${tbd.length ? `${tbd.length} TBD-date task${tbd.length === 1 ? "" : "s"} should be resolved proactively.` : "Keep the lookahead clean by confirming dates, owners, and dependency links before they become blockers."}`;
 
   const blockers = [
     primaryAtRisk && hasPrimaryDelay ? `The '${primaryAtRisk.label}' task is the primary schedule blocker right now.` : null,
@@ -240,11 +293,11 @@ function buildScheduleAiNarrative({
   ].filter(Boolean).slice(0, 4);
 
   const sequenceSuggestions = [
-    primaryAtRisk ? `Resolve or re-baseline '${primaryAtRisk.label}' before relying on downstream dates.` : null,
-    tbd.length ? `Define scope, duration, and dependencies for the ${tbd.length} TBD task${tbd.length === 1 ? "" : "s"}.` : null,
-    logicGaps.length ? "Tighten predecessor/successor links so critical-path movement is visible before work slips." : null,
-    forecastDelayDays > 0 ? `Communicate the current +${forecastDelayDays}d forecast pressure to affected detailing, fabrication, delivery, and field stakeholders.` : null,
-    unassignedTasks.length ? "Assign accountable owners to open work before the next coordination meeting." : null,
+    primaryAtRisk ? `Resolve or re-baseline '${primaryAtRisk.label}' (${phaseOf(primaryAtRisk.task)}) — ${primaryAtRisk.why.split(".")[0].toLowerCase()}.` : null,
+    tbd.length ? `Define dates for the ${tbd.length} TBD task${tbd.length === 1 ? "" : "s"} (${undefinedPct}% of open work). Prioritize any that gate detailing starts or fabrication releases.` : null,
+    logicGaps.length ? `Tighten predecessor/successor links on ${logicGaps.length} task${logicGaps.length === 1 ? "" : "s"} so critical-path movement surfaces before work slips.` : null,
+    forecastDelayDays > 0 ? `Communicate the +${forecastDelayDays}d forecast pressure to the PM and affected ${[...new Set([...delayed, ...overdue].map(t => phaseOf(t).toLowerCase()))].join(", ") || "project"} teams.` : null,
+    unassignedTasks.length ? `Assign owners to ${unassignedTasks.length} open task${unassignedTasks.length === 1 ? "" : "s"} before the next coordination meeting — these cannot be tracked on the lookahead without accountability.` : null,
   ].filter(Boolean).slice(0, 4);
 
   return {
@@ -391,92 +444,106 @@ function buildBrief(tasks) {
     .sort((a, b) => (b.delayed * 5 + b.overdue * 4 + b.critical * 3 + b.tbd) - (a.delayed * 5 + a.overdue * 4 + a.critical * 3 + a.tbd))
     .slice(0, 4);
 
+  // Helper: summarize which phases are affected in each recovery bucket
+  const phaseBreakdown = (taskList) => {
+    const counts = {};
+    taskList.forEach(t => { const p = phaseOf(t); counts[p] = (counts[p] || 0) + 1; });
+    return Object.entries(counts).sort((a,b) => b[1] - a[1]).map(([p, c]) => `${c} ${p}`).join(", ");
+  };
+
   const recoveryActions = [
     overdue.length ? {
       key: "overdue",
       title: "Clean up overdue finish dates",
-      detail: `${overdue.length} open task${overdue.length === 1 ? "" : "s"} finish before today. Confirm status or reset dates before downstream reviews depend on bad data.`,
+      detail: `${overdue.length} open task${overdue.length === 1 ? "" : "s"} past due (${phaseBreakdown(overdue)}). The worst is '${taskName(overdue[0])}' at ${Math.abs(daysFromToday(overdue[0].end_date))}d late. Confirm actual completion status or push dates and notify downstream teams before the next coordination meeting.`,
       filter: "overdue",
       tone: "var(--status-error)",
     } : null,
     critical.length ? {
       key: "critical",
       title: "Walk the critical path",
-      detail: `${critical.length} task${critical.length === 1 ? "" : "s"} are marked critical. Start with the earliest open critical item and verify predecessor logic.`,
+      detail: `${critical.length} critical-path task${critical.length === 1 ? "" : "s"} (${phaseBreakdown(critical)}). Start with '${taskName(nextCritical[0] || critical[0])}' and verify its predecessor chain — a slip here directly pushes the project completion date.`,
       filter: "critical",
       tone: "var(--status-warning)",
     } : null,
     stalled.length ? {
       key: "stalled",
       title: "Resolve stalled starts",
-      detail: `${stalled.length} task${stalled.length === 1 ? "" : "s"} started in the past but still show 0%. Decide whether work is blocked, late, or status is stale.`,
+      detail: `${stalled.length} task${stalled.length === 1 ? "" : "s"} with past start dates and 0% progress (${phaseBreakdown(stalled)}). Check '${taskName(stalled[0])}' first — is work blocked by a submittal, material, or crew issue, or does the status just need updating?`,
       filter: "stalled",
       tone: "var(--status-warning)",
     } : null,
     handoffCount ? {
       key: "lookahead",
       title: "Review the 14-day handoff",
-      detail: `${handoffCount} open task${handoffCount === 1 ? "" : "s"} start, finish, or span the next two weeks. Confirm crews, releases, blockers, and date logic before the weekly coordination meeting.`,
+      detail: `${handoffCount} task${handoffCount === 1 ? "" : "s"} in the two-week lookahead window. ${startsSoonEntries.length ? `${startsSoonEntries.length} starting` : ""}${startsSoonEntries.length && dueSoonEntries.length ? ", " : ""}${dueSoonEntries.length ? `${dueSoonEntries.length} finishing` : ""}${activeNowEntries.length ? `, ${activeNowEntries.length} active now` : ""}. Confirm crews, material releases, and blockers before the weekly coordination meeting.`,
       filter: "lookahead",
       tone: "var(--status-info)",
     } : null,
-    shiftedTasks.length ? {
+    shiftedAll.length ? {
       key: "shifted",
       title: "Review cascade variance",
-      detail: `${shiftedTasks.length} open task${shiftedTasks.length === 1 ? "" : "s"} moved from stored dates because predecessor logic pushed the effective schedule. Confirm whether the stored dates should be updated or the dependency should change.`,
+      detail: `${shiftedAll.length} task${shiftedAll.length === 1 ? "" : "s"} drifted from stored dates by predecessor cascade (${totalShiftDays} total shift-days). Worst: '${taskName(shiftedTasks[0])}' shifted +${shiftedByDays(effectiveDates[shiftedTasks[0]?.id])}d. Decide whether to re-baseline stored dates or fix the dependency logic.`,
       filter: "shifted",
       tone: "var(--status-warning)",
     } : null,
-    unassignedTasks.length ? {
+    unassignedAll.length ? {
       key: "unassigned",
       title: "Assign owners to open work",
-      detail: `${unassignedTasks.length} open task${unassignedTasks.length === 1 ? "" : "s"} have no assigned resource or owner. Assign accountability before relying on the lookahead in coordination meetings.`,
+      detail: `${unassignedAll.length} open task${unassignedAll.length === 1 ? "" : "s"} have no owner (${phaseBreakdown(unassignedAll)}). Unowned tasks drift silently — assign a detailer, fab lead, or field foreman before relying on the lookahead.`,
       filter: "unassigned",
       tone: "var(--status-error)",
     } : null,
     logicGaps.length ? {
       key: "logic",
       title: "Tighten schedule logic",
-      detail: `${logicGaps.length} open task${logicGaps.length === 1 ? "" : "s"} have missing predecessor or successor context. Review whether each is a true project start/end or needs dependency links.`,
+      detail: `${logicGaps.length} task${logicGaps.length === 1 ? "" : "s"} missing predecessor or successor links (${phaseBreakdown(logicGaps)}). Add links where work gates on drawing approval, steel release, fab completion, or delivery receipt.`,
       filter: "logic",
       tone: "var(--status-warning)",
     } : null,
     tbd.length ? {
       key: "tbd",
       title: "Convert TBD dates",
-      detail: `${tbd.length} open task${tbd.length === 1 ? "" : "s"} still need start/finish dates. GanttPro-style schedules need unknown dates visible, but they should be burned down.`,
+      detail: `${tbd.length} task${tbd.length === 1 ? "" : "s"} still need dates (${Math.round(tbd.length / Math.max(openTasks.length, 1) * 100)}% of open work). Focus on tasks gating ${phaseBreakdown(tbd)} — downstream teams cannot plan without upstream commitments.`,
       filter: "tbd",
       tone: "var(--status-info)",
     } : null,
     unlinked.length ? {
       key: "unlinked",
       title: "Add missing logic links",
-      detail: `${unlinked.length} root-level task${unlinked.length === 1 ? "" : "s"} have no predecessor/successor logic. Add links where work truly depends on drawing, release, fabrication, or delivery gates.`,
+      detail: `${unlinked.length} root-level task${unlinked.length === 1 ? "" : "s"} with no predecessor/successor logic. Add links where work depends on detailing approvals, steel release packages, fab/delivery gates, or erection sequences.`,
       filter: "unlinked",
       tone: "var(--text-secondary)",
     } : null,
   ].filter(Boolean).slice(0, 4);
 
-  const riskScore = Math.min(100, Math.round(
+  // Risk score normalized by project size — a 200-task project with 3 delayed
+  // items should not score as high as a 15-task project with 3 delayed items.
+  const taskCount = Math.max(openTasks.length, 1);
+  const rawScore =
     delayed.length * 16
     + overdue.length * 12
     + critical.length * 7
     + stalled.length * 6
     + tbd.length * 5
     + Math.min(20, shiftedTasks.length * 4)
-    + Math.min(18, unassignedTasks.length * 3)
+    + Math.min(18, unassignedAll.length * 3)
     + Math.min(18, logicGaps.length * 3)
-    + Math.min(20, unlinked.length * 2)
-  ));
+    + Math.min(20, unlinked.length * 2);
+  // For small schedules (≤20 tasks) use the raw score directly.
+  // For larger ones, dampen: a 100-task project needs proportionally more
+  // issues to hit the same score as a 20-task one.
+  const sizeNorm = taskCount <= 20 ? 1 : 20 / Math.sqrt(20 * taskCount);
+  const riskScore = Math.min(100, Math.round(rawScore * sizeNorm));
 
   const morningPlan = [
     recoveryActions[0] ? `1. ${recoveryActions[0].title}: ${recoveryActions[0].detail}` : null,
-    nextCritical[0] ? `2. Critical path check: confirm ${formatBriefTask(nextCritical[0])}.` : null,
-    startsSoon[0] ? `3. Start handoff: verify ${formatBriefTask(startsSoon[0])}.` : null,
-    dueSoon[0] ? `4. Finish handoff: confirm closeout path for ${formatBriefTask(dueSoon[0])}.` : null,
-    shiftedTasks.length ? `5. Variance review: inspect ${shiftedTasks.length} open task${shiftedTasks.length === 1 ? "" : "s"} shifted by dependency cascade before publishing schedule dates.` : null,
-    unassignedTasks.length ? `6. Ownership cleanup: assign resources to ${unassignedTasks.length} open task${unassignedTasks.length === 1 ? "" : "s"} with no owner.` : null,
-    logicGaps.length ? `7. Logic cleanup: review ${logicGaps.length} open task${logicGaps.length === 1 ? "" : "s"} missing predecessor or successor context.` : null,
+    nextCritical[0] ? `2. Critical path check: confirm status of '${taskName(nextCritical[0])}' (${phaseOf(nextCritical[0])} / ${nextCritical[0]?.status || "No status"}) — this is the nearest critical-path gate.` : null,
+    startsSoon[0] ? `3. Start handoff: verify '${taskName(startsSoon[0])}' (${phaseOf(startsSoon[0])}) is ready to begin — check ${phaseOf(startsSoon[0]) === "Detailing" ? "modeling capacity and approved-for-detailing docs" : phaseOf(startsSoon[0]) === "Fabrication" ? "material procurement and shop drawing approvals" : phaseOf(startsSoon[0]) === "Delivery" ? "PO status and trucking schedule" : phaseOf(startsSoon[0]) === "Erection" ? "crew and crane availability" : "resources and predecessor status"}.` : null,
+    dueSoon[0] ? `4. Finish handoff: confirm closeout path for '${taskName(dueSoon[0])}' (${phaseOf(dueSoon[0])}) — due ${formatDateShort(dueSoon[0].end_date)}.` : null,
+    shiftedTasks.length ? `5. Variance review: ${shiftedTasks.length} task${shiftedTasks.length === 1 ? "" : "s"} shifted by predecessor cascade (${totalShiftDays} total days). Worst: '${taskName(shiftedTasks[0])}' +${shiftedByDays(effectiveDates[shiftedTasks[0]?.id])}d.` : null,
+    unassignedAll.length ? `6. Ownership cleanup: assign owners to ${unassignedAll.length} open task${unassignedAll.length === 1 ? "" : "s"} — unowned work drifts silently.` : null,
+    logicGaps.length ? `7. Logic cleanup: ${logicGaps.length} task${logicGaps.length === 1 ? "" : "s"} missing predecessor or successor links. Add logic where work gates on approvals, releases, or deliveries.` : null,
   ].filter(Boolean);
 
   const aiNarrative = buildScheduleAiNarrative({
@@ -494,7 +561,7 @@ function buildBrief(tasks) {
   });
 
   const clipboardText = [
-    `Brena Schedule Brief - ${new Date().toLocaleDateString()}`,
+    `Rivet Schedule Brief - ${new Date().toLocaleDateString()}`,
     `Project: ${tasks[0]?.project_name || "Selected Project"}`,
     `Pressure: ${riskScore}%`,
     `Risk: ${aiNarrative.riskLevel}`,
@@ -541,7 +608,7 @@ function buildBrief(tasks) {
   return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, unassignedTasks, shiftedTasks, effectiveDates, totalShiftDays, logicGaps, successorCountById, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore, aiNarrative };
 }
 
-export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
+export default function ScheduleRivetBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
   const [copyState, setCopyState] = useState("idle");
   const brief = useMemo(() => buildBrief(tasks), [tasks]);
   const primaryPhase = brief.phaseRows[0]?.phase || null;
@@ -550,7 +617,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
   // Collapsible state — default COLLAPSED (data-first for enterprise schedulers)
   const [collapsed, setCollapsed] = useState(() => {
     try {
-      const stored = localStorage.getItem(BRENA_COLLAPSED_KEY);
+      const stored = localStorage.getItem(RIVET_COLLAPSED_KEY);
       // Default to collapsed if no stored preference
       return stored === null ? true : stored === "true";
     } catch { return true; }
@@ -576,18 +643,46 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
   const toggleCollapsed = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev;
-      try { localStorage.setItem(BRENA_COLLAPSED_KEY, String(next)); } catch {}
+      try { localStorage.setItem(RIVET_COLLAPSED_KEY, String(next)); } catch {}
       return next;
     });
   }, []);
 
-  const recommendation = brief.delayed.length
-    ? "Start with delayed tasks, then check their predecessors and downstream release dates."
-    : brief.overdue.length
-      ? "Start with overdue finish dates and confirm whether the dates are wrong or the work is actually late."
-      : brief.tbd.length
-        ? "Start by replacing TBD dates on open work that affects release, fabrication, delivery, or erection."
-        : "No major recovery pattern is visible. Use the lookahead to keep the next six weeks clean.";
+  // Data-driven recommendation — references actual task names, phases, and counts
+  const recommendation = (() => {
+    const topPhase = brief.phaseRows[0]?.phase;
+    const topPhaseSuffix = topPhase ? ` — most pressure is in ${topPhase}.` : ".";
+
+    if (brief.delayed.length) {
+      const first = taskName(brief.delayed[0]);
+      const phaseMix = [...new Set(brief.delayed.map(t => phaseOf(t)))].join(", ");
+      return `${brief.delayed.length} task${brief.delayed.length === 1 ? " is" : "s are"} flagged delayed across ${phaseMix}. Start with '${first}', check its predecessor chain, and verify downstream release or delivery dates are still achievable${topPhaseSuffix}`;
+    }
+    if (brief.overdue.length) {
+      const first = taskName(brief.overdue[0]);
+      const worstLag = brief.overdue.reduce((max, t) => {
+        const lag = daysFromToday(t.end_date);
+        return lag != null && lag < 0 ? Math.max(max, Math.abs(lag)) : max;
+      }, 0);
+      return `${brief.overdue.length} task${brief.overdue.length === 1 ? " is" : "s are"} past due (worst: ${worstLag}d). Start with '${first}' — confirm whether the work is actually done and status needs updating, or if the finish date needs to be pushed and downstream teams notified${topPhaseSuffix}`;
+    }
+    if (brief.stalled.length) {
+      const first = taskName(brief.stalled[0]);
+      return `${brief.stalled.length} task${brief.stalled.length === 1 ? " has" : "s have"} a past start date but 0% progress. Check '${first}' first — is the work blocked, waiting on a predecessor, or was it actually started but not updated?${topPhaseSuffix}`;
+    }
+    if (brief.tbd.length) {
+      const tbdPct = brief.openTasks.length ? Math.round((brief.tbd.length / brief.openTasks.length) * 100) : 0;
+      return `${brief.tbd.length} open task${brief.tbd.length === 1 ? "" : "s"} (${tbdPct}% of open work) still need dates. Focus on tasks that gate detailing approvals, fabrication starts, or delivery releases — those downstream dependencies can't plan without upstream dates${topPhaseSuffix}`;
+    }
+    if (brief.shiftedTasks.length) {
+      const maxShift = brief.shiftedTasks.reduce((max, t) => Math.max(max, shiftedByDays(brief.effectiveDates[t.id])), 0);
+      return `No delayed or overdue work, but ${brief.shiftedTasks.length} task${brief.shiftedTasks.length === 1 ? " has" : "s have"} drifted up to ${maxShift}d from stored dates due to predecessor cascade. Review whether stored dates should be re-baselined or if dependency logic needs correction.`;
+    }
+    if (brief.logicGaps.length) {
+      return `Schedule dates look clean. ${brief.logicGaps.length} task${brief.logicGaps.length === 1 ? "" : "s"} still lack predecessor or successor links — tighten logic before the next coordination meeting so critical-path movement is visible.`;
+    }
+    return `No major recovery pattern is visible across ${brief.openTasks.length} open tasks. Use the 14-day handoff panel to keep the next six weeks clean and confirm owner accountability.`;
+  })();
 
   const copyMorningBrief = async () => {
     const text = brief.clipboardText.replace("Project: Selected Project", `Project: ${project?.name || "Selected Project"}`);
@@ -619,7 +714,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
         <div style={titleWrapStyle}>
           <span style={avatarStyle}><Sparkles size={15} /></span>
           <div>
-            <div style={eyebrowStyle}>Brena Schedule Brief</div>
+            <div style={eyebrowStyle}>Rivet Schedule Brief</div>
             <div style={titleStyle}>{project?.name || "Selected Project"}</div>
           </div>
         </div>
@@ -639,7 +734,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
             type="button"
             onClick={toggleCollapsed}
             style={toggleButtonStyle}
-            title={collapsed ? "Expand BRENA brief" : "Collapse BRENA brief"}
+            title={collapsed ? "Expand Rivet brief" : "Collapse Rivet brief"}
             aria-expanded={!collapsed}
             aria-label={collapsed ? "Expand schedule brief" : "Collapse schedule brief"}
           >
@@ -679,7 +774,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
         <Metric icon={Zap} label="Stalled" value={brief.stalled.length} tone={brief.stalled.length ? "var(--status-error)" : "var(--status-success)"} />
 
         <div style={recommendationStyle}>
-          <div style={miniLabelStyle}>Brena read</div>
+          <div style={miniLabelStyle}>Rivet read</div>
           <p style={copyStyle}>{recommendation}</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
             {brief.overdue.length > 0 && (
@@ -828,7 +923,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
         </div>
 
         <div style={recoveryPanelStyle}>
-          <div style={miniLabelStyle}>Brena recovery queue</div>
+          <div style={miniLabelStyle}>Rivet recovery queue</div>
           <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
             {brief.recoveryActions.length ? brief.recoveryActions.map((action, index) => (
               <button

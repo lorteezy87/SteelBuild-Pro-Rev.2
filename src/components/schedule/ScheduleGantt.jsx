@@ -1377,7 +1377,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             <button
               type="button"
               onClick={() => setFocusedTaskId(null)}
-              title="Clear Brena task focus"
+              title="Clear Rivet task focus"
               style={{
                 maxWidth: 220,
                 padding: "4px 8px",
@@ -1396,7 +1396,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 whiteSpace: "nowrap",
               }}
             >
-              Brena Focus: {sanitizeTaskName(focusedTask)}
+              Rivet Focus: {sanitizeTaskName(focusedTask)}
             </button>
           )}
         </div>
