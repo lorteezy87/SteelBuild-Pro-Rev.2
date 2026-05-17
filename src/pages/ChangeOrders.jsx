@@ -27,6 +27,12 @@ import ChangeOrderImportModal from "@/components/changeorders/ChangeOrderImportM
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import { formatCurrency } from "@/components/shared/formatters";
 import { toast } from "sonner";
+import {
+  appendRecordToCaches,
+  replaceRecordInCaches,
+  removeRecordFromCaches,
+  toastCrudError,
+} from "@/components/shared/crudFeedback";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 
 import {
@@ -82,6 +88,8 @@ export default function ChangeOrders() {
 
   useRealtimeInvalidation("change_orders", projectId, [["change-orders", projectId]]);
 
+  const coQueryKeys = [["change-orders", projectId], ["change_orders"]];
+
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
@@ -121,36 +129,39 @@ export default function ChangeOrders() {
         project_id: targetProjectId,
       });
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
+      appendRecordToCaches(qc, coQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       qc.invalidateQueries({ queryKey: ["change-orders"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       setModalOpen(false);
       setEditing(null);
       toast.success("Change order created");
     },
-    onError: (err) => toast.error("Failed to create change order: " + (err?.message || "Unknown error")),
+    onError: (e) => toastCrudError(e, "Failed to create change order"),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.ChangeOrder.update(id, data),
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      replaceRecordInCaches(qc, coQueryKeys, updated);
       qc.invalidateQueries({ queryKey: ["change-orders"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       setModalOpen(false);
       setEditing(null);
       toast.success("Change order updated");
     },
-    onError: (err) => toast.error("Failed to update change order: " + (err?.message || "Unknown error")),
+    onError: (e) => toastCrudError(e, "Failed to update change order"),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.ChangeOrder.delete(id),
-    onSuccess: () => {
+    onSuccess: (_result, deletedId) => {
+      removeRecordFromCaches(qc, coQueryKeys, deletedId);
       qc.invalidateQueries({ queryKey: ["change-orders"] });
       setDeleteTarget(null);
       toast.success("Change order deleted");
     },
-    onError: () => toast.error("Failed to delete change order"),
+    onError: (e) => toastCrudError(e, "Failed to delete change order"),
   });
 
   const handleSave = (d) => {

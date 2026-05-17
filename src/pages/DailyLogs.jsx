@@ -11,6 +11,14 @@ import { Plus, Copy } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import {
+  appendRecordToCaches,
+  replaceRecordInCaches,
+  removeRecordFromCaches,
+  invalidateCrudQueries,
+  toastCrudError,
+} from "@/components/shared/crudFeedback";
 
 function getDateCutoff(preset) {
   const now = new Date();
@@ -50,6 +58,8 @@ export default function DailyLogs() {
     setShowForm(true);
   });
 
+  const dailyLogQueryKeys = [["daily-logs", projectId]];
+
   const { data: rawLogs = [], isLoading } = useQuery({
     queryKey: ["daily-logs", projectId],
     queryFn: () =>
@@ -57,6 +67,9 @@ export default function DailyLogs() {
         ? base44.entities.DailyLog.filter({ project_id: projectId })
         : base44.entities.DailyLog.list("-date"),
   });
+
+  useRealtimeInvalidation("daily_logs", projectId, dailyLogQueryKeys);
+
   // Defensive in-memory soft-delete filter — the entity client does this
   // at fetch time, but a stale cache from before the migration could still
   // surface deleted rows. Mirrors the BudgetHours / Procurement pattern.
@@ -120,48 +133,51 @@ export default function DailyLogs() {
 
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.DailyLog.create(data),
-    onSuccess: (created) => {
-      qc.invalidateQueries({ queryKey: ["daily-logs", projectId] });
+    onSuccess: async (created) => {
+      appendRecordToCaches(qc, dailyLogQueryKeys, created);
       toast.success("Daily log created");
       setShowForm(false);
       setEditing(null);
+      await invalidateCrudQueries(qc, dailyLogQueryKeys);
       // Audit trail — fire-and-forget
       logActivity("daily_log", "created", created, {
         projectId,
         description: `Daily log for ${created?.date || "today"}`,
       });
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toastCrudError(err, "Failed to create daily log"),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.DailyLog.update(id, data),
-    onSuccess: (updated) => {
-      qc.invalidateQueries({ queryKey: ["daily-logs", projectId] });
+    onSuccess: async (updated) => {
+      replaceRecordInCaches(qc, dailyLogQueryKeys, updated);
       toast.success("Daily log updated");
       setShowForm(false);
       setEditing(null);
+      await invalidateCrudQueries(qc, dailyLogQueryKeys);
       logActivity("daily_log", "updated", updated, {
         projectId,
         description: `Daily log for ${updated?.date || ""}`,
       });
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toastCrudError(err, "Failed to update daily log"),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.DailyLog.delete(id),
-    onSuccess: (_, deletedId) => {
-      qc.invalidateQueries({ queryKey: ["daily-logs", projectId] });
+    onSuccess: async (_, deletedId) => {
+      removeRecordFromCaches(qc, dailyLogQueryKeys, deletedId);
       if (editing?.id === deletedId) {
         setEditing(null);
         setShowForm(false);
       }
       toast.success("Daily log deleted");
       setDeleteTarget(null);
+      await invalidateCrudQueries(qc, dailyLogQueryKeys);
       logActivity("daily_log", "deleted", { id: deletedId }, { projectId });
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toastCrudError(err, "Failed to delete daily log"),
   });
 
   const handleSave = (data) => {

@@ -18,6 +18,14 @@ import {
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { Button as IconButton } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import {
+  appendRecordToCaches,
+  replaceRecordInCaches,
+  removeRecordFromCaches,
+  invalidateCrudQueries,
+  toastCrudError,
+} from "@/components/shared/crudFeedback";
 import { Button as DSButton, CommandBar } from "@/components/design-system";
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -82,20 +90,39 @@ export default function CostDashboard() {
   const [editingCode, setEditingCode] = useState(null);
   const [deleteCodeTarget, setDeleteCodeTarget] = useState(null);
 
+  const costCodeQueryKeys = [["cost-codes-dash", activeProject?.id]];
+
   const createCodeMut = useMutation({
     mutationFn: (d) => base44.entities.CostCode.create({ ...d, project_id: d.project_id || activeProject?.id }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setCodeModalOpen(false); setEditingCode(null); },
-    onError: (err) => toast.error(err?.message || "Operation failed"),
+    onSuccess: (created) => {
+      appendRecordToCaches(qc, costCodeQueryKeys, created);
+      invalidateCrudQueries(qc, costCodeQueryKeys);
+      toast.success("Cost code created");
+      setCodeModalOpen(false);
+      setEditingCode(null);
+    },
+    onError: (e) => toastCrudError(e, "Failed to create cost code"),
   });
   const updateCodeMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.CostCode.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setCodeModalOpen(false); setEditingCode(null); },
-    onError: (err) => toast.error(err?.message || "Operation failed"),
+    onSuccess: (updated) => {
+      replaceRecordInCaches(qc, costCodeQueryKeys, updated);
+      invalidateCrudQueries(qc, costCodeQueryKeys);
+      toast.success("Cost code updated");
+      setCodeModalOpen(false);
+      setEditingCode(null);
+    },
+    onError: (e) => toastCrudError(e, "Failed to update cost code"),
   });
   const deleteCodeMut = useMutation({
     mutationFn: (id) => base44.entities.CostCode.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setDeleteCodeTarget(null); },
-    onError: (err) => toast.error(err?.message || "Operation failed"),
+    onSuccess: (_, deletedId) => {
+      removeRecordFromCaches(qc, costCodeQueryKeys, deletedId);
+      invalidateCrudQueries(qc, costCodeQueryKeys);
+      toast.success("Cost code deleted");
+      setDeleteCodeTarget(null);
+    },
+    onError: (e) => toastCrudError(e, "Failed to delete cost code"),
   });
 
   const { data: codes = [], isLoading } = useQuery({
@@ -105,6 +132,8 @@ export default function CostDashboard() {
       : [],
     enabled: !!activeProject?.id,
   });
+
+  useRealtimeInvalidation("cost_codes", activeProject?.id, costCodeQueryKeys);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
