@@ -28,6 +28,11 @@ import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import {
+  replaceRecordInCaches,
+  removeRecordFromCaches,
+  toastCrudError,
+} from "@/components/shared/crudFeedback";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -205,20 +210,23 @@ export default function Deliveries() {
   }, [metrics.dueToday.length, metrics.overdue.length, metrics.readyToReceive.length, receiveMode]);
 
   const invalidateDeliveries = () => invalidateEntity(qc, "delivery", projectId);
+  const deliveryQueryKeys = [["deliveries", projectId || "all"], ["deliveries"]];
 
   const transitMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Delivery.update(id, data),
-    onSuccess: async (_result, variables) => {
+    onSuccess: async (updated, variables) => {
+      replaceRecordInCaches(qc, deliveryQueryKeys, updated);
       await invalidateDeliveries();
       setDetail((prev) => (prev?.id === variables.id ? null : prev));
       toast.success("Delivery status updated");
     },
-    onError: () => toast.error("Update failed"),
+    onError: (e) => toastCrudError(e, "Update failed"),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Delivery.delete(id),
-    onSuccess: async () => {
+    onSuccess: async (_result, deletedId) => {
+      removeRecordFromCaches(qc, deliveryQueryKeys, deletedId);
       await invalidateDeliveries();
       if (detail?.id === deleteTarget?.id) setDetail(null);
       if (editing?.id === deleteTarget?.id) setEditing(null);
@@ -230,7 +238,7 @@ export default function Deliveries() {
       setDeleteTarget(null);
       toast.success("Delivery removed");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (e) => toastCrudError(e, "Delete failed"),
   });
 
   const bulkUpdateMut = useMutation({
@@ -255,7 +263,7 @@ export default function Deliveries() {
         toast.success("Deliveries updated");
       }
     },
-    onError: () => toast.error("Bulk update failed"),
+    onError: (e) => toastCrudError(e, "Bulk update failed"),
   });
 
   const filtered = useMemo(() => {

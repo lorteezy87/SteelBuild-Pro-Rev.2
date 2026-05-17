@@ -31,6 +31,14 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import {
+  appendRecordToCaches,
+  replaceRecordInCaches,
+  removeRecordFromCaches,
+  invalidateCrudQueries,
+  toastCrudError,
+} from "@/components/shared/crudFeedback";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
@@ -178,6 +186,10 @@ export default function WorkPackages() {
     staleTime: 30 * 1000,
   });
 
+  const wpQueryKeys = [["work-packages", projectId], ["work-packages"], ["wps-all"]];
+
+  useRealtimeInvalidation("work_packages", projectId, wpQueryKeys);
+
   const invalidateWps = () => {
     qc.invalidateQueries({ queryKey: ["work-packages"] });
     qc.invalidateQueries({ queryKey: ["wps-all"] });
@@ -185,37 +197,39 @@ export default function WorkPackages() {
 
   const updateWPMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.WorkPackage.update(id, data),
-    onSuccess: () => {
+    onSuccess: async (updated) => {
+      replaceRecordInCaches(qc, wpQueryKeys, updated);
       invalidateWps();
       setWPModalOpen(false);
       setEditingWP(null);
       toast.success("Work package updated");
+      await invalidateCrudQueries(qc, wpQueryKeys);
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toastCrudError(err, "Failed to update work package"),
   });
 
   const createWPMut = useMutation({
     mutationFn: (data) => base44.entities.WorkPackage.create(data),
-    onSuccess: () => {
+    onSuccess: async (created) => {
+      appendRecordToCaches(qc, wpQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       invalidateWps();
       setWPModalOpen(false);
       setEditingWP(null);
       toast.success("Work package created");
+      await invalidateCrudQueries(qc, wpQueryKeys);
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toastCrudError(err, "Failed to create work package"),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.WorkPackage.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
+      removeRecordFromCaches(qc, wpQueryKeys, deletedId);
       invalidateWps();
       setDeleteTarget(null);
       toast.success("Work package deleted");
     },
-    onError: (err) => {
-      console.error("WP delete failed", err);
-      toast.error(`Delete failed: ${err?.message || "unknown error"}`);
-    },
+    onError: (err) => toastCrudError(err, "Failed to delete work package"),
   });
 
   const bulkCreateMut = useMutation({
@@ -261,7 +275,7 @@ export default function WorkPackages() {
         setBulkAddOpen(false);
       }
     },
-    onError: (err) => toast.error(err.message || "Bulk create failed"),
+    onError: (err) => toastCrudError(err, "Bulk create failed"),
   });
 
   const bulkStatusMut = useMutation({
@@ -281,7 +295,7 @@ export default function WorkPackages() {
         toast.success("Status updated");
       }
     },
-    onError: () => toast.error("Bulk update failed"),
+    onError: (err) => toastCrudError(err, "Bulk update failed"),
   });
 
   const metrics = useMemo(
