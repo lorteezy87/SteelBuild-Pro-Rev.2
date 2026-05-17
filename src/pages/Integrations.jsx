@@ -23,6 +23,9 @@ import {
 } from "lucide-react";
 
 import { createPageUrl } from "@/utils";
+import { useProjectId } from "@/hooks/useProjectId";
+import EmailAccountSettings from "@/components/email/EmailAccountSettings";
+import DocumentStorageSettings from "@/components/dms/DocumentStorageSettings";
 import {
   INTEGRATION_AREAS,
   INTEGRATION_BUILD_ORDER,
@@ -118,6 +121,7 @@ function SelectPill({ label, value, onChange, options }) {
 
 export default function Integrations() {
   const navigate = useNavigate();
+  const projectId = useProjectId();
   const [category, setCategory] = useState("All");
   const [status, setStatus] = useState("All");
   const [query, setQuery] = useState("");
@@ -228,6 +232,20 @@ export default function Integrations() {
             <h3>Next Sprint</h3>
             <BulletList items={selectedArea.nextSprint} />
           </div>
+
+          {/* Live management panels — appear when a project is active */}
+          {projectId && selectedKey === "email" && (
+            <div className="integrations-detail-section" style={{ marginTop: 20 }}>
+              <h3>Live Configuration</h3>
+              <EmailAccountSettings projectId={projectId} />
+            </div>
+          )}
+          {projectId && selectedKey === "document-storage" && (
+            <div className="integrations-detail-section" style={{ marginTop: 20 }}>
+              <h3>Live Configuration</h3>
+              <DocumentStorageSettings projectId={projectId} />
+            </div>
+          )}
         </aside>
 
         <section className="integrations-panel integrations-wide">

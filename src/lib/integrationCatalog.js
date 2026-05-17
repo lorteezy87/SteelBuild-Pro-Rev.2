@@ -60,6 +60,9 @@ export const INTEGRATION_AREAS = [
     existingCapabilities: [
       "Private Supabase Storage upload and signed URL resolution are already wired.",
       "Document repository accepts PDF, DWG, IFC, GLTF, XLSX, DOCX, image, and ZIP files.",
+      "Linked Folders panel for connecting SharePoint/OneDrive project folders.",
+      "Document import queue with human-approved review before record creation.",
+      "Server-side SharePoint proxy Edge Function (Graph API, client_credentials flow).",
     ],
     targetWorkflows: [
       "External folder linking by project and drawing set.",
@@ -69,9 +72,9 @@ export const INTEGRATION_AREAS = [
     dataTouched: ["Documents", "Drawings", "Photos", "Submittals", "RFIs"],
     prerequisites: ["Provider picker", "Folder permissions", "External file id storage", "Link refresh strategy"],
     nextSprint: [
-      "Model external file references without storing secrets in the browser.",
-      "Start with SharePoint/OneDrive project folder linking.",
-      "Keep imports human-approved before attaching files to records.",
+      "Configure Azure AD app registration (client ID, client secret, tenant ID).",
+      "Wire sync_folder action to poll linked folders on schedule.",
+      "Add file preview / download via Graph download URL proxy.",
     ],
   },
   {
