@@ -8,6 +8,24 @@ const PRIORITIES = ["Low", "Normal", "High", "Critical"];
 
 const today = () => new Date().toISOString().split("T")[0];
 
+/** Add `days` calendar days to a YYYY-MM-DD string. Returns YYYY-MM-DD. */
+function addDays(dateStr, days) {
+  if (!dateStr || !Number.isFinite(days)) return null;
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d)) return null;
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+/** Compute the day-count between two YYYY-MM-DD strings. */
+function daysBetween(start, end) {
+  if (!start || !end) return null;
+  const s = new Date(start + "T00:00:00");
+  const e = new Date(end + "T00:00:00");
+  if (isNaN(s) || isNaN(e)) return null;
+  return Math.round((e - s) / 86400000);
+}
+
 function emptyRow(id) {
   return {
     _id:            id,
@@ -16,6 +34,7 @@ function emptyRow(id) {
     phase:          "Fabrication",
     start_date:     today(),
     end_date:       today(),
+    duration:       0,
     status:         "Not Started",
     priority:       "Normal",
     resource_names: "",
@@ -64,8 +83,8 @@ const SELECT_STYLE = {
   outline: "none",
 };
 
-const COL_WIDTHS = "40px minmax(240px, 1.3fr) 108px 132px 166px 166px 130px 106px 150px 170px 54px";
-const GRID_MIN_WIDTH = 1462;
+const COL_WIDTHS = "40px minmax(220px, 1.3fr) 108px 132px 150px 68px 150px 120px 100px 140px 160px 54px";
+const GRID_MIN_WIDTH = 1512;
 const ROW_BG = "rgb(10,15,23)";
 const ROW_ALT_BG = "rgb(13,19,29)";
 const ROW_ERROR_BG = "rgb(41,19,24)";
@@ -88,7 +107,32 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
   }, [open]);
 
   const updateRow = (id, key, val) => {
-    setRows((prev) => prev.map((r) => r._id === id ? { ...r, [key]: val } : r));
+    setRows((prev) => prev.map((r) => {
+      if (r._id !== id) return r;
+      const next = { ...r, [key]: val };
+
+      // ── Duration ↔ date coupling ──────────────────────────────
+      if (key === "duration") {
+        // Duration edited → recompute end_date from start + duration
+        const days = parseInt(val, 10);
+        if (Number.isFinite(days) && days >= 0 && next.start_date) {
+          next.end_date = addDays(next.start_date, days);
+        }
+        next.duration = Number.isFinite(days) && days >= 0 ? days : val;
+      } else if (key === "start_date") {
+        // Start moved → if duration is set, recompute end_date
+        const dur = parseInt(next.duration, 10);
+        if (Number.isFinite(dur) && dur >= 0 && val) {
+          next.end_date = addDays(val, dur);
+        }
+      } else if (key === "end_date") {
+        // End date edited directly → recompute duration from the two dates
+        const diff = daysBetween(next.start_date, val);
+        if (diff != null && diff >= 0) next.duration = diff;
+      }
+
+      return next;
+    }));
     setErrors((prev) => { const e = { ...prev }; delete e[id]; return e; });
   };
 
@@ -162,6 +206,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
       ...rest,
       start_date: rest.start_date || null,
       end_date: rest.end_date || null,
+      duration: Number.isFinite(parseInt(rest.duration, 10)) ? parseInt(rest.duration, 10) : null,
       resource_names: rest.resource_names || null,
       parent_task_id: rest.parent_task_id || null,
     }));
@@ -212,7 +257,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
           flexShrink: 0, alignItems: "center",
         }}>
           <div />
-          {["TASK NAME", "TYPE", "PHASE", "START DATE", "END DATE", "STATUS", "PRIORITY", "RESOURCES", "PARENT TASK", ""].map((h, headerIndex) => (
+          {["TASK NAME", "TYPE", "PHASE", "START DATE", "DAYS", "END DATE", "STATUS", "PRIORITY", "RESOURCES", "PARENT TASK", ""].map((h, headerIndex) => (
             <div key={`${h || "actions"}-${headerIndex}`} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", padding: "0 7px", whiteSpace: "nowrap" }}>
               {h}
             </div>
@@ -280,6 +325,21 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                     data-row={idx}
                     data-col="start_date"
                     inputStyle={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark", padding: "7px 8px" }}
+                  />
+                </div>
+
+                {/* Duration (days) */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <input
+                    type="number"
+                    min="0"
+                    value={row.duration ?? ""}
+                    onChange={(e) => updateRow(row._id, "duration", e.target.value)}
+                    onKeyDown={handleCellKeyDown}
+                    data-row={idx}
+                    data-col="duration"
+                    placeholder="0"
+                    style={{ ...INPUT_STYLE, fontSize: 11, textAlign: "center", padding: "7px 4px", fontFamily: "var(--font-mono)" }}
                   />
                 </div>
 
