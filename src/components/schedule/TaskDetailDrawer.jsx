@@ -369,7 +369,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
     : '';
 
   // When the user edits duration, keep start_date fixed and shift end_date.
-  const handleDurationChange = useCallback((newDays) => {
+  const handleDurationChange = (newDays) => {
     const days = parseInt(newDays, 10);
     if (!Number.isFinite(days) || days < 1) return;
     if (!formData.start_date) {
@@ -382,7 +382,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
     end.setDate(end.getDate() + days);
     const endStr = end.toISOString().slice(0, 10);
     setFormData({ ...formData, end_date: endStr });
-  }, [formData]);
+  };
   // Predecessor links are now link objects: { id, type, lag_days }. The
   // legacy id-string shape is silently upgraded to FS+1 by parseDeps so
   // the editor can mix-and-match while a partial migration is in flight.
