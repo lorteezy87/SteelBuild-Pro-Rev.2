@@ -647,6 +647,7 @@ export default function Drawings() {
     setMarkerSet({
       id: setId,
       set_name: group.name,
+      project_id: activeProject?.id || (group.sheets || [])[0]?.project_id || null,
       // Carry across what the parent row stores so the modal can pre-seed
       // existing rectangles + the source file URL.
       file_url: group.parent?.file_url || (group.sheets || [])[0]?.file_url || null,
