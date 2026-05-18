@@ -97,6 +97,9 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
         <div className="sbd-card" style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0,
           width: 320,
+          background: "var(--bg-surface-secondary, #161B22)",
+          backdropFilter: "blur(24px) saturate(150%)",
+          WebkitBackdropFilter: "blur(24px) saturate(150%)",
           borderTop: "2px solid var(--accent)",
           zIndex: 2000, overflow: "hidden",
         }}>
