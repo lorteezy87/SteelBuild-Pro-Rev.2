@@ -35,7 +35,7 @@ If a build fails, a push is rejected, or a merge conflict needs judgment beyond
 ## Build / package notes
 
 - Vite + React. Build command: `npm run build`. Output: `dist/`.
-- 3D viewer (`src/pages/ModelViewer.jsx`) uses `@thatopen/components` v3.4.0.
+- 3D viewer (`src/pages/ModelViewer.jsx`) uses `@thatopen/components` v3.4.6.
   `FragmentsManager.init()` **requires** a worker URL — we serve it from
   `public/thatopen/fragments-worker.mjs`. If you upgrade
   `@thatopen/fragments`, re-copy

@@ -262,7 +262,10 @@ function FeedItemRow({ item }) {
           whiteSpace: "nowrap",
           flexShrink: 0,
         }}
+        title={item.urgency === "overdue" ? `Overdue: ${item.displayStatus}` : item.displayStatus}
+        aria-label={item.urgency === "overdue" ? `Overdue: ${item.displayStatus}` : item.displayStatus}
       >
+        {item.urgency === "overdue" && <span aria-hidden="true" style={{ marginRight: 4 }}>⚠</span>}
         {item.displayStatus}
       </span>
       {item.owner && (

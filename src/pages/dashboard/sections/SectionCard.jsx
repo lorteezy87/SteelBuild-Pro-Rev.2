@@ -35,6 +35,7 @@ export default function SectionCard({
   title,
   subtitle,
   stats = [],               // [{ value, label, color }]
+  accentColor,              // optional top-border accent (CSS color string)
   defaultOpen = true,
   children,
 }) {
@@ -44,7 +45,8 @@ export default function SectionCard({
   return (
     <div style={{
       background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, #000 8%) 0%, color-mix(in srgb, var(--bg-surface-low) 88%, #000 12%) 100%)",
-      border: "1px solid color-mix(in srgb, var(--border-default) 88%, white 12%)",
+      border: "1px solid var(--border-default)",
+      borderTop: `2px solid ${accentColor || "var(--accent)"}`,
       borderRadius: 18,
       overflow: "hidden",
       transition: "border-color 0.12s",
