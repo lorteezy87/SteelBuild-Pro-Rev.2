@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -81,6 +81,182 @@ const drawerControlStyle = {
   colorScheme: 'dark',
   outline: 'none',
 };
+
+/**
+ * Searchable task picker — replaces the plain <select> for adding
+ * predecessors / successors. Filters tasks by name or WBS code as
+ * the user types. Keyboard-navigable (↑ ↓ Enter Escape).
+ */
+function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search tasks...' }) {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const wrapperRef = useRef(null);
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return tasks.slice(0, 50); // show first 50 when empty
+    const q = query.toLowerCase();
+    return tasks.filter(t => {
+      const name = (t.task_name || '').toLowerCase();
+      const wbs = (t.wbs_code || '').toLowerCase();
+      const phase = (t.phase || '').toLowerCase();
+      return name.includes(q) || wbs.includes(q) || phase.includes(q);
+    }).slice(0, 50);
+  }, [tasks, query]);
+
+  // Reset highlight when results change
+  useEffect(() => { setHighlightIdx(0); }, [filtered.length, query]);
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (!listRef.current) return;
+    const el = listRef.current.children[highlightIdx];
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [highlightIdx]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen]);
+
+  const handleSelect = useCallback((t) => {
+    onSelect(t.id);
+    setQuery('');
+    setIsOpen(false);
+    setHighlightIdx(0);
+  }, [onSelect]);
+
+  const handleKeyDown = (e) => {
+    if (!isOpen && (e.key === 'ArrowDown' || e.key === 'Enter')) {
+      setIsOpen(true);
+      e.preventDefault();
+      return;
+    }
+    if (!isOpen) return;
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setHighlightIdx(i => Math.min(i + 1, filtered.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setHighlightIdx(i => Math.max(i - 1, 0));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (filtered[highlightIdx]) handleSelect(filtered[highlightIdx]);
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setIsOpen(false);
+        break;
+    }
+  };
+
+  if (tasks.length === 0) return null;
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', marginTop: 8 }}>
+      <div style={{ position: 'relative' }}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setIsOpen(true); }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          style={{
+            ...drawerControlStyle,
+            paddingLeft: 30,
+            fontSize: 11,
+          }}
+        />
+        <svg
+          width="13" height="13" viewBox="0 0 24 24" fill="none"
+          stroke={drawerMutedText} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+        >
+          <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+      </div>
+
+      {isOpen && (
+        <div
+          ref={listRef}
+          style={{
+            position: 'absolute', left: 0, right: 0, top: '100%',
+            marginTop: 4,
+            background: 'rgba(12,17,25,0.99)',
+            border: `1px solid ${drawerBorder}`,
+            borderRadius: 8,
+            maxHeight: 220,
+            overflowY: 'auto',
+            zIndex: 100,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+          }}
+        >
+          {filtered.length === 0 ? (
+            <div style={{
+              padding: '12px 14px', textAlign: 'center',
+              fontFamily: 'var(--font-mono)', fontSize: 9,
+              color: drawerMutedText, letterSpacing: '0.06em',
+            }}>
+              No matching tasks
+            </div>
+          ) : (
+            filtered.map((t, idx) => (
+              <div
+                key={t.id}
+                onClick={() => handleSelect(t)}
+                onMouseEnter={() => setHighlightIdx(idx)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '7px 12px',
+                  cursor: 'pointer',
+                  background: idx === highlightIdx ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  borderBottom: idx < filtered.length - 1 ? `1px solid ${drawerMutedBorder}` : 'none',
+                  transition: 'background 0.08s',
+                }}
+              >
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 600,
+                  color: 'var(--accent)', flexShrink: 0,
+                  minWidth: 48, textAlign: 'right',
+                }}>
+                  {t.wbs_code || '—'}
+                </span>
+                <span style={{
+                  fontFamily: 'var(--font-body)', fontSize: 11,
+                  color: idx === highlightIdx ? drawerText : drawerMutedText,
+                  flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {t.task_name}
+                </span>
+                {t.phase && (
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 7, fontWeight: 600,
+                    color: drawerMutedText, letterSpacing: '0.06em',
+                    textTransform: 'uppercase', flexShrink: 0,
+                  }}>
+                    {t.phase}
+                  </span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete }) {
   const [formData, setFormData] = useState(task || {});
@@ -563,22 +739,11 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 )}
 
                 {/* Add predecessor */}
-                {availablePreds.length > 0 && (
-                  <div style={{ marginTop: 8 }}>
-                    <select
-                      defaultValue=""
-                      onChange={(e) => { if (e.target.value) { addPredecessor(e.target.value); e.target.value = ''; } }}
-                      style={{
-                        ...drawerControlStyle,
-                      }}
-                    >
-                      <option value="">+ Add predecessor...</option>
-                      {availablePreds.map(t => (
-                        <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ''}{t.task_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <SearchableTaskPicker
+                  tasks={availablePreds}
+                  onSelect={(id) => addPredecessor(id)}
+                  placeholder="+ Search predecessors..."
+                />
               </div>
 
               {/* Successors — editable: add/remove tasks that depend on this one */}
@@ -605,22 +770,11 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 ) : (
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, padding: '8px 0' }}>No successors</div>
                 )}
-                {availableSuccessors.length > 0 && (
-                  <div style={{ marginTop: 6 }}>
-                    <select
-                      value=""
-                      onChange={(e) => { if (e.target.value) addSuccessor(e.target.value); }}
-                      style={{
-                        ...drawerControlStyle,
-                      }}
-                    >
-                      <option value="">+ Add successor...</option>
-                      {availableSuccessors.map(t => (
-                        <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ''}{t.task_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <SearchableTaskPicker
+                  tasks={availableSuccessors}
+                  onSelect={(id) => addSuccessor(id)}
+                  placeholder="+ Search successors..."
+                />
               </div>
             </div>
           )}
