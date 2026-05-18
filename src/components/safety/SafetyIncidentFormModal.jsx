@@ -4,12 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { localToday } from "@/utils/dates";
 
 const emptyForm = {
   project_id: "",
   incident_type: "Hazard",
   severity: "Medium",
-  incident_date: new Date().toISOString().split("T")[0],
+  incident_date: localToday(),
   incident_time: "",
   location: "",
   reported_by: "",

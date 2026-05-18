@@ -27,7 +27,9 @@ const STATUS_COLORS = {
   Closed: "var(--accent)",
 };
 
-export default function SafetyIncidentList({ incidents = [] }) {
+const STATUSES = ["Open", "In Progress", "Completed", "Closed"];
+
+export default function SafetyIncidentList({ incidents = [], onEdit, onDelete, onStatusChange }) {
   const [expanded, setExpanded] = useState(null);
 
   if (incidents.length === 0) {
@@ -56,9 +58,27 @@ export default function SafetyIncidentList({ incidents = [] }) {
                 <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "4px" }}>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fontWeight: 600, color: SEVERITY_COLORS[incident.severity], textTransform: "uppercase", letterSpacing: "0.05em" }}>{incident.severity}</span>
                 </div>
-                <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "4px" }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fontWeight: 600, color: STATUS_COLORS[incident.status], textTransform: "uppercase", letterSpacing: "0.05em" }}>{incident.status}</span>
-                </div>
+                {onStatusChange ? (
+                  <select
+                    value={incident.status || "Open"}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => { e.stopPropagation(); onStatusChange(incident, e.target.value); }}
+                    style={{
+                      background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
+                      borderRadius: 4, padding: "2px 4px",
+                      fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 600,
+                      color: STATUS_COLORS[incident.status] || "var(--text-muted)",
+                      textTransform: "uppercase", letterSpacing: "0.05em",
+                      cursor: "pointer", outline: "none",
+                    }}
+                  >
+                    {STATUSES.map((s) => (<option key={s} value={s}>{s}</option>))}
+                  </select>
+                ) : (
+                  <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "4px" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fontWeight: 600, color: STATUS_COLORS[incident.status], textTransform: "uppercase", letterSpacing: "0.05em" }}>{incident.status}</span>
+                  </div>
+                )}
               </div>
               <div style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "4px" }}>{new Date(incident.incident_date).toLocaleDateString()}</div>
             </div>
@@ -129,6 +149,48 @@ export default function SafetyIncidentList({ incidents = [] }) {
                     <div style={{ display: "inline-flex", alignItems: "center", padding: "4px 8px", background: "var(--success-muted)", border: "1px solid var(--success-border)", borderRadius: "4px" }}>
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 600, color: "var(--status-success)", textTransform: "uppercase" }}>✓ Trained</span>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Action buttons — Edit / Delete */}
+              {(onEdit || onDelete) && (
+                <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--divider)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  {onEdit && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEdit(incident); }}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
+                        borderRadius: 6, padding: "6px 14px",
+                        fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                        color: "var(--accent)", cursor: "pointer",
+                        textTransform: "uppercase", letterSpacing: "0.08em",
+                        transition: "all 0.12s",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 8%, transparent)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.background = "var(--bg-surface-low)"; }}
+                    >
+                      ✏ Edit
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDelete(incident); }}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
+                        borderRadius: 6, padding: "6px 14px",
+                        fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                        color: "var(--status-error)", cursor: "pointer",
+                        textTransform: "uppercase", letterSpacing: "0.08em",
+                        transition: "all 0.12s",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--status-error)"; e.currentTarget.style.background = "color-mix(in srgb, var(--status-error) 8%, transparent)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.background = "var(--bg-surface-low)"; }}
+                    >
+                      ✕ Delete
+                    </button>
                   )}
                 </div>
               )}

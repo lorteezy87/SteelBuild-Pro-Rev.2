@@ -93,6 +93,11 @@ export default function Safety() {
     }
   };
 
+  const handleStatusChange = (incident, newStatus) => {
+    if (incident.status === newStatus) return;
+    updateMut.mutate({ id: incident.id, status: newStatus });
+  };
+
   const filtered = incidents.filter((i) => {
     const typeMatch = filterType === "all" || i.incident_type === filterType;
     const severityMatch = filterSeverity === "all" || i.severity === filterSeverity;
@@ -188,7 +193,7 @@ export default function Safety() {
       {showForm && <SafetyIncidentFormModal projectId={projectId} incident={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
 
       {/* Incidents List */}
-      <SafetyIncidentList incidents={filtered} onEdit={(incident) => {setEditing(incident); setShowForm(true);}} onDelete={setDeleteTarget} />
+      <SafetyIncidentList incidents={filtered} onEdit={(incident) => {setEditing(incident); setShowForm(true);}} onDelete={setDeleteTarget} onStatusChange={handleStatusChange} />
 
       {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Incident" description="Delete this record? This cannot be undone." />
