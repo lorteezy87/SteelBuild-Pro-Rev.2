@@ -461,12 +461,12 @@ export default function ModelViewer() {
         // Previous values (0.35 dolly, 2.5 truck, 0.05 smooth) felt twitchy
         // and "too fast" for a steel model — small scroll/drag overshoots.
         const ctrl = world.camera.controls;
-        ctrl.smoothTime = 0.2;
-        ctrl.draggingSmoothTime = 0.1;
-        ctrl.azimuthRotateSpeed = 0.8;
-        ctrl.polarRotateSpeed = 0.8;
-        ctrl.dollySpeed = 0.15;
-        ctrl.truckSpeed = 1.0;
+        ctrl.smoothTime = 0.12;
+        ctrl.draggingSmoothTime = 0.06;
+        ctrl.azimuthRotateSpeed = 1.0;
+        ctrl.polarRotateSpeed = 1.0;
+        ctrl.dollySpeed = 0.35;
+        ctrl.truckSpeed = 1.8;
         ctrl.dollyToCursor = true;
         // infinityDolly + dollyToCursor was producing a "snap back" feel
         // on wheel zoom on some IFC packages — wheel events that crossed
@@ -653,8 +653,8 @@ export default function ModelViewer() {
     const ctrl = world.camera.controls;
     ctrl.minDistance = Math.max(0.05, diagonal * 0.002);
     ctrl.maxDistance = Math.max(1000, diagonal * 25);
-    ctrl.truckSpeed  = Math.max(0.8, Math.min(3.5, diagonal / 50));
-    ctrl.dollySpeed  = Math.max(0.1, Math.min(0.6, diagonal / 250));
+    ctrl.truckSpeed  = Math.max(1.2, Math.min(6.0, diagonal / 30));
+    ctrl.dollySpeed  = Math.max(0.2, Math.min(1.2, diagonal / 120));
 
     // Move shadow ground plane + key light to track the model
     if (shadowPlaneRef.current) {
@@ -1096,6 +1096,30 @@ export default function ModelViewer() {
 
       // The model.object is the THREE.Object3D for the scene
       const modelObject = model.object;
+
+      // Attempt an early fit so the camera frustum covers the model's
+      // spatial extent — otherwise the tile streamer loads nothing for
+      // models placed far from origin (real-world coordinates).
+      if (modelObject) {
+        try {
+          const earlyBox = new THREE.Box3().setFromObject(modelObject);
+          if (!earlyBox.isEmpty()) {
+            const earlyCenter = earlyBox.getCenter(new THREE.Vector3());
+            const earlySize = earlyBox.getSize(new THREE.Vector3());
+            const earlyDiag = earlySize.length() || 100;
+            const cam3 = world.camera.three;
+            const fov3 = (cam3.fov || 45) * (Math.PI / 180);
+            const earlyDist = (earlyDiag / 2) / Math.tan(fov3 / 2) * 2.5;
+            const earlyOff = new THREE.Vector3(1, 0.45, 1).normalize().multiplyScalar(earlyDist);
+            const earlyPos = earlyCenter.clone().add(earlyOff);
+            world.camera.controls.setLookAt(
+              earlyPos.x, earlyPos.y, earlyPos.z,
+              earlyCenter.x, earlyCenter.y, earlyCenter.z, false
+            );
+          }
+        } catch (e) { console.warn("Early camera fit skipped:", e); }
+      }
+
       if (modelObject) {
         normalizeMaterials(modelObject);
         applyStatusBasedColor(modelObject, workPackages);
@@ -1105,13 +1129,14 @@ export default function ModelViewer() {
 
       loadedModelRef.current = modelObject || model;
 
-      // Re-normalize materials every time the model streams in new tiles.
-      // FragmentsModel builds BIMMesh tiles asynchronously after load(), so
-      // a single normalize pass at load time misses anything that arrives
-      // later. onViewUpdated fires once per refreshView cycle.
+      // Re-normalize materials when new tiles stream in. Cap at 15 passes
+      // to catch late-arriving tiles without thrashing the scene graph every
+      // frame (which causes material flickering / model disappearing).
+      let tileNormCount = 0;
       try {
         model.onViewUpdated?.add?.(() => {
-          if (modelObject) {
+          if (modelObject && tileNormCount < 15) {
+            tileNormCount++;
             try {
               normalizeMaterials(modelObject);
               applyDefaultSteelColor(modelObject);
@@ -1123,10 +1148,12 @@ export default function ModelViewer() {
         });
       } catch (e) { console.warn("onViewUpdated hook failed", e); }
 
-      // Flush a streaming update so geometry tiles begin arriving immediately.
+      // Flush multiple streaming updates so tiles begin arriving.
       // Do NOT use update(true) — that evicts tiles and causes popping.
       setLoadingModel((prev) => ({ ...prev, progress: 80, status: "Streaming geometry..." }));
-      try { await fragmentsManager.core.update(); } catch (e) { console.warn("core.update failed", e); }
+      for (let flush = 0; flush < 3; flush++) {
+        try { await fragmentsManager.core.update(); } catch { /* ignore */ }
+      }
       if (modelObject) {
         normalizeMaterials(modelObject);
         applyDefaultSteelColor(modelObject);
@@ -1248,8 +1275,8 @@ export default function ModelViewer() {
         const poll = setInterval(async () => {
           polled++;
           try { await fragmentsManager.core.update(); } catch { /* ignore */ }
-          if (tryFit() || polled > 50) clearInterval(poll);
-        }, 200);
+          if (tryFit() || polled > 80) clearInterval(poll);
+        }, 250);
       }
 
       setModelLoaded({ name: file.name, memberCount: extracted.length, format: "IFC" });
