@@ -13,7 +13,8 @@
  *   - Approval Matrix (new view)
  */
 
-import React, { useState, useMemo, Suspense, lazy } from "react";
+import React, { useState, useMemo, Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
@@ -47,9 +48,10 @@ import {
   Workflow,
 } from "lucide-react";
 
-// Lazy-load the existing pages as tab content
-const DrawingsPage = lazy(() => import("@/pages/Drawings"));
-const SubmittalsPage = lazy(() => import("@/pages/Submittals"));
+// Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
+// chunk 404s after a deploy trigger a reload instead of a hard crash.
+const DrawingsPage = lazyWithRetry(() => import("@/pages/Drawings"));
+const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
 
 // ── Design-system tokens ──────────────────────────────────────────────────
 // Use the SAME CSS custom-property names as the rest of the app (Submittals,
