@@ -2149,7 +2149,7 @@ const FAB_RELEASE_STYLES = `
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: rgba(0,0,0,0.56);
+  background: rgba(0,0,0,0.72);
   display: flex;
   justify-content: flex-end;
 }
@@ -2159,9 +2159,11 @@ const FAB_RELEASE_STYLES = `
   height: 100vh;
   overflow-y: auto;
   padding: 20px;
-  background: var(--bg-surface);
+  /* --bg-surface is 3.5% white in steelbuild-dark — nearly invisible.
+     Use a solid fallback so the panel is always readable. */
+  background: var(--bg-page, #0D1117);
   border-left: 1px solid var(--border-default);
-  box-shadow: -24px 0 60px rgba(0,0,0,0.42);
+  box-shadow: -24px 0 60px rgba(0,0,0,0.55);
 }
 
 .fab-detail-head {
@@ -2196,7 +2198,7 @@ const FAB_RELEASE_STYLES = `
   border: 1px solid var(--border-default);
   border-radius: 12px;
   padding: 10px;
-  background: var(--bg-surface-low);
+  background: rgba(255,255,255,0.05);
 }
 
 .fab-detail-stat span {
@@ -2226,7 +2228,7 @@ const FAB_RELEASE_STYLES = `
   border: 1px solid var(--border-default);
   border-radius: 10px;
   padding: 8px 10px;
-  background: var(--bg-surface-low);
+  background: rgba(255,255,255,0.05);
   color: var(--text-primary);
   font-size: 12px;
 }
@@ -2238,8 +2240,8 @@ const FAB_RELEASE_STYLES = `
   gap: 8px;
   justify-content: flex-end;
   margin-top: 22px;
-  padding-top: 14px;
-  background: var(--bg-surface);
+  padding: 14px 0 4px;
+  background: var(--bg-page, #0D1117);
   border-top: 1px solid var(--divider);
 }
 
