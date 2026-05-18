@@ -1,4 +1,5 @@
-import React, { Suspense, lazy, useEffect, useMemo } from "react";
+import React, { Suspense, useEffect, useMemo } from "react";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
@@ -8,7 +9,7 @@ import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import ProjectDashboard from "./dashboard/ProjectDashboard";
 
-const PortfolioView = lazy(() => import("../components/dashboard/PortfolioView"));
+const PortfolioView = lazyWithRetry(() => import("../components/dashboard/PortfolioView"));
 
 /**
  * Dashboard — portfolio-or-single-project orchestrator.
