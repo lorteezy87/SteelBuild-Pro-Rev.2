@@ -1,5 +1,5 @@
-import React, { useRef, useState } from "react";
-import { X, Upload, FileText, CheckCircle2, ArrowRight } from "lucide-react";
+import React, { useRef, useState, useCallback } from "react";
+import { X, Upload, FileText, CheckCircle2, ArrowRight, Trash2, ChevronDown, ChevronRight, AlertCircle, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -14,104 +14,165 @@ const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
 const AI      = "var(--ai-accent, #22D3EE)";
 
 /**
- * Three-step wizard for importing a Tekla/fab-shop shipping ticket PDF:
- *   1. Upload — drag/drop the PDF, quick client-side size check.
- *   2. Extract — gpt-4o-mini reads it via tool_use; shows a preview of
- *      the matched project, load header, and every line item.
- *   3. Confirm — user picks/overrides the project link and hits Create.
- *      One deliveries row + N delivery_items rows are written atomically
- *      (the items step is rolled back if it fails, so no orphan parent).
- *
- * Plain fixed overlay (no Radix Dialog), no <form> tag — consistent with
- * the Drawing Analysis modals so the app keeps one consistent modal
- * pattern.
+ * Multi-file shipping ticket import wizard:
+ *   1. Upload — drag/drop one or many PDFs.
+ *   2. Extract — AI reads each ticket in parallel; shows per-file progress.
+ *   3. Review — collapsible preview of every extracted ticket.
+ *   4. Confirm — batch-create all deliveries.
  */
 export default function ShippingTicketImportModal({ open, projectId, projectName, projects = [], onClose, onCreated }) {
   const qc = useQueryClient();
   const fileInput = useRef(null);
 
-  const [step, setStep]             = useState("upload"); // upload | extracting | preview | committing | done
-  const [file, setFile]             = useState(null);
-  const [uploaded, setUploaded]     = useState(null);      // { file_url, storage_path, file_name }
-  const [parsed, setParsed]         = useState(null);      // { header, items, raw }
-  const [matchedProject, setMatched]= useState(null);      // row from projects
-  const [chosenProjectId, setChosen]= useState(projectId || null);
-  const [err, setErr]               = useState(null);
+  // step: upload | extracting | preview | committing | done
+  const [step, setStep]         = useState("upload");
+  const [files, setFiles]       = useState([]);       // File[]
+  const [tickets, setTickets]   = useState([]);       // per-ticket results
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [err, setErr]           = useState(null);
+
+  // Each ticket: { file, uploaded, parsed, matchedProject, chosenProjectId, error, expanded }
 
   if (!open) return null;
 
   const reset = () => {
-    setStep("upload"); setFile(null); setUploaded(null); setParsed(null);
-    setMatched(null); setChosen(projectId || null); setErr(null);
+    setStep("upload"); setFiles([]); setTickets([]);
+    setProgress({ done: 0, total: 0 }); setErr(null);
   };
 
-  const acceptFile = (f) => {
+  const validateFile = (f) => {
+    if (!f) return null;
+    if (!/\.pdf$/i.test(f.name) && f.type !== "application/pdf") return "not a PDF";
+    if (f.size > 32 * 1024 * 1024) return "exceeds 32 MB";
+    return null;
+  };
+
+  const acceptFiles = useCallback((fileList) => {
     setErr(null);
-    if (!f) return;
-    if (!/\.pdf$/i.test(f.name) && f.type !== "application/pdf") {
-      setErr("File must be a PDF.");
-      return;
+    const incoming = Array.from(fileList || []);
+    if (incoming.length === 0) return;
+
+    const valid = [];
+    const rejected = [];
+    for (const f of incoming) {
+      const reason = validateFile(f);
+      if (reason) rejected.push(`${f.name}: ${reason}`);
+      else valid.push(f);
     }
-    if (f.size > 32 * 1024 * 1024) {
-      setErr("PDF exceeds 32 MB limit.");
-      return;
+    if (rejected.length > 0) {
+      setErr(`Skipped ${rejected.length}: ${rejected.slice(0, 3).join("; ")}${rejected.length > 3 ? "…" : ""}`);
     }
-    setFile(f);
+    setFiles(prev => {
+      // Dedupe by name+size
+      const existing = new Set(prev.map(f => `${f.name}|${f.size}`));
+      const newFiles = valid.filter(f => !existing.has(`${f.name}|${f.size}`));
+      return [...prev, ...newFiles];
+    });
+  }, []);
+
+  const removeFile = (idx) => {
+    setFiles(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const runExtract = async () => {
-    if (!file) return;
+  const runExtractAll = async () => {
+    if (files.length === 0) return;
     setStep("extracting"); setErr(null);
-    try {
-      const up = await uploadShippingTicket(file);
-      setUploaded(up);
-      const res = await extractShippingTicket(up);
-      setParsed(res);
-      const match = await resolveProjectForTicket(res.header?.job_number);
-      if (match) {
-        setMatched(match);
-        setChosen(match.id);
-      } else if (projectId) {
-        setChosen(projectId);
+    setProgress({ done: 0, total: files.length });
+
+    const results = [];
+    // Process sequentially to avoid hammering the LLM proxy with too many
+    // concurrent PDF uploads. Each ticket is ~5-15s, and sequential is
+    // more predictable for the user watching the progress bar.
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const uploaded = await uploadShippingTicket(file);
+        const parsed = await extractShippingTicket(uploaded);
+        const match = await resolveProjectForTicket(parsed.header?.job_number);
+        results.push({
+          file,
+          uploaded,
+          parsed,
+          matchedProject: match || null,
+          chosenProjectId: match?.id || projectId || null,
+          error: null,
+          expanded: files.length <= 3, // auto-expand if small batch
+        });
+      } catch (e) {
+        results.push({
+          file,
+          uploaded: null,
+          parsed: null,
+          matchedProject: null,
+          chosenProjectId: projectId || null,
+          error: e?.message || String(e),
+          expanded: true,
+        });
       }
-      setStep("preview");
-    } catch (e) {
-      setErr(e?.message || String(e));
+      setProgress({ done: i + 1, total: files.length });
+    }
+
+    setTickets(results);
+    const successCount = results.filter(r => !r.error).length;
+    if (successCount === 0) {
+      setErr("All tickets failed extraction. Check the files and try again.");
       setStep("upload");
-    }
-  };
-
-  const runCommit = async () => {
-    if (!parsed || !uploaded) return;
-    if (!chosenProjectId) { setErr("Pick a project before creating."); return; }
-    setStep("committing"); setErr(null);
-    try {
-      const project = projects.find(p => p.id === chosenProjectId);
-      await commitShippingTicket({
-        header: parsed.header,
-        items:  parsed.items,
-        projectId:   chosenProjectId,
-        projectName: project?.name || projectName || null,
-        file_url:     uploaded.file_url,
-        storage_path: uploaded.storage_path,
-        file_name:    uploaded.file_name,
-      });
-      toast.success(`Load ${parsed.header?.load_number || "—"} imported (${parsed.items.length} items)`);
-      qc.invalidateQueries({ queryKey: ["deliveries"] });
-      qc.invalidateQueries({ queryKey: ["delivery_items"] });
-      setStep("done");
-      onCreated?.();
-      setTimeout(() => { reset(); onClose(); }, 900);
-    } catch (e) {
-      setErr(e?.message || String(e));
+    } else {
       setStep("preview");
     }
   };
 
-  const header = parsed?.header || {};
-  const items  = parsed?.items  || [];
-  const totalWeight = items.reduce((s, i) => s + (Number(i.weight_lbs) || 0), 0);
-  const totalQty    = items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+  const removeTicket = (idx) => {
+    setTickets(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const toggleExpand = (idx) => {
+    setTickets(prev => prev.map((t, i) => i === idx ? { ...t, expanded: !t.expanded } : t));
+  };
+
+  const setTicketProject = (idx, pid) => {
+    setTickets(prev => prev.map((t, i) => i === idx ? { ...t, chosenProjectId: pid } : t));
+  };
+
+  const committable = tickets.filter(t => !t.error && t.parsed && t.chosenProjectId);
+
+  const runCommitAll = async () => {
+    if (committable.length === 0) return;
+    setStep("committing"); setErr(null);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const ticket of committable) {
+      try {
+        const project = projects.find(p => p.id === ticket.chosenProjectId);
+        await commitShippingTicket({
+          header: ticket.parsed.header,
+          items:  ticket.parsed.items,
+          projectId:   ticket.chosenProjectId,
+          projectName: project?.name || projectName || null,
+          file_url:     ticket.uploaded.file_url,
+          storage_path: ticket.uploaded.storage_path,
+          file_name:    ticket.uploaded.file_name,
+        });
+        successCount++;
+      } catch (e) {
+        failCount++;
+        console.error(`[ShippingTicketImport] commit failed for ${ticket.file?.name}:`, e);
+      }
+    }
+
+    qc.invalidateQueries({ queryKey: ["deliveries"] });
+    qc.invalidateQueries({ queryKey: ["delivery_items"] });
+
+    if (failCount > 0) {
+      toast.warning(`${successCount} imported, ${failCount} failed`, { position: "top-right", duration: 4000 });
+    } else {
+      toast.success(`${successCount} delivery ticket${successCount !== 1 ? "s" : ""} imported`, { position: "top-right", duration: 3000 });
+    }
+    setStep("done");
+    onCreated?.();
+    setTimeout(() => { reset(); onClose(); }, 1200);
+  };
 
   return (
     <>
@@ -122,7 +183,7 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
         style={{
           position: "fixed", top: "50%", left: "50%",
           transform: "translate(-50%, -50%)",
-          width: 880, maxWidth: "96vw", maxHeight: "92vh",
+          width: 920, maxWidth: "96vw", maxHeight: "92vh",
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
           borderLeft: `3px solid ${AI}`,
@@ -138,12 +199,12 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
         }}>
           <div style={{ flex: 1 }}>
             <div style={{ ...display, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
-              Import Shipping Ticket
+              Import Shipping Tickets
             </div>
             <div style={{ ...mono, fontSize: 9, color: AI, letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 2 }}>
-              {step === "upload"     && "STEP 1 · UPLOAD"}
-              {step === "extracting" && "STEP 2 · EXTRACTING"}
-              {step === "preview"    && "STEP 2 · REVIEW"}
+              {step === "upload"     && `STEP 1 · UPLOAD ${files.length > 0 ? `(${files.length} FILE${files.length !== 1 ? "S" : ""})` : ""}`}
+              {step === "extracting" && `STEP 2 · EXTRACTING ${progress.done}/${progress.total}`}
+              {step === "preview"    && `STEP 2 · REVIEW (${committable.length} READY)`}
               {step === "committing" && "STEP 3 · CREATING"}
               {step === "done"       && "DONE"}
             </div>
@@ -162,11 +223,11 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
                 onClick={() => fileInput.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = `color-mix(in srgb, ${AI} 8%, transparent)`; }}
                 onDragLeave={(e) => { e.currentTarget.style.background = "var(--bg-page)"; }}
-                onDrop={(e) => { e.preventDefault(); acceptFile(e.dataTransfer.files?.[0]); e.currentTarget.style.background = "var(--bg-page)"; }}
+                onDrop={(e) => { e.preventDefault(); acceptFiles(e.dataTransfer.files); e.currentTarget.style.background = "var(--bg-page)"; }}
                 style={{
                   border: `1px dashed ${AI}`,
                   borderRadius: 4,
-                  padding: "32px 20px",
+                  padding: "28px 20px",
                   textAlign: "center",
                   cursor: "pointer",
                   background: "var(--bg-page)",
@@ -176,141 +237,119 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
                   ref={fileInput}
                   type="file"
                   accept="application/pdf,.pdf"
+                  multiple
                   style={{ display: "none" }}
-                  onChange={(e) => acceptFile(e.target.files?.[0])}
+                  onChange={(e) => { acceptFiles(e.target.files); e.target.value = ""; }}
                 />
-                {file ? (
-                  <div>
-                    <FileText size={24} color={AI} style={{ marginBottom: 8 }} />
-                    <div style={{ ...mono, fontSize: 13, color: "var(--text-primary)" }}>{file.name}</div>
-                    <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
-                      {(file.size / 1e6).toFixed(1)} MB — click to replace
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <Upload size={24} color="var(--text-muted)" style={{ marginBottom: 8 }} />
-                    <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                      Drop shipping ticket PDF here
-                    </div>
-                    <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>
-                      Fab shop / Tekla load list. Max 32 MB.
-                    </div>
-                  </div>
-                )}
+                <Upload size={24} color="var(--text-muted)" style={{ marginBottom: 8 }} />
+                <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                  Drop shipping ticket PDFs here
+                </div>
+                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>
+                  Select one or many. Fab shop / Tekla load lists. Max 32 MB each.
+                </div>
               </div>
+
+              {/* File list */}
+              {files.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 6 }}>
+                    {files.length} FILE{files.length !== 1 ? "S" : ""} QUEUED
+                  </div>
+                  {files.map((f, i) => (
+                    <div key={`${f.name}-${i}`} style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      padding: "6px 10px", marginBottom: 2,
+                      background: "var(--bg-page)", borderRadius: 2,
+                      border: "1px solid var(--border-default)",
+                    }}>
+                      <FileText size={14} color={AI} />
+                      <div style={{ flex: 1, ...mono, fontSize: 12, color: "var(--text-primary)" }}>
+                        {f.name}
+                      </div>
+                      <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
+                        {(f.size / 1e6).toFixed(1)} MB
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeFile(i); }}
+                        style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 2 }}
+                        aria-label="Remove"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {step === "extracting" && (
-            <div style={{ textAlign: "center", padding: "48px 20px" }}>
-              <div style={{ ...mono, fontSize: 12, color: AI, letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                ● READING TICKET…
+            <div style={{ padding: "32px 20px" }}>
+              <div style={{ textAlign: "center", marginBottom: 20 }}>
+                <Loader2 size={24} color={AI} style={{ animation: "spin 1s linear infinite", marginBottom: 8 }} />
+                <div style={{ ...mono, fontSize: 12, color: AI, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                  READING TICKETS… {progress.done}/{progress.total}
+                </div>
+                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>
+                  AI extracts the load header + every line item from each PDF.
+                </div>
               </div>
-              <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 8 }}>
-                gpt-4o-mini pulls the load header + every line. Usually 5–15 seconds.
+              {/* Progress bar */}
+              <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`,
+                  background: AI,
+                  borderRadius: 2,
+                  transition: "width 0.4s ease",
+                }} />
+              </div>
+              {/* File status list */}
+              <div style={{ marginTop: 14 }}>
+                {files.map((f, i) => (
+                  <div key={i} style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "4px 0", ...mono, fontSize: 11,
+                  }}>
+                    {i < progress.done ? (
+                      <CheckCircle2 size={12} color="var(--status-success)" />
+                    ) : i === progress.done ? (
+                      <Loader2 size={12} color={AI} style={{ animation: "spin 1s linear infinite" }} />
+                    ) : (
+                      <div style={{ width: 12, height: 12, borderRadius: "50%", border: "1px solid var(--border-default)" }} />
+                    )}
+                    <span style={{ color: i <= progress.done ? "var(--text-primary)" : "var(--text-muted)" }}>
+                      {f.name}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {step === "preview" && parsed && (
+          {step === "preview" && tickets.length > 0 && (
             <div>
-              {/* Project match */}
-              <div style={{
-                border: `1px solid ${matchedProject ? "var(--status-success)" : "var(--status-warning)"}`,
-                background: matchedProject ? "color-mix(in srgb, var(--status-success) 6%, transparent)" : "color-mix(in srgb, var(--status-warning) 6%, transparent)",
-                padding: "10px 14px", marginBottom: 14, borderRadius: 4,
-              }}>
-                <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase",
-                              color: matchedProject ? "var(--status-success)" : "var(--status-warning)", marginBottom: 4 }}>
-                  {matchedProject ? "PROJECT MATCHED" : "NO MATCH — PICK A PROJECT"}
-                </div>
-                {matchedProject ? (
-                  <div style={{ fontSize: 13, color: "var(--text-primary)" }}>
-                    <span style={{ ...mono, color: "var(--accent)", marginRight: 8 }}>{matchedProject.project_number}</span>
-                    {matchedProject.name}
-                  </div>
-                ) : (
-                  <select
-                    value={chosenProjectId || ""}
-                    onChange={(e) => setChosen(e.target.value)}
-                    style={{
-                      width: "100%", padding: "6px 10px", fontSize: 12,
-                      background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 2,
-                      color: "var(--text-primary)", fontFamily: "var(--font-body)",
-                    }}
-                  >
-                    <option value="">— select project —</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.project_number ? `${p.project_number} — ` : ""}{p.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>
-                  Ticket job: {header.job_number ? <strong>{header.job_number}</strong> : "—"}
-                  {header.job_name ? ` · ${header.job_name}` : ""}
-                </div>
-              </div>
-
-              {/* Header summary */}
-              <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 6 }}>
-                LOAD HEADER
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginBottom: 14 }}>
-                <Stat label="Load #"       value={header.load_number ?? "—"} />
-                <Stat label="Date"         value={header.date_shipped ?? "—"} />
-                <Stat label="Trailer"      value={header.trailer ?? "—"} />
-                <Stat label="Assy Qty"     value={header.assembly_quantity ?? totalQty} />
-                <Stat label="Load (lbs)"   value={fmtLbs(header.weight_loaded_lbs)} />
-                <Stat label="Capacity"     value={fmtLbs(header.capacity_lbs)} />
-              </div>
-
-              {/* Line items */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                  LINE ITEMS ({items.length})
-                </div>
-                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
-                  ∑ qty {totalQty} · ∑ weight {fmtLbs(totalWeight)}
-                </div>
-              </div>
-              <div style={{ border: "1px solid var(--border-default)", borderRadius: 2, maxHeight: 360, overflowY: "auto" }}>
-                <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                  <thead style={{ position: "sticky", top: 0, background: "var(--bg-surface-secondary)" }}>
-                    <tr>
-                      {["Qty","Mark","Seq","Profile","Length","Grade","Finish","Weight"].map(h => (
-                        <th key={h} style={{
-                          ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
-                          color: "var(--text-muted)", padding: "6px 8px", textAlign: "left",
-                          borderBottom: "1px solid var(--divider)", whiteSpace: "nowrap",
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((it, i) => (
-                      <tr key={i} style={{ borderBottom: "1px solid var(--divider)" }}>
-                        <Td mono>{it.qty}</Td>
-                        <Td mono accent>{it.assembly_mark}</Td>
-                        <Td mono>{it.sequence}</Td>
-                        <Td>{it.profile}</Td>
-                        <Td mono>{it.length_text}</Td>
-                        <Td>{it.grade}</Td>
-                        <Td>{it.finish}</Td>
-                        <Td mono right>{fmtLbs(it.weight_lbs)}</Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {tickets.map((ticket, idx) => (
+                <TicketPreviewCard
+                  key={idx}
+                  ticket={ticket}
+                  index={idx}
+                  projects={projects}
+                  onToggle={() => toggleExpand(idx)}
+                  onRemove={() => removeTicket(idx)}
+                  onProjectChange={(pid) => setTicketProject(idx, pid)}
+                />
+              ))}
             </div>
           )}
 
           {step === "committing" && (
-            <div style={{ textAlign: "center", padding: "48px 20px", ...mono, fontSize: 12, color: AI }}>
-              ● CREATING DELIVERY…
+            <div style={{ textAlign: "center", padding: "48px 20px" }}>
+              <Loader2 size={24} color={AI} style={{ animation: "spin 1s linear infinite", marginBottom: 10 }} />
+              <div style={{ ...mono, fontSize: 12, color: AI, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                CREATING {committable.length} DELIVER{committable.length !== 1 ? "IES" : "Y"}…
+              </div>
             </div>
           )}
 
@@ -338,41 +377,201 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
         {/* Footer */}
         <div style={{
           padding: "12px 20px", borderTop: "1px solid var(--divider)",
-          display: "flex", gap: 10, justifyContent: "flex-end", flexShrink: 0,
+          display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center", flexShrink: 0,
         }}>
           {step === "upload" && (
             <>
               <button onClick={onClose} style={btnGhost}>CANCEL</button>
-              <button onClick={runExtract} disabled={!file}
-                      style={{ ...btnPrimary, opacity: file ? 1 : 0.5, cursor: file ? "pointer" : "not-allowed" }}>
-                EXTRACT <ArrowRight size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
+              <button onClick={runExtractAll} disabled={files.length === 0}
+                      style={{ ...btnPrimary, opacity: files.length > 0 ? 1 : 0.5, cursor: files.length > 0 ? "pointer" : "not-allowed" }}>
+                EXTRACT {files.length > 1 ? `(${files.length})` : ""} <ArrowRight size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
               </button>
             </>
           )}
           {step === "preview" && (
             <>
-              <button onClick={() => { setParsed(null); setUploaded(null); setStep("upload"); }} style={btnGhost}>
+              <div style={{ flex: 1, ...mono, fontSize: 10, color: "var(--text-muted)" }}>
+                {committable.length} of {tickets.length} ready
+                {tickets.some(t => t.error) && ` · ${tickets.filter(t => t.error).length} failed`}
+              </div>
+              <button onClick={() => { setTickets([]); setStep("upload"); }} style={btnGhost}>
                 BACK
               </button>
-              <button onClick={runCommit} disabled={!chosenProjectId || items.length === 0}
-                      style={{ ...btnPrimary, opacity: (!chosenProjectId || items.length === 0) ? 0.5 : 1 }}>
-                CREATE DELIVERY
+              <button onClick={runCommitAll} disabled={committable.length === 0}
+                      style={{ ...btnPrimary, opacity: committable.length > 0 ? 1 : 0.5 }}>
+                CREATE {committable.length > 1 ? `${committable.length} ` : ""}DELIVER{committable.length !== 1 ? "IES" : "Y"}
               </button>
             </>
           )}
         </div>
       </div>
+
+      {/* Spin animation */}
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </>
   );
 }
 
+/* ─── Per-ticket collapsible card ─────────────────────────────────── */
+
+function TicketPreviewCard({ ticket, index, projects, onToggle, onRemove, onProjectChange }) {
+  const { file, parsed, matchedProject, chosenProjectId, error, expanded } = ticket;
+  const header = parsed?.header || {};
+  const items  = parsed?.items  || [];
+  const totalWeight = items.reduce((s, i) => s + (Number(i.weight_lbs) || 0), 0);
+  const totalQty    = items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+
+  return (
+    <div style={{
+      border: `1px solid ${error ? "var(--status-error)" : "var(--border-default)"}`,
+      borderRadius: 4,
+      marginBottom: 8,
+      background: error ? "color-mix(in srgb, var(--status-error) 4%, transparent)" : "transparent",
+    }}>
+      {/* Collapsed header row */}
+      <div
+        onClick={onToggle}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 12px", cursor: "pointer",
+        }}
+      >
+        {expanded
+          ? <ChevronDown size={14} color="var(--text-muted)" />
+          : <ChevronRight size={14} color="var(--text-muted)" />
+        }
+        {error
+          ? <AlertCircle size={14} color="var(--status-error)" />
+          : <FileText size={14} color={AI} />
+        }
+        <div style={{ flex: 1, ...mono, fontSize: 12, color: "var(--text-primary)" }}>
+          {error ? file?.name : `Load ${header.load_number || "?"} — ${file?.name}`}
+        </div>
+        {!error && (
+          <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
+            {items.length} items · {fmtLbs(totalWeight)}
+          </div>
+        )}
+        {error && (
+          <div style={{ ...mono, fontSize: 10, color: "var(--status-error)" }}>
+            FAILED
+          </div>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 2 }}
+          aria-label="Remove ticket"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div style={{ padding: "0 12px 12px 34px" }}>
+          {error ? (
+            <div style={{ ...mono, fontSize: 11, color: "var(--status-error)", lineHeight: 1.5 }}>
+              {error}
+            </div>
+          ) : (
+            <>
+              {/* Project match */}
+              <div style={{
+                border: `1px solid ${matchedProject ? "var(--status-success)" : "var(--status-warning)"}`,
+                background: matchedProject ? "color-mix(in srgb, var(--status-success) 6%, transparent)" : "color-mix(in srgb, var(--status-warning) 6%, transparent)",
+                padding: "8px 10px", marginBottom: 10, borderRadius: 3,
+              }}>
+                <div style={{ ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase",
+                              color: matchedProject ? "var(--status-success)" : "var(--status-warning)", marginBottom: 3 }}>
+                  {matchedProject ? "PROJECT MATCHED" : "NO MATCH — PICK A PROJECT"}
+                </div>
+                {matchedProject ? (
+                  <div style={{ fontSize: 12, color: "var(--text-primary)" }}>
+                    <span style={{ ...mono, color: "var(--accent)", marginRight: 6 }}>{matchedProject.project_number}</span>
+                    {matchedProject.name}
+                  </div>
+                ) : (
+                  <select
+                    value={chosenProjectId || ""}
+                    onChange={(e) => onProjectChange(e.target.value)}
+                    style={{
+                      width: "100%", padding: "4px 8px", fontSize: 11,
+                      background: "#161B22", border: "1px solid var(--border-default)", borderRadius: 2,
+                      color: "var(--text-primary)", fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    <option value="">— select project —</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.project_number ? `${p.project_number} — ` : ""}{p.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", marginTop: 3 }}>
+                  Ticket job: {header.job_number ? <strong>{header.job_number}</strong> : "—"}
+                  {header.job_name ? ` · ${header.job_name}` : ""}
+                </div>
+              </div>
+
+              {/* Header stats */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 10 }}>
+                <Stat label="Load #"     value={header.load_number ?? "—"} />
+                <Stat label="Date"       value={header.date_shipped ?? "—"} />
+                <Stat label="Trailer"    value={header.trailer ?? "—"} />
+                <Stat label="Assy Qty"   value={header.assembly_quantity ?? totalQty} />
+                <Stat label="Load (lbs)" value={fmtLbs(header.weight_loaded_lbs)} />
+                <Stat label="Capacity"   value={fmtLbs(header.capacity_lbs)} />
+              </div>
+
+              {/* Line items (compact) */}
+              <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
+                LINE ITEMS ({items.length}) · ∑ qty {totalQty} · ∑ weight {fmtLbs(totalWeight)}
+              </div>
+              <div style={{ border: "1px solid var(--border-default)", borderRadius: 2, maxHeight: 200, overflowY: "auto" }}>
+                <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+                  <thead style={{ position: "sticky", top: 0, background: "var(--bg-surface-secondary)" }}>
+                    <tr>
+                      {["Qty","Mark","Profile","Length","Grade","Weight"].map(h => (
+                        <th key={h} style={{
+                          ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
+                          color: "var(--text-muted)", padding: "4px 6px", textAlign: "left",
+                          borderBottom: "1px solid var(--divider)", whiteSpace: "nowrap",
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((it, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid var(--divider)" }}>
+                        <Td mono>{it.qty}</Td>
+                        <Td mono accent>{it.assembly_mark}</Td>
+                        <Td>{it.profile}</Td>
+                        <Td mono>{it.length_text}</Td>
+                        <Td>{it.grade}</Td>
+                        <Td mono right>{fmtLbs(it.weight_lbs)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Shared UI atoms ─────────────────────────────────────────────── */
+
 function Stat({ label, value }) {
   return (
     <div>
-      <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>
+      <div style={{ ...mono, fontSize: 7, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>
         {label}
       </div>
-      <div style={{ ...mono, fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
+      <div style={{ ...mono, fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
         {value ?? "—"}
       </div>
     </div>
@@ -382,7 +581,7 @@ function Stat({ label, value }) {
 function Td({ children, mono: isMono, accent, right }) {
   return (
     <td style={{
-      padding: "5px 8px",
+      padding: "3px 6px",
       fontFamily: isMono ? "var(--font-mono)" : "var(--font-body)",
       color: accent ? "var(--accent)" : "var(--text-primary)",
       textAlign: right ? "right" : "left",
