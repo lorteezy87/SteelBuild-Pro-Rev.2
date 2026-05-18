@@ -53,8 +53,9 @@ import {
   AlertOctagon,
   ListChecks,
 } from "lucide-react";
+import { localToday } from "@/utils/dates";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = localToday;
 
 function startOfWeekISO() {
   const now = new Date();

@@ -20,13 +20,12 @@ import {
   toastCrudError,
 } from "@/components/shared/crudFeedback";
 import { usePermissions } from "@/services/permissions";
+import { localToday } from "@/utils/dates";
 
 function getDateCutoff(preset) {
   const now = new Date();
   if (preset === "today") {
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      .toISOString()
-      .slice(0, 10);
+    return localToday();
   }
   if (preset === "week") {
     const day = now.getDay();
