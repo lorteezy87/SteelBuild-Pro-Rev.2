@@ -225,7 +225,28 @@ export default function FieldActivitySection({
         )}
       </div>
 
-      <SparkBars days={weekDays} />
+      {totalWeekEvents === 0 ? (
+        <div style={{
+          minHeight: 80,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "16px 12px",
+          background: "var(--bg-surface-low)",
+          border: "1px solid var(--border-default)",
+          borderRadius: 6,
+          fontFamily: "var(--font-body)",
+          fontSize: 12,
+          color: "var(--text-muted)",
+          fontStyle: "italic",
+          textAlign: "center",
+          lineHeight: 1.5,
+        }}>
+          No field activity this week — log your first daily report, photo, or inspection to start tracking.
+        </div>
+      ) : (
+        <SparkBars days={weekDays} />
+      )}
 
       {onNavigate && (
         <div style={{
@@ -236,16 +257,18 @@ export default function FieldActivitySection({
           <button
             onClick={() => onNavigate("field")}
             style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              color: "var(--accent)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               fontWeight: 700,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
+              color: "var(--accent)",
               cursor: "pointer",
+              padding: "4px 10px",
+              borderRadius: 4,
+              border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)",
+              background: "color-mix(in srgb, var(--accent) 6%, transparent)",
+              transition: "all 0.15s",
             }}
           >
             Open Field Hub →
@@ -305,13 +328,14 @@ function SparkBars({ days }) {
       display: "grid",
       gridTemplateColumns: "repeat(7, 1fr)",
       gap: 6,
-      height: 50,
+      minHeight: 80,
+      height: 80,
       alignItems: "end",
     }}>
       {days.map((d) => (
         <div key={d.iso} title={`${d.iso}: ${d.count} events`}>
           <div style={{
-            height: `${Math.max(2, (d.count / max) * 40)}px`,
+            height: `${Math.max(4, (d.count / max) * 64)}px`,
             background: d.count > 0 ? "var(--accent)" : "var(--border-default)",
             borderRadius: 2,
             transition: "height 0.2s",
