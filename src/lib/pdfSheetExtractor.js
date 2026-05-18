@@ -432,6 +432,65 @@ export function assignPdfPages(sheets, pageCount) {
     );
   }
 
+  // ── De-duplicate: when the LLM assigns the same pdfPage to multiple
+  //    sheets, each duplicate gets the next available page. This is the
+  //    root cause of "every thumbnail shows the same page" — the LLM
+  //    reads a drawing index on page 1 and emits pdfPage=1 for every
+  //    entry, or assigns the same page to groups of related sheets.
+  //    Walk the array and reassign duplicates to the nearest unused page.
+  if (out.length > 1) {
+    const usedPages = new Set();
+    // First pass: mark pages that are used exactly once.
+    const pageCounts = {};
+    for (const s of out) {
+      pageCounts[s.pdfPage] = (pageCounts[s.pdfPage] || 0) + 1;
+    }
+    const hasDupes = Object.values(pageCounts).some((c) => c > 1);
+    if (hasDupes) {
+      // Build the set of all available pages.
+      const maxPage = pc > 0 ? pc : Math.max(...out.map((s) => s.pdfPage), out.length);
+      const allPages = new Set();
+      for (let p = 1; p <= maxPage; p++) allPages.add(p);
+
+      // First-come-first-served: the first sheet claiming a page keeps it,
+      // subsequent duplicates get reassigned to the nearest unclaimed page.
+      const claimed = new Set();
+      let dupeFixCount = 0;
+      for (let i = 0; i < out.length; i++) {
+        if (!claimed.has(out[i].pdfPage)) {
+          claimed.add(out[i].pdfPage);
+          allPages.delete(out[i].pdfPage);
+        } else {
+          // Find the nearest unclaimed page.
+          const orig = out[i].pdfPage;
+          let best = null;
+          for (const p of allPages) {
+            if (best === null || Math.abs(p - orig) < Math.abs(best - orig)) {
+              best = p;
+            }
+          }
+          if (best !== null) {
+            out[i] = { ...out[i], pdfPage: best };
+            claimed.add(best);
+            allPages.delete(best);
+            dupeFixCount++;
+          } else {
+            // No unclaimed pages left — assign sequentially beyond the max.
+            const fallback = maxPage + dupeFixCount + 1;
+            out[i] = { ...out[i], pdfPage: fallback };
+            dupeFixCount++;
+          }
+        }
+      }
+      if (dupeFixCount > 0) {
+        console.warn(
+          `[pdfSheetExtractor] ${dupeFixCount} of ${out.length} sheets had duplicate pdfPage values — ` +
+          `reassigned to nearest unused pages. Verify in the upload preview.`,
+        );
+      }
+    }
+  }
+
   // Sanity check: if pageCount > 1 and EVERY sheet ended up on page 1,
   // that's almost certainly a regression of the original bug — surface it.
   if (pc > 1 && out.length > 1 && out.every((s) => s.pdfPage === 1)) {
