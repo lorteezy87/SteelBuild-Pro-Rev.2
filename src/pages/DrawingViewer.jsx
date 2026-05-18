@@ -430,9 +430,14 @@ export default function DrawingViewer() {
       } catch { /* fall through to cross-sheet lookup */ }
     }
 
-    // 2. External URL
+    // 2. External URL — C6 fix: validate scheme to prevent javascript: XSS
     if (annot.url) {
-      window.open(annot.url, "_blank", "noopener,noreferrer");
+      try {
+        const parsed = new URL(annot.url, window.location.origin);
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          window.open(annot.url, "_blank", "noopener,noreferrer");
+        }
+      } catch { /* malformed URL — ignore */ }
       return;
     }
 

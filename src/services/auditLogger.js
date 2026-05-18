@@ -12,6 +12,7 @@
  */
 
 import { base44 } from "@/api/base44Client";
+import { supabase } from "@/lib/supabase";
 
 // ─── Entity display names ──────────────────────────────────────────────
 const ENTITY_LABELS = {
@@ -67,12 +68,21 @@ function detectStatusChange(entityType, record, operation) {
 }
 
 // ─── Current user helper ───────────────────────────────────────────────
-function getCurrentUser() {
+// C5 fix: use Supabase auth session instead of spoofable localStorage.
+async function getCurrentUser() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const meta = user.user_metadata || {};
+      return meta.full_name || user.email || "System";
+    }
+  } catch {}
+  // Fallback: localStorage is best-effort for offline/anon contexts
   try {
     const stored = localStorage.getItem("sbp_current_user");
     if (stored) {
-      const user = JSON.parse(stored);
-      return user.name || user.email || "System";
+      const u = JSON.parse(stored);
+      return u.name || u.email || "System";
     }
   } catch {}
   return "System";
@@ -97,7 +107,7 @@ export async function logActivity(entityType, action, record, options = {}) {
 
     const activityRecord = {
       timestamp: new Date().toISOString(),
-      userName: options.userName || getCurrentUser(),
+      userName: options.userName || await getCurrentUser(),
       action: action,
       entityType: entityLabel,
       entityName: entityName,

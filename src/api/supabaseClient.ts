@@ -899,7 +899,17 @@ export const auth = {
    * Update the current user's metadata.
    */
   updateMe: async (updates: Record<string, unknown>): Promise<AuthMeResult> => {
-    const { data, error } = await supabase.auth.updateUser({ data: updates });
+    // C1 fix: whitelist safe fields to prevent privilege escalation via
+    // arbitrary user_metadata writes (e.g. setting role to "admin").
+    const ALLOWED_FIELDS = new Set([
+      'full_name', 'job_title', 'company', 'phone', 'timezone', 'bio',
+      'avatar_url', 'preferences', 'notification_settings',
+    ]);
+    const safeUpdates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (ALLOWED_FIELDS.has(key)) safeUpdates[key] = value;
+    }
+    const { data, error } = await supabase.auth.updateUser({ data: safeUpdates });
     if (error) throw error;
     const meta = (data.user.user_metadata ?? {}) as Record<string, unknown>;
     const fullName =
