@@ -14,6 +14,8 @@ const fmtDate = (d) => {
   return formatDate(d);
 };
 
+const PHASES = ["Detailing", "Fabrication", "Delivery", "Erection", "Punchlist", "Closeout"];
+
 const IMPACT_COLORS = {
   Critical: 'var(--status-error)',
   High: 'var(--status-warning)',
@@ -196,12 +198,12 @@ export default function DecisionLog() {
           placeholder="Search..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ ...iStyle, width: 240, height: 32, padding: '0 12px' }}
+          style={{ ...inputStyle, width: 240, height: 32, padding: '0 12px' }}
         />
         <select
           value={filterImpact}
           onChange={e => setFilterImpact(e.target.value)}
-          style={{ ...iStyle, width: 'auto', height: 32, padding: '0 10px' }}
+          style={{ ...inputStyle, width: 'auto', height: 32, padding: '0 10px' }}
         >
           <option value="all">All Impact</option>
           {['Critical', 'High', 'Medium', 'Low'].map(i => <option key={i} value={i}>{i}</option>)}
