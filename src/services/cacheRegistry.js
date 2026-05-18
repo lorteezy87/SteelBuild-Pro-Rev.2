@@ -126,6 +126,9 @@ const REGISTRY = {
       ["schedule-tasks", pid],
       ["schedule-tasks"],
       ["schedule-tasks-global"],    // ExecutiveView.jsx
+      ["schedule-tasks-dashboard"], // Dashboard.jsx
+      ["schedule-tasks-all"],       // Reports.jsx
+      ["portfolio-schedule-tasks"], // AIInsights.jsx
       ["sched-detail", pid],        // ProjectDetailView.jsx
       ["schedule-tasks-wp", pid],   // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
       ["lookahead", pid],           // LookAheadSchedule.jsx
@@ -544,7 +547,7 @@ const REGISTRY = {
 export async function invalidateEntity(qc, entity, projectId = null) {
   const reg = REGISTRY[entity];
   if (!reg) {
-    console.error(`[cacheRegistry] Unknown entity: "${entity}". Falling back to broad invalidation.`);
+    if (import.meta.env.DEV) console.error(`[cacheRegistry] Unknown entity: "${entity}". Falling back to broad invalidation.`);
     // Fallback: invalidate everything with the entity name as prefix
     await qc.invalidateQueries({ queryKey: [entity] });
     return;
@@ -575,7 +578,7 @@ export async function invalidateEntities(qc, entities, projectId = null) {
 export function getQueryKey(entity, projectId = null) {
   const reg = REGISTRY[entity];
   if (!reg) {
-    console.error(`[cacheRegistry] Unknown entity: "${entity}".`);
+    if (import.meta.env.DEV) console.error(`[cacheRegistry] Unknown entity: "${entity}".`);
     return [entity, projectId].filter(Boolean);
   }
   return reg.primary(projectId);
