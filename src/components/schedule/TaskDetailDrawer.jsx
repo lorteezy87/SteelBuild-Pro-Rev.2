@@ -237,7 +237,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
       };
       toast.info(
         `Dates shifted to ${fmt(shift.start_date)} – ${fmt(shift.end_date)} based on dependency`,
-        { description: 'Guideline only — edit dates in the Details tab if needed.' }
+        { description: 'Guideline only — edit dates in the Details tab if needed.', position: 'top-right', duration: 3000 }
       );
     } else {
       setFormData({ ...formData, dependencies: serialized });
@@ -286,7 +286,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
     // schedule-task mutations. The parent (ScheduleGantt) patches the
     // target task, NOT the currently-viewed one.
     onUpdate({ id: sucId, dependencies: serialized });
-    toast.info(`Linked as predecessor of "${sucTask.task_name || sucTask.wbs_code || 'task'}"`);
+    toast.info(`Linked as predecessor of "${sucTask.task_name || sucTask.wbs_code || 'task'}"`, { position: 'top-right', duration: 2500 });
   };
 
   const removeSuccessor = (sucId) => {
@@ -296,7 +296,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
     const updated = sucLinks.filter((l) => l.id !== task.id);
     const serialized = updated.length > 0 ? serializeDependencies(updated) : null;
     onUpdate({ id: sucId, dependencies: serialized });
-    toast.info(`Removed predecessor link from "${sucTask.task_name || sucTask.wbs_code || 'task'}"`);
+    toast.info(`Removed predecessor link from "${sucTask.task_name || sucTask.wbs_code || 'task'}"`, { position: 'top-right', duration: 2500 });
   };
 
   return (
