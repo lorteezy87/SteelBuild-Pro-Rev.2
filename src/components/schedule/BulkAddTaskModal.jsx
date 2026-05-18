@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { PHASES } from "../../utils/phases";
 import DateOrTbdInput from "./DateOrTbdInput";
 
@@ -75,6 +75,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
   const [rows, setRows] = useState(() => [emptyRow(1), emptyRow(2), emptyRow(3)]);
   const [nextId, setNextId] = useState(4);
   const [errors, setErrors] = useState({});
+  const gridRef = useRef(null);
 
   // Reset form state every time the modal opens so stale rows from a
   // previous bulk-add session are never carried over.
@@ -90,6 +91,41 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
     setRows((prev) => prev.map((r) => r._id === id ? { ...r, [key]: val } : r));
     setErrors((prev) => { const e = { ...prev }; delete e[id]; return e; });
   };
+
+  // ── Keyboard navigation ─────────────────────────────────────────
+  // Enter        → same column, next row (auto-adds row if on last)
+  // Shift+Enter  → same column, previous row
+  // Works on every input and select in the grid.
+  const handleCellKeyDown = useCallback((e) => {
+    if (e.key !== "Enter") return;
+    const el = e.target;
+    const row = el.getAttribute("data-row");
+    const col = el.getAttribute("data-col");
+    if (row == null || col == null) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const currentRow = parseInt(row, 10);
+    const targetRow = e.shiftKey ? currentRow - 1 : currentRow + 1;
+
+    // If going past the last row, add one first
+    if (!e.shiftKey && targetRow >= rows.length) {
+      setRows((prev) => [...prev, emptyRow(nextId)]);
+      setNextId((n) => n + 1);
+      // Focus after React re-renders the new row
+      requestAnimationFrame(() => {
+        const next = gridRef.current?.querySelector(`[data-row="${targetRow}"][data-col="${col}"]`);
+        next?.focus();
+      });
+      return;
+    }
+
+    if (targetRow < 0) return;
+
+    const next = gridRef.current?.querySelector(`[data-row="${targetRow}"][data-col="${col}"]`);
+    next?.focus();
+  }, [rows.length, nextId]);
 
   const addRow = () => {
     setRows((prev) => [...prev, emptyRow(nextId)]);
@@ -184,7 +220,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
         </div>
 
         {/* Rows — scrollable */}
-        <div style={{ flex: 1, overflow: "auto" }}>
+        <div ref={gridRef} style={{ flex: 1, overflow: "auto" }}>
           {rows.map((row, idx) => {
             const hasErr = !!errors[row._id];
             return (
@@ -212,6 +248,9 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                     onChange={(e) => updateRow(row._id, "task_name", e.target.value)}
                     onFocus={(e) => e.target.style.background = "rgb(18,25,38)"}
                     onBlur={(e) => e.target.style.background = INPUT_STYLE.background}
+                    onKeyDown={handleCellKeyDown}
+                    data-row={idx}
+                    data-col="task_name"
                     placeholder={hasErr ? "Required" : "Task name…"}
                     style={{ ...INPUT_STYLE, color: hasErr && !row.task_name ? "var(--status-error)" : "var(--text-primary)" }}
                   />
@@ -219,14 +258,14 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
 
                 {/* Task type */}
                 <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
-                  <select value={row.task_type} onChange={(e) => updateRow(row._id, "task_type", e.target.value)} style={SELECT_STYLE}>
+                  <select value={row.task_type} onChange={(e) => updateRow(row._id, "task_type", e.target.value)} onKeyDown={handleCellKeyDown} data-row={idx} data-col="task_type" style={SELECT_STYLE}>
                     {TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
 
                 {/* Phase */}
                 <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
-                  <select value={row.phase} onChange={(e) => updateRow(row._id, "phase", e.target.value)} style={SELECT_STYLE}>
+                  <select value={row.phase} onChange={(e) => updateRow(row._id, "phase", e.target.value)} onKeyDown={handleCellKeyDown} data-row={idx} data-col="phase" style={SELECT_STYLE}>
                     {PHASES.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
@@ -237,6 +276,9 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                     compact
                     value={row.start_date}
                     onChange={(v) => updateRow(row._id, "start_date", v)}
+                    onKeyDown={handleCellKeyDown}
+                    data-row={idx}
+                    data-col="start_date"
                     inputStyle={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark", padding: "7px 8px" }}
                   />
                 </div>
@@ -247,20 +289,23 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                     compact
                     value={row.end_date}
                     onChange={(v) => updateRow(row._id, "end_date", v)}
+                    onKeyDown={handleCellKeyDown}
+                    data-row={idx}
+                    data-col="end_date"
                     inputStyle={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark", padding: "7px 8px" }}
                   />
                 </div>
 
                 {/* Status */}
                 <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
-                  <select value={row.status} onChange={(e) => updateRow(row._id, "status", e.target.value)} style={SELECT_STYLE}>
+                  <select value={row.status} onChange={(e) => updateRow(row._id, "status", e.target.value)} onKeyDown={handleCellKeyDown} data-row={idx} data-col="status" style={SELECT_STYLE}>
                     {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
 
                 {/* Priority */}
                 <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
-                  <select value={row.priority} onChange={(e) => updateRow(row._id, "priority", e.target.value)} style={SELECT_STYLE}>
+                  <select value={row.priority} onChange={(e) => updateRow(row._id, "priority", e.target.value)} onKeyDown={handleCellKeyDown} data-row={idx} data-col="priority" style={SELECT_STYLE}>
                     {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
@@ -270,6 +315,9 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                   <input
                     value={row.resource_names}
                     onChange={(e) => updateRow(row._id, "resource_names", e.target.value)}
+                    onKeyDown={handleCellKeyDown}
+                    data-row={idx}
+                    data-col="resources"
                     placeholder="e.g. Fab A, John"
                     style={{ ...INPUT_STYLE, fontSize: 10 }}
                   />
@@ -280,6 +328,9 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                   <select
                     value={row.parent_task_id || ""}
                     onChange={(e) => updateRow(row._id, "parent_task_id", e.target.value || null)}
+                    onKeyDown={handleCellKeyDown}
+                    data-row={idx}
+                    data-col="parent_task"
                     style={SELECT_STYLE}
                   >
                     <option value="">— None —</option>
@@ -333,6 +384,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
         }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
             {rows.filter((r) => r.task_name.trim()).length} of {rows.length} rows ready to save
+            <span style={{ marginLeft: 12, opacity: 0.6 }}>ENTER ↓ · SHIFT+ENTER ↑</span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button
