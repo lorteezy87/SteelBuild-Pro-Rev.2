@@ -732,7 +732,7 @@ export default function GanttChart() {
 
   const promoteSubtask = useCallback((task) => {
     if (!task.parent_id) { toast.info("Not a subtask"); return; }
-    patchMeta(task, { parent_id: null }).then(() => toast.success("Promoted"));
+    patchMeta(task, { parent_id: null }).then(() => toast.success("Promoted")).catch((e) => toast.error(`Promote failed: ${e.message}`));
   }, [patchMeta]);
 
   const cutTask = useCallback((task) => {

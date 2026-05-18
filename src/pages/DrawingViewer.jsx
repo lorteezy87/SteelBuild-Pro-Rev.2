@@ -60,7 +60,7 @@ export default function DrawingViewer() {
 
   const [userId, setUserId] = useState(null);
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id || null));
+    supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id || null)).catch(() => {});
   }, []);
 
   const [activeId, setActiveId] = useState(initialId || null);

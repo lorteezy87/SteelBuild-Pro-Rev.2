@@ -140,7 +140,7 @@ export default function ExportFabReleaseModal({
           const [rfisQ, cosQ, photosQ] = await Promise.allSettled([
             supabase.from("rfis").select("id, rfi_number, subject, question, status, submitted_date, created_at, author, created_by").eq("project_id", project.id).eq("is_deleted", false),
             supabase.from("change_orders").select("id, co_number, title, description, status, issued_date, created_at, issued_by, created_by").eq("project_id", project.id).eq("is_deleted", false),
-            supabase.from("photos").select("id, caption, file_name, taken_at, created_at, uploaded_by, linked_drawing_id").eq("project_id", project.id),
+            supabase.from("photos").select("id, caption, file_name, taken_at, created_at, uploaded_by, linked_drawing_id").eq("project_id", project.id).eq("is_deleted", false),
           ]);
           if (rfisQ.status === "fulfilled" && !rfisQ.value.error) claimsExtras.rfis = rfisQ.value.data || [];
           if (cosQ.status === "fulfilled" && !cosQ.value.error) claimsExtras.changeOrders = cosQ.value.data || [];
