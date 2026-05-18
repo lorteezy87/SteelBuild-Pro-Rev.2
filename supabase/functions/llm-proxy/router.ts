@@ -26,10 +26,9 @@ export interface RoutingTarget {
 
 export const ROUTING_TABLE: Record<string, RoutingTarget> = {
   // Default catch-all. New code that hasn't picked a useCase yet ends
-  // up here. Anthropic Sonnet 4.5 is the safest choice for ad-hoc
-  // calls — strong reasoning, good cost-per-quality, and the existing
-  // analyze-drawing path was already on it.
-  "general":               { provider: "anthropic", model: "claude-sonnet-4-5" },
+  // up here. Switched from Anthropic Sonnet 4.5 → OpenAI gpt-4o
+  // (May 2026) after Anthropic credit balance was exhausted.
+  "general":               { provider: "openai",    model: "gpt-4o" },
 
   // Mirror current production routing for the existing AI features.
   // Each of these defaults to OpenAI gpt-4o-mini today inside the
@@ -40,7 +39,8 @@ export const ROUTING_TABLE: Record<string, RoutingTarget> = {
 
   // Schedule-assistant routes each model turn through llm-proxy while
   // keeping schedule tool execution inside its own JWT-scoped function.
-  "schedule-assist":       { provider: "anthropic", model: "claude-sonnet-4-5" },
+  // Switched from Anthropic → OpenAI (May 2026) — credit balance exhausted.
+  "schedule-assist":       { provider: "openai",    model: "gpt-4o" },
 
   // Bonus callers that the audit found. All currently default to
   // OpenAI in their respective modules.
