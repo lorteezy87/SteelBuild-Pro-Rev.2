@@ -229,6 +229,7 @@ export async function resolveProjectForTicket(jobNumber) {
     .from("projects")
     .select("id, name, project_number")
     .or(`project_number.eq.${cleaned},project_number.ilike.%${cleaned}%`)
+    .eq("is_deleted", false)
     .limit(1);
   if (error || !data || data.length === 0) return null;
   return data[0];
