@@ -18,13 +18,12 @@ import { normalizeRfiNumber, rfiNumberDedupKey } from "@/lib/rfiImportUtils";
 
 const STORAGE_BUCKET  = "app-files";
 const MAX_PDF_BYTES   = 32 * 1024 * 1024;
-// Anthropic Claude natively ingests PDFs and reliably emits tool_use
-// blocks — the previous gpt-4o-mini default was silently returning plain
-// text on multi-page RFI logs, which tripped the "AI did not return
-// structured data" error downstream. Sonnet 4.5 handles 100+ RFI rows
-// without drifting; swap to haiku-4-5 if cost becomes a concern.
-const DEFAULT_PROVIDER = "anthropic";
-const DEFAULT_MODEL    = "claude-sonnet-4-5";
+// Was Anthropic Sonnet 4.5 (reliable PDF + tool_use on multi-page RFI
+// logs). Switched to OpenAI gpt-4o (May 2026) after Anthropic credit
+// balance exhausted. gpt-4o handles structured extraction reasonably;
+// revert to anthropic/claude-sonnet-4-5 when credits are restored.
+const DEFAULT_PROVIDER = "openai";
+const DEFAULT_MODEL    = "gpt-4o";
 
 const SYSTEM_PROMPT = `You are parsing a structural-steel RFI log PDF. The header has a
 job number + project name + location. The body is a table of RFIs,

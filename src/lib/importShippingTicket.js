@@ -51,12 +51,12 @@ async function invokeProxyWithDetail(body) {
 
 const STORAGE_BUCKET = "app-files";
 const MAX_PDF_BYTES  = 32 * 1024 * 1024;
-// Switched from gpt-4o-mini to Claude for the same reason importRfiLog
-// did — OpenAI's Chat Completions PDF handling was unreliable on
-// shipping tickets with many line items; Claude Sonnet 4.5 reliably
-// emits the full tool_use block on multi-page tickets.
-const DEFAULT_PROVIDER = "anthropic";
-const DEFAULT_MODEL    = "claude-sonnet-4-5";
+// Was Anthropic Sonnet 4.5 (reliable PDF + tool_use on multi-page
+// tickets). Switched to OpenAI gpt-4o (May 2026) after Anthropic
+// credit balance exhausted. gpt-4o handles the structured extraction
+// well; revert to anthropic/claude-sonnet-4-5 when credits are restored.
+const DEFAULT_PROVIDER = "openai";
+const DEFAULT_MODEL    = "gpt-4o";
 
 const SYSTEM_PROMPT = `You are parsing a structural-steel shipping ticket (also called a load list
 or bill of lading). Every ticket has a header block with load-level
