@@ -868,7 +868,7 @@ function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], roun
   };
   if (!submittal) {
     return (
-      <div style={{ width: 480, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6, color: "var(--text-muted)", background: "var(--bg-surface)" }}>
+      <div style={{ width: 480, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6, color: "var(--text-muted)", background: "var(--bg-page, #0D1117)" }}>
         <div style={{ fontSize: 32 }}>◆</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase" }}>Select a submittal</div>
       </div>
@@ -882,8 +882,8 @@ function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], roun
     daysUntil(submittal.required_date) < 0;
 
   return (
-    <div style={{ width: 480, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--bg-surface)", minHeight: 0 }}>
-      <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)" }}>
+    <div style={{ width: 480, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--bg-page, #0D1117)", minHeight: 0 }}>
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "rgba(255,255,255,0.04)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.08em" }}>
@@ -1151,7 +1151,7 @@ function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], roun
         </DetailSection>
       </div>
 
-      <div style={{ padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", gap: 8 }}>
+      <div style={{ padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "rgba(255,255,255,0.04)", display: "flex", gap: 8 }}>
         <button
           onClick={onEdit}
           style={{ flex: 1, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}
@@ -1395,7 +1395,7 @@ function LinkedDrawingSets({ value = [], allSets = [], onChange }) {
           onBlur={() => setPicking(false)}
           style={{
             fontFamily: "var(--font-mono)", fontSize: 10, padding: "4px 8px",
-            background: "var(--bg-input, var(--bg-surface-low))",
+            background: "#161B22",
             border: "1px solid var(--accent)", borderRadius: 3,
             color: "var(--text-primary)", outline: "none",
             maxWidth: "100%",
