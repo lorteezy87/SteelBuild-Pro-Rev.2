@@ -267,6 +267,38 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
     t.id !== task.id && !predecessorIds.includes(t.id)
   );
 
+  // Available tasks to add as successors (not self, not already a successor).
+  // Adding a successor means writing *this* task as a predecessor on the target.
+  const successorIds = new Set(successorTasks.map((s) => s.id));
+  const availableSuccessors = allTasks.filter(t =>
+    t.id !== task.id && !successorIds.has(t.id) && !predecessorIds.includes(t.id)
+  );
+
+  const addSuccessor = (sucId) => {
+    const sucTask = allTasks.find((t) => t.id === sucId);
+    if (!sucTask) return;
+    const sucLinks = parseDeps(sucTask.dependencies);
+    if (sucLinks.some((l) => l.id === task.id)) return; // already linked
+    const newLink = { id: task.id, type: 'FS', lag_days: 1 };
+    const updated = [...sucLinks, newLink];
+    const serialized = serializeDependencies(updated);
+    // Push the update through the same onUpdate callback used for all
+    // schedule-task mutations. The parent (ScheduleGantt) patches the
+    // target task, NOT the currently-viewed one.
+    onUpdate({ id: sucId, dependencies: serialized });
+    toast.info(`Linked as predecessor of "${sucTask.task_name || sucTask.wbs_code || 'task'}"`);
+  };
+
+  const removeSuccessor = (sucId) => {
+    const sucTask = allTasks.find((t) => t.id === sucId);
+    if (!sucTask) return;
+    const sucLinks = parseDeps(sucTask.dependencies);
+    const updated = sucLinks.filter((l) => l.id !== task.id);
+    const serialized = updated.length > 0 ? serializeDependencies(updated) : null;
+    onUpdate({ id: sucId, dependencies: serialized });
+    toast.info(`Removed predecessor link from "${sucTask.task_name || sucTask.wbs_code || 'task'}"`);
+  };
+
   return (
     <>
       {/* Overlay */}
@@ -549,7 +581,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 )}
               </div>
 
-              {/* Successors (read-only) */}
+              {/* Successors — editable: add/remove tasks that depend on this one */}
               <div>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: drawerText, marginBottom: 8 }}>
                   Successors ({successorTasks.length})
@@ -559,12 +591,35 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                     {successorTasks.map(suc => (
                       <div key={suc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: drawerPanel, border: `1px solid ${drawerMutedBorder}`, borderRadius: 8 }}>
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{suc.wbs_code || '—'}</span>
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, flex: 1 }}>{suc.task_name}</span>
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{suc.task_name}</span>
+                        <button
+                          onClick={() => removeSuccessor(suc.id)}
+                          title="Remove successor link"
+                          style={{ background: 'none', border: 'none', color: 'var(--status-error)', cursor: 'pointer', padding: '2px 6px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, flexShrink: 0 }}
+                        >
+                          x
+                        </button>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, padding: '8px 0' }}>No successors</div>
+                )}
+                {availableSuccessors.length > 0 && (
+                  <div style={{ marginTop: 6 }}>
+                    <select
+                      value=""
+                      onChange={(e) => { if (e.target.value) addSuccessor(e.target.value); }}
+                      style={{
+                        ...drawerControlStyle,
+                      }}
+                    >
+                      <option value="">+ Add successor...</option>
+                      {availableSuccessors.map(t => (
+                        <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ''}{t.task_name}</option>
+                      ))}
+                    </select>
+                  </div>
                 )}
               </div>
             </div>
