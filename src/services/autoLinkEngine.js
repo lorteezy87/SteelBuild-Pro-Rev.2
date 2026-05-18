@@ -17,8 +17,9 @@ const PATTERNS = {
   wpCode: /\bWP[-\s]?(\d{2,5})\b/gi,
   // Sequence references: S2, Seq 2, Sequence 2
   sequence: /\b(?:S|Seq(?:uence)?)\s*(\d{1,3})\b/gi,
-  // Gridline references: A-5, B.3, Grid C-7
-  gridline: /\b(?:Grid(?:line)?[-\s]?)?([A-Z])-?(\d{1,3})\b/gi,
+  // Gridline references: Grid A-5, Gridline C-7 (H5 fix: require Grid/Gridline
+  // prefix to avoid false positives on bare "A2", "S3" which match drawings)
+  gridline: /\bGrid(?:line)?[-\s]?([A-Z])-?(\d{1,3})\b/gi,
   // Area references: common steel areas
   area: /\b((?:East|West|North|South|Central|Core)\s+(?:Wing|Bay|Tower|Addition|Side))\b/gi,
   // Revision: Rev 3, R3, Rev. A
