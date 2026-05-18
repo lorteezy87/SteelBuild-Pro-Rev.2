@@ -17,6 +17,7 @@ import React, { useMemo } from "react";
 import { Calendar, CalendarDays } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import SectionCard from "./SectionCard";
+import { Sparkline } from "@/components/design-system";
 import {
   daysRemaining,
   timelineElapsedPct,
@@ -86,6 +87,24 @@ export default function ScheduleTimelineSection({
     drift >= 30 ? "var(--status-error)"
       : drift >= 15 ? "var(--status-warning)"
       : "var(--status-success)";
+
+  // Schedule velocity — task completion per week over last 4 weeks.
+  // Gives temporal context to the progress bar above.
+  const completionTrend = useMemo(() => {
+    const now = new Date();
+    const weeks = [0, 1, 2, 3].map((w) => {
+      const end = new Date(now);
+      end.setDate(end.getDate() - w * 7);
+      const start = new Date(end);
+      start.setDate(start.getDate() - 7);
+      return scheduleTasks.filter((t) => {
+        if (t.status !== "Complete") return false;
+        const d = new Date(t.updated_at || t.end_date);
+        return d >= start && d < end;
+      }).length;
+    }).reverse();
+    return weeks;
+  }, [scheduleTasks]);
 
   const stats = [
     { value: pipeline.total, label: "PACKAGES", color: "accent" },
@@ -188,6 +207,29 @@ export default function ScheduleTimelineSection({
           )}
         </div>
       </div>
+
+      {/* Schedule Velocity sparkline — task completions per week, 4wk */}
+      {completionTrend.some((v) => v > 0) && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "8px 0", marginBottom: 10,
+        }}>
+          <span style={{
+            fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+            letterSpacing: "0.12em", textTransform: "uppercase",
+            color: "var(--text-muted)",
+          }}>
+            VELOCITY · 4WK
+          </span>
+          <Sparkline data={completionTrend} width={80} height={24} color="var(--status-success)" />
+          <span style={{
+            fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
+            color: "var(--text-primary)",
+          }}>
+            {completionTrend[completionTrend.length - 1]} this week
+          </span>
+        </div>
+      )}
 
       {/* Today / This Week — high-priority upcoming-events strip.
           Quickly answers "what's coming up?" without scrolling the
@@ -649,11 +691,18 @@ function Legend({ color, label }) {
 }
 
 const LINK_BTN = {
-  background: "none", border: "none", padding: 0,
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
   color: "var(--accent)",
-  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-  letterSpacing: "0.08em", textTransform: "uppercase",
   cursor: "pointer",
+  padding: "4px 10px",
+  borderRadius: 4,
+  border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)",
+  background: "color-mix(in srgb, var(--accent) 6%, transparent)",
+  transition: "all 0.15s",
 };
 
 // ── Upcoming Events strip ───────────────────────────────────────────

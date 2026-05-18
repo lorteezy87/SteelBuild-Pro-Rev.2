@@ -713,74 +713,78 @@ export default function Schedule() {
           unit=" TASKS"
           subtitle="Project lifecycle · Pre-Construction → Closeout"
         >
-          <Button
-            variant="secondary"
-            icon="upload"
-            disabled={importing || !projectId}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {importing ? "IMPORTING…" : "IMPORT MPP"}
-          </Button>
-          <Button
-            variant="secondary"
-            icon="calendar"
-            disabled={!projectId || scheduleTasks.length === 0}
-            onClick={() => {
-              // Use the effective-date overlay so calendar entries match
-              // where the Gantt actually places each task — exporting
-              // stored dates would put events on the wrong week for any
-              // task pulled forward by a predecessor cascade.
-              const events = tasksWithEffective
-                .map((t) => scheduleTaskToEvent(t, selectedProject?.project_number || ""))
-                .filter(Boolean);
-              if (events.length === 0) { toast.info("No tasks with dates to export."); return; }
-              downloadIcs({
-                filename: `schedule-${selectedProject?.project_number || "project"}.ics`,
-                calendarName: `${selectedProject?.name || "Project"} — Schedule`,
-                events,
-              });
-              toast.success(`Exported ${events.length} tasks to calendar`);
-            }}
-            title="Download .ics for Outlook / Teams / Google Calendar"
-          >
-            EXPORT .ICS
-          </Button>
-          <Button
-            variant="secondary"
-            icon="download"
-            disabled={
-              !projectId ||
-              scheduleTasks.length === 0 ||
-              view !== "gantt" ||
-              exportingPdf
-            }
-            onClick={async () => {
-              setExportingPdf(true);
-              const t = toast.loading("Generating PDF…");
-              try {
-                const { exportGanttToPdf } = await import("@/lib/exportGanttPdf");
-                const { pageCount, filename } = await exportGanttToPdf({
-                  project: selectedProject,
+          {/* Import / Export group */}
+          <div style={{ display: "flex", gap: 6, alignItems: "center", paddingRight: 10, borderRight: "1px solid var(--divider)", marginRight: 4 }}>
+            <Button
+              variant="secondary"
+              icon="upload"
+              disabled={importing || !projectId}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {importing ? "IMPORTING…" : "IMPORT MPP"}
+            </Button>
+            <Button
+              variant="secondary"
+              icon="calendar"
+              disabled={!projectId || scheduleTasks.length === 0}
+              onClick={() => {
+                // Use the effective-date overlay so calendar entries match
+                // where the Gantt actually places each task — exporting
+                // stored dates would put events on the wrong week for any
+                // task pulled forward by a predecessor cascade.
+                const events = tasksWithEffective
+                  .map((t) => scheduleTaskToEvent(t, selectedProject?.project_number || ""))
+                  .filter(Boolean);
+                if (events.length === 0) { toast.info("No tasks with dates to export."); return; }
+                downloadIcs({
+                  filename: `schedule-${selectedProject?.project_number || "project"}.ics`,
+                  calendarName: `${selectedProject?.name || "Project"} — Schedule`,
+                  events,
                 });
-                toast.success(
-                  `Exported ${filename}${pageCount > 1 ? ` (${pageCount} pages)` : ""}`,
-                  { id: t }
-                );
-              } catch (err) {
-                console.error("[Schedule] PDF export failed:", err);
-                toast.error(`PDF export failed: ${err?.message || "unknown error"}`, { id: t });
-              } finally {
-                setExportingPdf(false);
+                toast.success(`Exported ${events.length} tasks to calendar`);
+              }}
+              title="Download .ics for Outlook / Teams / Google Calendar"
+            >
+              EXPORT .ICS
+            </Button>
+            <Button
+              variant="secondary"
+              icon="download"
+              disabled={
+                !projectId ||
+                scheduleTasks.length === 0 ||
+                view !== "gantt" ||
+                exportingPdf
               }
-            }}
-            title={
-              view !== "gantt"
-                ? "Switch to the Gantt view to export"
-                : "Export the Gantt chart as a PDF for distribution"
-            }
-          >
-            {exportingPdf ? "EXPORTING…" : "EXPORT PDF"}
-          </Button>
+              onClick={async () => {
+                setExportingPdf(true);
+                const t = toast.loading("Generating PDF…");
+                try {
+                  const { exportGanttToPdf } = await import("@/lib/exportGanttPdf");
+                  const { pageCount, filename } = await exportGanttToPdf({
+                    project: selectedProject,
+                  });
+                  toast.success(
+                    `Exported ${filename}${pageCount > 1 ? ` (${pageCount} pages)` : ""}`,
+                    { id: t }
+                  );
+                } catch (err) {
+                  console.error("[Schedule] PDF export failed:", err);
+                  toast.error(`PDF export failed: ${err?.message || "unknown error"}`, { id: t });
+                } finally {
+                  setExportingPdf(false);
+                }
+              }}
+              title={
+                view !== "gantt"
+                  ? "Switch to the Gantt view to export"
+                  : "Export the Gantt chart as a PDF for distribution"
+              }
+            >
+              {exportingPdf ? "EXPORTING…" : "EXPORT PDF"}
+            </Button>
+          </div>
+          {/* AI tool */}
           <Button
             variant="secondary"
             icon="sparkles"
@@ -790,22 +794,25 @@ export default function Schedule() {
           >
             WBS BUILDER
           </Button>
-          <Button
-            variant="outline"
-            icon="plus"
-            disabled={!projectId}
-            onClick={() => setShowBulkAdd(true)}
-          >
-            BULK ADD
-          </Button>
-          <Button
-            variant="primary"
-            icon="plus"
-            disabled={!projectId}
-            onClick={() => setShowAddTask(true)}
-          >
-            ADD TASK
-          </Button>
+          {/* Primary actions */}
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <Button
+              variant="outline"
+              icon="plus"
+              disabled={!projectId}
+              onClick={() => setShowBulkAdd(true)}
+            >
+              BULK ADD
+            </Button>
+            <Button
+              variant="primary"
+              icon="plus"
+              disabled={!projectId}
+              onClick={() => setShowAddTask(true)}
+            >
+              ADD TASK
+            </Button>
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -823,60 +830,69 @@ export default function Schedule() {
       <div style={{ flexShrink: 0, padding: "0 24px 14px" }}>
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${PHASES.length + 1}, 1fr)`,
-            gap: 8,
+            display: "flex",
+            gap: 6,
+            overflowX: "auto",
+            paddingBottom: 4,
+            scrollbarWidth: "thin",
+            scrollbarColor: "var(--border-default) transparent",
           }}
         >
-          <KpiTile
-            compact
-            label="ALL PHASES"
-            value={phaseCounts.all}
-            color="var(--text-secondary)"
-            active={phaseFilter === "all"}
-            onClick={() => setPhaseFilter("all")}
-          />
-          {PHASES.map((p) => (
+          <div style={{ minWidth: 100, flexShrink: 0 }}>
             <KpiTile
-              key={p}
               compact
-              label={p.toUpperCase()}
-              value={phaseCounts[p] || 0}
-              color="var(--accent)"
-              active={phaseFilter === p}
-              onClick={() => setPhaseFilter(p)}
+              label="ALL PHASES"
+              value={phaseCounts.all}
+              color="var(--text-secondary)"
+              active={phaseFilter === "all"}
+              onClick={() => setPhaseFilter("all")}
             />
+          </div>
+          {PHASES.map((p) => (
+            <div key={p} style={{ minWidth: 100, flexShrink: 0 }}>
+              <KpiTile
+                compact
+                label={p.toUpperCase()}
+                value={phaseCounts[p] || 0}
+                color="var(--accent)"
+                active={phaseFilter === p}
+                onClick={() => setPhaseFilter(p)}
+              />
+            </div>
           ))}
         </div>
       </div>
 
       {/* View Tabs */}
-      <div style={{ flexShrink: 0, display: "flex", gap: 8, borderBottom: "1px solid var(--divider)", padding: "0 24px 12px", marginTop: 8 }}>
-        <div style={{ display: "inline-flex", gap: 6, padding: 6, borderRadius: 18, background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 76%, #000 24%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)", border: "1px solid var(--border-default)", boxShadow: "0 10px 28px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)" }}>
-          {[
-            { id: "gantt", label: "Gantt Chart" },
-            { id: "lookahead", label: "6-Week Lookahead" },
-            { id: "list", label: "Task List" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setView(tab.id)}
-              style={{
-                background: view === tab.id ? "linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, transparent) 100%)" : "transparent",
-                border: view === tab.id ? "1px solid var(--accent-border)" : "1px solid transparent", padding: "10px 16px",
-                borderRadius: 12,
-                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-                color: view === tab.id ? "var(--accent)" : "var(--text-muted)",
-                textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer",
-                boxShadow: view === tab.id ? "0 10px 24px color-mix(in srgb, var(--accent) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.05)" : "none",
-                transition: "color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      <div style={{ flexShrink: 0, display: "flex", gap: 0, padding: "0 24px", marginTop: 4 }}>
+        {[
+          { id: "gantt", label: "Gantt Chart" },
+          { id: "lookahead", label: "6-Week Lookahead" },
+          { id: "list", label: "Task List" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setView(tab.id)}
+            style={{
+              background: "transparent",
+              border: "none",
+              borderBottom: view === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
+              padding: "10px 20px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              color: view === tab.id ? "var(--accent)" : "var(--text-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+              transition: "color 0.15s, border-color 0.15s",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
+      <div style={{ height: 1, background: "var(--divider)", margin: "0 24px 8px" }} />
 
       <ScheduleRivetBrief
         tasks={tasksWithEffective}
