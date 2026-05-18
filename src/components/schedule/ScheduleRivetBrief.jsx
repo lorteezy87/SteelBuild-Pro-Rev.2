@@ -163,7 +163,8 @@ function buildAtRiskEntry(task, effectiveDates) {
   const criticalLabel = isCriticalTask(task) ? "critical-path " : "";
   const phase = phaseOf(task);
 
-  if (startLag != null && startLag < 0 && progressValue(task) === 0) {
+  const statusLower = String(task?.status || "").toLowerCase();
+  if (startLag != null && startLag < 0 && progressValue(task) === 0 && !statusLower.includes("in progress") && !statusLower.includes("active") && !statusLower.includes("complete")) {
     const lateDays = Math.abs(startLag);
     return {
       task,
@@ -376,7 +377,7 @@ function buildBrief(tasks) {
       overdue.push(task);
       if (phaseStatsRow) phaseStatsRow.overdue += 1;
     }
-    if (startDays != null && startDays < 0 && progressValue(task) === 0 && !status.includes("complete")) {
+    if (startDays != null && startDays < 0 && progressValue(task) === 0 && !status.includes("complete") && !status.includes("in progress") && !status.includes("active")) {
       stalled.push(task);
     }
     if (dateDays != null && dateDays >= 0 && dateDays <= 42) {
