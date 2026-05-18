@@ -278,11 +278,15 @@ export function computeEffectiveDates(tasks) {
   function resolve(taskId, visiting) {
     if (out[taskId]) return out[taskId];
     if (visiting.has(taskId)) {
-      // Cycle — mark everything currently on the stack as cycle members
-      // so consumers can decorate them, and bail.
-      const chain = [...visiting, taskId];
-      warnCycle(chain);
-      for (const id of chain) cycleNodes.add(id);
+      // H7 fix: only mark the actual cycle members, not ancestors that
+      // merely led to its discovery. If visiting = [A, B, C] and we hit
+      // B again, the cycle is B→C→B — A is not part of it.
+      const chain = [...visiting];
+      const cycleStart = chain.indexOf(taskId);
+      const cycleMembers = cycleStart >= 0 ? chain.slice(cycleStart) : chain;
+      warnCycle([...cycleMembers, taskId]);
+      for (const id of cycleMembers) cycleNodes.add(id);
+      cycleNodes.add(taskId);
       return null;
     }
 

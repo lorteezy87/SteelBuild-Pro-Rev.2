@@ -36,7 +36,9 @@ export default class ErrorBoundary extends React.Component {
             {this.props.label || "SECTION"} — LOAD ERROR
           </div>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
-            {this.state.error?.message || "Something went wrong"}
+            {import.meta.env.DEV
+              ? (this.state.error?.message || "Something went wrong")
+              : "Something went wrong. Please retry or refresh the page."}
           </div>
           <button
             className="sbd-btn"

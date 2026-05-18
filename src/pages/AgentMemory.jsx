@@ -4,8 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
 import { formatDate } from '@/components/shared/formatters';
+import AdminRoute from '../components/shared/AdminRoute';
 
-export default function AgentMemory() {
+function AgentMemoryPage() {
   const qc = useQueryClient();
   const [newMemory, setNewMemory] = useState('');
   const [category, setCategory] = useState('general');
@@ -211,5 +212,14 @@ export default function AgentMemory() {
         )}
       </div>
     </div>
+  );
+}
+
+// H2 fix: wrap in AdminRoute so non-admin users are blocked client-side
+export default function AgentMemory() {
+  return (
+    <AdminRoute>
+      <AgentMemoryPage />
+    </AdminRoute>
   );
 }
