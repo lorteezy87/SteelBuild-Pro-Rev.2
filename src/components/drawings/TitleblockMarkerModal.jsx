@@ -244,33 +244,41 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   };
 
   // ── Save ────────────────────────────────────────────────────────────
+
+  /**
+   * Load a pdfjs document, caching by storage path so multi-sheet sets
+   * that share a single PDF file don't re-download it for every sheet.
+   */
+  const loadPdfCached = async (fileUrl, cache) => {
+    if (cache.has(fileUrl)) return cache.get(fileUrl);
+    const signed = await resolveFileUrl(fileUrl);
+    if (!signed) return null;
+    const resp = await fetch(signed);
+    const buf = await resp.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    cache.set(fileUrl, pdf);
+    return pdf;
+  };
+
   /**
    * Re-extract title + sheet number for an existing drawing using the
-   * just-saved rectangles. Walks every page in the drawing's PDF and
-   * takes the first non-empty OCR result — handles cover-page-then-
-   * sheet PDFs and single-page sheets equally.
+   * just-saved rectangles. Uses `pdfCache` so sheets sharing the same
+   * PDF file (multi-page upload) don't re-download it.
    *
    * Returns the patch object (only fields that actually have a value)
    * or `null` when the OCR captured nothing usable.
    */
-  const reextractOne = async (drawing) => {
+  const reextractOne = async (drawing, pdfCache) => {
     if (!drawing?.file_url) return null;
     if (!titleRect && !numberRect) return null;
-    let signed;
-    try {
-      signed = await resolveFileUrl(drawing.file_url);
-    } catch {
-      return null;
-    }
-    if (!signed) return null;
     let pdf;
     try {
-      const resp = await fetch(signed);
-      const buf = await resp.arrayBuffer();
-      pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-    } catch {
+      pdf = await loadPdfCached(drawing.file_url, pdfCache);
+    } catch (err) {
+      console.warn(`[TitleblockMarker] PDF load failed for ${drawing.file_url}:`, err?.message);
       return null;
     }
+    if (!pdf) return null;
     let bestTitle = "";
     let bestNumber = "";
     try {
@@ -305,8 +313,18 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
           if (bestTitle && bestNumber) break;
         }
       }
-    } finally {
-      try { await pdf.destroy(); } catch { /* ignore */ }
+
+      // Diagnostic: surface what OCR captured so DevTools shows whether
+      // the rects are landing on the right area of the page.
+      if (bestTitle || bestNumber) {
+        console.info(
+          `[TitleblockMarker] OCR sheet=${drawing.sheet_number} page=${targetPage ?? "walk"}: ` +
+          `title="${bestTitle}" number="${bestNumber}"`,
+        );
+      }
+    } catch (err) {
+      console.warn(`[TitleblockMarker] OCR failed for sheet ${drawing.id}:`, err?.message);
+      return null;
     }
     const patch = {};
     if (bestTitle) patch.title = bestTitle;
@@ -346,49 +364,60 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
         total = sheets.length;
         if (total > 0) {
           setReExtractProgress({ done: 0, total });
-          for (let i = 0; i < sheets.length; i++) {
-            const sheet = sheets[i];
-            try {
-              const patch = await reextractOne(sheet);
-              if (patch) {
-                // Skip the write if the extracted values are byte-identical
-                // to what's already on the row — saves a round trip and
-                // avoids touching updated_at unnecessarily.
-                const titleSame =
-                  !patch.title || patch.title === (sheet.title || "");
-                const numberSame =
-                  !patch.sheet_number ||
-                  patch.sheet_number === (sheet.sheet_number || "");
-                if (titleSame && numberSame) {
-                  unchanged++;
+          // Cache loaded PDFs across sheets so multi-page sets sharing
+          // a single master PDF don't re-download it for every sheet.
+          const pdfCache = new Map();
+          try {
+            for (let i = 0; i < sheets.length; i++) {
+              const sheet = sheets[i];
+              try {
+                const patch = await reextractOne(sheet, pdfCache);
+                if (patch) {
+                  // Skip the write if the extracted values are byte-identical
+                  // to what's already on the row — saves a round trip and
+                  // avoids touching updated_at unnecessarily.
+                  const titleSame =
+                    !patch.title || patch.title === (sheet.title || "");
+                  const numberSame =
+                    !patch.sheet_number ||
+                    patch.sheet_number === (sheet.sheet_number || "");
+                  if (titleSame && numberSame) {
+                    unchanged++;
+                  } else {
+                    await base44.entities.Drawing.update(sheet.id, patch);
+                    updated++;
+                  }
                 } else {
-                  await base44.entities.Drawing.update(sheet.id, patch);
-                  updated++;
+                  unchanged++;
                 }
-              } else {
-                unchanged++;
+              } catch (err) {
+                failed++;
+                // Detect the most-common failure: the master PDF has the
+                // wrong pdf_page assignment so multiple sheets land on the
+                // same titleblock and collide on uq_drawings_set_sheet_revision.
+                // Surface a clearer message so users know to re-upload the
+                // set or hand-edit pdf_page values.
+                const msg = String(err?.message || err || "");
+                const isUniqueConflict =
+                  msg.includes("uq_drawings_set_sheet_revision") ||
+                  msg.includes("duplicate key value");
+
+                console.warn(
+                  `[TitleblockMarker] re-extract failed for sheet ${sheet?.id}` +
+                    (isUniqueConflict
+                      ? ` (sheet_number collision — pdf_page=${sheet?.pdf_page} likely points at the wrong page; re-upload the set or fix pdf_page in Edit Sheet)`
+                      : ""),
+                  err,
+                );
               }
-            } catch (err) {
-              failed++;
-              // Detect the most-common failure: the master PDF has the
-              // wrong pdf_page assignment so multiple sheets land on the
-              // same titleblock and collide on uq_drawings_set_sheet_revision.
-              // Surface a clearer message so users know to re-upload the
-              // set or hand-edit pdf_page values.
-              const msg = String(err?.message || err || "");
-              const isUniqueConflict =
-                msg.includes("uq_drawings_set_sheet_revision") ||
-                msg.includes("duplicate key value");
-               
-              console.warn(
-                `[TitleblockMarker] re-extract failed for sheet ${sheet?.id}` +
-                  (isUniqueConflict
-                    ? ` (sheet_number collision — pdf_page=${sheet?.pdf_page} likely points at the wrong page; re-upload the set or fix pdf_page in Edit Sheet)`
-                    : ""),
-                err,
-              );
+              setReExtractProgress({ done: i + 1, total });
             }
-            setReExtractProgress({ done: i + 1, total });
+          } finally {
+            // Release cached pdfjs documents to free memory.
+            for (const pdf of pdfCache.values()) {
+              try { await pdf.destroy(); } catch { /* ignore */ }
+            }
+            pdfCache.clear();
           }
         }
       } catch (err) {
