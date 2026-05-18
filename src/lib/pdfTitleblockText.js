@@ -14,6 +14,14 @@
  *   be dropped. Using the centre point keeps a "near enough" character
  *   in the extraction without leaking adjacent text into the result.
  *
+ * IMPORTANT — coordinate spaces:
+ *   The user draws rects on a canvas rendered with the page's intrinsic
+ *   rotation applied (via page.getViewport({ scale })). The normalised
+ *   rect (0..1) is therefore in the ROTATED frame. This module must use
+ *   the same rotation when de-normalising the rect AND when mapping text
+ *   item positions. The old code used rotation=0 which broke on rotated
+ *   pages (structural drawings commonly have page.rotate = 90).
+ *
  * Return value:
  *   Concatenated text in reading order (top-down, then left-right).
  *   Trimmed of leading/trailing whitespace. Empty string when no text
@@ -26,7 +34,8 @@
  *
  * @param {import("pdfjs-dist").PDFPageProxy} page
  * @param {{x:number,y:number,width:number,height:number}} rect
- *   Normalised in [0, 1] with origin at the page top-left.
+ *   Normalised in [0, 1] with origin at the page top-left (as rendered
+ *   with the page's intrinsic rotation).
  * @returns {Promise<string>}
  */
 export async function extractTextFromRect(page, rect) {
@@ -38,11 +47,12 @@ export async function extractTextFromRect(page, rect) {
     return "";
   }
 
-  // Use the unrotated viewport at scale=1 as the canonical page coordinate
-  // system. Width/height here are the page's native pdf-units size; we
-  // multiply normalised rect coords against those to land in the same
-  // space as the items we'll inspect.
-  const viewport = page.getViewport({ scale: 1, rotation: 0 });
+  // Use the viewport WITH the page's intrinsic rotation so the coordinate
+  // space matches the canvas the user drew the rect on. The old code used
+  // rotation: 0, which caused OCR to look at the wrong area on rotated
+  // pages — structural drawings commonly have page.rotate = 90 (portrait
+  // page displayed as landscape).
+  const viewport = page.getViewport({ scale: 1 });
   const pageW = viewport.width;
   const pageH = viewport.height;
 
@@ -54,9 +64,11 @@ export async function extractTextFromRect(page, rect) {
   const content = await page.getTextContent();
   if (!content?.items?.length) return "";
 
-  // pdfjs items have `transform = [a, b, c, d, e, f]` in TEXT space, where
-  // (e, f) is the text origin in PDF coords (BOTTOM-LEFT origin). The font
-  // height comes from the absolute value of `d`. Width is supplied directly.
+  // pdfjs items have `transform = [a, b, c, d, e, f]` in the PDF's raw
+  // coordinate system (bottom-left origin, pre-rotation). We use the
+  // viewport's convertToViewportPoint() to map them into the same rotated,
+  // top-left-origin space that the normalised rect lives in. This handles
+  // all four rotation cases (0, 90, 180, 270) automatically.
   const matches = [];
   for (const item of content.items) {
     if (!item?.str) continue;
@@ -64,29 +76,39 @@ export async function extractTextFromRect(page, rect) {
     if (!str.trim()) continue;
     const tx = item.transform;
     if (!tx) continue;
+
+    // Text origin in PDF coordinate space (bottom-left).
     const xPdf = tx[4];
     const yPdf = tx[5];
-    const w = Number.isFinite(item.width) ? item.width : (str.length * 5);
-    const h = Math.abs(tx[3]) || 10;
 
-    // Convert from pdf bottom-left to viewport top-left.
-    const xTop = xPdf;
-    const yTop = pageH - yPdf;
+    // Convert to viewport space (top-left origin, rotation applied).
+    // convertToViewportPoint returns [viewX, viewY].
+    const [vx, vy] = viewport.convertToViewportPoint(xPdf, yPdf);
+
+    // Approximate item dimensions in viewport space. For rotation=0 and
+    // rotation=180, width stays on the x-axis. For rotation=90/270,
+    // width maps to the y-axis. We convert the far corner of the item
+    // and compute the effective width/height from the two viewport points.
+    const rawW = Number.isFinite(item.width) ? item.width : (str.length * 5);
+    const rawH = Math.abs(tx[3]) || 10;
+    const [vx2, vy2] = viewport.convertToViewportPoint(xPdf + rawW, yPdf + rawH);
+    const w = Math.abs(vx2 - vx);
+    const h = Math.abs(vy2 - vy);
 
     // Use the centre of the item for the inside-rect test; tight user
     // rectangles otherwise clip glyphs whose bbox barely touches the edge.
-    const cx = xTop + w / 2;
-    const cy = yTop - h / 2;
+    const cx = Math.min(vx, vx2) + w / 2;
+    const cy = Math.min(vy, vy2) + h / 2;
 
     if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) {
-      matches.push({ x: xTop, y: yTop, str: str.trim() });
+      matches.push({ x: Math.min(vx, vx2), y: Math.min(vy, vy2), str: str.trim() });
     }
   }
 
   if (matches.length === 0) return "";
 
-  // Sort top-down then left-right. y-tolerance of 4 pdf units groups items
-  // visually on the same line — same constant the columnar extractor uses.
+  // Sort top-down then left-right. y-tolerance of 4 viewport units groups
+  // items visually on the same line.
   matches.sort((a, b) => {
     if (Math.abs(a.y - b.y) > 4) return a.y - b.y;
     return a.x - b.x;
