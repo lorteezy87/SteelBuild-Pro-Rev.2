@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function DateOrTbdInput({ value, onChange, inputStyle = {}, compact = false }) {
+export default function DateOrTbdInput({ value, onChange, inputStyle = {}, compact = false, onKeyDown, "data-row": dataRow, "data-col": dataCol }) {
   const hasValue = !!value;
 
   return (
@@ -9,6 +9,9 @@ export default function DateOrTbdInput({ value, onChange, inputStyle = {}, compa
         type="date"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        data-row={dataRow}
+        data-col={dataCol}
         style={{
           flex: 1,
           minWidth: 0,
