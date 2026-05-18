@@ -23,6 +23,7 @@ const labelStyle = {
 const selectStyle = { ...inputStyle, cursor: "pointer" };
 
 const INITIAL = {
+  revision_number: "",
   submitted_date: "",
   due_date: "",
   return_date: "",
@@ -110,6 +111,22 @@ export default function BulkEditModal({ open, onClose, onApply, selectedCount })
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* ── Revision ── */}
+        <FieldRow
+          label="Revision #"
+          fieldKey="revision_number"
+          enabled={enabled}
+          toggle={toggle}
+        >
+          <input
+            style={inputStyle}
+            value={form.revision_number}
+            onChange={(e) => set("revision_number", e.target.value)}
+            placeholder="e.g. 2, A, etc."
+            disabled={!enabled.revision_number}
+          />
+        </FieldRow>
+
         {/* ── Dates ── */}
         <FieldRow
           label="Submitted Date"
