@@ -685,19 +685,27 @@ function UpcomingEventsStrip({ scheduleTasks = [], deliveries = [], rfis = [], a
       if (!inHorizon(iso)) continue;
       out.push({ key: `m-${t.id}`, type: "milestone", date: iso, title: t.task_name, color: "var(--status-warning)" });
     }
-    // RFIs due (or overdue) in the window
+    // RFIs due (or overdue) in the window.
+    // Answered / Closed RFIs are NOT overdue even if the due date is past
+    // — matches the canonical isOverdue() in rfis/utils.js.
+    const RFI_CLOSED = new Set(["Answered", "Closed"]);
     for (const r of rfis) {
       if (r.is_deleted) continue;
+      const rfiStatus = r.status || "";
       const iso = String(r.date_required || r.due_date || "").slice(0, 10);
       if (!iso) continue;
-      if (!inHorizon(iso) && !isOverdue(iso)) continue;
+      const past = isOverdue(iso);
+      // Skip closed/answered RFIs entirely when their date is past —
+      // they're resolved, not overdue.
+      if (past && RFI_CLOSED.has(rfiStatus)) continue;
+      if (!inHorizon(iso) && !past) continue;
       out.push({
         key: `r-${r.id}`,
         type: "rfi",
         date: iso,
         title: `${r.rfi_number || "RFI"} due`,
-        color: isOverdue(iso) ? "var(--status-error)" : "var(--status-warning)",
-        overdue: isOverdue(iso),
+        color: past ? "var(--status-error)" : "var(--status-warning)",
+        overdue: past,
       });
     }
     // Deliveries scheduled in the window
