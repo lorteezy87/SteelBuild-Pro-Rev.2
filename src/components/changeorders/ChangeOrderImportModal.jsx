@@ -85,6 +85,7 @@ export default function ChangeOrderImportModal({
             .from("projects")
             .select("id, name, project_number")
             .or(`project_number.eq.${jobNumber},project_number.ilike.%${jobNumber}%`)
+            .eq("is_deleted", false)
             .limit(1);
           if (data && data.length > 0) {
             setMatched(data[0]);

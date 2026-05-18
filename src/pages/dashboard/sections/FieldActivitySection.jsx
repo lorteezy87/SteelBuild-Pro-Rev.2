@@ -24,8 +24,9 @@
 import React, { useMemo } from "react";
 import { ClipboardList, Plus } from "lucide-react";
 import SectionCard from "./SectionCard";
+import { localToday } from "@/utils/dates";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = localToday;
 
 function startOfWeekISO() {
   const now = new Date();
