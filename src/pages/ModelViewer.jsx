@@ -112,15 +112,15 @@ function normalizeMaterials(root) {
       m.side = THREE.DoubleSide;
       // Lift near-white colors to a light steel tone so they don't blow out
       if (m.color && m.color.r > 0.97 && m.color.g > 0.97 && m.color.b > 0.97) {
-        m.color.setHex(0xb0b8c0);
+        m.color.setHex(0x9aa0a8);
       }
       // Set PBR metallic properties for realistic steel look — if the material
       // supports metalness/roughness (MeshStandardMaterial or MeshPhysicalMaterial)
       if ("metalness" in m) {
-        m.metalness = Math.max(m.metalness || 0, 0.55);
+        m.metalness = Math.min(m.metalness ?? 0.25, 0.35);
       }
       if ("roughness" in m) {
-        m.roughness = Math.min(m.roughness || 1, 0.45);
+        m.roughness = Math.max(m.roughness ?? 0.65, 0.55);
       }
       // Turn off flat shading that some IFC exporters bake in
       if (m.flatShading) {
@@ -133,7 +133,7 @@ function normalizeMaterials(root) {
 
 // Default steel color — a warm grey that reads as shop-primer steel under
 // ACES tone mapping with our studio environment map.
-const DEFAULT_STEEL_COLOR = new THREE.Color(0.52, 0.55, 0.58); // warm blue-grey
+const DEFAULT_STEEL_COLOR = new THREE.Color(0.62, 0.63, 0.65); // light primer grey
 const GREY_THRESHOLD = 0.08; // how close r/g/b must be to count as "grey"
 
 function isUncoloredMaterial(mat) {
@@ -214,8 +214,8 @@ function applyDefaultSteelColor(root) {
     for (const mat of mats) {
       if (mat?.color?.copy && isUncoloredMaterial(mat)) {
         mat.color.copy(DEFAULT_STEEL_COLOR);
-        if ("metalness" in mat) mat.metalness = 0.65;
-        if ("roughness" in mat) mat.roughness = 0.35;
+        if ("metalness" in mat) mat.metalness = 0.25;
+        if ("roughness" in mat) mat.roughness = 0.65;
         mat.needsUpdate = true;
       }
     }
@@ -297,6 +297,11 @@ export default function ModelViewer() {
     active: false, firstPoint: null, markerObjs: [],
   });
   const raycasterRef = useRef(new THREE.Raycaster());
+  // Track mousedown position to distinguish a true click from a camera
+  // orbit/pan drag. Without this, every orbit attempt fires onClick,
+  // selects whatever mesh is under the cursor, and triggers a camera
+  // fly-to — the "wild" behavior the user reported.
+  const mouseDownPosRef = useRef(null);
 
   const [members, setMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
@@ -370,21 +375,21 @@ export default function ModelViewer() {
         // a LIGHT background + these settings looked blown-out; the dark
         // background provides the contrast range that makes them work.
         const threeScene = world.scene.three;
-        threeScene.background = new THREE.Color(0x0a1628); // deep navy
-        threeScene.fog = new THREE.Fog(0x0a1628, 600, 1800);
+        threeScene.background = new THREE.Color(0x2b2d31); // neutral grey — detail-friendly
+        threeScene.fog = new THREE.Fog(0x2b2d31, 1200, 4000);
 
         // Configure the underlying WebGL renderer for PBR fidelity.
         const renderer3 = world.renderer.three;
         renderer3.outputColorSpace = THREE.SRGBColorSpace;
         renderer3.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer3.toneMappingExposure = 1.15;
+        renderer3.toneMappingExposure = 0.95;
         renderer3.shadowMap.enabled = true;
         renderer3.shadowMap.type = THREE.PCFSoftShadowMap;
 
         // Studio-style lighting — key/fill/rim + hemisphere ambient.
-        const hemiLight = new THREE.HemisphereLight(0xe8f0ff, 0x1a2a40, 0.9);
+        const hemiLight = new THREE.HemisphereLight(0xf0f0f5, 0x3a3d45, 1.3);
         threeScene.add(hemiLight);
-        const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+        const keyLight = new THREE.DirectionalLight(0xfff8f0, 1.6);
         keyLight.position.set(80, 120, 60);
         keyLight.castShadow = true;
         keyLight.shadow.mapSize.set(2048, 2048);
@@ -397,10 +402,10 @@ export default function ModelViewer() {
         keyLight.shadow.bias = -0.001;
         threeScene.add(keyLight);
         keyShadowLightRef.current = keyLight;
-        const fillLight = new THREE.DirectionalLight(0x8db7ff, 0.75);
+        const fillLight = new THREE.DirectionalLight(0xc4d4ff, 1.0);
         fillLight.position.set(-80, 60, -60);
         threeScene.add(fillLight);
-        const rimLight = new THREE.DirectionalLight(0xfff0d4, 0.55);
+        const rimLight = new THREE.DirectionalLight(0xfff4e0, 0.4);
         rimLight.position.set(0, -40, -100);
         threeScene.add(rimLight);
 
@@ -420,7 +425,7 @@ export default function ModelViewer() {
           const pmremGen = new THREE.PMREMGenerator(renderer3);
           pmremGen.compileEquirectangularShader();
           const envScene = new THREE.Scene();
-          envScene.background = new THREE.Color(0x1a2a40);
+          envScene.background = new THREE.Color(0x3a3d45);
           // Simulate a studio with overhead light panels
           const envLightTop = new THREE.Mesh(
             new THREE.PlaneGeometry(10, 10),
@@ -446,8 +451,8 @@ export default function ModelViewer() {
         }
 
         // CAD-style grid — subtle on dark background.
-        const grid = new THREE.GridHelper(400, 80, 0x1e3a5f, 0x162d4a);
-        grid.material.opacity = 0.55;
+        const grid = new THREE.GridHelper(400, 80, 0x404548, 0x363a3d);
+        grid.material.opacity = 0.45;
         grid.material.transparent = true;
         grid.material.depthWrite = false;
         threeScene.add(grid);
@@ -639,7 +644,7 @@ export default function ModelViewer() {
     // Calculate distance needed to see the full model
     const cam = world.camera.three;
     const fov = (cam.fov || 45) * (Math.PI / 180);
-    const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.8;
+    const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.2;
 
     // Adapt control bounds + step sizes to model scale so zoom/pan feel
     // right regardless of whether the model is a 2m bracket or a 200m
@@ -680,7 +685,10 @@ export default function ModelViewer() {
     }
 
     // Isometric offset
-    const offset = new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(dist);
+    // Lower elevation angle — more like standing on the ground looking at
+    // the building, not a helicopter view. Matches the perspective a PM or
+    // erector has on site.
+    const offset = new THREE.Vector3(1, 0.45, 1).normalize().multiplyScalar(dist);
     const pos = center.clone().add(offset);
 
     ctrl.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
@@ -1289,7 +1297,7 @@ export default function ModelViewer() {
     const diagonal = Math.sqrt(size.x ** 2 + size.y ** 2 + size.z ** 2);
     const cam = world.camera.three;
     const fov = (cam.fov || 45) * (Math.PI / 180);
-    const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.8;
+    const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.2;
 
     const dir = new THREE.Vector3();
     switch (preset) {
@@ -1378,8 +1386,21 @@ export default function ModelViewer() {
     const world = worldRef.current;
     if (!container || !world?.camera?.three || !world?.scene?.three) return;
 
+    const onMouseDown = (ev) => {
+      mouseDownPosRef.current = { x: ev.clientX, y: ev.clientY };
+    };
+
     const onClick = (ev) => {
       if (ev.button !== 0) return;
+      // If mouse moved > 5px between mousedown and mouseup, it was an
+      // orbit/pan drag — skip the pick entirely.
+      const md = mouseDownPosRef.current;
+      if (md) {
+        const dx = ev.clientX - md.x;
+        const dy = ev.clientY - md.y;
+        if (dx * dx + dy * dy > 25) return;
+      }
+
       const rect = container.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((ev.clientX - rect.left) / rect.width) * 2 - 1,
@@ -1402,7 +1423,15 @@ export default function ModelViewer() {
         console.warn("Model pick skipped", e);
         return;
       }
-      if (hits.length === 0) return;
+
+      if (hits.length === 0) {
+        // Clicked empty space — deselect current member.
+        if (!measureMode) {
+          setSelectedMember(null);
+          clearSelectionOutline();
+        }
+        return;
+      }
       const hit = hits[0];
 
       if (measureMode) {
@@ -1422,14 +1451,24 @@ export default function ModelViewer() {
         return;
       }
 
+      // 3D viewport click: highlight only — don't fly the camera.
+      // Sidebar list clicks use selectMember() which does the fly-to.
+      // This prevents the "wild" camera jumps on every click.
       const mesh = hit.object;
       const matching = members.find((m) => m.mesh === mesh);
-      if (matching) selectMember(matching);
+      if (matching) {
+        setSelectedMember(matching);
+        attachSelectionOutline(matching.mesh);
+      }
     };
 
+    container.addEventListener("mousedown", onMouseDown);
     container.addEventListener("click", onClick);
-    return () => container.removeEventListener("click", onClick);
-  }, [members, measureMode, modelBounds, selectMember, addMeasureMarker, addMeasureLine, formatDistance]);
+    return () => {
+      container.removeEventListener("mousedown", onMouseDown);
+      container.removeEventListener("click", onClick);
+    };
+  }, [members, measureMode, modelBounds, addMeasureMarker, addMeasureLine, formatDistance, attachSelectionOutline, clearSelectionOutline]);
 
   // ─── AXIS GIZMO — DISABLED ──────────────────────────────────────
   // three/examples ViewHelper renders into the main WebGL canvas and
