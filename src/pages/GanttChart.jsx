@@ -269,7 +269,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
     const startDate = toLocalMidnight(start);
     const endDate = toLocalMidnight(end);
     if (!startDate || !endDate) return null;
-    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     const totalDuration = getDaysBetween(startDate, endDate);
     if (totalDuration <= 0) return null;
     const elapsed = getDaysBetween(startDate, today);

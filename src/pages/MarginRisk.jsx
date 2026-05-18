@@ -188,8 +188,8 @@ function RiskItemRow({ item, onNavigate }) {
 
 // ── Area / WP breakdown card ─────────────────────────────────────────
 function BreakdownSection({ title, groups, maxExposure, nameMap }) {
-  if (!groups || groups.length === 0) return null;
   const [expanded, setExpanded] = useState(false);
+  if (!groups || groups.length === 0) return null;
   const shown = expanded ? groups : groups.slice(0, 5);
 
   return (
