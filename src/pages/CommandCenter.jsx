@@ -362,7 +362,7 @@ export default function CommandCenter() {
   const subtitle =
     snapshot.needsAction > 0
       ? `${snapshot.needsAction} item${snapshot.needsAction !== 1 ? "s" : ""} need your attention · ${projects.length} active project${projects.length !== 1 ? "s" : ""}`
-      : `All clear across ${projects.length} project${projects.length !== 1 ? "s" : ""} · nothing urgent today`;
+      : `All clear across ${projects.length} project${projects.length !== 1 ? "s" : ""} — nothing urgent today ✓`;
 
   const activeFilter = (key) => (snapshotFilter === key);
   const toggleFilter = (key) => setSnapshotFilter((p) => (p === key ? null : key));
@@ -409,10 +409,11 @@ export default function CommandCenter() {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
-          padding: "6px 10px",
-          background: "var(--bg-surface-low)",
+          gap: 8,
+          padding: "8px 14px",
+          background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
+          borderLeft: `3px solid ${activeRole.color}`,
           borderRadius: "var(--radius-card)",
           flexWrap: "wrap",
         }}
@@ -439,14 +440,14 @@ export default function CommandCenter() {
               title={r.description}
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 10,
+                fontSize: isActive ? 11 : 10,
                 fontWeight: 700,
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
-                padding: "5px 10px",
+                padding: isActive ? "6px 14px" : "5px 10px",
                 borderRadius: 3,
                 border: `1px solid ${isActive ? r.color : "var(--divider)"}`,
-                background: isActive ? `color-mix(in srgb, ${r.color} 14%, transparent)` : "transparent",
+                background: isActive ? `color-mix(in srgb, ${r.color} 20%, var(--bg-surface))` : "transparent",
                 color: isActive ? r.color : "var(--text-muted)",
                 cursor: "pointer",
                 transition: "all 0.12s",
@@ -533,8 +534,8 @@ export default function CommandCenter() {
           driving the layout. */}
       {(() => {
         const tileSpecs = {
-          needsAction:   { label: "Needs You",     value: snapshot.needsAction,   color: "var(--accent)",           source: "action feed" },
-          overdue:       { label: "Overdue",       value: snapshot.overdue,       color: "var(--status-error)",     source: "rfis + drawings + tasks" },
+          needsAction:   { label: "Needs You",     value: snapshot.needsAction,   color: "var(--accent)",           source: "action feed",            sub: snapshot.needsAction > 0 ? `across ${projects.length} project${projects.length !== 1 ? "s" : ""}` : "all clear" },
+          overdue:       { label: "Overdue",       value: snapshot.overdue,       color: "var(--status-error)",     source: "rfis + drawings + tasks", sub: snapshot.overdue > 5 ? "⚠ elevated" : snapshot.overdue > 0 ? "needs attention" : "none" },
           dueToday:      { label: "Due Today",     value: snapshot.dueToday,      color: "var(--status-warning)",   source: "due-date rollup" },
           arrivingToday: { label: "Arriving Today",value: snapshot.arrivingToday, color: "var(--phase-delivery)",   source: "deliveries" },
           waitingOthers: { label: "Waiting Others",value: snapshot.waitingOthers, color: "var(--text-muted)",       source: "ball-in-court" },
@@ -551,6 +552,7 @@ export default function CommandCenter() {
                   compact
                   label={spec.label}
                   value={spec.value}
+                  sub={spec.sub}
                   color={spec.color}
                   active={activeFilter(key)}
                   onClick={() => toggleFilter(key)}
