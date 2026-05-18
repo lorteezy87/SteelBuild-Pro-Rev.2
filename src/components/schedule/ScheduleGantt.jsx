@@ -219,9 +219,18 @@ function isUnassignedTask(task) {
 
 function hasLogicGapTask(task, successorCountById) {
   if (!task || !isOpenScheduleTask(task) || !isActionableScheduleTask(task)) return false;
+  // Milestones are natural network endpoints — exempt from logic-gap checks.
+  if (isMilestoneTask(task)) return false;
   const predecessorCount = parseDeps(task.dependencies).length;
   const successorCount = successorCountById[task.id] || 0;
-  return predecessorCount === 0 || successorCount === 0;
+  // A task with either a predecessor OR a successor is part of the schedule
+  // network. Only flag completely unlinked tasks — those are the real logic
+  // gaps. The previous `||` condition flagged start tasks (no predecessor)
+  // and end tasks (no successor) as gaps, which is wrong: "Project Kickoff"
+  // naturally has no predecessors, and final milestones naturally have no
+  // successors. Multiple tasks sharing the same predecessor (e.g. several
+  // tasks starting after kickoff) is valid schedule logic, not a gap.
+  return predecessorCount === 0 && successorCount === 0;
 }
 
 function isLookaheadTask(task, today, getStart, getEnd, days = 14) {
