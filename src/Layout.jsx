@@ -12,7 +12,8 @@
  * All sub-components live in src/components/nav/.
  */
 
-import React, { Suspense, lazy, useState, useEffect, useContext } from "react";
+import React, { Suspense, useState, useEffect, useContext } from "react";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 
@@ -33,12 +34,13 @@ import { useDensityRestore } from "./components/nav/useDensityRestore";
 import { useFocusMainOnRouteChange } from "./components/nav/useFocusMainOnRouteChange";
 import { useDocumentTitleForRoute } from "./components/nav/useDocumentTitleForRoute";
 
-// Shared components
-const ModulesDropdown = lazy(() => import("./components/nav/ModulesDropdown"));
-const GlobalSearchModal = lazy(() => import("./components/search/GlobalSearchModal"));
-const MobileDrawer = lazy(() => import("./components/nav/MobileDrawer"));
-const Toaster = lazy(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
-const SidebarNav = lazy(() => import("./components/nav/SidebarNav"));
+// Shared components — use lazyWithRetry so stale-chunk 404s after a deploy
+// trigger a single page reload instead of a hard "LOAD ERROR" crash.
+const ModulesDropdown = lazyWithRetry(() => import("./components/nav/ModulesDropdown"));
+const GlobalSearchModal = lazyWithRetry(() => import("./components/search/GlobalSearchModal"));
+const MobileDrawer = lazyWithRetry(() => import("./components/nav/MobileDrawer"));
+const Toaster = lazyWithRetry(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
+const SidebarNav = lazyWithRetry(() => import("./components/nav/SidebarNav"));
 // QuickAddFAB intentionally not imported — the floating "+" shortcut at
 // bottom-right was hidden per user request. Component file is preserved
 // in src/components/shared/QuickAddFAB.jsx; uncomment this import + its
