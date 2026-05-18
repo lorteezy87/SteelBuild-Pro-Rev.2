@@ -1,10 +1,11 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import AppLoader from "@/boot/AppLoader";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 
-const LocalLoginForm = lazy(() => import("@/components/LocalLoginForm"));
-const AppRoutes = lazy(() => import("@/boot/AppRoutes"));
-const ProjectProvider = lazy(() =>
+const LocalLoginForm = lazyWithRetry(() => import("@/components/LocalLoginForm"));
+const AppRoutes = lazyWithRetry(() => import("@/boot/AppRoutes"));
+const ProjectProvider = lazyWithRetry(() =>
   import("@/components/shared/ProjectContext").then((mod) => ({ default: mod.ProjectProvider }))
 );
 
