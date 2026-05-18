@@ -328,12 +328,17 @@ export function scoreItem(item) {
 
 // ─── Map raw entity records to normalized PCC items ─────────────────────────
 export function mapRFIsToPCCItems(rfis) {
+  const RFI_TERMINAL = new Set(["Answered", "Closed", "Void"]);
   return rfis
-    .filter((r) => r.status !== "Closed" && r.status !== "Void")
+    .filter((r) => !RFI_TERMINAL.has(r.status))
     .map((r) => {
-      const openedDate = r.created_date || r.date_submitted;
-      const externalWait = openedDate
-        ? Math.max(0, Math.ceil((Date.now() - new Date(openedDate).getTime()) / 86400000))
+      // External wait: only meaningful for RFIs actively waiting on an
+      // external party (Under Review / Open with a ball_in_court).
+      // Measured from date_submitted — creation date is not a wait.
+      const isWaiting = r.status === "Under Review" || r.status === "Open";
+      const waitStart = isWaiting ? (r.date_submitted || r.created_date) : null;
+      const externalWait = waitStart
+        ? Math.max(0, Math.ceil((Date.now() - new Date(waitStart).getTime()) / 86400000))
         : 0;
       return {
         id: `rfi-${r.id}`,
@@ -342,7 +347,7 @@ export function mapRFIsToPCCItems(rfis) {
         title: r.question || r.subject || `RFI #${r.rfi_number || r.id?.slice(0, 8) || "?"}`,
         subtitle: `RFI #${r.rfi_number || ""}`,
         status: r.status,
-        due_date: r.due_date || r.required_by,
+        due_date: r.date_required || r.due_date || r.required_by,
         assigned_to: r.assigned_to || r.ball_in_court,
         waiting_on: r.ball_in_court || r.assigned_to,
         affects_fabrication: r.affects_fabrication || false,
@@ -384,6 +389,25 @@ export function mapWorkPackagesToPCCItems(wps) {
       const targetDays = daysFromToday(targetDate);
       const phaseNeedsGate = ["Fabrication", "Delivery", "Erection", "Installation"].includes(w.phase) || (targetDays !== null && targetDays <= 10);
 
+      // due_date = the next meaningful deadline for this WP, NOT released_date
+      // (released_date is when it WAS released — always in the past for
+      // active WPs, which would make every released WP "overdue").
+      const dueDate = w.ship_date || w.delivery_date || w.install_date || null;
+
+      // Release-gate confirmations only matter when the WP has explicitly
+      // populated gate fields OR is within 14 days of its target date.
+      // Applying gates universally inflates scores because most WPs have
+      // no gate fields set → all 7 gates read as missing → +45 score.
+      const hasAnyGateField = !!(
+        w.vif_confirmed || w.field_dimensions_confirmed ||
+        w.shop_drawing_revision_checked || w.current_drawing_revision_checked ||
+        w.e_sheet_checked || w.erection_sheet_checked ||
+        w.load_list_complete || w.load_list_completed ||
+        w.sequence_aligned || w.erection_sequence_aligned ||
+        w.site_ready || w.drawings_approved
+      );
+      const gateApplicable = phaseNeedsGate && (hasAnyGateField || (targetDays !== null && targetDays <= 14 && targetDays >= 0));
+
       return {
         id: `wp-${w.id}`,
         entityId: w.id,
@@ -391,14 +415,14 @@ export function mapWorkPackagesToPCCItems(wps) {
         title: w.name || `WP #${w.id}`,
         subtitle: w.phase || "",
         status: w.status,
-        due_date: w.released_date,
+        due_date: dueDate,
         target_date: targetDate,
         percent_complete: w.percent_complete || 0,
         phase: w.phase,
         assigned_to: w.assigned_to || w.owner || w.crew,
         waiting_on: null,
         impact_area: w.phase === "Delivery" ? "Shipping" : w.phase === "Erection" || w.phase === "Installation" ? "Erection" : "Fabrication",
-        confirmations: phaseNeedsGate ? {
+        confirmations: gateApplicable ? {
           vif_confirmed: !!(w.vif_confirmed || w.field_dimensions_confirmed),
           field_dimensions_confirmed: !!(w.field_dimensions_confirmed || w.vif_confirmed),
           shop_drawing_revision_checked: !!(w.shop_drawing_revision_checked || w.current_drawing_revision_checked || w.drawings_approved),
@@ -414,11 +438,16 @@ export function mapWorkPackagesToPCCItems(wps) {
 }
 
 export function mapScheduleTasksToPCCItems(tasks) {
+  const TASK_TERMINAL = new Set(["Complete", "Completed", "Cancelled", "Closed", "Done"]);
   return tasks
     .filter((t) => {
       const metadata = t.metadata || {};
       const isSummary = t.is_summary || metadata.is_summary || ["Summary", "Phase"].includes(t.task_type);
-      return !isSummary && t.status !== "Complete" && t.status !== "Cancelled";
+      if (isSummary) return false;
+      if (TASK_TERMINAL.has(t.status)) return false;
+      // Tasks at 100% completion are done regardless of status label
+      if (t.percent_complete >= 100) return false;
+      return true;
     })
     .map((t) => {
       const metadata = t.metadata || {};
@@ -464,32 +493,46 @@ export function mapScheduleTasksToPCCItems(tasks) {
 
 export function mapDeliveriesToPCCItems(deliveries) {
   return deliveries
-    .filter((d) => d.status !== "Delivered" && d.status !== "Cancelled")
-    .map((d) => ({
-      id: `del-${d.id}`,
-      entityId: d.id,
-      type: "Delivery",
-      title: d.description || `DEL-${d.delivery_id || d.id}`,
-      subtitle: `Delivery`,
-      status: d.status,
-      due_date: d.scheduled_date,
-      target_date: d.scheduled_date,
-      priority: d.priority,
-      assigned_to: d.contact_name,
-      waiting_on: d.vendor || d.supplier,
-      impact_area: "Shipping",
-      confirmations: {
-        vif_confirmed: d.vif_confirmed !== false,
-        field_dimensions_confirmed: d.field_dimensions_confirmed !== false,
-        shop_drawing_revision_checked: d.shop_drawing_revision_checked !== false,
-        e_sheet_checked: d.e_sheet_checked !== false,
-        load_list_complete: !!(d.load_list_complete || d.load_list_completed || d.items_confirmed),
-        sequence_aligned: d.sequence_aligned !== false,
-        site_ready: d.site_ready !== false,
-      },
-      project_id: d.project_id,
-      project_name: d.project_name,
-    }));
+    .filter((d) => d.status !== "Delivered" && d.status !== "Cancelled" && d.status !== "Received")
+    .map((d) => {
+      // Only score release gates when the delivery has explicitly set
+      // gate fields OR is within 14 days of scheduled date. Without
+      // this, every delivery gets 7 missing gates → +45 score.
+      const daysOut = daysFromToday(d.scheduled_date);
+      const hasAnyGateField = !!(
+        d.vif_confirmed || d.field_dimensions_confirmed ||
+        d.shop_drawing_revision_checked || d.e_sheet_checked ||
+        d.load_list_complete || d.load_list_completed || d.items_confirmed ||
+        d.sequence_aligned || d.site_ready
+      );
+      const gateApplicable = hasAnyGateField || (daysOut !== null && daysOut <= 14 && daysOut >= 0);
+
+      return {
+        id: `del-${d.id}`,
+        entityId: d.id,
+        type: "Delivery",
+        title: d.description || `DEL-${d.delivery_id || d.id}`,
+        subtitle: `Delivery`,
+        status: d.status,
+        due_date: d.scheduled_date,
+        target_date: d.scheduled_date,
+        priority: d.priority,
+        assigned_to: d.contact_name,
+        waiting_on: d.vendor || d.supplier,
+        impact_area: "Shipping",
+        confirmations: gateApplicable ? {
+          vif_confirmed: d.vif_confirmed !== false,
+          field_dimensions_confirmed: d.field_dimensions_confirmed !== false,
+          shop_drawing_revision_checked: d.shop_drawing_revision_checked !== false,
+          e_sheet_checked: d.e_sheet_checked !== false,
+          load_list_complete: !!(d.load_list_complete || d.load_list_completed || d.items_confirmed),
+          sequence_aligned: d.sequence_aligned !== false,
+          site_ready: d.site_ready !== false,
+        } : null,
+        project_id: d.project_id,
+        project_name: d.project_name,
+      };
+    });
 }
 
 export function mapChangeOrdersToPCCItems(cos) {
