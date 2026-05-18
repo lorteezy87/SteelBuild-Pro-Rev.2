@@ -39,10 +39,12 @@ export default class ErrorBoundary extends React.Component {
         <p style={{ margin: 0, opacity: 0.6, maxWidth: 480, fontSize: 14 }}>
           An unexpected error occurred. Refresh the page to continue. If the problem persists, contact support.
         </p>
-        <details style={{ marginTop: 8, fontSize: 12, opacity: 0.4, maxWidth: 600, textAlign: 'left', whiteSpace: 'pre-wrap' }}>
-          <summary style={{ cursor: 'pointer', marginBottom: 4 }}>Error details</summary>
-          {this.state.error?.toString()}
-        </details>
+        {import.meta.env.DEV && (
+          <details style={{ marginTop: 8, fontSize: 12, opacity: 0.4, maxWidth: 600, textAlign: 'left', whiteSpace: 'pre-wrap' }}>
+            <summary style={{ cursor: 'pointer', marginBottom: 4 }}>Error details</summary>
+            {this.state.error?.toString()}
+          </details>
+        )}
         <button
           onClick={() => window.location.reload()}
           style={{

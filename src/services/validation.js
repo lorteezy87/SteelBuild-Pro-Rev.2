@@ -291,8 +291,9 @@ const RULES = {
 export function validate(entity, data, mode = "create") {
   const ruleFn = RULES[entity];
   if (!ruleFn) {
+    // H6 fix: fail closed — unknown entity types must not silently pass validation
     console.error(`[validation] No rules defined for entity: "${entity}"`);
-    return [];
+    return [{ field: "_entity", message: `Unknown entity type: "${entity}"`, rule: "entity_exists" }];
   }
   return ruleFn(data, mode);
 }
