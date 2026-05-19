@@ -123,7 +123,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               }} className="bg-transparent text-slate-50 px-3 py-2 text-sm rounded-md flex h-9 w-full items-center justify-between whitespace-nowrap border border-input shadow-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1">
                 <SelectValue placeholder="Select project" />
               </SelectTrigger>
-              <SelectContent style={{ background: 'var(--bg-surface-low)' }}>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+              <SelectContent style={{ background: 'var(--bg-surface-secondary)', zIndex: 10001 }}>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
             </Select>
             {errors.project_id && <p className="text-xs text-rose-500 mt-1">{errors.project_id}</p>}
           </div>
@@ -157,7 +157,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                 style={{
                   width: '100%',
                   height: 38,
-                  background: 'var(--bg-surface-low)',
+                  background: 'var(--bg-surface-secondary)',
                   border: '1px solid var(--border-default)',
                   borderRadius: 8,
                   padding: '0 28px 0 12px',
@@ -187,7 +187,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                         key={cc.code}
                         value={cc.code}
                         disabled={alreadyAdded}
-                        style={{ background: 'var(--bg-surface-low)', color: alreadyAdded ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                        style={{ background: 'var(--bg-surface-secondary)', color: alreadyAdded ? 'var(--text-muted)' : 'var(--text-primary)' }}>
 
                           {cc.code} — {cc.name}{alreadyAdded ? ' (already added)' : ''}
                         </option>);
