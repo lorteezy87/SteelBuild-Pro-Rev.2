@@ -197,6 +197,22 @@ export const REPORTS = [
     component: Lazy(() => import("./PPMRoadmap.jsx")),
   },
 
+  // ── Financial ──
+  {
+    slug: "financial-kpis",
+    title: "Financial KPIs",
+    summary: "Cross-project financial health: EVM scatter, budget health matrix, cash flow, margins, AR aging, and automated alerts.",
+    category: "Financial",
+    component: Lazy(() => import("./FinancialKPIs.jsx")),
+  },
+  {
+    slug: "financial-scorecard",
+    title: "Financial Scorecard",
+    summary: "Per-project health grading: 15 KPIs with traffic-light scores across EVM, budget, billing, profit, and risk.",
+    category: "Financial",
+    component: Lazy(() => import("./FinancialScorecard.jsx")),
+  },
+
   // ── Cost ──
   {
     slug: "profit",
@@ -298,4 +314,4 @@ export const REPORTS_BY_SLUG = Object.fromEntries(
 );
 
 /** Categories for the hub grouping, in display order. */
-export const REPORT_CATEGORIES = ["Portfolio", "Risk", "Schedule", "Cost", "Team"];
+export const REPORT_CATEGORIES = ["Portfolio", "Financial", "Risk", "Schedule", "Cost", "Team"];
