@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { base44 } from "@/api/base44Client";
 import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,6 +27,7 @@ const CATEGORIES = ["Structural", "Misc Metals", "Connections", "Coatings", "Ere
  */
 export default function BulkScopeModal({ projectId, onClose, onCreated }) {
   const qc = useQueryClient();
+  const trapRef = useFocusTrap(true);
   const fileInput = useRef(null);
 
   const [mode, setMode] = useState("lines");
@@ -99,7 +101,7 @@ export default function BulkScopeModal({ projectId, onClose, onCreated }) {
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1200 }} />
       <div
-        tabIndex={-1}
+        ref={trapRef}
         onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
         style={{
           position: "fixed", top: "50%", left: "50%",

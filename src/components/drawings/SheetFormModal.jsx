@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 import { STAGES, DISCIPLINES, EMPTY_FORM, mono, surface } from "./drawingsConfig";
@@ -11,6 +12,7 @@ import { Button, Modal } from "@/components/design-system";
  * @param {{ initial?: object, onSave: (form: object) => void, onClose: () => void, saving: boolean }} props
  */
 export default function SheetFormModal({ initial, onSave, onClose, saving, existingSetNames = [] }) {
+  const trapRef = useFocusTrap(true);
   const [form, setForm] = useState(initial || EMPTY_FORM);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -63,7 +65,7 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
       }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="sbd-card-strong" style={{ ...surface, width: "100%", maxWidth: 640, maxHeight: "90vh", overflowY: "auto", padding: 28 }}>
+      <div ref={trapRef} className="sbd-card-strong" style={{ ...surface, width: "100%", maxWidth: 640, maxHeight: "90vh", overflowY: "auto", padding: 28 }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <span style={{ ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--accent)" }}>

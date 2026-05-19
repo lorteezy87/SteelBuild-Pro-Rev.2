@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { COST_CODES, COST_CODES_GROUPED } from '../shared/costCodes';
 import { getCostCodeSummary } from '../shared/budgetCalculations';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -71,6 +72,7 @@ export default function ExpenseFormModal({
   defaultProjectId,
   isSaving = false,
 }) {
+  const trapRef = useFocusTrap(open);
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
 
@@ -140,7 +142,7 @@ export default function ExpenseFormModal({
       style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{
+      <div ref={trapRef} style={{
         width: '100%',
         maxWidth: 900,
         height: '88vh',

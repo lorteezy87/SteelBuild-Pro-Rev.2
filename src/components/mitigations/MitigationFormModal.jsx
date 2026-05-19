@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
@@ -70,6 +71,7 @@ export default function MitigationFormModal({
   isSaving = false,
   prefill = null,
 }) {
+  const trapRef = useFocusTrap(true);
   const [formData, setFormData] = useState({ ...emptyForm, project_id: projectId || "" });
   const isEdit = !!mitigation;
 
@@ -168,7 +170,7 @@ export default function MitigationFormModal({
       }}
       onClick={(e) => { if (e.target === e.currentTarget && !isSaving) onClose(); }}
     >
-      <div style={{
+      <div ref={trapRef} style={{
         background: "var(--bg-surface-secondary)",
         border: "1px solid var(--border-default)",
         borderRadius: "var(--radius-card)", padding: 24,

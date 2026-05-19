@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 
@@ -27,6 +28,7 @@ const labelStyle = {
 };
 
 export default function MeetingFormModal({ projectId, meeting, templateDefaults, onSave, onClose, isSaving }) {
+  const trapRef = useFocusTrap(true);
   const isEditing = !!meeting;
 
   const [formData, setFormData] = useState({
@@ -79,6 +81,7 @@ export default function MeetingFormModal({ projectId, meeting, templateDefaults,
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        ref={trapRef}
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--glass-border)",

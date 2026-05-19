@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -178,6 +179,7 @@ const DEFAULT_FORM = (projectId) => ({
 
 export default function ProductionNoteFormModal({ projectId, onClose, note = null, onSave }) {
   const qc = useQueryClient();
+  const trapRef = useFocusTrap(true);
   const [formData, setFormData] = useState(note ? { ...note, sketch_data: note.sketch_data || null } : DEFAULT_FORM(projectId));
 
   useEffect(() => {
@@ -227,6 +229,7 @@ export default function ProductionNoteFormModal({ projectId, onClose, note = nul
       }}
     >
       <div
+        ref={trapRef}
         className="sbd-card-strong"
         style={{
           background: "var(--bg-surface-secondary)",

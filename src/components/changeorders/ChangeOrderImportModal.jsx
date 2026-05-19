@@ -12,6 +12,7 @@
  */
 
 import React, { useRef, useState } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { X, Upload, FileText, CheckCircle2, ArrowRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -32,6 +33,7 @@ export default function ChangeOrderImportModal({
   onCreated,
 }) {
   const qc = useQueryClient();
+  const trapRef = useFocusTrap(open);
   const fileInput = useRef(null);
 
   const [step, setStep]             = useState("upload");
@@ -196,7 +198,7 @@ export default function ChangeOrderImportModal({
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1200 }} />
       <div
-        tabIndex={-1}
+        ref={trapRef}
         onKeyDown={(e) => { if (e.key === "Escape" && step !== "committing") onClose(); }}
         style={{
           position: "fixed", top: "50%", left: "50%",
