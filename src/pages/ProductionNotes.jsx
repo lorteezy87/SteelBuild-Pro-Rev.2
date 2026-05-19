@@ -19,7 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, Trash2, X, Highlighter, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
-import { CommandBar } from "@/components/design-system";
+import { CommandBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
 
 // ─── Date helpers ──────────────────────────────────────────────────────────
@@ -301,27 +301,9 @@ export default function ProductionNotes() {
           >
             <CalendarDays size={14} />
           </button>
-          <button
-            onClick={() => setProjectPickerOpen(true)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "var(--accent)",
-              color: "var(--accent-text, var(--bg-base))",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 14px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              cursor: "pointer",
-              textTransform: "uppercase",
-            }}
-          >
-            <Plus size={12} /> Add Project
-          </button>
+          <Button variant="primary" icon="plus" onClick={() => setProjectPickerOpen(true)}>
+            Add Project
+          </Button>
         </CommandBar>
       </div>
 
@@ -388,28 +370,9 @@ export default function ProductionNotes() {
             >
               No notes for this meeting.
               <br />
-              <button
-                onClick={() => setProjectPickerOpen(true)}
-                style={{
-                  marginTop: 12,
-                  background: "var(--accent)",
-                  color: "var(--accent-text, var(--bg-base))",
-                  border: "none",
-                  borderRadius: "var(--radius-btn)",
-                  padding: "8px 14px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  cursor: "pointer",
-                  textTransform: "uppercase",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <Plus size={12} /> Add a project to get started
-              </button>
+              <Button variant="primary" icon="plus" onClick={() => setProjectPickerOpen(true)} style={{ marginTop: 12 }}>
+                Add a project to get started
+              </Button>
             </div>
           )}
 

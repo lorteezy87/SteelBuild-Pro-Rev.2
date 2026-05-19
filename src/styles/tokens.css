@@ -43,9 +43,6 @@ html {
   --divider:        rgba(120, 132, 150, 0.85);
   --outline:        rgba(255, 255, 255, 0.65);
 
-  /* NC legacy tokens */
-  --nc-border-default: rgba(255, 255, 255, 0.18);
-  --nc-text-muted:     var(--text-muted);
 
   /* Status text — bump to ensure legibility over muted bg chips */
   --status-success: #4ADE80;
@@ -161,23 +158,6 @@ html {
   --bg-elevated:              #21262D;
   --bg-surface-secondary:     #161B22;
 
-  /* NC tokens (legacy compat) */
-  --nc-bg-primary:            #0A0C10;
-  --nc-bg-secondary:          #0E1116;
-  --nc-bg-tertiary:           #12151A;
-  --nc-bg-panel:              #0C0E13;
-  --nc-accent-cyan:           var(--accent);
-  --nc-accent-orange:         var(--accent);
-  --nc-accent-blue:           #2B7FFF;
-  --nc-accent-green:          #22C55E;
-  --nc-accent-red:            #EF4444;
-  --nc-text-primary:          var(--text-primary);
-  --nc-text-muted:            var(--text-muted);
-  --nc-text-cyan:             var(--accent);
-  --nc-text-orange:           var(--accent);
-  --nc-border-default:        rgba(255,255,255,0.07);
-  --nc-border-cyan:           var(--accent-border);
-  --nc-border-orange:         var(--accent-border);
 
   /* Borders */
   --border-default:           #30363D;
@@ -280,6 +260,32 @@ html {
   --glass-border:             rgba(255,255,255,0.08);
   --glass-blur:               20px;
 
+  /* Typography scale — semantic sizes used across the app.
+   * Replaces magic-number fontSize values in inline styles.
+   * Naming: 2xs→3xl mirrors Tailwind-style progressive scale. */
+  --text-2xs:                 8px;   /* mono labels, badges, timestamps */
+  --text-xs:                  9px;   /* filter buttons, mono section labels */
+  --text-sm:                  10px;  /* pill text, small labels */
+  --text-base:                12px;  /* standard body, subtitles */
+  --text-md:                  14px;  /* subheadings, form labels */
+  --text-lg:                  18px;  /* modal titles, section headers */
+  --text-xl:                  24px;  /* KPI values (compact) */
+  --text-2xl:                 28px;  /* large display numbers */
+  --text-3xl:                 34px;  /* KPI values (full), hero headings */
+
+  /* Spacing scale — consistent padding, gap, and margin values.
+   * Use these instead of arbitrary px values in inline styles. */
+  --space-2xs:                2px;
+  --space-xs:                 4px;
+  --space-sm:                 6px;
+  --space-md:                 8px;
+  --space-lg:                 12px;
+  --space-xl:                 16px;
+  --space-2xl:                20px;
+  --space-3xl:                24px;
+  --space-4xl:                32px;
+  --space-5xl:                48px;
+
   /* Density (comfortable default) */
   --density-padding:          12px;
   --density-gap:              14px;
@@ -334,23 +340,6 @@ html {
   --bg-elevated:              #FFFFFF;
   --bg-surface-secondary:     #F8FAFC;
 
-  /* Legacy NC tokens */
-  --nc-bg-primary:            #F1F5F9;
-  --nc-bg-secondary:          #F8FAFC;
-  --nc-bg-tertiary:           #E2E8F0;
-  --nc-bg-panel:              #F8FAFC;
-  --nc-accent-cyan:           #B8860B;
-  --nc-accent-orange:         #B8860B;
-  --nc-accent-blue:           #1D4ED8;
-  --nc-accent-green:          #15803D;
-  --nc-accent-red:            #B91C1C;
-  --nc-text-primary:          #020617;
-  --nc-text-muted:            #475569;
-  --nc-text-cyan:             #B8860B;
-  --nc-text-orange:           #B8860B;
-  --nc-border-default:        #CBD5E1;
-  --nc-border-cyan:           rgba(184,134,11,0.45);
-  --nc-border-orange:         rgba(184,134,11,0.50);
 
   /* Borders — every border now at slate-300 or deeper for HD feel */
   --border-default:           #CBD5E1;  /* was #E2E8F0 — too soft */

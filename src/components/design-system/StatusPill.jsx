@@ -23,6 +23,8 @@ export default function StatusPill({ label, color, variant = "soft", size = "sm"
 
   return (
     <span
+      role="status"
+      aria-label={`Status: ${label}`}
       style={{
         display: "inline-flex",
         alignItems: "center",

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Modal, Button } from "@/components/design-system";
 
 const INITIAL_FORM = {
   first_name: "",
@@ -96,204 +97,125 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
   };
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.65)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={isEdit ? `Edit — ${contact.first_name} ${contact.last_name}` : "New Contact"}
+      width={560}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSubmit} disabled={createMut.isPending}>
+            {createMut.isPending ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Contact")}
+          </Button>
+        </>
+      }
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "var(--bg-surface-secondary)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
-          padding: 24,
-          maxWidth: 560,
-          width: "90%",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          boxSizing: "border-box",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h2
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 13,
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.10em",
-            }}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Project */}
+        <div>
+          <label style={labelStyle}>Project</label>
+          <select
+            value={formData.project_id}
+            onChange={(e) => handleChange("project_id", e.target.value)}
+            style={inputStyle}
           >
-            {isEdit ? `Edit — ${contact.first_name} ${contact.last_name}` : "New Contact"}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
-          >
-            ×
-          </button>
+            <option value="">Select a project</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Project */}
+        {/* Name */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
-            <label style={labelStyle}>Project</label>
-            <select
-              value={formData.project_id}
-              onChange={(e) => handleChange("project_id", e.target.value)}
+            <label style={labelStyle}>First Name</label>
+            <input
+              value={formData.first_name}
+              onChange={(e) => handleChange("first_name", e.target.value)}
               style={inputStyle}
-            >
-              <option value="">Select a project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Name */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>First Name</label>
-              <input
-                value={formData.first_name}
-                onChange={(e) => handleChange("first_name", e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Last Name</label>
-              <input
-                value={formData.last_name}
-                onChange={(e) => handleChange("last_name", e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          {/* Company / Role */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Company</label>
-              <input
-                value={formData.company}
-                onChange={(e) => handleChange("company", e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Role</label>
-              <input
-                value={formData.role}
-                onChange={(e) => handleChange("role", e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          {/* Contact type */}
-          <div>
-            <label style={labelStyle}>Contact Type</label>
-            <select
-              value={formData.contact_type}
-              onChange={(e) => handleChange("contact_type", e.target.value)}
-              style={inputStyle}
-            >
-              {["Owner", "GC", "Engineer", "Subcontractor", "Supplier", "Inspector", "Internal"].map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Email / Phone */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Email</label>
-              <input
-                value={formData.email}
-                onChange={(e) => handleChange("email", e.target.value)}
-                style={inputStyle}
-                type="email"
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Phone</label>
-              <input
-                value={formData.phone}
-                onChange={(e) => handleChange("phone", e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label style={labelStyle}>Notes</label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => handleChange("notes", e.target.value)}
-              style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
             />
           </div>
-
-          {/* Footer */}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border-default)",
-                borderRadius: "var(--radius-btn)",
-                padding: "8px 16px",
-                color: "var(--text-secondary)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: "pointer",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={createMut.isPending}
-              style={{
-                background: "var(--accent)",
-                color: "var(--accent-text)",
-                border: "none",
-                borderRadius: "var(--radius-btn)",
-                padding: "8px 20px",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: createMut.isPending ? "not-allowed" : "pointer",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                opacity: createMut.isPending ? 0.5 : 1,
-              }}
-            >
-              {createMut.isPending ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Contact")}
-            </button>
+          <div>
+            <label style={labelStyle}>Last Name</label>
+            <input
+              value={formData.last_name}
+              onChange={(e) => handleChange("last_name", e.target.value)}
+              style={inputStyle}
+            />
           </div>
         </div>
+
+        {/* Company / Role */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Company</label>
+            <input
+              value={formData.company}
+              onChange={(e) => handleChange("company", e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Role</label>
+            <input
+              value={formData.role}
+              onChange={(e) => handleChange("role", e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        {/* Contact type */}
+        <div>
+          <label style={labelStyle}>Contact Type</label>
+          <select
+            value={formData.contact_type}
+            onChange={(e) => handleChange("contact_type", e.target.value)}
+            style={inputStyle}
+          >
+            {["Owner", "GC", "Engineer", "Subcontractor", "Supplier", "Inspector", "Internal"].map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Email / Phone */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Email</label>
+            <input
+              value={formData.email}
+              onChange={(e) => handleChange("email", e.target.value)}
+              style={inputStyle}
+              type="email"
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Phone</label>
+            <input
+              value={formData.phone}
+              onChange={(e) => handleChange("phone", e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label style={labelStyle}>Notes</label>
+          <textarea
+            value={formData.notes}
+            onChange={(e) => handleChange("notes", e.target.value)}
+            style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
+          />
+        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

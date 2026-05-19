@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Button, Modal } from "@/components/design-system";
 
 // Map between UI field names and the actual DB columns on the `resources` table.
 // DB schema: name, resource_type, role, capacity, unit, cost_rate, availability, notes, metadata (JSONB)
@@ -105,99 +106,112 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
     }
   };
 
+  const inputStyle = {
+    width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)",
+    borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)",
+    fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box",
+  };
+
+  const labelStyle = {
+    fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)",
+    letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px",
+  };
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "16px", padding: "24px", maxWidth: "600px", width: "90%", maxHeight: "90vh", overflowY: "auto" }}>
-        <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px 0", textTransform: "uppercase", letterSpacing: "0.10em" }}>{editing ? "Edit Resource" : "Add Resource"}</h2>
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={editing ? "Edit Resource" : "Add Resource"}
+      width={600}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={handleSubmit} disabled={mutation.isPending}>
+          {mutation.isPending ? "Saving..." : editing ? "Save" : "Add Resource"}
+        </Button>
+      </>}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div>
+          <label style={labelStyle}>Project</label>
+          <select value={formData.project_id} onChange={(e) => setFormData({ ...formData, project_id: e.target.value })} style={inputStyle} required>
+            <option value="">Select project...</option>
+            {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+          </select>
+        </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div>
+          <label style={labelStyle}>Name</label>
+          <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} style={inputStyle} required />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
           <div>
-            <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Project</label>
-            <select value={formData.project_id} onChange={(e) => setFormData({ ...formData, project_id: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} required>
-              <option value="">Select project...</option>
-              {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+            <label style={labelStyle}>Type</label>
+            <select value={formData.resource_type} onChange={(e) => setFormData({ ...formData, resource_type: e.target.value })} style={inputStyle}>
+              <option value="Person">Person</option>
+              <option value="Crew">Crew</option>
+              <option value="Labor">Labor</option>
+              <option value="Equipment">Equipment</option>
+              <option value="Bay">Bay</option>
+              <option value="Subcontractor">Subcontractor</option>
+              <option value="Material">Material</option>
             </select>
           </div>
-
           <div>
-            <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Name</label>
-            <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} required />
+            <label style={labelStyle}>Role/Trade</label>
+            <input type="text" value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} style={inputStyle} />
           </div>
+        </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div>
-              <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Type</label>
-              <select value={formData.resource_type} onChange={(e) => setFormData({ ...formData, resource_type: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }}>
-                <option value="Person">Person</option>
-                <option value="Crew">Crew</option>
-                <option value="Labor">Labor</option>
-                <option value="Equipment">Equipment</option>
-                <option value="Bay">Bay</option>
-                <option value="Subcontractor">Subcontractor</option>
-                <option value="Material">Material</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Role/Trade</label>
-              <input type="text" value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-            <div>
-              <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Budget Hrs</label>
-              <input type="number" value={formData.budget_hours} onChange={(e) => setFormData({ ...formData, budget_hours: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
-            </div>
-            <div>
-              <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Actual Hrs</label>
-              <input type="number" value={formData.actual_hours} onChange={(e) => setFormData({ ...formData, actual_hours: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
-            </div>
-            <div>
-              <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Hourly Rate</label>
-              <input type="number" value={formData.hourly_rate} onChange={(e) => setFormData({ ...formData, hourly_rate: e.target.value })} placeholder="0.00" style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
-            </div>
-          </div>
-
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
           <div>
-            <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Parent Crew</label>
-            <select
-              value={formData.parent_resource_id}
-              onChange={(e) => setFormData({ ...formData, parent_resource_id: e.target.value })}
-              style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }}
-            >
-              <option value="">— None (top-level) —</option>
-              {parentCandidates.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name}{p.resource_type ? ` · ${p.resource_type}` : ""}
-                </option>
-              ))}
-            </select>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.06em" }}>
-              Assign this resource to a crew. Crews roll up member capacities on the scheduling board.
-            </div>
+            <label style={labelStyle}>Budget Hrs</label>
+            <input type="number" value={formData.budget_hours} onChange={(e) => setFormData({ ...formData, budget_hours: e.target.value })} style={inputStyle} />
           </div>
-
           <div>
-            <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Availability Status</label>
-            <select value={formData.availability_status} onChange={(e) => setFormData({ ...formData, availability_status: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }}>
-              <option value="Available">Available</option>
-              <option value="Allocated">Allocated</option>
-              <option value="Over-Allocated">Over-Allocated</option>
-              <option value="On Leave">On Leave</option>
-            </select>
+            <label style={labelStyle}>Actual Hrs</label>
+            <input type="number" value={formData.actual_hours} onChange={(e) => setFormData({ ...formData, actual_hours: e.target.value })} style={inputStyle} />
           </div>
-
           <div>
-            <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Notes</label>
-            <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box", minHeight: "60px", resize: "vertical" }} />
+            <label style={labelStyle}>Hourly Rate</label>
+            <input type="number" value={formData.hourly_rate} onChange={(e) => setFormData({ ...formData, hourly_rate: e.target.value })} placeholder="0.00" style={inputStyle} />
           </div>
+        </div>
 
-          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-            <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em" }}>Cancel</button>
-            <button type="submit" disabled={mutation.isPending} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "8px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: mutation.isPending ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending ? 0.5 : 1 }}>{mutation.isPending ? "Saving..." : editing ? "Save" : "Add Resource"}</button>
+        <div>
+          <label style={labelStyle}>Parent Crew</label>
+          <select
+            value={formData.parent_resource_id}
+            onChange={(e) => setFormData({ ...formData, parent_resource_id: e.target.value })}
+            style={inputStyle}
+          >
+            <option value="">— None (top-level) —</option>
+            {parentCandidates.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.resource_type ? ` · ${p.resource_type}` : ""}
+              </option>
+            ))}
+          </select>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.06em" }}>
+            Assign this resource to a crew. Crews roll up member capacities on the scheduling board.
           </div>
-        </form>
+        </div>
+
+        <div>
+          <label style={labelStyle}>Availability Status</label>
+          <select value={formData.availability_status} onChange={(e) => setFormData({ ...formData, availability_status: e.target.value })} style={inputStyle}>
+            <option value="Available">Available</option>
+            <option value="Allocated">Allocated</option>
+            <option value="Over-Allocated">Over-Allocated</option>
+            <option value="On Leave">On Leave</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={labelStyle}>Notes</label>
+          <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} />
+        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

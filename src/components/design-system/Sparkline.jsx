@@ -17,7 +17,7 @@ export default function Sparkline({ data, color = "var(--accent)", height = 28, 
   const areaD = `${d} L${width},${height} L0,${height} Z`;
 
   return (
-    <svg width={width} height={height} style={{ display: "block" }}>
+    <svg width={width} height={height} role="img" aria-label="Sparkline trend chart" style={{ display: "block" }}>
       {fill && <path d={areaD} fill={color} opacity="0.15" />}
       <path
         d={d}

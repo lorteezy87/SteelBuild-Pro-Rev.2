@@ -2,6 +2,7 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 import { STAGES, DISCIPLINES, EMPTY_FORM, mono, surface } from "./drawingsConfig";
+import { Button, Modal } from "@/components/design-system";
 
 /**
  * Modal for creating or editing a single drawing sheet.

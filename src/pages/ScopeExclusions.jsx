@@ -8,7 +8,7 @@ import BulkScopeModal from "@/components/scope/BulkScopeModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
 import { Check, X, Info, Search, Plus, Upload } from "lucide-react";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { CommandBar, KpiTile, Button } from "@/components/design-system";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -171,49 +171,12 @@ export default function ScopeExclusions() {
         unit={` OF ${stats.total}`}
         subtitle={`Contract-defined scope · exclusions · clarifications${stats.completed > 0 ? ` · ${stats.completed} complete` : ""}`}
       >
-        <button
-          onClick={() => setShowBulk(true)}
-          disabled={!projectId}
-          title={!projectId ? "Select a project first" : "Bulk import scope items"}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--bg-surface)",
-            color: "var(--text-secondary)",
-            border: "1px solid var(--border-default)",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 12px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: projectId ? "pointer" : "not-allowed",
-            opacity: projectId ? 1 : 0.5,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-        >
+        <Button variant="secondary" onClick={() => setShowBulk(true)} disabled={!projectId} title={!projectId ? "Select a project first" : "Bulk import scope items"}>
           <Upload size={12} /> Bulk Import
-        </button>
-        <button
-          onClick={openCreate}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--accent)",
-            color: "var(--bg-base)",
-            border: "none",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 14px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> New Item
-        </button>
+        </Button>
+        <Button variant="primary" icon="plus" onClick={openCreate}>
+          New Item
+        </Button>
       </CommandBar>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>

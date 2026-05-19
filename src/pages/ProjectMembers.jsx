@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { CommandBar, KpiTile, Button as DSButton } from "@/components/design-system";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -373,30 +373,9 @@ function ProjectMembersContent() {
             : "Pick a project to manage its members"
         }
       >
-        <button
-          onClick={refetch}
-          disabled={!selectedProjectId || !canManageSelectedProject}
-          title="Refresh"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-default)",
-            color: "var(--text-secondary)",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 12px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            cursor: selectedProjectId && canManageSelectedProject ? "pointer" : "not-allowed",
-            textTransform: "uppercase",
-            opacity: selectedProjectId && canManageSelectedProject ? 1 : 0.5,
-          }}
-        >
+        <DSButton variant="secondary" onClick={refetch} disabled={!selectedProjectId || !canManageSelectedProject} title="Refresh">
           <RefreshCw size={12} /> Refresh
-        </button>
+        </DSButton>
       </CommandBar>
 
       {/* Project picker */}
