@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/AuthContext";
 import AppLoader from "@/boot/AppLoader";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 
-const LocalLoginForm = lazyWithRetry(() => import("@/components/LocalLoginForm"));
+const Landing = lazyWithRetry(() => import("@/pages/Landing"));
 const AppRoutes = lazyWithRetry(() => import("@/boot/AppRoutes"));
 const ProjectProvider = lazyWithRetry(() =>
   import("@/components/shared/ProjectContext").then((mod) => ({ default: mod.ProjectProvider }))
@@ -14,13 +14,13 @@ const ProjectProvider = lazyWithRetry(() =>
  *
  * Three states, in order of precedence:
  *   1. Auth still resolving         → AppLoader (full-screen spinner)
- *   2. Auth required (no session)   → LocalLoginForm
- *   3. Authenticated                → AppRoutes
+ *   2. Auth required (no session)   → Landing page (marketing site
+ *      with inline sign-in modal)
+ *   3. Authenticated                → AppRoutes (Dashboard, etc.)
  *
  * `authError.type === 'auth_required'` is the canonical "no session"
- * marker; any other authError surfaces as an inline message on the
- * login form ("Authentication required" is suppressed because it's the
- * default message when the user simply hasn't logged in yet).
+ * marker; any other authError surfaces as a login-error string on the
+ * Landing page's sign-in modal.
  */
 export default function AuthenticatedApp() {
   const { isLoadingAuth, isLoadingPublicSettings, authError, loginWithPassword } = useAuth();
@@ -32,10 +32,10 @@ export default function AuthenticatedApp() {
   if (authError?.type === "auth_required") {
     return (
       <Suspense fallback={<AppLoader />}>
-        <LocalLoginForm
-          onSubmit={loginWithPassword}
+        <Landing
+          onLogin={loginWithPassword}
           isSubmitting={isLoadingAuth}
-          errorMessage={authError?.message !== "Authentication required" ? authError?.message : null}
+          loginError={authError?.message !== "Authentication required" ? authError?.message : null}
         />
       </Suspense>
     );
