@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useFormValidation } from "@/hooks/useFormValidation";
+import { Button, Modal } from "@/components/design-system";
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 
 const PRIORITY_OPTIONS = [
@@ -81,32 +82,18 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
     mutation.mutate(formData);
   };
 
-  // Cmd/Ctrl+Enter to save, Escape to close
+  // Cmd/Ctrl+Enter to save (Escape is handled by Modal)
   const handleSubmitRef = useRef(handleSubmit);
   handleSubmitRef.current = handleSubmit;
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === "Escape") onClose();
-      else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleSubmitRef.current();
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleSubmitRef.current();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
   const field = (key, value) => setFormData(prev => ({ ...prev, [key]: value }));
-
-  const modalStyle = {
-    background: "var(--bg-elevated)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: "var(--radius-card)",
-    boxShadow: "0 24px 60px rgba(0,0,0,0.65)",
-    maxWidth: 640,
-    width: "90%",
-    maxHeight: "90vh",
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-  };
 
   const inputStyle = {
     width: "100%", background: "var(--bg-surface-high)", border: "1px solid var(--border-strong)",
@@ -121,144 +108,125 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
   };
 
   return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={actionItem ? `Edit: ${actionItem.title}` : "New Action Item"}
+      eyebrow="Ctrl+Enter to save"
+      width={640}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={handleSubmit} disabled={mutation.isPending}>
+          {mutation.isPending ? "Saving…" : actionItem ? "Update" : "Create Item"}
+        </Button>
+      </>}
     >
-      <div ref={trapRef} role="dialog" aria-modal="true" style={modalStyle}>
-        {/* Header */}
-        <div style={{ padding: "18px 24px 12px", borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
-          <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.10em" }}>
-            {actionItem ? `Edit: ${actionItem.title}` : "New Action Item"}
-          </h2>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", margin: "4px 0 0", letterSpacing: "0.06em" }}>
-            Ctrl+Enter to save
-          </p>
+      <div ref={trapRef} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {/* Title — full width, auto-focused */}
+        <div>
+          <label style={labelStyle}>Title *</label>
+          <input
+            ref={titleRef}
+            type="text"
+            value={formData.title}
+            onChange={e => { field("title", e.target.value); clearField("title"); }}
+            placeholder="e.g., Fix anchor bolt alignment at Grid A-4"
+            style={{ ...inputStyle, ...(fieldErrors.title ? { borderColor: "var(--status-error)" } : {}) }}
+            required
+          />
+          {fieldErrors.title && <p style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--status-error)", marginTop: 4 }}>{fieldErrors.title}</p>}
         </div>
 
-        {/* Body */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 24px", flex: 1, overflowY: "auto", background: "var(--bg-surface)" }}>
-
-          {/* Title — full width, auto-focused */}
+        {/* Priority toggle buttons + Due Date */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
-            <label style={labelStyle}>Title *</label>
-            <input
-              ref={titleRef}
-              type="text"
-              value={formData.title}
-              onChange={e => { field("title", e.target.value); clearField("title"); }}
-              placeholder="e.g., Fix anchor bolt alignment at Grid A-4"
-              style={{ ...inputStyle, ...(fieldErrors.title ? { borderColor: "var(--status-error)" } : {}) }}
-              required
-            />
-            {fieldErrors.title && <p style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--status-error)", marginTop: 4 }}>{fieldErrors.title}</p>}
-          </div>
-
-          {/* Priority toggle buttons + Due Date */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Priority</label>
-              <div style={{ display: "flex", gap: 4 }}>
-                {PRIORITY_OPTIONS.map(opt => {
-                  const active = formData.priority === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => field("priority", opt.value)}
-                      style={{
-                        flex: 1, padding: "7px 4px",
-                        fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
-                        textTransform: "uppercase", letterSpacing: "0.04em",
-                        border: `1px solid ${active ? opt.border : "var(--border-default)"}`,
-                        borderRadius: 6, cursor: "pointer",
-                        background: active ? opt.bg : "var(--bg-surface-low)",
-                        color: active ? opt.color : "var(--text-muted)",
-                        transition: "all 0.12s",
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <label style={labelStyle}>Due Date</label>
-              <input type="date" value={formData.due_date} onChange={e => field("due_date", e.target.value)} style={inputStyle} />
+            <label style={labelStyle}>Priority</label>
+            <div style={{ display: "flex", gap: 4 }}>
+              {PRIORITY_OPTIONS.map(opt => {
+                const active = formData.priority === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => field("priority", opt.value)}
+                    style={{
+                      flex: 1, padding: "7px 4px",
+                      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                      textTransform: "uppercase", letterSpacing: "0.04em",
+                      border: `1px solid ${active ? opt.border : "var(--border-default)"}`,
+                      borderRadius: 6, cursor: "pointer",
+                      background: active ? opt.bg : "var(--bg-surface-low)",
+                      color: active ? opt.color : "var(--text-muted)",
+                      transition: "all 0.12s",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
-
-          {/* Status + Assigned To */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Status</label>
-              <select value={formData.status} onChange={e => field("status", e.target.value)} style={inputStyle}>
-                {["Open", "In Progress", "Complete", "Cancelled"].map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Assign To</label>
-              <input type="text" value={formData.assigned_to} onChange={e => field("assigned_to", e.target.value)} placeholder="Name or crew" style={inputStyle} />
-            </div>
-          </div>
-
-          {/* Project */}
           <div>
-            <label style={labelStyle}>Project *</label>
-            <select value={formData.project_id} onChange={e => { field("project_id", e.target.value); clearField("project_id"); }} style={{ ...inputStyle, ...(fieldErrors.project_id ? { borderColor: "var(--status-error)" } : {}) }} required>
-              <option value="">Select project...</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            <label style={labelStyle}>Due Date</label>
+            <input type="date" value={formData.due_date} onChange={e => field("due_date", e.target.value)} style={inputStyle} />
+          </div>
+        </div>
+
+        {/* Status + Assigned To */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Status</label>
+            <select value={formData.status} onChange={e => field("status", e.target.value)} style={inputStyle}>
+              {["Open", "In Progress", "Complete", "Cancelled"].map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            {fieldErrors.project_id && <p style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--status-error)", marginTop: 4 }}>{fieldErrors.project_id}</p>}
           </div>
-
-          {/* Description */}
           <div>
-            <label style={labelStyle}>Description / Notes</label>
-            <textarea
-              value={formData.description}
-              onChange={e => field("description", e.target.value)}
-              rows={3}
-              style={{ ...inputStyle, minHeight: 70, resize: "vertical" }}
+            <label style={labelStyle}>Assign To</label>
+            <input type="text" value={formData.assigned_to} onChange={e => field("assigned_to", e.target.value)} placeholder="Name or crew" style={inputStyle} />
+          </div>
+        </div>
+
+        {/* Project */}
+        <div>
+          <label style={labelStyle}>Project *</label>
+          <select value={formData.project_id} onChange={e => { field("project_id", e.target.value); clearField("project_id"); }} style={{ ...inputStyle, ...(fieldErrors.project_id ? { borderColor: "var(--status-error)" } : {}) }} required>
+            <option value="">Select project...</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          {fieldErrors.project_id && <p style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--status-error)", marginTop: 4 }}>{fieldErrors.project_id}</p>}
+        </div>
+
+        {/* Description */}
+        <div>
+          <label style={labelStyle}>Description / Notes</label>
+          <textarea
+            value={formData.description}
+            onChange={e => field("description", e.target.value)}
+            rows={3}
+            style={{ ...inputStyle, minHeight: 70, resize: "vertical" }}
+          />
+        </div>
+
+        {/* Meeting ref */}
+        <div>
+          <label style={labelStyle}>Meeting Reference</label>
+          <input type="text" value={formData.meeting_reference} onChange={e => field("meeting_reference", e.target.value)} placeholder="e.g., MTG-001" style={inputStyle} />
+        </div>
+
+        {/* Inbound chips — schedule tasks that link to this Action Item.
+            Read-only; edit the link from the schedule task's LINKS tab.
+            Only renders when we're editing an existing item. */}
+        {actionItem?.id && formData.project_id && (
+          <div style={{ paddingTop: 8, borderTop: "1px solid var(--divider)" }}>
+            <RelatedScheduleTasksChips
+              projectId={formData.project_id}
+              relatedField="related_action_item_ids"
+              targetId={actionItem.id}
             />
           </div>
-
-          {/* Meeting ref */}
-          <div>
-            <label style={labelStyle}>Meeting Reference</label>
-            <input type="text" value={formData.meeting_reference} onChange={e => field("meeting_reference", e.target.value)} placeholder="e.g., MTG-001" style={inputStyle} />
-          </div>
-
-          {/* Inbound chips — schedule tasks that link to this Action Item.
-              Read-only; edit the link from the schedule task's LINKS tab.
-              Only renders when we're editing an existing item. */}
-          {actionItem?.id && formData.project_id && (
-            <div style={{ paddingTop: 8, borderTop: "1px solid var(--divider)" }}>
-              <RelatedScheduleTasksChips
-                projectId={formData.project_id}
-                relatedField="related_action_item_ids"
-                targetId={actionItem.id}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{ padding: "10px 24px", borderTop: "1px solid var(--divider)", display: "flex", gap: 8, justifyContent: "flex-end", background: "var(--bg-elevated)", flexShrink: 0 }}>
-          <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={mutation.isPending}
-            style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending ? 0.5 : 1 }}
-          >
-            {mutation.isPending ? "Saving…" : actionItem ? "Update" : "Create Item"}
-          </button>
-        </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

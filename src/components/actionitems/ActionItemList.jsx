@@ -1,5 +1,6 @@
 import React from "react";
 import { Trash2 } from "lucide-react";
+import { StatusPill } from "@/components/design-system";
 
 const PRIORITY_CONFIG = {
   Critical: { color: "var(--status-error)",   bg: "rgba(239,68,68,0.1)",   border: "rgba(239,68,68,0.3)",   icon: "\u{1F525}" },
@@ -191,18 +192,10 @@ export default function ActionItemList({
 
                 <div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 12, flexShrink: 0 }}>
                   {/* Priority badge */}
-                  <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 8px", background: priorityCfg.bg, border: `1px solid ${priorityCfg.border}`, borderRadius: 6 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: priorityCfg.color, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      {item.priority}
-                    </span>
-                  </div>
+                  <StatusPill label={item.priority} color={priorityCfg.color} size="xs" />
 
                   {/* Status badge */}
-                  <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 8px", background: `${STATUS_COLORS[item.status]}20`, border: `1px solid ${STATUS_COLORS[item.status]}40`, borderRadius: 6 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: STATUS_COLORS[item.status], textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      {item.status}
-                    </span>
-                  </div>
+                  <StatusPill label={item.status} color={STATUS_COLORS[item.status]} size="xs" />
                 </div>
               </div>
 

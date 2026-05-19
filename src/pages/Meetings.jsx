@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import MeetingFormModal from "@/components/meetings/MeetingFormModal";
 import MeetingList from "@/components/meetings/MeetingList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { KpiTile } from "@/components/design-system";
+import { KpiTile, Button } from "@/components/design-system";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { CheckSquare, Plus } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -108,27 +108,9 @@ function ProductionMeetingParserPanel({
             style={{ ...inputStyle, minHeight: 170, resize: "vertical" }}
           />
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
-            <button
-              type="button"
-              onClick={onParse}
-              disabled={!notes.trim()}
-              style={{
-                background: "var(--accent)",
-                color: "var(--bg-base)",
-                border: "none",
-                borderRadius: "var(--radius-btn)",
-                padding: "8px 14px",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                fontWeight: 800,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                cursor: notes.trim() ? "pointer" : "not-allowed",
-                opacity: notes.trim() ? 1 : 0.55,
-              }}
-            >
+            <Button variant="primary" onClick={onParse} disabled={!notes.trim()}>
               Extract Actions
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -142,27 +124,9 @@ function ProductionMeetingParserPanel({
                 {selectedIds.size} selected of {parsedActions.length}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onCreate}
-              disabled={!canCreate || isCreating}
-              style={{
-                background: "var(--accent-muted)",
-                color: "var(--accent)",
-                border: "1px solid var(--accent)",
-                borderRadius: "var(--radius-btn)",
-                padding: "8px 12px",
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                fontWeight: 800,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                cursor: canCreate && !isCreating ? "pointer" : "not-allowed",
-                opacity: canCreate && !isCreating ? 1 : 0.55,
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={onCreate} disabled={!canCreate || isCreating}>
               {isCreating ? "Creating..." : "Create Selected"}
-            </button>
+            </Button>
           </div>
 
           {parsedActions.length === 0 ? (

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import PunchlistList from "@/components/punchlist/PunchlistList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar, KpiTile, ProgressBar, BulkActionBar } from "@/components/design-system";
+import { CommandBar, KpiTile, ProgressBar, BulkActionBar, Button } from "@/components/design-system";
 import { Plus } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
@@ -203,20 +203,9 @@ export default function Punchlist() {
         unit=" · ITEMS"
         subtitle={`${completionRate}% complete · ${stats.critical} critical · close-out checklist`}
       >
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--accent)", color: "var(--bg-base)", border: "none",
-            borderRadius: "var(--radius-btn)", padding: "8px 14px",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> Add Item
-        </button>
+        <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
+          Add Item
+        </Button>
       </CommandBar>
 
       {/* Completion Progress */}
@@ -379,47 +368,12 @@ function CloseoutSignatureModal({ count, signature, onSignatureChange, onCancel,
           disabled={isSaving}
         />
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSaving}
-            style={{
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-default)",
-              borderRadius: 8,
-              padding: "8px 16px",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: isSaving ? "not-allowed" : "pointer",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
+          <Button variant="secondary" onClick={onCancel} disabled={isSaving}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isSaving || !signature.trim()}
-            style={{
-              background: "var(--accent)",
-              color: "var(--bg-base)",
-              border: "none",
-              borderRadius: 8,
-              padding: "8px 16px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: isSaving || !signature.trim() ? "not-allowed" : "pointer",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              opacity: isSaving || !signature.trim() ? 0.5 : 1,
-            }}
-          >
+          </Button>
+          <Button variant="primary" onClick={onConfirm} disabled={isSaving || !signature.trim()}>
             {isSaving ? "Closing…" : "Sign & Close"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import ContactFormModal from "@/components/contacts/ContactFormModal";
 import ContactList from "@/components/contacts/ContactList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Plus, Upload } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
 import { CONTACT_TYPE } from "@/lib/enums";
@@ -131,29 +131,10 @@ export default function Contacts() {
         unit=" · CONTACTS"
         subtitle={`Project directory · Owner / GC / Engineer / Subs / Suppliers / Inspectors${filterType !== "all" ? ` · filtered: ${filterType}` : ""}`}
       >
-        <button
-          className="sbd-btn"
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 12px",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", textTransform: "uppercase",
-          }}
-        >
-          <Upload size={12} /> Import CSV
-        </button>
-        <button
-          onClick={() => { setEditingContact(null); setShowForm(true); }}
-          className="sbd-btn sbd-btn-primary"
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 14px",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", textTransform: "uppercase",
-          }}
-        >
-          <Plus size={12} /> New Contact
-        </button>
+        <Button variant="secondary"><Upload size={12} /> Import CSV</Button>
+        <Button variant="primary" icon="plus" onClick={() => { setEditingContact(null); setShowForm(true); }}>
+          New Contact
+        </Button>
       </CommandBar>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>

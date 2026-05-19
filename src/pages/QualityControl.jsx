@@ -7,7 +7,7 @@ import QCFormModal from "@/components/qc/QCFormModal";
 import QCList from "@/components/qc/QCList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Plus } from "lucide-react";
 
 export default function QualityControl() {
@@ -131,20 +131,9 @@ export default function QualityControl() {
         unit=" · RECORDS"
         subtitle={`${passRate}% pass rate · ${stats.pending} pending · material certs, weld inspections, NDT tests`}
       >
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--accent)", color: "var(--bg-base)", border: "none",
-            borderRadius: "var(--radius-btn)", padding: "8px 14px",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> New Test
-        </button>
+        <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
+          New Test
+        </Button>
       </CommandBar>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
@@ -235,23 +224,15 @@ export default function QualityControl() {
             </svg>
             <p style={{ fontFamily: "var(--font-body)", fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", margin: 0, textAlign: "center" }}>No quality control records yet</p>
             <p style={{ fontFamily: "var(--font-body)", fontSize: "11px", color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>Create your first test record to start tracking material certifications, NDT results, and inspection outcomes.</p>
-            <button
-              onClick={() => { setEditing(null); setShowForm(true); }}
-              style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 20px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4 }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-            >+ New Test Record</button>
+            <Button variant="primary" onClick={() => { setEditing(null); setShowForm(true); }} style={{ marginTop: 4 }}>
+              + New Test Record
+            </Button>
           </div>
         ) : (
           /* Has records but filters exclude everything */
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "36px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: "12px" }}>
             <p style={{ fontFamily: "var(--font-body)", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>No records match the current filters</p>
-            <button
-              onClick={clearFilters}
-              style={{ background: "transparent", color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: "var(--radius-btn)", padding: "6px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.color = "white"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--accent)"; }}
-            >Clear Filters</button>
+            <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
           </div>
         )
       ) : (

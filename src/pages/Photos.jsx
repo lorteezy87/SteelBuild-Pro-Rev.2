@@ -5,7 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import PhotoUploadModal from "@/components/photos/PhotoUploadModal";
 import PhotoGallery from "@/components/photos/PhotoGallery";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Upload } from "lucide-react";
 
 export default function Photos() {
@@ -84,27 +84,9 @@ export default function Photos() {
         unit=" · PHOTOS"
         subtitle="Progress · safety · issues · delivery · punchlist · field documentation"
       >
-        <button
-          onClick={() => setShowUpload(true)}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--accent)",
-            color: "var(--bg-base)",
-            border: "none",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 14px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
+        <Button variant="primary" onClick={() => setShowUpload(true)}>
           <Upload size={12} /> Upload Photo
-        </button>
+        </Button>
       </CommandBar>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>

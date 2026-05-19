@@ -19,6 +19,8 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
   return (
     <div
       className="sbp-command-bar"
+      role="banner"
+      aria-label={title ? `${title} page header` : "Page header"}
       style={{
         display: "flex",
         alignItems: "flex-start",
