@@ -469,7 +469,7 @@ function ProjectMembersContent() {
         >
           <div
             style={{
-              color: "var(--nc-accent-red)",
+              color: "var(--danger)",
               fontWeight: 700,
               fontSize: 14,
               marginBottom: 6,
@@ -751,7 +751,7 @@ function ProjectMembersContent() {
                             border: "1px solid var(--border-default)",
                             color: isSelf || isLastAdmin
                               ? "var(--text-muted)"
-                              : "var(--nc-accent-red, #ff6b6b)",
+                              : "var(--danger)",
                             borderRadius: "var(--radius-btn)",
                             padding: "6px 10px",
                             cursor: isSelf || isLastAdmin ? "not-allowed" : "pointer",
