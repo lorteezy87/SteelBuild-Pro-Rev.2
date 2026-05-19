@@ -133,6 +133,7 @@ const REGISTRY = {
       ["schedule-tasks-wp", pid],   // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
       ["lookahead", pid],           // LookAheadSchedule.jsx
       ["lookahead-gantt", pid],     // GanttChart.jsx
+      ["pcc-schedule-tasks", pid],  // ProjectControlCenter.jsx
     ],
   },
 
@@ -181,6 +182,7 @@ const REGISTRY = {
       ["action-items"],
       ["action-items-all"],          // Dashboard.jsx, Reports.jsx
       ["all-action-items-portfolio"], // AIInsights.jsx, CostDashboard.jsx
+      ["pcc-action-items", pid],     // ProjectControlCenter.jsx
     ],
   },
 

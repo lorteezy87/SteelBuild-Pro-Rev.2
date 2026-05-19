@@ -12,6 +12,7 @@ import { Download } from "lucide-react";
 import {
   mapRFIsToPCCItems,
   mapDrawingsToPCCItems,
+  mapSubmittalsToPCCItems,
   mapWorkPackagesToPCCItems,
   mapDeliveriesToPCCItems,
   mapChangeOrdersToPCCItems,
@@ -32,6 +33,7 @@ import {
 const TYPE_PAGE_MAP = {
   RFI:         "RFIs",
   Drawing:     "Documents",
+  Submittal:   "DrawingSubmittalHub",
   WorkPackage: "WorkPackages",
   Delivery:    "Deliveries",
   ChangeOrder: "ChangeOrders",
@@ -43,6 +45,7 @@ const TYPE_PAGE_MAP = {
 const TYPE_CONFIG = {
   RFI:         { icon: "⚑",  label: "RFI",          color: "var(--status-warning)" },
   Drawing:     { icon: "▦",  label: "DRAWING",       color: "var(--status-info)" },
+  Submittal:   { icon: "◈",  label: "SUBMITTAL",     color: "var(--status-review)" },
   WorkPackage: { icon: "▤",  label: "WORK PKG",      color: "var(--status-review)" },
   Delivery:    { icon: "📦", label: "DELIVERY",      color: "var(--status-success)" },
   ChangeOrder: { icon: "$",  label: "CHANGE ORDER",  color: "var(--status-review)" },
@@ -1198,25 +1201,28 @@ export default function ProjectControlCenter() {
   const coQ   = useQuery({ queryKey: ["pcc-cos",        activeProject?.id], queryFn: () => base44.entities.ChangeOrder.filter({ project_id: activeProject.id }), enabled });
   const taskQ = useQuery({ queryKey: ["pcc-schedule-tasks", activeProject?.id], queryFn: () => base44.entities.ScheduleTask.filter({ project_id: activeProject.id }), enabled });
   const actionQ = useQuery({ queryKey: ["pcc-action-items", activeProject?.id], queryFn: () => base44.entities.ActionItem.filter({ project_id: activeProject.id }), enabled });
+  const subQ = useQuery({ queryKey: ["pcc-submittals", activeProject?.id], queryFn: () => base44.entities.Submittal.filter({ project_id: activeProject.id }), enabled });
   const rfis = rfiQ.data ?? [];
   const drawings = dwgQ.data ?? [];
+  const submittals = subQ.data ?? [];
   const workPackages = wpQ.data ?? [];
   const deliveries = delQ.data ?? [];
   const changeOrders = coQ.data ?? [];
   const scheduleTasks = taskQ.data ?? [];
   const actionItems = actionQ.data ?? [];
-  const isLoading = enabled && (rfiQ.isLoading || dwgQ.isLoading || wpQ.isLoading || delQ.isLoading || coQ.isLoading || taskQ.isLoading || actionQ.isLoading);
+  const isLoading = enabled && (rfiQ.isLoading || dwgQ.isLoading || wpQ.isLoading || delQ.isLoading || coQ.isLoading || taskQ.isLoading || actionQ.isLoading || subQ.isLoading);
 
   // ── Build scored feed ──────────────────────────────────────────
   const allRaw = useMemo(() => [
     ...mapRFIsToPCCItems(rfis),
     ...mapDrawingsToPCCItems(drawings),
+    ...mapSubmittalsToPCCItems(submittals),
     ...mapWorkPackagesToPCCItems(workPackages),
     ...mapDeliveriesToPCCItems(deliveries),
     ...mapChangeOrdersToPCCItems(changeOrders),
     ...mapScheduleTasksToPCCItems(scheduleTasks),
     ...mapActionItemsToPCCItems(actionItems),
-  ], [rfis, drawings, workPackages, deliveries, changeOrders, scheduleTasks, actionItems]);
+  ], [rfis, drawings, submittals, workPackages, deliveries, changeOrders, scheduleTasks, actionItems]);
 
   const scoredFeed = useMemo(() => buildPriorityFeed(allRaw), [allRaw]);
 

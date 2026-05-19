@@ -31,6 +31,12 @@ export const IMPACT_TAGS = {
   RELEASE_GATE:      { label: "RELEASE GATE",        color: "var(--accent)" },
 };
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+/** Normalize a string for case-insensitive status comparison */
+function norm(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 const RELEASE_CONFIRMATIONS = [
   ["vif_confirmed", "VIF missing"],
   ["field_dimensions_confirmed", "Field dimensions missing"],
@@ -99,23 +105,24 @@ function ownerOf(item) {
 
 // ─── Recommended next actions by record type / state ─────────────────────────
 export function recommendNextAction(item) {
-  const { type, status, overdueDays, waitingOnExternal, blocksPhase } = item;
+  const { type, overdueDays, waitingOnExternal, blocksPhase } = item;
+  const s = norm(item.status);
 
   if (type === "RFI") {
     if (overdueDays > 7) return "ESCALATE";
     if (waitingOnExternal) return "FOLLOW UP";
-    if (status === "Open") return "ASSIGN";
-    if (status === "Answered") return "CLOSE ITEM";
+    if (s === "open") return "ASSIGN";
+    if (s === "answered") return "CLOSE ITEM";
     return "REVIEW";
   }
   if (type === "Drawing") {
-    if (status === "OFA" || status === "BFA") return "SEND TO ENGINEER";
-    if (status === "Released" && blocksPhase === "Fabrication") return "RELEASE TO FAB";
+    if (s === "ofa" || s === "bfa") return "SEND TO ENGINEER";
+    if (s === "released" && blocksPhase === "Fabrication") return "RELEASE TO FAB";
     if (overdueDays > 0) return "ESCALATE";
     return "REVIEW";
   }
   if (type === "WorkPackage") {
-    if (status === "On Hold") return "RESOLVE BLOCKER";
+    if (s === "on hold") return "RESOLVE BLOCKER";
     if (blocksPhase === "Delivery") return "CONFIRM DELIVERY";
     if (blocksPhase === "Erection") return "COORDINATE WITH GC";
     return "RELEASE TO FAB";
@@ -126,22 +133,22 @@ export function recommendNextAction(item) {
     return "REVIEW";
   }
   if (type === "ChangeOrder") {
-    if (status === "Pending") return "PRICE CO";
-    if (status === "Submitted") return "FOLLOW UP";
+    if (s === "pending") return "PRICE CO";
+    if (s === "submitted") return "FOLLOW UP";
     return "REVIEW";
   }
   if (type === "Submittal") {
     if (item.review_recommendation) return item.review_recommendation;
-    if (status === "Draft") return "Complete submittal and submit for review";
-    if (status === "Revise and Resubmit") return "Address reviewer comments and resubmit";
-    if (status === "Under Review") return `Follow up with ${item.waiting_on || "reviewer"}`;
+    if (s === "draft") return "Complete submittal and submit for review";
+    if (s === "revise and resubmit") return "Address reviewer comments and resubmit";
+    if (s === "under review") return `Follow up with ${item.waiting_on || "reviewer"}`;
     return "Review submittal status";
   }
   if (type === "ScheduleTask") {
     if (blocksPhase === "Delivery") return "CLEAR RELEASE GATE";
     if (blocksPhase === "Erection") return "VERIFY FIELD READY";
-    if (status === "Blocked" || status === "On Hold") return "RESOLVE BLOCKER";
-    if (status === "Not Started") return "ASSIGN OWNER";
+    if (s === "blocked" || s === "on hold") return "RESOLVE BLOCKER";
+    if (s === "not started") return "ASSIGN OWNER";
     return "REVIEW TASK";
   }
   if (type === "ActionItem") {
@@ -149,7 +156,7 @@ export function recommendNextAction(item) {
     if (blocksPhase === "Delivery") return "CLEAR RELEASE GATE";
     if (blocksPhase === "Erection") return "VERIFY FIELD READY";
     if (blocksPhase === "Fabrication") return "CLEAR FAB BLOCKER";
-    if (status === "Open") return "START";
+    if (s === "open") return "START";
     return "REVIEW ACTION";
   }
   return "REVIEW";
@@ -236,17 +243,22 @@ export function scoreItem(item) {
   if (item.impact_area === "Cost")        { score += 20; tags.push("COST_EXPOSURE"); reasons.push("Cost exposure"); }
   if (item.impact_area === "GC Approval") { score += 15; tags.push("EXTERNAL_WAIT"); reasons.push("GC approval impact"); }
 
+  // Normalize status/stage/priority once for case-insensitive comparisons
+  const itemStatus = norm(item.status || item.stage);
+  const itemPriority = norm(item.priority);
+
   // 4. RFI-specific scoring
   if (item.type === "RFI") {
     if (item.affects_fabrication) { score += 25; tags.push("BLOCKS_FAB"); reasons.push("Affects fabrication"); }
     if (item.affects_drawings)    { score += 15; tags.push("BLOCKS_DETAILING"); reasons.push("Affects drawings"); }
     if (item.affects_erection)    { score += 20; tags.push("BLOCKS_ERECTION"); reasons.push("Affects erection"); }
-    if (item.priority === "Critical" || item.priority === "High") { score += 15; reasons.push("High priority"); }
+    if (itemPriority === "critical" || itemPriority === "high") { score += 15; reasons.push("High priority"); }
   }
 
   // 5a. Drawing scoring
   if (item.type === "Drawing") {
-    if (item.stage === "OFA" || item.stage === "BFA") { score += 10; reasons.push("Pending engineer review"); tags.push("BLOCKS_DETAILING"); }
+    const stageN = norm(item.stage);
+    if (stageN === "ofa" || stageN === "bfa") { score += 10; reasons.push("Pending engineer review"); tags.push("BLOCKS_DETAILING"); }
     if (item.priority_flag) { score += 12; reasons.push("Priority flagged"); }
   }
 
@@ -255,21 +267,24 @@ export function scoreItem(item) {
     if (item.review_risk === "critical") { score += 25; reasons.push("Critical review flags"); tags.push("BLOCKS_FAB"); }
     else if (item.review_risk === "warning") { score += 12; reasons.push("Review warnings"); }
     if (item.review_flag_count > 3) { score += 8; reasons.push(`${item.review_flag_count} review flags`); }
-    if (item.status === "Revise and Resubmit") { score += 15; tags.push("BLOCKS_DETAILING"); reasons.push("R&R — needs detailer action"); }
-    if (item.status === "Under Review") { score += 5; tags.push("EXTERNAL_WAIT"); reasons.push("Under external review"); }
+    if (itemStatus === "revise and resubmit") { score += 15; tags.push("BLOCKS_DETAILING"); reasons.push("R&R — needs detailer action"); }
+    if (itemStatus === "rejected") { score += 18; tags.push("BLOCKS_DETAILING"); reasons.push("Rejected — needs resubmission"); }
+    if (itemStatus === "under review") { score += 5; tags.push("EXTERNAL_WAIT"); reasons.push("Under external review"); }
+    if (item.round_friction) { score += 10; reasons.push(`${item.round_count} rounds — review friction`); }
   }
 
   // 6. Work package scoring
   if (item.type === "WorkPackage") {
-    if (item.status === "On Hold") { score += 20; reasons.push("On hold — blocker"); tags.push("BLOCKS_FAB"); }
+    if (itemStatus === "on hold") { score += 20; reasons.push("On hold — blocker"); tags.push("BLOCKS_FAB"); }
     if (item.percent_complete < 20 && overdueDays > 3) { score += 10; reasons.push("Low progress, overdue"); }
-    if (item.phase === "Erection" || item.phase === "Installation") { score += 8; tags.push("BLOCKS_ERECTION"); }
+    const phaseN = norm(item.phase);
+    if (phaseN === "erection" || phaseN === "installation") { score += 8; tags.push("BLOCKS_ERECTION"); }
   }
 
   // 7. Delivery scoring
   if (item.type === "Delivery") {
-    if (item.status === "Delayed") { score += 30; tags.push("BLOCKS_DELIVERY"); reasons.push("Delivery delayed"); }
-    if (item.priority === "Critical") { score += 20; reasons.push("Critical delivery"); }
+    if (itemStatus === "delayed") { score += 30; tags.push("BLOCKS_DELIVERY"); reasons.push("Delivery delayed"); }
+    if (itemPriority === "critical") { score += 20; reasons.push("Critical delivery"); }
   }
 
   // 8. Change order scoring
@@ -277,21 +292,21 @@ export function scoreItem(item) {
     const exposure = parseFloat(item.amount) || 0;
     if (exposure > 50000) { score += 20; tags.push("COST_EXPOSURE"); reasons.push(`$${(exposure / 1000).toFixed(0)}k exposure`); }
     else if (exposure > 10000) { score += 10; tags.push("COST_EXPOSURE"); reasons.push(`$${(exposure / 1000).toFixed(0)}k exposure`); }
-    if (item.status === "Pending") { score += 12; reasons.push("Unsigned CO"); }
+    if (itemStatus === "pending") { score += 12; reasons.push("Unsigned CO"); }
   }
 
-  // 9. External wait penalty — aging
+  // 9. Schedule task scoring
   if (item.type === "ScheduleTask") {
     if (item.task_kind === "Gate") { score += 18; tags.push("RELEASE_GATE"); reasons.push("Gate item"); }
     if (item.task_kind === "Milestone") { score += 12; tags.push("SCHEDULE_RISK"); reasons.push("Milestone"); }
-    if (item.status === "Blocked" || item.status === "On Hold") { score += 25; tags.push("SCHEDULE_RISK"); reasons.push("Blocked task"); }
+    if (itemStatus === "blocked" || itemStatus === "on hold") { score += 25; tags.push("SCHEDULE_RISK"); reasons.push("Blocked task"); }
   }
 
   if (item.type === "ActionItem") {
-    if (item.priority === "Critical") { score += 24; reasons.push("Critical action"); }
-    else if (item.priority === "High") { score += 16; reasons.push("High priority action"); }
+    if (itemPriority === "critical") { score += 24; reasons.push("Critical action"); }
+    else if (itemPriority === "high") { score += 16; reasons.push("High priority action"); }
     if (item.created_from === "production_meeting_parser") { score += 8; reasons.push("Generated from meeting"); }
-    if (item.status === "In Progress") { score += 6; reasons.push("In progress"); }
+    if (itemStatus === "in progress") { score += 6; reasons.push("In progress"); }
   }
 
   const externalWait = item.external_wait_days || 0;
@@ -328,14 +343,15 @@ export function scoreItem(item) {
 
 // ─── Map raw entity records to normalized PCC items ─────────────────────────
 export function mapRFIsToPCCItems(rfis) {
-  const RFI_TERMINAL = new Set(["Answered", "Closed", "Void"]);
+  const RFI_TERMINAL = new Set(["answered", "closed", "complete", "completed", "cancelled", "canceled", "void"]);
   return rfis
-    .filter((r) => !RFI_TERMINAL.has(r.status))
+    .filter((r) => !RFI_TERMINAL.has(norm(r.status)))
     .map((r) => {
       // External wait: only meaningful for RFIs actively waiting on an
       // external party (Under Review / Open with a ball_in_court).
       // Measured from date_submitted — creation date is not a wait.
-      const isWaiting = r.status === "Under Review" || r.status === "Open";
+      const ns = norm(r.status);
+      const isWaiting = ns === "under review" || ns === "open";
       const waitStart = isWaiting ? (r.date_submitted || r.created_date) : null;
       const externalWait = waitStart
         ? Math.max(0, Math.ceil((Date.now() - new Date(waitStart).getTime()) / 86400000))
@@ -362,8 +378,9 @@ export function mapRFIsToPCCItems(rfis) {
 }
 
 export function mapDrawingsToPCCItems(drawings) {
+  const DRAWING_TERMINAL = new Set(["released", "void", "cancelled", "canceled"]);
   return drawings
-    .filter((d) => d.stage !== "Released" && d.stage !== "Void")
+    .filter((d) => !DRAWING_TERMINAL.has(norm(d.stage)))
     .map((d) => ({
       id: `dwg-${d.id}`,
       entityId: d.id,
@@ -381,9 +398,47 @@ export function mapDrawingsToPCCItems(drawings) {
     }));
 }
 
+export function mapSubmittalsToPCCItems(submittals) {
+  const SUB_TERMINAL = new Set([
+    "approved", "approved as noted", "released for fabrication",
+    "void", "cancelled", "canceled",
+  ]);
+  return submittals
+    .filter((s) => !SUB_TERMINAL.has(norm(s.status)))
+    .map((s) => {
+      const isOverdue = s.required_date && new Date(s.required_date) < new Date();
+      const isRejected = norm(s.status) === "rejected" || norm(s.status) === "revise and resubmit";
+      const rounds = Number(s.total_rounds) || 0;
+      const roundFriction = rounds >= 3;
+
+      return {
+        id: `sub-${s.id}`,
+        entityId: s.id,
+        type: "Submittal",
+        title: [s.submittal_number, s.title || s.description].filter(Boolean).join(" — ") || "Untitled Submittal",
+        subtitle: s.spec_section || `Round ${rounds || 1}`,
+        status: s.status,
+        due_date: s.required_date,
+        target_date: s.required_date,
+        priority: isRejected ? "High" : isOverdue ? "High" : roundFriction ? "Medium" : s.priority,
+        assigned_to: s.ball_in_court,
+        waiting_on: s.ball_in_court,
+        impact_area: /\b(erect|install|field|crane)\b/i.test(`${s.title || ""} ${s.description || ""}`) ? "Erection"
+          : /\b(fab|shop|galv|paint)\b/i.test(`${s.title || ""} ${s.description || ""}`) ? "Fabrication"
+          : "GC Approval",
+        round_count: rounds,
+        round_friction: roundFriction,
+        is_rejected: isRejected,
+        project_id: s.project_id,
+        project_name: s.project_name,
+      };
+    });
+}
+
 export function mapWorkPackagesToPCCItems(wps) {
+  const WP_TERMINAL = new Set(["complete", "completed", "cancelled", "canceled", "void"]);
   return wps
-    .filter((w) => w.status !== "Complete" && w.status !== "Cancelled")
+    .filter((w) => !WP_TERMINAL.has(norm(w.status)))
     .map((w) => {
       const targetDate = w.ship_date || w.delivery_date || w.install_date || w.released_date;
       const targetDays = daysFromToday(targetDate);
@@ -438,13 +493,14 @@ export function mapWorkPackagesToPCCItems(wps) {
 }
 
 export function mapScheduleTasksToPCCItems(tasks) {
-  const TASK_TERMINAL = new Set(["Complete", "Completed", "Cancelled", "Closed", "Done"]);
+  const TASK_TERMINAL = new Set(["complete", "completed", "cancelled", "canceled", "closed", "done", "void"]);
+  const SUMMARY_TYPES = new Set(["summary", "phase"]);
   return tasks
     .filter((t) => {
       const metadata = t.metadata || {};
-      const isSummary = t.is_summary || metadata.is_summary || ["Summary", "Phase"].includes(t.task_type);
+      const isSummary = t.is_summary || metadata.is_summary || SUMMARY_TYPES.has(norm(t.task_type));
       if (isSummary) return false;
-      if (TASK_TERMINAL.has(t.status)) return false;
+      if (TASK_TERMINAL.has(norm(t.status))) return false;
       // Tasks at 100% completion are done regardless of status label
       if (t.percent_complete >= 100) return false;
       return true;
@@ -492,8 +548,9 @@ export function mapScheduleTasksToPCCItems(tasks) {
 }
 
 export function mapDeliveriesToPCCItems(deliveries) {
+  const DEL_TERMINAL = new Set(["delivered", "received", "complete", "completed", "cancelled", "canceled", "void"]);
   return deliveries
-    .filter((d) => d.status !== "Delivered" && d.status !== "Cancelled" && d.status !== "Received")
+    .filter((d) => !DEL_TERMINAL.has(norm(d.status)))
     .map((d) => {
       // Only score release gates when the delivery has explicitly set
       // gate fields OR is within 14 days of scheduled date. Without
@@ -536,8 +593,9 @@ export function mapDeliveriesToPCCItems(deliveries) {
 }
 
 export function mapChangeOrdersToPCCItems(cos) {
+  const CO_TERMINAL = new Set(["approved", "rejected", "complete", "completed", "cancelled", "canceled", "void"]);
   return cos
-    .filter((c) => c.status !== "Approved" && c.status !== "Rejected" && c.status !== "Void")
+    .filter((c) => !CO_TERMINAL.has(norm(c.status)))
     .map((c) => ({
       id: `co-${c.id}`,
       entityId: c.id,
@@ -556,8 +614,9 @@ export function mapChangeOrdersToPCCItems(cos) {
 
 // ─── Build scored + sorted priority feed ─────────────────────────────────────
 export function mapActionItemsToPCCItems(actionItems) {
+  const AI_TERMINAL = new Set(["complete", "completed", "done", "cancelled", "canceled", "closed", "void"]);
   return actionItems
-    .filter((a) => a.status !== "Complete" && a.status !== "Cancelled")
+    .filter((a) => !AI_TERMINAL.has(norm(a.status)))
     .map((a) => {
       const metadata = a.metadata || {};
       const text = `${a.title || ""} ${a.description || ""}`;
