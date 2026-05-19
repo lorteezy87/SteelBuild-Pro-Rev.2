@@ -360,7 +360,7 @@ function FeatureFlagsAdminContent() {
                         title="Delete flag"
                         style={{
                           background: "none", border: "1px solid var(--border-default)",
-                          color: "var(--nc-accent-red, #ff6b6b)",
+                          color: "var(--danger)",
                           borderRadius: "var(--radius-btn)", padding: "6px 10px",
                           cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4,
                           fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,

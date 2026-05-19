@@ -23,7 +23,7 @@ export default function AdminRoute({ children }) {
         <div style={{
           fontSize: 24,
           fontWeight: 700,
-          color: "var(--nc-accent-red)",
+          color: "var(--danger)",
           marginBottom: 12
         }}>
           Access Denied
