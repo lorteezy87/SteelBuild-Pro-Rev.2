@@ -189,7 +189,7 @@ export default function ExpenseFormModal({
                   <label style={labelStyle}>Type</label>
                   <Select value={form.expense_type} onValueChange={v => set('expense_type', v)}>
                     <SelectTrigger style={triggerStyle}><SelectValue /></SelectTrigger>
-                    <SelectContent style={{ background: 'var(--bg-surface-low)', zIndex: 10001 }}>
+                    <SelectContent style={{ background: 'var(--bg-surface-secondary)', zIndex: 10001 }}>
                       {EXPENSE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -228,7 +228,7 @@ export default function ExpenseFormModal({
                   <label style={labelStyle}>Unit</label>
                   <Select value={form.unit} onValueChange={v => set('unit', v)}>
                     <SelectTrigger style={triggerStyle}><SelectValue /></SelectTrigger>
-                    <SelectContent style={{ background: 'var(--bg-surface-low)', zIndex: 10001 }}>
+                    <SelectContent style={{ background: 'var(--bg-surface-secondary)', zIndex: 10001 }}>
                       {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -268,7 +268,7 @@ export default function ExpenseFormModal({
                   <label style={labelStyle}>Payment Status</label>
                   <Select value={form.payment_status} onValueChange={v => set('payment_status', v)}>
                     <SelectTrigger style={triggerStyle}><SelectValue /></SelectTrigger>
-                    <SelectContent style={{ background: 'var(--bg-surface-low)', zIndex: 10001 }}>
+                    <SelectContent style={{ background: 'var(--bg-surface-secondary)', zIndex: 10001 }}>
                       {PAYMENT_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -309,7 +309,7 @@ export default function ExpenseFormModal({
                   <label style={labelStyle}>Work Package</label>
                   <Select value={form.work_package_id || '__none__'} onValueChange={v => set('work_package_id', v === '__none__' ? '' : v)}>
                     <SelectTrigger style={triggerStyle}><SelectValue placeholder="Select WP" /></SelectTrigger>
-                    <SelectContent style={{ background: 'var(--bg-surface-low)', zIndex: 10001 }}>
+                    <SelectContent style={{ background: 'var(--bg-surface-secondary)', zIndex: 10001 }}>
                       <SelectItem value="__none__">None</SelectItem>
                       {workPackages.filter(wp => wp.project_id === form.project_id).map(wp => (
                         <SelectItem key={wp.id} value={wp.id}>{wp.wp_number} — {wp.name}</SelectItem>
@@ -324,7 +324,7 @@ export default function ExpenseFormModal({
                   <label style={labelStyle}>SOV Line Item</label>
                   <Select value={form.sov_line_item_id || '__none__'} onValueChange={v => set('sov_line_item_id', v === '__none__' ? '' : v)}>
                     <SelectTrigger style={triggerStyle}><SelectValue placeholder="Select SOV item" /></SelectTrigger>
-                    <SelectContent style={{ background: 'var(--bg-surface-low)', zIndex: 10001 }}>
+                    <SelectContent style={{ background: 'var(--bg-surface-secondary)', zIndex: 10001 }}>
                       <SelectItem value="__none__">None</SelectItem>
                       {sovItems.filter(s => s.project_id === form.project_id).map(s => (
                         <SelectItem key={s.id} value={s.id}>{s.description}</SelectItem>
