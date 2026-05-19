@@ -6,7 +6,7 @@ import DailyLogForm from "@/components/fieldops/DailyLogForm";
 import DailyLogsList from "@/components/fieldops/DailyLogsList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Plus, Copy } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -247,50 +247,14 @@ export default function DailyLogs() {
         subtitle="Field superintendent journal · man-hours · safety · delays"
       >
         {can("create", "daily_log") && (
-          <button
-            onClick={handleCopyFromYesterday}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "var(--bg-surface)",
-              color: "var(--text-secondary)",
-              border: "1px solid var(--border-default)",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 12px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: "pointer",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
-          >
+          <Button variant="secondary" onClick={handleCopyFromYesterday}>
             <Copy size={12} /> Copy Yesterday
-          </button>
+          </Button>
         )}
         {can("create", "daily_log") && (
-          <button
-            onClick={() => { setEditing(null); setShowForm(true); }}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "var(--accent)",
-              color: "var(--bg-base)",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 14px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: "pointer",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-          >
-            <Plus size={12} /> New Log
-          </button>
+          <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
+            New Log
+          </Button>
         )}
       </CommandBar>
 

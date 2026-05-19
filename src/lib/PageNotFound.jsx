@@ -36,7 +36,7 @@ export default function PageNotFound({}) {
 
                 {isFetched && authData?.isAuthenticated && authData?.user?.role === 'admin' && (
                     <div style={{ padding: "12px 16px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 2, textAlign: "left", marginBottom: 24 }}>
-                        <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--nc-accent-orange)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>ADMIN_NOTE</p>
+                        <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>ADMIN_NOTE</p>
                         <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, margin: 0 }}>
                             This page may not be implemented yet. Ask Claude to build it in the chat.
                         </p>
@@ -45,7 +45,7 @@ export default function PageNotFound({}) {
 
                 <button
                     onClick={() => navigate('/')}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px", background: "var(--nc-accent-orange)", color: "#FFFFFF", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer" }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px", background: "var(--accent)", color: "#FFFFFF", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer" }}
                 >
                     ← GO HOME
                 </button>

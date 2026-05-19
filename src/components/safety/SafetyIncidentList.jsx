@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { StatusPill } from "@/components/design-system";
 
 const SEVERITY_COLORS = {
   Critical: "var(--status-error)",
@@ -55,9 +56,7 @@ export default function SafetyIncidentList({ incidents = [], onEdit, onDelete, o
 
             <div>
               <div style={{ display: "flex", gap: "6px" }}>
-                <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "4px" }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fontWeight: 600, color: SEVERITY_COLORS[incident.severity], textTransform: "uppercase", letterSpacing: "0.05em" }}>{incident.severity}</span>
-                </div>
+                <StatusPill label={incident.severity} color={SEVERITY_COLORS[incident.severity]} size="xs" />
                 {onStatusChange ? (
                   <select
                     value={incident.status || "Open"}
@@ -75,9 +74,7 @@ export default function SafetyIncidentList({ incidents = [], onEdit, onDelete, o
                     {STATUSES.map((s) => (<option key={s} value={s}>{s}</option>))}
                   </select>
                 ) : (
-                  <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "4px" }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fontWeight: 600, color: STATUS_COLORS[incident.status], textTransform: "uppercase", letterSpacing: "0.05em" }}>{incident.status}</span>
-                  </div>
+                  <StatusPill label={incident.status} color={STATUS_COLORS[incident.status]} size="xs" />
                 )}
               </div>
               <div style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "4px" }}>{new Date(incident.incident_date).toLocaleDateString()}</div>

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import InspectionFormModal from "@/components/inspections/InspectionFormModal";
 import InspectionList from "@/components/inspections/InspectionList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Plus } from "lucide-react";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
@@ -205,20 +205,9 @@ export default function Inspections() {
         unit={` OF ${inspections.length}`}
         subtitle={`Welds · material · connections · coatings${filterType !== "all" || filterStatus !== "all" ? " · (filtered)" : ""}`}
       >
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--accent)", color: "var(--bg-base)", border: "none",
-            borderRadius: "var(--radius-btn)", padding: "8px 14px",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> New Inspection
-        </button>
+        <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
+          New Inspection
+        </Button>
       </CommandBar>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
@@ -394,33 +383,13 @@ export default function Inspections() {
               : "Try adjusting your type or status filters, or clear all filters to see everything."}
           </div>
           {inspections.length === 0 ? (
-            <button
-              onClick={() => { setEditing(null); setShowForm(true); }}
-              style={{
-                background: "var(--accent)", color: "#07090E", border: "none",
-                borderRadius: "var(--radius-btn)", padding: "10px 24px",
-                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800,
-                cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
-                marginTop: 4, transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-            >
+            <Button variant="primary" onClick={() => { setEditing(null); setShowForm(true); }} style={{ marginTop: 4 }}>
               + Create First Inspection
-            </button>
+            </Button>
           ) : (
-            <button
-              onClick={() => { setFilterType("all"); setFilterStatus("all"); }}
-              style={{
-                background: "transparent", color: "var(--accent)",
-                border: "1px solid var(--accent)", borderRadius: "var(--radius-btn)",
-                padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10,
-                fontWeight: 700, cursor: "pointer", textTransform: "uppercase",
-                letterSpacing: "0.08em", marginTop: 4,
-              }}
-            >
+            <Button variant="outline" onClick={() => { setFilterType("all"); setFilterStatus("all"); }} style={{ marginTop: 4 }}>
               Clear All Filters
-            </button>
+            </Button>
           )}
         </div>
       ) : (

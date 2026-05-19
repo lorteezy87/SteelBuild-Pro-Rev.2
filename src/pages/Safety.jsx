@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import SafetyIncidentFormModal from "@/components/safety/SafetyIncidentFormModal";
 import SafetyIncidentList from "@/components/safety/SafetyIncidentList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Plus } from "lucide-react";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -127,20 +127,9 @@ export default function Safety() {
         unit=" · INCIDENTS"
         subtitle={`${stats.open} open · ${stats.critical} critical · injuries / near-misses / hazards`}
       >
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--accent)", color: "var(--bg-base)", border: "none",
-            borderRadius: "var(--radius-btn)", padding: "8px 14px",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> Report Incident
-        </button>
+        <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
+          Report Incident
+        </Button>
       </CommandBar>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>

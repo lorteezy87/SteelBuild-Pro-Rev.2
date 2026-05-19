@@ -84,6 +84,7 @@ export default function Button({
   disabled,
   title,
   type = "button",
+  "aria-label": ariaLabel,
   style: styleOverride,
 }) {
   const s = SIZES[size] || SIZES.md;
@@ -97,6 +98,7 @@ export default function Button({
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-label={ariaLabel}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{

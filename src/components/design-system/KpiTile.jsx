@@ -90,7 +90,11 @@ export default function KpiTile({
   return (
     <div
       className="sbd-kpi"
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `${label}: ${value}` : undefined}
       onClick={onClick}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } } : undefined}
       onMouseEnter={() => clickable && setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
