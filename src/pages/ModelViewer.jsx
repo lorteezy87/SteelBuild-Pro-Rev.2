@@ -1520,7 +1520,7 @@ export default function ModelViewer() {
 
   // ─── RENDER ────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", flex: 1, minHeight: 0, background: "var(--bg-page)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", flex: 1, minHeight: 0, maxHeight: "100%", overflow: "hidden", background: "var(--bg-page)" }}>
       {/* TOOLBAR */}
       <div className="sbd-topbar" style={{
         height: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -1758,6 +1758,8 @@ export default function ModelViewer() {
             flex: 1,
             position: "relative",
             overflow: "hidden",
+            minHeight: 0,
+            minWidth: 0,
             cursor: measureMode ? "crosshair" : "default",
           }}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
