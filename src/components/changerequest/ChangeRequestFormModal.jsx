@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 
@@ -48,6 +49,7 @@ export default function ChangeRequestFormModal({
   onSave,
   isSaving = false,
 }) {
+  const trapRef = useFocusTrap(true);
   const [formData, setFormData] = useState({ ...emptyForm, project_id: projectId || "" });
   const isEdit = !!changeRequest;
 
@@ -112,6 +114,7 @@ export default function ChangeRequestFormModal({
       }}
     >
       <div
+        ref={trapRef}
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",

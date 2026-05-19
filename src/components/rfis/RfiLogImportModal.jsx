@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { X, Upload, FileText, CheckCircle2, ArrowRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ const AI      = "var(--ai-accent, #22D3EE)";
  */
 export default function RfiLogImportModal({ open, projectId, projectName, projects = [], onClose, onCreated }) {
   const qc = useQueryClient();
+  const trapRef = useFocusTrap(open);
   const fileInput = useRef(null);
 
   const [step, setStep] = useState("upload");  // upload | extracting | preview | committing | done
@@ -140,7 +142,7 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1200 }} />
       <div
-        tabIndex={-1}
+        ref={trapRef}
         onKeyDown={(e) => { if (e.key === "Escape" && step !== "committing") onClose(); }}
         style={{
           position: "fixed", top: "50%", left: "50%",

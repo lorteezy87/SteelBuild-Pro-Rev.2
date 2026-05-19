@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -6,6 +7,7 @@ import { Paperclip, Upload, X as XIcon } from "lucide-react";
 
 export default function ScopeItemFormModal({ projectId, editing, onClose, onSave }) {
   const qc = useQueryClient();
+  const trapRef = useFocusTrap(true);
   const fileInput = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState(editing ? { ...editing } : {
@@ -90,6 +92,7 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
       }}
     >
       <div
+        ref={trapRef}
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { Button, Modal } from "@/components/design-system";
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
@@ -22,7 +21,6 @@ const tomorrow = () => {
 
 export default function ActionItemFormModal({ projectId, onClose, onSave, actionItem = null }) {
   const qc = useQueryClient();
-  const trapRef = useFocusTrap(true);
   const { fieldErrors, runValidation, clearField } = useFormValidation("action_item", actionItem ? "update" : "create");
   const titleRef = useRef(null);
   const [formData, setFormData] = useState({
@@ -121,7 +119,7 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
         </Button>
       </>}
     >
-      <div ref={trapRef} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
         {/* Title — full width, auto-focused */}
         <div>

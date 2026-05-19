@@ -12,7 +12,8 @@
  * project-wide modal convention.
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import Icon from "./Icon";
 
 export default function Modal({
@@ -24,6 +25,8 @@ export default function Modal({
   footer,
   width = 720,
 }) {
+  const trapRef = useFocusTrap(open);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
@@ -61,6 +64,9 @@ export default function Modal({
         @keyframes sbp-modal-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
       <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%",

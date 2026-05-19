@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { ArrowRight, CheckCircle2, FileSpreadsheet, Loader2, Upload, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ export default function PsrSpreadsheetImportModal({
   onImported,
 }) {
   const qc = useQueryClient();
+  const trapRef = useFocusTrap(open);
   const fileInput = useRef(null);
 
   const [step, setStep] = useState("upload");
@@ -159,7 +161,7 @@ export default function PsrSpreadsheetImportModal({
     <>
       <div onClick={close} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1200 }} />
       <div
-        tabIndex={-1}
+        ref={trapRef}
         onKeyDown={(event) => { if (event.key === "Escape") close(); }}
         style={{
           position: "fixed",

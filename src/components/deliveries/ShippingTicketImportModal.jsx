@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { X, Upload, FileText, CheckCircle2, ArrowRight, Trash2, ChevronDown, ChevronRight, AlertCircle, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ const AI      = "var(--ai-accent, #22D3EE)";
  */
 export default function ShippingTicketImportModal({ open, projectId, projectName, projects = [], onClose, onCreated }) {
   const qc = useQueryClient();
+  const trapRef = useFocusTrap(open);
   const fileInput = useRef(null);
 
   // step: upload | extracting | preview | committing | done
@@ -178,7 +180,7 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1200 }} />
       <div
-        tabIndex={-1}
+        ref={trapRef}
         onKeyDown={(e) => { if (e.key === "Escape" && step !== "committing") onClose(); }}
         style={{
           position: "fixed", top: "50%", left: "50%",
