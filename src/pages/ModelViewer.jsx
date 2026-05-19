@@ -1520,7 +1520,7 @@ export default function ModelViewer() {
 
   // ─── RENDER ────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", flex: 1, minHeight: 0, maxHeight: "100%", overflow: "hidden", background: "var(--bg-page)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 36px)", maxHeight: "calc(100vh - 36px)", flex: "0 0 auto", minHeight: 0, overflow: "hidden", background: "var(--bg-page)" }}>
       {/* TOOLBAR */}
       <div className="sbd-topbar" style={{
         height: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between",
