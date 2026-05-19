@@ -8,7 +8,7 @@ import ActionItemList from "@/components/actionitems/ActionItemList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
 import { CommandBar, KpiTile, BulkActionBar } from "@/components/design-system";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, ClipboardCheck, ChevronDown, ChevronRight } from "lucide-react";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 import { daysUntil } from "@/lib/dateMath";
 
@@ -138,7 +138,7 @@ export default function ActionItems() {
   });
 
   // ─── Queries ─────────────────────────────────────────────────────────────
-  const { data: actionItems = [], isLoading } = useQuery({
+  const { data: allItems = [], isLoading } = useQuery({
     queryKey: ["action-items", projectId],
     queryFn: () =>
       projectId
@@ -155,6 +155,27 @@ export default function ActionItems() {
   });
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : null;
+
+  // ─── Split SETUP checklist items from regular action items ──────────────
+  const [setupCollapsed, setSetupCollapsed] = useState(false);
+
+  const setupItems = useMemo(() =>
+    allItems
+      .filter((ai) => ai.category === "SETUP")
+      .sort((a, b) => (a.metadata?.sort_order ?? 99) - (b.metadata?.sort_order ?? 99)),
+    [allItems]
+  );
+
+  const actionItems = useMemo(() =>
+    allItems.filter((ai) => ai.category !== "SETUP"),
+    [allItems]
+  );
+
+  const setupStats = useMemo(() => {
+    const total = setupItems.length;
+    const complete = setupItems.filter((si) => si.status === ACTION_ITEM_STATUS.COMPLETE).length;
+    return { total, complete, pct: total > 0 ? Math.round((complete / total) * 100) : 0 };
+  }, [setupItems]);
 
   // ─── Derived: unique assignees (for bulk-assign dropdown) ────────────────
   const knownAssignees = useMemo(() => {
@@ -327,6 +348,137 @@ export default function ActionItems() {
           );
         })}
       </div>
+
+      {/* ─── Project Setup Checklist ─────────────────────────────────── */}
+      {setupItems.length > 0 && projectId && (
+        <div style={{
+          background: "var(--bg-surface)",
+          border: `1px solid ${setupStats.pct === 100 ? "rgba(0,214,143,0.25)" : "var(--accent-border)"}`,
+          borderRadius: "var(--radius-card)",
+          overflow: "hidden",
+          transition: "border-color 0.3s",
+        }}>
+          {/* Header — clickable to collapse */}
+          <button
+            type="button"
+            onClick={() => setSetupCollapsed((v) => !v)}
+            style={{
+              width: "100%",
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "14px 16px",
+              background: "none", border: "none", cursor: "pointer",
+              borderBottom: setupCollapsed ? "none" : "1px solid var(--divider)",
+            }}
+          >
+            {setupCollapsed
+              ? <ChevronRight size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+              : <ChevronDown size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+            }
+            <ClipboardCheck size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800,
+                letterSpacing: "0.12em", textTransform: "uppercase",
+                color: setupStats.pct === 100 ? "var(--status-success)" : "var(--accent)",
+              }}>
+                Project Setup Checklist
+              </span>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
+                marginLeft: 10,
+              }}>
+                {setupStats.complete}/{setupStats.total} complete
+              </span>
+            </div>
+            {/* Progress bar */}
+            <div style={{ width: 120, height: 4, borderRadius: 2, background: "var(--bg-surface-low)", flexShrink: 0 }}>
+              <div style={{
+                height: "100%", borderRadius: 2,
+                width: `${setupStats.pct}%`,
+                background: setupStats.pct === 100 ? "var(--status-success)" : "var(--accent)",
+                transition: "width 0.4s ease",
+              }} />
+            </div>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+              color: setupStats.pct === 100 ? "var(--status-success)" : "var(--accent)",
+              minWidth: 32, textAlign: "right",
+            }}>
+              {setupStats.pct}%
+            </span>
+          </button>
+
+          {/* Checklist rows */}
+          {!setupCollapsed && (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {setupItems.map((item, idx) => {
+                const done = item.status === ACTION_ITEM_STATUS.COMPLETE;
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: "10px 16px 10px 46px",
+                      borderBottom: idx < setupItems.length - 1 ? "1px solid var(--divider)" : "none",
+                      opacity: done ? 0.55 : 1,
+                      transition: "opacity 0.2s, background 0.15s",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                    onClick={() => setEditingItem(item)}
+                  >
+                    {/* Resolve checkbox */}
+                    <div
+                      onClick={(e) => { e.stopPropagation(); handleResolve(item); }}
+                      style={{
+                        width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+                        border: done ? "1.5px solid var(--status-success)" : "1.5px solid var(--border-strong)",
+                        background: done ? "rgba(0,214,143,0.15)" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: "pointer", transition: "all 0.15s",
+                      }}
+                    >
+                      {done && <span style={{ color: "var(--status-success)", fontSize: 12, fontWeight: 900, lineHeight: 1 }}>{"✓"}</span>}
+                    </div>
+
+                    {/* Title + description */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600,
+                        color: done ? "var(--text-muted)" : "var(--text-primary)",
+                        textDecoration: done ? "line-through" : "none",
+                        lineHeight: 1.3,
+                      }}>
+                        {item.title}
+                      </div>
+                      {item.description && !done && (
+                        <div style={{
+                          fontFamily: "var(--font-body)", fontSize: 11,
+                          color: "var(--text-muted)", lineHeight: 1.4, marginTop: 2,
+                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                        }}>
+                          {item.description}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Assignee */}
+                    {item.assigned_to && (
+                      <span style={{
+                        fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
+                        flexShrink: 0,
+                      }}>
+                        {item.assigned_to}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {executionQueue.length > 0 && (
         <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
