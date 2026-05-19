@@ -14,7 +14,7 @@ export default function LocalLoginForm({ onSubmit, isSubmitting, errorMessage })
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "var(--bg-page)", padding: "0 24px" }}>
       <div style={{ width: "100%", maxWidth: 420, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 2, padding: 32 }}>
         <div style={{ marginBottom: 28 }}>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.25em", color: "var(--nc-accent-cyan)", marginBottom: 10 }}>STEELBUILD PRO</p>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.25em", color: "var(--accent)", marginBottom: 10 }}>STEELBUILD PRO</p>
           <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>SIGN IN</h1>
           <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
             Enter your credentials to access the platform.
@@ -45,7 +45,7 @@ export default function LocalLoginForm({ onSubmit, isSubmitting, errorMessage })
           </div>
 
           {errorMessage && (
-            <div style={{ padding: "10px 14px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 2, fontFamily: "var(--font-body)", fontSize: 12, color: "var(--nc-accent-red)" }}>
+            <div style={{ padding: "10px 14px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 2, fontFamily: "var(--font-body)", fontSize: 12, color: "var(--status-error)" }}>
               {errorMessage}
             </div>
           )}
@@ -53,7 +53,7 @@ export default function LocalLoginForm({ onSubmit, isSubmitting, errorMessage })
           <button
             type="submit"
             disabled={isSubmitting}
-            style={{ width: "100%", padding: "10px 0", background: "var(--nc-accent-orange)", color: "#FFFFFF", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.6 : 1 }}
+            style={{ width: "100%", padding: "10px 0", background: "var(--accent)", color: "#FFFFFF", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.6 : 1 }}
           >
             {isSubmitting ? 'SIGNING IN...' : 'SIGN IN →'}
           </button>

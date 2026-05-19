@@ -6,7 +6,7 @@ const UserNotRegisteredError = () => {
       <div style={{ maxWidth: 480, width: "100%", padding: 32, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 2 }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, marginBottom: 20, borderRadius: "50%", background: "var(--warning-muted)", border: "1px solid var(--warning-border)" }}>
-            <svg width="24" height="24" fill="none" stroke="var(--nc-accent-orange)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+            <svg width="24" height="24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
