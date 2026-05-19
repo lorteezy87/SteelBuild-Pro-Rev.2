@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import VendorFormModal from "@/components/vendors/VendorFormModal";
 import VendorList from "@/components/vendors/VendorList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar } from "@/components/design-system";
+import { CommandBar, Button as DSButton } from "@/components/design-system";
 import KPIStrip from "../components/shared/KPIStrip";
 import SearchFilter from "../components/shared/SearchFilter";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
@@ -220,30 +220,12 @@ export default function Vendors() {
         unit=" · VENDORS"
         subtitle={`${activeCount} active${riskVendors.length > 0 ? ` · ${riskVendors.length} at risk` : ""} · certs · insurance · on-time performance`}
       >
-        <button
-          onClick={refetch}
-          title="Refresh"
-          className="sbd-btn"
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", textTransform: "uppercase",
-          }}
-        >
+        <DSButton variant="secondary" onClick={refetch} title="Refresh">
           <RefreshCw size={12} /> Refresh
-        </button>
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          className="sbd-btn sbd-btn-primary"
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 14px",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", textTransform: "uppercase",
-          }}
-        >
-          <Plus size={12} /> New Vendor
-        </button>
+        </DSButton>
+        <DSButton variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
+          New Vendor
+        </DSButton>
       </CommandBar>
 
       <KPIStrip items={kpis} />

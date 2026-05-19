@@ -5,11 +5,16 @@
 
 import React from "react";
 
-export default function ProgressBar({ value, color = "var(--accent)", height = 6, sub }) {
+export default function ProgressBar({ value, color = "var(--accent)", height = 6, sub, label }) {
   const clamped = Math.max(0, Math.min(100, Number(value) || 0));
   return (
     <div>
       <div
+        role="progressbar"
+        aria-valuenow={clamped}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={label || `${clamped}% complete`}
         style={{
           height,
           background: "var(--bg-surface-high)",

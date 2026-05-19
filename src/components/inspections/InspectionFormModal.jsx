@@ -3,11 +3,10 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useFormValidation } from "@/hooks/useFormValidation";
-import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { Modal, Button } from "@/components/design-system";
 
 export default function InspectionFormModal({ projectId, inspection = null, onClose, onSave, isSaving = false }) {
   const { fieldErrors, runValidation, clearField } = useFormValidation("inspection");
-  const trapRef = useFocusTrap(true);
   const [formData, setFormData] = useState({
     project_id: projectId,
     inspection_type: "Steel Fabrication",

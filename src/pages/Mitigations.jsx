@@ -11,7 +11,7 @@ import StatCard from "@/components/shared/StatCard";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DonutChart from "@/components/shared/DonutChart";
 import { createPageUrl } from "@/utils";
-import { CommandBar } from "@/components/design-system";
+import { CommandBar, StatusPill } from "@/components/design-system";
 import { Plus, Download } from "lucide-react";
 import { setDraft, takeDraft } from "@/lib/draftStorage";
 
@@ -1014,21 +1014,8 @@ export default function Mitigations() {
                   </div>
 
                   {/* Status chip */}
-                  <div>
-                    <span
-                      title={STATUS_TOOLTIPS[m.status] || ""}
-                      style={{
-                        display: "inline-flex", alignItems: "center", padding: "3px 8px",
-                        background: `${statusColor}18`, borderRadius: "var(--radius-badge, 6px)",
-                      }}
-                    >
-                      <span style={{
-                        fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
-                        color: statusColor, textTransform: "uppercase", letterSpacing: "0.06em",
-                      }}>
-                        {m.status === "Pending PM Review" ? "PM REV" : m.status}
-                      </span>
-                    </span>
+                  <div title={STATUS_TOOLTIPS[m.status] || ""}>
+                    <StatusPill label={m.status === "Pending PM Review" ? "PM REV" : m.status} color={statusColor} size="xs" />
                   </div>
 
                   {/* Source */}
