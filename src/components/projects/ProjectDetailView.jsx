@@ -518,7 +518,7 @@ export default function ProjectDetailView({ project, onClose }) {
   });
   const { data: costCodes = [] } = useQuery({
     queryKey: ['cc-detail', project.id],
-    queryFn: () => base44.entities.CostCode.filter({ project_id: project.id }),
+    queryFn: () => base44.entities.CostCode.filter({ project_id: project.id }, "cost_code_number"),
     initialData: [],
   });
 

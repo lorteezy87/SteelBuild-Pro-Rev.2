@@ -168,7 +168,7 @@ export default function FinancialScorecard() {
 
   const { data: costCodes = [] } = useQuery({
     queryKey: ["cost-codes", projectId],
-    queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }),
+    queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }, "cost_code_number"),
     enabled: !!projectId,
   });
 

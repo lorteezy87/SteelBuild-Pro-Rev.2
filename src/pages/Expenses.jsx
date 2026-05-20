@@ -93,7 +93,7 @@ export default function ExpensesPage() {
     queryKey: ["cost-codes", activeProject?.id],
     queryFn: () =>
       activeProject?.id
-        ? base44.entities.CostCode.filter({ project_id: activeProject.id }, "-created_at")
+        ? base44.entities.CostCode.filter({ project_id: activeProject.id }, "cost_code_number")
         : [],
     enabled: !!activeProject?.id,
   });
