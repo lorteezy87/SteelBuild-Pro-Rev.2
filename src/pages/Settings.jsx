@@ -13,6 +13,7 @@ import DashboardTab from "@/components/settings/DashboardTab.jsx";
 import ShortcutsTab from "@/components/settings/ShortcutsTab.jsx";
 import RolesTab from "@/components/settings/RolesTab.jsx";
 import SystemTab from "@/components/settings/SystemTab.jsx";
+import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -32,8 +33,9 @@ const TAB_GROUPS = [
     label: 'Workspace',
     adminOnly: true,
     tabs: [
-      { id: 'roles',  label: 'Roles',  icon: '\u{1F451}', desc: 'Permissions and access', adminOnly: true },
-      { id: 'system', label: 'System', icon: '\u2699',    desc: 'Data and app management', adminOnly: true },
+      { id: 'roles',      label: 'Roles',      icon: '\u{1F451}', desc: 'Permissions and access', adminOnly: true },
+      { id: 'costcodes',  label: 'Cost Codes', icon: '\u{1F4B0}', desc: 'Default budget codes for new projects', adminOnly: true },
+      { id: 'system',     label: 'System',     icon: '\u2699',    desc: 'Data and app management', adminOnly: true },
     ],
   },
 ];
@@ -240,6 +242,7 @@ export default function Settings() {
         {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
         {activeTab === 'shortcuts' && <ShortcutsTab />}
         {activeTab === 'roles' && <RolesTab user={user} />}
+        {activeTab === 'costcodes' && <CostCodesTab />}
         {activeTab === 'system' && <SystemTab user={user} />}
       </div>
     </div>
