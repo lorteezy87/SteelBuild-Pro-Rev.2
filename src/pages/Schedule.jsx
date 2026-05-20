@@ -13,6 +13,7 @@ import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
 import AddTaskModal from "@/components/schedule/AddTaskModal";
 import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
 import BulkDateEditModal from "@/components/schedule/BulkDateEditModal";
+import BulkDurationEditModal from "@/components/schedule/BulkDurationEditModal";
 import WbsBuilderModal from "@/components/schedule/WbsBuilderModal";
 import { PHASES, PHASE_NUMBER } from "@/utils/phases";
 import { useRef, useMemo, useState } from "react";
@@ -124,6 +125,7 @@ export default function Schedule() {
   const [showBulkResource, setShowBulkResource] = useState(false);
   const [bulkResourceValue, setBulkResourceValue] = useState("");
   const [showBulkDates, setShowBulkDates] = useState(false);
+  const [showBulkDuration, setShowBulkDuration] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const qc = useQueryClient();
 
@@ -411,6 +413,59 @@ export default function Schedule() {
     onError: (err) => toast.error(err?.message || "Bulk date update failed"),
   });
 
+  const bulkDurationMut = useMutation({
+    mutationFn: async ({ ids, mode, days }) => {
+      const selected = tasksWithEffective.filter((task) => ids.includes(task.id));
+      const editable = selected.filter((task) => !task._hasChildren && !task._isRolledUpSummary && !task.is_summary);
+      const skipped = selected.length - editable.length;
+
+      if (editable.length === 0) {
+        throw new Error("Summary tasks roll up from child tasks. Select child tasks to bulk edit durations.");
+      }
+
+      const results = await batchProcess(
+        editable,
+        (task) => {
+          const current = parseInt(task.duration, 10) || 0;
+          let newDur;
+          if (mode === "set") newDur = days;
+          else if (mode === "add") newDur = current + days;
+          else newDur = Math.max(0, current - days);
+
+          const fields = { duration: newDur };
+          if (task.start_date) {
+            const d = new Date(task.start_date + "T00:00:00");
+            if (!isNaN(d)) {
+              d.setDate(d.getDate() + newDur);
+              fields.end_date = d.toISOString().split("T")[0];
+            }
+          }
+          return base44.entities.ScheduleTask.update(task.id, fields);
+        },
+      );
+
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} duration updates failed.`);
+      }
+      return { ...results, skipped };
+    },
+    onSuccess: (results) => {
+      invalidateEntity(qc, "schedule_task", projectId);
+      setSelectedIds(new Set());
+      setShowBulkDuration(false);
+
+      const skippedMsg = results.skipped > 0
+        ? ` ${results.skipped} summary row${results.skipped === 1 ? "" : "s"} skipped.`
+        : "";
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} duration${results.succeeded.length === 1 ? "" : "s"} updated, ${results.failed.length} failed.${skippedMsg}`);
+      } else {
+        toast.success(`${results.succeeded.length} task duration${results.succeeded.length === 1 ? "" : "s"} updated.${skippedMsg}`);
+      }
+    },
+    onError: (err) => toast.error(err?.message || "Bulk duration update failed"),
+  });
+
   const handleBulkAdd = async (rows) => {
     if (!projectId) return;
     setBulkSaving(true);
@@ -675,6 +730,12 @@ export default function Schedule() {
     const ids = Array.from(selectedIds);
     if (!ids.length || bulkDateMut.isPending || bulkDeleteMut.isPending || bulkUpdateMut.isPending) return;
     bulkDateMut.mutate({ ids, fields });
+  };
+
+  const bulkUpdateDuration = ({ mode, days }) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length || bulkDurationMut.isPending || bulkDeleteMut.isPending || bulkUpdateMut.isPending) return;
+    bulkDurationMut.mutate({ ids, mode, days });
   };
 
   const confirmBulkDelete = () => {
@@ -1024,6 +1085,14 @@ export default function Schedule() {
         onSubmit={bulkUpdateDates}
       />
 
+      <BulkDurationEditModal
+        open={showBulkDuration}
+        count={selectedIds.size}
+        isSaving={bulkDurationMut.isPending}
+        onClose={() => setShowBulkDuration(false)}
+        onSubmit={bulkUpdateDuration}
+      />
+
       <WbsBuilderModal
         open={showWbsBuilder}
         projectId={projectId}
@@ -1090,6 +1159,9 @@ export default function Schedule() {
           </button>
           <button onClick={() => setShowBulkDates(true)} disabled={bulkDateMut.isPending || bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--accent)", background: "rgba(86,176,255,0.12)", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkDateMut.isPending || bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkDateMut.isPending || bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
             Edit Dates
+          </button>
+          <button onClick={() => setShowBulkDuration(true)} disabled={bulkDurationMut.isPending || bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--accent)", background: "rgba(86,176,255,0.12)", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkDurationMut.isPending || bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkDurationMut.isPending || bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
+            Edit Durations
           </button>
 
           <div style={{ width: 1, height: 20, background: "var(--divider)", margin: "0 4px" }} />
