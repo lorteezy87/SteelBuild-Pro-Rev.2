@@ -48,6 +48,7 @@ export const ROUTING_TABLE: Record<string, RoutingTarget> = {
   "shipping-ticket-import":{ provider: "openai",    model: "gpt-4o-mini" },
   "rfi-log-import":        { provider: "openai",    model: "gpt-4o-mini" },
   "photo-ocr":             { provider: "openai",    model: "gpt-4o-mini" },
+  "email-classify":        { provider: "openai",    model: "gpt-4o-mini" },
 };
 
 /**
