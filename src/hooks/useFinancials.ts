@@ -104,6 +104,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const { data: costCodes = [], isLoading: loadingCC } = useQuery<CostCode[]>({
     queryKey: getQueryKey("cost_code", projectId),
     queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }, "cost_code_number", 2000),
+    select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     enabled: !!projectId,
     staleTime: 60_000,
   });

@@ -113,6 +113,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
   const { data: codes = [], isLoading: codesLoading } = useQuery({
     queryKey: ["modal-codes", pid],
     queryFn: () => base44.entities.CostCode.filter({ project_id: pid }, "cost_code_number"),
+    select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     enabled: !!pid,
     staleTime: 2 * 60 * 1000,
   });
