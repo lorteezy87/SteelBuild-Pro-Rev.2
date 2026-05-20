@@ -132,6 +132,7 @@ export default function CostDashboard() {
     queryFn: () => activeProject?.id
       ? base44.entities.CostCode.filter({ project_id: activeProject.id }, "cost_code_number")
       : [],
+    select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     enabled: !!activeProject?.id,
   });
 

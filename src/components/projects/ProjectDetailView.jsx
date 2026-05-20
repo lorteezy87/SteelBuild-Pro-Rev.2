@@ -519,6 +519,7 @@ export default function ProjectDetailView({ project, onClose }) {
   const { data: costCodes = [] } = useQuery({
     queryKey: ['cc-detail', project.id],
     queryFn: () => base44.entities.CostCode.filter({ project_id: project.id }, "cost_code_number"),
+    select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     initialData: [],
   });
 

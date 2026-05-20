@@ -169,6 +169,7 @@ export default function FinancialScorecard() {
   const { data: costCodes = [] } = useQuery({
     queryKey: ["cost-codes", projectId],
     queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }, "cost_code_number"),
+    select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     enabled: !!projectId,
   });
 
