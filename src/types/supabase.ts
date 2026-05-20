@@ -689,6 +689,45 @@ export type Database = {
           },
         ]
       }
+      default_cost_codes: {
+        Row: {
+          id: string
+          cost_code_number: string
+          description: string
+          category: string
+          default_budget_amount: number | null
+          is_active: boolean
+          sort_order: number
+          metadata: Json | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          cost_code_number: string
+          description: string
+          category: string
+          default_budget_amount?: number | null
+          is_active?: boolean
+          sort_order?: number
+          metadata?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          cost_code_number?: string
+          description?: string
+          category?: string
+          default_budget_amount?: number | null
+          is_active?: boolean
+          sort_order?: number
+          metadata?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       daily_logs: {
         Row: {
           activities: string | null

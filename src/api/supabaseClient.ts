@@ -800,6 +800,7 @@ export const entities = {
   ScopeItem:             createEntityClient('scope_items'),
   Alert:                 createEntityClient('alerts'),
   CostCode:              createEntityClient('cost_codes'),
+  DefaultCostCode:       createEntityClient('default_cost_codes'),
   ProjectCloseout:       createEntityClient('project_closeout'),
   ProjectHandoffItem:    createEntityClient('project_handoff_items'),
   PmaDecision:           createEntityClient('pma_decisions'),
