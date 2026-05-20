@@ -36,6 +36,9 @@ const IMPORT_EXAMPLES = {
   deliveries: "PO Number,Description,Scheduled Date,Required Date,Status,Pieces,Receiving Location\nPO-1001,Sequence 1 steel,2026-07-15,2026-07-17,Scheduled,86,North laydown yard",
   punchlist: "Description,Category,Location,Assigned To,Priority,Status\nTouch up primer at Column B4,Coating,Grid B/4,Field Crew,Medium,Open",
   contacts: "First Name,Last Name,Company,Role,Email,Phone\nJordan,Steel,Demo Steel,Project Manager,jordan@example.com,555-0100",
+  sovItems: "Line Item,Description,Scheduled Value,Current % Complete,Retainage %,Status\n1,Structural Steel Fabrication,485000,35,10,Open\n2,Erection & Field Labor,220000,10,10,Open",
+  costCodes: "Code,Description,Category,Budget,Actual Cost,Committed Cost,Forecast to Complete\n01,Project Management,General Conditions,45000,12500,22000,10500\n02,Detailing,Engineering,85000,42000,85000,0",
+  expenses: "Description,Expense Type,Cost Code,Amount,Vendor,Invoice #,Invoice Date,Payment Status\nShop drawing review,Engineering,02,4500,Detailing Consultants,INV-2026-041,2026-05-01,Approved",
 };
 
 function formatProjectLabel(project) {
