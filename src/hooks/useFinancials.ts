@@ -103,7 +103,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   // ── Queries ─────────────────────────────────────────────────────────
   const { data: costCodes = [], isLoading: loadingCC } = useQuery<CostCode[]>({
     queryKey: getQueryKey("cost_code", projectId),
-    queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }, undefined, 2000),
+    queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }, "cost_code_number", 2000),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -245,7 +245,8 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const reviewFlags = useMemo<ReviewFlag[]>(() => {
     const flags: ReviewFlag[] = [];
 
-    if (Math.abs(summary.sovTotal - summary.contractValue) > 1 && summary.contractValue > 0) {
+    // SOV mismatch: only flag when SOV items actually exist
+    if (summary.sovTotal > 0 && summary.contractValue > 0 && Math.abs(summary.sovTotal - summary.contractValue) > 1) {
       flags.push({ tone: "warning", message: "SOV total does not match contract value." });
     }
     if (summary.totalRemaining < 0) {
@@ -260,10 +261,11 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       flags.push({ tone: "warning", message: `${unmappedExpenses.length} expense(s) unmapped to cost codes.` });
     }
 
-    const zeroBuckets = costCodeRows.filter(
-      (r) => r.revised_budget > 0 && r.committed_cost === 0 && r.actual_cost === 0
-    );
-    if (zeroBuckets.length > 0) {
+    // Committed cost gap: only flag when at least one code has activity
+    const codesWithBudget = costCodeRows.filter((r) => r.revised_budget > 0);
+    const zeroBuckets = codesWithBudget.filter((r) => r.committed_cost === 0 && r.actual_cost === 0);
+    const codesWithActivity = codesWithBudget.length - zeroBuckets.length;
+    if (zeroBuckets.length > 0 && codesWithActivity > 0) {
       flags.push({ tone: "warning", message: `${zeroBuckets.length} cost code(s) with budget but zero committed/actual.` });
     }
 
