@@ -286,26 +286,58 @@ async function parseMultipartPayload(req: Request): Promise<ParsedEmail> {
   };
 }
 
-// ── AI Classification ──────────────────────────────────────────────────────
+// ── Classification types ───────────────────────────────────────────────────
 
-function classifyEmail(email: ParsedEmail): { type: string; confidence: number } {
+interface EmailClassification {
+  type: string;
+  confidence: number;
+  extracted: ExtractedFields;
+}
+
+interface ExtractedFields {
+  rfi_number: string | null;
+  submittal_number: string | null;
+  drawing_refs: string[];
+  due_date: string | null;
+  responsible_party: string | null;
+  priority: string | null;
+  related_entities: string[];
+  summary: string | null;
+  action_required: string | null;
+}
+
+const EMPTY_EXTRACTED: ExtractedFields = {
+  rfi_number: null,
+  submittal_number: null,
+  drawing_refs: [],
+  due_date: null,
+  responsible_party: null,
+  priority: null,
+  related_entities: [],
+  summary: null,
+  action_required: null,
+};
+
+// ── Regex fallback classification ─────────────────────────────────────────
+
+function classifyEmailRegex(email: ParsedEmail): EmailClassification {
   const subjectLower = (email.subject || "").toLowerCase();
   const bodyLower = (email.bodyText || "").toLowerCase();
   const combined = `${subjectLower} ${bodyLower}`;
 
   const rfiPatterns = ["rfi", "request for information", "rfi #", "rfi-", "information request"];
   if (rfiPatterns.some((p) => combined.includes(p))) {
-    return { type: "rfi", confidence: 0.85 };
+    return { type: "rfi", confidence: 0.85, extracted: EMPTY_EXTRACTED };
   }
 
   const submittalPatterns = ["submittal", "shop drawing", "product data", "sample", "mock-up", "mockup"];
   if (submittalPatterns.some((p) => combined.includes(p))) {
-    return { type: "submittal", confidence: 0.80 };
+    return { type: "submittal", confidence: 0.80, extracted: EMPTY_EXTRACTED };
   }
 
   const transmittalPatterns = ["transmittal", "transmitted", "enclosed please find", "attached please find", "for your review"];
   if (transmittalPatterns.some((p) => combined.includes(p))) {
-    return { type: "transmittal", confidence: 0.70 };
+    return { type: "transmittal", confidence: 0.70, extracted: EMPTY_EXTRACTED };
   }
 
   const actionPatterns = [
@@ -314,10 +346,187 @@ function classifyEmail(email: ParsedEmail): { type: string; confidence: number }
     "follow up", "follow-up",
   ];
   if (actionPatterns.some((p) => combined.includes(p))) {
-    return { type: "action_item", confidence: 0.65 };
+    return { type: "action_item", confidence: 0.65, extracted: EMPTY_EXTRACTED };
   }
 
-  return { type: "general", confidence: 0.50 };
+  return { type: "general", confidence: 0.50, extracted: EMPTY_EXTRACTED };
+}
+
+// ── AI Classification via OpenAI ──────────────────────────────────────────
+
+const EMAIL_CLASSIFY_PROMPT = `You are a construction project email classifier for a structural steel fabrication and erection company. Analyze the email and return a JSON object.
+
+Classify the email into exactly one type:
+- "rfi" — Request for Information (questions about design, specifications, field conditions)
+- "submittal" — Shop drawing submittals, product data, samples, approval requests
+- "transmittal" — Document transmittals, file deliveries, drawing distributions
+- "change_order" — Change orders, contract modifications, scope changes, PCOs, CORs
+- "action_item" — Action items, tasks, requests requiring a response or action
+- "general" — General correspondence that doesn't fit above categories
+
+Extract these fields when present (null if not found):
+- rfi_number: RFI identifier (e.g. "RFI-042", "RFI 12")
+- submittal_number: Submittal identifier (e.g. "Sub-003", "Submittal 15")
+- drawing_refs: Array of drawing/sheet references (e.g. ["S3.2", "A2.1", "SK-101"])
+- due_date: Due date or deadline in ISO format (YYYY-MM-DD) if mentioned
+- responsible_party: Person or company expected to take action
+- priority: "critical", "high", "medium", or "low" based on urgency signals
+- related_entities: Array of work packages, sequences, areas mentioned (e.g. ["WP-104", "Seq 2", "Area B"])
+- summary: One-sentence summary of the email's purpose (max 120 chars)
+- action_required: What action is needed, if any (max 120 chars, null if informational only)
+
+Return ONLY valid JSON matching this schema:
+{
+  "type": string,
+  "confidence": number (0.0-1.0),
+  "rfi_number": string|null,
+  "submittal_number": string|null,
+  "drawing_refs": string[],
+  "due_date": string|null,
+  "responsible_party": string|null,
+  "priority": string|null,
+  "related_entities": string[],
+  "summary": string|null,
+  "action_required": string|null
+}`;
+
+async function classifyEmailWithAI(email: ParsedEmail): Promise<EmailClassification> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) {
+    console.log("[email-ingest] OPENAI_API_KEY not set, falling back to regex");
+    return classifyEmailRegex(email);
+  }
+
+  const bodySnippet = (email.bodyText || "").slice(0, 2000);
+  const attachmentList = email.attachments.map((a) => a.filename).join(", ");
+
+  const userContent = [
+    `Subject: ${email.subject || "(no subject)"}`,
+    `From: ${email.senderName || ""} <${email.senderEmail}>`,
+    `To: ${email.recipients.join(", ")}`,
+    attachmentList ? `Attachments: ${attachmentList}` : null,
+    ``,
+    `Body:`,
+    bodySnippet,
+  ].filter(Boolean).join("\n");
+
+  try {
+    const t0 = performance.now();
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: EMAIL_CLASSIFY_PROMPT },
+          { role: "user", content: userContent },
+        ],
+        max_tokens: 400,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    const latencyMs = Math.round(performance.now() - t0);
+
+    if (!resp.ok) {
+      const detail = await resp.text();
+      console.error(`[email-ingest] OpenAI classify failed ${resp.status}: ${detail.slice(0, 200)}`);
+      return classifyEmailRegex(email);
+    }
+
+    const data = await resp.json();
+    const text = data?.choices?.[0]?.message?.content;
+    if (!text) {
+      console.error("[email-ingest] OpenAI returned no content");
+      return classifyEmailRegex(email);
+    }
+
+    const parsed = JSON.parse(text);
+    const validTypes = ["rfi", "submittal", "transmittal", "change_order", "action_item", "general"];
+    const type = validTypes.includes(parsed.type) ? parsed.type : "general";
+    const confidence = typeof parsed.confidence === "number"
+      ? Math.max(0, Math.min(1, parsed.confidence))
+      : 0.5;
+
+    const extracted: ExtractedFields = {
+      rfi_number: parsed.rfi_number || null,
+      submittal_number: parsed.submittal_number || null,
+      drawing_refs: Array.isArray(parsed.drawing_refs) ? parsed.drawing_refs.filter((r: unknown) => typeof r === "string") : [],
+      due_date: parsed.due_date || null,
+      responsible_party: parsed.responsible_party || null,
+      priority: ["critical", "high", "medium", "low"].includes(parsed.priority) ? parsed.priority : null,
+      related_entities: Array.isArray(parsed.related_entities) ? parsed.related_entities.filter((r: unknown) => typeof r === "string") : [],
+      summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 120) : null,
+      action_required: typeof parsed.action_required === "string" ? parsed.action_required.slice(0, 120) : null,
+    };
+
+    const inputTokens = data?.usage?.prompt_tokens || null;
+    const outputTokens = data?.usage?.completion_tokens || null;
+
+    console.log(
+      `[email-ingest] AI classify: type=${type} confidence=${confidence} ` +
+      `latency=${latencyMs}ms tokens=${inputTokens}/${outputTokens} ` +
+      `rfi=${extracted.rfi_number} drawings=${extracted.drawing_refs.length} ` +
+      `due=${extracted.due_date} priority=${extracted.priority}`
+    );
+
+    // Best-effort telemetry
+    logClassifyTelemetry(inputTokens, outputTokens, latencyMs, true, null).catch(() => {});
+
+    return { type, confidence, extracted };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[email-ingest] AI classify error: ${msg}`);
+    return classifyEmailRegex(email);
+  }
+}
+
+async function logClassifyTelemetry(
+  inputTokens: number | null,
+  outputTokens: number | null,
+  latencyMs: number,
+  success: boolean,
+  errorKind: string | null,
+): Promise<void> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) return;
+
+  const inTok = Number(inputTokens) || 0;
+  const outTok = Number(outputTokens) || 0;
+  const costUsd = (inTok * 0.15 + outTok * 0.60) / 1_000_000;
+
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/llm_telemetry`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
+        "Prefer": "return=minimal",
+      },
+      body: JSON.stringify({
+        use_case: "email-classify",
+        provider: "openai",
+        model: "gpt-4o-mini",
+        user_id: null,
+        project_id: null,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_usd: Math.round(costUsd * 1_000_000) / 1_000_000,
+        latency_ms: latencyMs,
+        success,
+        error_kind: errorKind,
+        metadata: { source: "email-ingest" },
+      }),
+    });
+  } catch {
+    // best-effort
+  }
 }
 
 // ── Content Hash ───────────────────────────────────────────────────────────
@@ -397,7 +606,7 @@ async function handle(req: Request): Promise<Response> {
     }
   }
 
-  const classification = classifyEmail(email);
+  const classification = await classifyEmailWithAI(email);
 
   // Insert email_message
   const messageRow = {
@@ -418,6 +627,8 @@ async function handle(req: Request): Promise<Response> {
     parsed_metadata: JSON.stringify({
       ingestion_method: "webhook",
       ingested_at: new Date().toISOString(),
+      classifier: "ai",
+      extracted: classification.extracted,
     }),
     import_status: "pending",
   };

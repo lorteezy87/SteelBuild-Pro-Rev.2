@@ -26,9 +26,9 @@ import { toast } from "sonner";
 import { KpiTile, Modal, BulkActionBar } from "@/components/design-system";
 import {
   Mail, Search, Inbox, CheckCircle2, XCircle, Link2, Archive, RotateCcw,
-  Paperclip, Clock, AlertTriangle, FileText, MessageSquare, ChevronDown,
-  Plus, Filter, ExternalLink, X, Settings, Star, Eye, EyeOff, Tag,
-  Send, Trash2, ChevronRight, MoreHorizontal, Check, Hash,
+  Paperclip, Clock, AlertTriangle, FileText,
+  Plus, ExternalLink, X, Settings, Star, Eye, EyeOff, Tag,
+  Send, Hash,
 } from "lucide-react";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useNavigate } from "react-router-dom";
@@ -37,12 +37,13 @@ import { createPageUrl } from "@/utils";
 // ── Constants ──────────────────────────────────────────────────────────
 
 const TYPE_STYLES = {
-  rfi:         { color: "var(--info)",       label: "RFI" },
-  submittal:   { color: "var(--accent)",     label: "Submittal" },
-  action_item: { color: "var(--warning)",    label: "Action Item" },
-  transmittal: { color: "var(--success)",    label: "Transmittal" },
-  general:     { color: "var(--text-muted)", label: "General" },
-  unknown:     { color: "var(--text-muted)", label: "Unknown" },
+  rfi:          { color: "var(--info)",       label: "RFI" },
+  submittal:    { color: "var(--accent)",     label: "Submittal" },
+  action_item:  { color: "var(--warning)",    label: "Action Item" },
+  transmittal:  { color: "var(--success)",    label: "Transmittal" },
+  change_order: { color: "#F97316",          label: "Change Order" },
+  general:      { color: "var(--text-muted)", label: "General" },
+  unknown:      { color: "var(--text-muted)", label: "Unknown" },
 };
 
 const STATUS_STYLES = {
@@ -54,9 +55,10 @@ const STATUS_STYLES = {
 };
 
 const ENTITY_TYPE_OPTIONS = [
-  { value: "rfi",         label: "RFI" },
-  { value: "action_item", label: "Action Item" },
-  { value: "submittal",   label: "Submittal" },
+  { value: "rfi",          label: "RFI" },
+  { value: "action_item",  label: "Action Item" },
+  { value: "submittal",    label: "Submittal" },
+  { value: "change_order", label: "Change Order" },
 ];
 
 const DEFAULT_LABELS = ["Urgent", "Follow-up", "Waiting", "Important"];
@@ -111,15 +113,6 @@ function formatDate(dateStr) {
     weekday: "short", year: "numeric", month: "short", day: "numeric",
     hour: "numeric", minute: "2-digit",
   });
-}
-
-function isToday(dateStr) {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear()
-    && d.getMonth() === now.getMonth()
-    && d.getDate() === now.getDate();
 }
 
 // ── Responsive hook ───────────────────────────────────────────────────
@@ -709,9 +702,17 @@ function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, onStar, a
   const typeInfo = TYPE_STYLES[message.parsed_type] || TYPE_STYLES.unknown;
   const labels = Array.isArray(message.labels) ? message.labels : [];
 
-  const bodyPreview = useMemo(() => {
+  const { bodyPreview, aiSummary } = useMemo(() => {
+    // Try AI summary first
+    let summary = null;
+    if (message.parsed_metadata) {
+      const meta = typeof message.parsed_metadata === "string"
+        ? (() => { try { return JSON.parse(message.parsed_metadata); } catch { return null; } })()
+        : message.parsed_metadata;
+      if (meta?.extracted?.summary) summary = meta.extracted.summary;
+    }
+
     let text = message.body_text || "";
-    // Strip HTML tags if body_text contains raw HTML (happens when body_html was empty)
     if (/^\s*<|<html|<body|<div|<table/i.test(text)) {
       text = text
         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -724,8 +725,9 @@ function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, onStar, a
         .replace(/&quot;/gi, '"')
         .replace(/&#39;/gi, "'");
     }
-    return text.replace(/\s+/g, " ").trim().slice(0, 120);
-  }, [message.body_text]);
+    const preview = text.replace(/\s+/g, " ").trim().slice(0, 120);
+    return { bodyPreview: preview, aiSummary: summary };
+  }, [message.body_text, message.parsed_metadata]);
 
   return (
     <div
@@ -804,14 +806,16 @@ function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, onStar, a
           {message.subject || "(no subject)"}
         </div>
 
-        {/* Body preview */}
+        {/* Body preview — AI summary preferred when available */}
         <div style={{
           fontFamily: "var(--font-body)", fontSize: 10.5,
-          color: "var(--text-muted)", lineHeight: 1.35,
+          color: aiSummary ? "var(--text-secondary)" : "var(--text-muted)",
+          lineHeight: 1.35,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           marginTop: 2,
+          fontStyle: aiSummary ? "normal" : "normal",
         }}>
-          {bodyPreview || "No content"}
+          {aiSummary || bodyPreview || "No content"}
         </div>
 
         {/* Bottom row: badges + attachments + labels */}
@@ -1059,6 +1063,9 @@ function EmailDetail({
           </div>
         </div>
 
+        {/* AI-extracted fields */}
+        <ExtractedFieldsStrip metadata={message.parsed_metadata} confidence={message.parsed_confidence} />
+
         {/* Linked entity info */}
         {(message.import_status === "approved" || message.import_status === "linked") && message.linked_entity_type && (
           <div style={{
@@ -1296,12 +1303,19 @@ function MobileDetailFooter({ message, onReject, onArchive, onRestore, onApprove
 
 function CreateRecordModal({ message, attachments, projectId, onClose, onSuccess }) {
   const qc = useQueryClient();
-  const [entityType, setEntityType] = useState(
-    message.parsed_type === "rfi" ? "rfi"
-    : message.parsed_type === "action_item" ? "action_item"
-    : message.parsed_type === "submittal" ? "submittal"
-    : "action_item"
-  );
+
+  const extracted = useMemo(() => {
+    if (!message.parsed_metadata) return null;
+    const meta = typeof message.parsed_metadata === "string"
+      ? (() => { try { return JSON.parse(message.parsed_metadata); } catch { return null; } })()
+      : message.parsed_metadata;
+    return meta?.extracted || null;
+  }, [message.parsed_metadata]);
+
+  const validTypes = ENTITY_TYPE_OPTIONS.map((o) => o.value);
+  const defaultType = validTypes.includes(message.parsed_type) ? message.parsed_type : "action_item";
+
+  const [entityType, setEntityType] = useState(defaultType);
   const [title, setTitle] = useState(message.subject || "");
   const [description, setDescription] = useState(
     `From: ${message.sender_name || message.sender_email}\n\n${message.body_text || ""}`
@@ -1316,22 +1330,37 @@ function CreateRecordModal({ message, attachments, projectId, onClose, onSuccess
     setSaving(true);
     try {
       let createdRecord;
+      const priorityMap = { critical: "Critical", high: "High", medium: "Medium", low: "Low" };
+      const aiPriority = extracted?.priority ? (priorityMap[extracted.priority] || "Medium") : "Medium";
+
       if (entityType === "rfi") {
         createdRecord = await base44.entities.RFI.create({
           project_id: projectId, subject: title, question: description,
-          status: "Open", priority: "Medium",
+          status: "Open", priority: aiPriority,
+          ...(extracted?.rfi_number ? { rfi_number: extracted.rfi_number } : {}),
+          ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
+          ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
         });
         invalidateEntity(qc, "rfi", projectId);
       } else if (entityType === "action_item") {
         createdRecord = await base44.entities.ActionItem.create({
-          project_id: projectId, title, description, status: "Open", priority: "Medium",
+          project_id: projectId, title, description, status: "Open", priority: aiPriority,
+          ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
+          ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
         });
         invalidateEntity(qc, "action_item", projectId);
       } else if (entityType === "submittal") {
         createdRecord = await base44.entities.Submittal.create({
           project_id: projectId, title, description, status: "Open",
+          ...(extracted?.submittal_number ? { submittal_number: extracted.submittal_number } : {}),
         });
         invalidateEntity(qc, "submittal", projectId);
+      } else if (entityType === "change_order") {
+        createdRecord = await base44.entities.ChangeOrder.create({
+          project_id: projectId, title, description, status: "Pending",
+          ...(extracted?.due_date ? { response_due: extracted.due_date } : {}),
+        });
+        invalidateEntity(qc, "change_order", projectId);
       }
       if (createdRecord) {
         await base44.entities.EmailMessage.update(message.id, {
@@ -1386,6 +1415,44 @@ function CreateRecordModal({ message, attachments, projectId, onClose, onSuccess
           <textarea value={description} onChange={(e) => setDescription(e.target.value)}
             rows={5} style={{ ...inputStyle, resize: "vertical", minHeight: 80 }} />
         </div>
+        {extracted && (
+          <div style={{
+            padding: "10px 12px", background: "color-mix(in srgb, var(--info) 6%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--info) 20%, transparent)",
+            borderRadius: 8,
+          }}>
+            <div style={{
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              letterSpacing: "0.1em", textTransform: "uppercase",
+              color: "var(--info)", marginBottom: 6,
+            }}>
+              AI-Extracted Fields (pre-filled)
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {extracted.rfi_number && (
+                <ExtractedChip label={`RFI: ${extracted.rfi_number}`} color="var(--info)" />
+              )}
+              {extracted.submittal_number && (
+                <ExtractedChip label={`Submittal: ${extracted.submittal_number}`} color="var(--accent)" />
+              )}
+              {extracted.due_date && (
+                <ExtractedChip label={`Due: ${extracted.due_date}`} color="var(--warning)" />
+              )}
+              {extracted.responsible_party && (
+                <ExtractedChip label={`Assigned: ${extracted.responsible_party}`} color="var(--text-secondary)" />
+              )}
+              {extracted.priority && (
+                <ExtractedChip label={`Priority: ${extracted.priority}`} color="var(--warning)" />
+              )}
+              {extracted.drawing_refs?.length > 0 && (
+                <ExtractedChip label={`Drawings: ${extracted.drawing_refs.join(", ")}`} color="var(--info)" />
+              )}
+              {extracted.related_entities?.length > 0 && (
+                <ExtractedChip label={`Refs: ${extracted.related_entities.join(", ")}`} color="var(--accent)" />
+              )}
+            </div>
+          </div>
+        )}
         {attachments.length > 0 && (
           <div>
             <label style={labelStyle}>Attachments to File</label>
@@ -1530,6 +1597,126 @@ function LinkToExistingModal({ message, projectId, onClose, onSuccess }) {
         </div>
       )}
     </Modal>
+  );
+}
+
+// ── Extracted Chip ───────────────────────────────────────────────────
+
+function ExtractedChip({ label, color }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 3,
+      padding: "2px 7px", borderRadius: 4,
+      fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 600,
+      color,
+      background: `color-mix(in srgb, ${color} 10%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
+      maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+    }}>
+      {label}
+    </span>
+  );
+}
+
+// ── Extracted Fields Strip ────────────────────────────────────────────
+
+function ExtractedFieldsStrip({ metadata, confidence }) {
+  const extracted = useMemo(() => {
+    if (!metadata) return null;
+    const meta = typeof metadata === "string" ? (() => { try { return JSON.parse(metadata); } catch { return null; } })() : metadata;
+    if (!meta?.extracted) return null;
+    const e = meta.extracted;
+    const hasData = e.summary || e.rfi_number || e.submittal_number
+      || (e.drawing_refs?.length > 0) || e.due_date || e.responsible_party
+      || e.priority || (e.related_entities?.length > 0) || e.action_required;
+    return hasData ? e : null;
+  }, [metadata]);
+
+  if (!extracted) return null;
+
+  const chips = [];
+
+  if (extracted.summary) {
+    chips.push({ icon: <FileText size={10} strokeWidth={2} />, label: extracted.summary, color: "var(--text-secondary)" });
+  }
+
+  if (extracted.action_required) {
+    chips.push({ icon: <AlertTriangle size={10} strokeWidth={2} />, label: extracted.action_required, color: "var(--warning)" });
+  }
+
+  if (extracted.rfi_number) {
+    chips.push({ icon: <Hash size={10} strokeWidth={2} />, label: `RFI ${extracted.rfi_number}`, color: "var(--info)" });
+  }
+
+  if (extracted.submittal_number) {
+    chips.push({ icon: <Hash size={10} strokeWidth={2} />, label: `Sub ${extracted.submittal_number}`, color: "var(--accent)" });
+  }
+
+  if (extracted.drawing_refs?.length > 0) {
+    chips.push({ icon: <FileText size={10} strokeWidth={2} />, label: `Dwg: ${extracted.drawing_refs.join(", ")}`, color: "var(--info)" });
+  }
+
+  if (extracted.due_date) {
+    const d = new Date(extracted.due_date);
+    const formatted = isNaN(d.getTime()) ? extracted.due_date : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    chips.push({ icon: <Clock size={10} strokeWidth={2} />, label: `Due: ${formatted}`, color: "var(--warning)" });
+  }
+
+  if (extracted.responsible_party) {
+    chips.push({ icon: <Send size={10} strokeWidth={2} />, label: extracted.responsible_party, color: "var(--text-secondary)" });
+  }
+
+  if (extracted.priority) {
+    const priColors = { critical: "var(--status-error)", high: "var(--warning)", medium: "var(--info)", low: "var(--text-muted)" };
+    chips.push({ icon: <AlertTriangle size={10} strokeWidth={2} />, label: extracted.priority.charAt(0).toUpperCase() + extracted.priority.slice(1), color: priColors[extracted.priority] || "var(--text-muted)" });
+  }
+
+  if (extracted.related_entities?.length > 0) {
+    chips.push({ icon: <Link2 size={10} strokeWidth={2} />, label: extracted.related_entities.join(", "), color: "var(--accent)" });
+  }
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 4, marginBottom: 5,
+      }}>
+        <span style={{
+          fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+          letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)",
+        }}>
+          AI Extracted
+        </span>
+        {confidence != null && confidence > 0 && (
+          <span style={{
+            fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
+            opacity: 0.7,
+          }}>
+            {Math.round(confidence * 100)}%
+          </span>
+        )}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+        {chips.map((chip, i) => (
+          <span
+            key={i}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              padding: "3px 8px", borderRadius: 5,
+              fontFamily: "var(--font-body)", fontSize: 10.5, fontWeight: 500,
+              color: chip.color,
+              background: `color-mix(in srgb, ${chip.color} 8%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${chip.color} 20%, transparent)`,
+              maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}
+          >
+            {chip.icon}
+            {chip.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
