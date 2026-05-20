@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import {
   Pencil, Trash2, Lock, Check, ChevronDown, ChevronRight,
   ClipboardList, AlertTriangle, CheckCircle, Download, Upload,
+  CheckSquare, Square,
 } from "lucide-react";
+import { BulkActionBar } from "@/components/design-system";
 import KPIStrip from "../components/shared/KPIStrip";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import SOVFormModal from "../components/sov/SOVFormModal";
@@ -124,6 +126,8 @@ export default function SOV() {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const fileInputRef = useRef(null);
 
   /* Requirement 4 — global retainage toggle */
@@ -226,6 +230,49 @@ export default function SOV() {
     },
     onError: () => toast.error("Failed to update"),
   });
+
+  const bulkDeleteMut = useMutation({
+    mutationFn: (ids) => Promise.allSettled(ids.map((id) => base44.entities.SOVItem.delete(id))),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sov-items"] });
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+      toast.success("Deleted selected SOV items");
+    },
+    onError: () => toast.error("Bulk delete failed"),
+  });
+
+  const bulkStatusMut = useMutation({
+    mutationFn: ({ ids, status }) => Promise.allSettled(ids.map((id) => base44.entities.SOVItem.update(id, { status }))),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sov-items"] });
+      setSelectedIds(new Set());
+      toast.success("Status updated");
+    },
+    onError: () => toast.error("Bulk status update failed"),
+  });
+
+  const bulkFillMut = useMutation({
+    mutationFn: (ids) => Promise.allSettled(ids.map((id) => base44.entities.SOVItem.update(id, { current_percent_complete: 100 }))),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sov-items"] });
+      setSelectedIds(new Set());
+      toast.success("Filled selected to 100%");
+    },
+    onError: () => toast.error("Bulk fill failed"),
+  });
+
+  const toggleSelect = (id) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map((s) => s.id)));
+  };
 
   const handleSave = (d) => {
     if (editing) updateMut.mutate({ id: editing.id, data: d });
@@ -543,12 +590,13 @@ export default function SOV() {
   };
 
   const nextSovId = `SOV-${String((sovs.length || 0) + 1).padStart(3, '0')}`;
-  const COL_COUNT = 15;
+  const COL_COUNT = 16;
 
   /* ═══════════════════════════════════════════════════════════════
      Column definitions
      ═══════════════════════════════════════════════════════════════ */
   const columns = [
+    { label: <span onClick={toggleSelectAll} style={{ cursor: "pointer" }}>{selectedIds.size > 0 && selectedIds.size === filtered.length ? <CheckSquare size={12} color="var(--accent)" /> : <Square size={12} color="var(--text-muted)" />}</span> },
     { label: "Line #" }, { label: "Description" }, { label: "Project" },
     { label: "Sched. Value", right: true }, { label: "Prev %", right: true },
     { label: "Curr %", right: true }, { label: "This Period", right: true },
@@ -591,6 +639,14 @@ export default function SOV() {
           transition: "background 0.1s",
         }}
       >
+        <td
+          style={{ padding: "9px 14px", textAlign: "center", cursor: "pointer" }}
+          onClick={(e) => { e.stopPropagation(); toggleSelect(s.id); }}
+        >
+          {selectedIds.has(s.id)
+            ? <CheckSquare size={12} color="var(--accent)" />
+            : <Square size={12} color="var(--text-muted)" />}
+        </td>
         <PTD mono accent>{s.line_item_number}</PTD>
         <PTD style={{ maxWidth: 160 }}>{s.description}</PTD>
         <PTD muted>{s.project_name}</PTD>
@@ -674,7 +730,7 @@ export default function SOV() {
 
   const renderTotalsRow = () => (
     <tr style={{ background: "var(--bg-surface-low)", borderTop: "2px solid var(--divider)" }}>
-      <td colSpan={3} style={{
+      <td colSpan={4} style={{
         fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em",
         color: "var(--accent)", fontWeight: 700, padding: "8px 12px",
       }}>TOTALS</td>
@@ -1060,6 +1116,40 @@ export default function SOV() {
         onConfirm={() => deleteMut.mutate(deleteTarget.id)}
         title="Delete SOV Item"
         description={`Delete ${deleteTarget?.sov_id}?`}
+      />
+
+      <BulkActionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[
+          {
+            label: "Fill to 100%",
+            icon: Check,
+            onClick: () => bulkFillMut.mutate([...selectedIds]),
+          },
+          {
+            label: "Mark Draft",
+            onClick: () => bulkStatusMut.mutate({ ids: [...selectedIds], status: "Draft" }),
+          },
+          {
+            label: "Mark Submitted",
+            onClick: () => bulkStatusMut.mutate({ ids: [...selectedIds], status: "Submitted" }),
+          },
+          {
+            label: "Delete Selected",
+            icon: Trash2,
+            variant: "danger",
+            onClick: () => setBulkDeleteOpen(true),
+          },
+        ]}
+      />
+
+      <DeleteDialog
+        open={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+        title="Delete SOV Items"
+        description={`Delete ${selectedIds.size} selected SOV item${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
       />
     </div>
   );

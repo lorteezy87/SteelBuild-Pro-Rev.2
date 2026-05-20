@@ -5,9 +5,9 @@ import { useProjectId } from "@/hooks/useProjectId";
 import { useFinancials } from "@/hooks/useFinancials";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar } from "@/components/design-system";
+import { CommandBar, BulkActionBar } from "@/components/design-system";
 import { PhoenixPanel } from "@/components/shared/PhoenixPanel";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Tag } from "lucide-react";
 import PhoenixTable, { PTR, PTD } from "@/components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent, formatBudgetPercent } from "@/components/shared/formatters";
 import {
@@ -40,6 +40,9 @@ export default function Financials() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCostCode, setEditingCostCode] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkPhaseTarget, setBulkPhaseTarget] = useState(null);
   const qc = useQueryClient();
 
   const { data: projects = [] } = useQuery({
@@ -106,6 +109,38 @@ export default function Financials() {
     },
     onError: (error) => toastCrudError(error, "Failed to delete cost code"),
   });
+
+  const bulkDeleteMut = useMutation({
+    mutationFn: (ids) => Promise.allSettled(ids.map((id) => base44.entities.CostCode.delete(id))),
+    onSuccess: async () => {
+      await invalidateCrudQueries(qc, costCodeQueryKeys);
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+    },
+    onError: (error) => toastCrudError(error, "Bulk delete failed"),
+  });
+
+  const bulkUpdateMut = useMutation({
+    mutationFn: ({ ids, data }) => Promise.allSettled(ids.map((id) => base44.entities.CostCode.update(id, data))),
+    onSuccess: async () => {
+      await invalidateCrudQueries(qc, costCodeQueryKeys);
+      setSelectedIds(new Set());
+      setBulkPhaseTarget(null);
+    },
+    onError: (error) => toastCrudError(error, "Bulk update failed"),
+  });
+
+  const toggleSelect = (id) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredCostCodeRows.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredCostCodeRows.map((r) => r.id)));
+  };
 
   const selectedProject = projectId ? projects.find((project) => project.id === projectId) : null;
 
@@ -524,6 +559,7 @@ export default function Financials() {
         <PhoenixPanel title="Budget Control" count={filteredCostCodeRows.length}>
           <PhoenixTable
             columns={[
+              { label: <span onClick={toggleSelectAll} style={{ cursor: "pointer" }}>{selectedIds.size > 0 && selectedIds.size === filteredCostCodeRows.length ? "☑" : "☐"}</span> },
               { label: "Cost Bucket" },
               { label: "Original Estimate", right: true },
               { label: "Signed Extras", right: true },
@@ -541,6 +577,11 @@ export default function Financials() {
           >
             {filteredCostCodeRows.map((row) => (
               <PTR key={row.id} overdue={row.remaining_budget < 0} warn={row.used_pct > 85 && row.remaining_budget >= 0}>
+                <PTD>
+                  <span onClick={(e) => { e.stopPropagation(); toggleSelect(row.id); }} style={{ cursor: "pointer", fontSize: 13 }}>
+                    {selectedIds.has(row.id) ? "☑" : "☐"}
+                  </span>
+                </PTD>
                 <PTD style={{ maxWidth: 220, whiteSpace: "normal" }}>
                   <div style={{ ...mono, fontSize: 10, color: "var(--accent)", marginBottom: 2 }}>{row.cost_code_number || "—"}</div>
                   <div style={{ ...body, fontSize: 12, color: "var(--text-primary)" }}>{row.description || "—"}</div>
@@ -697,6 +738,35 @@ export default function Financials() {
         onClose={() => setActiveDrawer(null)}
         kpi={daysSalesOutstanding}
         sovItems={sovItems}
+      />
+
+      <BulkActionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[
+          {
+            label: "Change Phase",
+            icon: Tag,
+            onClick: () => {
+              const phase = window.prompt("Enter new phase for selected cost codes:");
+              if (phase != null) bulkUpdateMut.mutate({ ids: [...selectedIds], data: { phase } });
+            },
+          },
+          {
+            label: "Delete Selected",
+            icon: Trash2,
+            variant: "danger",
+            onClick: () => setBulkDeleteOpen(true),
+          },
+        ]}
+      />
+
+      <DeleteDialog
+        open={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+        title="Delete Cost Codes"
+        description={`Delete ${selectedIds.size} selected cost code${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
       />
     </div>
   );
