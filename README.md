@@ -66,7 +66,8 @@ Do not put provider API keys in VITE_* browser environment variables.
 | `npm run preview`    | Serve the built bundle locally               |
 | `npm run lint`       | ESLint (quiet — warnings suppressed)         |
 | `npm run lint:fix`   | ESLint with autofix                          |
-| `npm run typecheck`  | `tsc --noEmit` against `jsconfig.json`       |
+| `npm run typecheck`  | `tsc --noEmit` against `tsconfig.json` (TS)  |
+| `npm run typecheck:js` | `tsc --noEmit` against `jsconfig.json` (JS/JSX) |
 | `npm test`           | Vitest run (unit tests)                      |
 | `npm run test:watch` | Vitest in watch mode                         |
 
@@ -80,8 +81,8 @@ src/
   api/           Supabase client + storage helpers
   lib/           shared utilities, auth context, query client
 supabase/
-  migrations/    ordered SQL migrations (`NNN_name.sql`)
-  functions/     Supabase Edge Function source (currently: llm-proxy)
+  migrations/    ordered SQL migrations (timestamped `YYYYMMDDhhmmss_name.sql`)
+  functions/     Edge Functions (llm-proxy, schedule-assistant, email-ingest, sharepoint-proxy)
 public/          static assets, wasm, pdf/fragments workers
 ```
 
@@ -92,7 +93,10 @@ dashboard SQL editor or the Supabase MCP/CLI. After applying a migration
 that adds columns, the code calls `NOTIFY pgrst, 'reload schema'` so
 PostgREST picks up the change without a restart.
 
-Latest migration as of this writing: `080_rbac_rls_tightening`. See
+Migration filenames switched from `NNN_name.sql` to timestamped
+`YYYYMMDDhhmmss_name.sql`; inspect the directory for the current latest
+rather than assuming a number (105 migrations as of this writing, latest
+`20260517004000_wp_production_backbone.sql`). See
 [`ARCHITECTURE.md`](./ARCHITECTURE.md#auth--authorization) for the RBAC
 model.
 
@@ -123,12 +127,9 @@ member-management admin UI is queued (RBAC Phase C).
 
 ## CI/CD
 
-- `.github/workflows/ci.yml` runs on every push / PR: lint, typecheck (non-
-  blocking; types stale), Vitest, production build
+- `.github/workflows/ci.yml` runs on every push / PR: lint, typecheck (TS +
+  JS/JSX), Vitest, production build — all blocking
 - Concurrency group cancels redundant runs on rapid iteration
-- TypeScript is currently `continue-on-error` because `src/types/supabase.ts`
-  is missing some recently-added tables; flip to blocking after running
-  `npm run types:db`
 
 ## Deployment
 
