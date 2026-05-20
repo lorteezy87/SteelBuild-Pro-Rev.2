@@ -280,7 +280,9 @@ export default function Financials() {
 
   const reviewFlags = useMemo(() => {
     const flags = [];
-    if (Math.abs(summary.sovVsContract) > 1) {
+    // SOV mismatch: only flag when SOV items actually exist — an empty SOV
+    // is expected on new projects and shouldn't trigger a warning.
+    if (summary.sovTotal > 0 && summary.contractValue > 0 && Math.abs(summary.sovVsContract) > 1) {
       flags.push({
         title: "SOV mismatch",
         body: `Schedule of values totals ${formatSigned(summary.sovVsContract)} against the project contract. The workbook treats this as a review item before billing.`,
@@ -301,8 +303,13 @@ export default function Financials() {
         tone: "warning",
       });
     }
-    const zeroCommitted = costCodeRows.filter((row) => row.committed_cost === 0 && row.actual_cost === 0 && row.revised_budget > 0);
-    if (zeroCommitted.length > 0) {
+    // Committed cost gap: only flag when at least some cost codes have
+    // activity — if every code is at zero, the project is still in setup
+    // and the flag is noise rather than a useful control.
+    const codesWithBudget = costCodeRows.filter((row) => row.revised_budget > 0);
+    const zeroCommitted = codesWithBudget.filter((row) => row.committed_cost === 0 && row.actual_cost === 0);
+    const codesWithActivity = codesWithBudget.length - zeroCommitted.length;
+    if (zeroCommitted.length > 0 && codesWithActivity > 0) {
       flags.push({
         title: "Committed cost gap",
         body: `${zeroCommitted.length} cost buckets have revised budget but no actual or committed cost. The spreadsheet treats this as a control check for missing POs or buyouts.`,
