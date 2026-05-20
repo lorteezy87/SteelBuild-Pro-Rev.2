@@ -50,7 +50,7 @@ export default function Financials() {
 
   const { data: costCodes = [] } = useQuery({
     queryKey: ["cost-codes", projectId],
-    queryFn: () => (projectId ? base44.entities.CostCode.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? base44.entities.CostCode.filter({ project_id: projectId }, "cost_code_number") : []),
     enabled: !!projectId,
   });
 
