@@ -10,6 +10,10 @@
 // Supabase Storage, and inserts the message into email_messages with
 // import_status='pending' for human review in the Email Inbox UI.
 //
+// Attachments arrive two ways: multipart File parts (SendGrid / manual
+// forward) or base64 `contentBytes` items in the JSON payload (Power
+// Automate / Microsoft Graph). Both decode to the same storage path.
+//
 // Auth: This endpoint does NOT require a JWT (verify_jwt=false) because
 // it receives webhooks from external email services. Instead, it uses
 // a shared secret (EMAIL_WEBHOOK_SECRET) as a bearer token or query param.
@@ -164,6 +168,53 @@ function parseRecipientsField(raw: any): string[] {
   return parseRecipientList(String(raw));
 }
 
+/**
+ * Decode a standard (non-url-safe) base64 string to bytes. Power Automate
+ * and Microsoft Graph deliver attachment payloads as a single base64
+ * `contentBytes` string.
+ */
+function base64ToBytes(b64: string): Uint8Array {
+  const clean = b64.replace(/\s/g, "");
+  const binary = atob(clean);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Parse attachments from a Power Automate / Microsoft Graph JSON payload.
+ * Power Automate (Office 365 Outlook): [{ Name, ContentType, ContentBytes, Size, IsInline }]
+ * Microsoft Graph (fileAttachment):    [{ name, contentType, contentBytes, size, isInline }]
+ *
+ * Inline parts (signature logos, embedded images) are skipped so the
+ * inbox shows real document attachments, not boilerplate. Items without a
+ * decodable `contentBytes` string are ignored. The decoded bytes flow
+ * through the same Storage upload + email_attachments insert path used by
+ * the multipart parser.
+ */
+// deno-lint-ignore no-explicit-any
+function parseJsonAttachments(raw: any): ParsedAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ParsedAttachment[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    if ((item.isInline ?? item.IsInline) === true) continue;
+    const contentBytes = item.contentBytes ?? item.ContentBytes;
+    if (!contentBytes || typeof contentBytes !== "string") continue;
+    const filename = String(item.name || item.Name || "attachment");
+    const contentType = String(item.contentType || item.ContentType || "application/octet-stream");
+    try {
+      const content = base64ToBytes(contentBytes);
+      if (content.byteLength === 0) continue;
+      out.push({ filename, contentType, sizeBytes: content.byteLength, content });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[email-ingest] Failed to decode attachment "${filename}": ${msg}`);
+    }
+  }
+  return out;
+}
+
 // deno-lint-ignore no-explicit-any
 async function parseJsonPayload(body: Record<string, any>): Promise<ParsedEmail> {
   const subject = String(body.subject || body.Subject || "");
@@ -241,7 +292,7 @@ async function parseJsonPayload(body: Record<string, any>): Promise<ParsedEmail>
     bodyText,
     bodyHtml,
     receivedAt: date ? new Date(date).toISOString() : new Date().toISOString(),
-    attachments: [],
+    attachments: parseJsonAttachments(body.attachments || body.Attachments),
     headers: {},
   };
 }
