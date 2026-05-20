@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { CATEGORY_ORDER, CATEGORY_COLORS } from '@/components/shared/costCodes';
+import { CATEGORY_COLORS } from '@/components/shared/costCodes';
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -52,11 +52,9 @@ export default function CostCodesTab() {
     budgetMut.mutate({ id, default_budget_amount: val });
   };
 
-  const grouped = CATEGORY_ORDER.map(cat => ({
-    category: cat,
-    color: CATEGORY_COLORS[cat],
-    codes: defaults.filter(d => d.category === cat),
-  })).filter(g => g.codes.length > 0);
+  const sorted = [...defaults].sort((a, b) =>
+    (a.cost_code_number || '').localeCompare(b.cost_code_number || '', undefined, { numeric: true })
+  );
 
   const activeCount = defaults.filter(d => d.is_active).length;
 
@@ -106,142 +104,133 @@ export default function CostCodesTab() {
         </span>
       </div>
 
-      {grouped.map(group => (
-        <div key={group.category} style={sectionStyle}>
-          <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: group.color, display: 'inline-block',
-            }} />
-            {group.category}
-          </label>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {group.codes.map(code => {
-              const isEditing = editingId === code.id;
-              return (
-                <div
-                  key={code.id}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {sorted.map(code => {
+            const isEditing = editingId === code.id;
+            const catColor = CATEGORY_COLORS[code.category] || 'var(--text-muted)';
+            return (
+              <div
+                key={code.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '36px 1fr 140px 80px',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 10px',
+                  borderRadius: 6,
+                  background: code.is_active ? 'rgba(255,255,255,0.02)' : 'transparent',
+                  opacity: code.is_active ? 1 : 0.5,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {/* Toggle */}
+                <button
+                  onClick={() => toggleMut.mutate({ id: code.id, is_active: !code.is_active })}
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: '36px 1fr 140px 60px',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '8px 10px',
-                    borderRadius: 6,
-                    background: code.is_active ? 'rgba(255,255,255,0.02)' : 'transparent',
-                    opacity: code.is_active ? 1 : 0.5,
+                    width: 32, height: 18, borderRadius: 9,
+                    background: code.is_active ? 'var(--accent)' : 'var(--bg-surface)',
+                    border: `1px solid ${code.is_active ? 'var(--accent)' : 'var(--border-default)'}`,
+                    cursor: 'pointer', position: 'relative',
                     transition: 'all 0.15s',
                   }}
                 >
-                  {/* Toggle */}
-                  <button
-                    onClick={() => toggleMut.mutate({ id: code.id, is_active: !code.is_active })}
-                    style={{
-                      width: 32, height: 18, borderRadius: 9,
-                      background: code.is_active ? 'var(--accent)' : 'var(--bg-surface)',
-                      border: `1px solid ${code.is_active ? 'var(--accent)' : 'var(--border-default)'}`,
-                      cursor: 'pointer', position: 'relative',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <span style={{
-                      position: 'absolute', top: 2,
-                      left: code.is_active ? 15 : 2,
-                      width: 12, height: 12, borderRadius: '50%',
-                      background: 'white',
-                      transition: 'left 0.15s',
-                    }} />
-                  </button>
-
-                  {/* Code + description */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{
-                      fontFamily: 'var(--font-mono)', fontSize: 12,
-                      fontWeight: 700, color: 'var(--accent)',
-                      minWidth: 20,
-                    }}>
-                      {code.cost_code_number}
-                    </span>
-                    <span style={{
-                      fontFamily: 'var(--font-body)', fontSize: 13,
-                      color: 'var(--text-primary)',
-                    }}>
-                      {code.description}
-                    </span>
-                  </div>
-
-                  {/* Budget amount */}
-                  {isEditing ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <input
-                        type="number"
-                        value={editBudget}
-                        onChange={(e) => setEditBudget(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleBudgetSave(code.id);
-                          if (e.key === 'Escape') setEditingId(null);
-                        }}
-                        autoFocus
-                        style={{
-                          width: 90, padding: '4px 8px',
-                          background: 'var(--bg-input, var(--bg-base))',
-                          border: '1px solid var(--accent)',
-                          borderRadius: 4, color: 'var(--text-primary)',
-                          fontFamily: 'var(--font-mono)', fontSize: 11,
-                        }}
-                      />
-                      <button
-                        onClick={() => handleBudgetSave(code.id)}
-                        style={{
-                          padding: '3px 6px', background: 'var(--accent)',
-                          border: 'none', borderRadius: 4,
-                          color: 'white', fontSize: 9, fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        OK
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setEditingId(code.id);
-                        setEditBudget(String(code.default_budget_amount || 0));
-                      }}
-                      style={{
-                        background: 'transparent', border: 'none',
-                        cursor: 'pointer', textAlign: 'right',
-                        padding: '4px 8px', borderRadius: 4,
-                      }}
-                      title="Click to edit default budget"
-                    >
-                      <span style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 12,
-                        color: code.default_budget_amount > 0 ? 'var(--text-primary)' : 'var(--text-muted)',
-                      }}>
-                        {code.default_budget_amount > 0
-                          ? `$${Number(code.default_budget_amount).toLocaleString()}`
-                          : '$0'
-                        }
-                      </span>
-                    </button>
-                  )}
-
-                  {/* Category badge */}
                   <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 8,
-                    color: group.color, textTransform: 'uppercase',
-                    letterSpacing: '0.08em', textAlign: 'right',
+                    position: 'absolute', top: 2,
+                    left: code.is_active ? 15 : 2,
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: 'white',
+                    transition: 'left 0.15s',
+                  }} />
+                </button>
+
+                {/* Code + description */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 12,
+                    fontWeight: 700, color: 'var(--accent)',
+                    minWidth: 20,
                   }}>
-                    {code.category}
+                    {code.cost_code_number}
+                  </span>
+                  <span style={{
+                    fontFamily: 'var(--font-body)', fontSize: 13,
+                    color: 'var(--text-primary)',
+                  }}>
+                    {code.description}
                   </span>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* Budget amount */}
+                {isEditing ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      type="number"
+                      value={editBudget}
+                      onChange={(e) => setEditBudget(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleBudgetSave(code.id);
+                        if (e.key === 'Escape') setEditingId(null);
+                      }}
+                      autoFocus
+                      style={{
+                        width: 90, padding: '4px 8px',
+                        background: 'var(--bg-input, var(--bg-base))',
+                        border: '1px solid var(--accent)',
+                        borderRadius: 4, color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-mono)', fontSize: 11,
+                      }}
+                    />
+                    <button
+                      onClick={() => handleBudgetSave(code.id)}
+                      style={{
+                        padding: '3px 6px', background: 'var(--accent)',
+                        border: 'none', borderRadius: 4,
+                        color: 'white', fontSize: 9, fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      OK
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditingId(code.id);
+                      setEditBudget(String(code.default_budget_amount || 0));
+                    }}
+                    style={{
+                      background: 'transparent', border: 'none',
+                      cursor: 'pointer', textAlign: 'right',
+                      padding: '4px 8px', borderRadius: 4,
+                    }}
+                    title="Click to edit default budget"
+                  >
+                    <span style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 12,
+                      color: code.default_budget_amount > 0 ? 'var(--text-primary)' : 'var(--text-muted)',
+                    }}>
+                      {code.default_budget_amount > 0
+                        ? `$${Number(code.default_budget_amount).toLocaleString()}`
+                        : '$0'
+                      }
+                    </span>
+                  </button>
+                )}
+
+                {/* Category badge */}
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 8,
+                  color: catColor, textTransform: 'uppercase',
+                  letterSpacing: '0.08em', textAlign: 'right',
+                }}>
+                  {code.category}
+                </span>
+              </div>
+            );
+          })}
         </div>
-      ))}
+      </div>
 
       <div style={{
         marginTop: 24, padding: '12px 14px',
