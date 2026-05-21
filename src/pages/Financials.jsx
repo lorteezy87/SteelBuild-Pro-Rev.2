@@ -8,6 +8,8 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, BulkActionBar } from "@/components/design-system";
 import { PhoenixPanel } from "@/components/shared/PhoenixPanel";
 import { Plus, RefreshCw, Trash2, Tag } from "lucide-react";
+import { toast } from "sonner";
+import { batchProcess } from "@/utils/batchProcess";
 import PhoenixTable, { PTR, PTD } from "@/components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent, formatBudgetPercent } from "@/components/shared/formatters";
 import {
@@ -111,21 +113,43 @@ export default function Financials() {
   });
 
   const bulkDeleteMut = useMutation({
-    mutationFn: (ids) => Promise.allSettled(ids.map((id) => base44.entities.CostCode.delete(id))),
-    onSuccess: async () => {
+    // batchProcess resolves with { succeeded, failed } instead of rejecting,
+    // so per-row failures are reported here rather than silently swallowed
+    // (the old Promise.allSettled path always reported success).
+    mutationFn: (ids) => batchProcess(ids, (id) => base44.entities.CostCode.delete(id)),
+    onSuccess: async (results) => {
+      results.succeeded.forEach(({ item: id }) => removeRecordFromCaches(qc, costCodeQueryKeys, id));
       await invalidateCrudQueries(qc, costCodeQueryKeys);
       setSelectedIds(new Set());
       setBulkDeleteOpen(false);
+      const ok = results.succeeded.length;
+      const failed = results.failed.length;
+      if (failed === 0) {
+        toast.success(`Deleted ${ok} cost code${ok === 1 ? "" : "s"}`);
+      } else if (ok === 0) {
+        toast.error(`Bulk delete failed: ${results.failed[0]?.error || "unknown error"}`);
+      } else {
+        toast.warning(`Deleted ${ok}, ${failed} failed`);
+      }
     },
     onError: (error) => toastCrudError(error, "Bulk delete failed"),
   });
 
   const bulkUpdateMut = useMutation({
-    mutationFn: ({ ids, data }) => Promise.allSettled(ids.map((id) => base44.entities.CostCode.update(id, data))),
-    onSuccess: async () => {
+    mutationFn: ({ ids, data }) => batchProcess(ids, (id) => base44.entities.CostCode.update(id, data)),
+    onSuccess: async (results) => {
       await invalidateCrudQueries(qc, costCodeQueryKeys);
       setSelectedIds(new Set());
       setBulkPhaseTarget(null);
+      const ok = results.succeeded.length;
+      const failed = results.failed.length;
+      if (failed === 0) {
+        toast.success(`Updated ${ok} cost code${ok === 1 ? "" : "s"}`);
+      } else if (ok === 0) {
+        toast.error(`Bulk update failed: ${results.failed[0]?.error || "unknown error"}`);
+      } else {
+        toast.warning(`Updated ${ok}, ${failed} failed`);
+      }
     },
     onError: (error) => toastCrudError(error, "Bulk update failed"),
   });
