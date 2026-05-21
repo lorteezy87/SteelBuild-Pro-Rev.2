@@ -28,7 +28,7 @@ import {
   Mail, Search, Inbox, CheckCircle2, XCircle, Link2, Archive, RotateCcw,
   Paperclip, Clock, AlertTriangle, FileText,
   Plus, ExternalLink, X, Settings, Star, Eye, EyeOff, Tag,
-  Send, Hash, Reply, ReplyAll, PenSquare, CornerUpLeft,
+  Send, Hash, Reply, ReplyAll, PenSquare,
 } from "lucide-react";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -1849,6 +1849,7 @@ function ComposeEmailModal({ projectId, onClose, onSent }) {
   const [cc, setCc] = useState("");
   const [subject, setSubject] = useState("");
   const [bodyText, setBodyText] = useState("");
+  const [attachments, setAttachments] = useState([]);
   const [sending, setSending] = useState(false);
 
   const handleSend = async () => {
@@ -1866,6 +1867,7 @@ function ComposeEmailModal({ projectId, onClose, onSent }) {
       cc: ccList,
       subject: subject.trim(),
       body_text: bodyText,
+      attachments,
     });
 
     setSending(false);
@@ -1922,6 +1924,10 @@ function ComposeEmailModal({ projectId, onClose, onSent }) {
             style={{ ...inputStyle, resize: "vertical", minHeight: 160, lineHeight: 1.5 }}
           />
         </div>
+        <div>
+          <label style={labelStyle}>Attachments</label>
+          <AttachmentPicker attachments={attachments} setAttachments={setAttachments} disabled={sending} />
+        </div>
       </div>
     </Modal>
   );
@@ -1939,6 +1945,7 @@ function ReplyEmailModal({ projectId, originalMessage, mode, currentUserEmail, o
   const [cc, setCc] = useState(defaults.cc.join(", "));
   const [subject, setSubject] = useState(defaults.subject);
   const [bodyText, setBodyText] = useState("");
+  const [attachments, setAttachments] = useState([]);
   const [sending, setSending] = useState(false);
 
   const handleSend = async () => {
@@ -1960,6 +1967,7 @@ function ReplyEmailModal({ projectId, originalMessage, mode, currentUserEmail, o
       reply_to_message_id: defaults.reply_to_message_id,
       in_reply_to_external_id: defaults.in_reply_to_external_id,
       thread_id: defaults.thread_id,
+      attachments,
     });
 
     setSending(false);
@@ -2017,6 +2025,10 @@ function ReplyEmailModal({ projectId, originalMessage, mode, currentUserEmail, o
             style={{ ...inputStyle, resize: "vertical", minHeight: 120, lineHeight: 1.5 }}
             autoFocus
           />
+        </div>
+        <div>
+          <label style={labelStyle}>Attachments</label>
+          <AttachmentPicker attachments={attachments} setAttachments={setAttachments} disabled={sending} />
         </div>
         {/* Quoted original */}
         <div style={{
@@ -2077,4 +2089,109 @@ function formatBytes(bytes) {
   const units = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+}
+
+// Combined raw-size cap for outbound attachments (must match the email-send
+// edge function guard). base64 inflates the request body ~33%.
+const MAX_ATTACH_TOTAL_BYTES = 20 * 1024 * 1024;
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Attachment picker (shared by Compose + Reply) ──────────────────────
+function AttachmentPicker({ attachments, setAttachments, disabled }) {
+  const inputRef = useRef(null);
+
+  const handleFiles = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
+    const next = [...attachments];
+    for (const file of files) {
+      const total = next.reduce((sum, a) => sum + (a.size_bytes || 0), 0);
+      if (total + file.size > MAX_ATTACH_TOTAL_BYTES) {
+        toast.error(`Attachments exceed ${formatBytes(MAX_ATTACH_TOTAL_BYTES)} total — "${file.name}" skipped`);
+        continue;
+      }
+      try {
+        const content_base64 = await readFileAsBase64(file);
+        next.push({
+          filename: file.name,
+          content_type: file.type || "application/octet-stream",
+          size_bytes: file.size,
+          content_base64,
+        });
+      } catch {
+        toast.error(`Failed to read "${file.name}"`);
+      }
+    }
+    setAttachments(next);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const removeAt = (idx) => setAttachments(attachments.filter((_, i) => i !== idx));
+
+  return (
+    <div>
+      <input
+        ref={inputRef} type="file" multiple style={{ display: "none" }}
+        disabled={disabled}
+        onChange={(e) => handleFiles(e.target.files)}
+      />
+      <button
+        type="button" onClick={() => inputRef.current?.click()} disabled={disabled}
+        style={{
+          ...secondaryBtnStyle, display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "6px 12px", opacity: disabled ? 0.6 : 1,
+          cursor: disabled ? "not-allowed" : "pointer",
+        }}
+      >
+        <Paperclip size={12} strokeWidth={2} />
+        Attach files
+      </button>
+      {attachments.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+          {attachments.map((att, idx) => (
+            <div
+              key={`${att.filename}-${idx}`}
+              style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
+                background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
+                borderRadius: 8,
+              }}
+            >
+              <Paperclip size={12} strokeWidth={2} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+              <span style={{
+                flex: 1, minWidth: 0, fontFamily: "var(--font-body)", fontSize: 12,
+                color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {att.filename}
+              </span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>
+                {formatBytes(att.size_bytes)}
+              </span>
+              <button
+                type="button" onClick={() => removeAt(idx)} disabled={disabled} title="Remove"
+                style={{
+                  background: "none", border: "none", padding: 2, flexShrink: 0,
+                  color: "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer",
+                }}
+              >
+                <X size={12} strokeWidth={2} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

@@ -33,6 +33,7 @@ const EDGE_FN_PATH = "/functions/v1/email-send";
  * @param {string} [params.thread_id]
  * @param {string} [params.from_email]
  * @param {string} [params.from_name]
+ * @param {Array<{ filename: string, content_type?: string, content_base64: string, size_bytes?: number }>} [params.attachments] - File attachments (base64, no data: prefix)
  * @returns {Promise<{ success: boolean, message_id?: string, error?: string }>}
  */
 export async function sendEmail(params) {
