@@ -1,7 +1,4 @@
-Here is a complete root `AGENTS.md` version I would use for SteelBuild Pro. It is written as a direct operating contract for Claude Code, with stale facts removed and safety rules tightened.
-
-````markdown
-# AGENTS.md - SteelBuild Pro Engineering Contract
+# CLAUDE.md — SteelBuild Pro Engineering Contract
 
 You are a senior software engineering agent working on SteelBuild Pro, a construction project management application built for structural steel fabricators and erectors.
 
@@ -40,7 +37,8 @@ Core platform:
 - Hosting: Vercel
 - Production URL: `https://steelbuild-pro.vercel.app`
 - Deploy branch: `codex/base44-deploy-nick`
-- Main local checkout: `C:\dev\SteelBuild-Pro-Rev.2`
+- Main local checkout (Windows): `C:\dev\SteelBuild-Pro-Rev.2`
+- Also worked on in Claude Code cloud / Linux sessions (the repo is cloned to a Linux path per session; use bash equivalents there)
 
 Important repo docs:
 
@@ -54,6 +52,31 @@ Important repo docs:
 Always read `ARCHITECTURE.md` and `TECH_DEBT.md` when the task touches architecture, RBAC, RLS, database schema, workflows, LLM behavior, deployment, or major refactors.
 
 Do not assume this file has the latest migration number, package version, test count, or dependency state. Inspect the repo.
+
+### Repository map
+
+This is the current shape of the tree. Treat it as a navigation aid, not a frozen contract — verify against the live repo before depending on a specific file.
+
+Frontend (`src/`):
+
+- `main.jsx`, `App.jsx`, `Layout.jsx` — entry point, root component, app shell.
+- `boot/` — app bootstrap split: `AppProviders`, `AppRoutes`, `AuthenticatedApp`, `AppLoader`, `LayoutRoute`, `PageLoader`.
+- `config/` — `routes.js` is the **page-registry source of truth** (lazy component + label + `projectScoped` flag per page; `PAGES`, `PAGE_LABELS`, `ALL_ROUTE_PATHS` derive from it). `src/routes.js` is a back-compat re-export shim. `moduleRegistry.js` drives nav modules; `schemas.js` holds shared schemas.
+- `pages/` — ~75 route-level screens (Dashboard, Drawings, Submittals, RFIs, ChangeOrders/ChangeRequests, SOV, CostDashboard/Expenses/BudgetHours, Schedule/GanttChart/LookAheadSchedule, WorkPackages, FabRelease, Procurement, Deliveries, Field/FieldPlan, QualityControl/Inspections, Safety, EmailInbox, Integrations, BluebeamCallback, ProjectMembers, FeatureFlagsAdmin, CommandCenter, calculators, …) plus per-domain subfolders (`dashboard/`, `financials/`, `rfis/`, `workPackages/`, `changeOrders/`, `deliveries/`, `documents/`, …).
+- `components/` — feature-scoped UI grouped by domain (`drawings/`, `submittals/`, `financials/`, `sov/`, `expenses/`, `gantt/`, `schedule/`, `email/`, `integrations/`, `commandcenter/`, `dms/`, `rfis/`, `workpackages/`, `qc/`, `safety/`, …), plus `ui/` (radix/shadcn primitives), `design-system/`, and `shared/`.
+- `services/` — deterministic domain engines: `marginRiskEngine`, `autoLinkEngine`, `constraintEngine`, `scheduleCascade`, `workflowEngine`, `permissions`, `validation`, `auditLogger`, `cacheRegistry`, `emailSendService`.
+- `hooks/` — TanStack Query CRUD + state hooks (`useDrawings`, `useSubmittals`, `useFinancials`, `useDeliveries`, `useAlerts`, `useProjectRole`, `useFeatureFlag`, `useCrudMutation`, `useSaveMutation`, `useRealtimeInvalidation`, `useProjectId`, …).
+- `api/` — `supabaseClient.ts` (Supabase client + storage helpers), `base44Client.ts`.
+- `lib/` — shared utilities + domain mapping: `AuthContext.tsx`, `submittalStageMapping.js`, `drawingSetOrdering.js`, `analyzeDrawing.js`, `compareRevisions.js`, `dataExchange.js`, `integrationCatalog.js`, `featureFlags.jsx`, `query-client.ts`, importers (`importAnalyzedDrawings.js`, `importRfiCsv.js`, `importPsrSpreadsheet.js`, …), and the `commandCenter/`, `integrations/`, `exports/`, `drawingHub/` subfolders.
+- `utils/` — pure helpers (`dates.js`, `fractionConversion.js`, `riggingCalculations.js`, `projectKpis.js`, `operationalGraph.js`, `compressImage.js`, …).
+- `styles/` — SteelBuild Dark token/CSS system. `data/` — static reference (`aiscShapes.js`). `dev/` — mock data. `types/supabase.ts` — generated DB types.
+
+Backend (`supabase/`):
+
+- `migrations/` — ordered SQL, mixed `NNN_name.sql` and timestamped `YYYYMMDDhhmmss_name.sql`. Inspect the directory for the latest; do not assume a number.
+- `functions/` — Edge Functions (see section 16) plus `_shared/`.
+
+Other: `public/` (static assets, wasm, pdf/fragments workers), `scripts/` (perf reports + `test-email-ingest.ps1`), `docs/` (tutorial, audits, Power Automate email-ingest setup), and root docs `ARCHITECTURE.md`, `TECH_DEBT.md`, `README.md`, `AGENTS.md`. `ARCHITECTURE.md` also carries a "File structure cheat sheet" and a decision log.
 
 ---
 
@@ -115,6 +138,8 @@ Use PowerShell for:
 - file inspection
 
 Avoid Bash unless the user explicitly asks for it.
+
+Environment note: the PowerShell examples below assume the Windows local checkout at `C:\dev\SteelBuild-Pro-Rev.2`. In a Claude Code cloud / Linux session, bash is the shell — use the obvious equivalents (`cd <repo>`, `git ...`, `npm ...`, `node ./node_modules/vite/bin/vite.js build`). The git-safety, validation-ladder, RBAC/RLS, and deploy rules are identical regardless of OS.
 
 Reliable command pattern:
 
@@ -633,14 +658,19 @@ Edge functions live in:
 supabase/functions/
 ```
 
-Important functions include:
+Current functions:
 
 ```text
-llm-proxy
-schedule-assistant
-email-ingest
-sharepoint-proxy
+llm-proxy           external LLM gateway — ALL model calls route here
+schedule-assistant  schedule chat/tooling; routes model turns through llm-proxy
+email-ingest        inbound email -> staged project records (Power Automate path)
+email-send          outbound email compose/reply send pipeline
+sharepoint-proxy    SharePoint / OneDrive document access
+bluebeam-proxy      Bluebeam Max (Studio) OAuth + session/document API
+_shared             shared helpers (CORS, etc.) imported by the functions above
 ```
+
+Integration functions (`sharepoint-proxy`, `bluebeam-proxy`) follow one pattern: OAuth/user tokens are stored server-side, the Edge Function proxies every external API call, and RLS enforces project membership on the mapped records. Do not move tokens or provider calls into the browser. The Bluebeam connection/session schema lives in `supabase/migrations/20260520001000_bluebeam_max_integration.sql` and the OAuth callback page is `src/pages/BluebeamCallback.jsx`; outbound email columns live in `20260520002000_email_send_columns.sql` with client logic in `src/services/emailSendService.js`.
 
 Rules:
 
@@ -1158,4 +1188,3 @@ A task is done only when:
 - No unapproved production-impacting action was taken.
 
 Never say "done" unless verification passed or limitations are clearly stated.
-````
