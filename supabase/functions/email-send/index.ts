@@ -1,0 +1,443 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// email-send — Supabase Edge Function
+//
+// Sends emails on behalf of authenticated SteelBuild Pro users.
+// Supports compose (new) and reply modes with threading headers.
+//
+// Provider routing:
+//   1. Resend API (default) — transactional email, easiest setup.
+//   2. Microsoft Graph (optional) — send-as from shared mailbox.
+//
+// Stores every sent message in email_messages with direction='outbound'
+// so the Email Inbox shows a complete conversation history.
+//
+// Auth: JWT-verified. User must have project access.
+//
+// Secrets required:
+//   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+//   RESEND_API_KEY (for Resend provider)
+//   — OR —
+//   MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET, MS_GRAPH_TENANT_ID (for Graph)
+//
+// Deploy:
+//   supabase functions deploy email-send
+// ─────────────────────────────────────────────────────────────────────────────
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface SendEmailRequest {
+  project_id: string;
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  body_text: string;
+  body_html?: string;
+  /** For replies: the email_messages.id being replied to */
+  reply_to_message_id?: string;
+  /** For replies: the external Message-ID header for In-Reply-To */
+  in_reply_to_external_id?: string;
+  /** Thread grouping key */
+  thread_id?: string;
+  /** From address — must match a configured email account for the project */
+  from_email?: string;
+  from_name?: string;
+}
+
+interface SendResult {
+  provider: string;
+  provider_message_id: string | null;
+  success: boolean;
+  error?: string;
+}
+
+// ── JWT Verification ──────────────────────────────────────────────────────────
+
+async function verifyJwt(req: Request): Promise<{ userId: string; email: string } | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+
+  const token = authHeader.slice(7);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) return null;
+
+  try {
+    const resp = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "apikey": serviceKey,
+      },
+    });
+    if (!resp.ok) return null;
+    const user = await resp.json();
+    return { userId: user.id, email: user.email };
+  } catch {
+    return null;
+  }
+}
+
+// ── Project Access Check ──────────────────────────────────────────────────────
+
+async function checkProjectAccess(
+  userId: string,
+  projectId: string,
+  supabaseUrl: string,
+  serviceKey: string,
+): Promise<boolean> {
+  try {
+    const resp = await fetch(
+      `${supabaseUrl}/rest/v1/user_projects?user_id=eq.${userId}&project_id=eq.${projectId}&select=id&limit=1`,
+      {
+        headers: {
+          "apikey": serviceKey,
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+      },
+    );
+    if (!resp.ok) return false;
+    const rows = await resp.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+// ── Resend Provider ───────────────────────────────────────────────────────────
+
+async function sendViaResend(
+  apiKey: string,
+  from: string,
+  to: string[],
+  cc: string[],
+  bcc: string[],
+  subject: string,
+  bodyText: string,
+  bodyHtml: string | null,
+  headers: Record<string, string>,
+): Promise<SendResult> {
+  try {
+    const payload: Record<string, unknown> = {
+      from,
+      to,
+      subject,
+      text: bodyText,
+    };
+    if (cc.length > 0) payload.cc = cc;
+    if (bcc.length > 0) payload.bcc = bcc;
+    if (bodyHtml) payload.html = bodyHtml;
+    if (Object.keys(headers).length > 0) payload.headers = headers;
+
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) {
+      const detail = await resp.text();
+      console.error(`[email-send] Resend error ${resp.status}: ${detail.slice(0, 300)}`);
+      return { provider: "resend", provider_message_id: null, success: false, error: detail.slice(0, 200) };
+    }
+
+    const data = await resp.json();
+    return { provider: "resend", provider_message_id: data.id || null, success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { provider: "resend", provider_message_id: null, success: false, error: msg };
+  }
+}
+
+// ── Microsoft Graph Provider ──────────────────────────────────────────────────
+
+async function getMsGraphToken(tenantId: string, clientId: string, clientSecret: string): Promise<string | null> {
+  try {
+    const params = new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      scope: "https://graph.microsoft.com/.default",
+      grant_type: "client_credentials",
+    });
+
+    const resp = await fetch(
+      `https://login.microsoftonline.com/${tenantId}/oauth2/v2/token`,
+      { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: params },
+    );
+
+    if (!resp.ok) {
+      const detail = await resp.text();
+      console.error(`[email-send] MS Graph token error ${resp.status}: ${detail.slice(0, 200)}`);
+      return null;
+    }
+
+    const data = await resp.json();
+    return data.access_token || null;
+  } catch (err) {
+    console.error(`[email-send] MS Graph token error: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+async function sendViaMsGraph(
+  token: string,
+  fromEmail: string,
+  to: string[],
+  cc: string[],
+  bcc: string[],
+  subject: string,
+  bodyText: string,
+  bodyHtml: string | null,
+  inReplyTo: string | null,
+): Promise<SendResult> {
+  try {
+    const message: Record<string, unknown> = {
+      subject,
+      body: {
+        contentType: bodyHtml ? "HTML" : "Text",
+        content: bodyHtml || bodyText,
+      },
+      toRecipients: to.map((addr) => ({ emailAddress: { address: addr } })),
+    };
+
+    if (cc.length > 0) {
+      message.ccRecipients = cc.map((addr) => ({ emailAddress: { address: addr } }));
+    }
+    if (bcc.length > 0) {
+      message.bccRecipients = bcc.map((addr) => ({ emailAddress: { address: addr } }));
+    }
+    if (inReplyTo) {
+      message.internetMessageHeaders = [
+        { name: "In-Reply-To", value: inReplyTo },
+      ];
+    }
+
+    const resp = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(fromEmail)}/sendMail`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message, saveToSentItems: true }),
+      },
+    );
+
+    if (!resp.ok) {
+      const detail = await resp.text();
+      console.error(`[email-send] MS Graph send error ${resp.status}: ${detail.slice(0, 300)}`);
+      return { provider: "msgraph", provider_message_id: null, success: false, error: detail.slice(0, 200) };
+    }
+
+    // Graph sendMail returns 202 with no body
+    return { provider: "msgraph", provider_message_id: null, success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { provider: "msgraph", provider_message_id: null, success: false, error: msg };
+  }
+}
+
+// ── Store Sent Message ────────────────────────────────────────────────────────
+
+async function storeSentMessage(
+  supabaseUrl: string,
+  serviceKey: string,
+  projectId: string,
+  userId: string,
+  req: SendEmailRequest,
+  result: SendResult,
+): Promise<string | null> {
+  const now = new Date().toISOString();
+  const externalId = result.provider_message_id
+    ? `sent-${result.provider}-${result.provider_message_id}`
+    : `sent-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+
+  const row = {
+    project_id: projectId,
+    external_id: externalId,
+    direction: "outbound",
+    subject: req.subject,
+    sender_email: req.from_email || "",
+    sender_name: req.from_name || "",
+    recipients: JSON.stringify(req.to),
+    cc: JSON.stringify(req.cc || []),
+    body_text: req.body_text,
+    body_html: req.body_html || null,
+    received_at: now,
+    sent_at: now,
+    sent_by: userId,
+    in_reply_to: req.in_reply_to_external_id || null,
+    thread_id: req.thread_id || null,
+    import_status: "approved",
+    is_read: true,
+    has_attachments: false,
+    attachment_count: 0,
+    parsed_type: "general",
+    parsed_confidence: 1.0,
+    parsed_metadata: JSON.stringify({
+      send_provider: result.provider,
+      provider_message_id: result.provider_message_id,
+      sent_at: now,
+    }),
+  };
+
+  try {
+    const resp = await fetch(`${supabaseUrl}/rest/v1/email_messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
+        "Prefer": "return=representation",
+      },
+      body: JSON.stringify(row),
+    });
+
+    if (!resp.ok) {
+      const detail = await resp.text();
+      console.error(`[email-send] Store sent message failed ${resp.status}: ${detail.slice(0, 300)}`);
+      return null;
+    }
+
+    const [inserted] = await resp.json();
+    return inserted?.id || null;
+  } catch (err) {
+    console.error(`[email-send] Store error: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+// ── Main Handler ──────────────────────────────────────────────────────────────
+
+async function handle(req: Request): Promise<Response> {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return errorResponse(405, "Method not allowed");
+
+  // Authenticate
+  const user = await verifyJwt(req);
+  if (!user) return errorResponse(401, "Unauthorized — valid JWT required");
+
+  // Parse body
+  let body: SendEmailRequest;
+  try {
+    body = await req.json();
+  } catch {
+    return errorResponse(400, "Invalid JSON body");
+  }
+
+  // Validate required fields
+  if (!body.project_id) return errorResponse(400, "project_id is required");
+  if (!body.to || body.to.length === 0) return errorResponse(400, "to is required (array of email addresses)");
+  if (!body.subject) return errorResponse(400, "subject is required");
+  if (!body.body_text) return errorResponse(400, "body_text is required");
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) return errorResponse(500, "Edge function not configured");
+
+  // Verify project access
+  const hasAccess = await checkProjectAccess(user.userId, body.project_id, supabaseUrl, serviceKey);
+  if (!hasAccess) return errorResponse(403, "No access to this project");
+
+  // Determine from address — use provided or fall back to first active project email account
+  let fromEmail = body.from_email || "";
+  let fromName = body.from_name || "";
+
+  if (!fromEmail) {
+    try {
+      const acctResp = await fetch(
+        `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${body.project_id}&is_active=eq.true&select=email_address,display_name&limit=1`,
+        { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } },
+      );
+      if (acctResp.ok) {
+        const accts = await acctResp.json();
+        if (Array.isArray(accts) && accts.length > 0) {
+          fromEmail = accts[0].email_address;
+          fromName = fromName || accts[0].display_name || "";
+        }
+      }
+    } catch { /* best effort */ }
+  }
+
+  if (!fromEmail) {
+    return errorResponse(400, "No from_email provided and no active email account configured for this project");
+  }
+
+  const fromFormatted = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
+
+  // Build threading headers
+  const threadingHeaders: Record<string, string> = {};
+  if (body.in_reply_to_external_id) {
+    threadingHeaders["In-Reply-To"] = body.in_reply_to_external_id;
+    threadingHeaders["References"] = body.in_reply_to_external_id;
+  }
+
+  // Route to provider
+  let result: SendResult;
+
+  const resendKey = Deno.env.get("RESEND_API_KEY");
+  const msClientId = Deno.env.get("MS_GRAPH_CLIENT_ID");
+  const msClientSecret = Deno.env.get("MS_GRAPH_CLIENT_SECRET");
+  const msTenantId = Deno.env.get("MS_GRAPH_TENANT_ID");
+
+  if (msClientId && msClientSecret && msTenantId) {
+    // Prefer Microsoft Graph when configured — sends as the actual shared mailbox
+    const token = await getMsGraphToken(msTenantId, msClientId, msClientSecret);
+    if (!token) return errorResponse(502, "Failed to obtain Microsoft Graph token");
+
+    result = await sendViaMsGraph(
+      token, fromEmail, body.to, body.cc || [], body.bcc || [],
+      body.subject, body.body_text, body.body_html || null,
+      body.in_reply_to_external_id || null,
+    );
+  } else if (resendKey) {
+    result = await sendViaResend(
+      resendKey, fromFormatted, body.to, body.cc || [], body.bcc || [],
+      body.subject, body.body_text, body.body_html || null,
+      threadingHeaders,
+    );
+  } else {
+    return errorResponse(503, "No email send provider configured. Set RESEND_API_KEY or MS_GRAPH_* secrets.");
+  }
+
+  if (!result.success) {
+    console.error(`[email-send] Send failed via ${result.provider}: ${result.error}`);
+    return jsonResponse({
+      success: false,
+      provider: result.provider,
+      error: result.error,
+    }, 502);
+  }
+
+  // Store the sent message
+  const storedId = await storeSentMessage(supabaseUrl, serviceKey, body.project_id, user.userId, body, result);
+
+  console.log(
+    `[email-send] Sent: project=${body.project_id} from=${fromEmail} ` +
+    `to=${body.to.join(",")} subject="${body.subject.slice(0, 60)}" ` +
+    `provider=${result.provider} stored=${storedId || "failed"}`,
+  );
+
+  return jsonResponse({
+    success: true,
+    provider: result.provider,
+    message_id: storedId,
+    provider_message_id: result.provider_message_id,
+  });
+}
+
+Deno.serve(async (req: Request): Promise<Response> => {
+  try {
+    return await handle(req);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[email-send] Unhandled: ${message}`);
+    return errorResponse(500, `Internal error: ${message}`);
+  }
+});

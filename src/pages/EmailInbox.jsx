@@ -28,12 +28,14 @@ import {
   Mail, Search, Inbox, CheckCircle2, XCircle, Link2, Archive, RotateCcw,
   Paperclip, Clock, AlertTriangle, FileText,
   Plus, ExternalLink, X, Settings, Star, Eye, EyeOff, Tag,
-  Send, Hash,
+  Send, Hash, Reply, ReplyAll, PenSquare, CornerUpLeft,
 } from "lucide-react";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { useAppSecurity } from "@/components/shared/useAppSecurity";
+import { sendEmail, buildReplyDefaults } from "@/services/emailSendService";
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -83,9 +85,10 @@ function getLabelColor(label) {
 // ── Sidebar folders ───────────────────────────────────────────────────
 
 const FOLDERS = [
-  { id: "inbox",    label: "Inbox",    icon: Inbox,       filter: (m) => m.import_status === "pending" },
+  { id: "inbox",    label: "Inbox",    icon: Inbox,       filter: (m) => m.import_status === "pending" && m.direction !== "outbound" },
+  { id: "sent",     label: "Sent",     icon: Send,        filter: (m) => m.direction === "outbound" },
   { id: "starred",  label: "Starred",  icon: Star,        filter: (m) => m.is_starred && m.import_status !== "archived" && m.import_status !== "rejected" },
-  { id: "approved", label: "Approved", icon: CheckCircle2, filter: (m) => m.import_status === "approved" },
+  { id: "approved", label: "Approved", icon: CheckCircle2, filter: (m) => m.import_status === "approved" && m.direction !== "outbound" },
   { id: "linked",   label: "Linked",   icon: Link2,       filter: (m) => m.import_status === "linked" },
   { id: "rejected", label: "Rejected", icon: XCircle,     filter: (m) => m.import_status === "rejected" },
   { id: "archived", label: "Archived", icon: Archive,     filter: (m) => m.import_status === "archived" },
@@ -136,6 +139,8 @@ export default function EmailInbox() {
   const navigate = useNavigate();
   const windowWidth = useWindowWidth();
   const isNarrow = windowWidth < 900;
+  const { user } = useAppSecurity();
+  const currentUserEmail = user?.email || "";
 
   // ── State ──────────────────────────────────────────────────────────
   const [activeFolder, setActiveFolder] = useState("inbox");
@@ -147,6 +152,8 @@ export default function EmailInbox() {
   const [linkModal, setLinkModal] = useState(null);
   const [labelDropdownId, setLabelDropdownId] = useState(null);
   const [mobileDetailMsg, setMobileDetailMsg] = useState(null);
+  const [composeModal, setComposeModal] = useState(false);
+  const [replyState, setReplyState] = useState(null); // { mode: 'reply'|'reply_all', message }
 
   // ── Data fetching ──────────────────────────────────────────────────
   const { data: messages = [], isLoading, error } = useQuery({
@@ -233,11 +240,12 @@ export default function EmailInbox() {
 
   // ── Stats ──────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const total = messages.filter((m) => m.import_status === "pending").length;
-    const unread = messages.filter((m) => !m.is_read && m.import_status === "pending").length;
+    const total = messages.filter((m) => m.import_status === "pending" && m.direction !== "outbound").length;
+    const unread = messages.filter((m) => !m.is_read && m.import_status === "pending" && m.direction !== "outbound").length;
     const starred = messages.filter((m) => m.is_starred && m.import_status !== "archived" && m.import_status !== "rejected").length;
-    const pending = messages.filter((m) => m.import_status === "pending").length;
-    return { total, unread, starred, pending };
+    const pending = messages.filter((m) => m.import_status === "pending" && m.direction !== "outbound").length;
+    const sent = messages.filter((m) => m.direction === "outbound").length;
+    return { total, unread, starred, pending, sent };
   }, [messages]);
 
   // ── Folder counts ──────────────────────────────────────────────────
@@ -354,6 +362,20 @@ export default function EmailInbox() {
           </h1>
           <div style={{ flex: 1 }} />
           <button
+            onClick={() => setComposeModal(true)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              height: 30, padding: "0 12px",
+              background: "var(--accent)", border: "1px solid var(--accent-border)",
+              borderRadius: 8, cursor: "pointer",
+              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600,
+              color: "var(--text-on-accent, #fff)", flexShrink: 0,
+            }}
+          >
+            <PenSquare size={12} strokeWidth={2} />
+            Compose
+          </button>
+          <button
             onClick={() => navigate(createPageUrl("Integrations"))}
             title="Email Settings"
             style={{
@@ -372,6 +394,8 @@ export default function EmailInbox() {
             onClick={() => { setActiveFolder("inbox"); setActiveLabelFilter(null); }} />
           <KpiTile compact label="Starred" value={stats.starred} icon={<Star size={14} />} color="#F59E0B"
             active={activeFolder === "starred"} onClick={() => { setActiveFolder("starred"); setActiveLabelFilter(null); }} />
+          <KpiTile compact label="Sent" value={stats.sent} icon={<Send size={14} />} color="var(--accent)"
+            active={activeFolder === "sent"} onClick={() => { setActiveFolder("sent"); setActiveLabelFilter(null); }} />
           <KpiTile compact label="Pending Review" value={stats.pending} icon={<Clock size={14} />} color="var(--info)"
             active={activeFolder === "inbox"} onClick={() => { setActiveFolder("inbox"); setActiveLabelFilter(null); }} />
         </div>
@@ -602,6 +626,8 @@ export default function EmailInbox() {
                 allLabels={allLabels}
                 labelDropdownOpen={labelDropdownId === selectedMessage.id}
                 onToggleLabelDropdown={() => setLabelDropdownId(labelDropdownId === selectedMessage.id ? null : selectedMessage.id)}
+                onReply={() => setReplyState({ mode: "reply", message: selectedMessage })}
+                onReplyAll={() => setReplyState({ mode: "reply_all", message: selectedMessage })}
               />
             ) : (
               <div style={{
@@ -700,6 +726,33 @@ export default function EmailInbox() {
           }}
         />
       )}
+
+      {/* Compose Modal */}
+      {composeModal && (
+        <ComposeEmailModal
+          projectId={projectId}
+          onClose={() => setComposeModal(false)}
+          onSent={() => {
+            setComposeModal(false);
+            invalidateEntity(qc, "email_message", projectId);
+          }}
+        />
+      )}
+
+      {/* Reply Modal */}
+      {replyState && (
+        <ReplyEmailModal
+          projectId={projectId}
+          originalMessage={replyState.message}
+          mode={replyState.mode}
+          currentUserEmail={currentUserEmail}
+          onClose={() => setReplyState(null)}
+          onSent={() => {
+            setReplyState(null);
+            invalidateEntity(qc, "email_message", projectId);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -708,8 +761,20 @@ export default function EmailInbox() {
 
 function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, onStar, attachmentCount }) {
   const isUnread = !message.is_read;
+  const isOutbound = message.direction === "outbound";
   const typeInfo = TYPE_STYLES[message.parsed_type] || TYPE_STYLES.unknown;
   const labels = Array.isArray(message.labels) ? message.labels : [];
+
+  // For outbound messages, show first recipient instead of sender
+  const displayName = useMemo(() => {
+    if (isOutbound) {
+      try {
+        const recips = typeof message.recipients === "string" ? JSON.parse(message.recipients) : (message.recipients || []);
+        return recips.length > 0 ? `To: ${recips[0]}${recips.length > 1 ? ` +${recips.length - 1}` : ""}` : "To: (unknown)";
+      } catch { return "To: (unknown)"; }
+    }
+    return message.sender_name || message.sender_email || "Unknown";
+  }, [isOutbound, message.sender_name, message.sender_email, message.recipients]);
 
   const { bodyPreview, aiSummary } = useMemo(() => {
     // Try AI summary first
@@ -791,10 +856,10 @@ function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, onStar, a
           <span style={{
             fontFamily: "var(--font-body)", fontSize: 12,
             fontWeight: isUnread ? 700 : 400,
-            color: "var(--text-primary)",
+            color: isOutbound ? "var(--accent)" : "var(--text-primary)",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1,
           }}>
-            {message.sender_name || message.sender_email || "Unknown"}
+            {displayName}
           </span>
           <span style={{
             fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
@@ -885,7 +950,7 @@ function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, onStar, a
 function EmailDetail({
   message, attachments, onReject, onArchive, onRestore, onApprove, onLink,
   onMarkRead, onStar, onAddLabel, onRemoveLabel, allLabels,
-  labelDropdownOpen, onToggleLabelDropdown,
+  labelDropdownOpen, onToggleLabelDropdown, onReply, onReplyAll,
 }) {
   const [customLabel, setCustomLabel] = useState("");
   const status = STATUS_STYLES[message.import_status] || STATUS_STYLES.pending;
@@ -1091,7 +1156,14 @@ function EmailDetail({
 
         {/* Action buttons */}
         <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-          {message.import_status === "pending" && (
+          {/* Reply actions — available for all messages */}
+          {message.direction !== "outbound" && (
+            <>
+              <DetailAction icon={<Reply size={12} />} label="Reply" color="var(--accent)" onClick={onReply} />
+              <DetailAction icon={<ReplyAll size={12} />} label="Reply All" color="var(--accent)" onClick={onReplyAll} />
+            </>
+          )}
+          {message.import_status === "pending" && message.direction !== "outbound" && (
             <>
               <DetailAction icon={<Plus size={12} />} label="Approve & Create" color="var(--success)" onClick={onApprove} />
               <DetailAction icon={<Link2 size={12} />} label="Link to Existing" color="var(--info)" onClick={onLink} />
@@ -1767,6 +1839,208 @@ function ExtractedFieldsStrip({ metadata, confidence }) {
         ))}
       </div>
     </div>
+  );
+}
+
+// ── Compose Email Modal ──────────────────────────────────────────────
+
+function ComposeEmailModal({ projectId, onClose, onSent }) {
+  const [to, setTo] = useState("");
+  const [cc, setCc] = useState("");
+  const [subject, setSubject] = useState("");
+  const [bodyText, setBodyText] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    const toList = to.split(",").map((s) => s.trim()).filter(Boolean);
+    if (toList.length === 0) { toast.error("At least one recipient is required"); return; }
+    if (!subject.trim()) { toast.error("Subject is required"); return; }
+    if (!bodyText.trim()) { toast.error("Message body is required"); return; }
+
+    setSending(true);
+    const ccList = cc ? cc.split(",").map((s) => s.trim()).filter(Boolean) : [];
+
+    const result = await sendEmail({
+      project_id: projectId,
+      to: toList,
+      cc: ccList,
+      subject: subject.trim(),
+      body_text: bodyText,
+    });
+
+    setSending(false);
+    if (result.success) {
+      toast.success("Email sent");
+      onSent();
+    } else {
+      toast.error("Send failed: " + (result.error || "Unknown error"));
+    }
+  };
+
+  return (
+    <Modal
+      open={true} onClose={onClose} title="Compose Email"
+      eyebrow="NEW MESSAGE" width={600}
+      footer={
+        <>
+          <button onClick={onClose} style={secondaryBtnStyle}>Discard</button>
+          <button onClick={handleSend} disabled={sending} style={{
+            ...primaryBtnStyle,
+            display: "inline-flex", alignItems: "center", gap: 6,
+            opacity: sending ? 0.7 : 1,
+          }}>
+            <Send size={12} strokeWidth={2} />
+            {sending ? "Sending..." : "Send"}
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div>
+          <label style={labelStyle}>To</label>
+          <input type="text" value={to} onChange={(e) => setTo(e.target.value)}
+            placeholder="recipient@example.com (comma-separated for multiple)"
+            style={inputStyle} autoFocus />
+        </div>
+        <div>
+          <label style={labelStyle}>CC</label>
+          <input type="text" value={cc} onChange={(e) => setCc(e.target.value)}
+            placeholder="cc@example.com (optional)"
+            style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Subject</label>
+          <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)}
+            placeholder="Email subject"
+            style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Message</label>
+          <textarea
+            value={bodyText} onChange={(e) => setBodyText(e.target.value)}
+            rows={12} placeholder="Type your message..."
+            style={{ ...inputStyle, resize: "vertical", minHeight: 160, lineHeight: 1.5 }}
+          />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Reply Email Modal ────────────────────────────────────────────────
+
+function ReplyEmailModal({ projectId, originalMessage, mode, currentUserEmail, onClose, onSent }) {
+  const defaults = useMemo(
+    () => buildReplyDefaults(originalMessage, mode, currentUserEmail),
+    [originalMessage, mode, currentUserEmail]
+  );
+
+  const [to, setTo] = useState(defaults.to.join(", "));
+  const [cc, setCc] = useState(defaults.cc.join(", "));
+  const [subject, setSubject] = useState(defaults.subject);
+  const [bodyText, setBodyText] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    const toList = to.split(",").map((s) => s.trim()).filter(Boolean);
+    if (toList.length === 0) { toast.error("At least one recipient is required"); return; }
+    if (!bodyText.trim()) { toast.error("Message body is required"); return; }
+
+    setSending(true);
+    const ccList = cc ? cc.split(",").map((s) => s.trim()).filter(Boolean) : [];
+
+    const fullBody = bodyText + defaults.quoted_body;
+
+    const result = await sendEmail({
+      project_id: projectId,
+      to: toList,
+      cc: ccList,
+      subject: subject.trim(),
+      body_text: fullBody,
+      reply_to_message_id: defaults.reply_to_message_id,
+      in_reply_to_external_id: defaults.in_reply_to_external_id,
+      thread_id: defaults.thread_id,
+    });
+
+    setSending(false);
+    if (result.success) {
+      toast.success("Reply sent");
+      onSent();
+    } else {
+      toast.error("Send failed: " + (result.error || "Unknown error"));
+    }
+  };
+
+  const modeLabel = mode === "reply_all" ? "Reply All" : "Reply";
+  const ModeIcon = mode === "reply_all" ? ReplyAll : Reply;
+
+  return (
+    <Modal
+      open={true} onClose={onClose}
+      title={`${modeLabel}: ${originalMessage.subject || "(no subject)"}`}
+      eyebrow={`TO ${originalMessage.sender_name || originalMessage.sender_email}`}
+      width={600}
+      footer={
+        <>
+          <button onClick={onClose} style={secondaryBtnStyle}>Discard</button>
+          <button onClick={handleSend} disabled={sending} style={{
+            ...primaryBtnStyle,
+            display: "inline-flex", alignItems: "center", gap: 6,
+            opacity: sending ? 0.7 : 1,
+          }}>
+            <ModeIcon size={12} strokeWidth={2} />
+            {sending ? "Sending..." : modeLabel}
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div>
+          <label style={labelStyle}>To</label>
+          <input type="text" value={to} onChange={(e) => setTo(e.target.value)} style={inputStyle} />
+        </div>
+        {(mode === "reply_all" || cc) && (
+          <div>
+            <label style={labelStyle}>CC</label>
+            <input type="text" value={cc} onChange={(e) => setCc(e.target.value)} style={inputStyle} />
+          </div>
+        )}
+        <div>
+          <label style={labelStyle}>Subject</label>
+          <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Message</label>
+          <textarea
+            value={bodyText} onChange={(e) => setBodyText(e.target.value)}
+            rows={8} placeholder="Type your reply..."
+            style={{ ...inputStyle, resize: "vertical", minHeight: 120, lineHeight: 1.5 }}
+            autoFocus
+          />
+        </div>
+        {/* Quoted original */}
+        <div style={{
+          padding: "10px 12px", borderRadius: 8,
+          background: "var(--bg-surface-low)",
+          border: "1px solid var(--border-default)",
+          maxHeight: 200, overflowY: "auto",
+        }}>
+          <div style={{
+            fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            color: "var(--text-muted)", marginBottom: 6,
+          }}>
+            Original Message
+          </div>
+          <div style={{
+            fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)",
+            whiteSpace: "pre-wrap", lineHeight: 1.5, wordBreak: "break-word",
+          }}>
+            {defaults.quoted_body.trim()}
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
