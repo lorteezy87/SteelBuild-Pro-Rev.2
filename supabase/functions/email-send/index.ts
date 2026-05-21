@@ -2,7 +2,8 @@
 // email-send — Supabase Edge Function
 //
 // Sends emails on behalf of authenticated SteelBuild Pro users.
-// Supports compose (new) and reply modes with threading headers.
+// Supports compose (new) and reply modes with threading headers, plus
+// file attachments (base64) sent through whichever provider is active.
 //
 // Provider routing:
 //   1. Resend API (default) — transactional email, easiest setup.
@@ -26,7 +27,20 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
 
+// Max combined raw (decoded) size of outbound attachments. base64 inflates
+// the payload ~33%, so the actual request body stays well under typical
+// edge limits. MS Graph's inline sendMail path is stricter (~4 MB total).
+const MAX_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024;
+
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface EmailAttachmentInput {
+  filename: string;
+  content_type?: string;
+  /** base64-encoded file bytes, no `data:` prefix */
+  content_base64: string;
+  size_bytes?: number;
+}
 
 interface SendEmailRequest {
   project_id: string;
@@ -45,6 +59,8 @@ interface SendEmailRequest {
   /** From address — must match a configured email account for the project */
   from_email?: string;
   from_name?: string;
+  /** File attachments (base64-encoded, no `data:` prefix) */
+  attachments?: EmailAttachmentInput[];
 }
 
 interface SendResult {
@@ -118,6 +134,7 @@ async function sendViaResend(
   bodyText: string,
   bodyHtml: string | null,
   headers: Record<string, string>,
+  attachments: EmailAttachmentInput[],
 ): Promise<SendResult> {
   try {
     const payload: Record<string, unknown> = {
@@ -130,6 +147,12 @@ async function sendViaResend(
     if (bcc.length > 0) payload.bcc = bcc;
     if (bodyHtml) payload.html = bodyHtml;
     if (Object.keys(headers).length > 0) payload.headers = headers;
+    if (attachments.length > 0) {
+      payload.attachments = attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content_base64,
+      }));
+    }
 
     const resp = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -194,6 +217,7 @@ async function sendViaMsGraph(
   bodyText: string,
   bodyHtml: string | null,
   inReplyTo: string | null,
+  attachments: EmailAttachmentInput[],
 ): Promise<SendResult> {
   try {
     const message: Record<string, unknown> = {
@@ -215,6 +239,16 @@ async function sendViaMsGraph(
       message.internetMessageHeaders = [
         { name: "In-Reply-To", value: inReplyTo },
       ];
+    }
+    if (attachments.length > 0) {
+      // sendMail carries attachments inline; the whole request must stay
+      // under ~4 MB. Larger files require an upload session (future work).
+      message.attachments = attachments.map((a) => ({
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: a.filename,
+        contentType: a.content_type || "application/octet-stream",
+        contentBytes: a.content_base64,
+      }));
     }
 
     const resp = await fetch(
@@ -241,6 +275,95 @@ async function sendViaMsGraph(
     const msg = err instanceof Error ? err.message : String(err);
     return { provider: "msgraph", provider_message_id: null, success: false, error: msg };
   }
+}
+
+// ── Attachment Helpers ──────────────────────────────────────────────────────────
+
+function base64ToBytes(b64: string): Uint8Array {
+  const clean = b64.replace(/\s/g, "");
+  const binary = atob(clean);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function hashContent(data: Uint8Array): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Persist sent attachments to Storage + email_attachments, mirroring the
+// inbound email-ingest path so the Email Inbox renders them identically.
+async function storeSentAttachments(
+  supabaseUrl: string,
+  serviceKey: string,
+  projectId: string,
+  messageId: string,
+  attachments: EmailAttachmentInput[],
+): Promise<number> {
+  let stored = 0;
+  for (const att of attachments) {
+    try {
+      const bytes = base64ToBytes(att.content_base64);
+      const contentType = att.content_type || "application/octet-stream";
+      const contentHash = await hashContent(bytes);
+      const storagePath = `${projectId}/${messageId}/${att.filename}`;
+
+      const uploadResp = await fetch(
+        `${supabaseUrl}/storage/v1/object/email-attachments/${storagePath}`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${serviceKey}`,
+            "apikey": serviceKey,
+            "Content-Type": contentType,
+            "x-upsert": "true",
+          },
+          body: bytes,
+        },
+      );
+
+      if (!uploadResp.ok) {
+        const detail = await uploadResp.text();
+        console.error(`[email-send] Storage upload failed for ${att.filename}: ${detail.slice(0, 200)}`);
+        continue;
+      }
+
+      const attRow = {
+        message_id: messageId,
+        project_id: projectId,
+        filename: att.filename,
+        content_type: contentType,
+        size_bytes: bytes.length,
+        content_hash: contentHash,
+        storage_path: storagePath,
+        storage_bucket: "email-attachments",
+      };
+
+      const attResp = await fetch(`${supabaseUrl}/rest/v1/email_attachments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": serviceKey,
+          "Authorization": `Bearer ${serviceKey}`,
+          "Prefer": "return=minimal",
+        },
+        body: JSON.stringify(attRow),
+      });
+
+      if (!attResp.ok) {
+        const detail = await attResp.text();
+        console.error(`[email-send] Insert attachment failed for ${att.filename}: ${detail.slice(0, 200)}`);
+        continue;
+      }
+
+      stored++;
+    } catch (err) {
+      console.error(`[email-send] Attachment error for ${att.filename}: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  return stored;
 }
 
 // ── Store Sent Message ────────────────────────────────────────────────────────
@@ -276,8 +399,8 @@ async function storeSentMessage(
     thread_id: req.thread_id || null,
     import_status: "approved",
     is_read: true,
-    has_attachments: false,
-    attachment_count: 0,
+    has_attachments: (req.attachments?.length ?? 0) > 0,
+    attachment_count: req.attachments?.length ?? 0,
     parsed_type: "general",
     parsed_confidence: 1.0,
     parsed_metadata: JSON.stringify({
@@ -337,6 +460,19 @@ async function handle(req: Request): Promise<Response> {
   if (!body.subject) return errorResponse(400, "subject is required");
   if (!body.body_text) return errorResponse(400, "body_text is required");
 
+  // Validate + size-guard attachments (base64 inflates ~33%; cap on raw bytes)
+  const attachments = body.attachments ?? [];
+  let attachmentBytes = 0;
+  for (const att of attachments) {
+    if (!att.filename || !att.content_base64) {
+      return errorResponse(400, "Each attachment requires filename and content_base64");
+    }
+    attachmentBytes += Math.floor(att.content_base64.length * 0.75);
+  }
+  if (attachmentBytes > MAX_ATTACHMENT_TOTAL_BYTES) {
+    return errorResponse(413, "Attachments exceed the 20 MB total limit");
+  }
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceKey) return errorResponse(500, "Edge function not configured");
@@ -394,13 +530,13 @@ async function handle(req: Request): Promise<Response> {
     result = await sendViaMsGraph(
       token, fromEmail, body.to, body.cc || [], body.bcc || [],
       body.subject, body.body_text, body.body_html || null,
-      body.in_reply_to_external_id || null,
+      body.in_reply_to_external_id || null, attachments,
     );
   } else if (resendKey) {
     result = await sendViaResend(
       resendKey, fromFormatted, body.to, body.cc || [], body.bcc || [],
       body.subject, body.body_text, body.body_html || null,
-      threadingHeaders,
+      threadingHeaders, attachments,
     );
   } else {
     return errorResponse(503, "No email send provider configured. Set RESEND_API_KEY or MS_GRAPH_* secrets.");
@@ -418,10 +554,17 @@ async function handle(req: Request): Promise<Response> {
   // Store the sent message
   const storedId = await storeSentMessage(supabaseUrl, serviceKey, body.project_id, user.userId, body, result);
 
+  // Persist attachments now that we have the stored message id
+  let attachmentsStored = 0;
+  if (storedId && attachments.length > 0) {
+    attachmentsStored = await storeSentAttachments(supabaseUrl, serviceKey, body.project_id, storedId, attachments);
+  }
+
   console.log(
     `[email-send] Sent: project=${body.project_id} from=${fromEmail} ` +
     `to=${body.to.join(",")} subject="${body.subject.slice(0, 60)}" ` +
-    `provider=${result.provider} stored=${storedId || "failed"}`,
+    `provider=${result.provider} stored=${storedId || "failed"} ` +
+    `attachments=${attachmentsStored}/${attachments.length}`,
   );
 
   return jsonResponse({
