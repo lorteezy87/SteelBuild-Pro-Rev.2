@@ -14,7 +14,6 @@ import { toast } from "sonner";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import {
   FolderOpen, Plus, Trash2, Power, PowerOff, Clock, RefreshCw,
-  ChevronDown,
 } from "lucide-react";
 
 // ── Provider config ───────────────────────────────────────────────────

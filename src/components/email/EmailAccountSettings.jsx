@@ -13,8 +13,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import {
-  Mail, Plus, Trash2, Power, PowerOff, Clock, Copy, ExternalLink,
-  Check, X, AlertTriangle, ChevronDown,
+  Mail, Plus, Trash2, Power, PowerOff, Clock, Copy,
+  Check, AlertTriangle,
 } from "lucide-react";
 
 // ── Time helper ────────────────────────────────────────────────────────

@@ -25,7 +25,7 @@ import {
   calcLaborBurn,
 } from "@/utils/projectKpis";
 import ReportShell from "./ReportShell";
-import { FilterBar, SearchInput, SelectFilter } from "./ReportFilters";
+import { FilterBar, SearchInput } from "./ReportFilters";
 import { mono, body, CARD, CARD_TITLE, LABEL, HEALTH_COLORS } from "./constants";
 import {
   formatCurrency,
@@ -35,8 +35,7 @@ import {
 } from "./utils";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
-  ResponsiveContainer, Cell, BarChart, Bar, LabelList, Legend,
-  PieChart, Pie,
+  ResponsiveContainer, Cell, BarChart, Bar,
 } from "recharts";
 
 /* ─── Helpers ─────────────────────────────────────────────────────── */

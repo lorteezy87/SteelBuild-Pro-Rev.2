@@ -13,8 +13,7 @@ import { toast } from "sonner";
 import { invalidateEntity, invalidateEntities } from "@/services/cacheRegistry";
 import {
   X, CheckCircle, XCircle, Download, RotateCcw,
-  FileText, Image, FileSpreadsheet, File, Clock,
-  ChevronDown, SkipForward,
+  FileText, Image, FileSpreadsheet, File, Clock, SkipForward,
 } from "lucide-react";
 
 // ── Provider labels ───────────────────────────────────────────────────
