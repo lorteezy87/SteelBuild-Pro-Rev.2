@@ -258,7 +258,7 @@ function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search tasks..
   );
 }
 
-export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete }) {
+export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete, effectiveDates = {} }) {
   const [formData, setFormData] = useState(task || {});
   const [activeTab, setActiveTab] = useState('details');
   // Local editable copy of the detailing stage-gate dates. Mirrors
@@ -615,6 +615,40 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                   <FormField label="WBS Code" value={formData.wbs_code || ''} onChange={(v) => setFormData({ ...formData, wbs_code: v })} />
                 </div>
               </div>
+
+              {/* Effective-date banner — shown when predecessors shift the
+                  Gantt bar past the stored dates so users understand why
+                  the bar and drawer dates differ. */}
+              {(() => {
+                const eff = task?.id && effectiveDates[task.id];
+                if (!eff?.shifted) return null;
+                const fmtShort = (iso) => {
+                  try { return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }); }
+                  catch { return iso; }
+                };
+                return (
+                  <div style={{
+                    background: 'rgba(59,130,246,0.10)',
+                    border: '1px solid rgba(59,130,246,0.30)',
+                    borderRadius: 8,
+                    padding: '8px 12px',
+                    marginBottom: 8,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                  }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: 'rgba(147,197,253,0.95)', letterSpacing: '0.04em' }}>
+                      SHIFTED BY PREDECESSORS
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: drawerText }}>
+                      Gantt shows {fmtShort(eff.start)} → {fmtShort(eff.end)}
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: drawerMutedText }}>
+                      Dates below are the stored values — edit them to update the schedule.
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* Dates section — full-width so date pickers don't get
                   squished. Detailing tasks render the four-gate panel

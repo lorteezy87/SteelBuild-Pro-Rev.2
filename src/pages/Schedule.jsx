@@ -21,7 +21,7 @@ import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
-import { applyEffectiveDates } from "@/services/scheduleCascade";
+import { applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -249,9 +249,14 @@ export default function Schedule() {
   // know "where is this task effectively scheduled?", so feeding them the
   // overlaid array is simpler and removes the prior bug where those views
   // showed dates that didn't match the Gantt bars.
-  const tasksWithEffective = useMemo(
-    () => applyEffectiveDates(enrichedTasks),
+  const effectiveDatesMap = useMemo(
+    () => computeEffectiveDates(enrichedTasks),
     [enrichedTasks]
+  );
+
+  const tasksWithEffective = useMemo(
+    () => applyEffectiveDates(enrichedTasks, effectiveDatesMap),
+    [enrichedTasks, effectiveDatesMap]
   );
 
   const updateTaskMut = useMutation({
@@ -1049,6 +1054,7 @@ export default function Schedule() {
         onUpdate={(data) => updateTaskMut.mutate(data)}
         onDelete={(id) => deleteTaskMut.mutate(id)}
         allTasks={enrichedTasks}
+        effectiveDates={effectiveDatesMap}
       />
 
       {/* Add Task Modal */}
