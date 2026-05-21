@@ -178,15 +178,21 @@ export default function EmailAccountSettings({ projectId }) {
               onClick={() => setAddType("manual_forward")}
             />
             <TypeButton
-              label="Connect Outlook"
+              label="Power Automate"
+              active={addType === "power_automate"}
+              onClick={() => setAddType("power_automate")}
+            />
+            <TypeButton
+              label="Outlook OAuth"
               active={addType === "oauth"}
               onClick={() => setAddType("oauth")}
               disabled
-              tooltip="Coming Soon -- requires Azure AD app registration"
+              tooltip="Coming Soon — requires Azure AD app registration"
             />
           </div>
 
-          {addType === "manual_forward" ? (
+          {/* ── Manual Forward ──────────────────────────────────────── */}
+          {addType === "manual_forward" && (
             <>
               <div style={{ marginBottom: 10 }}>
                 <label style={labelStyle}>Email Address</label>
@@ -210,77 +216,118 @@ export default function EmailAccountSettings({ projectId }) {
               </div>
 
               {/* Webhook URL */}
-              <div style={{ marginBottom: 12 }}>
-                <label style={labelStyle}>Forward Emails To</label>
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "6px 10px",
-                  background: "var(--bg-surface)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: 8,
-                }}>
-                  <code style={{
-                    flex: 1,
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 10,
-                    color: "var(--text-secondary)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}>
-                    {webhookUrl}
-                  </code>
-                  <button
-                    onClick={handleCopyUrl}
-                    title="Copy URL"
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      color: copiedUrl ? "var(--success)" : "var(--text-muted)",
-                      padding: 2,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {copiedUrl ? <Check size={12} /> : <Copy size={12} />}
-                  </button>
-                </div>
-                <p style={{
-                  fontFamily: "var(--font-body)",
-                  fontSize: 10,
-                  color: "var(--text-muted)",
-                  margin: "4px 0 0",
-                  lineHeight: 1.4,
-                }}>
-                  Set up an Outlook rule to auto-forward project emails to this URL.
-                  Forwarded emails will appear in the Email Inbox for review.
-                </p>
-              </div>
+              <WebhookUrlBlock webhookUrl={webhookUrl} copiedUrl={copiedUrl} onCopy={handleCopyUrl} />
+              <p style={hintTextStyle}>
+                Set up an Outlook rule to auto-forward project emails to this URL.
+                Forwarded emails will appear in the Email Inbox for review.
+              </p>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10 }}>
                 <button onClick={() => setShowAddForm(false)} style={secondaryBtnStyle}>Cancel</button>
                 <button onClick={handleAdd} disabled={createMut.isPending} style={primaryBtnStyle}>
                   {createMut.isPending ? "Adding..." : "Add Account"}
                 </button>
               </div>
             </>
-          ) : (
+          )}
+
+          {/* ── Power Automate ──────────────────────────────────────── */}
+          {addType === "power_automate" && (
+            <>
+              <div style={{ marginBottom: 10 }}>
+                <label style={labelStyle}>Shared Mailbox Address</label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="projects@shsteelaz.com"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={labelStyle}>Display Name (optional)</label>
+                <input
+                  type="text"
+                  value={newDisplayName}
+                  onChange={(e) => setNewDisplayName(e.target.value)}
+                  placeholder="SHS Steel Projects"
+                  style={inputStyle}
+                />
+              </div>
+
+              {/* Webhook URL */}
+              <WebhookUrlBlock webhookUrl={webhookUrl} copiedUrl={copiedUrl} onCopy={handleCopyUrl} />
+
+              {/* Setup guide */}
+              <div style={{
+                marginTop: 10, padding: "10px 12px",
+                background: "color-mix(in srgb, var(--info) 6%, transparent)",
+                border: "1px solid color-mix(in srgb, var(--info) 20%, transparent)",
+                borderRadius: 8,
+              }}>
+                <div style={{
+                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                  letterSpacing: "0.1em", textTransform: "uppercase",
+                  color: "var(--info)", marginBottom: 6,
+                }}>
+                  Power Automate Setup
+                </div>
+                <ol style={{
+                  fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)",
+                  lineHeight: 1.6, margin: 0, paddingLeft: 18,
+                }}>
+                  <li>Open <strong>Power Automate</strong> in Microsoft 365.</li>
+                  <li>Create a new <strong>Automated cloud flow</strong>.</li>
+                  <li>Trigger: <em>When a new email arrives</em> (Office 365 Outlook).</li>
+                  <li>Set the shared mailbox or folder to monitor.</li>
+                  <li>Add an action: <strong>HTTP — POST</strong> to the webhook URL above.</li>
+                  <li>Set header: <code style={{ fontSize: 10 }}>x-webhook-secret</code> = your EMAIL_WEBHOOK_SECRET.</li>
+                  <li>Body (JSON): include <code style={{ fontSize: 10 }}>subject</code>, <code style={{ fontSize: 10 }}>from</code>, <code style={{ fontSize: 10 }}>toRecipients</code>, <code style={{ fontSize: 10 }}>body</code>, <code style={{ fontSize: 10 }}>receivedDateTime</code>, <code style={{ fontSize: 10 }}>internetMessageId</code>, and <code style={{ fontSize: 10 }}>attachments</code> from the trigger output.</li>
+                  <li>Save and test — emails will appear in the Email Inbox.</li>
+                </ol>
+                <p style={{
+                  fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-muted)",
+                  margin: "8px 0 0", lineHeight: 1.4,
+                }}>
+                  The ingestion endpoint supports Microsoft Graph / Power Automate nested formats natively —
+                  including nested <code style={{ fontSize: 9 }}>emailAddress</code> objects and base64 <code style={{ fontSize: 9 }}>contentBytes</code> attachments.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10 }}>
+                <button onClick={() => setShowAddForm(false)} style={secondaryBtnStyle}>Cancel</button>
+                <button
+                  onClick={() => {
+                    if (!newEmail.trim()) { toast.error("Email address is required"); return; }
+                    createMut.mutate({
+                      project_id: projectId,
+                      email_address: newEmail.trim(),
+                      display_name: newDisplayName.trim() || null,
+                      connection_type: "power_automate",
+                      provider: "outlook",
+                      is_active: true,
+                    });
+                  }}
+                  disabled={createMut.isPending}
+                  style={primaryBtnStyle}
+                >
+                  {createMut.isPending ? "Adding..." : "Add Account"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Outlook OAuth (disabled) ────────────────────────────── */}
+          {addType === "oauth" && (
             <div style={{
-              padding: 20,
-              textAlign: "center",
-              color: "var(--text-muted)",
-              fontFamily: "var(--font-body)",
-              fontSize: 12,
-              lineHeight: 1.5,
+              padding: 20, textAlign: "center", color: "var(--text-muted)",
+              fontFamily: "var(--font-body)", fontSize: 12, lineHeight: 1.5,
             }}>
               <AlertTriangle size={20} strokeWidth={1.5} style={{ marginBottom: 8, color: "var(--warning)" }} />
               <br />
-              OAuth connection requires Azure AD app registration.
+              Direct Outlook OAuth connection requires Azure AD app registration.
               <br />
-              Contact your IT administrator to set up the application registration,
-              then configure the client ID and tenant ID in the project settings.
+              Use <strong>Power Automate</strong> for the fastest path to live email ingestion.
             </div>
           )}
         </div>
@@ -367,7 +414,7 @@ export default function EmailAccountSettings({ projectId }) {
                     background: "var(--bg-surface-low)",
                     borderRadius: 3,
                   }}>
-                    {account.connection_type === "manual_forward" ? "Forward" : "OAuth"}
+                    {account.connection_type === "manual_forward" ? "Forward" : account.connection_type === "power_automate" ? "Power Automate" : "OAuth"}
                   </span>
                   <span style={{
                     display: "inline-flex",
@@ -439,7 +486,48 @@ function TypeButton({ label, active, onClick, disabled, tooltip }) {
   );
 }
 
+// ── Webhook URL block (shared between manual forward and Power Automate) ──
+
+function WebhookUrlBlock({ webhookUrl, copiedUrl, onCopy }) {
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <label style={labelStyle}>Webhook URL</label>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "6px 10px", background: "var(--bg-surface)",
+        border: "1px solid var(--border-default)", borderRadius: 8,
+      }}>
+        <code style={{
+          flex: 1, fontFamily: "var(--font-mono)", fontSize: 10,
+          color: "var(--text-secondary)", overflow: "hidden",
+          textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {webhookUrl}
+        </code>
+        <button
+          onClick={onCopy} title="Copy URL"
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            color: copiedUrl ? "var(--success)" : "var(--text-muted)",
+            padding: 2, flexShrink: 0,
+          }}
+        >
+          {copiedUrl ? <Check size={12} /> : <Copy size={12} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Shared styles ──────────────────────────────────────────────────────
+
+const hintTextStyle = {
+  fontFamily: "var(--font-body)",
+  fontSize: 10,
+  color: "var(--text-muted)",
+  margin: "4px 0 0",
+  lineHeight: 1.4,
+};
 
 const labelStyle = {
   display: "block",
