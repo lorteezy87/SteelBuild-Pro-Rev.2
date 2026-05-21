@@ -73,12 +73,14 @@ describe("useFormValidation", () => {
     expect(result.current.fieldErrors.completed_date).toContain("must not be before");
   });
 
-  it("handles unknown entity gracefully", () => {
+  it("fails closed for an unknown entity", () => {
+    // H6 fix: unknown entity types fail validation instead of passing.
     const { result } = renderHook(() => useFormValidation("nonexistent"));
     let valid;
     act(() => {
       valid = result.current.runValidation({});
     });
-    expect(valid).toBe(true);
+    expect(valid).toBe(false);
+    expect(result.current.fieldErrors._entity).toMatch(/unknown entity type/i);
   });
 });
