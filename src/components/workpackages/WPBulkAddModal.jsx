@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle } from "@/components/shared/PhoenixModal";
 
 /*
@@ -226,6 +226,38 @@ export default function WPBulkAddModal({
   isSaving = false,
 }) {
   const [raw, setRaw] = useState("");
+  const [fileError, setFileError] = useState("");
+  const fileInputRef = useRef(null);
+
+  // Read a CSV/TSV file from disk into the paste box. parseBlock already
+  // handles both delimiters + optional headers, so the file path reuses
+  // the exact same validation/preview/commit pipeline as pasting.
+  const handleFilePick = (e) => {
+    const file = e.target.files?.[0];
+    // Clear the input so re-selecting the same file fires onChange again.
+    e.target.value = "";
+    if (!file) return;
+    setFileError("");
+    if (file.size > 5 * 1024 * 1024) {
+      setFileError(`"${file.name}" is larger than 5MB. Export a smaller CSV.`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === "string" ? reader.result : "";
+      if (text.includes("\u0000")) {
+        setFileError(`"${file.name}" looks like a binary file (e.g. .xlsx). Save it as CSV first.`);
+        return;
+      }
+      if (!text.trim()) {
+        setFileError(`"${file.name}" is empty.`);
+        return;
+      }
+      setRaw(text);
+    };
+    reader.onerror = () => setFileError(`Could not read "${file.name}".`);
+    reader.readAsText(file);
+  };
 
   const { rows, headerDetected } = useMemo(() => parseBlock(raw), [raw]);
 
@@ -261,10 +293,28 @@ export default function WPBulkAddModal({
     onCommit(payload);
   };
 
-  const loadExample = () => setRaw(EXAMPLE);
+  const loadExample = () => {
+    setFileError("");
+    setRaw(EXAMPLE);
+  };
 
   const footer = (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"
+        onChange={handleFilePick}
+        style={{ display: "none" }}
+      />
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        style={{ ...btnSecondary, marginRight: 8 }}
+        disabled={isSaving}
+      >
+        Upload CSV File
+      </button>
       <button
         type="button"
         onClick={loadExample}
@@ -310,7 +360,8 @@ export default function WPBulkAddModal({
             padding: "10px 12px",
           }}
         >
-          Paste directly from Excel or a CSV. Supports tab- or comma-separated values. Expected columns
+          Paste directly from Excel or a CSV, or use <strong>Upload CSV File</strong> to load a .csv/.tsv
+          from disk. Supports tab- or comma-separated values. Expected columns
           (in any order when a header row is included):{" "}
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)" }}>
             WP #, Name, Phase, Status, Tonnage, % Complete, Crew, Shop Hrs Budget, Shop Hrs Actual, Notes
@@ -318,6 +369,18 @@ export default function WPBulkAddModal({
           . Blank WP # values will be auto-numbered on save. Duplicates of existing WP numbers on this project
           are flagged but allowed.
         </div>
+
+        {fileError && (
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--status-error)",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
+            {fileError}
+          </div>
+        )}
 
         {/* Paste textarea */}
         <div>
@@ -337,7 +400,7 @@ export default function WPBulkAddModal({
           </label>
           <textarea
             value={raw}
-            onChange={(e) => setRaw(e.target.value)}
+            onChange={(e) => { setFileError(""); setRaw(e.target.value); }}
             placeholder={"WP #\tName\tPhase\tStatus\tTonnage\t% Complete\tCrew\tShop Hrs Budget\tShop Hrs Actual\tNotes\nWP-001\tShop A - Main Steel\tFabrication\tNot Started\t42.5\t0%\t\t120\t0\t"}
             spellCheck={false}
             style={{
