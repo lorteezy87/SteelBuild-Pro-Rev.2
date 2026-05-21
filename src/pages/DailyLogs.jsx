@@ -7,7 +7,7 @@ import DailyLogsList from "@/components/fieldops/DailyLogsList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
-import { Plus, Copy } from "lucide-react";
+import { Copy } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";

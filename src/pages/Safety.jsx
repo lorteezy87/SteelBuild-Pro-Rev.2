@@ -7,7 +7,6 @@ import SafetyIncidentFormModal from "@/components/safety/SafetyIncidentFormModal
 import SafetyIncidentList from "@/components/safety/SafetyIncidentList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
-import { Plus } from "lucide-react";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
