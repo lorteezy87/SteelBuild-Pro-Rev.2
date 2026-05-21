@@ -31,6 +31,7 @@ import {
   Send, Hash,
 } from "lucide-react";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 
@@ -159,6 +160,14 @@ export default function EmailInbox() {
     queryFn: () => base44.entities.EmailAttachment.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
+
+  // Live updates — new webhook emails appear without manual refresh
+  useRealtimeInvalidation("email_messages", projectId, [
+    ["email-messages", projectId],
+  ]);
+  useRealtimeInvalidation("email_attachments", projectId, [
+    ["email-attachments", projectId],
+  ]);
 
   const attachmentsByMessage = useMemo(() => {
     const map = {};
@@ -1367,8 +1376,49 @@ function CreateRecordModal({ message, attachments, projectId, onClose, onSuccess
           import_status: "approved", linked_entity_type: entityType,
           linked_entity_id: createdRecord.id, reviewed_at: new Date().toISOString(),
         });
+
+        // File selected attachments as documents
+        if (selectedAttachments.size > 0) {
+          const attsToFile = attachments.filter((a) => selectedAttachments.has(a.id));
+          const today = new Date().toISOString();
+          let filedCount = 0;
+          for (const att of attsToFile) {
+            try {
+              const ext = (att.filename || "").split(".").pop()?.toLowerCase() || "other";
+              const knownTypes = ["pdf","dwg","dxf","ifc","rvt","jpg","jpeg","png","xlsx","xls","docx","doc","csv","zip"];
+              await base44.entities.Document.create({
+                project_id: projectId,
+                display_name: att.filename,
+                description: `Filed from email: ${message.subject || "(no subject)"}\nFrom: ${message.sender_name || message.sender_email}`,
+                file_name: att.filename,
+                file_url: att.storage_path
+                  ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/email-attachments/${att.storage_path}`
+                  : null,
+                file_type: knownTypes.includes(ext) ? ext : "other",
+                file_size_kb: att.size_bytes ? Math.round(att.size_bytes / 1024) : 0,
+                mime_type: att.content_type || "application/octet-stream",
+                category: "Correspondence",
+                status: "Final",
+                revision_number: "0",
+                revision_date: today.split("T")[0],
+                tags: ["email-attachment", entityType],
+                uploaded_date: today,
+                source_type: "email",
+                source_id: message.id,
+              });
+              filedCount++;
+            } catch (docErr) {
+              console.error(`[EmailInbox] Failed to file attachment ${att.filename}:`, docErr);
+            }
+          }
+          if (filedCount > 0) {
+            invalidateEntity(qc, "document", projectId);
+          }
+        }
       }
-      toast.success(`${ENTITY_TYPE_OPTIONS.find((o) => o.value === entityType)?.label || "Record"} created from email`);
+      const typeName = ENTITY_TYPE_OPTIONS.find((o) => o.value === entityType)?.label || "Record";
+      const attMsg = selectedAttachments.size > 0 ? ` (${selectedAttachments.size} attachment${selectedAttachments.size > 1 ? "s" : ""} filed)` : "";
+      toast.success(`${typeName} created from email${attMsg}`);
       onSuccess();
     } catch (err) {
       toast.error("Failed: " + (err?.message || "Unknown error"));
