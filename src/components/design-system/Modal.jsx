@@ -12,7 +12,7 @@
  * project-wide modal convention.
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import Icon from "./Icon";
 
