@@ -7,7 +7,6 @@ import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import PunchlistList from "@/components/punchlist/PunchlistList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, ProgressBar, BulkActionBar, Button } from "@/components/design-system";
-import { Plus } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
