@@ -59,6 +59,7 @@ const ROUTE_DOMAINS = {
     ProjectControlCenter:   r(lazyWithRetry(() => import("@/pages/ProjectControlCenter")),  "Project Control Center",    { projectScoped: true }),
     ExecutiveView:          r(lazyWithRetry(() => import("@/pages/ExecutiveView")),         "Executive View"),
     Projects:               r(lazyWithRetry(() => import("@/pages/Projects")),              "Projects"),
+    PortfolioGantt:         r(lazyWithRetry(() => import("@/pages/PortfolioGantt")),        "Portfolio Schedule"),
     Onboarding:             r(lazyWithRetry(() => import("@/pages/Onboarding")),            "Onboarding"),
     ProjectDetail:          r(lazyWithRetry(() => import("@/pages/ProjectDetail")),         "Project Detail"),
     AIInsights:             r(lazyWithRetry(() => import("@/pages/AIInsights")),            "Portfolio Overview"),
