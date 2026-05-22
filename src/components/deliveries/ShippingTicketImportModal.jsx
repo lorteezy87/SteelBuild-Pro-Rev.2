@@ -35,8 +35,6 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
 
   // Each ticket: { file, uploaded, parsed, matchedProject, chosenProjectId, error, expanded }
 
-  if (!open) return null;
-
   const reset = () => {
     setStep("upload"); setFiles([]); setTickets([]);
     setProgress({ done: 0, total: 0 }); setErr(null);
@@ -71,6 +69,9 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
       return [...prev, ...newFiles];
     });
   }, []);
+
+  // All hooks must run before any early return (Rules of Hooks).
+  if (!open) return null;
 
   const removeFile = (idx) => {
     setFiles(prev => prev.filter((_, i) => i !== idx));
