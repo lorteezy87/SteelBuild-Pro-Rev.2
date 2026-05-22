@@ -16,7 +16,8 @@ node_modules
 dist
 dist-ssr
 **/.next
-.claude
+# Claude Code: track shared project config (settings.json) + hooks; ignore local/session settings
+.claude/settings.local.json
 steelbuild-pro
 SteelBuild-Pro-Rev.2/
 *.local
