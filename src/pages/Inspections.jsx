@@ -7,7 +7,6 @@ import InspectionFormModal from "@/components/inspections/InspectionFormModal";
 import InspectionList from "@/components/inspections/InspectionList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
-import { Plus } from "lucide-react";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 const TYPES = [

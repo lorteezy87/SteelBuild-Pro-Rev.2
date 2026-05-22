@@ -13,7 +13,7 @@ import KPIStrip from "../components/shared/KPIStrip";
 import SearchFilter from "../components/shared/SearchFilter";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { formatCurrency } from "../components/shared/formatters";
-import { Plus, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { VENDOR_STATUS } from "@/lib/enums";
 import { exportToCSV } from "@/lib/csv";
 
