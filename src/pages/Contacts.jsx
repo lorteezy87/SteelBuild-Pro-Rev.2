@@ -6,7 +6,7 @@ import ContactFormModal from "@/components/contacts/ContactFormModal";
 import ContactList from "@/components/contacts/ContactList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
-import { Plus, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
 import { CONTACT_TYPE } from "@/lib/enums";
 
