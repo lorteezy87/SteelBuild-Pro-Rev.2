@@ -70,7 +70,7 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
     });
   }, []);
 
-  // All hooks above run unconditionally; the open guard comes after them.
+  // All hooks must run before any early return (Rules of Hooks).
   if (!open) return null;
 
   const removeFile = (idx) => {
