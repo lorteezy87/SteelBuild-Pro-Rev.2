@@ -103,3 +103,24 @@ WHERE dl.linked_record_type = 'document'
   AND (dl.metadata->>'finding_id') IS NOT NULL
   AND df.id         = (dl.metadata->>'finding_id')::uuid
   AND da.project_id = dl.project_id;
+
+
+-- ============================================================================
+-- Consolidated from 056_rfis_status_add_incomplete_response.sql
+-- This migration shared a numeric version prefix with 056_drawing_links_finding_type.sql, so Supabase's
+-- migration runner (which keys on the leading numeric token) silently skipped
+-- it on a clean apply, leaving its objects uncreated on fresh branch DBs.
+-- Folded here so a from-scratch apply runs it in order. Production already
+-- recorded it under a separate timestamp version, so prod is unaffected.
+-- ============================================================================
+-- Migration 056: Add 'Incomplete Response' to the RFI status CHECK constraint.
+--
+-- Workflow context: 'Incomplete Response' = the GC sent an answer back, but the
+-- response doesn't fully address the question and the RFI needs another round.
+-- It sits between 'Under Review' and 'Answered' in the lifecycle — the RFI is
+-- technically responded-to but still requires action. Treated as still-open
+-- (NOT included in ['Answered','Closed'] closed-state filters).
+
+ALTER TABLE rfis DROP CONSTRAINT IF EXISTS chk_rfis_status;
+ALTER TABLE rfis ADD CONSTRAINT chk_rfis_status
+  CHECK (status IN ('Open', 'Under Review', 'Incomplete Response', 'Answered', 'Closed', 'Void'));

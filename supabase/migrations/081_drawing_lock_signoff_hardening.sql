@@ -96,3 +96,105 @@ DROP TRIGGER IF EXISTS drawing_signoffs_void_only_update_check ON public.drawing
 CREATE TRIGGER drawing_signoffs_void_only_update_check
   BEFORE UPDATE ON public.drawing_signoffs
   FOR EACH ROW EXECUTE FUNCTION public.enforce_signoff_void_only_update();
+
+
+-- ============================================================================
+-- Consolidated from 081_llm_telemetry.sql
+-- This migration shared a numeric version prefix with 081_drawing_lock_signoff_hardening.sql, so Supabase's
+-- migration runner (which keys on the leading numeric token) silently skipped
+-- it on a clean apply, leaving its objects uncreated on fresh branch DBs.
+-- Folded here so a from-scratch apply runs it in order. Production already
+-- recorded it under a separate timestamp version, so prod is unaffected.
+-- ============================================================================
+-- 081_llm_telemetry.sql
+--
+-- LLM Gateway Phase 1 telemetry table.
+--
+-- Captures one row per llm-proxy call so we can answer:
+--   * Cost per use case / project / day
+--   * P50/P95 latency by provider+model
+--   * Error rate (success=false) and dominant error_kind by use case
+--
+-- Phase 2 will read this table to make informed per-use-case provider
+-- routing decisions (e.g. switch sheet-extraction to Gemini Flash if
+-- input-token volume is high).
+--
+-- Inserts are performed by the edge function under the service role,
+-- which bypasses RLS — so we only need a SELECT policy. Admins can read
+-- aggregates; everyone else gets nothing.
+
+CREATE TABLE IF NOT EXISTS public.llm_telemetry (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  occurred_at     timestamptz NOT NULL DEFAULT now(),
+  use_case        text NOT NULL DEFAULT 'general',
+  provider        text NOT NULL,
+  model           text NOT NULL,
+  user_id         uuid,
+  project_id      uuid,
+  input_tokens    integer,
+  output_tokens   integer,
+  cost_usd        numeric(12, 6),
+  latency_ms      integer,
+  success         boolean NOT NULL DEFAULT true,
+  error_kind      text,
+  metadata        jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_llm_telemetry_use_case
+  ON public.llm_telemetry(use_case, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_telemetry_provider
+  ON public.llm_telemetry(provider, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_telemetry_project
+  ON public.llm_telemetry(project_id, occurred_at DESC)
+  WHERE project_id IS NOT NULL;
+
+ALTER TABLE public.llm_telemetry ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS llm_telemetry_select ON public.llm_telemetry;
+CREATE POLICY llm_telemetry_select ON public.llm_telemetry
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_profiles
+      WHERE user_profiles.id = auth.uid() AND user_profiles.role = 'admin'
+    )
+  );
+
+
+-- ============================================================================
+-- Consolidated from 081_photos_rbac_policies.sql
+-- This migration shared a numeric version prefix with 081_drawing_lock_signoff_hardening.sql, so Supabase's
+-- migration runner (which keys on the leading numeric token) silently skipped
+-- it on a clean apply, leaving its objects uncreated on fresh branch DBs.
+-- Folded here so a from-scratch apply runs it in order. Production already
+-- recorded it under a separate timestamp version, so prod is unaffected.
+-- ============================================================================
+-- 081_photos_rbac_policies.sql
+-- Enforce app RBAC model for photos at the database layer.
+-- view/select: project member
+-- create/insert: field+
+-- edit/update: field+
+-- delete: admin
+
+DROP POLICY IF EXISTS project_member_access ON public.photos;
+DROP POLICY IF EXISTS photos_select ON public.photos;
+DROP POLICY IF EXISTS photos_insert ON public.photos;
+DROP POLICY IF EXISTS photos_update ON public.photos;
+DROP POLICY IF EXISTS photos_delete ON public.photos;
+
+CREATE POLICY photos_select
+  ON public.photos FOR SELECT
+  USING (public.user_has_project_access(project_id));
+
+CREATE POLICY photos_insert
+  ON public.photos FOR INSERT
+  WITH CHECK (public.user_has_project_role_at_least(project_id, 'field'));
+
+CREATE POLICY photos_update
+  ON public.photos FOR UPDATE
+  USING (public.user_has_project_role_at_least(project_id, 'field'))
+  WITH CHECK (public.user_has_project_role_at_least(project_id, 'field'));
+
+CREATE POLICY photos_delete
+  ON public.photos FOR DELETE
+  USING (public.user_has_project_role_at_least(project_id, 'admin'));
