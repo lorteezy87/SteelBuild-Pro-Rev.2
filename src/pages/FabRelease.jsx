@@ -43,7 +43,6 @@ import {
   appendRecordToCaches,
   replaceRecordInCaches,
   removeRecordFromCaches,
-  invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
 import { usePermissions } from "@/services/permissions";

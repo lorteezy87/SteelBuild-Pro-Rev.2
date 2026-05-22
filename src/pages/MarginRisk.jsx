@@ -21,7 +21,6 @@ import {
   Package,
   ShieldAlert,
   Timer,
-  TrendingDown,
 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useProjectId } from "@/hooks/useProjectId";
