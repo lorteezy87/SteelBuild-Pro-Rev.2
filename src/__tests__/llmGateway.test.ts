@@ -58,33 +58,34 @@ describe("router.getProviderForUseCase", () => {
     }
   });
 
-  it("routes schedule-assist to Anthropic Sonnet", () => {
+  it("routes schedule-assist to OpenAI gpt-4o", () => {
     // schedule-assistant keeps its local schedule tools, but its model
     // calls use this route so telemetry and provider switches stay
-    // centralized in llm-proxy.
+    // centralized in llm-proxy. Switched Anthropic → OpenAI (May 2026)
+    // when the Anthropic credit balance was exhausted.
     expect(getProviderForUseCase("schedule-assist")).toEqual({
-      provider: "anthropic",
-      model: "claude-sonnet-4-5",
+      provider: "openai",
+      model: "gpt-4o",
     });
   });
 
   it("undefined → general fallback", () => {
     const target = getProviderForUseCase(undefined);
-    expect(target).toEqual({ provider: "anthropic", model: "claude-sonnet-4-5" });
+    expect(target).toEqual({ provider: "openai", model: "gpt-4o" });
   });
 
   it("null → general fallback", () => {
     const target = getProviderForUseCase(null);
-    expect(target).toEqual({ provider: "anthropic", model: "claude-sonnet-4-5" });
+    expect(target).toEqual({ provider: "openai", model: "gpt-4o" });
   });
 
   it("unknown useCase → general fallback (typos must NOT crash)", () => {
     const target = getProviderForUseCase("does-not-exist");
-    expect(target).toEqual({ provider: "anthropic", model: "claude-sonnet-4-5" });
+    expect(target).toEqual({ provider: "openai", model: "gpt-4o" });
   });
 
   it("empty string → general fallback", () => {
-    expect(getProviderForUseCase("")).toEqual({ provider: "anthropic", model: "claude-sonnet-4-5" });
+    expect(getProviderForUseCase("")).toEqual({ provider: "openai", model: "gpt-4o" });
   });
 
   it("ROUTING_TABLE has every key the existing callers need", () => {

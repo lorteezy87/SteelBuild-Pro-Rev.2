@@ -350,8 +350,11 @@ describe("Punchlist Item validation", () => {
 // ─── Unknown entity ─────────────────────────────────────────────────────
 
 describe("Unknown entity", () => {
-  it("returns empty errors with console warning for unknown entity", () => {
+  it("fails closed with an entity_exists error for an unknown entity", () => {
+    // H6 fix: unknown entity types must not silently pass validation.
     const errors = validate("nonexistent", { foo: "bar" });
-    expect(errors).toEqual([]);
+    expect(errors).toEqual([
+      { field: "_entity", message: 'Unknown entity type: "nonexistent"', rule: "entity_exists" },
+    ]);
   });
 });

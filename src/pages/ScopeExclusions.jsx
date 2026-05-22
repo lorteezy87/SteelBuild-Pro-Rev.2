@@ -7,7 +7,7 @@ import ScopeItemList from "@/components/scope/ScopeItemList";
 import BulkScopeModal from "@/components/scope/BulkScopeModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
-import { Check, X, Info, Search, Plus, Upload } from "lucide-react";
+import { Check, X, Info, Search, Upload } from "lucide-react";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 
 const TYPE_META = {
