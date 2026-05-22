@@ -19,7 +19,7 @@ import {
   YAxis,
 } from "recharts";
 import { AlertTriangle, DollarSign, Layers3, Search, ShieldCheck, Truck } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
@@ -205,6 +205,7 @@ function computeProjectModel(project, data) {
 export default function PortfolioOverview() {
   const navigate = useNavigate();
   const projectId = useProjectId();
+  const qc = useQueryClient();
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [healthFilter, setHealthFilter] = useState("All");
   const [search, setSearch] = useState("");
