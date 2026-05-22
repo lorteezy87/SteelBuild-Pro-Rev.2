@@ -28,7 +28,7 @@ import {
   Mail, Search, Inbox, CheckCircle2, XCircle, Link2, Archive, RotateCcw,
   Paperclip, Clock, AlertTriangle, FileText,
   Plus, ExternalLink, X, Settings, Star, Eye, EyeOff, Tag,
-  Send, Hash, Reply, ReplyAll, PenSquare, CornerUpLeft,
+  Send, Hash, Reply, ReplyAll, PenSquare,
 } from "lucide-react";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
