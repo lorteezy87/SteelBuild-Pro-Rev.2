@@ -40,6 +40,32 @@
 
 BEGIN;
 
+-- Define the project-membership helper before its first use. The original
+-- migration history assumed user_has_project_access() already existed — it was
+-- created out-of-band on the production database and only formalized later in
+-- 065_restore_project_read_access.sql. That left a clean apply from scratch
+-- (e.g. a Supabase preview branch) failing right here with
+-- "function user_has_project_access(uuid) does not exist". Defining it
+-- idempotently makes this migration self-contained; 065 simply re-runs the
+-- same CREATE OR REPLACE as a no-op. Databases that already applied this
+-- migration never re-run it, so production is unaffected.
+CREATE OR REPLACE FUNCTION public.user_has_project_access(p_project_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.user_projects up
+    WHERE up.user_id = auth.uid()
+      AND up.project_id = p_project_id
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.user_has_project_access(uuid) TO authenticated;
+
 -- ─── 1. user_projects: drop the forgeable auth_all policy ─────────────────
 
 DROP POLICY IF EXISTS auth_all ON public.user_projects;
