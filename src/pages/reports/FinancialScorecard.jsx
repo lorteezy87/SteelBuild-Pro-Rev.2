@@ -24,11 +24,9 @@ import {
 } from "@/utils/projectKpis";
 import { calculateMarginRisk } from "@/services/marginRiskEngine";
 import ReportShell from "./ReportShell";
-import { mono, body, CARD, CARD_TITLE, LABEL, HEALTH_COLORS } from "./constants";
+import { mono, body, CARD, LABEL, HEALTH_COLORS } from "./constants";
 import {
   formatCurrency,
-  formatCurrencyFull,
-  formatPercent,
   exportTableCSV,
 } from "./utils";
 

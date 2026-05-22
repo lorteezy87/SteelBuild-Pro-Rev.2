@@ -8,7 +8,6 @@ import QCList from "@/components/qc/QCList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
-import { Plus } from "lucide-react";
 
 export default function QualityControl() {
   const projectId = useProjectId();
