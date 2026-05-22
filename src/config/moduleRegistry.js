@@ -16,7 +16,7 @@
 export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
   { label: "PCC",         pages: ["ProjectControlCenter"] },
-  { label: "PROJECTS",    pages: ["Projects", "Onboarding", "DataExchange", "Integrations", "ExecutiveView"] },
+  { label: "PROJECTS",    pages: ["Projects", "PortfolioGantt", "Onboarding", "DataExchange", "Integrations", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingAnalysis", "DrawingViewer", "Documents"] },
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule"] },
@@ -54,6 +54,7 @@ export const ALL_MODULES = [
   { icon: "\u2295", name: "Project Control Center",   group: "Overview",      page: "ProjectControlCenter" },
   { icon: "\u25C9", name: "Executive View",           group: "Overview",      page: "ExecutiveView" },
   { icon: "\u25A4", name: "Projects",                 group: "Overview",      page: "Projects" },
+  { icon: "\u25A5", name: "Portfolio Schedule",       group: "Overview",      page: "PortfolioGantt" },
   { icon: "\u25A3", name: "Onboarding",               group: "Setup",         page: "Onboarding" },
   { icon: "\u21C5", name: "Data Exchange",            group: "Setup",         page: "DataExchange" },
   { icon: "\u25CE", name: "Integrations",             group: "Setup",         page: "Integrations" },
@@ -118,6 +119,7 @@ export const NAV_GROUPS = [
       { label: "Command Center", icon: "\u2318", page: "CommandCenter" },
       { label: "Project Control Center", icon: "\u2295", page: "ProjectControlCenter" },
       { label: "Executive View", icon: "\u25A4", page: "ExecutiveView" },
+      { label: "Portfolio Schedule", icon: "\u25A5", page: "PortfolioGantt" },
     ],
   },
   {
@@ -249,6 +251,7 @@ export const SIDEBAR_GROUPS = [
       { label: "Dashboard",          icon: "\u25C8", page: "Dashboard" },
       { label: "Command Center",    icon: "\u2318", page: "CommandCenter" },
       { label: "Project Control Center", icon: "\u2295", page: "ProjectControlCenter" },
+      { label: "Portfolio Schedule",  icon: "\u25a5", page: "PortfolioGantt" },
       { label: "Portfolio Overview",  icon: "\u2726", page: "AIInsights" },
     ],
   },
