@@ -25,6 +25,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { normalizeRecipients } from "./recipients.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -337,6 +338,27 @@ async function handle(req: Request): Promise<Response> {
   if (!body.subject) return errorResponse(400, "subject is required");
   if (!body.body_text) return errorResponse(400, "body_text is required");
 
+  // Normalize + format-validate recipients at the boundary so malformed
+  // addresses fail fast with a clear message instead of bubbling up as an
+  // opaque provider error (or being silently sent to a blank "" recipient).
+  const toRecipients = normalizeRecipients(body.to);
+  const ccRecipients = normalizeRecipients(body.cc ?? []);
+  const bccRecipients = normalizeRecipients(body.bcc ?? []);
+  const invalidAddresses = [
+    ...toRecipients.invalid,
+    ...ccRecipients.invalid,
+    ...bccRecipients.invalid,
+  ];
+  if (invalidAddresses.length > 0) {
+    return errorResponse(400, `Invalid email address(es): ${invalidAddresses.slice(0, 5).join(", ")}`);
+  }
+  if (toRecipients.valid.length === 0) {
+    return errorResponse(400, "to must contain at least one valid email address");
+  }
+  body.to = toRecipients.valid;
+  body.cc = ccRecipients.valid;
+  body.bcc = bccRecipients.valid;
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceKey) return errorResponse(500, "Edge function not configured");
@@ -418,9 +440,11 @@ async function handle(req: Request): Promise<Response> {
   // Store the sent message
   const storedId = await storeSentMessage(supabaseUrl, serviceKey, body.project_id, user.userId, body, result);
 
+  // Log counts only — recipient addresses + subject are PII and must not
+  // land in function logs (see AGENTS.md edge-function rules).
   console.log(
     `[email-send] Sent: project=${body.project_id} from=${fromEmail} ` +
-    `to=${body.to.join(",")} subject="${body.subject.slice(0, 60)}" ` +
+    `recipients=${body.to.length} cc=${(body.cc || []).length} ` +
     `provider=${result.provider} stored=${storedId || "failed"}`,
   );
 
