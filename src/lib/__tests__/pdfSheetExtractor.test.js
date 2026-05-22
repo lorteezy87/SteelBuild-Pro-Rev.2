@@ -122,19 +122,22 @@ describe("assignPdfPages", () => {
         { sheetNumber: "S-104", pdfPage: "abc" },
       ];
       const result = assignPdfPages(sheets, 10);
-      expect(result.map(s => s.pdfPage)).toEqual([2, 1, 1, 1]);
+      // The three invalid pages fall back to 1, then the duplicate-page
+      // de-dup re-spreads the collisions onto the nearest free pages (3, 4).
+      expect(result.map(s => s.pdfPage)).toEqual([2, 1, 3, 4]);
       expect(warnSpy).toHaveBeenCalled();
       const firstCall = warnSpy.mock.calls[0][0];
       expect(firstCall).toMatch(/3 of 4 sheet\(s\) had invalid or out-of-range pdfPage/);
     });
 
-    it("clamps pdfPage that exceeds pageCount to 1", () => {
+    it("clamps out-of-range pdfPage to 1, then de-dups it to the next free page", () => {
       const sheets = [
         { sheetNumber: "S-101", pdfPage: 1 },
-        { sheetNumber: "S-102", pdfPage: 99 }, // out of range
+        { sheetNumber: "S-102", pdfPage: 99 }, // out of range → clamps to 1
       ];
       const result = assignPdfPages(sheets, 5);
-      expect(result.map(s => s.pdfPage)).toEqual([1, 1]);
+      // 99 clamps to 1, collides with S-101, so de-dup moves it to page 2.
+      expect(result.map(s => s.pdfPage)).toEqual([1, 2]);
       expect(warnSpy).toHaveBeenCalled();
     });
 
@@ -147,20 +150,23 @@ describe("assignPdfPages", () => {
       expect(warnSpy).not.toHaveBeenCalled();
     });
 
-    it("warns loudly when a multi-page PDF resolves every sheet to page 1", () => {
-      // This is the original bug regressing — surface it.
+    it("re-spreads + warns when a multi-page PDF resolves every sheet to page 1", () => {
       const sheets = [
         { sheetNumber: "S-101", pdfPage: null },
         { sheetNumber: "S-102", pdfPage: null },
         { sheetNumber: "S-103", pdfPage: null },
       ];
       // pageCount=10 ≠ sheets.length=3, so the deterministic override
-      // doesn't fire; everything falls back to 1.
+      // doesn't fire; every sheet falls back to 1, then the de-dup step
+      // re-spreads the collisions onto distinct pages so thumbnails don't
+      // all point at page 1.
       const result = assignPdfPages(sheets, 10);
-      expect(result.every(s => s.pdfPage === 1)).toBe(true);
-      // Both warnings fired (per-sheet validation + the all-page-1 sanity check).
+      expect(result.map(s => s.pdfPage)).toEqual([1, 2, 3]);
+      // Two warnings fire: the invalid-page fallback and the duplicate
+      // re-spread — both tell the user to verify in the upload preview.
       const allMessages = warnSpy.mock.calls.map(c => c[0]).join("\n");
-      expect(allMessages).toMatch(/multi-sheet pdf_page bug/);
+      expect(allMessages).toMatch(/invalid or out-of-range pdfPage/);
+      expect(allMessages).toMatch(/duplicate pdfPage values/);
     });
   });
 
