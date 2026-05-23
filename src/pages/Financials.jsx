@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useFinancials } from "@/hooks/useFinancials";
+import { useCostCodes } from "@/hooks/useCostCodes";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, BulkActionBar } from "@/components/design-system";
@@ -10,13 +11,7 @@ import { PhoenixPanel } from "@/components/shared/PhoenixPanel";
 import { Plus, RefreshCw, Trash2, Tag } from "lucide-react";
 import PhoenixTable, { PTR, PTD } from "@/components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent, formatBudgetPercent } from "@/components/shared/formatters";
-import {
-  appendRecordToCaches,
-  replaceRecordInCaches,
-  removeRecordFromCaches,
-  invalidateCrudQueries,
-  toastCrudError,
-} from "@/components/shared/crudFeedback";
+import { invalidateCrudQueries } from "@/components/shared/crudFeedback";
 import {
   mono,
   body,
@@ -51,12 +46,14 @@ export default function Financials() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: costCodes = [] } = useQuery({
-    queryKey: ["cost-codes", projectId],
-    queryFn: () => (projectId ? base44.entities.CostCode.filter({ project_id: projectId }, "cost_code_number") : []),
-    select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
-    enabled: !!projectId,
-  });
+  const {
+    costCodes,
+    createCostCode,
+    updateCostCode,
+    deleteCostCode,
+    bulkDeleteCostCodes,
+    bulkUpdateCostCodes,
+  } = useCostCodes(projectId);
 
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["change-orders", projectId],
@@ -77,58 +74,6 @@ export default function Financials() {
   });
 
   const costCodeQueryKeys = [["cost-codes", projectId], ["cost-codes"]];
-
-  const createMut = useMutation({
-    mutationFn: (data) => base44.entities.CostCode.create(data),
-    onSuccess: async (created) => {
-      appendRecordToCaches(qc, costCodeQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
-      await invalidateCrudQueries(qc, costCodeQueryKeys);
-      setModalOpen(false);
-      setEditingCostCode(null);
-    },
-    onError: (error) => toastCrudError(error, "Failed to create cost code"),
-  });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.CostCode.update(id, data),
-    onSuccess: async (updated) => {
-      replaceRecordInCaches(qc, costCodeQueryKeys, updated);
-      await invalidateCrudQueries(qc, costCodeQueryKeys);
-      setModalOpen(false);
-      setEditingCostCode(null);
-    },
-    onError: (error) => toastCrudError(error, "Failed to update cost code"),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.CostCode.delete(id),
-    onSuccess: async (_, deletedId) => {
-      removeRecordFromCaches(qc, costCodeQueryKeys, deletedId);
-      await invalidateCrudQueries(qc, costCodeQueryKeys);
-      setDeleteTarget(null);
-    },
-    onError: (error) => toastCrudError(error, "Failed to delete cost code"),
-  });
-
-  const bulkDeleteMut = useMutation({
-    mutationFn: (ids) => Promise.allSettled(ids.map((id) => base44.entities.CostCode.delete(id))),
-    onSuccess: async () => {
-      await invalidateCrudQueries(qc, costCodeQueryKeys);
-      setSelectedIds(new Set());
-      setBulkDeleteOpen(false);
-    },
-    onError: (error) => toastCrudError(error, "Bulk delete failed"),
-  });
-
-  const bulkUpdateMut = useMutation({
-    mutationFn: ({ ids, data }) => Promise.allSettled(ids.map((id) => base44.entities.CostCode.update(id, data))),
-    onSuccess: async () => {
-      await invalidateCrudQueries(qc, costCodeQueryKeys);
-      setSelectedIds(new Set());
-      setBulkPhaseTarget(null);
-    },
-    onError: (error) => toastCrudError(error, "Bulk update failed"),
-  });
 
   const toggleSelect = (id) => setSelectedIds((prev) => {
     const next = new Set(prev);
@@ -691,8 +636,9 @@ export default function Financials() {
         }}
         onSave={(data) => {
           const payload = { ...data, project_id: data.project_id || projectId };
-          if (editingCostCode?.id) updateMut.mutate({ id: editingCostCode.id, data: payload });
-          else createMut.mutate(payload);
+          const onSuccess = () => { setModalOpen(false); setEditingCostCode(null); };
+          if (editingCostCode?.id) updateCostCode.mutate({ id: editingCostCode.id, data: payload }, { onSuccess });
+          else createCostCode.mutate(payload, { onSuccess });
         }}
         costCode={editingCostCode}
         projects={projects}
@@ -702,7 +648,7 @@ export default function Financials() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => deleteTarget && deleteCostCode.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) })}
         title="Delete Cost Code"
         description={`Delete ${deleteTarget?.cost_code_number || "cost code"}?`}
       />
@@ -749,7 +695,10 @@ export default function Financials() {
             icon: Tag,
             onClick: () => {
               const phase = window.prompt("Enter new phase for selected cost codes:");
-              if (phase != null) bulkUpdateMut.mutate({ ids: [...selectedIds], data: { phase } });
+              if (phase != null) bulkUpdateCostCodes.mutate(
+                { ids: [...selectedIds], data: { phase } },
+                { onSuccess: () => { setSelectedIds(new Set()); setBulkPhaseTarget(null); } },
+              );
             },
           },
           {
@@ -764,7 +713,7 @@ export default function Financials() {
       <DeleteDialog
         open={bulkDeleteOpen}
         onClose={() => setBulkDeleteOpen(false)}
-        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+        onConfirm={() => bulkDeleteCostCodes.mutate([...selectedIds], { onSuccess: () => { setSelectedIds(new Set()); setBulkDeleteOpen(false); } })}
         title="Delete Cost Codes"
         description={`Delete ${selectedIds.size} selected cost code${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
       />
