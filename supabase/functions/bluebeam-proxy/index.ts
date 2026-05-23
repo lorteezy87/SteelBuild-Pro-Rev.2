@@ -47,9 +47,33 @@ const BB_CLIENT_ID = Deno.env.get("BLUEBEAM_CLIENT_ID") || "";
 const BB_CLIENT_SECRET = Deno.env.get("BLUEBEAM_CLIENT_SECRET") || "";
 const BB_REDIRECT_URI = Deno.env.get("BLUEBEAM_REDIRECT_URI") || "";
 
-const BB_AUTH_BASE = "https://authserver.bluebeam.com/auth/oauth/authorize";
-const BB_TOKEN_URL = "https://authserver.bluebeam.com/auth/token";
-const BB_API_BASE = "https://studioapi.bluebeam.com/publicapi/v1";
+// OAuth + API endpoints are env-configurable so they can be pointed at the
+// correct Bluebeam host/region without a code change. Defaults preserve the
+// historical values.
+const BB_AUTH_URL = Deno.env.get("BLUEBEAM_AUTH_URL") || "https://authserver.bluebeam.com/auth/oauth/authorize";
+const BB_TOKEN_URL = Deno.env.get("BLUEBEAM_TOKEN_URL") || "https://authserver.bluebeam.com/auth/token";
+const BB_API_BASE = Deno.env.get("BLUEBEAM_API_BASE") || "https://studioapi.bluebeam.com/publicapi/v1";
+
+// ── PKCE helpers (Authorization Code + S256) ─────────────────────────────
+// Bluebeam's OAuth requires PKCE: we generate a high-entropy code_verifier,
+// send its SHA-256 challenge on /authorize, then replay the verifier on the
+// token exchange. 32 random bytes → 43-char base64url string (matches spec).
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function generateCodeVerifier(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+async function codeChallengeS256(verifier: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return base64UrlEncode(new Uint8Array(digest));
+}
 
 // ── Token management ────────────────────────────────────────────────────
 
@@ -208,24 +232,27 @@ async function bbDelete(token: string, path: string): Promise<void> {
 
 // ── OAuth action handlers ───────────────────────────────────────────────
 
-function buildAuthUrl(state: string): string {
+function buildAuthUrl(state: string, codeChallenge: string): string {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: BB_CLIENT_ID,
     redirect_uri: BB_REDIRECT_URI,
     scope: "offline_access full_user",
     state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
   });
-  return `${BB_AUTH_BASE}?${params.toString()}`;
+  return `${BB_AUTH_URL}?${params.toString()}`;
 }
 
-async function exchangeCode(code: string): Promise<TokenResponse> {
+async function exchangeCode(code: string, codeVerifier: string): Promise<TokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
     redirect_uri: BB_REDIRECT_URI,
     client_id: BB_CLIENT_ID,
     client_secret: BB_CLIENT_SECRET,
+    code_verifier: codeVerifier,
   });
 
   const res = await fetch(BB_TOKEN_URL, {
@@ -371,17 +398,58 @@ Deno.serve(async (req: Request) => {
         if (!BB_REDIRECT_URI) {
           return errorResponse(500, "BLUEBEAM_REDIRECT_URI not configured");
         }
-        // State encodes the user ID so the callback can associate tokens
-        const state = btoa(JSON.stringify({ userId: user.id, ts: Date.now() }));
-        const url = buildAuthUrl(state);
+        // Opaque random state + PKCE verifier. The verifier is parked
+        // server-side keyed by state so exchange_code can replay it; it
+        // never reaches the browser.
+        const state = crypto.randomUUID();
+        const codeVerifier = generateCodeVerifier();
+        const codeChallenge = await codeChallengeS256(codeVerifier);
+
+        // Best-effort purge of expired states (keeps the table small).
+        await supabase
+          .from("bluebeam_oauth_states")
+          .delete()
+          .lt("expires_at", new Date().toISOString());
+
+        const { error: stateErr } = await supabase
+          .from("bluebeam_oauth_states")
+          .insert({ state, user_id: user.id, code_verifier: codeVerifier });
+        if (stateErr) {
+          console.error("[bluebeam-proxy] OAuth state insert error:", stateErr);
+          return errorResponse(500, "Failed to start Bluebeam authorization");
+        }
+
+        const url = buildAuthUrl(state, codeChallenge);
         return jsonResponse({ url, state });
       }
 
       case "exchange_code": {
         const code = body.code as string;
+        const state = body.state as string;
         if (!code) return errorResponse(400, "Missing 'code'");
+        if (!state) return errorResponse(400, "Missing 'state'");
 
-        const tokens = await exchangeCode(code);
+        // Recover + validate the PKCE verifier for this flow.
+        const { data: stateRow } = await supabase
+          .from("bluebeam_oauth_states")
+          .select("user_id, code_verifier, expires_at")
+          .eq("state", state)
+          .maybeSingle();
+
+        // One-time use: delete immediately regardless of validation outcome.
+        await supabase.from("bluebeam_oauth_states").delete().eq("state", state);
+
+        if (!stateRow) {
+          return errorResponse(400, "Invalid or expired authorization state. Please restart the connection.");
+        }
+        if (stateRow.user_id !== user.id) {
+          return errorResponse(403, "Authorization state does not match the current user.");
+        }
+        if (new Date(stateRow.expires_at as string).getTime() < Date.now()) {
+          return errorResponse(400, "Authorization state expired. Please restart the connection.");
+        }
+
+        const tokens = await exchangeCode(code, stateRow.code_verifier as string);
 
         // Deactivate any existing connection for this user
         await supabase

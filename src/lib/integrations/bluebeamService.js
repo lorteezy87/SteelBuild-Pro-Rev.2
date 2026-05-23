@@ -54,11 +54,12 @@ export async function getAuthUrl() {
 }
 
 /**
- * Exchange an OAuth authorization code for tokens.
+ * Exchange an OAuth authorization code for tokens. The `state` is required —
+ * the Edge Function uses it to recover the PKCE code_verifier for this flow.
  * Called from the OAuth callback handler.
  */
-export async function exchangeCode(code) {
-  return callProxy("exchange_code", { code });
+export async function exchangeCode(code, state) {
+  return callProxy("exchange_code", { code, state });
 }
 
 /**
@@ -247,14 +248,18 @@ export function connectWithPopup() {
         if (event.data?.type !== "bluebeam-oauth-callback") return;
         window.removeEventListener("message", handler);
 
-        const { code, error: oauthError } = event.data;
+        const { code, state, error: oauthError } = event.data;
         if (oauthError) {
           reject(new Error(oauthError));
           return;
         }
+        if (!state) {
+          reject(new Error("Authorization response missing state. Please try again."));
+          return;
+        }
 
         try {
-          const result = await exchangeCode(code);
+          const result = await exchangeCode(code, state);
           resolve(result);
         } catch (err) {
           reject(err);
