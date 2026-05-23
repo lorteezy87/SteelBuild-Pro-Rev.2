@@ -190,7 +190,7 @@ export default function Layout({ children, currentPageName }) {
               </div>
             )}
             {!isMobile && isDarkTheme && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
-            {!isMobile && !isDarkTheme && <ProjectPillDropdown />}
+            {!isMobile && !isDarkTheme && <ProjectPillDropdown align="left" />}
             {!isMobile && !isDarkTheme && (
               <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 Home
