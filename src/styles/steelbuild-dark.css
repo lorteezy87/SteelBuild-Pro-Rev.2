@@ -21,39 +21,42 @@
   /* Surfaces */
   --sbd-bg-base:         #050810;
   --sbd-bg-page:         #0B0E11;
-  --sbd-bg-surface:      rgba(255,255,255,0.035);
-  --sbd-bg-surface-hi:   rgba(255,255,255,0.06);
+  --sbd-bg-surface:      rgba(255,255,255,0.05);
+  --sbd-bg-surface-hi:   rgba(255,255,255,0.08);
   --sbd-bg-elevated:     rgba(15,22,38,0.85);
   --sbd-bg-input:        rgba(255,255,255,0.04);
   --sbd-bg-row-hover:    rgba(86,176,255,0.06);
 
   /* Borders */
-  --sbd-border:          rgba(255,255,255,0.08);
-  --sbd-border-strong:   rgba(255,255,255,0.16);
+  --sbd-border:          rgba(255,255,255,0.10);
+  --sbd-border-card:     #2D333B;
+  --sbd-border-strong:   rgba(255,255,255,0.18);
   --sbd-divider:         rgba(255,255,255,0.05);
 
   /* Accents — steel-blue primary, executive-gold secondary */
-  --sbd-accent:          #56B0FF;
-  --sbd-accent-light:    #7CC4FF;
-  --sbd-accent-muted:    rgba(86,176,255,0.10);
-  --sbd-accent-border:   rgba(86,176,255,0.35);
-  --sbd-gold:            #C89B20;
+  --sbd-accent:          #E0B030;
+  --sbd-accent-light:    #F2C84B;
+  --sbd-accent-muted:    rgba(224,176,48,0.14);
+  --sbd-accent-border:   rgba(224,176,48,0.45);
+  --sbd-gold:            #E0B030;
   --sbd-gold-light:      #E0B030;
 
   /* Status */
   --sbd-success:         #34D399;
-  --sbd-warning:         #F59E0B;
-  --sbd-error:           #EF4444;
-  --sbd-info:            #56B0FF;
-  --sbd-review:          #D97706;
+  --sbd-warning:         #E0B030;
+  --sbd-error:           #F87171;
+  --sbd-info:            #60A5FA;
+  --sbd-review:          #FB923C;
 
   /* Phase palette (gantt / pipeline) */
-  --sbd-phase-detailing:   #2EA8FF;
-  --sbd-phase-fabrication: #D97706;
-  --sbd-phase-delivery:    #34D399;
-  --sbd-phase-erection:    #22D3EE;
+  --sbd-phase-detailing:   #E0B030;
+  --sbd-phase-fabrication: #60A5FA;
+  --sbd-phase-delivery:    #2DD4BF;
+  --sbd-phase-erection:    #34D399;
 
-  /* Gantt surfaces and lockstep phase palette */
+  /* Gantt surfaces and lockstep phase palette (app-specific; preserved
+     across theme handoffs — the Gantt/Schedule views read these and they
+     are not part of the generic design-system handoff). */
   --sbd-gantt-bg:              #050910;
   --sbd-gantt-panel:           #070D16;
   --sbd-gantt-panel-strong:    #0A1220;
@@ -90,83 +93,91 @@
   --sbd-font-body:       'Inter', system-ui, sans-serif;
   --sbd-font-mono:       'IBM Plex Mono', 'Courier New', monospace;
 
-  /* Apply base look */
-  background: var(--sbd-bg-base);
+  /* Apply base look + ALWAYS-ON aurora mesh so glass surfaces have
+     something to blur. The aurora lives on a fixed background-image
+     so it sits behind every child without affecting layout. */
+  position: relative;
+  min-height: 100vh;
+  background-color: var(--sbd-bg-base);
+  background-image:
+    radial-gradient(ellipse 60% 50% at 12% 8%,  rgba(96,165,250,0.22),  transparent 60%),
+    radial-gradient(ellipse 50% 45% at 88% 18%, rgba(224,176,48,0.18),  transparent 60%),
+    radial-gradient(ellipse 55% 55% at 80% 92%, rgba(251,146,60,0.16),  transparent 60%),
+    radial-gradient(ellipse 40% 50% at 22% 88%, rgba(52,211,153,0.12),  transparent 60%);
+  background-attachment: fixed;
   color: var(--sbd-text);
   font-family: var(--sbd-font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-
-/* ── 2. INDUSTRIAL MESH BACKDROP ──────────────────────────────
-   Optional. Add .sbd-mesh-bg to a container to get the aurora.   */
-.steelbuild-dark .sbd-mesh-bg {
-  position: relative;
-  isolation: isolate;
-}
-.steelbuild-dark .sbd-mesh-bg::before {
+/* Subtle blueprint grid overlay layered on top of the aurora */
+.steelbuild-dark::before {
   content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  /* Aurora wash — boosted from 0.18→0.32 so it reads through chrome on
-   * top. position: fixed keeps it stable while content scrolls. With the
-   * deeper base (#050810) underneath, the 32% steel-blue corner + 24%
-   * copper opposite corner produces a visible "lit-from-the-edges"
-   * vignette instead of the previously imperceptible 18% wash. */
-  background:
-    radial-gradient(ellipse 70% 60% at 12% 8%, rgba(86,176,255,0.32), transparent 60%),
-    radial-gradient(ellipse 55% 55% at 88% 18%, rgba(217,119,6,0.24), transparent 60%),
-    radial-gradient(ellipse 65% 65% at 82% 92%, rgba(194,65,12,0.22), transparent 60%),
-    radial-gradient(ellipse 45% 55% at 28% 88%, rgba(123,139,158,0.16), transparent 60%);
-  filter: blur(48px);
-}
-.steelbuild-dark .sbd-mesh-bg::after {
-  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  /* Subtle 48px grid — visible just enough to feel "technical" without
-   * fighting the content. 2.5% white instead of 1.2% so it actually
-   * reads on top of the deeper base. */
   background-image:
-    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(ellipse at center, black 25%, transparent 85%);
-  -webkit-mask-image: radial-gradient(ellipse at center, black 25%, transparent 85%);
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at center, black 20%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 80%);
 }
-/* Make sure children of mesh-bg containers stack above the aurora */
-.steelbuild-dark .sbd-mesh-bg > * { position: relative; z-index: 1; }
+.steelbuild-dark > * { position: relative; z-index: 1; }
+
+
+/* ── 2. (legacy) MESH-BG UTILITY ──────────────────────────────
+   The aurora mesh is now ALWAYS-ON via .steelbuild-dark itself.
+   This class is kept as a no-op for backwards compatibility —
+   if you have markup using <div class="sbd-mesh-bg"> it still works.
+   ────────────────────────────────────────────────────────────── */
+.steelbuild-dark .sbd-mesh-bg { /* no-op */ }
 
 
 /* ── 3. CARDS & SURFACES ──────────────────────────────────────── */
 .steelbuild-dark .sbd-card {
-  background: var(--sbd-bg-surface);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  backdrop-filter: blur(20px) saturate(140%);
+  position: relative;
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.07) 0%,
+    rgba(255,255,255,0.03) 100%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
   border: 1px solid var(--sbd-border);
   border-radius: var(--sbd-radius-lg);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.06),
-    0 8px 32px rgba(0,0,0,0.30);
+    0 1px 0 rgba(0,0,0,0.40),
+    0 2px 6px rgba(0,0,0,0.35),
+    0 12px 28px -8px rgba(0,0,0,0.50);
   padding: 20px;
 }
 
 .steelbuild-dark .sbd-card-strong {
-  background: rgba(255,255,255,0.05);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  backdrop-filter: blur(28px) saturate(160%);
-  border: 1px solid rgba(255,255,255,0.10);
+  position: relative;
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.10) 0%,
+    rgba(255,255,255,0.04) 100%);
+  -webkit-backdrop-filter: blur(32px) saturate(170%);
+  backdrop-filter: blur(32px) saturate(170%);
+  border: 1px solid rgba(255,255,255,0.14);
   border-radius: var(--sbd-radius-lg);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.10),
-    0 16px 50px rgba(0,0,0,0.40);
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    inset 0 0 0 1px rgba(255,255,255,0.03),
+    0 16px 50px rgba(0,0,0,0.45);
   padding: 24px;
 }
 
 .steelbuild-dark .sbd-card-hover {
-  transition: background 0.18s, border-color 0.18s, transform 0.18s;
+  transition: background 0.18s, border-color 0.18s, transform 0.18s, box-shadow 0.18s;
 }
 .steelbuild-dark .sbd-card-hover:hover {
-  background: var(--sbd-bg-surface-hi);
-  border-color: rgba(255,255,255,0.14);
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.10) 0%,
+    rgba(255,255,255,0.05) 100%);
+  border-color: rgba(255,255,255,0.18);
   transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    0 12px 40px rgba(0,0,0,0.45);
 }
 
 
@@ -221,7 +232,7 @@
   color: var(--sbd-text);
 }
 .steelbuild-dark .sbd-nav-item.is-active {
-  background: linear-gradient(135deg, rgba(86,176,255,0.18) 0%, rgba(86,176,255,0.06) 100%);
+  background: linear-gradient(135deg, rgba(224,176,48,0.18) 0%, rgba(224,176,48,0.06) 100%);
   border: 1px solid var(--sbd-accent-border);
   color: var(--sbd-accent);
 }
@@ -257,15 +268,15 @@
   border-color: rgba(255,255,255,0.16);
 }
 .steelbuild-dark .sbd-btn-primary {
-  background: linear-gradient(135deg, #56B0FF 0%, #3D8FE0 100%);
-  border-color: rgba(86,176,255,0.5);
+  background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%);
+  border-color: rgba(96,165,250,0.55);
   color: #061018;
   font-weight: 600;
-  box-shadow: 0 6px 20px rgba(86,176,255,0.30), inset 0 1px 0 rgba(255,255,255,0.25);
+  box-shadow: 0 6px 20px rgba(96,165,250,0.30), inset 0 1px 0 rgba(255,255,255,0.25);
 }
 .steelbuild-dark .sbd-btn-primary:hover {
-  background: linear-gradient(135deg, #7CC4FF 0%, #56B0FF 100%);
-  box-shadow: 0 10px 28px rgba(86,176,255,0.45), inset 0 1px 0 rgba(255,255,255,0.30);
+  background: linear-gradient(135deg, #93C5FD 0%, #60A5FA 100%);
+  box-shadow: 0 10px 28px rgba(96,165,250,0.45), inset 0 1px 0 rgba(255,255,255,0.30);
 }
 .steelbuild-dark .sbd-btn-ghost {
   background: transparent;
@@ -292,10 +303,10 @@
   color: var(--sbd-text-secondary);
 }
 .steelbuild-dark .sbd-badge-success { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.35); color: var(--sbd-success); }
-.steelbuild-dark .sbd-badge-warning { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.35); color: var(--sbd-warning); }
-.steelbuild-dark .sbd-badge-error   { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.35); color: var(--sbd-error); }
-.steelbuild-dark .sbd-badge-info    { background: rgba(86,176,255,0.12);  border-color: var(--sbd-accent-border); color: var(--sbd-accent); }
-.steelbuild-dark .sbd-badge-gold    { background: rgba(200,155,32,0.12);  border-color: rgba(200,155,32,0.35); color: var(--sbd-gold-light); }
+.steelbuild-dark .sbd-badge-warning { background: rgba(224,176,48,0.14); border-color: rgba(224,176,48,0.45); color: var(--sbd-warning); }
+.steelbuild-dark .sbd-badge-error   { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.35); color: var(--sbd-error); }
+.steelbuild-dark .sbd-badge-info    { background: rgba(96,165,250,0.14);  border-color: var(--sbd-accent-border); color: var(--sbd-accent); }
+.steelbuild-dark .sbd-badge-gold    { background: rgba(224,176,48,0.14);  border-color: rgba(224,176,48,0.45); color: var(--sbd-gold-light); }
 
 .steelbuild-dark .sbd-pill {
   display: inline-flex; align-items: center;
@@ -328,7 +339,7 @@
 .steelbuild-dark .sbd-textarea:focus {
   border-color: var(--sbd-accent-border);
   background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 0 3px rgba(86,176,255,0.15);
+  box-shadow: 0 0 0 3px rgba(224,176,48,0.20);
 }
 .steelbuild-dark .sbd-input::placeholder,
 .steelbuild-dark .sbd-textarea::placeholder {
@@ -381,12 +392,15 @@
 
 /* ── 10. KPI TILES ────────────────────────────────────────────── */
 .steelbuild-dark .sbd-kpi {
-  background: var(--sbd-bg-surface);
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.07) 0%,
+    rgba(255,255,255,0.03) 100%);
   border: 1px solid var(--sbd-border);
   border-radius: var(--sbd-radius-md);
   padding: 16px 18px;
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
 }
 .steelbuild-dark .sbd-kpi-label {
   font-family: var(--sbd-font-mono);
