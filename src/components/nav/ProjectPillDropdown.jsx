@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../shared/ProjectContext";
 
-export default function ProjectPillDropdown({ compact = false }) {
+export default function ProjectPillDropdown({ compact = false, align = "right" }) {
   const { projects, activeProject, setActiveProject, loading } = useProjectContext();
   // Pages resolve the project id via useProjectId() which checks the URL
   // FIRST (?projectId= / ?project=), then falls back to the active project
@@ -197,8 +197,11 @@ export default function ProjectPillDropdown({ compact = false }) {
           style={{
             position: compact ? "fixed" : "absolute",
             top: compact ? 58 : "calc(100% + 6px)",
-            right: compact ? 12 : 0,
-            left: compact ? 12 : undefined,
+            // Anchor toward the trigger so the panel never flies off-screen:
+            // left-placed pill (light topbar, upper-left) opens rightward;
+            // right-placed pill (dark topbar) opens leftward.
+            right: compact ? 12 : (align === "left" ? undefined : 0),
+            left: compact ? 12 : (align === "left" ? 0 : undefined),
             width: compact ? "auto" : 400,
             maxHeight: compact ? "min(70dvh, 420px)" : 300,
             overflowY: "auto",
