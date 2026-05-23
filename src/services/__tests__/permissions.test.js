@@ -47,6 +47,34 @@ describe("canPerform — action floors", () => {
   });
 });
 
+describe("canPerform — global user_profiles roles", () => {
+  // usePermissions reads user_profiles.role, which only ever holds the GLOBAL
+  // values 'admin' or 'user'. A regular 'user' must map to a productive,
+  // PM-level rank — not deny-all (the old bug ranked 'user' at 99, hiding every
+  // create/edit/delete control across the app).
+  it("global 'user' can do normal PM-level work", () => {
+    expect(canPerform("user", "view")).toBe(true);
+    expect(canPerform("user", "create")).toBe(true);
+    expect(canPerform("user", "edit")).toBe(true);
+    expect(canPerform("user", "approve")).toBe(true);
+    expect(canPerform("user", "export")).toBe(true);
+    expect(canPerform("user", "create", "delivery")).toBe(true);
+  });
+
+  it("global 'user' is still blocked from destructive admin-only actions", () => {
+    expect(canPerform("user", "delete")).toBe(false);
+    expect(canPerform("user", "void")).toBe(false);
+    expect(canPerform("user", "bulk_delete")).toBe(false);
+    expect(canPerform("user", "void", "change_order")).toBe(false);
+  });
+
+  it("global 'admin' retains full control and 'owner' mirrors admin", () => {
+    expect(canPerform("admin", "delete")).toBe(true);
+    expect(canPerform("owner", "delete")).toBe(true);
+    expect(canPerform("owner", "void", "change_order")).toBe(true);
+  });
+});
+
 describe("canPerform — entity overrides", () => {
   it("field can create/edit deliveries, expenses, and RFIs via override", () => {
     expect(canPerform("field", "create", "delivery")).toBe(true);
