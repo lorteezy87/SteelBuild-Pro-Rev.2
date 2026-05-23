@@ -20,7 +20,16 @@ import { supabase } from "@/lib/supabase";
 import { validateTransition } from "./workflowEngine";
 
 // ─── Role hierarchy ─────────────────────────────────────────────────────
-const ROLE_RANK = { admin: 0, pm: 1, field: 2, viewer: 3 };
+// Privilege rank (lower = more privileged). This table must cover BOTH role
+// vocabularies, because canPerform is fed whichever role the caller holds:
+//   • GLOBAL  user_profiles.role  → 'admin' | 'user'   (what usePermissions reads)
+//   • PROJECT user_projects.role  → 'owner' | 'admin' | 'pm' | 'field' | 'viewer'
+// A global 'user' maps to PM-level — full create/edit/approve/export/view, with
+// delete/void/bulk_delete still reserved for admins. 'owner' mirrors 'admin'.
+// Without the 'user' entry a regular account ranked 99 (deny-all), which hid
+// every create/edit/delete control across the app. This gate is display-only —
+// the authoritative guards are RLS and workflowEngine.validateTransition.
+const ROLE_RANK = { owner: 0, admin: 0, pm: 1, user: 1, field: 2, viewer: 3 };
 
 const ACTION_FLOORS = {
   // entity-agnostic action → minimum role
