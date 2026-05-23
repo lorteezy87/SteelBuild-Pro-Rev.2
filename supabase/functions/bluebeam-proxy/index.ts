@@ -343,6 +343,25 @@ async function listProjectFiles(token: string, projectId: string, folderId?: str
   return data.Files || [];
 }
 
+// ── Authorization ────────────────────────────────────────────────────────
+// This proxy talks to the DB with the service-role client (RLS bypassed), so
+// any action that acts in a SteelBuild project's context MUST verify the
+// caller's project membership explicitly — a valid JWT alone is not enough.
+async function userHasProjectAccess(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  projectId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("user_projects")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("project_id", projectId)
+    .limit(1)
+    .maybeSingle();
+  return !error && !!data;
+}
+
 // ── Main handler ────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -388,6 +407,13 @@ Deno.serve(async (req: Request) => {
   const needsConfig = action !== "connection_status";
   if (needsConfig && (!BB_CLIENT_ID || !BB_CLIENT_SECRET)) {
     return errorResponse(500, "Bluebeam API credentials not configured. Set BLUEBEAM_CLIENT_ID and BLUEBEAM_CLIENT_SECRET in Edge Function secrets.");
+  }
+
+  // Any action carrying a SteelBuild projectId (create_session, upload_to_session)
+  // writes that project's data — require membership before doing the work.
+  const requestProjectId = body.projectId as string | undefined;
+  if (requestProjectId && !(await userHasProjectAccess(supabase, user.id, requestProjectId))) {
+    return errorResponse(403, "You do not have access to this project.");
   }
 
   try {

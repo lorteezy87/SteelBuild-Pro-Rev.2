@@ -607,6 +607,45 @@ async function handle(req: Request): Promise<Response> {
     return json({ error: "Missing project_id in URL path. Use /email-ingest/<project-id>" }, 400);
   }
 
+  // Reject malformed ids before they ever reach a PostgREST filter, and avoid
+  // the confusing 500 PostgREST returns for a non-UUID project_id.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(projectId)) {
+    return json({ error: "Invalid project_id format" }, 400);
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) {
+    console.error("[email-ingest] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    return json({ error: "Edge function not configured" }, 500);
+  }
+
+  const supabaseHeaders = {
+    "Content-Type": "application/json",
+    "apikey": serviceKey,
+    "Authorization": `Bearer ${serviceKey}`,
+    "Prefer": "return=representation",
+  };
+
+  // The shared webhook secret authorizes the *sender*, not the *target
+  // project*. Confirm the project exists and is active so a leaked secret
+  // can't inject email/attachments into arbitrary or bogus project ids.
+  try {
+    const projResp = await fetch(
+      `${supabaseUrl}/rest/v1/projects?id=eq.${projectId}&is_deleted=eq.false&select=id&limit=1`,
+      { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } },
+    );
+    const projRows = projResp.ok ? await projResp.json() : null;
+    if (!Array.isArray(projRows) || projRows.length === 0) {
+      return json({ error: "Unknown or inactive project" }, 404);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[email-ingest] Project validation failed: ${msg}`);
+    return json({ error: "Project validation failed" }, 500);
+  }
+
   // Parse email based on content type
   const contentType = req.headers.get("content-type") || "";
   let email: ParsedEmail;
@@ -627,20 +666,6 @@ async function handle(req: Request): Promise<Response> {
   if (!email.senderEmail) {
     return json({ error: "No sender email found in payload" }, 400);
   }
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceKey) {
-    console.error("[email-ingest] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-    return json({ error: "Edge function not configured" }, 500);
-  }
-
-  const supabaseHeaders = {
-    "Content-Type": "application/json",
-    "apikey": serviceKey,
-    "Authorization": `Bearer ${serviceKey}`,
-    "Prefer": "return=representation",
-  };
 
   // Dedup check
   if (email.externalId && !email.externalId.startsWith("manual-")) {
