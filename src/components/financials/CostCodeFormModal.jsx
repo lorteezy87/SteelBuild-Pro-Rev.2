@@ -84,7 +84,12 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
       <DialogContent
         className="sbd-card-strong max-w-2xl max-h-[90vh] overflow-y-auto"
         style={{
-          background: 'var(--bg-surface)',
+          // Use an OPAQUE surface token. In .steelbuild-dark, --bg-surface
+          // resolves to a translucent value (rgba white ~0.035), which made
+          // this modal render see-through over the dialog scrim (appeared
+          // blank/unclickable). --bg-surface-secondary stays opaque (#161B22
+          // dark / #F8FAFC light) — matching the default DialogContent face.
+          background: 'var(--bg-surface-secondary)',
           color: 'var(--text-primary)',
           borderRadius: 14,
           border: '1px solid var(--accent-border)',

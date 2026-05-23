@@ -24,7 +24,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sbd-card-strong" style={{ maxWidth: 480, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 16 }}>
+      <DialogContent className="sbd-card-strong" style={{ maxWidth: 480, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 16 }}>
         <DialogHeader>
           <DialogTitle style={{ fontFamily: "var(--font-body)", fontSize: 18, color: "var(--text-primary)", letterSpacing: "0.06em" }}>
             Approve Drawing Set
