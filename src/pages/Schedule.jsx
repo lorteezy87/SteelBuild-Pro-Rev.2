@@ -24,7 +24,7 @@ import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
-import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 
 /**
  * Auto-generate a WBS code for a task. Format is now "<phase>.<n>"
@@ -129,16 +129,7 @@ export default function Schedule() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const qc = useQueryClient();
 
-  const { data: scheduleTasks = [] } = useQuery({
-    queryKey: ["schedule-tasks", projectId],
-    queryFn: () =>
-      projectId
-        ? base44.entities.ScheduleTask.filter({ project_id: projectId }, "start_date")
-        : [],
-    enabled: !!projectId,
-  });
-
-  useRealtimeInvalidation("schedule_tasks", projectId, [["schedule-tasks", projectId]]);
+  const { scheduleTasks } = useScheduleTasks(projectId);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
