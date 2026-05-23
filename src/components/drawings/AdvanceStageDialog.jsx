@@ -40,7 +40,7 @@ export default function AdvanceStageDialog({
         className="sbd-card-strong"
         style={{
           maxWidth: 480,
-          background: "var(--bg-surface)",
+          background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
           borderRadius: 16,
         }}
