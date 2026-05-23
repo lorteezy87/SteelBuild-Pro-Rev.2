@@ -49,6 +49,26 @@ const ENTITY_OVERRIDES = {
   "change_order:void":    "admin",
 };
 
+// ─── Pure permission check ──────────────────────────────────────────────
+/**
+ * Resolve whether `role` may perform `action` on an optional `entity`.
+ * UI gating only — the authoritative guard is workflowEngine.validateTransition.
+ *
+ * Lower rank = more privileged; you may act when your rank is at least as
+ * privileged as the floor. Entity-specific overrides win over the
+ * entity-agnostic action floor. Unknown roles get rank 99 (deny); unknown
+ * actions fall back to an admin-only floor.
+ */
+export function canPerform(role, action, entity = null) {
+  const roleRank = ROLE_RANK[role] ?? 99;
+  if (entity) {
+    const overrideFloor = ENTITY_OVERRIDES[`${entity}:${action}`];
+    if (overrideFloor) return roleRank <= (ROLE_RANK[overrideFloor] ?? 0);
+  }
+  const floor = ACTION_FLOORS[action] || "admin";
+  return roleRank <= (ROLE_RANK[floor] ?? 0);
+}
+
 // ─── Server role fetcher ────────────────────────────────────────────────
 
 async function fetchUserRole() {
@@ -91,20 +111,8 @@ export function usePermissions() {
    * This is for UI gating only — the real guard is in workflowEngine.
    */
   const can = useCallback(
-    (action, entity = null) => {
-      // Check entity-specific override first
-      if (entity) {
-        const overrideKey = `${entity}:${action}`;
-        const overrideFloor = ENTITY_OVERRIDES[overrideKey];
-        if (overrideFloor) {
-          return roleRank <= (ROLE_RANK[overrideFloor] ?? 0);
-        }
-      }
-      // Fall back to action-level floor
-      const floor = ACTION_FLOORS[action] || "admin";
-      return roleRank <= (ROLE_RANK[floor] ?? 0);
-    },
-    [roleRank]
+    (action, entity = null) => canPerform(role, action, entity),
+    [role]
   );
 
   /**
