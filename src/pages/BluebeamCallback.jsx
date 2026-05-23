@@ -18,6 +18,7 @@ export default function BluebeamCallback() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
+    const state = params.get("state");
     const error = params.get("error");
     const errorDescription = params.get("error_description");
 
@@ -42,11 +43,13 @@ export default function BluebeamCallback() {
       return;
     }
 
-    // Post the code to the opener (popup flow)
+    // Post the code + state to the opener (popup flow). State is required by
+    // the Edge Function to recover the PKCE verifier for this flow.
     if (window.opener) {
       window.opener.postMessage({
         type: "bluebeam-oauth-callback",
         code,
+        state,
       }, window.location.origin);
 
       setStatus("success");
