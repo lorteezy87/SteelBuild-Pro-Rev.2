@@ -46,6 +46,7 @@ export default function DrawingContextMenu({
         top: contextMenu.y,
         zIndex: 999,
         ...surface,
+        background: "var(--bg-surface-secondary)",
         padding: "6px 0",
         minWidth: 180,
         boxShadow: "0 8px 32px rgba(0,0,0,0.5)",

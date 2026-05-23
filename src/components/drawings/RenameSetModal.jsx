@@ -41,6 +41,7 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
         onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
         style={{
           ...surface,
+          background: "var(--bg-surface-secondary)",
           position: "fixed", top: "50%", left: "50%",
           transform: "translate(-50%, -50%)",
           width: 440, maxWidth: "95vw",
