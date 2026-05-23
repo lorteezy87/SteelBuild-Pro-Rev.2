@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { useTaskLinkOptions } from '@/hooks/useTaskLinkOptions';
 import { calculateTaskDuration, computeAutoScheduledDates } from './scheduleUtils';
 import { PHASES } from '../../utils/phases';
 import {
@@ -272,61 +271,11 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
     setStageDates(getStageDates(task));
   }, [task]);
 
-  // ── Project-scoped option lists for the LINKS tab. Cache for a minute
-  //    so toggling tabs doesn't refetch. Same idiom as DailyLogForm. ─────
-  const linkProjectId = task?.project_id;
-  const { data: rfis = [] } = useQuery({
-    queryKey: ['rfis-for-task-link', linkProjectId],
-    queryFn: () =>
-      linkProjectId
-        ? base44.entities.RFI.filter({ project_id: linkProjectId })
-        : Promise.resolve([]),
-    enabled: !!linkProjectId && !!open,
-    staleTime: 60 * 1000,
-  });
-  const { data: changeOrders = [] } = useQuery({
-    queryKey: ['change-orders-for-task-link', linkProjectId],
-    queryFn: () =>
-      linkProjectId
-        ? base44.entities.ChangeOrder.filter({ project_id: linkProjectId })
-        : Promise.resolve([]),
-    enabled: !!linkProjectId && !!open,
-    staleTime: 60 * 1000,
-  });
-  const { data: actionItems = [] } = useQuery({
-    queryKey: ['action-items-for-task-link', linkProjectId],
-    queryFn: () =>
-      linkProjectId
-        ? base44.entities.ActionItem.filter({ project_id: linkProjectId })
-        : Promise.resolve([]),
-    enabled: !!linkProjectId && !!open,
-    staleTime: 60 * 1000,
-  });
-
-  const rfiOptions = useMemo(
-    () => rfis.map((r) => ({
-      id: r.id,
-      label: r.rfi_number || r.title || `RFI ${r.id?.slice(0, 6)}`,
-      sublabel: r.title && r.rfi_number ? r.title : (r.status || ''),
-    })),
-    [rfis]
-  );
-  const changeOrderOptions = useMemo(
-    () => changeOrders.map((c) => ({
-      id: c.id,
-      label: c.co_number || c.title || `CO ${c.id?.slice(0, 6)}`,
-      sublabel: c.title && c.co_number ? c.title : (c.status || ''),
-    })),
-    [changeOrders]
-  );
-  const actionItemOptions = useMemo(
-    () => actionItems.map((a) => ({
-      id: a.id,
-      label: a.title || a.description?.slice(0, 40) || `Item ${a.id?.slice(0, 6)}`,
-      sublabel: a.status || '',
-    })),
-    [actionItems]
-  );
+  // Project-scoped option lists for the LINKS tab (RFIs / change orders /
+  // action items). Data fetching + option shaping live in the hook; only
+  // fetch while the drawer is open.
+  const { rfiOptions, changeOrderOptions, actionItemOptions } =
+    useTaskLinkOptions(task?.project_id, open);
 
   if (!open || !task) return null;
 
