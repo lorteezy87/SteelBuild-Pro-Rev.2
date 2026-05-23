@@ -52,6 +52,18 @@ export default [
       "unused-imports": pluginUnusedImports,
     },
     rules: {
+      ...pluginJs.configs.recommended.rules,
+      ...pluginReact.configs.flat.recommended.rules,
+      // Restore the recommended floor (these were previously dropped because
+      // the explicit `rules` block shadowed the spreads above). `no-undef`
+      // in particular catches the class of bug that shipped as
+      // "qc is not defined".
+      "no-undef": "error",
+      // Apostrophes/quotes in JSX copy are intentional throughout the app;
+      // this rule is pure stylistic noise here.
+      "react/no-unescaped-entities": "off",
+      // Empty catch blocks are a deliberate best-effort pattern in this code.
+      "no-empty": ["error", { allowEmptyCatch: true }],
       "no-unused-vars": "off",
       "react/jsx-uses-vars": "error",
       "react/jsx-uses-react": "error",

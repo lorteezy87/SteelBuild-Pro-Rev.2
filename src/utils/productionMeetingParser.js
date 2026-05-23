@@ -52,7 +52,7 @@ const KEYWORD_RULES = [
   },
 ];
 
-const OWNER_PATTERN = /\b(?:owner|assigned to|assign to|by|responsible)\s*[:\-]?\s*([A-Z]{2,4})\b/i;
+const OWNER_PATTERN = /\b(?:owner|assigned to|assign to|by|responsible)\s*[:-]?\s*([A-Z]{2,4})\b/i;
 const DATE_PATTERN = /\b(?:due|by|before|needed|need|ship(?:ping)?|deliver(?:y)?|install(?:ing)?)\s*(?:on|by|before)?\s*(\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\b/i;
 
 function normalizeLine(line) {

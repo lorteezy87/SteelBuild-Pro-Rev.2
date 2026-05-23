@@ -27,6 +27,11 @@ const STAGE_STYLES = {
   Released: { bg: "rgba(168,240,203,0.12)", color: "var(--status-success)" },
 };
 
+const formatDate = (d) =>
+  d
+    ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "—";
+
 export default function WorkPackageList({
   workPackages,
   drawings = [],
@@ -124,11 +129,6 @@ export default function WorkPackageList({
       </div>
     );
   }
-
-  const _formatDate = (d) =>
-    d
-      ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-      : "—";
 
   const hoursColor = (actual, budget) => {
     if (!budget) return "var(--text-muted)";

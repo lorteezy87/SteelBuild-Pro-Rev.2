@@ -533,7 +533,7 @@ export default function SOV() {
     filtered.forEach(s => {
       const key = s.phase
         || s.cost_code
-        || (s.description || "Ungrouped").split(/[\s\-]/)[0]
+        || (s.description || "Ungrouped").split(/[\s-]/)[0]
         || "Ungrouped";
       if (!groups[key]) {
         groups[key] = {

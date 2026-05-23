@@ -179,7 +179,6 @@ export default function CalendarView({ tasks = [], onSelectTask, selectedDate, o
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: 11,
-                  color: day.isCurrentMonth ? 'var(--text-muted)' : 'rgba(160,175,210,0.25)',
                   marginBottom: 6,
                   display: 'flex',
                   alignItems: 'center',
@@ -188,7 +187,9 @@ export default function CalendarView({ tasks = [], onSelectTask, selectedDate, o
                   height: 22,
                   background: cellIsToday ? GANTT_TODAY_HEX : 'transparent',
                   borderRadius: cellIsToday ? '50%' : '0',
-                  color: cellIsToday ? 'white' : 'var(--text-muted)',
+                  color: cellIsToday
+                    ? 'white'
+                    : day.isCurrentMonth ? 'var(--text-muted)' : 'rgba(160,175,210,0.25)',
                 }}
               >
                 {day.date.getDate()}
