@@ -221,6 +221,25 @@ async function syncFolder(
   return { discovered: files.length, staged, skipped };
 }
 
+// ── Authorization ────────────────────────────────────────────────────────
+// This proxy talks to the DB with the service-role client (RLS bypassed), so
+// any action that acts in a SteelBuild project's context MUST verify the
+// caller's project membership explicitly — a valid JWT alone is not enough.
+async function userHasProjectAccess(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  projectId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("user_projects")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("project_id", projectId)
+    .limit(1)
+    .maybeSingle();
+  return !error && !!data;
+}
+
 // ── Main handler ────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -265,6 +284,13 @@ Deno.serve(async (req: Request) => {
 
   if (!action) {
     return errorResponse(400, "Missing 'action' field");
+  }
+
+  // A projectId in the request means the caller is acting in that project's
+  // context (sync_folder stages files into its import queue, and the tenant is
+  // resolved from its linked folders) — require membership before proceeding.
+  if (projectId && !(await userHasProjectAccess(supabase, user.id, projectId))) {
+    return errorResponse(403, "You do not have access to this project.");
   }
 
   // Resolve tenant ID — either from request body or from the linked folder

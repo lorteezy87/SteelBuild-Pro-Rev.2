@@ -345,7 +345,9 @@ async function runAgentLoop(args: AgentLoopArgs) {
     conversation.push({ role: "user", content: toolResults });
   }
 
-  persistAuditLog(
+  // Await so the audit row is durably written before the isolate is recycled.
+  // persistAuditLog swallows its own errors, so this never fails the response.
+  await persistAuditLog(
     supabase,
     projectId,
     userId,
