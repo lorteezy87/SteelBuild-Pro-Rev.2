@@ -256,7 +256,7 @@ function EquipmentTab({ dailyLogs }) {
         let type = entry;
         let qty = 1;
 
-        const matchPrefix = entry.match(/^(\d+)\s*[x×\-]\s*(.+)$/i);
+        const matchPrefix = entry.match(/^(\d+)\s*[x×-]\s*(.+)$/i);
         const matchSuffix = entry.match(/^(.+?)\s*[x×]\s*(\d+)$/i);
         const matchParen = entry.match(/^(.+?)\s*\((\d+)\)\s*$/);
 
