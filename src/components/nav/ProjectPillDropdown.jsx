@@ -96,7 +96,7 @@ export default function ProjectPillDropdown({ compact = false }) {
           ? "NO PROJECTS"
           : "SELECT PROJECT";
   const displayLabel = activeProject && !loading
-    ? `${activeProject.project_number || "----"} \u00B7 ${(activeProject.name || "Project").slice(0, 24).toUpperCase()}`
+    ? `${activeProject.project_number || "----"} \u00B7 ${(activeProject.name || "Project").toUpperCase()}`
     : label;
 
   // Filter projects by search
@@ -167,13 +167,23 @@ export default function ProjectPillDropdown({ compact = false }) {
             }}
           />
         )}
-        {displayLabel}
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            minWidth: 0,
+          }}
+        >
+          {displayLabel}
+        </span>
         <span
           style={{
             marginLeft: 4,
             transition: "transform 0.15s",
             display: "inline-block",
             transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            flexShrink: 0,
           }}
         >
           ▾
@@ -189,7 +199,7 @@ export default function ProjectPillDropdown({ compact = false }) {
             top: compact ? 58 : "calc(100% + 6px)",
             right: compact ? 12 : 0,
             left: compact ? 12 : undefined,
-            width: compact ? "auto" : 360,
+            width: compact ? "auto" : 400,
             maxHeight: compact ? "min(70dvh, 420px)" : 300,
             overflowY: "auto",
             background: "linear-gradient(180deg, rgba(7, 13, 24, 0.995) 0%, rgba(4, 9, 18, 0.995) 100%)",
@@ -395,12 +405,16 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
               fontSize: 12.5,
               color: "var(--text-primary)",
               fontWeight: isActive ? 600 : 500,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
               overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              overflowWrap: "anywhere",
+              lineHeight: 1.25,
               flex: 1,
               minWidth: 0,
             }}
+            title={project.name}
           >
             {project.name}
           </div>
