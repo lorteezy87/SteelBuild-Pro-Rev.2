@@ -58,6 +58,13 @@ describe("logActivity — record shape", () => {
     expect(rec.project_id).toBe("px");
     expect(rec.project_name).toBe("Annex");
   });
+
+  it("uses the project's own id as project_id for the 'project' entity", async () => {
+    // A project record has `id`, not `project_id`; without this fallback the
+    // audit row would have a null project_id and be rejected by activities RLS.
+    await logActivity("project", "updated", { id: "proj1", name: "Tower" }, { userName: "X" });
+    expect(mocks.create.mock.calls[0][0].project_id).toBe("proj1");
+  });
 });
 
 describe("logActivity — status change descriptions", () => {

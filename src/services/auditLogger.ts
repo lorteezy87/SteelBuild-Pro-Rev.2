@@ -120,6 +120,16 @@ export async function logActivity(
     const entityName = getEntityName(entityLabel, record);
     const statusChange = detectStatusChange(entityType, record, action === "status_changed" ? "update" : action);
 
+    // For the project entity the record IS the project (it has `id`, not
+    // `project_id`), so fall back to record.id to keep project-level audits
+    // scoped to a real project — activities RLS requires project membership on
+    // a non-null project_id.
+    const projectId =
+      options.projectId ||
+      record?.project_id ||
+      (entityType === "project" ? record?.id : null) ||
+      null;
+
     // Columns are snake_case to match the activities table. Read-side aliasing
     // mirrors these to camelCase for the legacy Activity feed.
     const activityRecord = {
@@ -129,7 +139,7 @@ export async function logActivity(
       entity_type: entityLabel,
       entity_name: entityName,
       entity_id: record?.id ?? null,
-      project_id: options.projectId || record?.project_id || null,
+      project_id: projectId,
       project_name: options.projectName || record?.project_name || null,
       description: options.description || statusChange || "",
     };
