@@ -201,7 +201,12 @@ export async function extractRfiLog({
 
 export async function resolveProjectForRfiLog(jobNumber) {
   if (!jobNumber) return null;
-  const cleaned = String(jobNumber).trim();
+  // Strip to digits before interpolating into the PostgREST .or() filter —
+  // jobNumber is AI-extracted (untrusted) and raw values could break out of the
+  // filter. Matches the CSV importers; the ilike fallback still hits
+  // alphanumeric stored project_numbers.
+  const cleaned = String(jobNumber).replace(/\D+/g, "");
+  if (!cleaned) return null;
   const { data, error } = await supabase
     .from("projects")
     .select("id, name, project_number")
