@@ -205,7 +205,9 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
             width: compact ? "auto" : 400,
             maxHeight: compact ? "min(70dvh, 420px)" : 300,
             overflowY: "auto",
-            background: "linear-gradient(180deg, rgba(7, 13, 24, 0.995) 0%, rgba(4, 9, 18, 0.995) 100%)",
+            // Theme-aware opaque surface — a hardcoded dark gradient here left
+            // dark var(--text-primary) text unreadable on a dark panel in light mode.
+            background: "var(--bg-surface-secondary)",
             border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border-default))",
             borderRadius: 14,
             boxShadow:
@@ -225,7 +227,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
               style={{
                 width: "100%",
                 padding: "7px 10px",
-                background: "rgba(9, 18, 32, 1)",
+                background: "var(--bg-input, var(--bg-page))",
                 border: "1px solid var(--accent-border)",
                 borderRadius: 6,
                 fontFamily: "var(--font-body)",
