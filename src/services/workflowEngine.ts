@@ -1,5 +1,5 @@
 /**
- * workflowEngine.js — Centralized state machine for all trust-critical workflows.
+ * workflowEngine.ts — Centralized state machine for all trust-critical workflows.
  *
  * ONE source of truth for:
  *   • Which transitions are legal
@@ -13,10 +13,74 @@
  *   if (!result.valid) { toast.error(result.reason); return; }
  */
 
-// ─── Role hierarchy (lower = more privileged) ──────────────────────────
-const ROLE_RANK = { admin: 0, pm: 1, field: 2, viewer: 3 };
+import type { WorkflowRole } from "@/types/rbac";
 
-function roleAtLeast(userRole, floor) {
+// ─── Types ──────────────────────────────────────────────────────────────
+
+type WorkflowRecord = Record<string, any>;
+
+export interface GuardResult {
+  valid: boolean;
+  reason?: string;
+}
+
+export interface TransitionContext {
+  user?: { role?: string; email?: string | null; id?: string | null } | null;
+  record?: WorkflowRecord | null;
+  fields?: WorkflowRecord | null;
+  metadata?: WorkflowRecord | null;
+}
+
+export interface WorkflowTransition {
+  requiredFields: string[];
+  minRole: WorkflowRole;
+  label: string;
+  guard?: (record: WorkflowRecord, context?: TransitionContext) => GuardResult | void;
+}
+
+export interface WorkflowDefinition {
+  field: string;
+  states: string[];
+  initial: string;
+  transitions: Record<string, WorkflowTransition>;
+}
+
+export interface TransitionResult {
+  valid: boolean;
+  reason?: string;
+  transition?: WorkflowTransition | null;
+}
+
+export interface ValidNextTransition {
+  toStatus: string;
+  label: string;
+  allowed: boolean;
+  reason: string | null;
+  requiredFields: string[];
+  minRole: WorkflowRole;
+}
+
+export interface TransitionAudit {
+  workflow: string;
+  from_status: string;
+  to_status: string;
+  transitioned_by: string;
+  transitioned_at: string;
+  role: string;
+  record_id: string | null;
+  project_id: string | null;
+  metadata: WorkflowRecord | null;
+}
+
+// ─── Role hierarchy (lower = more privileged) ──────────────────────────
+const ROLE_RANK: Record<WorkflowRole, number> & Record<string, number> = {
+  admin: 0,
+  pm: 1,
+  field: 2,
+  viewer: 3,
+};
+
+function roleAtLeast(userRole: string, floor: string): boolean {
   return (ROLE_RANK[userRole] ?? 99) <= (ROLE_RANK[floor] ?? 0);
 }
 
@@ -172,21 +236,25 @@ export const WORKFLOWS = {
       "Paid→Finalized":        { requiredFields: [],                          minRole: "admin", label: "Finalize" },
     },
   },
-};
+} satisfies Record<string, WorkflowDefinition>;
+
+export type WorkflowName = keyof typeof WORKFLOWS;
+
+// Indexed view for runtime lookups by an arbitrary (possibly unknown) name.
+const WORKFLOW_TABLE = WORKFLOWS as Record<string, WorkflowDefinition>;
 
 // ─── Core validation ────────────────────────────────────────────────────
 
 /**
  * Validates whether a status transition is legal.
- *
- * @param {string} workflowName  – key in WORKFLOWS
- * @param {string} fromStatus    – current status value
- * @param {string} toStatus      – desired next status
- * @param {object} context       – { record, user: { role }, fields?: {} }
- * @returns {{ valid: boolean, reason?: string, transition?: object }}
  */
-export function validateTransition(workflowName, fromStatus, toStatus, context = {}) {
-  const workflow = WORKFLOWS[workflowName];
+export function validateTransition(
+  workflowName: string,
+  fromStatus: string,
+  toStatus: string,
+  context: TransitionContext = {},
+): TransitionResult {
+  const workflow = WORKFLOW_TABLE[workflowName];
   if (!workflow) {
     return { valid: false, reason: `Unknown workflow: ${workflowName}` };
   }
@@ -215,7 +283,7 @@ export function validateTransition(workflowName, fromStatus, toStatus, context =
   }
 
   // Required fields check
-  const record = { ...context.record, ...context.fields };
+  const record: WorkflowRecord = { ...context.record, ...context.fields };
   for (const field of transition.requiredFields) {
     const val = record[field];
     if (val === undefined || val === null || val === "") {
@@ -240,8 +308,12 @@ export function validateTransition(workflowName, fromStatus, toStatus, context =
 /**
  * Returns all valid next states from a given state.
  */
-export function getValidTransitions(workflowName, currentStatus, context = {}) {
-  const workflow = WORKFLOWS[workflowName];
+export function getValidTransitions(
+  workflowName: string,
+  currentStatus: string,
+  context: TransitionContext = {},
+): ValidNextTransition[] {
+  const workflow = WORKFLOW_TABLE[workflowName];
   if (!workflow) return [];
 
   return Object.entries(workflow.transitions)
@@ -263,14 +335,19 @@ export function getValidTransitions(workflowName, currentStatus, context = {}) {
 /**
  * Returns the field name that a workflow controls.
  */
-export function getWorkflowField(workflowName) {
-  return WORKFLOWS[workflowName]?.field || null;
+export function getWorkflowField(workflowName: string): string | null {
+  return WORKFLOW_TABLE[workflowName]?.field || null;
 }
 
 /**
  * Build an audit entry for a transition.
  */
-export function buildTransitionAudit(workflowName, fromStatus, toStatus, context = {}) {
+export function buildTransitionAudit(
+  workflowName: string,
+  fromStatus: string,
+  toStatus: string,
+  context: TransitionContext = {},
+): TransitionAudit {
   return {
     workflow: workflowName,
     from_status: fromStatus,
