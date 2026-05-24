@@ -1,5 +1,5 @@
 /**
- * cacheRegistry.js — Centralized query key registry and invalidation.
+ * cacheRegistry.ts — Centralized query key registry and invalidation.
  *
  * Problem: Mutations invalidate ["deliveries"] but queries use ["deliveries-all"],
  *          ["deliveries-nav-count"], ["pcc-deliveries"] etc. Result: stale data.
@@ -22,7 +22,19 @@
 // Each entity lists ALL query keys that read its data, anywhere in the app.
 // "fn" receives projectId and returns the exact key array.
 
-const REGISTRY = {
+import type { QueryClient } from "@tanstack/react-query";
+
+// A query key family: an array whose first element is the key name and whose
+// remaining elements scope it (e.g. project id). null/undefined parts are
+// filtered out before invalidation.
+type RegistryKey = (string | null | undefined)[];
+
+interface EntityRegistration {
+  primary: (id?: any) => RegistryKey;
+  families: (id?: any) => RegistryKey[];
+}
+
+const REGISTRY: Record<string, EntityRegistration> = {
 
   // ── Core entities ─────────────────────────────────────────────────────
 
@@ -546,7 +558,7 @@ const REGISTRY = {
  * @param {string}      entity   – key in REGISTRY (e.g., "delivery")
  * @param {string|null} projectId – current project ID (null for global)
  */
-export async function invalidateEntity(qc, entity, projectId = null) {
+export async function invalidateEntity(qc: QueryClient, entity: string, projectId: any = null): Promise<void> {
   const reg = REGISTRY[entity];
   if (!reg) {
     if (import.meta.env.DEV) console.error(`[cacheRegistry] Unknown entity: "${entity}". Falling back to broad invalidation.`);
@@ -569,7 +581,7 @@ export async function invalidateEntity(qc, entity, projectId = null) {
  * Example: Drawing creation also creates a ScheduleTask:
  *   invalidateEntities(qc, ["drawing", "schedule_task"], projectId);
  */
-export async function invalidateEntities(qc, entities, projectId = null) {
+export async function invalidateEntities(qc: QueryClient, entities: string[], projectId: any = null): Promise<void> {
   await Promise.all(entities.map((e) => invalidateEntity(qc, e, projectId)));
 }
 
@@ -577,7 +589,7 @@ export async function invalidateEntities(qc, entities, projectId = null) {
  * Get the primary query key for an entity.
  * Use this in useQuery() to keep keys consistent.
  */
-export function getQueryKey(entity, projectId = null) {
+export function getQueryKey(entity: string, projectId: any = null): RegistryKey {
   const reg = REGISTRY[entity];
   if (!reg) {
     if (import.meta.env.DEV) console.error(`[cacheRegistry] Unknown entity: "${entity}".`);
@@ -589,7 +601,7 @@ export function getQueryKey(entity, projectId = null) {
 /**
  * Get all query key families for an entity (useful for optimistic updates).
  */
-export function getQueryFamilies(entity, projectId = null) {
+export function getQueryFamilies(entity: string, projectId: any = null): RegistryKey[] {
   const reg = REGISTRY[entity];
   if (!reg) return [[entity, projectId].filter(Boolean)];
   return reg.families(projectId);
@@ -598,6 +610,6 @@ export function getQueryFamilies(entity, projectId = null) {
 /**
  * List all registered entity names.
  */
-export function getRegisteredEntities() {
+export function getRegisteredEntities(): string[] {
   return Object.keys(REGISTRY);
 }
