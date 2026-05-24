@@ -1,5 +1,5 @@
 /**
- * autoLinkEngine.js — Pattern-based cross-entity auto-linking.
+ * autoLinkEngine.ts — Pattern-based cross-entity auto-linking.
  *
  * Parses entity text fields for recognizable patterns (drawing numbers,
  * WP codes, sequences, gridlines, areas) and suggests links to matching
@@ -8,9 +8,35 @@
  * Deterministic — no ML, just pattern matching against known entity indexes.
  */
 
+type EntityRecord = Record<string, any>;
+type Confidence = "high" | "medium" | "low";
+
+interface PatternMatch {
+  type: string;
+  match: string;
+  value: string;
+  fullMatch: RegExpExecArray;
+}
+
+export interface AutoLinkSources {
+  drawings?: EntityRecord[];
+  workPackages?: EntityRecord[];
+  rfis?: EntityRecord[];
+}
+
+export interface AutoLinkSuggestion {
+  type: string;
+  pattern: string;
+  matchedEntity: EntityRecord;
+  entityType: string;
+  entityId: any;
+  label: string;
+  confidence: Confidence;
+}
+
 // --- Pattern matchers ---
 
-const PATTERNS = {
+const PATTERNS: Record<string, RegExp> = {
   // Drawing sheet numbers: S3.2, A2.1, M1.04, E-2.3
   drawingNumber: /\b([SAEMPC])-?(\d{1,3})[.](\d{1,3})\b/gi,
   // Work package codes: WP-104, WP 204, WP104
@@ -28,13 +54,13 @@ const PATTERNS = {
   rfiNumber: /\bRFI[-\s]?(\d{1,5})\b/gi,
 };
 
-function extractPatterns(text) {
+function extractPatterns(text: any): PatternMatch[] {
   if (!text || typeof text !== "string") return [];
-  const matches = [];
+  const matches: PatternMatch[] = [];
 
   for (const [type, regex] of Object.entries(PATTERNS)) {
     const re = new RegExp(regex.source, regex.flags);
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = re.exec(text)) !== null) {
       matches.push({ type, match: match[0], value: match[0].toUpperCase().replace(/\s+/g, ""), fullMatch: match });
     }
@@ -44,8 +70,8 @@ function extractPatterns(text) {
 
 // --- Index builders ---
 
-function buildDrawingIndex(drawings = []) {
-  const index = new Map();
+function buildDrawingIndex(drawings: EntityRecord[] = []): Map<string, EntityRecord> {
+  const index = new Map<string, EntityRecord>();
   for (const d of drawings) {
     if (!d || d.is_deleted) continue;
     const num = String(d.sheet_number || "").trim().toUpperCase().replace(/\s+/g, "");
@@ -57,8 +83,8 @@ function buildDrawingIndex(drawings = []) {
   return index;
 }
 
-function buildWPIndex(workPackages = []) {
-  const index = new Map();
+function buildWPIndex(workPackages: EntityRecord[] = []): Map<string, EntityRecord> {
+  const index = new Map<string, EntityRecord>();
   for (const wp of workPackages) {
     if (!wp || wp.is_deleted) continue;
     const num = String(wp.wp_number || "").trim().toUpperCase().replace(/[-\s]/g, "");
@@ -69,8 +95,8 @@ function buildWPIndex(workPackages = []) {
   return index;
 }
 
-function buildRFIIndex(rfis = []) {
-  const index = new Map();
+function buildRFIIndex(rfis: EntityRecord[] = []): Map<string, EntityRecord> {
+  const index = new Map<string, EntityRecord>();
   for (const rfi of rfis) {
     if (!rfi || rfi.is_deleted) continue;
     const num = String(rfi.rfi_number || "").trim().toUpperCase().replace(/[-\s#]/g, "");
@@ -80,14 +106,14 @@ function buildRFIIndex(rfis = []) {
   return index;
 }
 
-function buildSequenceIndex(workPackages = []) {
-  const index = new Map();
+function buildSequenceIndex(workPackages: EntityRecord[] = []): Map<string, EntityRecord[]> {
+  const index = new Map<string, EntityRecord[]>();
   for (const wp of workPackages) {
     if (!wp || wp.is_deleted) continue;
     const seq = String(wp.sequence_number || "").trim().toUpperCase();
     if (seq) {
       if (!index.has(seq)) index.set(seq, []);
-      index.get(seq).push(wp);
+      index.get(seq)!.push(wp);
     }
   }
   return index;
@@ -99,7 +125,7 @@ function buildSequenceIndex(workPackages = []) {
  * Find suggested links for a piece of text against project entities.
  * Returns an array of { type, pattern, matchedEntity, entityType, entityId, confidence }.
  */
-export function findAutoLinks(text, sources = {}) {
+export function findAutoLinks(text: any, sources: AutoLinkSources = {}): AutoLinkSuggestion[] {
   const patterns = extractPatterns(text);
   if (patterns.length === 0) return [];
 
@@ -108,7 +134,7 @@ export function findAutoLinks(text, sources = {}) {
   const rfiIdx = buildRFIIndex(sources.rfis);
   const seqIdx = buildSequenceIndex(sources.workPackages);
 
-  const suggestions = [];
+  const suggestions: AutoLinkSuggestion[] = [];
 
   for (const p of patterns) {
     const key = p.value;
@@ -178,7 +204,7 @@ export function findAutoLinks(text, sources = {}) {
   }
 
   // Deduplicate by entityId
-  const seen = new Set();
+  const seen = new Set<any>();
   return suggestions.filter(s => {
     if (seen.has(s.entityId)) return false;
     seen.add(s.entityId);
@@ -190,7 +216,7 @@ export function findAutoLinks(text, sources = {}) {
  * Build link suggestions for a new/edited entity.
  * Scans title, description, drawing_reference, notes fields.
  */
-export function suggestLinksForEntity(entity, sources = {}) {
+export function suggestLinksForEntity(entity: EntityRecord, sources: AutoLinkSources = {}): AutoLinkSuggestion[] {
   const textFields = [
     entity.title,
     entity.description,
