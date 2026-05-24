@@ -3,10 +3,10 @@
 // doesn't spam the console on every cascade pass (Schedule page can
 // trigger 3+ passes during initial load via React re-renders).
 // Reset via __resetCycleWarnings() in tests.
-const _WARNED_CYCLES = new Set();
+const _WARNED_CYCLES = new Set<string>();
 
 /**
- * scheduleCascade.js
+ * scheduleCascade.ts
  *
  * Single source of truth for "where do these tasks actually sit on the
  * calendar once predecessor links are followed". Every schedule consumer
@@ -41,6 +41,22 @@ const _WARNED_CYCLES = new Set();
  * it with a toast or inline indicator.
  */
 
+export interface DependencyLink {
+  id: string;
+  type: string;
+  lag_days: number;
+}
+
+export interface EffectiveDate {
+  start: string | null;
+  end: string | null;
+  shifted: boolean;
+  shiftedBy: number;
+  cycle: boolean;
+}
+
+type ScheduleTask = Record<string, any>;
+
 // ── Link-type model ─────────────────────────────────────────────────────
 
 export const LINK_TYPES = ["FS", "SS", "FF", "SF"];
@@ -50,7 +66,7 @@ const MIN_SANE_YEAR = 1900;
 const MAX_SANE_YEAR = 2200;
 
 /** Parse a YYYY-MM-DD or full ISO timestamp as UTC midnight. */
-function parseDateUTC(s) {
+function parseDateUTC(s: any): Date | null {
   if (!s) return null;
   if (s instanceof Date) return Number.isNaN(s.getTime()) ? null : s;
   const str = String(s).trim();
@@ -65,23 +81,23 @@ function parseDateUTC(s) {
 }
 
 /** Normalise any date input to a YYYY-MM-DD string (or null). */
-export function toDateOnly(s) {
+export function toDateOnly(s: any): string | null {
   const d = parseDateUTC(s);
   return d ? d.toISOString().slice(0, 10) : null;
 }
 
-function addDaysIso(iso, n) {
+function addDaysIso(iso: any, n: number): string | null {
   const d = parseDateUTC(iso);
   if (!d) return null;
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 
-function diffDays(a, b) {
+function diffDays(a: any, b: any): number {
   const da = parseDateUTC(a);
   const db = parseDateUTC(b);
   if (!da || !db) return 0;
-  return Math.round((db - da) / DAY_MS);
+  return Math.round((db.getTime() - da.getTime()) / DAY_MS);
 }
 
 // ── Dependency parsing / validation ─────────────────────────────────────
@@ -91,13 +107,13 @@ function diffDays(a, b) {
  * NaN, Infinity, or non-integer is coerced to the FS+1 default of 1 so a
  * single bad row can't crash the cascade for the whole project.
  */
-function normaliseLag(raw, fallback = 1) {
+function normaliseLag(raw: any, fallback = 1): number {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
   return Math.trunc(n);
 }
 
-function normaliseType(raw) {
+function normaliseType(raw: any): string {
   const t = typeof raw === "string" ? raw.toUpperCase() : "FS";
   return LINK_TYPES.includes(t) ? t : "FS";
 }
@@ -113,8 +129,8 @@ function normaliseType(raw) {
  * so the new cascade renders identically to the old one for unmigrated
  * rows — preserves the regression-test bar.
  */
-export function parseDependencies(raw) {
-  let arr = raw;
+export function parseDependencies(raw: any): DependencyLink[] {
+  let arr: any = raw;
   if (raw == null || raw === "" || raw === "null") return [];
   if (typeof raw === "string") {
     try {
@@ -125,7 +141,7 @@ export function parseDependencies(raw) {
   }
   if (!Array.isArray(arr)) return [];
 
-  const out = [];
+  const out: DependencyLink[] = [];
   for (const elem of arr) {
     if (!elem) continue;
     if (typeof elem === "string") {
@@ -152,9 +168,9 @@ export function parseDependencies(raw) {
  * error surfaces loudly, but coerces non-integer lags to the FS+1 default
  * to match parseDependencies' tolerance on read.
  */
-export function serializeDependencies(links) {
+export function serializeDependencies(links: any): string | null {
   if (!Array.isArray(links) || links.length === 0) return null;
-  const valid = [];
+  const valid: DependencyLink[] = [];
   for (const link of links) {
     if (!link || !link.id) continue;
     const t = typeof link.type === "string" ? link.type.toUpperCase() : "FS";
@@ -174,6 +190,12 @@ export function serializeDependencies(links) {
 
 // ── Effective-date cascade ──────────────────────────────────────────────
 
+interface LinkResult {
+  start: string;
+  end: string;
+  drove: boolean;
+}
+
 /**
  * Apply one predecessor link to a successor candidate window and return
  * `{ start, end, drove }` — `drove` is true iff the predecessor pulled
@@ -187,7 +209,13 @@ export function serializeDependencies(links) {
  *
  * Duration is preserved on every shift.
  */
-function applyLink(currentStart, currentEnd, dur, predResolved, link) {
+function applyLink(
+  currentStart: string,
+  currentEnd: string,
+  dur: number,
+  predResolved: { start: string | null; end: string | null },
+  link: DependencyLink,
+): LinkResult {
   const { type } = link;
   const lag = link.lag_days ?? 0;
   let candStart = currentStart;
@@ -242,25 +270,23 @@ function applyLink(currentStart, currentEnd, dur, predResolved, link) {
  *
  * Stable / deterministic — given the same input array (same task order)
  * the output is identical, so React `useMemo` consumers get cache hits.
- *
- * @param {Array} tasks  Array of `{ id, start_date, end_date, dependencies, ... }`
  */
-export function computeEffectiveDates(tasks) {
-  const out = {};
+export function computeEffectiveDates(tasks: ScheduleTask[]): Record<string, EffectiveDate> {
+  const out: Record<string, EffectiveDate> = {};
   if (!Array.isArray(tasks) || tasks.length === 0) return out;
 
   // Index tasks once. Cycles are detected by tracking the in-flight
   // resolution chain via the `visiting` set — if `resolve` is called
   // for a task already on the stack we mark every member of the cycle
   // and bail out without infinite-recursing.
-  const taskById = Object.create(null);
+  const taskById: Record<string, ScheduleTask> = Object.create(null);
   for (const t of tasks) {
     if (t && t.id) taskById[t.id] = t;
   }
 
-  const cycleNodes = new Set();
+  const cycleNodes = new Set<string>();
 
-  function warnCycle(chain) {
+  function warnCycle(chain: string[]): void {
     const key = [...chain].sort().join("|");
     // Module-scoped dedupe (see _WARNED_CYCLES at the bottom of the
     // file). The previous per-call Set re-warned every time the
@@ -269,13 +295,13 @@ export function computeEffectiveDates(tasks) {
     // per unique cycle per session is enough.
     if (_WARNED_CYCLES.has(key)) return;
     _WARNED_CYCLES.add(key);
-     
+
     console.warn(
       `[scheduleCascade] Predecessor cycle detected, falling back to stored dates for: ${[...chain].join(" → ")}`
     );
   }
 
-  function resolve(taskId, visiting) {
+  function resolve(taskId: string, visiting: Set<string>): EffectiveDate | null {
     if (out[taskId]) return out[taskId];
     if (visiting.has(taskId)) {
       // H7 fix: only mark the actual cycle members, not ancestors that
@@ -300,7 +326,7 @@ export function computeEffectiveDates(tasks) {
 
     if (!startOnly || !endOnly) {
       // Without dates we can't do anything but echo whatever's parseable.
-      const fallback = {
+      const fallback: EffectiveDate = {
         start: startOnly,
         end: endOnly,
         shifted: false,
@@ -335,7 +361,7 @@ export function computeEffectiveDates(tasks) {
     }
 
     const shiftedBy = shifted ? Math.max(0, diffDays(startOnly, curStart)) : 0;
-    const result = {
+    const result: EffectiveDate = {
       start: curStart,
       end: curEnd,
       shifted,
@@ -376,7 +402,7 @@ export function computeEffectiveDates(tasks) {
  * test can re-trigger the warning path without leaking state from a
  * prior test.
  */
-export function __resetCycleWarnings() {
+export function __resetCycleWarnings(): void {
   _WARNED_CYCLES.clear();
 }
 
@@ -390,7 +416,10 @@ export function __resetCycleWarnings() {
  * React renderers is safe; mutations on the wrappers don't leak back to
  * the originals or to the database.
  */
-export function applyEffectiveDates(tasks, effective = null) {
+export function applyEffectiveDates(
+  tasks: ScheduleTask[],
+  effective: Record<string, EffectiveDate> | null = null,
+): ScheduleTask[] {
   if (!Array.isArray(tasks) || tasks.length === 0) return [];
   const eff = effective || computeEffectiveDates(tasks);
   return tasks.map((t) => {
