@@ -60,7 +60,7 @@ const mapColumn = (col: string): string => COLUMN_MAP[col] || col;
  * After fetching, add Base44-style aliases to each record so UI code
  * reading `record.created_date` still works.
  */
-const addAliases = <R>(record: R): R => {
+const addAliases = <R>(record: R, tableName?: string): R => {
   if (!record || typeof record !== 'object') return record;
   const out: Record<string, unknown> = { ...(record as Record<string, unknown>) };
   // Project-scoped reads embed the parent project only to enforce
@@ -69,10 +69,22 @@ const addAliases = <R>(record: R): R => {
   delete out.projects;
   if (out.created_at !== undefined && out.created_date === undefined) out.created_date = out.created_at;
   if (out.updated_at !== undefined && out.updated_date === undefined) out.updated_date = out.updated_at;
+  // The activities table stores audit columns in snake_case; the legacy
+  // Activity-feed UI (dashboard/ActivityFeed) reads Base44-style camelCase.
+  // Mirror them so both shapes resolve off the same row. cleanRecord() strips
+  // any uppercase-containing key on write, so these mirrors never persist back.
+  if (tableName === 'activities') {
+    if (out.performed_by !== undefined && out.userName === undefined) out.userName = out.performed_by;
+    if (out.entity_type !== undefined && out.entityType === undefined) out.entityType = out.entity_type;
+    if (out.entity_name !== undefined && out.entityName === undefined) out.entityName = out.entity_name;
+    if (out.project_name !== undefined && out.projectName === undefined) out.projectName = out.project_name;
+    if (out.project_id !== undefined && out.projectId === undefined) out.projectId = out.project_id;
+  }
   return out as R;
 };
 
-const addAliasesToList = <R>(rows: R[] | null | undefined): R[] => (rows || []).map(addAliases);
+const addAliasesToList = <R>(rows: R[] | null | undefined, tableName?: string): R[] =>
+  (rows || []).map((r) => addAliases(r, tableName));
 
 /**
  * Coerce a JSONB id-array value into a clean string[]. Postgres can return
@@ -350,7 +362,7 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     }
     const { data, error } = await q;
     if (error) throw new SupabaseOperationError(tableName as string, 'list', error);
-    return addAliasesToList<RowWithAliases<T>>(data);
+    return addAliasesToList<RowWithAliases<T>>(data, tableName as string);
   },
 
   /**
@@ -373,7 +385,7 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     if (limit) q = q.limit(limit);
     const { data, error } = await q;
     if (error) throw new SupabaseOperationError(tableName as string, 'filter', error);
-    return addAliasesToList<RowWithAliases<T>>(data);
+    return addAliasesToList<RowWithAliases<T>>(data, tableName as string);
   },
 
   /**
@@ -394,7 +406,7 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     }
     const { data, error } = await q.single();
     if (error) throw new SupabaseOperationError(tableName as string, 'get', error);
-    return addAliases<RowWithAliases<T>>(data);
+    return addAliases<RowWithAliases<T>>(data, tableName as string);
   },
 
   /**
@@ -415,7 +427,7 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
       .select()
       .single();
     if (error) throw new SupabaseOperationError(tableName as string, 'create', error);
-    return addAliases<RowWithAliases<T>>(data);
+    return addAliases<RowWithAliases<T>>(data, tableName as string);
   },
 
   /**
@@ -434,7 +446,7 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
       .select()
       .single();
     if (error) throw new SupabaseOperationError(tableName as string, 'update', error);
-    return addAliases<RowWithAliases<T>>(data);
+    return addAliases<RowWithAliases<T>>(data, tableName as string);
   },
 
   /**
@@ -470,7 +482,7 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
       .insert(cleaned)
       .select();
     if (error) throw new SupabaseOperationError(tableName as string, 'bulkCreate', error);
-    return addAliasesToList<RowWithAliases<T>>(data);
+    return addAliasesToList<RowWithAliases<T>>(data, tableName as string);
   },
 });
 
@@ -490,7 +502,7 @@ export const entities = {
         project_data: clean as never,
       });
       if (error) throw new SupabaseOperationError('projects', 'create', error);
-      return addAliases<RowWithAliases<'projects'>>(data as RowWithAliases<'projects'>);
+      return addAliases<RowWithAliases<'projects'>>(data as RowWithAliases<'projects'>, 'projects');
     },
     delete: async (id: string): Promise<{ success: true }> => {
       const deletedAt = new Date().toISOString();
