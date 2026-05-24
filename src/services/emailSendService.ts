@@ -1,5 +1,5 @@
 /**
- * emailSendService.js — Client service for sending emails through the
+ * emailSendService.ts — Client service for sending emails through the
  * email-send Edge Function.
  *
  * Usage:
@@ -15,28 +15,52 @@
 
 import { supabase } from "@/lib/supabase";
 
+export interface EmailAttachment {
+  filename: string;
+  content_type?: string;
+  content_base64: string;
+  size_bytes?: number;
+}
+
+export interface SendEmailParams {
+  project_id: string;
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  body_text: string;
+  body_html?: string;
+  reply_to_message_id?: string;
+  in_reply_to_external_id?: string | null;
+  thread_id?: string | null;
+  from_email?: string;
+  from_name?: string;
+  attachments?: EmailAttachment[];
+}
+
+export interface SendEmailResult {
+  success: boolean;
+  message_id?: string;
+  provider_message_id?: string;
+  error?: string;
+}
+
+export interface ReplyDefaults {
+  to: string[];
+  cc: string[];
+  subject: string;
+  in_reply_to_external_id: string | null;
+  thread_id: string | null;
+  reply_to_message_id: any;
+  quoted_body: string;
+}
+
 const EDGE_FN_PATH = "/functions/v1/email-send";
 
 /**
  * Send an email through the email-send Edge Function.
- *
- * @param {Object} params
- * @param {string} params.project_id
- * @param {string[]} params.to
- * @param {string[]} [params.cc]
- * @param {string[]} [params.bcc]
- * @param {string} params.subject
- * @param {string} params.body_text
- * @param {string} [params.body_html]
- * @param {string} [params.reply_to_message_id] - email_messages.id being replied to
- * @param {string} [params.in_reply_to_external_id] - Message-ID header for threading
- * @param {string} [params.thread_id]
- * @param {string} [params.from_email]
- * @param {string} [params.from_name]
- * @param {Array<{ filename: string, content_type?: string, content_base64: string, size_bytes?: number }>} [params.attachments] - File attachments (base64, no data: prefix)
- * @returns {Promise<{ success: boolean, message_id?: string, error?: string }>}
  */
-export async function sendEmail(params) {
+export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) {
     return { success: false, error: "Not authenticated" };
@@ -71,7 +95,7 @@ export async function sendEmail(params) {
       message_id: data.message_id,
       provider_message_id: data.provider_message_id,
     };
-  } catch (err) {
+  } catch (err: any) {
     return {
       success: false,
       error: err?.message || "Network error sending email",
@@ -81,22 +105,21 @@ export async function sendEmail(params) {
 
 /**
  * Build default field values for a reply to an existing message.
- *
- * @param {Object} originalMessage - The email_messages row being replied to.
- * @param {'reply'|'reply_all'} mode
- * @param {string} [currentUserEmail] - The current user's email to exclude from CC.
- * @returns {{ to: string[], cc: string[], subject: string, in_reply_to_external_id: string, thread_id: string, reply_to_message_id: string, quoted_body: string }}
  */
-export function buildReplyDefaults(originalMessage, mode = "reply", currentUserEmail = "") {
+export function buildReplyDefaults(
+  originalMessage: Record<string, any>,
+  mode: "reply" | "reply_all" = "reply",
+  currentUserEmail = "",
+): ReplyDefaults {
   const msg = originalMessage;
 
   // To: reply goes to sender
   const to = msg.sender_email ? [msg.sender_email] : [];
 
   // CC: for reply_all, include original recipients + CC minus current user and sender
-  let cc = [];
+  let cc: string[] = [];
   if (mode === "reply_all") {
-    const allRecipients = new Set();
+    const allRecipients = new Set<string>();
 
     // Parse recipients
     const recipients = parseEmailList(msg.recipients);
@@ -136,7 +159,7 @@ export function buildReplyDefaults(originalMessage, mode = "reply", currentUserE
   const originalBody = (msg.body_text || "").trim();
   const quotedLines = originalBody
     .split("\n")
-    .map((line) => `> ${line}`)
+    .map((line: string) => `> ${line}`)
     .join("\n");
 
   const quotedBody = `\n\nOn ${dateStr}, ${senderDisplay} wrote:\n${quotedLines}`;
@@ -156,7 +179,7 @@ export function buildReplyDefaults(originalMessage, mode = "reply", currentUserE
  * Parse an email list field from email_messages.
  * Could be a JSON string array, a JSON stringified array, or a comma-separated string.
  */
-function parseEmailList(raw) {
+function parseEmailList(raw: any): string[] {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
   if (typeof raw === "string") {
