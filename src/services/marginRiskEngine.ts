@@ -1,5 +1,5 @@
 /**
- * marginRiskEngine.js — Deterministic margin-at-risk scoring.
+ * marginRiskEngine.ts — Deterministic margin-at-risk scoring.
  *
  * Calculates estimated margin exposure from operational signals:
  * open RFIs, rejected submittals, crew stacking, late procurement,
@@ -8,26 +8,59 @@
  * Every score is explainable — no ML, no hidden formulas.
  */
 
+type SourceRecord = Record<string, any>;
+type Severity = "critical" | "high" | "medium";
+
+export interface RiskItem {
+  signal: string;
+  label: string;
+  severity: Severity;
+  exposure: number;
+  detail: string;
+  entityType: string;
+  entityId: any;
+  area?: string | null;
+  workPackageId?: string | null;
+}
+
+export interface RiskSignal {
+  signal: string;
+  label: string;
+  risk: string;
+  totalExposure: number;
+  items: RiskItem[];
+}
+
+export interface MarginRiskSources {
+  rfis?: SourceRecord[];
+  submittals?: SourceRecord[];
+  workPackages?: SourceRecord[];
+  deliveries?: SourceRecord[];
+  inspections?: SourceRecord[];
+  scheduleTasks?: SourceRecord[];
+  changeOrders?: SourceRecord[];
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
-function normalize(v) { return String(v || "").trim().toLowerCase(); }
-function asDate(v) {
+function num(v: any): number { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+function normalize(v: any): string { return String(v || "").trim().toLowerCase(); }
+function asDate(v: any): Date | null {
   if (!v) return null;
   const d = v instanceof Date ? new Date(v) : new Date(`${String(v).slice(0, 10)}T00:00:00`);
   return Number.isNaN(d.getTime()) ? null : d;
 }
-function daysBetween(a, b) {
+function daysBetween(a: any, b: any): number {
   const da = asDate(a), db = asDate(b);
   if (!da || !db) return 0;
-  return Math.round((db - da) / DAY_MS);
+  return Math.round((db.getTime() - da.getTime()) / DAY_MS);
 }
 
 // --- Risk signal scorers ---
 
-function scoreRfiRisk(rfis = []) {
+function scoreRfiRisk(rfis: SourceRecord[] = []): RiskSignal {
   // Open RFIs = delay/rework risk
-  const items = [];
+  const items: RiskItem[] = [];
   let totalExposure = 0;
   for (const rfi of rfis) {
     if (!rfi || rfi.is_deleted) continue;
@@ -43,7 +76,7 @@ function scoreRfiRisk(rfis = []) {
     if (scheduleDays > 0) exposure += scheduleDays * 2000;
     if (ageDays > 14 && !costImpact) exposure += ageDays * 500; // aging penalty
 
-    const severity = rfi.priority === "Critical" ? "critical"
+    const severity: Severity = rfi.priority === "Critical" ? "critical"
       : rfi.priority === "High" ? "high"
       : ageDays > 21 ? "high" : "medium";
 
@@ -65,8 +98,8 @@ function scoreRfiRisk(rfis = []) {
   return { signal: "open_rfis", label: "Open RFIs", risk: "delay/rework", totalExposure, items };
 }
 
-function scoreSubmittalRisk(submittals = []) {
-  const items = [];
+function scoreSubmittalRisk(submittals: SourceRecord[] = []): RiskSignal {
+  const items: RiskItem[] = [];
   let totalExposure = 0;
   for (const sub of submittals) {
     if (!sub || sub.is_deleted) continue;
@@ -92,8 +125,8 @@ function scoreSubmittalRisk(submittals = []) {
   return { signal: "rejected_submittals", label: "Rejected Submittals", risk: "detailing/fab churn", totalExposure, items };
 }
 
-function scoreLaborBurnRisk(workPackages = []) {
-  const items = [];
+function scoreLaborBurnRisk(workPackages: SourceRecord[] = []): RiskSignal {
+  const items: RiskItem[] = [];
   let totalExposure = 0;
   for (const wp of workPackages) {
     if (!wp || wp.is_deleted) continue;
@@ -130,8 +163,8 @@ function scoreLaborBurnRisk(workPackages = []) {
   return { signal: "labor_burn", label: "Labor Burn", risk: "productivity loss", totalExposure, items };
 }
 
-function scoreProcurementRisk(deliveries = []) {
-  const items = [];
+function scoreProcurementRisk(deliveries: SourceRecord[] = []): RiskSignal {
+  const items: RiskItem[] = [];
   let totalExposure = 0;
   const CLOSED = new Set(["delivered", "received", "complete", "completed", "cancelled", "canceled", "closed"]);
 
@@ -141,7 +174,7 @@ function scoreProcurementRisk(deliveries = []) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     if (!requiredDate) continue;
 
-    const daysLate = Math.round((today - requiredDate) / DAY_MS);
+    const daysLate = Math.round((today.getTime() - requiredDate.getTime()) / DAY_MS);
     const isLate = daysLate > 0;
     const isAtRisk = normalize(del.status).includes("delay") || normalize(del.status).includes("hold");
 
@@ -165,8 +198,8 @@ function scoreProcurementRisk(deliveries = []) {
   return { signal: "late_procurement", label: "Late Procurement", risk: "acceleration cost", totalExposure, items };
 }
 
-function scoreInspectionRisk(inspections = []) {
-  const items = [];
+function scoreInspectionRisk(inspections: SourceRecord[] = []): RiskSignal {
+  const items: RiskItem[] = [];
   let totalExposure = 0;
   for (const insp of inspections) {
     if (!insp || insp.is_deleted) continue;
@@ -191,8 +224,8 @@ function scoreInspectionRisk(inspections = []) {
   return { signal: "failed_inspections", label: "Failed Inspections", risk: "rework", totalExposure, items };
 }
 
-function scoreScheduleSlipRisk(scheduleTasks = []) {
-  const items = [];
+function scoreScheduleSlipRisk(scheduleTasks: SourceRecord[] = []): RiskSignal {
+  const items: RiskItem[] = [];
   let totalExposure = 0;
   for (const task of scheduleTasks) {
     if (!task || task.is_deleted) continue;
@@ -203,7 +236,7 @@ function scoreScheduleSlipRisk(scheduleTasks = []) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     if (!endDate) continue;
 
-    const daysLate = Math.round((today - endDate) / DAY_MS);
+    const daysLate = Math.round((today.getTime() - endDate.getTime()) / DAY_MS);
     const pct = num(task.percent_complete);
     if (daysLate <= 0 || pct >= 100) continue;
 
@@ -226,8 +259,8 @@ function scoreScheduleSlipRisk(scheduleTasks = []) {
   return { signal: "schedule_slips", label: "Schedule Slips", risk: "liquidated damages", totalExposure, items };
 }
 
-function scoreChangeOrderRisk(changeOrders = []) {
-  const items = [];
+function scoreChangeOrderRisk(changeOrders: SourceRecord[] = []): RiskSignal {
+  const items: RiskItem[] = [];
   let totalExposure = 0;
   for (const co of changeOrders) {
     if (!co || co.is_deleted) continue;
@@ -255,7 +288,7 @@ function scoreChangeOrderRisk(changeOrders = []) {
 
 // --- Main export ---
 
-export function calculateMarginRisk(sources = {}) {
+export function calculateMarginRisk(sources: MarginRiskSources = {}) {
   const signals = [
     scoreRfiRisk(sources.rfis),
     scoreSubmittalRisk(sources.submittals),
@@ -270,7 +303,7 @@ export function calculateMarginRisk(sources = {}) {
   const allItems = signals.flatMap(s => s.items).sort((a, b) => b.exposure - a.exposure);
 
   // Exposure by area
-  const byArea = {};
+  const byArea: Record<string, { area: string; exposure: number; items: RiskItem[] }> = {};
   for (const item of allItems) {
     const area = item.area || "Unassigned";
     if (!byArea[area]) byArea[area] = { area, exposure: 0, items: [] };
@@ -279,7 +312,7 @@ export function calculateMarginRisk(sources = {}) {
   }
 
   // Exposure by work package
-  const byWorkPackage = {};
+  const byWorkPackage: Record<string, { workPackageId: string; exposure: number; items: RiskItem[] }> = {};
   for (const item of allItems) {
     const wpId = item.workPackageId || "unlinked";
     if (!byWorkPackage[wpId]) byWorkPackage[wpId] = { workPackageId: wpId, exposure: 0, items: [] };
