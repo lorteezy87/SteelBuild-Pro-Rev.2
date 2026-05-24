@@ -41,7 +41,9 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
     <div ref={ref} className="sbd-card" style={{
       position: "absolute", top: "calc(100% + 4px)", right: 0,
       width: dropdownWidth,
-      background: "linear-gradient(180deg, rgba(7, 13, 24, 0.995) 0%, rgba(4, 9, 18, 0.995) 100%)",
+      // Theme-aware opaque surface so light-mode text stays legible (was a
+      // hardcoded dark navy gradient that left dark text unreadable in light mode).
+      background: "var(--bg-surface-secondary)",
       backdropFilter: "none",
       WebkitBackdropFilter: "none",
       border: "1px solid color-mix(in srgb, var(--accent) 34%, var(--border-default))",
@@ -54,14 +56,14 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
       maxHeight: isMobile ? "calc(100vh - 72px)" : "auto",
     }}>
       {/* Search bar */}
-      <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid var(--border-default)", background: "rgba(2, 6, 14, 0.96)" }}>
+      <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid var(--border-default)", background: "var(--bg-surface)" }}>
         <input
           placeholder="Search modules..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoFocus
           style={{
-            width: "100%", background: "rgba(9, 18, 32, 1)", border: "1px solid var(--accent-border)",
+            width: "100%", background: "var(--bg-input, var(--bg-page))", border: "1px solid var(--accent-border)",
             borderRadius: 6, padding: "6px 10px", color: "var(--text-primary)",
             fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box",
           }}
@@ -137,7 +139,7 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
       <div style={{
         borderTop: "1px solid var(--border-default)", padding: "7px 14px",
         display: "flex", justifyContent: "space-between", alignItems: "center",
-        background: "rgba(2, 6, 14, 0.98)",
+        background: "var(--bg-surface)",
       }}>
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
           <span style={{
