@@ -132,7 +132,10 @@ export function ContextMenuItem({ label, onClick, danger }) {
 
 const UNGROUPED_KEY = "__ungrouped__";
 const UNGROUPED_LABEL = "UNGROUPED SHEETS";
-const EXPAND_LS_KEY = "sbp-drawings-expanded-sets";
+// v2: the default is now all-collapsed (rolled up). Bumping the key discards
+// the old persisted "everything expanded" state so the new default takes effect
+// for existing users; their future expand/collapse choices persist under v2.
+const EXPAND_LS_KEY = "sbp-drawings-expanded-sets-v2";
 
 /**
  * Group drawings into drawing sets. Identity is the FK `drawing_set_id` when
@@ -1052,11 +1055,13 @@ export default function DrawingsTable({
     });
   };
 
-  // Initialize expand state — default all named sets expanded on first load
+  // Initialize expand state — default all sets COLLAPSED (rolled up) on first
+  // load. The rolled-up view is the scannable set-level list; the user expands
+  // only the sets they care about, and that choice persists (under the v2 key).
   const [expanded, setExpanded] = useState(() => {
     const persisted = loadExpanded();
     if (persisted) return persisted;
-    return new Set(groups.map((g) => g.key));
+    return new Set();
   });
 
   // Track which group keys we've already seen so we can distinguish "brand
