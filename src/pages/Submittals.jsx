@@ -369,8 +369,23 @@ export default function Submittals() {
 
   // ── Filter/search ──────────────────────────────────────────────────
   const filtered = useMemo(() => {
+    // KPI cards filter by GROUPED status (matching their stat counts); the
+    // status dropdown filters by an EXACT status. Group keys expand to the same
+    // status sets the counts use — fixes "Pending/Approved show nothing" and
+    // "Rejected counts 2 but lists 1" (the count grouped statuses the exact
+    // filter didn't). See the `stats` memo for the matching count definitions.
+    const STATUS_GROUPS = {
+      __pending: ["Submitted", "Under Review"],
+      __approved: ["Approved", "Approved as Noted", "Released for Fabrication"],
+      __rejected: ["Rejected", "Revise and Resubmit"],
+    };
     let list = rows;
-    if (filterStatus !== "all") list = list.filter((r) => r.status === filterStatus);
+    if (filterStatus !== "all") {
+      const group = STATUS_GROUPS[filterStatus];
+      list = group
+        ? list.filter((r) => group.includes(r.status))
+        : list.filter((r) => r.status === filterStatus);
+    }
     if (filterBIC    !== "all") list = list.filter((r) => r.ball_in_court === filterBIC);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -464,14 +479,14 @@ export default function Submittals() {
           active={filterStatus === "all" && filterBIC === "all"}
           onClick={() => { setFilterStatus("all"); setFilterBIC("all"); }} />
         <KpiTile compact label="Pending" value={stats.pending}  color="var(--status-warning)"
-          active={filterStatus === "Under Review" || filterStatus === "Submitted"}
-          onClick={() => setFilterStatus("Under Review")} />
+          active={filterStatus === "__pending"}
+          onClick={() => setFilterStatus("__pending")} />
         <KpiTile compact label="Approved" value={stats.approved} color="var(--status-success)"
-          active={filterStatus === "Approved"}
-          onClick={() => setFilterStatus("Approved")} />
+          active={filterStatus === "__approved"}
+          onClick={() => setFilterStatus("__approved")} />
         <KpiTile compact label="Rejected" value={stats.rejected} color="var(--status-error)"
-          active={filterStatus === "Rejected"}
-          onClick={() => setFilterStatus("Rejected")} />
+          active={filterStatus === "__rejected"}
+          onClick={() => setFilterStatus("__rejected")} />
         <KpiTile compact label="Overdue" value={stats.overdue} color="var(--status-error)" />
       </div>
 
