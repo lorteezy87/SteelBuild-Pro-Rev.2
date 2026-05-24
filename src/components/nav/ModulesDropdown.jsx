@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { NAV_GROUPS, getDropdownColumn } from "@/config/moduleRegistry";
 import { prefetchRoute } from "@/lib/routePrefetch";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 
 export default function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {} }) {
   const ref = useRef(null);
@@ -22,20 +23,27 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
     return () => window.removeEventListener("resize", handler);
   }, []);
 
+  const { isPageVisible } = useModuleAccess();
+
   if (!open) return null;
 
   const isMobile = windowWidth < 760;
   const dropdownWidth = isMobile ? 280 : 720;
   const isSearching = search.trim().length > 0;
 
+  // Drop pages whose module is gated off, then drop any group left empty.
+  const visibleGroups = NAV_GROUPS
+    .map((g) => ({ ...g, items: g.items.filter((it) => isPageVisible(it.page)) }))
+    .filter((g) => g.items.length > 0);
+
   const searchResults = isSearching
-    ? NAV_GROUPS.flatMap((g) => g.items).filter((item) => item.label.toLowerCase().includes(search.toLowerCase()))
+    ? visibleGroups.flatMap((g) => g.items).filter((item) => item.label.toLowerCase().includes(search.toLowerCase()))
     : [];
 
   const columns = [[], [], []];
-  NAV_GROUPS.forEach((group) => { columns[getDropdownColumn(group.label)].push(group); });
+  visibleGroups.forEach((group) => { columns[getDropdownColumn(group.label)].push(group); });
 
-  const totalModules = NAV_GROUPS.flatMap((g) => g.items).length;
+  const totalModules = visibleGroups.flatMap((g) => g.items).length;
 
   return (
     <div ref={ref} className="sbd-card" style={{

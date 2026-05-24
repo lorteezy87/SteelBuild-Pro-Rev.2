@@ -44,6 +44,7 @@ import {
   Star,
 } from "lucide-react";
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 
@@ -183,6 +184,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   const [showRecents, setShowRecents] = useState(true);
   const [favorites, setFavorites] = useState(loadFavorites);
   const railMode = isLightTheme ? false : railModeState;
+  const { isPageVisible } = useModuleAccess();
 
   // Recent-pages tracking — kept here so reloads remember the last
   // few pages you visited.
@@ -233,19 +235,29 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
     });
   }, []);
 
+  // Groups with gated-off pages removed (and emptied groups dropped). One
+  // memo feeds the rendered nav, favorites, and recents so a deprioritized
+  // module never appears in any of them.
+  const visibleGroups = useMemo(
+    () => SIDEBAR_GROUPS
+      .map((g) => ({ ...g, items: g.items.filter((it) => isPageVisible(it.page)) }))
+      .filter((g) => g.items.length > 0),
+    [isPageVisible],
+  );
+
   const favoriteItems = useMemo(() => {
-    const flat = SIDEBAR_GROUPS.flatMap((g) =>
+    const flat = visibleGroups.flatMap((g) =>
       g.items.map((it) => ({ ...it, _group: g.label }))
     );
     return favorites
       .map((p) => flat.find((it) => it.page === p))
       .filter(Boolean);
-  }, [favorites]);
+  }, [favorites, visibleGroups]);
 
   // Recents filtered against the flat registry so a deleted/renamed
   // page falls out cleanly instead of rendering a dead entry.
   const recentItems = useMemo(() => {
-    const flat = SIDEBAR_GROUPS.flatMap((g) =>
+    const flat = visibleGroups.flatMap((g) =>
       g.items.map((it) => ({ ...it, _group: g.label }))
     );
     return recents
@@ -253,7 +265,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
       .filter(Boolean)
       .filter((it) => it.page !== currentPageName)
       .slice(0, 3);
-  }, [recents, currentPageName]);
+  }, [recents, currentPageName, visibleGroups]);
 
   const openGlobalSearch = () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
@@ -470,7 +482,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
           />
         )}
 
-        {SIDEBAR_GROUPS.map((group, groupIdx) => {
+        {visibleGroups.map((group, groupIdx) => {
           const isCollapsed = group.collapsible && collapsed[group.label];
           const hasFavs = favoriteItems.length > 0;
           return (

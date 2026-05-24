@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 
 export default function MobileDrawer({ open, onClose, onNavigate, currentPageName }) {
   const ref = useRef(null);
   const [mobileCollapsed, setMobileCollapsed] = useState(loadSidebarState);
+  const { isPageVisible } = useModuleAccess();
 
   const toggleGroup = (label) => {
     setMobileCollapsed((prev) => {
@@ -89,7 +91,10 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
           </button>
         </div>
         <div style={{ padding: "4px 0 16px" }}>
-          {SIDEBAR_GROUPS.map((group, groupIdx) => {
+          {SIDEBAR_GROUPS
+            .map((group) => ({ ...group, items: group.items.filter((it) => isPageVisible(it.page)) }))
+            .filter((group) => group.items.length > 0)
+            .map((group, groupIdx) => {
             const isCollapsed = group.collapsible && mobileCollapsed[group.label];
             return (
               <div key={group.label} style={{ marginTop: groupIdx === 0 ? 0 : 8 }}>
