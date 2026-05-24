@@ -301,7 +301,7 @@ function ModalShell({ title, onClose, children }) {
     }}>
       <div style={{
         width: 420, maxWidth: "90vw",
-        background: "var(--bg-surface)",
+        background: "var(--bg-surface-secondary)",
         border: "1px solid var(--border-default)",
         borderRadius: 12,
         padding: 16,

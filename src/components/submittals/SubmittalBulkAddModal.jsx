@@ -291,7 +291,7 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit }) {
         style={{
           width: 720, maxWidth: "94vw", maxHeight: "92vh", overflow: "hidden",
           display: "flex", flexDirection: "column",
-          background: "var(--bg-surface)",
+          background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)", borderRadius: 4,
           boxShadow: "var(--shadow-lg)", color: "var(--text-primary)",
           padding: 0,

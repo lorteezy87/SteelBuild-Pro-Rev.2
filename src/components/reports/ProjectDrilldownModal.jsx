@@ -234,7 +234,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
     >
       <div style={{
         width: "100%", maxWidth: 940, maxHeight: "92vh",
-        background: "var(--bg-surface)",
+        background: "var(--bg-surface-secondary)",
         border: "none",
         borderTop: "2px solid var(--accent)",
         borderRadius: "var(--radius-card)",
