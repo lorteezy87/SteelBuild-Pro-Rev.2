@@ -1,5 +1,5 @@
 /**
- * permissions.js — Server-authoritative permission model.
+ * permissions.ts — Server-authoritative permission model.
  *
  * Problem: useAppSecurity stores roles in localStorage (bypassable).
  *          can() returns true for ALL authenticated users.
@@ -17,7 +17,8 @@
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { validateTransition } from "./workflowEngine";
+import { validateTransition, type TransitionResult } from "./workflowEngine";
+import type { AppRole, PermissionAction } from "@/types/rbac";
 
 // ─── Role hierarchy ─────────────────────────────────────────────────────
 // Privilege rank (lower = more privileged). This table must cover BOTH role
@@ -29,9 +30,16 @@ import { validateTransition } from "./workflowEngine";
 // Without the 'user' entry a regular account ranked 99 (deny-all), which hid
 // every create/edit/delete control across the app. This gate is display-only —
 // the authoritative guards are RLS and workflowEngine.validateTransition.
-const ROLE_RANK = { owner: 0, admin: 0, pm: 1, user: 1, field: 2, viewer: 3 };
+const ROLE_RANK: Record<AppRole, number> & Record<string, number> = {
+  owner: 0,
+  admin: 0,
+  pm: 1,
+  user: 1,
+  field: 2,
+  viewer: 3,
+};
 
-const ACTION_FLOORS = {
+const ACTION_FLOORS: Record<string, AppRole> = {
   // entity-agnostic action → minimum role
   create:      "pm",
   edit:        "pm",
@@ -45,7 +53,7 @@ const ACTION_FLOORS = {
 };
 
 // Entity-specific overrides (entity:action → minRole)
-const ENTITY_OVERRIDES = {
+const ENTITY_OVERRIDES: Record<string, AppRole> = {
   "delivery:create":      "field",
   "delivery:edit":        "field",
   "expense:create":       "field",
@@ -68,8 +76,12 @@ const ENTITY_OVERRIDES = {
  * entity-agnostic action floor. Unknown roles get rank 99 (deny); unknown
  * actions fall back to an admin-only floor.
  */
-export function canPerform(role, action, entity = null) {
-  const roleRank = ROLE_RANK[role] ?? 99;
+export function canPerform(
+  role: string | null | undefined,
+  action: string,
+  entity: string | null = null,
+): boolean {
+  const roleRank = ROLE_RANK[role as string] ?? 99;
   if (entity) {
     const overrideFloor = ENTITY_OVERRIDES[`${entity}:${action}`];
     if (overrideFloor) return roleRank <= (ROLE_RANK[overrideFloor] ?? 0);
@@ -80,7 +92,13 @@ export function canPerform(role, action, entity = null) {
 
 // ─── Server role fetcher ────────────────────────────────────────────────
 
-async function fetchUserRole() {
+interface UserInfo {
+  role: string;
+  email: string | null;
+  id: string | null;
+}
+
+async function fetchUserRole(): Promise<UserInfo> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { role: "viewer", email: null, id: null };
 
@@ -97,7 +115,7 @@ async function fetchUserRole() {
 
   return {
     role: profile?.role || "viewer",
-    email: user.email,
+    email: user.email ?? null,
     id: user.id,
   };
 }
@@ -109,7 +127,7 @@ export function usePermissions() {
     queryKey: ["user-permissions"],
     queryFn: fetchUserRole,
     staleTime: 5 * 60 * 1000, // re-fetch every 5 minutes
-    initialData: { role: "viewer", email: null, id: null },
+    initialData: { role: "viewer", email: null, id: null } as UserInfo,
   });
 
   const role = userInfo?.role || "viewer";
@@ -120,7 +138,8 @@ export function usePermissions() {
    * This is for UI gating only — the real guard is in workflowEngine.
    */
   const can = useCallback(
-    (action, entity = null) => canPerform(role, action, entity),
+    (action: PermissionAction, entity: string | null = null): boolean =>
+      canPerform(role, action, entity),
     [role]
   );
 
@@ -129,7 +148,12 @@ export function usePermissions() {
    * Delegates to workflowEngine.validateTransition for the real check.
    */
   const canTransition = useCallback(
-    (workflowName, fromStatus, toStatus, record = {}) => {
+    (
+      workflowName: string,
+      fromStatus: string,
+      toStatus: string,
+      record: Record<string, any> = {},
+    ): TransitionResult => {
       return validateTransition(workflowName, fromStatus, toStatus, {
         user: userInfo,
         record,
