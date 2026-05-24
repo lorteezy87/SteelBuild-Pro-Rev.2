@@ -282,6 +282,10 @@ export default function ModelViewer() {
   const loadedModelRef = useRef(null);
   const gltfSceneRef = useRef(null); // For GLTF models (non-IFC)
   const fragmentsManagerRef = useRef(null);
+  // The FragmentsModel returned by IfcLoader.load(). IFC element colours must
+  // be set through this model's own API (setColor/highlight) — mutating
+  // mesh.material has no effect on streamed fragment geometry. null for GLTF.
+  const fragmentsModelRef = useRef(null);
   const rafHandleRef = useRef(0);
   // Belt-and-braces: persists across the whole component lifetime, so
   // even if multiple loaders / refit listeners race during IFC tile
@@ -358,16 +362,33 @@ export default function ModelViewer() {
   // Keep the ref in sync so tile-streaming callbacks read the live mode.
   useEffect(() => { colorModeRef.current = colorMode; }, [colorMode]);
 
-  // Mode-aware recolour: realistic metallic-steel / matte-concrete PBR by
-  // default, work-package status heatmap when toggled. Reads colorModeRef so
-  // callbacks captured at model-load time still honour the current mode.
-  const recolorModel = useCallback((root) => {
-    if (!root) return;
-    if (colorModeRef.current === "status") {
-      applyStatusBasedColor(root, workPackages);
-    } else {
-      applyRealisticMaterials(root);
+  // Mode-aware recolour. Two completely different mechanisms by model type:
+  //   • IFC → streamed as fragments; element colour MUST go through the model's
+  //     own setColor/resetColor API (mutating mesh.material does nothing). The
+  //     fragments BIMMaterial is colour-only (no metalness), so realistic mode
+  //     applies a steel-grey tint; status mode restores the original IFC colours.
+  //   • GLTF/.glb → standard Three.js materials, so we traverse + set full PBR
+  //     (metalness/roughness/env reflections) for the realistic look.
+  // Reads colorModeRef so callbacks captured at load time honour the live mode.
+  const recolorModel = useCallback(async (root) => {
+    const fm = fragmentsModelRef.current;
+    if (fm) {
+      try {
+        if (colorModeRef.current === "realistic") {
+          await fm.setColor(undefined, REALISTIC_STEEL);
+        } else {
+          await fm.resetColor(undefined);
+        }
+        fragmentsManagerRef.current?.core?.update?.();
+      } catch (e) {
+        console.warn("[ModelViewer] fragments recolor failed:", e);
+      }
+      return;
     }
+    const target = gltfSceneRef.current || root;
+    if (!target) return;
+    if (colorModeRef.current === "status") applyStatusBasedColor(target, workPackages);
+    else applyRealisticMaterials(target);
   }, [workPackages]);
 
   // ─── @thatopen/components INITIALIZATION ────────────────────────
@@ -636,6 +657,7 @@ export default function ModelViewer() {
       loadedModelRef.current = null;
       gltfSceneRef.current = null;
       fragmentsManagerRef.current = null;
+      fragmentsModelRef.current = null;
       keyShadowLightRef.current = null;
       shadowPlaneRef.current = null;
       selectionOutlineRef.current = null;
@@ -985,6 +1007,7 @@ export default function ModelViewer() {
     } catch { /* ignore */ }
 
     loadedModelRef.current = null;
+    fragmentsModelRef.current = null;
     setMembers([]);
     setSelectedMember(null);
     setModelBounds(null);
@@ -1123,6 +1146,9 @@ export default function ModelViewer() {
 
       // Load using @thatopen/components IfcLoader
       const model = await ifcLoader.load(uint8Array, true, file.name.replace(/\.ifc$/i, ""));
+      // Hold the FragmentsModel so recolorModel can drive element colours
+      // through its setColor/resetColor API (the only thing that works for IFC).
+      fragmentsModelRef.current = model;
 
       setLoadingModel((prev) => ({ ...prev, progress: 70, status: "Wiring camera..." }));
 
