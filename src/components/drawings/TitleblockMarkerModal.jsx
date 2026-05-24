@@ -68,8 +68,14 @@ const canvasWrapStyle = {
   background: "rgba(0,0,0,0.4)",
   position: "relative",
   display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "center",
+  // `safe` alignment: center the sheet when it fits, but fall back to
+  // start-alignment when it's larger than the viewport. Plain `center` makes
+  // the leading (left/top) overflow unreachable by scrolling, which clips the
+  // sheet edges — exactly where titleblocks live — so the corners can't be
+  // marked. `safe` keeps every edge scroll-reachable (and degrades to a
+  // reachable flex-start on browsers that don't support the keyword).
+  alignItems: "safe center",
+  justifyContent: "safe center",
   padding: 16,
 };
 
