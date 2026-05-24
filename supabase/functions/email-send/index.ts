@@ -407,6 +407,9 @@ async function storeSentMessage(
       send_provider: result.provider,
       provider_message_id: result.provider_message_id,
       sent_at: now,
+      // email_messages has no bcc column; keep the blind-copied recipients in
+      // metadata so the sent record reflects everyone the message reached.
+      bcc: req.bcc || [],
     }),
   };
 
@@ -481,24 +484,37 @@ async function handle(req: Request): Promise<Response> {
   const hasAccess = await checkProjectAccess(user.userId, body.project_id, supabaseUrl, serviceKey);
   if (!hasAccess) return errorResponse(403, "No access to this project");
 
-  // Determine from address — use provided or fall back to first active project email account
+  // Determine the from address. A caller-supplied from_email must be one of the
+  // project's ACTIVE email accounts — otherwise a member could send as any
+  // address (spoofing) and the spoofed message would be persisted as legitimate
+  // project correspondence. When none is supplied we fall back to the first
+  // active account. Always fetch the active accounts so we can validate.
   let fromEmail = body.from_email || "";
   let fromName = body.from_name || "";
 
-  if (!fromEmail) {
-    try {
-      const acctResp = await fetch(
-        `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${body.project_id}&is_active=eq.true&select=email_address,display_name&limit=1`,
-        { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } },
-      );
-      if (acctResp.ok) {
-        const accts = await acctResp.json();
-        if (Array.isArray(accts) && accts.length > 0) {
-          fromEmail = accts[0].email_address;
-          fromName = fromName || accts[0].display_name || "";
-        }
-      }
-    } catch { /* best effort */ }
+  let activeAccounts: Array<{ email_address?: string; display_name?: string }> = [];
+  try {
+    const acctResp = await fetch(
+      `${supabaseUrl}/rest/v1/email_accounts?project_id=eq.${body.project_id}&is_active=eq.true&select=email_address,display_name`,
+      { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } },
+    );
+    if (acctResp.ok) {
+      const accts = await acctResp.json();
+      if (Array.isArray(accts)) activeAccounts = accts;
+    }
+  } catch { /* best effort */ }
+
+  if (fromEmail) {
+    const match = activeAccounts.find(
+      (a) => (a.email_address || "").toLowerCase() === fromEmail.toLowerCase(),
+    );
+    if (!match) {
+      return errorResponse(403, "from_email is not an active sending account for this project");
+    }
+    fromName = fromName || match.display_name || "";
+  } else if (activeAccounts.length > 0) {
+    fromEmail = activeAccounts[0].email_address || "";
+    fromName = fromName || activeAccounts[0].display_name || "";
   }
 
   if (!fromEmail) {

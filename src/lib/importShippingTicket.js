@@ -224,7 +224,13 @@ export async function extractShippingTicket({
  */
 export async function resolveProjectForTicket(jobNumber) {
   if (!jobNumber) return null;
-  const cleaned = String(jobNumber).trim();
+  // Strip to digits before interpolating into the PostgREST .or() filter.
+  // jobNumber is AI-extracted (untrusted); raw values could carry commas /
+  // parens / dots that break out of the filter and alter the query. Digits-only
+  // matches the CSV importers, and the ilike fallback still hits alphanumeric
+  // stored project_numbers (e.g. "24426A").
+  const cleaned = String(jobNumber).replace(/\D+/g, "");
+  if (!cleaned) return null;
   const { data, error } = await supabase
     .from("projects")
     .select("id, name, project_number")
