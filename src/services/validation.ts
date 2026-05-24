@@ -1,5 +1,5 @@
 /**
- * validation.js — Entity-specific validation rules.
+ * validation.ts — Entity-specific validation rules.
  *
  * ONE place to define what makes a record valid for create/update.
  * No silent fallbacks — every validation returns explicit errors.
@@ -10,16 +10,27 @@
  *   if (errors.length) { errors.forEach(e => toast.error(e.message)); return; }
  */
 
+export interface ValidationError {
+  field: string;
+  message: string;
+  rule: string;
+}
+
+export type ValidationMode = "create" | "update";
+
+type RecordData = Record<string, any>;
+type RuleFn = (data: RecordData, mode: ValidationMode) => ValidationError[];
+
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function required(value, field, label) {
+function required(value: any, field: string, label: string): ValidationError | null {
   if (value === undefined || value === null || (typeof value === "string" && !value.trim())) {
     return { field, message: `${label} is required.`, rule: "REQUIRED" };
   }
   return null;
 }
 
-function positiveNumber(value, field, label) {
+function positiveNumber(value: any, field: string, label: string): ValidationError | null {
   const num = Number(value);
   if (isNaN(num) || num <= 0) {
     return { field, message: `${label} must be a positive number.`, rule: "POSITIVE_NUMBER" };
@@ -27,7 +38,7 @@ function positiveNumber(value, field, label) {
   return null;
 }
 
-function nonNegativeNumber(value, field, label) {
+function nonNegativeNumber(value: any, field: string, label: string): ValidationError | null {
   const num = Number(value);
   if (isNaN(num) || num < 0) {
     return { field, message: `${label} must not be negative.`, rule: "NON_NEGATIVE" };
@@ -35,7 +46,7 @@ function nonNegativeNumber(value, field, label) {
   return null;
 }
 
-function validDate(value, field, label) {
+function validDate(value: any, field: string, label: string): ValidationError | null {
   if (!value) return null; // optional dates pass
   const d = new Date(value);
   if (isNaN(d.getTime())) {
@@ -44,7 +55,13 @@ function validDate(value, field, label) {
   return null;
 }
 
-function dateNotBefore(value, beforeValue, field, label, beforeLabel) {
+function dateNotBefore(
+  value: any,
+  beforeValue: any,
+  field: string,
+  label: string,
+  beforeLabel: string,
+): ValidationError | null {
   if (!value || !beforeValue) return null;
   if (new Date(value) < new Date(beforeValue)) {
     return { field, message: `${label} must not be before ${beforeLabel}.`, rule: "DATE_ORDER" };
@@ -52,7 +69,7 @@ function dateNotBefore(value, beforeValue, field, label, beforeLabel) {
   return null;
 }
 
-function maxLength(value, max, field, label) {
+function maxLength(value: any, max: number, field: string, label: string): ValidationError | null {
   if (typeof value === "string" && value.length > max) {
     return { field, message: `${label} must be ${max} characters or fewer.`, rule: "MAX_LENGTH" };
   }
@@ -61,10 +78,10 @@ function maxLength(value, max, field, label) {
 
 // ─── Entity rules ───────────────────────────────────────────────────────
 
-const RULES = {
+const RULES: Record<string, RuleFn> = {
 
-  drawing: (data, mode) => {
-    const errors = [];
+  drawing: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.sheet_number, "sheet_number", "Sheet Number"));
     errors.push(required(data.title, "title", "Title"));
@@ -74,11 +91,11 @@ const RULES = {
     errors.push(maxLength(data.sheet_number, 50, "sheet_number", "Sheet Number"));
     errors.push(maxLength(data.title, 200, "title", "Title"));
     errors.push(maxLength(data.drawing_set_name, 100, "drawing_set_name", "Drawing Set Name"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  delivery: (data, mode) => {
-    const errors = [];
+  delivery: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.description, "description", "Delivery Title"));
     errors.push(required(data.vendor, "vendor", "Vendor"));
@@ -88,22 +105,22 @@ const RULES = {
     errors.push(validDate(data.actual_date, "actual_date", "Actual Date"));
     errors.push(nonNegativeNumber(data.pieces || 0, "pieces", "Pieces"));
     errors.push(nonNegativeNumber(data.weight_tons || 0, "weight_tons", "Weight"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  rfi: (data, mode) => {
-    const errors = [];
+  rfi: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.title, "title", "Title"));
     errors.push(required(data.ball_in_court, "ball_in_court", "Ball in Court"));
     errors.push(validDate(data.submitted_date, "submitted_date", "Submitted Date"));
     errors.push(validDate(data.date_required, "date_required", "Date Required"));
     errors.push(maxLength(data.title, 200, "title", "Title"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  change_order: (data, mode) => {
-    const errors = [];
+  change_order: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.title, "title", "Title"));
     errors.push(required(data.co_amount, "co_amount", "CO Amount"));
@@ -124,11 +141,11 @@ const RULES = {
       errors.push(required(data.approved_by, "approved_by", "Approved By"));
       errors.push(required(data.approved_date, "approved_date", "Approved Date"));
     }
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  expense: (data, mode) => {
-    const errors = [];
+  expense: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.amount, "amount", "Amount"));
     errors.push(positiveNumber(data.amount, "amount", "Amount"));
@@ -137,31 +154,31 @@ const RULES = {
     errors.push(validDate(data.expense_date, "expense_date", "Expense Date"));
     errors.push(validDate(data.invoice_date, "invoice_date", "Invoice Date"));
     errors.push(validDate(data.payment_date, "payment_date", "Payment Date"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  cost_code: (data, mode) => {
-    const errors = [];
+  cost_code: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.cost_code_number, "cost_code_number", "Cost Code Number"));
     errors.push(required(data.description, "description", "Description"));
     errors.push(nonNegativeNumber(data.budget_amount || 0, "budget_amount", "Budget Amount"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  work_package: (data, mode) => {
-    const errors = [];
+  work_package: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.name, "name", "Name"));
     errors.push(required(data.wp_number, "wp_number", "WP Number"));
     errors.push(validDate(data.planned_start, "planned_start", "Planned Start"));
     errors.push(validDate(data.planned_end, "planned_end", "Planned End"));
     errors.push(dateNotBefore(data.planned_end, data.planned_start, "planned_end", "Planned End", "Planned Start"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  sov_item: (data, mode) => {
-    const errors = [];
+  sov_item: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.description, "description", "Description"));
     errors.push(nonNegativeNumber(data.scheduled_value || 0, "scheduled_value", "Scheduled Value"));
@@ -169,21 +186,21 @@ const RULES = {
     errors.push(validDate(data.payment_received_date, "payment_received_date", "Date Payment Received"));
     // Payment can't be received before submission
     errors.push(dateNotBefore(data.payment_received_date, data.submitted_date, "payment_received_date", "Date Payment Received", "Date Submitted"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  schedule_task: (data, mode) => {
-    const errors = [];
+  schedule_task: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.task_name, "task_name", "Task Name"));
     errors.push(validDate(data.start_date, "start_date", "Start Date"));
     errors.push(validDate(data.end_date, "end_date", "End Date"));
     errors.push(dateNotBefore(data.end_date, data.start_date, "end_date", "End Date", "Start Date"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  submittal: (data, mode) => {
-    const errors = [];
+  submittal: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.submittal_number, "submittal_number", "Submittal #"));
     errors.push(required(data.title, "title", "Title"));
@@ -199,11 +216,11 @@ const RULES = {
         errors.push({ field: "round_number", message: "Round must be 1 or greater.", rule: "POSITIVE_INTEGER" });
       }
     }
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  submittal_round: (data, mode) => {
-    const errors = [];
+  submittal_round: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.submittal_id, "submittal_id", "Submittal"));
     errors.push(validDate(data.submitted_date, "submitted_date", "Submitted Date"));
@@ -214,49 +231,49 @@ const RULES = {
         errors.push({ field: "round_number", message: "Round must be 1 or greater.", rule: "POSITIVE_INTEGER" });
       }
     }
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  action_item: (data, mode) => {
-    const errors = [];
+  action_item: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.title, "title", "Title"));
     errors.push(validDate(data.due_date, "due_date", "Due Date"));
     errors.push(maxLength(data.title, 200, "title", "Title"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  inspection: (data, mode) => {
-    const errors = [];
+  inspection: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.inspection_type, "inspection_type", "Inspection Type"));
     errors.push(validDate(data.scheduled_date, "scheduled_date", "Scheduled Date"));
     errors.push(validDate(data.completed_date, "completed_date", "Completed Date"));
     errors.push(dateNotBefore(data.completed_date, data.scheduled_date, "completed_date", "Completed Date", "Scheduled Date"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  safety_incident: (data, mode) => {
-    const errors = [];
+  safety_incident: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.incident_type, "incident_type", "Incident Type"));
     errors.push(required(data.severity, "severity", "Severity"));
     errors.push(validDate(data.incident_date, "incident_date", "Incident Date"));
     errors.push(maxLength(data.description, 2000, "description", "Description"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  punchlist_item: (data, mode) => {
-    const errors = [];
+  punchlist_item: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.title, "title", "Title"));
     errors.push(validDate(data.due_date, "due_date", "Due Date"));
     errors.push(maxLength(data.title, 200, "title", "Title"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 
-  project: (data, mode) => {
-    const errors = [];
+  project: (data) => {
+    const errors: (ValidationError | null)[] = [];
     errors.push(required(data.project_number, "project_number", "Project Number"));
     errors.push(required(data.name, "name", "Project Name"));
     errors.push(required(data.client, "client", "Client"));
@@ -274,21 +291,16 @@ const RULES = {
     errors.push(validDate(data.start_date, "start_date", "Start Date"));
     errors.push(validDate(data.target_completion_date, "target_completion_date", "Target Completion Date"));
     errors.push(dateNotBefore(data.target_completion_date, data.start_date, "target_completion_date", "Target Completion", "Start Date"));
-    return errors.filter(Boolean);
+    return errors.filter(Boolean) as ValidationError[];
   },
 };
 
 // ─── Public API ─────────────────────────────────────────────────────────
 
 /**
- * Validate an entity record.
- *
- * @param {string} entity  – entity name (key in RULES)
- * @param {object} data    – form/record data
- * @param {string} mode    – "create" or "update"
- * @returns {Array<{field, message, rule}>} – empty array = valid
+ * Validate an entity record. Returns an empty array when valid.
  */
-export function validate(entity, data, mode = "create") {
+export function validate(entity: string, data: RecordData, mode: ValidationMode = "create"): ValidationError[] {
   const ruleFn = RULES[entity];
   if (!ruleFn) {
     // H6 fix: fail closed — unknown entity types must not silently pass validation
@@ -301,13 +313,13 @@ export function validate(entity, data, mode = "create") {
 /**
  * Returns true if the record passes all validation rules.
  */
-export function isValid(entity, data, mode = "create") {
+export function isValid(entity: string, data: RecordData, mode: ValidationMode = "create"): boolean {
   return validate(entity, data, mode).length === 0;
 }
 
 /**
  * Returns all registered entity names with validation rules.
  */
-export function getValidatedEntities() {
+export function getValidatedEntities(): string[] {
   return Object.keys(RULES);
 }
