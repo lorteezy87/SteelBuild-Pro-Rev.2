@@ -16,7 +16,7 @@ import BulkDateEditModal from "@/components/schedule/BulkDateEditModal";
 import BulkDurationEditModal from "@/components/schedule/BulkDurationEditModal";
 import WbsBuilderModal from "@/components/schedule/WbsBuilderModal";
 import { PHASES, PHASE_NUMBER } from "@/utils/phases";
-import { useRef, useMemo, useState } from "react";
+import { useRef, useMemo, useState, useEffect } from "react";
 import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
@@ -176,8 +176,8 @@ export default function Schedule() {
      "ABC-NNN" format transparently — any code we can parse a trailing
      number out of counts toward the per-phase max so new codes pick
      up from there without colliding. */
-  const enrichedTasks = useMemo(() => {
-    if (!scheduleTasks.length) return scheduleTasks;
+  const { tasks: enrichedTasks, wbsBackfill } = useMemo(() => {
+    if (!scheduleTasks.length) return { tasks: scheduleTasks, wbsBackfill: [] };
     const phaseCounts = {};
     const result = [];
     // First pass: find the highest n seen per phase, accepting both
@@ -210,22 +210,32 @@ export default function Schedule() {
         toBackfill.push({ id: t.id, wbs });
       }
     });
-    // Background-persist generated WBS codes to DB
-    if (toBackfill.length > 0) {
-      batchProcess(
-        toBackfill,
-        ({ id, wbs }) => base44.entities.ScheduleTask.update(id, { wbs_code: wbs }).catch(() => {}),
-      ).then(({ succeeded, failed }) => {
-        invalidateEntity(qc, "schedule_task", projectId);
-        if (failed.length > 0) {
-          console.warn(`[Schedule] WBS backfill: ${succeeded.length} ok, ${failed.length} failed`);
-        }
-      }).catch((err) => {
-        console.warn("[Schedule] WBS backfill batch failed:", err?.message);
-      });
-    }
-    return result;
-  }, [scheduleTasks, projectId, qc]);
+    return { tasks: result, wbsBackfill: toBackfill };
+  }, [scheduleTasks]);
+
+  // Background-persist generated WBS codes to the DB. Kept out of the memo
+  // above so that stays a pure computation. Guarded by an attempted-id set:
+  // a task whose write is rejected (e.g. a read-only role blocked by RLS) is
+  // not retried on every refetch, which would otherwise loop
+  // write → invalidate → refetch → write. Refetch only when a write actually
+  // persisted.
+  const attemptedWbsRef = useRef(new Set());
+  useEffect(() => {
+    const todo = wbsBackfill.filter(({ id }) => !attemptedWbsRef.current.has(id));
+    if (todo.length === 0) return;
+    todo.forEach(({ id }) => attemptedWbsRef.current.add(id));
+    batchProcess(
+      todo,
+      ({ id, wbs }) => base44.entities.ScheduleTask.update(id, { wbs_code: wbs }),
+    ).then(({ succeeded, failed }) => {
+      if (succeeded.length > 0) invalidateEntity(qc, "schedule_task", projectId);
+      if (failed.length > 0) {
+        console.warn(`[Schedule] WBS backfill: ${succeeded.length} ok, ${failed.length} failed`);
+      }
+    }).catch((err) => {
+      console.warn("[Schedule] WBS backfill batch failed:", err?.message);
+    });
+  }, [wbsBackfill, qc, projectId]);
 
   // ── Effective-date overlay ─────────────────────────────────────────────
   // Single source of truth: the shared cascade utility runs once over the

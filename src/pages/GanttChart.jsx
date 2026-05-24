@@ -910,6 +910,7 @@ export default function GanttChart() {
 
   // Phase-level actions for summary (parent) row right-click.
   const addTaskToPhase = useCallback(async (phase) => {
+    if (!activeProject?.id) return;
     const newRecord = {
       project_id: activeProject.id,
       project_name: activeProject.project_name || activeProject.name || "",
