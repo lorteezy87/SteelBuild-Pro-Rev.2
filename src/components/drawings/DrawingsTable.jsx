@@ -647,8 +647,8 @@ function GroupRow({
         {a.earliestDue || "—"}
       </td>
 
-      {/* Reviewer — n/a for group */}
-      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", ...hideOnCompact }}>—</td>
+      {/* Reviewer — dropped from the register table */}
+      <td style={{ display: "none" }}>—</td>
 
       {/* Approval */}
       <td style={tdBase}>
@@ -890,9 +890,10 @@ function SheetRow({
         )}
       </td>
 
-      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap", ...hideOnCompact }}>{d.discipline}</td>
+      {/* DISCIPLINE — dropped from the register table (still on the discipline chips) */}
+      <td style={{ display: "none" }}>{d.discipline}</td>
       <td style={{ ...tdBase, ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textAlign: "center" }}>R{d.revision_number ?? "0"}</td>
-      <td style={tdBase}><StageChip stage={d.stage} /></td>
+      <td style={tdBase}><StageChip stage={d.stage} size="lg" /></td>
       <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap", ...hideOnCompact }}>{d.submitted_date || "—"}</td>
 
       {/* Due date / days late */}
@@ -909,7 +910,8 @@ function SheetRow({
         )}
       </td>
 
-      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", ...hideOnCompact }}>{d.reviewer || "—"}</td>
+      {/* REVIEWER — dropped from the register table */}
+      <td style={{ display: "none" }}>{d.reviewer || "—"}</td>
 
       {/* Approval status (per-sheet) */}
       <td style={tdBase}>
@@ -1210,12 +1212,12 @@ export default function DrawingsTable({
               </th>
               <SortableTh field="sheet_number"    label="SET / SHEET #" />
               <SortableTh field="title"           label="TITLE" />
-              <SortableTh field="discipline"      label="DISCIPLINE" extraStyle={hideOnCompact} />
+              <SortableTh field="discipline"      label="DISCIPLINE" extraStyle={{ display: "none" }} />
               <SortableTh field="revision_number" label="REV" />
               <SortableTh field="stage"           label="STAGE" />
               <SortableTh field="submitted_date"  label="SUBMITTED" extraStyle={hideOnCompact} />
               <SortableTh field="due_date"        label="DUE DATE" />
-              <SortableTh field="reviewer"        label="REVIEWER" extraStyle={hideOnCompact} />
+              <SortableTh field="reviewer"        label="REVIEWER" extraStyle={{ display: "none" }} />
               <SortableTh field={null}            label="APPROVAL" />
               <SortableTh field={null}            label="" />
             </tr>
