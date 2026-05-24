@@ -655,7 +655,7 @@ export default function DrawingSubmittalHub() {
                 onOpenTab={setActiveTab}
               />
             )}
-            {activeTab === "drawings" && <DrawingsPage />}
+            {activeTab === "drawings" && <DrawingsPage embedded />}
             {activeTab === "submittals" && <SubmittalsPage />}
             {activeTab === "matrix" && (
               <ApprovalMatrix

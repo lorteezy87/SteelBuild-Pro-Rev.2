@@ -298,9 +298,23 @@ function groupByDrawingSet(drawings, drawingSetMap = {}) {
     });
   }
 
-  // Order: named sets by drawing-set/package number first, then natural name;
-  // ungrouped stays last so loose sheets do not break package order.
-  groups.sort(compareDrawingSetPackages);
+  // Action-first default ordering: sets needing attention (overdue, priority,
+  // failed or needs-review AI extraction) float to the top so the register
+  // answers "what needs action?" at a glance. Package order (drawing-set /
+  // package number, then natural name) is preserved WITHIN each partition, and
+  // ungrouped loose sheets always stay last.
+  const setNeedsAction = (g) => {
+    if (g.isUngrouped) return false;
+    const a = g.aggregates;
+    return a.overdueCount > 0 || a.hasPriority || a.aiNeedsReview > 0 || a.aiFailed > 0;
+  };
+  groups.sort((x, y) => {
+    if (x.isUngrouped !== y.isUngrouped) return x.isUngrouped ? 1 : -1;
+    const ax = setNeedsAction(x);
+    const ay = setNeedsAction(y);
+    if (ax !== ay) return ax ? -1 : 1;
+    return compareDrawingSetPackages(x, y);
+  });
 
   return groups;
 }

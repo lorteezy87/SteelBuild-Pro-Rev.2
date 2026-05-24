@@ -63,7 +63,7 @@ import {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Drawings() {
+export default function Drawings({ embedded = false } = {}) {
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -710,7 +710,9 @@ export default function Drawings() {
 
   return (
     <div
-      style={{ padding: "24px 28px", minHeight: "100vh", background: "var(--bg-page)" }}
+      style={embedded
+        ? { padding: 0, background: "transparent" }
+        : { padding: "24px 28px", minHeight: "100vh", background: "var(--bg-page)" }}
       onClick={() => { setContextMenu(null); }}
     >
       {/* ── CommandBar ─────────────────────────────────────────────────────── */}
@@ -752,14 +754,16 @@ export default function Drawings() {
         </Button>
       </CommandBar>
 
-      {/* ── KPI Row ────────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 14 }}>
-        <KpiTile compact label="PACKAGES"  value={stats.total}    color="var(--accent)"          active={stageFilter === "ALL"}        onClick={() => setStageFilter("ALL")} />
-        <KpiTile compact label="RELEASED"  value={stats.released} color="var(--status-success)"  active={stageFilter === "Released"}   onClick={() => setStageFilter("Released")} />
-        <KpiTile compact label="IN REVIEW" value={stats.inReview} color="var(--status-info)"     active={stageFilter === "_inReview"}  onClick={() => setStageFilter(stageFilter === "_inReview" ? "ALL" : "_inReview")} />
-        <KpiTile compact label="OVERDUE"   value={stats.overdue}  color="var(--status-error)"    active={stageFilter === "_overdue"}   onClick={() => setStageFilter(stageFilter === "_overdue" ? "ALL" : "_overdue")} />
-        <KpiTile compact label="PRIORITY"  value={stats.priority} color="var(--status-review)"   active={stageFilter === "_priority"}  onClick={() => setStageFilter(stageFilter === "_priority" ? "ALL" : "_priority")} />
-      </div>
+      {/* ── KPI Row (hidden when embedded — the hub shows its own KPIs) ─────── */}
+      {!embedded && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 14 }}>
+          <KpiTile compact label="PACKAGES"  value={stats.total}    color="var(--accent)"          active={stageFilter === "ALL"}        onClick={() => setStageFilter("ALL")} />
+          <KpiTile compact label="RELEASED"  value={stats.released} color="var(--status-success)"  active={stageFilter === "Released"}   onClick={() => setStageFilter("Released")} />
+          <KpiTile compact label="IN REVIEW" value={stats.inReview} color="var(--status-info)"     active={stageFilter === "_inReview"}  onClick={() => setStageFilter(stageFilter === "_inReview" ? "ALL" : "_inReview")} />
+          <KpiTile compact label="OVERDUE"   value={stats.overdue}  color="var(--status-error)"    active={stageFilter === "_overdue"}   onClick={() => setStageFilter(stageFilter === "_overdue" ? "ALL" : "_overdue")} />
+          <KpiTile compact label="PRIORITY"  value={stats.priority} color="var(--status-review)"   active={stageFilter === "_priority"}  onClick={() => setStageFilter(stageFilter === "_priority" ? "ALL" : "_priority")} />
+        </div>
+      )}
 
       {/* ── Revision Alerts ────────────────────────────────────────────────── */}
       {revisionAlerts.length > 0 && (
@@ -777,7 +781,8 @@ export default function Drawings() {
         </div>
       )}
 
-      {/* ── Submittal Stage Pipeline (PhaseChevron) ────────────────────────── */}
+      {/* ── Submittal Stage Pipeline — hidden when embedded (hub shows its own) ─ */}
+      {!embedded && (
       <ErrorBoundary label="Stage Pipeline">
         <div
           style={{
@@ -851,6 +856,7 @@ export default function Drawings() {
           })()}
         </div>
       </ErrorBoundary>
+      )}
 
       {/* ── Filters ────────────────────────────────────────────────────────── */}
       <DisciplineChips discipline={discipline} setDiscipline={setDiscipline} disciplineCounts={disciplineCounts} />
