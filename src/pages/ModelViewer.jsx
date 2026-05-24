@@ -206,22 +206,6 @@ function extractElementName(child, index) {
   return `Element ${index + 1}`;
 }
 
-function applyDefaultSteelColor(root) {
-  if (!root?.traverse) return;
-  root.traverse((child) => {
-    if (!child.isMesh) return;
-    const mats = materialList(child.material);
-    for (const mat of mats) {
-      if (mat?.color?.copy && isUncoloredMaterial(mat)) {
-        mat.color.copy(DEFAULT_STEEL_COLOR);
-        if ("metalness" in mat) mat.metalness = 0.25;
-        if ("roughness" in mat) mat.roughness = 0.65;
-        mat.needsUpdate = true;
-      }
-    }
-  });
-}
-
 function applyStatusBasedColor(root, workPackages, currentMembers = []) {
   if (!root?.traverse) return;
   root.traverse((child) => {
@@ -247,6 +231,34 @@ function applyStatusBasedColor(root, workPackages, currentMembers = []) {
           mat.needsUpdate = true;
         }
       }
+    }
+  });
+}
+
+// ─── REALISTIC MATERIAL PASS ─────────────────────────────────────
+// Default appearance. Gives bare structural steel a metallic PBR finish so
+// the studio environment map produces real metal reflections (instead of the
+// flat "painted" look the conservative metalness cap in normalizeMaterials
+// leaves), and gives slabs / decks / walls / foundations a matte concrete
+// look. Runs AFTER normalizeMaterials, so it intentionally overrides that
+// cap. The alternative is the work-package "Status" colour heatmap.
+const REALISTIC_STEEL = new THREE.Color(0.50, 0.53, 0.58);    // cool bare-steel grey
+const REALISTIC_CONCRETE = new THREE.Color(0.74, 0.72, 0.68); // matte concrete grey
+function applyRealisticMaterials(root) {
+  if (!root?.traverse) return;
+  root.traverse((child) => {
+    if (!child.isMesh) return;
+    const ud = child.userData || {};
+    const name = `${child.name || ""} ${ud.Name || ud.type || ud.ObjectType || ""}`.toUpperCase();
+    const isConcrete = /SLAB|DECK|FLOOR|CONC|FOUND|FOOTING|GROUT|PIER|WALL/.test(name);
+    const mats = materialList(child.material);
+    for (const mat of mats) {
+      if (!mat) continue;
+      if (mat.color?.copy) mat.color.copy(isConcrete ? REALISTIC_CONCRETE : REALISTIC_STEEL);
+      if ("metalness" in mat) mat.metalness = isConcrete ? 0.0 : 0.85;
+      if ("roughness" in mat) mat.roughness = isConcrete ? 0.92 : 0.42;
+      if ("envMapIntensity" in mat) mat.envMapIntensity = isConcrete ? 0.25 : 1.15;
+      mat.needsUpdate = true;
     }
   });
 }
@@ -302,6 +314,10 @@ export default function ModelViewer() {
   // selects whatever mesh is under the cursor, and triggers a camera
   // fly-to — the "wild" behavior the user reported.
   const mouseDownPosRef = useRef(null);
+  // Colour mode: "realistic" (metallic steel / matte concrete PBR — the default
+  // realistic appearance) or "status" (work-package status heatmap). A ref
+  // mirrors the state so tile-streaming callbacks read the current mode.
+  const colorModeRef = useRef("realistic");
 
   const [members, setMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
@@ -313,6 +329,7 @@ export default function ModelViewer() {
   const [isDragging, setIsDragging] = useState(false);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [engineReady, setEngineReady] = useState(false);
+  const [colorMode, setColorMode] = useState("realistic"); // "realistic" | "status"
 
   // Tool mode + section state
   const [sectionEnabled, setSectionEnabled] = useState(false);
@@ -337,6 +354,21 @@ export default function ModelViewer() {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
+
+  // Keep the ref in sync so tile-streaming callbacks read the live mode.
+  useEffect(() => { colorModeRef.current = colorMode; }, [colorMode]);
+
+  // Mode-aware recolour: realistic metallic-steel / matte-concrete PBR by
+  // default, work-package status heatmap when toggled. Reads colorModeRef so
+  // callbacks captured at model-load time still honour the current mode.
+  const recolorModel = useCallback((root) => {
+    if (!root) return;
+    if (colorModeRef.current === "status") {
+      applyStatusBasedColor(root, workPackages);
+    } else {
+      applyRealisticMaterials(root);
+    }
+  }, [workPackages]);
 
   // ─── @thatopen/components INITIALIZATION ────────────────────────
   useEffect(() => {
@@ -611,11 +643,14 @@ export default function ModelViewer() {
     };
   }, []);
 
-  // ─── UPDATE COLORS WHEN WORK PACKAGES CHANGE ──────────────────
+  // ─── RECOLOUR WHEN WORK PACKAGES, MEMBERS, OR COLOUR MODE CHANGE ──
+  // (Drops the old `workPackages?.length` guard: realistic mode must still
+  // colour the model when there are no work packages, and toggling the mode
+  // must repaint immediately.)
   useEffect(() => {
-    if (!loadedModelRef.current || !workPackages?.length) return;
-    applyStatusBasedColor(loadedModelRef.current, workPackages);
-  }, [workPackages, members]);
+    if (!loadedModelRef.current) return;
+    recolorModel(loadedModelRef.current);
+  }, [workPackages, members, colorMode, recolorModel]);
 
   // ─── FIT CAMERA ────────────────────────────────────────────────
   // `auto=true` means "called by tile-streaming callbacks, please
@@ -1032,7 +1067,7 @@ export default function ModelViewer() {
       // Normalize first (fix transparency, double-side, near-white), then
       // apply steel color to whatever remains uncolored.
       normalizeMaterials(model);
-      applyDefaultSteelColor(model);
+      recolorModel(model);
       enableShadows(model);
       world.scene.three.add(model);
       gltfSceneRef.current = model;
@@ -1063,7 +1098,7 @@ export default function ModelViewer() {
       setUploadError("Failed to load model: " + err.message);
       setLoadingModel({ active: false, progress: 0, status: "", fileName: "" });
     }
-  }, [fitCamera, clearCurrentModel, captureModelBounds]);
+  }, [fitCamera, clearCurrentModel, captureModelBounds, recolorModel]);
 
   // ─── LOAD IFC via @thatopen/components ─────────────────────────
   const handleIFCUpload = useCallback(async (file) => {
@@ -1122,7 +1157,7 @@ export default function ModelViewer() {
 
       if (modelObject) {
         normalizeMaterials(modelObject);
-        applyStatusBasedColor(modelObject, workPackages);
+        recolorModel(modelObject);
         enableShadows(modelObject);
         world.scene.three.add(modelObject);
       }
@@ -1139,7 +1174,7 @@ export default function ModelViewer() {
             tileNormCount++;
             try {
               normalizeMaterials(modelObject);
-              applyDefaultSteelColor(modelObject);
+              recolorModel(modelObject);
               enableShadows(modelObject);
             } catch (e) {
               console.warn("Model tile material update skipped", e);
@@ -1156,7 +1191,7 @@ export default function ModelViewer() {
       }
       if (modelObject) {
         normalizeMaterials(modelObject);
-        applyDefaultSteelColor(modelObject);
+        recolorModel(modelObject);
       }
 
       // Extract mesh members for the sidebar list — use extractElementName()
@@ -1208,7 +1243,7 @@ export default function ModelViewer() {
           const box = new THREE.Box3().setFromObject(modelObject);
           if (box.isEmpty()) return false;
           normalizeMaterials(modelObject);
-          applyStatusBasedColor(modelObject, workPackages);
+          recolorModel(modelObject);
           enableShadows(modelObject);
         } catch (e) {
           console.warn("Model tile update skipped", e);
@@ -1290,7 +1325,7 @@ export default function ModelViewer() {
       setUploadError(msg);
       setLoadingModel({ active: false, progress: 0, status: "", fileName: "" });
     }
-  }, [fitCamera, clearCurrentModel, captureModelBounds, workPackages]);
+  }, [fitCamera, clearCurrentModel, captureModelBounds, workPackages, recolorModel]);
 
   // ─── FILE HANDLING ──────────────────────────────────────────────
   const handleFile = useCallback((file) => {
@@ -1555,6 +1590,21 @@ export default function ModelViewer() {
                 </button>
               ))}
             </>
+          )}
+
+          {/* Realistic materials ↔ work-package status colour heatmap */}
+          {modelLoaded && (
+            <button
+              onClick={() => setColorMode((m) => (m === "realistic" ? "status" : "realistic"))}
+              title="Toggle realistic materials vs. work-package status colours"
+              style={{
+                ...tbBtn,
+                color: colorMode === "status" ? "var(--accent)" : "var(--text-muted)",
+                background: colorMode === "status" ? "rgba(200,155,32,0.12)" : "transparent",
+              }}
+            >
+              {colorMode === "status" ? "◑ STATUS" : "◐ REALISTIC"}
+            </button>
           )}
 
           {modelLoaded && <div style={{ width: 1, height: 16, background: "var(--divider)" }} />}
