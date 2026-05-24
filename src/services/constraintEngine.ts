@@ -1,3 +1,58 @@
+type Row = Record<string, any>;
+
+export interface ConstraintSources {
+  existingConstraints?: Row[];
+  rfis?: Row[];
+  submittals?: Row[];
+  deliveries?: Row[];
+  inspections?: Row[];
+  scheduleTasks?: Row[];
+  workPackages?: Row[];
+  drawings?: Row[];
+}
+
+interface ConstraintConfig {
+  key: string;
+  sourceType: string;
+  source?: Row | null;
+  sourceRef: string;
+  type: string;
+  title: string;
+  description: string;
+  priority?: string;
+  dueDate?: any;
+  workPackageId?: any;
+  projectId?: any;
+  projectName?: any;
+  area?: any;
+  assignedTo?: any;
+}
+
+export interface GeneratedConstraint {
+  id: string;
+  category: string;
+  status: string;
+  priority: string;
+  constraint_type: string;
+  constraint_number: string;
+  title: string;
+  description: string;
+  project_id: string;
+  project_name: any;
+  project_area: any;
+  work_package_id: any;
+  assigned_to: any;
+  due_date: string | null;
+  created_at: any;
+  updated_at: any;
+  metadata: Row;
+  _generated: boolean;
+  _source_type: string;
+  _source_id: any;
+  _source_ref: string;
+  _source_status: any;
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const PRIORITIES = new Set(["Critical", "High", "Medium", "Low"]);
@@ -15,15 +70,15 @@ const RELEASED_DRAWING_STATES = new Set([
 ]);
 const PRODUCTION_PHASES = new Set(["fabrication", "delivery", "erection", "installation", "closeout"]);
 
-function normalize(value) {
+function normalize(value: any): string {
   return String(value || "").trim().toLowerCase();
 }
 
-function display(value, fallback = "") {
+function display(value: any, fallback = ""): string {
   return String(value || "").trim() || fallback;
 }
 
-function asDate(value) {
+function asDate(value: any): Date | null {
   if (!value) return null;
   const parsed = value instanceof Date ? new Date(value) : new Date(`${String(value).slice(0, 10)}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return null;
@@ -31,40 +86,40 @@ function asDate(value) {
   return parsed;
 }
 
-function isoDate(value) {
+function isoDate(value: any): string | null {
   const parsed = asDate(value);
   return parsed ? parsed.toISOString().slice(0, 10) : null;
 }
 
-function todayStart(value) {
+function todayStart(value: any): Date {
   const parsed = value ? asDate(value) : new Date();
   parsed.setHours(0, 0, 0, 0);
   return parsed;
 }
 
-function isBeforeToday(value, today) {
+function isBeforeToday(value: any, today: Date): boolean {
   const parsed = asDate(value);
   return Boolean(parsed && parsed.getTime() < today.getTime());
 }
 
-function isWithinDays(value, today, days) {
+function isWithinDays(value: any, today: Date, days: number): boolean {
   const parsed = asDate(value);
   if (!parsed) return false;
   const delta = Math.round((parsed.getTime() - today.getTime()) / DAY_MS);
   return delta >= 0 && delta <= days;
 }
 
-function normalizePriority(priority, fallback = "Medium") {
+function normalizePriority(priority: any, fallback = "Medium"): string {
   const raw = display(priority);
   const match = Array.from(PRIORITIES).find((p) => normalize(p) === normalize(raw));
   return match || fallback;
 }
 
-function sourceTitle(sourceType, ref, title) {
+function sourceTitle(sourceType: any, ref: any, title: any): string {
   return [sourceType, ref, title].map((part) => display(part)).filter(Boolean).join(" - ");
 }
 
-function parseLinkedIds(value) {
+function parseLinkedIds(value: any): string[] {
   if (!value) return [];
   if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
   return String(value)
@@ -73,11 +128,11 @@ function parseLinkedIds(value) {
     .filter(Boolean);
 }
 
-function isClosedSource(row) {
+function isClosedSource(row: Row): boolean {
   return CLOSED_STATUSES.has(normalize(row?.status));
 }
 
-function isReleasedDrawing(drawing) {
+function isReleasedDrawing(drawing: Row): boolean {
   if (!drawing || drawing.is_deleted || drawing.is_superseded) return false;
   return [
     drawing.stage,
@@ -87,7 +142,7 @@ function isReleasedDrawing(drawing) {
   ].some((value) => RELEASED_DRAWING_STATES.has(normalize(value)));
 }
 
-function projectArea(row) {
+function projectArea(row: Row): any {
   return (
     row?.project_area ||
     row?.area ||
@@ -100,15 +155,15 @@ function projectArea(row) {
   );
 }
 
-function sourceRef(prefix, row, fields) {
+function sourceRef(prefix: string, row: Row, fields: string[]): string {
   for (const field of fields) {
     if (row?.[field]) return `${prefix} ${row[field]}`;
   }
   return row?.id ? `${prefix} ${String(row.id).slice(0, 8)}` : prefix;
 }
 
-function buildExistingConstraintIndex(existingConstraints = []) {
-  const keys = new Set();
+function buildExistingConstraintIndex(existingConstraints: Row[] = []): Set<string> {
+  const keys = new Set<string>();
   for (const constraint of existingConstraints || []) {
     if (!constraint || isClosedSource(constraint)) continue;
     const metadata = constraint.metadata || {};
@@ -148,7 +203,7 @@ function makeGeneratedConstraint({
   projectName = null,
   area = null,
   assignedTo = null,
-}) {
+}: ConstraintConfig): GeneratedConstraint {
   return {
     id: `generated:${key}`,
     category: "CONSTRAINT",
@@ -184,13 +239,13 @@ function makeGeneratedConstraint({
   };
 }
 
-function addConstraint(output, existingKeys, config) {
+function addConstraint(output: GeneratedConstraint[], existingKeys: Set<string>, config: ConstraintConfig): void {
   const autoNumber = config.key ? `AUTO-${config.key.toUpperCase().replaceAll(":", "-")}` : null;
-  if (!config.key || existingKeys.has(config.key) || existingKeys.has(autoNumber)) return;
+  if (!config.key || existingKeys.has(config.key) || existingKeys.has(autoNumber as string)) return;
   output.push(makeGeneratedConstraint(config));
 }
 
-function deriveRfiConstraints(output, existingKeys, rfis, today) {
+function deriveRfiConstraints(output: GeneratedConstraint[], existingKeys: Set<string>, rfis: Row[] = [], today: Date): void {
   for (const rfi of rfis || []) {
     if (!rfi || rfi.is_deleted || NON_BLOCKING_RFI_STATUSES.has(normalize(rfi.status))) continue;
     const ref = sourceRef("RFI", rfi, ["rfi_number", "number"]);
@@ -211,7 +266,7 @@ function deriveRfiConstraints(output, existingKeys, rfis, today) {
   }
 }
 
-function deriveSubmittalConstraints(output, existingKeys, submittals, today) {
+function deriveSubmittalConstraints(output: GeneratedConstraint[], existingKeys: Set<string>, submittals: Row[] = [], today: Date): void {
   for (const submittal of submittals || []) {
     if (!submittal || submittal.is_deleted || isClosedSource(submittal)) continue;
     const status = normalize(submittal.status || submittal.review_status || submittal.submittal_status);
@@ -236,7 +291,7 @@ function deriveSubmittalConstraints(output, existingKeys, submittals, today) {
   }
 }
 
-function deriveDeliveryConstraints(output, existingKeys, deliveries, today) {
+function deriveDeliveryConstraints(output: GeneratedConstraint[], existingKeys: Set<string>, deliveries: Row[] = [], today: Date): void {
   for (const delivery of deliveries || []) {
     if (!delivery || delivery.is_deleted || NON_BLOCKING_DELIVERY_STATUSES.has(normalize(delivery.status))) continue;
     const requiredDate = delivery.required_date || delivery.scheduled_date || delivery.expected_ship_date;
@@ -260,7 +315,7 @@ function deriveDeliveryConstraints(output, existingKeys, deliveries, today) {
   }
 }
 
-function deriveInspectionConstraints(output, existingKeys, inspections) {
+function deriveInspectionConstraints(output: GeneratedConstraint[], existingKeys: Set<string>, inspections: Row[] = []): void {
   for (const inspection of inspections || []) {
     if (!inspection || inspection.is_deleted || isClosedSource(inspection) && normalize(inspection.sign_off_status) !== "rejected") continue;
     const rejected = normalize(inspection.sign_off_status).includes("reject") || normalize(inspection.status).includes("fail");
@@ -283,7 +338,7 @@ function deriveInspectionConstraints(output, existingKeys, inspections) {
   }
 }
 
-function deriveScheduleConstraints(output, existingKeys, scheduleTasks, today) {
+function deriveScheduleConstraints(output: GeneratedConstraint[], existingKeys: Set<string>, scheduleTasks: Row[] = [], today: Date): void {
   for (const task of scheduleTasks || []) {
     if (!task || task.is_deleted || isClosedSource(task)) continue;
     const status = normalize(task.status);
@@ -336,8 +391,8 @@ function deriveScheduleConstraints(output, existingKeys, scheduleTasks, today) {
   }
 }
 
-function deriveWorkPackageConstraints(output, existingKeys, workPackages, drawings, today) {
-  const drawingsById = new Map((drawings || []).map((drawing) => [String(drawing.id), drawing]));
+function deriveWorkPackageConstraints(output: GeneratedConstraint[], existingKeys: Set<string>, workPackages: Row[] = [], drawings: Row[] = [], today: Date): void {
+  const drawingsById = new Map<string, Row>((drawings || []).map((drawing) => [String(drawing.id), drawing]));
   for (const wp of workPackages || []) {
     if (!wp || wp.is_deleted || isClosedSource(wp)) continue;
     const phase = normalize(wp.phase);
@@ -396,7 +451,7 @@ function deriveWorkPackageConstraints(output, existingKeys, workPackages, drawin
     }
 
     const linkedDrawingIds = parseLinkedIds(wp.linked_drawing_ids);
-    const linkedDrawings = linkedDrawingIds.map((id) => drawingsById.get(String(id))).filter(Boolean);
+    const linkedDrawings = linkedDrawingIds.map((id) => drawingsById.get(String(id))).filter(Boolean) as Row[];
     const hasUnreleasedKnownDrawing = linkedDrawings.length > 0 && linkedDrawings.some((drawing) => !isReleasedDrawing(drawing));
     const missingKnownDrawings = linkedDrawingIds.length > linkedDrawings.length;
     if (inProduction && incomplete && (hasUnreleasedKnownDrawing || missingKnownDrawings)) {
@@ -419,10 +474,10 @@ function deriveWorkPackageConstraints(output, existingKeys, workPackages, drawin
   }
 }
 
-export function deriveOperationalConstraints(sources = {}, options = {}) {
+export function deriveOperationalConstraints(sources: ConstraintSources = {}, options: { today?: any } = {}): GeneratedConstraint[] {
   const today = todayStart(options.today);
   const existingKeys = buildExistingConstraintIndex(sources.existingConstraints || []);
-  const output = [];
+  const output: GeneratedConstraint[] = [];
 
   deriveRfiConstraints(output, existingKeys, sources.rfis, today);
   deriveSubmittalConstraints(output, existingKeys, sources.submittals, today);
@@ -432,7 +487,7 @@ export function deriveOperationalConstraints(sources = {}, options = {}) {
   deriveWorkPackageConstraints(output, existingKeys, sources.workPackages, sources.drawings, today);
 
   return output.sort((a, b) => {
-    const priorityRank = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+    const priorityRank: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
     const priorityDiff = (priorityRank[a.priority] ?? 2) - (priorityRank[b.priority] ?? 2);
     if (priorityDiff !== 0) return priorityDiff;
     const dateA = a.due_date || "9999-12-31";
@@ -442,6 +497,6 @@ export function deriveOperationalConstraints(sources = {}, options = {}) {
   });
 }
 
-export function isGeneratedConstraint(constraint) {
+export function isGeneratedConstraint(constraint: any): boolean {
   return Boolean(constraint?._generated || constraint?.metadata?.constraint_engine?.generated);
 }
