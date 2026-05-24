@@ -35,7 +35,7 @@ const overlay = {
 };
 
 const dialog = {
-  background: "var(--bg-surface)",
+  background: "var(--bg-surface-secondary)",
   border: "1px solid var(--border-default)",
   borderRadius: 10,
   width: "min(580px, 92vw)",

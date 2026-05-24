@@ -83,7 +83,7 @@ export default function MeetingFormModal({ projectId, meeting, templateDefaults,
       <div
         ref={trapRef}
         style={{
-          background: "var(--bg-surface)",
+          background: "var(--bg-surface-secondary)",
           border: "1px solid var(--glass-border)",
           borderRadius: "16px",
           padding: "28px",

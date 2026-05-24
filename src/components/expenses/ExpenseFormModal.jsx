@@ -147,7 +147,7 @@ export default function ExpenseFormModal({
         maxWidth: 900,
         height: '88vh',
         maxHeight: '88vh',
-        background: 'var(--bg-surface)',
+        background: 'var(--bg-surface-secondary)',
         border: '1px solid var(--accent-border)',
         borderRadius: 8,
         boxShadow: '0 24px 80px rgba(0,0,0,0.85)',
