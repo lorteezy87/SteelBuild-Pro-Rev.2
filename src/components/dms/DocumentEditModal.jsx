@@ -129,7 +129,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
         className="sbd-card-strong"
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "var(--bg-surface)",
+          background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-card)",
           padding: 20,

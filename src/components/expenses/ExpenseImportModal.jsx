@@ -328,7 +328,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
         style={{
           width: 'min(980px, 100%)',
           maxHeight: '92vh',
-          background: 'var(--bg-surface)',
+          background: 'var(--bg-surface-secondary)',
           border: '1px solid var(--border-default)',
           borderRadius: 'var(--radius-card)',
           boxShadow: 'var(--shadow-lg)',

@@ -28,7 +28,7 @@ export default function BulkImportModal({
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ width: 560, background: "var(--bg-surface)", border: "1px solid var(--border-strong)", borderRadius: 4, overflow: "hidden" }}>
+      <div style={{ width: 560, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-strong)", borderRadius: 4, overflow: "hidden" }}>
         <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-secondary)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>Bulk Add RFIs</div>
