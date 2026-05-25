@@ -362,6 +362,38 @@ async function userHasProjectAccess(
   return !error && !!data;
 }
 
+/**
+ * Session-scoped actions carry only a Bluebeam `sessionId` (no SteelBuild
+ * projectId), yet they read/mutate the project-owned `bluebeam_sessions`
+ * record. Resolve the owning project from that record and require the caller
+ * to be a member before doing the work. Returns an errorResponse to send when
+ * access is denied or the session is unmapped, or null when the caller is a
+ * member.
+ */
+async function assertSessionMembership(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  sessionId: string,
+): Promise<Response | null> {
+  const { data: sessionRow, error } = await supabase
+    .from("bluebeam_sessions")
+    .select("project_id")
+    .eq("session_id", sessionId)
+    .eq("is_deleted", false)
+    .maybeSingle();
+
+  if (error || !sessionRow?.project_id) {
+    // Not found / unmapped — do not reveal existence; treat as no access.
+    return errorResponse(403, "You do not have access to this session.");
+  }
+
+  if (!(await userHasProjectAccess(supabase, userId, sessionRow.project_id as string))) {
+    return errorResponse(403, "You do not have access to this session.");
+  }
+
+  return null;
+}
+
 // ── Main handler ────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -575,6 +607,8 @@ Deno.serve(async (req: Request) => {
       case "get_session": {
         const sessionId = body.sessionId as string;
         if (!sessionId) return errorResponse(400, "Missing 'sessionId'");
+        const denied = await assertSessionMembership(supabase, user.id, sessionId);
+        if (denied) return denied;
         const { token } = await getValidToken(supabase, user.id);
         const session = await getSession(token, sessionId);
         return jsonResponse({ session });
@@ -583,6 +617,8 @@ Deno.serve(async (req: Request) => {
       case "end_session": {
         const sessionId = body.sessionId as string;
         if (!sessionId) return errorResponse(400, "Missing 'sessionId'");
+        const denied = await assertSessionMembership(supabase, user.id, sessionId);
+        if (denied) return denied;
         const { token } = await getValidToken(supabase, user.id);
         await endSession(token, sessionId);
 
@@ -600,6 +636,8 @@ Deno.serve(async (req: Request) => {
         const sessionId = body.sessionId as string;
         const email = body.email as string;
         if (!sessionId || !email) return errorResponse(400, "Missing 'sessionId' or 'email'");
+        const denied = await assertSessionMembership(supabase, user.id, sessionId);
+        if (denied) return denied;
         const { token } = await getValidToken(supabase, user.id);
         const result = await inviteUser(token, sessionId, email, body.permission as string);
         return jsonResponse({ invitation: result });
@@ -610,6 +648,8 @@ Deno.serve(async (req: Request) => {
       case "list_session_files": {
         const sessionId = body.sessionId as string;
         if (!sessionId) return errorResponse(400, "Missing 'sessionId'");
+        const denied = await assertSessionMembership(supabase, user.id, sessionId);
+        if (denied) return denied;
         const { token } = await getValidToken(supabase, user.id);
         const files = await listSessionFiles(token, sessionId);
         return jsonResponse({ files });
@@ -661,6 +701,8 @@ Deno.serve(async (req: Request) => {
       case "create_snapshot": {
         const sessionId = body.sessionId as string;
         if (!sessionId) return errorResponse(400, "Missing 'sessionId'");
+        const denied = await assertSessionMembership(supabase, user.id, sessionId);
+        if (denied) return denied;
         const { token } = await getValidToken(supabase, user.id);
         const snapshot = await createSnapshot(token, sessionId);
         return jsonResponse({ snapshot });
