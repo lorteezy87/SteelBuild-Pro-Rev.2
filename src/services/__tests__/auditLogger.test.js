@@ -38,25 +38,32 @@ describe("logActivity — record shape", () => {
     );
     expect(mocks.create).toHaveBeenCalledTimes(1);
     const rec = mocks.create.mock.calls[0][0];
-    expect(rec.entityType).toBe("RFI");
-    expect(rec.entityName).toBe("RFI-001");
+    expect(rec.entity_type).toBe("RFI");
+    expect(rec.entity_name).toBe("RFI-001");
     expect(rec.action).toBe("created");
-    expect(rec.projectId).toBe("p1");
-    expect(rec.projectName).toBe("Tower");
-    expect(rec.userName).toBe("Jane");
+    expect(rec.project_id).toBe("p1");
+    expect(rec.project_name).toBe("Tower");
+    expect(rec.performed_by).toBe("Jane");
     expect(typeof rec.timestamp).toBe("string");
   });
 
   it("falls back to '<Label> #<id>' when no name field is present", async () => {
     await logActivity("delivery", "created", { id: "d9" }, { userName: "X" });
-    expect(mocks.create.mock.calls[0][0].entityName).toBe("Delivery #d9");
+    expect(mocks.create.mock.calls[0][0].entity_name).toBe("Delivery #d9");
   });
 
   it("derives projectId/projectName from the record when not in options", async () => {
     await logActivity("expense", "created", { id: "e1", project_id: "px", project_name: "Annex" }, { userName: "X" });
     const rec = mocks.create.mock.calls[0][0];
-    expect(rec.projectId).toBe("px");
-    expect(rec.projectName).toBe("Annex");
+    expect(rec.project_id).toBe("px");
+    expect(rec.project_name).toBe("Annex");
+  });
+
+  it("uses the project's own id as project_id for the 'project' entity", async () => {
+    // A project record has `id`, not `project_id`; without this fallback the
+    // audit row would have a null project_id and be rejected by activities RLS.
+    await logActivity("project", "updated", { id: "proj1", name: "Tower" }, { userName: "X" });
+    expect(mocks.create.mock.calls[0][0].project_id).toBe("proj1");
   });
 });
 
@@ -81,12 +88,12 @@ describe("logActivity — user resolution + safety", () => {
   it("uses the auth session's full name when no userName is supplied", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: { email: "s@x.com", user_metadata: { full_name: "Sam Smith" } } } });
     await logActivity("rfi", "created", { rfi_number: "RFI-2" });
-    expect(mocks.create.mock.calls[0][0].userName).toBe("Sam Smith");
+    expect(mocks.create.mock.calls[0][0].performed_by).toBe("Sam Smith");
   });
 
   it("falls back to 'System' when there is no user", async () => {
     await logActivity("rfi", "created", { rfi_number: "RFI-3" });
-    expect(mocks.create.mock.calls[0][0].userName).toBe("System");
+    expect(mocks.create.mock.calls[0][0].performed_by).toBe("System");
   });
 
   it("never throws when the audit write fails (fire-and-forget)", async () => {
@@ -102,8 +109,8 @@ describe("logTransition", () => {
     const rec = mocks.create.mock.calls[0][0];
     expect(rec.action).toBe("status_changed");
     expect(rec.description).toBe("Open → Answered");
-    expect(rec.entityType).toBe("RFI");
-    expect(rec.entityName).toBe("RFI-9");
-    expect(rec.projectId).toBe("p1");
+    expect(rec.entity_type).toBe("RFI");
+    expect(rec.entity_name).toBe("RFI-9");
+    expect(rec.project_id).toBe("p1");
   });
 });
