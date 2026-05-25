@@ -20,14 +20,12 @@ import { mono, BIC_COLORS, BIC_PARTIES, PRIORITY_CFG, STATUS_CFG, statusColumns 
 import { isOverdue } from "./utils";
 import { Pill, Section, Meta, ContentBox } from "./subcomponents";
 import CommentThread from "@/components/collaboration/CommentThread";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
 
 export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdit, onDelete }) {
-  const preflightOn = useFlag("rfi_preflight");
   // Reuse the existing constraint engine (no rule duplication) to show the
   // live downstream hold this open RFI generates. Read-only / derived.
-  const downstreamHold = (preflightOn && rfi)
+  const downstreamHold = rfi
     ? deriveOperationalConstraints({ rfis: [rfi] }).find((c) => c._source_type === "RFI")
     : null;
   return (
@@ -188,29 +186,27 @@ export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdi
               </Section>
             )}
 
-            {preflightOn && (
-              <Section title="Downstream Impact">
-                {downstreamHold ? (
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                      <span style={{ ...mono, fontSize: 8, background: "var(--danger-muted)", border: "1px solid var(--danger-border)", padding: "4px 8px", borderRadius: 4, color: "var(--status-error)", fontWeight: 700 }}>
-                        ⛔ {downstreamHold.constraint_type || "Engineering Hold"}
-                      </span>
-                      <span style={{ ...mono, fontSize: 10, color: "var(--text-primary)" }}>
-                        {downstreamHold.priority} priority
-                      </span>
-                    </div>
-                    <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                      This open RFI generates a hold that {downstreamHold.work_package_id ? "gates its linked work package" : "applies at the project level"} and appears on the Constraints board &amp; look-ahead until the RFI is answered.
-                    </div>
+            <Section title="Downstream Impact">
+              {downstreamHold ? (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ ...mono, fontSize: 8, background: "var(--danger-muted)", border: "1px solid var(--danger-border)", padding: "4px 8px", borderRadius: 4, color: "var(--status-error)", fontWeight: 700 }}>
+                      ⛔ {downstreamHold.constraint_type || "Engineering Hold"}
+                    </span>
+                    <span style={{ ...mono, fontSize: 10, color: "var(--text-primary)" }}>
+                      {downstreamHold.priority} priority
+                    </span>
                   </div>
-                ) : (
                   <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    No active hold — answered, closed, or draft RFIs don&apos;t block downstream work.
+                    This open RFI generates a hold that {downstreamHold.work_package_id ? "gates its linked work package" : "applies at the project level"} and appears on the Constraints board &amp; look-ahead until the RFI is answered.
                   </div>
-                )}
-              </Section>
-            )}
+                </div>
+              ) : (
+                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  No active hold — answered, closed, or draft RFIs don&apos;t block downstream work.
+                </div>
+              )}
+            </Section>
 
             {/* Threaded conversation — realtime across all users viewing
                 this RFI. Lives on `comments` table with entity_type='rfi'. */}

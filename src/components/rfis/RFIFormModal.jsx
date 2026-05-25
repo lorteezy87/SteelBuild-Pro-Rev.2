@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { getNextFormattedNumber } from "../shared/numberSequencing";
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import { RFI_TYPES, buildRfiPreflight } from "@/lib/rfiPreflight";
 import { findDuplicateRfis } from "@/lib/rfiDedup";
 
@@ -125,9 +124,9 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     work_package_id: "",
     drawing_set_id: "",
     area_sequence: "",
-    // RFI workflow backbone (flag: rfi_preflight). Held as local form fields
-    // and folded into metadata.{rfi_type,proposed_solution} on submit, so no
-    // schema change is required for this slice.
+    // RFI workflow backbone fields. Held as local form fields and folded into
+    // metadata.{rfi_type,proposed_solution} on submit, so no schema change is
+    // required.
     rfi_type: "",
     proposed_solution: "",
   };
@@ -150,7 +149,6 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     project_id: projectId || empty.project_id,
     drawing_reference: initialDrawingReference || empty.drawing_reference,
   };
-  const preflightOn = useFlag("rfi_preflight");
   const [formData, setFormData] = useState(rfi ? seedFromRfi(rfi) : seedEmpty);
   const [pendingPdfFiles, setPendingPdfFiles] = useState([]);
 
@@ -314,11 +312,10 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   };
 
   const buildPayload = () => {
-    // rfi_type / proposed_solution are local fields only — never sent as
-    // top-level columns. When the preflight flag is on they fold into
-    // metadata; otherwise they're dropped entirely (no schema dependency).
+    // rfi_type / proposed_solution are local-only fields — fold them into the
+    // existing metadata JSON and strip the top-level keys so we never send a
+    // non-column (no schema dependency).
     const { rfi_type, proposed_solution, ...rest } = formData;
-    if (!preflightOn) return rest;
     return {
       ...rest,
       metadata: { ...(formData.metadata || {}), rfi_type, proposed_solution },
@@ -329,13 +326,11 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     e.preventDefault();
     if (!formData.title?.trim()) return toast.error("Title is required");
 
-    // Preflight gate (flag: rfi_preflight) — block submission on required
-    // failures so under-specified RFIs don't ship. Soft checks never block.
-    if (preflightOn) {
-      const pf = buildRfiPreflight(formData);
-      if (!pf.passed) {
-        return toast.error(`Preflight: resolve ${pf.blockers.map((b) => b.label).join("; ")}`);
-      }
+    // Preflight gate — block submission on required failures so
+    // under-specified RFIs don't ship. Soft checks never block.
+    const pf = buildRfiPreflight(formData);
+    if (!pf.passed) {
+      return toast.error(`Preflight: resolve ${pf.blockers.map((b) => b.label).join("; ")}`);
     }
 
     const payload = buildPayload();
@@ -363,8 +358,8 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     ? `${rfi.rfi_number || "RFI"} — ${(rfi.title || "").slice(0, 30)}${(rfi.title || "").length > 30 ? "…" : ""}`
     : "New RFI";
 
-  const preflight = preflightOn ? buildRfiPreflight(formData) : null;
-  const duplicateMatches = preflightOn ? findDuplicateRfis(formData, existingRfis) : [];
+  const preflight = buildRfiPreflight(formData);
+  const duplicateMatches = findDuplicateRfis(formData, existingRfis);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -399,16 +394,14 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             <Field label="Title *" span={3}>
               <input style={iStyle} value={formData.title} onChange={(e) => set("title", e.target.value)} required />
             </Field>
-            {preflightOn && (
-              <Field label="RFI Type" span={3}>
-                <DarkSelect
-                  value={formData.rfi_type || ""}
-                  onChange={(value) => set("rfi_type", value)}
-                  placeholder="Classify this RFI..."
-                  options={RFI_TYPES.map((t) => ({ value: t, label: t }))}
-                />
-              </Field>
-            )}
+            <Field label="RFI Type" span={3}>
+              <DarkSelect
+                value={formData.rfi_type || ""}
+                onChange={(value) => set("rfi_type", value)}
+                placeholder="Classify this RFI..."
+                options={RFI_TYPES.map((t) => ({ value: t, label: t }))}
+              />
+            </Field>
 
             {/* Section 2 — Details */}
             <SectionLabel>Details</SectionLabel>
@@ -504,13 +497,11 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             <Field label="Question / Issue" span={3}>
               <textarea style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.question} onChange={(e) => set("question", e.target.value)} />
             </Field>
-            {preflightOn && (
-              <Field label="Proposed Resolution" span={3}>
-                <textarea style={{ ...iStyle, minHeight: 56, resize: "vertical" }} value={formData.proposed_solution} onChange={(e) => set("proposed_solution", e.target.value)} placeholder="Your recommended answer — speeds review and documents intent." />
-              </Field>
-            )}
-            {preflightOn && duplicateMatches.length > 0 && <DuplicateWarning matches={duplicateMatches} />}
-            {preflightOn && <PreflightScorecard result={preflight} />}
+            <Field label="Proposed Resolution" span={3}>
+              <textarea style={{ ...iStyle, minHeight: 56, resize: "vertical" }} value={formData.proposed_solution} onChange={(e) => set("proposed_solution", e.target.value)} placeholder="Your recommended answer — speeds review and documents intent." />
+            </Field>
+            {duplicateMatches.length > 0 && <DuplicateWarning matches={duplicateMatches} />}
+            <PreflightScorecard result={preflight} />
 
             {/* Section 3 — Routing */}
             <SectionLabel>Routing</SectionLabel>
