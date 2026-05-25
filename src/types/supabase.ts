@@ -98,6 +98,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           entity_id: string | null
+          entity_name: string | null
           entity_type: string | null
           id: string
           metadata: Json | null
@@ -112,6 +113,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           entity_id?: string | null
+          entity_name?: string | null
           entity_type?: string | null
           id?: string
           metadata?: Json | null
@@ -126,6 +128,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           entity_id?: string | null
+          entity_name?: string | null
           entity_type?: string | null
           id?: string
           metadata?: Json | null
