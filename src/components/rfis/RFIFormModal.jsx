@@ -7,6 +7,9 @@ import { toast } from "sonner";
 import { getNextFormattedNumber } from "../shared/numberSequencing";
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import { RFI_TYPES, buildRfiPreflight } from "@/lib/rfiPreflight";
+import { findDuplicateRfis } from "@/lib/rfiDedup";
 
 /** @type {import('react').CSSProperties} */
 const iStyle = {
@@ -29,6 +32,72 @@ const Field = ({ label, span = 1, children }) => (
     {children}
   </div>
 );
+
+// Deterministic RFI preflight scorecard (flag-gated). Renders the checks
+// from buildRfiPreflight() with a score; required failures read as blockers.
+const PreflightScorecard = ({ result }) => {
+  if (!result) return null;
+  const scoreColor = result.passed
+    ? "var(--status-success)"
+    : result.score >= 60 ? "var(--status-warning)" : "var(--status-error)";
+  return (
+    <div style={{ gridColumn: "span 3", border: "1px solid var(--border-default)", borderRadius: 6, padding: 12, background: "var(--bg-surface-low)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 }}>
+          RFI Preflight
+        </span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 800, color: scoreColor }}>
+          {result.score}%{result.passed ? " · Ready" : ` · ${result.blockers.length} to fix`}
+        </span>
+      </div>
+      <div style={{ display: "grid", gap: 4 }}>
+        {result.checks.map((c) => {
+          const tone = c.pass ? "var(--status-success)" : c.required ? "var(--status-error)" : "var(--status-warning)";
+          return (
+            <div key={c.key} style={{ display: "flex", alignItems: "flex-start", gap: 8 }} title={c.hint || ""}>
+              <span style={{ color: tone, fontFamily: "var(--font-mono)", fontSize: 11, lineHeight: "16px", width: 12, flexShrink: 0 }}>
+                {c.pass ? "✓" : c.required ? "✕" : "!"}
+              </span>
+              <span style={{ fontSize: 11, color: c.pass ? "var(--text-secondary)" : "var(--text-primary)", lineHeight: "16px" }}>
+                {c.label}{!c.pass && c.required ? " (required)" : ""}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Non-blocking duplicate-RFI warning (flag-gated). Surfaces likely prior RFIs
+// so the author links instead of re-asking (the RFI 007/008 pain).
+const DuplicateWarning = ({ matches }) => {
+  if (!matches || matches.length === 0) return null;
+  return (
+    <div style={{ gridColumn: "span 3", border: "1px solid var(--status-warning)", borderRadius: 6, padding: 12, background: "var(--warning-muted)" }}>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--status-warning)", fontWeight: 700, marginBottom: 8 }}>
+        Possible duplicate{matches.length > 1 ? "s" : ""} — review before submitting
+      </div>
+      <div style={{ display: "grid", gap: 6 }}>
+        {matches.map((m) => (
+          <div key={m.rfi.id} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--accent)", flexShrink: 0, minWidth: 64 }}>
+              {m.rfi.rfi_number || "RFI"}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {m.rfi.title || "Untitled RFI"}
+              </div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
+                {m.reasons.join(" · ")}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "" }) {
   const qc = useQueryClient();
@@ -56,7 +125,21 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     work_package_id: "",
     drawing_set_id: "",
     area_sequence: "",
+    // RFI workflow backbone (flag: rfi_preflight). Held as local form fields
+    // and folded into metadata.{rfi_type,proposed_solution} on submit, so no
+    // schema change is required for this slice.
+    rfi_type: "",
+    proposed_solution: "",
   };
+
+  // Seed the workflow-backbone fields from metadata when editing an existing
+  // RFI (they live under metadata, not as top-level columns).
+  const seedFromRfi = (r) => ({
+    ...empty,
+    ...r,
+    rfi_type: r?.metadata?.rfi_type || "",
+    proposed_solution: r?.metadata?.proposed_solution || "",
+  });
 
   // Pre-fill drawing_reference when the modal is opened for a NEW
   // RFI (rfi === null) — used by the drawing-hub "Create RFI from
@@ -67,12 +150,13 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     project_id: projectId || empty.project_id,
     drawing_reference: initialDrawingReference || empty.drawing_reference,
   };
-  const [formData, setFormData] = useState(rfi ? { ...empty, ...rfi } : seedEmpty);
+  const preflightOn = useFlag("rfi_preflight");
+  const [formData, setFormData] = useState(rfi ? seedFromRfi(rfi) : seedEmpty);
   const [pendingPdfFiles, setPendingPdfFiles] = useState([]);
 
   useEffect(() => {
     setFormData(rfi
-      ? { ...empty, ...rfi }
+      ? seedFromRfi(rfi)
       : { ...empty, project_id: projectId || "", drawing_reference: initialDrawingReference || "" });
     setPendingPdfFiles([]);
   }, [rfi, projectId, initialDrawingReference]);
@@ -229,18 +313,41 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     window.open(resolvedUrl, "_blank", "noopener,noreferrer");
   };
 
+  const buildPayload = () => {
+    // rfi_type / proposed_solution are local fields only — never sent as
+    // top-level columns. When the preflight flag is on they fold into
+    // metadata; otherwise they're dropped entirely (no schema dependency).
+    const { rfi_type, proposed_solution, ...rest } = formData;
+    if (!preflightOn) return rest;
+    return {
+      ...rest,
+      metadata: { ...(formData.metadata || {}), rfi_type, proposed_solution },
+    };
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.title?.trim()) return toast.error("Title is required");
 
+    // Preflight gate (flag: rfi_preflight) — block submission on required
+    // failures so under-specified RFIs don't ship. Soft checks never block.
+    if (preflightOn) {
+      const pf = buildRfiPreflight(formData);
+      if (!pf.passed) {
+        return toast.error(`Preflight: resolve ${pf.blockers.map((b) => b.label).join("; ")}`);
+      }
+    }
+
+    const payload = buildPayload();
+
     // If parent supplied onSave, delegate to it (parent handles persistence + cache)
     if (typeof onSave === "function") {
-      onSave(formData, pendingPdfFiles);
+      onSave(payload, pendingPdfFiles);
       return;
     }
 
     // Otherwise use our internal mutation as fallback
-    internalMutation.mutate(formData);
+    internalMutation.mutate(payload);
   };
 
   const statusBtnStyle = (s) => ({
@@ -255,6 +362,9 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   const title = rfi
     ? `${rfi.rfi_number || "RFI"} — ${(rfi.title || "").slice(0, 30)}${(rfi.title || "").length > 30 ? "…" : ""}`
     : "New RFI";
+
+  const preflight = preflightOn ? buildRfiPreflight(formData) : null;
+  const duplicateMatches = preflightOn ? findDuplicateRfis(formData, existingRfis) : [];
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -289,6 +399,16 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             <Field label="Title *" span={3}>
               <input style={iStyle} value={formData.title} onChange={(e) => set("title", e.target.value)} required />
             </Field>
+            {preflightOn && (
+              <Field label="RFI Type" span={3}>
+                <DarkSelect
+                  value={formData.rfi_type || ""}
+                  onChange={(value) => set("rfi_type", value)}
+                  placeholder="Classify this RFI..."
+                  options={RFI_TYPES.map((t) => ({ value: t, label: t }))}
+                />
+              </Field>
+            )}
 
             {/* Section 2 — Details */}
             <SectionLabel>Details</SectionLabel>
@@ -384,6 +504,13 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             <Field label="Question / Issue" span={3}>
               <textarea style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.question} onChange={(e) => set("question", e.target.value)} />
             </Field>
+            {preflightOn && (
+              <Field label="Proposed Resolution" span={3}>
+                <textarea style={{ ...iStyle, minHeight: 56, resize: "vertical" }} value={formData.proposed_solution} onChange={(e) => set("proposed_solution", e.target.value)} placeholder="Your recommended answer — speeds review and documents intent." />
+              </Field>
+            )}
+            {preflightOn && duplicateMatches.length > 0 && <DuplicateWarning matches={duplicateMatches} />}
+            {preflightOn && <PreflightScorecard result={preflight} />}
 
             {/* Section 3 — Routing */}
             <SectionLabel>Routing</SectionLabel>

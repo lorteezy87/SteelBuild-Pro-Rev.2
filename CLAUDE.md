@@ -80,6 +80,41 @@ Other: `public/` (static assets, wasm, pdf/fragments workers), `scripts/` (perf 
 
 ---
 
+## 2.5 Strategic Focus And Current Priorities
+
+The product is being deliberately narrowed to its strongest workflow. When planning or building, bias toward the killer workflow below; treat everything else as deprioritized and gate new investment behind feature flags.
+
+Status notes here are a snapshot (2026-05-25). Verify against the repo before relying on them, and do not record a goal as "done" without evidence on the deploy branch (`codex/base44-deploy-nick`). These are priorities and direction, not a claim of completion.
+
+### Killer workflow (the moat — protect and deepen)
+
+- Drawings + Submittals (the core moat; see sections 20-21).
+- RFIs.
+- Work Packages, with drawing/RFI linkage.
+- Basic schedule + field progress (see section 22).
+- AI drawing analysis + revision compare (`src/lib/analyzeDrawing.js`, `src/lib/compareRevisions.js`) — the key differentiator.
+
+Changes that strengthen, simplify, or speed up these flows take priority over breadth elsewhere.
+
+### Deprioritized (flag-gate; do not expand without an explicit ask)
+
+Full 3D IFC viewer, email inbox, Bluebeam deep integration, advanced financials (beyond basic SOV/cost visibility), safety/QC, and other non-core modules. Keep these behind feature flags (section 24); prefer hiding by default over deleting code.
+
+- Status: a scope-cut "moat gate" (`moduleGating` / `useModuleAccess`, branch `claude/scope-cut-moat-gate`) exists but is NOT merged to the deploy branch as of this snapshot. Verify before assuming modules are gated.
+
+### Tech-debt roadmap (ongoing — treat as in-progress, not complete)
+
+- TypeScript conversion: `src/services/` is fully `.ts` (10 files). The rest of the app is still mixed JS/TS (~750 `.js/.jsx` vs ~56 `.ts/.tsx` on the deploy branch). Convert incrementally, preserving runtime behavior and existing tests.
+  - Large-page pattern (first applied to `FabRelease`, the largest page at 2324 lines, on branch `claude/refactor-large-pages`): extract a `src/pages/<page>/` folder — `styles.ts` (CSS string, moved verbatim), `format.ts` (constants + pure helpers), `types.ts` (shared shapes), `components.tsx` (presentational components, prop-typed) — leave any deterministic engine (e.g. `fabRelease/analytics.js`) untouched, then convert the thinned container to `.tsx`. Verify the CSS relocation is byte-identical.
+  - Shared-infra-first ordering: converting a page to `.tsx` forces boundary casts wherever it consumes still-untyped JS — the design-system primitives (`Button`, `ProgressBar`, `EmptyState`, …), `LoadingSkeleton`, `crudFeedback`, and the `base44` client surface. Prefer typing those shared modules first (or in parallel) so page conversions don't each re-introduce permissive casts. Where casts are unavoidable in the interim, mark them in-code as removable once the shared layer is typed.
+  - Watch for the JS→TS gotchas that `strict:false` still flags: `useState(null)`/`useState([])` narrow inference (annotate the state), and untyped `useMutation` mutationFns inferring `TVariables` as `void` (annotate the mutationFn parameter).
+- RBAC cleanup (finish "Phase C" properly): keep the server/DB boundary authoritative (sections 13-15); converge legacy role names on the canonical `user_projects.role` set; never weaken RLS to fix a UI bug.
+- Strengthen audit logging on everything mutable: the `activities` audit trail is fixed and `activities`/`uploaded_files` RLS is hardened (canonical per-command `user_has_project_access` policies; legacy `project_member_access` leftovers removed). Extend coverage to the remaining mutable workflows via `src/services/auditLogger.ts`.
+- Mobile experience overhaul (section 25): touch-friendly controls, readable drawers/modals, responsive core-workflow screens.
+- Performance on large projects (section 26): pagination, virtualization, server-side filtering, narrow query invalidation.
+
+---
+
 ## 3. Operating Loop
 
 For every task, internally organize work as:
