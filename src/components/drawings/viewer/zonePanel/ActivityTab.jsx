@@ -21,11 +21,8 @@ import { useQuery } from "@tanstack/react-query";
 import { listZoneActivity } from "@/lib/drawingHub";
 import { mono } from "./zonePanelConstants";
 import { describeActivity, formatRelative } from "./zonePanelHelpers";
-import { useAppSecurity } from "@/components/shared/useAppSecurity";
-import { getReviewerColor } from "@/lib/reviewerColors";
 
 export function ActivityTab({ zone }) {
-  const { getUserRole } = useAppSecurity();
   const { data: rows = [], isFetching } = useQuery({
     queryKey: ["drawing-zone-activity", zone?.id],
     queryFn: () => listZoneActivity(zone.id),
@@ -56,14 +53,6 @@ export function ActivityTab({ zone }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {rows.map((r) => {
           const { color, title, subtitle } = describeActivity(r);
-          // Reviewer color-coding — use the activity row's actor_email
-          // (when present in metadata) to look up the user's role and
-          // tint a small chip alongside the activity title. Falls back
-          // gracefully (no chip) when the email isn't available, so
-          // existing renders keep working unchanged.
-          const actorEmail = r?.metadata?.actor_email || null;
-          const role = actorEmail ? getUserRole(actorEmail) : null;
-          const roleColor = role ? getReviewerColor(role) : null;
           return (
             <div key={r.id} style={{ position: "relative" }}>
               {/* Dot */}
@@ -79,28 +68,8 @@ export function ActivityTab({ zone }) {
                 boxShadow: `0 0 0 1px ${color}`,
               }} />
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.4 }}>
-                    {title}
-                  </div>
-                  {role && roleColor && (
-                    <span
-                      title={`${actorEmail} — ${role}`}
-                      style={{
-                        ...mono,
-                        fontSize: 8, fontWeight: 700,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.08em",
-                        padding: "1px 5px",
-                        borderRadius: 2,
-                        color: roleColor,
-                        background: `color-mix(in srgb, ${roleColor} 14%, transparent)`,
-                        border: `1px solid color-mix(in srgb, ${roleColor} 40%, transparent)`,
-                      }}
-                    >
-                      {role}
-                    </span>
-                  )}
+                <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.4 }}>
+                  {title}
                 </div>
                 {subtitle && (
                   <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.02em" }}>
