@@ -10,11 +10,10 @@
  *      EOR, GC, Architect, Owner, Detailer, Fabricator. These typically
  *      come from a free-text "ball_in_court" or company-role field.
  *
- *   2. App-permission roles — what `useAppSecurity().getUserRole(email)`
- *      returns: admin, pm, field, viewer. These are localStorage-backed
- *      permission tiers, not project roles. We give them their own
- *      colors so the chip is still useful in environments where the
- *      trade-role data isn't populated yet.
+ *   2. App-permission roles — admin, pm, field, viewer (the canonical
+ *      `user_projects.role` tiers, sourced server-side via the DB role
+ *      helpers). We give them their own colors so a chip is still useful
+ *      where trade-role data isn't populated yet.
  *
  * Anything else falls back to grey. The fallback is deliberate — it's
  * better to render a neutral chip than to surface a misleading color.
