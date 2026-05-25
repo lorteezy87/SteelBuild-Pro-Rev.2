@@ -354,10 +354,15 @@ Deno.serve(async (req: Request) => {
         const folderId = body.folderId as string;
         if (!folderId || !projectId) return errorResponse(400, "Missing folderId or projectId");
 
+        // Scope the folder lookup to the validated project. The membership gate
+        // above only proves the caller belongs to `projectId`; without this
+        // filter a member of one project could pass a folderId owned by another
+        // and sync its files (cross-project IDOR).
         const { data: folder, error: folderErr } = await supabase
           .from("linked_folders")
           .select("*")
           .eq("id", folderId)
+          .eq("project_id", projectId)
           .eq("is_deleted", false)
           .single();
 
