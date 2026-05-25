@@ -2,10 +2,10 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 
 export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, isLoadingAuth } = useAuth();
   const location = useLocation();
 
-  if (loading) {
+  if (isLoadingAuth) {
     return (
       <div style={{
         display: 'flex',
