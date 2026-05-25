@@ -1,35 +1,5 @@
-/**
- * DrawingSubmittalHub.jsx — Unified Drawings & Submittals command center.
- *
- * Three tabs:
- *   1. Drawing Register   — existing Drawings.jsx (embedded)
- *   2. Submittal Register  — existing Submittals.jsx (embedded)
- *   3. Approval Matrix     — cross-reference: drawing sets vs submittal status
- *
- * This is a thin orchestrator. The existing pages render inside tab panels
- * and keep all their internal state / queries. The hub adds:
- *   - Unified KPI strip spanning both domains
- *   - Shared CommandBar with tab navigation
- *   - Approval Matrix (new view)
- */
-
-import React, { useState, useMemo, Suspense } from "react";
-import { lazyWithRetry } from "@/lib/lazyRetry";
-import { useSearchParams } from "react-router-dom";
-import { useProjectContext } from "@/components/shared/ProjectContext";
-import { useDrawings } from "@/hooks/useDrawings";
-import { useSubmittals } from "@/hooks/useSubmittals";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
-import { toast } from "sonner";
-import ErrorBoundary from "@/components/shared/ErrorBoundary";
-import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { CommandBar, KpiTile } from "@/components/design-system";
-import { computeFabReady } from "@/lib/submittalAnalytics";
-import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
-import CycleTimeCard from "@/components/submittals/CycleTimeCard";
-import AgingReportTable from "@/components/submittals/AgingReportTable";
-import SubmittalVisualBoard from "@/components/submittals/SubmittalVisualBoard";
+import { Fragment, useMemo, useState } from "react";
+import type { ComponentType, CSSProperties, ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -38,645 +8,58 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
-  FileStack,
-  Gauge,
   Layers3,
   Link2,
   Search,
   ShieldCheck,
   User,
-  Workflow,
 } from "lucide-react";
+import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
+import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
+import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
+import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import {
+  BIC_CHOICES,
+  STATUS_COLORS,
+  accent,
+  border,
+  dueInfo,
+  error,
+  fmtDate,
+  getActionTone,
+  getStatusColor,
+  getSubmittalDueDate,
+  info,
+  isClosedSubmittal,
+  mono,
+  pluralize,
+  review,
+  success,
+  surface1,
+  surface2,
+  textMuted,
+  textPrimary,
+  warning,
+} from "./format";
+import type { DueInfo, Submittal } from "./types";
 
-// Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
-// chunk 404s after a deploy trigger a reload instead of a hard crash.
-const DrawingsPage = lazyWithRetry(() => import("@/pages/Drawings"));
-const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
+// These shared screens are still .jsx; cast at the boundary (removable
+// once they are typed).
+type AnyProps = Record<string, any>;
+const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
+const CycleTimeCard = CycleTimeCardRaw as unknown as ComponentType<AnyProps>;
+const AgingReportTable = AgingReportTableRaw as unknown as ComponentType<AnyProps>;
 
-// ── Design-system tokens ──────────────────────────────────────────────────
-// Use the SAME CSS custom-property names as the rest of the app (Submittals,
-// Drawings, RFIs, etc.). Previous version referenced nonexistent vars
-// (--surface-0, --border) with dark hardcoded fallbacks, which made the
-// Approval Matrix unreadable.
-const accent      = "var(--accent)";
-const surface1    = "var(--bg-surface-low)";
-const surface2    = "var(--bg-surface-high)";
-const border      = "var(--border-default)";
-const textPrimary = "var(--text-primary)";
-const textMuted   = "var(--text-muted)";
-const mono        = "var(--font-mono)";
-const success     = "var(--status-success)";
-const warning     = "var(--status-warning)";
-const error       = "var(--status-error)";
-const info        = "var(--status-info)";
-const review      = "var(--status-review)";
+type IconType = ComponentType<{ size?: number | string; color?: string }>;
 
-const TABS = [
-  { key: "overview",   label: "Control Board", icon: Gauge },
-  { key: "process",    label: "Process Board", icon: Layers3 },
-  { key: "drawings",   label: "Drawing Register", icon: FileStack },
-  { key: "submittals", label: "Submittal Register", icon: ClipboardList },
-  { key: "matrix",     label: "Approval Matrix", icon: Workflow },
-];
-
-// ── Status colors for matrix ───────────────────────────────────────────────
-const STATUS_COLORS = {
-  Draft:                 "#64748b",
-  Submitted:             "#3b82f6",
-  "Under Review":        "#0d9488",
-  Approved:              "#10b981",
-  "Approved as Noted":   "#84cc16",
-  "Revise and Resubmit": "#f59e0b",
-  Rejected:              "#ef4444",
-  "Released for Fabrication": "#0ea5e9",
-  Void:                  "#6b7280",
-};
-
-const CLOSED_SUBMITTAL_STATUSES = new Set([
-  "Approved",
-  "Approved as Noted",
-  "Released for Fabrication",
-  "Void",
-]);
-
-// Ball-in-court choices — matches the canonical list used in submittal modals
-// (src/components/submittals/NewRoundModal.jsx).
-const BIC_CHOICES = [
-  "Detailer", "S&H", "Contractor", "Subcontractor",
-  "EOR", "Architect", "AOR",
-  "GC", "Owner",
-];
-
-const ACTION_STATUSES = new Set([
-  "Rejected",
-  "Revise and Resubmit",
-]);
-
-function toLocalDay(input) {
-  if (!input) return null;
-  if (input instanceof Date) {
-    if (!Number.isFinite(input.getTime())) return null;
-    return new Date(input.getFullYear(), input.getMonth(), input.getDate());
-  }
-  if (typeof input === "string") {
-    const match = input.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-    }
-  }
-  const parsed = new Date(input);
-  if (!Number.isFinite(parsed.getTime())) return null;
-  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+interface HeaderSignalProps {
+  icon: IconType;
+  label: string;
+  value: ReactNode;
+  tone: string;
 }
 
-function daysUntil(input) {
-  const due = toLocalDay(input);
-  if (!due) return null;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((due.getTime() - today.getTime()) / 86_400_000);
-}
-
-function dueInfo(input, closed = false) {
-  if (closed) {
-    return { label: "Closed", days: null, overdue: false, dueSoon: false, tone: success, sort: 99999 };
-  }
-  const days = daysUntil(input);
-  if (days === null) {
-    return { label: "No date", days: null, overdue: false, dueSoon: false, tone: textMuted, sort: 99998 };
-  }
-  if (days < 0) {
-    return { label: `${Math.abs(days)}d late`, days, overdue: true, dueSoon: false, tone: error, sort: days };
-  }
-  if (days === 0) {
-    return { label: "Due today", days, overdue: false, dueSoon: true, tone: warning, sort: 0 };
-  }
-  if (days <= 7) {
-    return { label: `${days}d left`, days, overdue: false, dueSoon: true, tone: warning, sort: days };
-  }
-  return { label: fmtDate(input), days, overdue: false, dueSoon: false, tone: textMuted, sort: days };
-}
-
-function getSubmittalDueDate(submittal) {
-  return submittal?.required_date || submittal?.due_date || submittal?.date_required || null;
-}
-
-function getDrawingDueDate(drawing) {
-  return drawing?.due_date || drawing?.required_date || drawing?.target_date || null;
-}
-
-function getSetDisplayName({ parent, legacyName, fallback = "Ungrouped drawing set" } = {}) {
-  return (parent?.set_name || legacyName || fallback).trim();
-}
-
-function compareDueDates(a, b) {
-  const ad = daysUntil(a);
-  const bd = daysUntil(b);
-  if (ad === null && bd === null) return 0;
-  if (ad === null) return 1;
-  if (bd === null) return -1;
-  return ad - bd;
-}
-
-function earliestDate(values) {
-  return values.filter(Boolean).sort(compareDueDates)[0] || null;
-}
-
-function isClosedSubmittal(submittal) {
-  return CLOSED_SUBMITTAL_STATUSES.has(submittal?.status);
-}
-
-function isClosedDrawing(drawing) {
-  return drawing?.stage === "Released" || drawing?.set_approval_status === "approved";
-}
-
-function rollupDrawingStage(sheets) {
-  if (!sheets.length) return "No sheets";
-  if (sheets.every(isClosedDrawing)) return "Released";
-  if (sheets.some((d) => ["Rejected", "Revise and Resubmit", "Returned"].includes(d.stage))) return "Needs Action";
-  if (sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage))) return "In Review";
-  return sheets[0]?.stage || "No stage";
-}
-
-function buildSetPackages(drawings, drawingSets, submittals) {
-  const parentsById = new Map((drawingSets || []).filter((set) => !set?.is_deleted).map((set) => [set.id, set]));
-  const parentsByName = new Map(
-    Array.from(parentsById.values())
-      .map((set) => [(set.set_name || "").trim().toLowerCase(), set])
-      .filter(([name]) => !!name)
-  );
-  const packages = new Map();
-
-  const ensurePackage = ({ setId = null, legacyName = "", parent = null }) => {
-    const key = setId ? `id:${setId}` : `name:${(legacyName || "").trim() || "Ungrouped drawing set"}`;
-    if (!packages.has(key)) {
-      packages.set(key, {
-        key,
-        setId,
-        name: getSetDisplayName({ parent, legacyName }),
-        parent,
-        sheets: [],
-        submittals: [],
-      });
-    }
-    return packages.get(key);
-  };
-
-  for (const parent of parentsById.values()) {
-    ensurePackage({ setId: parent.id, legacyName: parent.set_name, parent });
-  }
-
-  for (const drawing of drawings || []) {
-    if (!drawing || drawing.is_deleted || drawing.is_superseded) continue;
-    const parent = drawing.drawing_set_id ? parentsById.get(drawing.drawing_set_id) : null;
-    const pkg = ensurePackage({
-      setId: drawing.drawing_set_id || null,
-      legacyName: drawing.drawing_set_name,
-      parent,
-    });
-    pkg.sheets.push(drawing);
-  }
-
-  for (const submittal of submittals || []) {
-    if (!submittal || submittal.is_deleted) continue;
-    const ids = Array.isArray(submittal.drawing_set_ids) ? submittal.drawing_set_ids.filter(Boolean) : [];
-    if (ids.length) {
-      ids.forEach((setId) => {
-        const parent = parentsById.get(setId);
-        ensurePackage({ setId, legacyName: parent?.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
-      });
-      continue;
-    }
-    if (submittal.drawing_set_name) {
-      const parent = parentsByName.get(submittal.drawing_set_name.trim().toLowerCase()) || null;
-      ensurePackage({
-        setId: parent?.id || null,
-        legacyName: submittal.drawing_set_name,
-        parent,
-      }).submittals.push(submittal);
-    }
-  }
-
-  return Array.from(packages.values())
-    .filter((pkg) => pkg.name && pkg.name !== "Ungrouped drawing set" ? true : pkg.sheets.length || pkg.submittals.length)
-    .sort(compareDrawingSetPackages);
-}
-
-function itemUrgency(a, b) {
-  const rank = (item) => {
-    if (item.due.overdue) return 0;
-    if (item.due.dueSoon) return 1;
-    if (item.needsAction) return 2;
-    if (!item.dueDate) return 3;
-    return 4;
-  };
-  return rank(a) - rank(b) || a.due.sort - b.due.sort || a.title.localeCompare(b.title);
-}
-
-function pluralize(count, singular, plural = `${singular}s`) {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function getStatusColor(status) {
-  return STATUS_COLORS[status] || textMuted;
-}
-
-function getActionTone(item) {
-  if (item?.due?.overdue) return error;
-  if (item?.needsAction) return review;
-  if (item?.due?.dueSoon) return warning;
-  return info;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-export default function DrawingSubmittalHub() {
-  const { activeProject } = useProjectContext();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const qc = useQueryClient();
-  const projectId = activeProject?.id;
-  const projectName = activeProject?.name || activeProject?.project_number || "";
-
-  // Tab state from URL (persistent across navigation)
-  const tabParam = searchParams.get("hub_tab") || "overview";
-  const activeTab = TABS.find((t) => t.key === tabParam) ? tabParam : "overview";
-  const setActiveTab = (key) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("hub_tab", key);
-      return next;
-    }, { replace: true });
-  };
-
-  // ── Data for KPI strip & matrix ────────────────────────────────────────
-  const { drawings, isLoading: drawingsLoading } = useDrawings(projectId);
-  const {
-    submittals, kpis, _byDrawingSet, roundsBySubmittal,
-    isLoading: submittalsLoading,
-  } = useSubmittals(projectId);
-
-  // Drawing sets (for matrix)
-  const { data: drawingSets = [] } = useQuery({
-    queryKey: ["drawing-sets", projectId],
-    queryFn: () => base44.entities.DrawingSet.filter({ project_id: projectId }),
-    enabled: !!projectId,
-    staleTime: 60_000,
-  });
-
-  const setPackages = useMemo(
-    () => buildSetPackages(drawings, drawingSets, submittals),
-    [drawings, drawingSets, submittals]
-  );
-
-  // ── Drawing KPIs ───────────────────────────────────────────────────────
-  const drawingKpis = useMemo(() => {
-    const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted);
-    const released = setPackages.filter((pkg) => pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)).length;
-    // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
-    const inReview = setPackages.filter((pkg) =>
-      pkg.sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage))
-    ).length;
-    const overdueDrawings = setPackages.filter((pkg) =>
-      pkg.sheets.some((d) => dueInfo(getDrawingDueDate(d), isClosedDrawing(d)).overdue)
-    ).length;
-    return {
-      totalSets: setPackages.length,
-      totalSheets: active.length,
-      released,
-      inReview,
-      overdue: overdueDrawings,
-    };
-  }, [drawings, setPackages]);
-
-  // ── Fab-Ready KPI ──────────────────────────────────────────────────────
-  const fabReady = useMemo(
-    () => computeFabReady(drawings, submittals),
-    [drawings, submittals]
-  );
-
-  const isLoading = drawingsLoading || submittalsLoading;
-
-  const triage = useMemo(() => {
-    const activeSubmittals = submittals.filter((s) => !s.is_deleted);
-
-    const setItems = setPackages.map((pkg) => {
-      const sortedSubmittals = pkg.submittals
-        .slice()
-        .sort((a, b) => (b.round_number || 1) - (a.round_number || 1));
-      const latestSubmittal = sortedSubmittals[0] || null;
-      const closed = latestSubmittal ? isClosedSubmittal(latestSubmittal) : (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing));
-      const dueDate = getSubmittalDueDate(latestSubmittal) || earliestDate(pkg.sheets.map(getDrawingDueDate));
-      const needsAction =
-        (latestSubmittal && ACTION_STATUSES.has(latestSubmittal.status)) ||
-        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage));
-      const status = latestSubmittal?.status || rollupDrawingStage(pkg.sheets);
-      const owner =
-        latestSubmittal?.ball_in_court ||
-        latestSubmittal?.assigned_to ||
-        latestSubmittal?.reviewer ||
-        pkg.sheets.find((drawing) => drawing.ball_in_court || drawing.assigned_to || drawing.reviewer)?.ball_in_court ||
-        pkg.sheets.find((drawing) => drawing.assigned_to)?.assigned_to ||
-        pkg.sheets.find((drawing) => drawing.reviewer)?.reviewer ||
-        "Unassigned";
-      const submittalLabel = latestSubmittal?.submittal_number ? `Submittal ${latestSubmittal.submittal_number}` : "No linked submittal";
-      return {
-        id: `set-${pkg.key}`,
-        kind: "Drawing Set",
-        title: pkg.name,
-        group: `${pkg.sheets.length} sheet${pkg.sheets.length === 1 ? "" : "s"} - ${submittalLabel}`,
-        status,
-        owner,
-        dueDate,
-        due: dueInfo(dueDate, closed),
-        closed,
-        needsAction,
-        routeTab: "drawings",
-        // Entity references for inline editing
-        _submittalId: latestSubmittal?.id || null,
-        _drawingSetId: pkg.setId || null,
-        _firstSheetId: pkg.sheets[0]?.id || null,
-      };
-    });
-
-    const linkedSubmittalIds = new Set(
-      setPackages.flatMap((pkg) => pkg.submittals.map((submittal) => submittal.id).filter(Boolean))
-    );
-    const unlinkedSubmittalItems = activeSubmittals
-      .filter((submittal) => !linkedSubmittalIds.has(submittal.id))
-      .map((submittal) => {
-      const closed = isClosedSubmittal(submittal);
-      const dueDate = getSubmittalDueDate(submittal);
-      const title = [submittal.submittal_number, submittal.title || submittal.description]
-        .filter(Boolean)
-        .join(" - ") || "Untitled submittal";
-      const needsAction = ACTION_STATUSES.has(submittal.status);
-      return {
-        id: `submittal-${submittal.id}`,
-        kind: "Unlinked Submittal",
-        title,
-        group: "No drawing set name linked",
-        status: submittal.status || "Draft",
-        owner: submittal.ball_in_court || submittal.assigned_to || submittal.reviewer || "Unassigned",
-        dueDate,
-        due: dueInfo(dueDate, closed),
-        closed,
-        needsAction,
-        routeTab: "submittals",
-        // Entity references for inline editing
-        _submittalId: submittal.id,
-        _drawingSetId: null,
-        _firstSheetId: null,
-      };
-    });
-
-    const openItems = [...setItems, ...unlinkedSubmittalItems].filter((item) => !item.closed);
-    const overdue = openItems.filter((item) => item.due.overdue).sort(itemUrgency);
-    const dueSoon = openItems
-      .filter((item) => item.due.dueSoon)
-      .sort(itemUrgency);
-    const needsAction = openItems
-      .filter((item) => item.needsAction)
-      .sort(itemUrgency);
-    const noDate = openItems
-      .filter((item) => !item.dueDate)
-      .sort(itemUrgency);
-
-    const pipelineCounts = openItems.reduce((acc, item) => {
-      const key = item.status || "No status";
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-
-    return {
-      setItems,
-      unlinkedSubmittalItems,
-      openItems: openItems.sort(itemUrgency),
-      overdue,
-      dueSoon,
-      needsAction,
-      noDate,
-      pipelineCounts,
-      overdueDrawingSets: overdue.filter((item) => item.kind === "Drawing Set").length,
-      overdueUnlinkedSubmittals: overdue.filter((item) => item.kind === "Unlinked Submittal").length,
-      dueSoonDrawingSets: dueSoon.filter((item) => item.kind === "Drawing Set").length,
-      noDateDrawingSets: noDate.filter((item) => item.kind === "Drawing Set").length,
-    };
-  }, [submittals, setPackages]);
-
-  const tabCounts = useMemo(() => ({
-    overview: triage.openItems.length,
-    process: setPackages.length + triage.unlinkedSubmittalItems.length,
-    drawings: drawingKpis.totalSets,
-    submittals: kpis.total,
-    matrix: drawingSets.filter((set) => !set?.is_deleted).length,
-  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSets, kpis.total, drawingSets]);
-
-  // ── Inline quick-action mutations (Next Decision card) ────────────────
-  const invalidateHub = () => {
-    qc.invalidateQueries({ queryKey: ["drawing-sets", projectId] });
-    qc.invalidateQueries({ queryKey: ["drawings", projectId] });
-    qc.invalidateQueries({ queryKey: ["submittals", projectId] });
-  };
-
-  const updateOwnerMut = useMutation({
-    mutationFn: async ({ item, owner }) => {
-      if (item._submittalId) {
-        await base44.entities.Submittal.update(item._submittalId, { ball_in_court: owner });
-      } else if (item._firstSheetId) {
-        await base44.entities.Drawing.update(item._firstSheetId, { assigned_to: owner });
-      } else {
-        throw new Error("No entity available to assign owner");
-      }
-    },
-    onSuccess: (_data, { owner }) => {
-      invalidateHub();
-      toast.success(`Owner assigned: ${owner}`);
-    },
-    onError: (err) => toast.error("Failed to assign owner: " + (err?.message || "Unknown")),
-  });
-
-  const updateDueDateMut = useMutation({
-    mutationFn: async ({ item, date }) => {
-      if (item._submittalId) {
-        await base44.entities.Submittal.update(item._submittalId, { required_date: date });
-      } else if (item._firstSheetId) {
-        await base44.entities.Drawing.update(item._firstSheetId, { due_date: date });
-      } else {
-        throw new Error("No entity available to set due date");
-      }
-    },
-    onSuccess: () => {
-      invalidateHub();
-      toast.success("Due date set");
-    },
-    onError: (err) => toast.error("Failed to set due date: " + (err?.message || "Unknown")),
-  });
-
-  // ── Render ─────────────────────────────────────────────────────────────
-  return (
-    <div
-      className="drawing-submittal-hub"
-      style={{
-        minHeight: "100vh",
-        background: "var(--bg-page)",
-        color: textPrimary,
-        padding: "24px 28px",
-      }}
-    >
-      {/* ── Command Bar ──────────────────────────────────────────────── */}
-      <CommandBar
-        eyebrow={projectName ? `Detailing control - ${projectName}` : "Detailing control"}
-        title="Drawing & Submittal Control"
-        count={drawingKpis.totalSets}
-        unit={` sets | ${drawingKpis.totalSheets} sheets`}
-        subtitle="Set-level drawing packages, submittal status, due dates, ownership, and fabrication-release readiness."
-      >
-        <HeaderSignal
-          icon={AlertTriangle}
-          label="Overdue"
-          value={triage.overdue.length}
-          tone={triage.overdue.length ? error : success}
-        />
-        <HeaderSignal
-          icon={Gauge}
-          label="In Review"
-          value={drawingKpis.inReview}
-          tone={drawingKpis.inReview > 0 ? info : textMuted}
-        />
-        <HeaderSignal
-          icon={Link2}
-          label="Unlinked"
-          value={triage.unlinkedSubmittalItems.length}
-          tone={triage.unlinkedSubmittalItems.length ? warning : textMuted}
-        />
-      </CommandBar>
-
-      {/* ── KPI Strip ────────────────────────────────────────────────── */}
-      <div className="sbp-hub-kpi-strip" style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-        gap: 10,
-        marginBottom: 14,
-      }}>
-        <KpiTile compact label="Drawing Sets" value={drawingKpis.totalSets} sub={`${drawingKpis.totalSheets} active sheets`} color={accent} loading={isLoading} />
-        <KpiTile compact label="Sets Released" value={drawingKpis.released} color={success} loading={isLoading} />
-        <KpiTile compact label="Sets In Review" value={drawingKpis.inReview} color={info} loading={isLoading} />
-        <KpiTile compact label="Submittals" value={kpis.total} sub={`${kpis.pending} pending`} color={accent} loading={isLoading} />
-        <KpiTile compact label="Needs Action" value={kpis.rejected} color={review} loading={isLoading} />
-        <KpiTile compact label="Overdue" value={Math.max(kpis.overdue, triage.overdue.length)} color={error} loading={isLoading} />
-        <KpiTile compact label="Fab Ready" value={`${fabReady.numerator}/${fabReady.denominator}`} sub={`${fabReady.percent}% released`} color={success} loading={isLoading} />
-      </div>
-
-      {/* ── Tab Bar ──────────────────────────────────────────────────── */}
-      <div className="sbp-hub-tabbar" style={{
-        display: "flex",
-        gap: 8,
-        flexWrap: "wrap",
-        alignItems: "center",
-        padding: 6,
-        marginBottom: 16,
-        background: "color-mix(in srgb, var(--bg-surface) 82%, transparent)",
-        border: `1px solid ${border}`,
-        borderRadius: 14,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-      }}>
-        {TABS.map((tab) => {
-          const isActive = tab.key === activeTab;
-          const Icon = tab.icon;
-          return (
-            <button
-              className={`sbp-hub-tab${isActive ? " is-active" : ""}`}
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                minHeight: 40,
-                padding: "8px 12px",
-                borderRadius: 10,
-                border: `1px solid ${isActive ? accent : "transparent"}`,
-                background: isActive
-                  ? "color-mix(in srgb, var(--accent) 14%, var(--bg-surface-high) 86%)"
-                  : "transparent",
-                color: isActive ? textPrimary : textMuted,
-                fontFamily: mono,
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-              }}
-            >
-              <Icon size={14} />
-              <span>{tab.label}</span>
-              <span
-                className="sbd-num"
-                data-hub-tab-count="true"
-                style={{
-                  padding: "2px 7px",
-                  borderRadius: 999,
-                  background: isActive ? "color-mix(in srgb, var(--accent) 18%, transparent)" : surface2,
-                  border: `1px solid ${isActive ? "color-mix(in srgb, var(--accent) 32%, transparent)" : border}`,
-                  color: isActive ? accent : textMuted,
-                  fontSize: 10,
-                  lineHeight: 1.2,
-                }}
-              >
-                {tabCounts[tab.key] ?? 0}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Tab Content ──────────────────────────────────────────────── */}
-      <div style={{ minHeight: 0, position: "relative" }}>
-        <ErrorBoundary>
-          <Suspense fallback={<LoadingSkeleton />}>
-            {activeTab === "overview" && (
-              <TriageBoard
-                triage={triage}
-                kpis={kpis}
-                drawingKpis={drawingKpis}
-                isLoading={isLoading}
-                onOpenTab={setActiveTab}
-                onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
-                onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
-                isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending}
-              />
-            )}
-            {activeTab === "process" && (
-              <SubmittalVisualBoard
-                setPackages={setPackages}
-                submittals={submittals}
-                isLoading={isLoading}
-                onOpenTab={setActiveTab}
-              />
-            )}
-            {activeTab === "drawings" && <DrawingsPage embedded />}
-            {activeTab === "submittals" && <SubmittalsPage />}
-            {activeTab === "matrix" && (
-              <ApprovalMatrix
-                drawingSets={drawingSets}
-                submittals={submittals}
-                roundsBySubmittal={roundsBySubmittal}
-                isLoading={isLoading}
-              />
-            )}
-          </Suspense>
-        </ErrorBoundary>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Approval Matrix — rows: drawing sets, columns show linked submittal status
-// ─────────────────────────────────────────────────────────────────────────────
-
-function HeaderSignal({ icon: Icon, label, value, tone }) {
+export function HeaderSignal({ icon: Icon, label, value, tone }: HeaderSignalProps) {
   return (
     <div className="sbp-header-signal" style={{
       display: "inline-flex",
@@ -704,18 +87,29 @@ function HeaderSignal({ icon: Icon, label, value, tone }) {
   );
 }
 
-function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, isSaving }) {
+interface TriageBoardProps {
+  triage: any;
+  kpis: any;
+  drawingKpis: any;
+  isLoading: boolean;
+  onOpenTab: (key: string) => void;
+  onUpdateOwner: (item: any, owner: string) => void;
+  onUpdateDueDate: (item: any, date: string) => void;
+  isSaving: boolean;
+}
+
+export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, isSaving }: TriageBoardProps) {
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
   const focusTone = getActionTone(focusItem);
   const topStatuses = Object.entries(triage.pipelineCounts)
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => (b[1] as number) - (a[1] as number))
     .slice(0, 6);
   const focusRoute = focusItem?.routeTab || "matrix";
   const criticalItems = Array.from(
-    new Map([...triage.overdue, ...triage.needsAction, ...triage.dueSoon].map((item) => [item.id, item])).values()
-  ).slice(0, 12);
+    new Map([...triage.overdue, ...triage.needsAction, ...triage.dueSoon].map((item: any) => [item.id, item])).values()
+  ).slice(0, 12) as any[];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -863,7 +257,13 @@ function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdate
 // Compact controls shown directly on the "Next Decision" card so users can
 // assign an owner or set a due date without navigating away.
 
-function InlineOwnerControl({ currentOwner, onAssign, disabled }) {
+interface InlineOwnerControlProps {
+  currentOwner: string;
+  onAssign: (owner: string) => void;
+  disabled: boolean;
+}
+
+function InlineOwnerControl({ currentOwner, onAssign, disabled }: InlineOwnerControlProps) {
   const [open, setOpen] = useState(false);
   const isUnassigned = !currentOwner || currentOwner === "Unassigned";
 
@@ -946,7 +346,14 @@ function InlineOwnerControl({ currentOwner, onAssign, disabled }) {
   );
 }
 
-function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }) {
+interface InlineDateControlProps {
+  currentDate: string | null;
+  isOverdue: boolean;
+  onSetDate: (date: string) => void;
+  disabled: boolean;
+}
+
+function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: InlineDateControlProps) {
   const [open, setOpen] = useState(false);
   const hasDate = !!currentDate;
 
@@ -1025,7 +432,14 @@ function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }) {
   );
 }
 
-function RiskPill({ icon: Icon, label, value, color }) {
+interface RiskPillProps {
+  icon: IconType;
+  label: string;
+  value: ReactNode;
+  color: string;
+}
+
+function RiskPill({ icon: Icon, label, value, color }: RiskPillProps) {
   return (
     <div style={{
       display: "inline-flex",
@@ -1049,7 +463,13 @@ function RiskPill({ icon: Icon, label, value, color }) {
   );
 }
 
-function PipelinePanel({ topStatuses, openCount, onOpenTab }) {
+interface PipelinePanelProps {
+  topStatuses: Array<[string, unknown]>;
+  openCount: number;
+  onOpenTab: (key: string) => void;
+}
+
+function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps) {
   return (
     <div className="sbd-card" style={{ padding: 16, borderRadius: 16, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
@@ -1069,7 +489,7 @@ function PipelinePanel({ topStatuses, openCount, onOpenTab }) {
           <EmptyState text="No open items to summarize." />
         ) : (
           topStatuses.map(([status, count]) => (
-            <PipelineBar key={status} status={status} count={count} total={openCount} />
+            <PipelineBar key={status} status={status} count={count as number} total={openCount} />
           ))
         )}
       </div>
@@ -1077,7 +497,15 @@ function PipelinePanel({ topStatuses, openCount, onOpenTab }) {
   );
 }
 
-function TriageMetric({ icon: Icon, label, value, sub, color }) {
+interface TriageMetricProps {
+  icon: IconType;
+  label: string;
+  value: ReactNode;
+  sub: ReactNode;
+  color: string;
+}
+
+function TriageMetric({ icon: Icon, label, value, sub, color }: TriageMetricProps) {
   return (
     <div className="sbd-card" style={{ padding: "14px 16px", borderRadius: 14, borderTop: `2px solid ${color}`, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
@@ -1094,7 +522,16 @@ function TriageMetric({ icon: Icon, label, value, sub, color }) {
   );
 }
 
-function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false }) {
+interface TriageListProps {
+  title: string;
+  subtitle: string;
+  items: any[];
+  empty: string;
+  onOpenTab: (key: string) => void;
+  compact?: boolean;
+}
+
+function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false }: TriageListProps) {
   return (
     <section className="sbd-card" style={{ padding: compact ? 14 : 16, borderRadius: 14, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
@@ -1117,7 +554,7 @@ function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false 
   );
 }
 
-function TriageItemRow({ item, onOpen }) {
+function TriageItemRow({ item, onOpen }: { item: any; onOpen: () => void }) {
   const tone = getActionTone(item);
   return (
     <button
@@ -1176,7 +613,7 @@ function TriageItemRow({ item, onOpen }) {
   );
 }
 
-function PipelineBar({ status, count, total }) {
+function PipelineBar({ status, count, total }: { status: string; count: number; total: number }) {
   const color = STATUS_COLORS[status] || accent;
   const pct = total > 0 ? Math.max(4, Math.round((count / total) * 100)) : 0;
   return (
@@ -1192,7 +629,7 @@ function PipelineBar({ status, count, total }) {
   );
 }
 
-function EmptyState({ text }) {
+function EmptyState({ text }: { text: string }) {
   return (
     <div style={{ padding: 14, color: textMuted, border: `1px dashed ${border}`, borderRadius: 10, fontSize: 13 }}>
       {text}
@@ -1200,7 +637,7 @@ function EmptyState({ text }) {
   );
 }
 
-function DueChip({ info, compact = false }) {
+function DueChip({ info: chipInfo, compact = false }: { info: DueInfo; compact?: boolean }) {
   return (
     <span style={{
       display: "inline-block",
@@ -1212,23 +649,30 @@ function DueChip({ info, compact = false }) {
       fontWeight: 800,
       letterSpacing: "0.08em",
       textTransform: "uppercase",
-      color: info.tone,
-      background: `color-mix(in srgb, ${info.tone} 16%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${info.tone} 44%, transparent)`,
+      color: chipInfo.tone,
+      background: `color-mix(in srgb, ${chipInfo.tone} 16%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${chipInfo.tone} 44%, transparent)`,
       whiteSpace: "nowrap",
     }}>
-      {info.label}
+      {chipInfo.label}
     </span>
   );
 }
 
-function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading }) {
+interface ApprovalMatrixProps {
+  drawingSets: any[];
+  submittals: Submittal[];
+  roundsBySubmittal: Record<string, any[]>;
+  isLoading: boolean;
+}
+
+export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading }: ApprovalMatrixProps) {
   const [search, setSearch] = useState("");
 
   // Build matrix: for each drawing set, find all submittals that reference it
   const matrixRows = useMemo(() => {
     const activeSubmittals = submittals.filter((s) => !s.is_deleted);
-    const setSubmittalMap = {};
+    const setSubmittalMap: Record<string, any[]> = {};
 
     for (const sub of activeSubmittals) {
       const setIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
@@ -1404,10 +848,18 @@ function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading 
 
 // ── Matrix table row ──────────────────────────────────────────────────────
 
-function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }) {
+interface MatrixRowProps {
+  drawingSet: any;
+  sub: any;
+  due: DueInfo;
+  allSubmittals: any[];
+  roundsBySubmittal: Record<string, any[]>;
+}
+
+function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }: MatrixRowProps) {
   const [expanded, setExpanded] = useState(false);
   const hasMultiple = allSubmittals.length > 1;
-  const overdueStyle = due?.overdue ? { color: error, fontWeight: 700 } : {};
+  const overdueStyle: CSSProperties = due?.overdue ? { color: error, fontWeight: 700 } : {};
   const rowStatusColor = getStatusColor(sub?.status);
 
   return (
@@ -1502,7 +954,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }) {
 
 // ── Round Timeline (compact inline version) ────────────────────────────────
 
-function RoundTimeline({ rounds }) {
+function RoundTimeline({ rounds }: { rounds: any[] }) {
   if (!rounds || rounds.length === 0) return null;
 
   return (
@@ -1518,11 +970,11 @@ function RoundTimeline({ rounds }) {
         const isLast = i === rounds.length - 1;
         const statusColor = STATUS_COLORS[r.status] || textMuted;
         const days = r.submitted_date && r.returned_date
-          ? Math.ceil((new Date(r.returned_date) - new Date(r.submitted_date)) / 86400000)
+          ? Math.ceil((new Date(r.returned_date).getTime() - new Date(r.submitted_date).getTime()) / 86400000)
           : null;
 
         return (
-          <React.Fragment key={r.id}>
+          <Fragment key={r.id}>
             <div style={{
               display: "inline-flex", alignItems: "center", gap: 6,
               padding: "3px 10px", borderRadius: 4,
@@ -1547,7 +999,7 @@ function RoundTimeline({ rounds }) {
             {!isLast && (
               <span style={{ color: textMuted, fontSize: 10 }}>→</span>
             )}
-          </React.Fragment>
+          </Fragment>
         );
       })}
     </div>
@@ -1556,7 +1008,7 @@ function RoundTimeline({ rounds }) {
 
 // ── Shared micro-components ────────────────────────────────────────────────
 
-function Th({ children, style = {} }) {
+function Th({ children, style = {} }: { children?: ReactNode; style?: CSSProperties }) {
   return (
     <th style={{
       padding: "10px 12px", textAlign: "left",
@@ -1570,7 +1022,7 @@ function Th({ children, style = {} }) {
   );
 }
 
-function Td({ children, style = {}, colSpan }) {
+function Td({ children, style = {}, colSpan }: { children?: ReactNode; style?: CSSProperties; colSpan?: number }) {
   return (
     <td colSpan={colSpan} className="sbd-num" style={{
       padding: "8px 12px",
@@ -1583,7 +1035,7 @@ function Td({ children, style = {}, colSpan }) {
   );
 }
 
-function StatusChip({ status }) {
+function StatusChip({ status }: { status: string }) {
   const color = STATUS_COLORS[status] || textMuted;
   return (
     <span style={{
@@ -1600,7 +1052,14 @@ function StatusChip({ status }) {
   );
 }
 
-function SummaryChip({ icon: Icon, label, value, color }) {
+interface SummaryChipProps {
+  icon: IconType;
+  label: string;
+  value: ReactNode;
+  color: string;
+}
+
+function SummaryChip({ icon: Icon, label, value, color }: SummaryChipProps) {
   return (
     <div className="sbd-pill" style={{
       display: "flex", alignItems: "center", gap: 6,
@@ -1616,13 +1075,4 @@ function SummaryChip({ icon: Icon, label, value, color }) {
       </span>
     </div>
   );
-}
-
-function fmtDate(d) {
-  if (!d) return "—";
-  try {
-    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
-  } catch {
-    return "—";
-  }
 }
