@@ -9,6 +9,7 @@ import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksC
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { RFI_TYPES, buildRfiPreflight } from "@/lib/rfiPreflight";
+import { findDuplicateRfis } from "@/lib/rfiDedup";
 
 /** @type {import('react').CSSProperties} */
 const iStyle = {
@@ -63,6 +64,36 @@ const PreflightScorecard = ({ result }) => {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+};
+
+// Non-blocking duplicate-RFI warning (flag-gated). Surfaces likely prior RFIs
+// so the author links instead of re-asking (the RFI 007/008 pain).
+const DuplicateWarning = ({ matches }) => {
+  if (!matches || matches.length === 0) return null;
+  return (
+    <div style={{ gridColumn: "span 3", border: "1px solid var(--status-warning)", borderRadius: 6, padding: 12, background: "var(--warning-muted)" }}>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--status-warning)", fontWeight: 700, marginBottom: 8 }}>
+        Possible duplicate{matches.length > 1 ? "s" : ""} — review before submitting
+      </div>
+      <div style={{ display: "grid", gap: 6 }}>
+        {matches.map((m) => (
+          <div key={m.rfi.id} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--accent)", flexShrink: 0, minWidth: 64 }}>
+              {m.rfi.rfi_number || "RFI"}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {m.rfi.title || "Untitled RFI"}
+              </div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
+                {m.reasons.join(" · ")}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -333,6 +364,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     : "New RFI";
 
   const preflight = preflightOn ? buildRfiPreflight(formData) : null;
+  const duplicateMatches = preflightOn ? findDuplicateRfis(formData, existingRfis) : [];
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -477,6 +509,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 <textarea style={{ ...iStyle, minHeight: 56, resize: "vertical" }} value={formData.proposed_solution} onChange={(e) => set("proposed_solution", e.target.value)} placeholder="Your recommended answer — speeds review and documents intent." />
               </Field>
             )}
+            {preflightOn && duplicateMatches.length > 0 && <DuplicateWarning matches={duplicateMatches} />}
             {preflightOn && <PreflightScorecard result={preflight} />}
 
             {/* Section 3 — Routing */}
