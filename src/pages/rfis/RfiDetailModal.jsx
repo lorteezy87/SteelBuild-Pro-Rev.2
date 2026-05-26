@@ -30,7 +30,7 @@ function impactValue(rfi) {
   return parts.join(" / ") || "No known impact";
 }
 
-export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge }) {
+export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO }) {
   if (!rfi) return null;
 
   const age = daysOpen(rfi);
@@ -52,6 +52,9 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Close</Button>
+          {onCreateCO && rfi.cost_impact && (
+            <Button variant="secondary" onClick={onCreateCO}>Create CO</Button>
+          )}
           {onNudge && <Button variant="secondary" icon="bell" onClick={onNudge}>Nudge BIC</Button>}
           {onEdit && <Button variant="outline" icon="ai" onClick={onEdit}>Edit</Button>}
           {onAdvanceStatus && rfi.status !== "Answered" && rfi.status !== "Closed" && (

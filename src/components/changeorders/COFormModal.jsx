@@ -13,21 +13,22 @@ const empty = {
   approved_date: null, co_amount: 0, margin_percent: 0, schedule_impact_days: 0,
   approved_by: "", notes: "", attachments: "",
   co_number: "",
+  source_rfi_id: null, sov_line_item_id: "", sov_line_number: null,
 };
 
-export default function COFormModal({ open, onClose, onSave, isSaving, co, projects = [], nextNumber }) {
+export default function COFormModal({ open, onClose, onSave, isSaving, co, projects = [], nextNumber, prefill = null, sovItems = [], sourceRfiLabel = "" }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (co) setForm({ ...empty, ...co });
-    // For new COs, leave co_number BLANK so the "Auto-assigned …"
-    // placeholder is visible. The createMut on the parent page fills
-    // in a fresh "CO #NNN" via getNextFormattedNumber if the user
-    // saves without typing one in.
-    else setForm({ ...empty });
+    // For new COs, seed from `prefill` (e.g. when converting a cost-impact RFI)
+    // and leave co_number BLANK so the "Auto-assigned …" placeholder shows. The
+    // createMut on the parent page fills a fresh "CO #NNN" via
+    // getNextFormattedNumber if the user saves without typing one in.
+    else setForm({ ...empty, ...(prefill || {}) });
     setErrors({});
-  }, [co, open]);
+  }, [co, open, prefill]);
 
   const validate = () => {
     const e = {};
@@ -53,6 +54,9 @@ export default function COFormModal({ open, onClose, onSave, isSaving, co, proje
       co_amount: Number(form.co_amount) || 0,
       margin_percent: Number(form.margin_percent) || 0,
       schedule_impact_days: Number(form.schedule_impact_days) || 0,
+      sov_line_item_id: form.sov_line_item_id || null,
+      sov_line_number: form.sov_line_number ?? null,
+      source_rfi_id: form.source_rfi_id || null,
     };
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
@@ -75,6 +79,11 @@ export default function COFormModal({ open, onClose, onSave, isSaving, co, proje
         </button>
       </>}
     >
+      {form.source_rfi_id && (
+        <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 6, background: "var(--accent-muted)", border: "1px solid var(--accent-border)", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, letterSpacing: "0.04em" }}>
+          ⤷ Converted from {sourceRfiLabel || "a cost-impact RFI"}
+        </div>
+      )}
       <div style={grid}>
         <FormField label="CO Number">
           {/* User-assignable, RFI-style. Edit mode shows the existing
@@ -141,6 +150,24 @@ export default function COFormModal({ open, onClose, onSave, isSaving, co, proje
         </FormField>
         <FormField label="Schedule Impact (days)">
           <input type="number" style={inputStyle} value={form.schedule_impact_days || 0} onChange={e => set("schedule_impact_days", e.target.value)} min="0" placeholder="0" />
+        </FormField>
+        <FormField label="SOV Line Item">
+          <Select
+            value={form.sov_line_item_id || "none"}
+            onValueChange={(v) => {
+              if (v === "none") { setForm(p => ({ ...p, sov_line_item_id: "", sov_line_number: null })); return; }
+              const item = sovItems.find(s => s.id === v);
+              setForm(p => ({ ...p, sov_line_item_id: v, sov_line_number: item ? item.line_item_number : null }));
+            }}
+          >
+            <SelectTrigger><SelectValue placeholder="Link to SOV line (optional)" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">— None —</SelectItem>
+              {sovItems.map(s => (
+                <SelectItem key={s.id} value={s.id}>{`#${s.line_item_number} · ${s.description || "(no description)"}`}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </FormField>
         {selectedProject && (
           <FormField label="Original Contract Value">
