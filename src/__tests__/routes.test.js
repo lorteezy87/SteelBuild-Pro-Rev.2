@@ -34,7 +34,6 @@ describe("routes — page registry", () => {
 describe("routeLabel", () => {
   it("returns the explicit label when present", () => {
     expect(routeLabel("Dashboard")).toBe("Dashboard");
-    expect(routeLabel("ProjectControlCenter")).toBe("Project Control Center");
     expect(routeLabel("ModelViewer")).toBe("3D Model Viewer");
   });
 

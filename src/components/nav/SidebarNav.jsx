@@ -76,13 +76,11 @@ const PAGE_ICON = {
   Mitigations:                  Scale,
   Meetings:                     Users,
   EmailInbox:                   Mail,
-  ProjectControlCenter:         Grid3x3,
   ProjectCloseout:              Box,
   ProductionNotes:              FileText,
 
   // Design & drawings
   Drawings:                     FileText,
-  DrawingAnalysis:              ScanLine,
   DrawingViewer:                Eye,
   ModelViewer:                  Box,
   Documents:                    Folder,
