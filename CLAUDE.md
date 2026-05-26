@@ -513,6 +513,15 @@ For page crashes, check first-render/runtime issues early:
 - Error boundary output
 - Browser console errors
 
+### Error monitoring (production)
+
+Client errors + performance are captured by Sentry (`@sentry/react`), initialised in `src/instrument.js` (imported FIRST in `src/main.jsx`):
+
+- `Sentry.init` runs error capture + performance tracing + **masked** session replay (`maskAllText` + `blockAllMedia` — replays never expose readable project/financial content). DSN comes from `VITE_SENTRY_DSN` (env override) with a baked-in public project DSN as a fallback so monitoring works out of the box. Optional source maps via `@sentry/vite-plugin` (needs a `SENTRY_AUTH_TOKEN`).
+- React render errors are reported via `Sentry.captureException` in both ErrorBoundaries (`src/components/ErrorBoundary.jsx` top-level, `src/components/shared/ErrorBoundary.jsx` per-route). `window.onerror` / `unhandledrejection` are caught by Sentry's global handlers.
+- `src/lib/telemetry.js` is a **local** ring buffer (`window.__sbpErrorLog`) only — it deliberately does NOT forward to Sentry (avoids double-reporting). `llm_telemetry` (see §17) is separate, LLM-specific.
+- Never log sensitive project/financial data to Sentry; rely on the replay masking above.
+
 ---
 
 ## 12. Refactor Rules
