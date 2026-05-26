@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./rfis/RFIs.css";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
@@ -73,6 +73,7 @@ function loadInsightsCollapsed() {
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const projectId = useProjectId();
   const qc = useQueryClient();
   const { can } = usePermissions();
@@ -589,6 +590,9 @@ export default function RFIs() {
           updateMut.mutate({ id: selectedRFI.id, data: { status, ...extra } });
         }}
         onNudge={() => setNudgeRFI(selectedRFI)}
+        onCreateCO={() => {
+          if (selectedRFI) navigate(`/ChangeOrders?fromRfi=${selectedRFI.id}`);
+        }}
       />
 
       <NudgeDraftModal

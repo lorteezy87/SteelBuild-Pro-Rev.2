@@ -16,6 +16,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -66,6 +67,8 @@ export default function ChangeOrders() {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [prefill, setPrefill] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Auto-open create modal when QuickAddFAB navigated here with ?new=1.
   useAutoOpenCreate(() => {
@@ -97,6 +100,62 @@ export default function ChangeOrders() {
     queryFn: () => base44.entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
+
+  // SOV lines (to link a CO to a contract line) + cost-impact RFIs (eligible
+  // to convert into a CO via ?fromRfi).
+  const { data: sovItems = [] } = useQuery({
+    queryKey: ["sov-items", projectId],
+    queryFn: () => projectId
+      ? base44.entities.SOVItem.filter({ project_id: projectId }, "line_item_number")
+      : [],
+    enabled: !!projectId,
+    staleTime: 60 * 1000,
+  });
+
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["rfis", projectId],
+    queryFn: () => projectId
+      ? base44.entities.RFI.filter({ project_id: projectId }, "-created_at")
+      : [],
+    enabled: !!projectId,
+    staleTime: 60 * 1000,
+  });
+
+  // Convert a cost-impact RFI into a new CO: ?fromRfi=<id> opens the form
+  // prefilled from the RFI (amount, schedule, title) tagged with source_rfi_id.
+  // The param is stripped so a refresh / back navigation doesn't reopen it.
+  useEffect(() => {
+    const fromRfi = searchParams.get("fromRfi");
+    if (!fromRfi || !rfis.length) return;
+    const rfi = rfis.find((r) => r.id === fromRfi);
+    if (rfi) {
+      const label = rfi.rfi_number ? `RFI ${rfi.rfi_number}` : "RFI";
+      setPrefill({
+        source_rfi_id: rfi.id,
+        project_id: projectId,
+        title: `${label}: ${rfi.title || rfi.subject || "cost change"}`.slice(0, 200),
+        description: rfi.question || rfi.description || "",
+        reason_code: "Design Change",
+        co_amount: Number(rfi.cost_impact_amount) || 0,
+        schedule_impact_days: Number(rfi.schedule_impact_days) || 0,
+      });
+      setEditing(null);
+      setModalOpen(true);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("fromRfi");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, rfis, projectId, setSearchParams]);
+
+  // Label for the "converted from RFI" banner — works for both a fresh
+  // conversion (prefill) and editing an already-linked CO. Derived (not stored
+  // in the form) so it never gets written back to the record.
+  const activeSourceRfiId = prefill?.source_rfi_id || editing?.source_rfi_id || null;
+  const sourceRfiLabel = useMemo(() => {
+    if (!activeSourceRfiId) return "";
+    const r = rfis.find((x) => x.id === activeSourceRfiId);
+    return r?.rfi_number ? `RFI ${r.rfi_number}` : (r ? "the source RFI" : "");
+  }, [activeSourceRfiId, rfis]);
 
   /* -- Mutations -- */
   const createMut = useMutation({
@@ -319,7 +378,7 @@ export default function ChangeOrders() {
           </OpsActionButton>
           <OpsActionButton
             variant="primary"
-            onClick={() => { setEditing(null); setModalOpen(true); }}
+            onClick={() => { setEditing(null); setPrefill(null); setModalOpen(true); }}
           >
             New CO
           </OpsActionButton>
@@ -510,10 +569,13 @@ export default function ChangeOrders() {
       {/* Modals */}
       <COFormModal
         open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditing(null); }}
+        onClose={() => { setModalOpen(false); setEditing(null); setPrefill(null); }}
         onSave={handleSave}
         isSaving={createMut.isPending || updateMut.isPending}
         co={editing}
+        prefill={prefill}
+        sovItems={sovItems}
+        sourceRfiLabel={sourceRfiLabel}
         projects={projects}
         // Heuristic preview of the auto-assigned number for the modal
         // placeholder. The real auto-assignment runs in createMut and
