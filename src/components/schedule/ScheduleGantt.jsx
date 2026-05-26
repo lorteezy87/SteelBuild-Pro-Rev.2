@@ -12,7 +12,7 @@ import {
   calcDuration,
 } from "./scheduleDateUtils";
 import { buildTreeOrder } from "./scheduleTree";
-import { parseDeps } from "./scheduleDependencies";
+import { parseDeps, formatPredecessorLabels } from "./scheduleDependencies";
 import {
   PHASES,
   normalizePhase,
@@ -1935,10 +1935,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             // Task row
             const { task, phase } = row;
             const deps = parseDeps(task.dependencies);
-            const depLabels = deps.map(dId => {
-              const dt = taskById.get(dId);
-              return dt?.wbs_code || (dt?.task_name?.slice(0, 6) + "…") || "—";
-            }).join(", ");
+            // Orphaned dependencies (predecessor task deleted) are skipped so
+            // the cell never renders the literal "undefined…".
+            const depLabels = formatPredecessorLabels(deps, (dId) => taskById.get(dId));
             const predecessorCount = deps.length;
             const successorCount = successorCountById[task.id] || 0;
             const logicGap = hasLogicGapTask(task, successorCountById);
