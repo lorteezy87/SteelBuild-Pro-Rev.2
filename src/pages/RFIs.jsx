@@ -43,6 +43,8 @@ import RfiRow, { RFI_ROW_GRID } from "./rfis/RfiRow";
 import RfiDetailModal from "./rfis/RfiDetailModal";
 import RfiInsightsStrip from "./rfis/RfiInsightsStrip";
 import RfiCommandCenter from "./rfis/RfiCommandCenter";
+import AgendaPanel from "./rfis/AgendaPanel";
+import { buildRfiAgenda } from "@/lib/commandCenter/rfiAgenda";
 
 const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
 
@@ -211,6 +213,10 @@ export default function RFIs() {
     },
     onError: (e) => toastCrudError(e, "Bulk delete failed"),
   });
+
+  /* ── Today's RFI Agenda (meeting view) ── */
+  const [agendaOpen, setAgendaOpen] = useState(false);
+  const agenda = useMemo(() => buildRfiAgenda(rfis), [rfis]);
 
   /* ── Counts & filtered list ── */
   const counts = useMemo(() => {
@@ -446,8 +452,25 @@ export default function RFIs() {
 
         <SequenceFilter items={rfis} value={seqFilter} onChange={setSeqFilter} />
 
+        <button
+          type="button"
+          className={`rfi-chip${agendaOpen ? " is-active" : ""}`}
+          onClick={() => setAgendaOpen((v) => !v)}
+          title="Today's RFI Agenda — overdue, blocking, due-soon, and awaiting RFIs for the production meeting"
+        >
+          Today's Agenda{agenda.total > 0 ? ` · ${agenda.total}` : ""}
+        </button>
+
         <span className="rfi-toolbar-count">{filtered.length} of {rfis.length}</span>
       </div>
+
+      {agendaOpen && (
+        <AgendaPanel
+          agenda={agenda}
+          onOpenRfi={setSelectedRFI}
+          onClose={() => setAgendaOpen(false)}
+        />
+      )}
 
       {/* Table */}
       <div className="rfi-table-shell">
