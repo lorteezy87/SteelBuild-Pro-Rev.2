@@ -219,6 +219,9 @@ export default function RFIs() {
   /* ── Today's RFI Agenda (meeting view) ── */
   const [agendaOpen, setAgendaOpen] = useState(false);
   const agenda = useMemo(() => buildRfiAgenda(rfis), [rfis]);
+  // Overdue + blocking RFIs are the ones that warrant pulling the eye to the
+  // agenda toggle; drive its "urgent" treatment off that count.
+  const agendaUrgent = (agenda.counts?.overdue ?? 0) + (agenda.counts?.blocking ?? 0);
 
   /* ── Counts & filtered list ── */
   const counts = useMemo(() => {
@@ -456,11 +459,15 @@ export default function RFIs() {
 
         <button
           type="button"
-          className={`rfi-chip${agendaOpen ? " is-active" : ""}`}
+          className={`rfi-agenda-toggle${agendaOpen ? " is-active" : ""}${agendaUrgent > 0 ? " is-urgent" : ""}`}
           onClick={() => setAgendaOpen((v) => !v)}
           title="Today's RFI Agenda — overdue, blocking, due-soon, and awaiting RFIs for the production meeting"
         >
-          Today's Agenda{agenda.total > 0 ? ` · ${agenda.total}` : ""}
+          <span className="rfi-agenda-toggle__icon" aria-hidden="true">⚑</span>
+          Today's Agenda
+          {agenda.total > 0 ? (
+            <span className="rfi-agenda-toggle__count">{agenda.total}</span>
+          ) : null}
         </button>
 
         <span className="rfi-toolbar-count">{filtered.length} of {rfis.length}</span>
