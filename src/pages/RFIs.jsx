@@ -41,6 +41,7 @@ import { compareRfisByNumber, isOverdue, exportRFIsToCSV } from "./rfis/utils";
 import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import RfiRow, { RFI_ROW_GRID } from "./rfis/RfiRow";
 import RfiDetailModal from "./rfis/RfiDetailModal";
+import NudgeDraftModal from "./rfis/NudgeDraftModal";
 import RfiInsightsStrip from "./rfis/RfiInsightsStrip";
 import RfiCommandCenter from "./rfis/RfiCommandCenter";
 
@@ -81,6 +82,7 @@ export default function RFIs() {
   const [showLogImport, setShowLogImport] = useState(false);
   const [editingRFI, setEditingRFI] = useState(null);
   const [selectedRFI, setSelectedRFI] = useState(null);
+  const [nudgeRFI, setNudgeRFI] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
@@ -556,6 +558,13 @@ export default function RFIs() {
             : {};
           updateMut.mutate({ id: selectedRFI.id, data: { status, ...extra } });
         }}
+        onNudge={() => setNudgeRFI(selectedRFI)}
+      />
+
+      <NudgeDraftModal
+        rfi={nudgeRFI}
+        open={!!nudgeRFI}
+        onClose={() => setNudgeRFI(null)}
       />
 
       <RfiLogImportModal
