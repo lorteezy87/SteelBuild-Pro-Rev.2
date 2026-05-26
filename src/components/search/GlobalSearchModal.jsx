@@ -33,7 +33,6 @@ const COLOR_MAP = {
 /* ── Quick-nav modules for empty-query state ────────────────────────────── */
 const QUICK_NAV = [
   { icon: "◈", name: "Dashboard",    page: "Dashboard",               group: "Navigate" },
-  { icon: "⊕", name: "PCC",          page: "ProjectControlCenter",    group: "Navigate" },
   { icon: "⚑", name: "RFI Hub",      page: "RFIs",                    group: "Navigate" },
   { icon: "▦", name: "Drawings",     page: "Drawings",                group: "Navigate" },
   { icon: "☰", name: "Work Packages",page: "WorkPackages",            group: "Navigate" },

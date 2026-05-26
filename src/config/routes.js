@@ -56,10 +56,8 @@ const ROUTE_DOMAINS = {
   overview: {
     Dashboard:              r(lazyWithRetry(() => import("@/pages/Dashboard")),             "Dashboard",                 { projectScoped: true }),
     CommandCenter:          r(lazyWithRetry(() => import("@/pages/CommandCenter")),         "Command Center"),
-    ProjectControlCenter:   r(lazyWithRetry(() => import("@/pages/ProjectControlCenter")),  "Project Control Center",    { projectScoped: true }),
     ExecutiveView:          r(lazyWithRetry(() => import("@/pages/ExecutiveView")),         "Executive View"),
     Projects:               r(lazyWithRetry(() => import("@/pages/Projects")),              "Projects"),
-    PortfolioGantt:         r(lazyWithRetry(() => import("@/pages/PortfolioGantt")),        "Portfolio Schedule"),
     Onboarding:             r(lazyWithRetry(() => import("@/pages/Onboarding")),            "Onboarding"),
     ProjectDetail:          r(lazyWithRetry(() => import("@/pages/ProjectDetail")),         "Project Detail"),
     AIInsights:             r(lazyWithRetry(() => import("@/pages/AIInsights")),            "Portfolio Overview"),
@@ -78,7 +76,6 @@ const ROUTE_DOMAINS = {
   documents: {
     DrawingSubmittalHub: r(lazyWithRetry(() => import("@/pages/DrawingSubmittalHub")), "Drawings & Submittals", { projectScoped: true }),
     Drawings:         r(lazyWithRetry(() => import("@/pages/Drawings")),         "Drawings",            { projectScoped: true }),
-    DrawingAnalysis:  r(lazyWithRetry(() => import("@/pages/DrawingAnalysis")),  "Drawing Analysis",    { projectScoped: true }),
     DrawingViewer:    r(lazyWithRetry(() => import("@/pages/DrawingViewer")),    "Drawing Viewer",      { projectScoped: true }),
     Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents",           { projectScoped: true }),
     ModelViewer:      r(lazyWithRetry(() => import("@/pages/ModelViewer")),      "3D Model Viewer",     { projectScoped: true }),

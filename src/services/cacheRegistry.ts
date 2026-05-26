@@ -54,7 +54,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["drawings-all"],
       ["drawings-nav-count", pid], // Layout.jsx nav badge
       ["draw-detail", pid],        // ProjectDetailView.jsx
-      ["pcc-drawings", pid],       // ProjectControlCenter.jsx
       ["drawings-for-wp", pid],    // WorkPackageDetailModal.jsx (uses project_id)
     ],
   },
@@ -70,7 +69,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["all-deliveries-portfolio"],   // AIInsights.jsx, CostDashboard.jsx
       ["procurement", pid],           // Procurement.jsx (deliveries are procurement)
       ["procurement"],
-      ["pcc-deliveries", pid],        // ProjectControlCenter.jsx
       ["modal-deliveries", pid],      // ProjectDrilldownModal.jsx
       ["del-detail", pid],            // ProjectDetailView.jsx
       ["deliveries-for-wp", pid],     // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
@@ -111,7 +109,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["cos-all"],                  // Dashboard.jsx, ProductionNotes.jsx
       ["all-cos-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
       ["co-detail", pid],           // ProjectDetailView.jsx
-      ["pcc-cos", pid],             // ProjectControlCenter.jsx
       ["modal-cos", pid],           // ProjectDrilldownModal.jsx
       ["projects"],                 // CO approval modifies revised contract value
     ],
@@ -126,7 +123,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["rfis", "hub"],              // RFIHub.jsx
       ["rfis-nav-count", pid],      // Layout.jsx nav badge
       ["rfi-detail", pid],          // ProjectDetailView.jsx
-      ["pcc-rfis", pid],            // ProjectControlCenter.jsx
       ["pill-rfis-quick"],          // ProjectPillDropdown.jsx
       ["modal-rfis", pid],          // ProjectDrilldownModal.jsx
     ],
@@ -145,7 +141,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["schedule-tasks-wp", pid],   // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
       ["lookahead", pid],           // LookAheadSchedule.jsx
       ["lookahead-gantt", pid],     // GanttChart.jsx
-      ["pcc-schedule-tasks", pid],  // ProjectControlCenter.jsx
     ],
   },
 
@@ -161,7 +156,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["wps-cost", pid],            // CostDashboard.jsx
       ["wps-fab", pid],             // FabRelease.jsx
       ["wp-detail", pid],           // ProjectDetailView.jsx
-      ["pcc-wps", pid],             // ProjectControlCenter.jsx
       ["modal-wps", pid],           // ProjectDrilldownModal.jsx
     ],
   },
@@ -194,7 +188,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["action-items"],
       ["action-items-all"],          // Dashboard.jsx, Reports.jsx
       ["all-action-items-portfolio"], // AIInsights.jsx, CostDashboard.jsx
-      ["pcc-action-items", pid],     // ProjectControlCenter.jsx
     ],
   },
 
@@ -375,7 +368,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["submittals-all"],
       ["submittals-nav-count", pid],
       ["submittal-detail", pid],
-      ["pcc-submittals", pid],
     ],
   },
 

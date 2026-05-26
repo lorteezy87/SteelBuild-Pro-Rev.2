@@ -15,10 +15,9 @@
 // ── Tab definitions ──────────────────────────────────────────────────
 export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
-  { label: "PCC",         pages: ["ProjectControlCenter"] },
-  { label: "PROJECTS",    pages: ["Projects", "PortfolioGantt", "Onboarding", "DataExchange", "Integrations", "ExecutiveView"] },
+  { label: "PROJECTS",    pages: ["Projects", "Onboarding", "DataExchange", "Integrations", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
-  { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingAnalysis", "DrawingViewer", "Documents"] },
+  { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingViewer", "Documents"] },
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["Schedule", "GanttChart", "ProjectCalendar"] },
@@ -32,7 +31,6 @@ export const PRIMARY_TABS = [
 
 export const TAB_DEFAULT_PAGE = {
   DASHBOARD:   "Dashboard",
-  PCC:         "ProjectControlCenter",
   PROJECTS:    "Projects",
   RFIs:        "RFIs",
   DRAWINGS:    "DrawingSubmittalHub",
@@ -51,10 +49,8 @@ export const TAB_DEFAULT_PAGE = {
 export const ALL_MODULES = [
   { icon: "\u25C8", name: "Dashboard",               group: "Overview",      page: "Dashboard" },
   { icon: "\u2318", name: "Command Center",          group: "Overview",      page: "CommandCenter" },
-  { icon: "\u2295", name: "Project Control Center",   group: "Overview",      page: "ProjectControlCenter" },
   { icon: "\u25C9", name: "Executive View",           group: "Overview",      page: "ExecutiveView" },
   { icon: "\u25A4", name: "Projects",                 group: "Overview",      page: "Projects" },
-  { icon: "\u25A5", name: "Portfolio Schedule",       group: "Overview",      page: "PortfolioGantt" },
   { icon: "\u25A3", name: "Onboarding",               group: "Setup",         page: "Onboarding" },
   { icon: "\u21C5", name: "Data Exchange",            group: "Setup",         page: "DataExchange" },
   { icon: "\u25CE", name: "Integrations",             group: "Setup",         page: "Integrations" },
@@ -62,7 +58,6 @@ export const ALL_MODULES = [
   { icon: "\u2630", name: "Contacts",                 group: "Setup",         page: "Contacts" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
   { icon: "\u25A6", name: "Drawings & Submittals",    group: "Detailing",     page: "DrawingSubmittalHub" },
-  { icon: "\u25C8", name: "Drawing Analysis (AI)",    group: "Detailing",     page: "DrawingAnalysis" },
   { icon: "\u25B3", name: "3D Model Viewer",          group: "Detailing",     page: "ModelViewer" },
   { icon: "\u2691", name: "RFI Hub",                  group: "Comms",         page: "RFIs" },
   { icon: "\uD83D\uDCDD", name: "Production Notes",   group: "Comms",         page: "ProductionNotes" },
@@ -117,9 +112,7 @@ export const NAV_GROUPS = [
     items: [
       { label: "Dashboard",       icon: "\u25C8", page: "Dashboard" },
       { label: "Command Center", icon: "\u2318", page: "CommandCenter" },
-      { label: "Project Control Center", icon: "\u2295", page: "ProjectControlCenter" },
       { label: "Executive View", icon: "\u25A4", page: "ExecutiveView" },
-      { label: "Portfolio Schedule", icon: "\u25A5", page: "PortfolioGantt" },
     ],
   },
   {
@@ -148,7 +141,6 @@ export const NAV_GROUPS = [
     label: "DOCUMENTS & DRAWINGS",
     items: [
       { label: "Drawings & Submittals", icon: "\u25A6", page: "DrawingSubmittalHub" },
-      { label: "Drawing Analysis (AI)", icon: "\u25C8", page: "DrawingAnalysis" },
       { label: "Document Repository",   icon: "\uD83D\uDCC1", page: "Documents" },
       { label: "3D Model Viewer",       icon: "\u25B3", page: "ModelViewer" },
     ],
@@ -250,8 +242,6 @@ export const SIDEBAR_GROUPS = [
     items: [
       { label: "Dashboard",          icon: "\u25C8", page: "Dashboard" },
       { label: "Command Center",    icon: "\u2318", page: "CommandCenter" },
-      { label: "Project Control Center", icon: "\u2295", page: "ProjectControlCenter" },
-      { label: "Portfolio Schedule",  icon: "\u25a5", page: "PortfolioGantt" },
       { label: "Portfolio Overview",  icon: "\u2726", page: "AIInsights" },
     ],
   },
@@ -274,7 +264,6 @@ export const SIDEBAR_GROUPS = [
     collapsible: true,
     items: [
       { label: "Drawings & Submittals", icon: "\u25A6", page: "DrawingSubmittalHub" },
-      { label: "Drawing Analysis (AI)", icon: "\u25C8", page: "DrawingAnalysis" },
       { label: "Drawing Viewer",       icon: "\u25A6", page: "DrawingViewer" },
       { label: "3D Model Viewer",      icon: "\u25B3", page: "ModelViewer" },
     ],
