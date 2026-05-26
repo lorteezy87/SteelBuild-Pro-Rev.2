@@ -55,7 +55,6 @@ const STATUS_STYLES = {
 const QUICK_LINKS = [
   { label: "Documents", page: "Documents" },
   { label: "Schedule", page: "Schedule" },
-  { label: "Model Viewer", page: "ModelViewer" },
   { label: "RFIs", page: "RFIs" },
   { label: "Change Orders", page: "ChangeOrders" },
 ];

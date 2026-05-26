@@ -66,7 +66,6 @@ const ROUTE_DOMAINS = {
   // ── Communications ──
   communications: {
     RFIs:             r(lazyWithRetry(() => import("@/pages/RFIs")),             "RFIs",                { projectScoped: true }),
-    Meetings:         r(lazyWithRetry(() => import("@/pages/Meetings")),         "Meetings",            { projectScoped: true }),
     ActionItems:      r(lazyWithRetry(() => import("@/pages/ActionItems")),      "Action Items",        { projectScoped: true }),
     ProductionNotes:  r(lazyWithRetry(() => import("@/pages/ProductionNotes")),  "Production Notes",    { projectScoped: true }),
     EmailInbox:       r(lazyWithRetry(() => import("@/pages/EmailInbox")),       "Email Inbox",         { projectScoped: true }),
@@ -78,7 +77,6 @@ const ROUTE_DOMAINS = {
     Drawings:         r(lazyWithRetry(() => import("@/pages/Drawings")),         "Drawings",            { projectScoped: true }),
     DrawingViewer:    r(lazyWithRetry(() => import("@/pages/DrawingViewer")),    "Drawing Viewer",      { projectScoped: true }),
     Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents",           { projectScoped: true }),
-    ModelViewer:      r(lazyWithRetry(() => import("@/pages/ModelViewer")),      "3D Model Viewer",     { projectScoped: true }),
     Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittal Register",  { projectScoped: true }),
   },
 
@@ -132,7 +130,6 @@ const ROUTE_DOMAINS = {
 
   // ── Risk & Compliance ──
   risk: {
-    Mitigations:     r(lazyWithRetry(() => import("@/pages/Mitigations")),     "Mitigations",         { projectScoped: true }),
     ChangeRequests:  r(lazyWithRetry(() => import("@/pages/ChangeRequests")),  "Change Requests",     { projectScoped: true }),
     DecisionLog:     r(lazyWithRetry(() => import("@/pages/DecisionLog")),     "Decision Log"),
     AlertsCenter:    r(lazyWithRetry(() => import("@/pages/AlertsCenter")),    "Alerts Center"),

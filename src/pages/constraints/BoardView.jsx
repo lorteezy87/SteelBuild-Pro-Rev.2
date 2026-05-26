@@ -10,7 +10,7 @@ import { PRIORITY_CONFIG, STATUS_CONFIG, TYPE_COLORS, TYPE_ICONS, PRIORITIES } f
 import { abbreviateType, isOverdue, isResolved } from "./utils";
 import { MiniBtn } from "./subcomponents";
 
-export default function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete, onLogMitigation }) {
+export default function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete }) {
   const grouped = PRIORITIES.map((p) => ({
     priority: p,
     items: items.filter((c) => c.priority === p),
@@ -131,26 +131,6 @@ export default function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete,
                             EDIT
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); onLogMitigation(c); }}
-                          style={{
-                            background: "transparent",
-                            border: "1px solid var(--border-default)",
-                            borderRadius: "var(--radius-btn)",
-                            padding: "3px 7px",
-                            color: "var(--text-muted)",
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 8,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            letterSpacing: "0.08em",
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-                        >
-                          MIT
-                        </button>
                       </div>
 
                       <div

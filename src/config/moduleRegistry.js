@@ -24,7 +24,7 @@ export const PRIMARY_TABS = [
   { label: "FIELD",       pages: ["Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs"] },
   { label: "COST",        pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
   { label: "RESOURCES",   pages: ["ResourceScheduling", "ResourceManagement"] },
-  { label: "REPORTS",     pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity", "Mitigations"] },
+  { label: "REPORTS",     pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
   { label: "QUALITY",     pages: ["Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
@@ -58,10 +58,8 @@ export const ALL_MODULES = [
   { icon: "\u2630", name: "Contacts",                 group: "Setup",         page: "Contacts" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
   { icon: "\u25A6", name: "Drawings & Submittals",    group: "Detailing",     page: "DrawingSubmittalHub" },
-  { icon: "\u25B3", name: "3D Model Viewer",          group: "Detailing",     page: "ModelViewer" },
   { icon: "\u2691", name: "RFI Hub",                  group: "Comms",         page: "RFIs" },
   { icon: "\uD83D\uDCDD", name: "Production Notes",   group: "Comms",         page: "ProductionNotes" },
-  { icon: "\uD83D\uDC65", name: "Meetings",           group: "Comms",         page: "Meetings" },
   { icon: "\u2713", name: "Action Items",             group: "Comms",         page: "ActionItems" },
   { icon: "\u2709", name: "Email Inbox",              group: "Comms",         page: "EmailInbox" },
   { icon: "\u25A6", name: "Work Packages",            group: "Fab",           page: "WorkPackages" },
@@ -142,14 +140,12 @@ export const NAV_GROUPS = [
     items: [
       { label: "Drawings & Submittals", icon: "\u25A6", page: "DrawingSubmittalHub" },
       { label: "Document Repository",   icon: "\uD83D\uDCC1", page: "Documents" },
-      { label: "3D Model Viewer",       icon: "\u25B3", page: "ModelViewer" },
     ],
   },
   {
     label: "COMMUNICATIONS",
     items: [
       { label: "RFI Hub",          icon: "\u2691", page: "RFIs", badgeKey: "rfi" },
-      { label: "Meetings",         icon: "\uD83D\uDC65", page: "Meetings" },
       { label: "Action Items",     icon: "\u2611", page: "ActionItems" },
       { label: "Email Inbox",      icon: "\u2709", page: "EmailInbox" },
       { label: "Production Notes", icon: "\uD83D\uDCDD", page: "ProductionNotes" },
@@ -207,7 +203,6 @@ export const NAV_GROUPS = [
       { label: "Job Status Report",  icon: "\uD83D\uDCCB", page: "JobStatusReport" },
       { label: "Decision Log",       icon: "\uD83D\uDCCB", page: "DecisionLog" },
       { label: "Portfolio Overview",  icon: "\u2726", page: "AIInsights" },
-      { label: "Mitigations",        icon: "\u2696", page: "Mitigations" },
       { label: "Activity Log",       icon: "\uD83D\uDCCA", page: "Activity" },
     ],
   },
@@ -255,8 +250,6 @@ export const SIDEBAR_GROUPS = [
       { label: "Email Inbox",   icon: "\u2709", page: "EmailInbox" },
       { label: "RFIs",                icon: "\u2691", page: "RFIs" },
       { label: "Change Orders",  icon: "$",  page: "ChangeOrders" },
-      { label: "Mitigations",    icon: "\u2696", page: "Mitigations" },
-      { label: "Meetings",       icon: "\uD83D\uDC65", page: "Meetings" },
     ],
   },
   {
@@ -265,7 +258,6 @@ export const SIDEBAR_GROUPS = [
     items: [
       { label: "Drawings & Submittals", icon: "\u25A6", page: "DrawingSubmittalHub" },
       { label: "Drawing Viewer",       icon: "\u25A6", page: "DrawingViewer" },
-      { label: "3D Model Viewer",      icon: "\u25B3", page: "ModelViewer" },
     ],
   },
   {

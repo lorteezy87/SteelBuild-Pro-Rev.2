@@ -7,7 +7,6 @@ import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
 import { useAlerts } from "@/hooks/useAlerts";
 import { CommandBar } from "@/components/design-system";
-import { setDraft } from "@/lib/draftStorage";
 
 const PAGE_MAP = { RFI: "RFIs", Drawing: "Drawings", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
 
@@ -144,37 +143,6 @@ export default function AlertsCenter() {
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => markRead(alert)}>Mark Read</Button>
                     )}
                     <Button size="sm" variant="ghost" className="h-7 text-xs" style={{ color: "rgba(200,210,230,0.7)" }} onClick={() => dismiss(alert)}>Dismiss</Button>
-                    <button
-                      onClick={() => {
-                        setDraft("new-mitigation", {
-                          issue_source: "Alert",
-                          source_entity_ref: alert.title,
-                          source_entity_id: alert.id,
-                          title: alert.title,
-                          identified_date: new Date().toISOString().split("T")[0],
-                          status: "Open",
-                        });
-                        navigate("/Mitigations");
-                      }}
-                      style={{
-                        background: "transparent",
-                        border: "1px solid var(--border-default)",
-                        borderRadius: 4,
-                        padding: "4px 8px",
-                        color: "var(--text-muted)",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 9,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        minHeight: 28,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-                    >
-                      Log Mitigation
-                    </button>
                   </div>
                 </div>
               </div>

@@ -11,7 +11,6 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
@@ -33,7 +32,6 @@ import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/Seque
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus, Search } from "lucide-react";
 import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
-import { setDraft } from "@/lib/draftStorage";
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
 
 const EMPTY_ENGINE_SOURCES = {
@@ -49,7 +47,6 @@ export default function Constraints() {
   const qc = useQueryClient();
   const projectId = useProjectId();
   const { activeProject } = useProjectContext();
-  const navigate = useNavigate();
 
   const [view, setView] = useState("list");
   const [showForm, setShowForm] = useState(false);
@@ -231,17 +228,6 @@ export default function Constraints() {
   const overdueCount = kpis.overdue.length;
 
   // -- Handlers ----------------------------------------------------------------------
-  const handleLogMitigation = (c) => {
-    setDraft("new-mitigation", {
-      issue_source: "Constraint",
-      source_entity_ref: c._source_ref || c.constraint_number || "Constraint",
-      source_entity_id: c._source_id || c.id,
-      title: c.title,
-      identified_date: new Date().toISOString().split("T")[0],
-      status: CONSTRAINT_STATUS.OPEN,
-    });
-    navigate("/Mitigations");
-  };
 
   const handleSave = (data) => {
     if (editing) {
@@ -382,7 +368,6 @@ export default function Constraints() {
           onQuickUpdate={(id, data) => updateMut.mutate({ id, data })}
           onEdit={(c) => { setEditing(c); setShowForm(true); }}
           onDelete={(c) => setDeleteTarget(c)}
-          onLogMitigation={handleLogMitigation}
         />
       ) : (
         <BoardView
@@ -391,7 +376,6 @@ export default function Constraints() {
           onQuickUpdate={(id, data) => updateMut.mutate({ id, data })}
           onEdit={(c) => { setEditing(c); setShowForm(true); }}
           onDelete={(c) => setDeleteTarget(c)}
-          onLogMitigation={handleLogMitigation}
         />
       )}
 
