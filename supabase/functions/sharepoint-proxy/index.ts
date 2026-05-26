@@ -240,6 +240,21 @@ async function userHasProjectAccess(
   return !error && !!data;
 }
 
+// Org-level SharePoint browsing (no projectId) enumerates the whole connected
+// tenant's sites/drives/files via the service-role token — gate it to system
+// admins so a valid JWT alone can't let any authenticated user browse it.
+async function userIsSystemAdmin(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+  return !error && data?.role === "admin";
+}
+
 // ── Main handler ────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -291,6 +306,17 @@ Deno.serve(async (req: Request) => {
   // resolved from its linked folders) — require membership before proceeding.
   if (projectId && !(await userHasProjectAccess(supabase, user.id, projectId))) {
     return errorResponse(403, "You do not have access to this project.");
+  }
+
+  // Org-level browse actions carry no projectId and expose the ENTIRE connected
+  // tenant's SharePoint — require a system admin (these are integration-setup
+  // operations, not per-project work). Closes the residual where any valid JWT
+  // could enumerate the org's sites/drives/files.
+  const ORG_BROWSE_ACTIONS = new Set(["list_sites", "list_drives", "list_children", "get_file_meta"]);
+  if (!projectId && ORG_BROWSE_ACTIONS.has(action)) {
+    if (!(await userIsSystemAdmin(supabase, user.id))) {
+      return errorResponse(403, "Org-level SharePoint browsing requires a system admin.");
+    }
   }
 
   // Resolve tenant ID — either from request body or from the linked folder
