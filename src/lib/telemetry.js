@@ -1,44 +1,18 @@
 /**
- * Lightweight error telemetry shim.
+ * Lightweight error telemetry shim — LOCAL ring buffer only.
  *
- * Right now this only logs to the console + a ring buffer that survives in
- * `window.__sbpErrorLog` (handy for debugging in production). When we wire
- * a real provider (Sentry, Logtail, Supabase Edge Function, …) we plug it
- * in here and every ErrorBoundary, mutation, and toast gets coverage for
- * free.
+ * Keeps the last N errors/events in `window.__sbpErrorLog` (handy for debugging
+ * in production via devtools). This is deliberately NOT wired to Sentry:
+ * Sentry initialisation lives in `src/instrument.js` (imported first in
+ * main.jsx), whose default integrations already capture window.onerror /
+ * unhandledrejection, and the ErrorBoundaries call `Sentry.captureException`
+ * directly for React render errors. Forwarding logError() here too would
+ * double-report. Use this buffer for the in-page debug log; use Sentry for
+ * aggregation/alerting.
  */
 
 const MAX_BUFFER = 50;
 const buffer = [];
-
-// ── Optional Sentry forwarder (env-gated, lazy) ──────────────────────────
-// The @sentry/react SDK is imported ONLY when VITE_SENTRY_DSN is set, so a
-// build/runtime without a DSN never loads it (zero overhead). initTelemetry()
-// is called once from main.jsx; logError/logEvent forward to Sentry when it's
-// active. Telemetry must never break the app, so all of this is best-effort.
-let sentry = null;
-let sentryInitStarted = false;
-
-export async function initTelemetry() {
-  if (sentryInitStarted) return;
-  sentryInitStarted = true;
-  let dsn;
-  try { dsn = import.meta.env?.VITE_SENTRY_DSN; } catch { dsn = undefined; }
-  if (!dsn) return; // no DSN configured → Sentry SDK is never loaded
-  try {
-    const Sentry = await import("@sentry/react");
-    Sentry.init({
-      dsn,
-      environment: (typeof import.meta !== "undefined" && import.meta.env?.MODE) || "production",
-      release: import.meta.env?.VITE_SENTRY_RELEASE || undefined,
-      tracesSampleRate: Number(import.meta.env?.VITE_SENTRY_TRACES_RATE ?? 0.1),
-      sendDefaultPii: false,
-    });
-    sentry = Sentry;
-  } catch (err) {
-    console.warn("[telemetry] Sentry init skipped:", err?.message || err);
-  }
-}
 
 function pushBuffer(entry) {
   buffer.push(entry);
@@ -73,20 +47,9 @@ export function logError(error, context = {}) {
     };
     pushBuffer(entry);
     // Loud console.error so it shows up in dev tools and any log forwarder
-    // hooked into the console (e.g. LogRocket, Sentry's BrowserTracing).
+    // hooked into the console.
 
     console.error("[telemetry]", entry);
-    // Forward to Sentry when configured (no-op until a DSN is set).
-    if (sentry) {
-      if (error instanceof Error) {
-        sentry.captureException(error, { extra: { ...context, url: entry.url } });
-      } else {
-        sentry.captureMessage(String(error?.message || error || "Unknown error"), {
-          level: "error",
-          extra: { ...context, url: entry.url, error: entry.error },
-        });
-      }
-    }
   } catch {
     /* never throw from telemetry */
   }
@@ -107,8 +70,6 @@ export function logEvent(name, data = {}) {
     pushBuffer({ event: entry });
 
     if (typeof console !== "undefined" && console.debug) console.debug("[event]", entry);
-    // Breadcrumb so Sentry has context leading up to any captured error.
-    if (sentry) sentry.addBreadcrumb({ message: entry.name, data: entry.data, level: "info" });
   } catch { /* no-op */ }
 }
 

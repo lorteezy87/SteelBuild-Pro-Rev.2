@@ -1,16 +1,14 @@
+// Sentry must initialise before any other app code — keep this import FIRST.
+import './instrument'
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
 import { installDateOnlyShim } from '@/lib/dateOnly'
-import { logError, initTelemetry } from '@/lib/telemetry'
+import { logError } from '@/lib/telemetry'
 import '@/globals.css'
 
 installDateOnlyShim()
-
-// Initialise error telemetry (Sentry) as early as possible. This is a no-op
-// unless VITE_SENTRY_DSN is configured, in which case the SDK is lazily loaded
-// and every logError() / ErrorBoundary / window error handler reports to Sentry.
-initTelemetry()
 
 function installWebManifest() {
   if (typeof document === 'undefined' || typeof window === 'undefined') return
