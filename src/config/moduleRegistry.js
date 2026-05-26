@@ -15,7 +15,7 @@
 // ── Tab definitions ──────────────────────────────────────────────────
 export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
-  { label: "PROJECTS",    pages: ["Projects", "Onboarding", "DataExchange", "Integrations", "ExecutiveView"] },
+  { label: "PROJECTS",    pages: ["Projects", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingViewer", "Documents"] },
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule"] },
@@ -51,9 +51,6 @@ export const ALL_MODULES = [
   { icon: "\u2318", name: "Command Center",          group: "Overview",      page: "CommandCenter" },
   { icon: "\u25C9", name: "Executive View",           group: "Overview",      page: "ExecutiveView" },
   { icon: "\u25A4", name: "Projects",                 group: "Overview",      page: "Projects" },
-  { icon: "\u25A3", name: "Onboarding",               group: "Setup",         page: "Onboarding" },
-  { icon: "\u21C5", name: "Data Exchange",            group: "Setup",         page: "DataExchange" },
-  { icon: "\u25CE", name: "Integrations",             group: "Setup",         page: "Integrations" },
   { icon: "\u2261", name: "Scope & Exclusions",       group: "Setup",         page: "ScopeExclusions" },
   { icon: "\u2630", name: "Contacts",                 group: "Setup",         page: "Contacts" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
@@ -96,7 +93,6 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDCDD", name: "Change Requests",    group: "Closeout",      page: "ChangeRequests" },
   { icon: "\uD83C\uDFE2", name: "Vendors",            group: "Setup",         page: "Vendors" },
   { icon: "\uD83D\uDCD0", name: "Calculator",                group: "Tools", page: "Calculator" }, // 🧮 calculator
-  { icon: "📘", name: "Tutorial / Help",           group: "Setup", page: "Tutorial" },
   { icon: "📐", name: "Ft/In Calculator",          group: "Tools", page: "FeetInchesCalculator" },
   { icon: "\u2696",       name: "Steel Weight Calculator",   group: "Tools", page: "SteelWeightCalculator" },
   { icon: "\uD83C\uDFD7", name: "Crane Pick Calculator",     group: "Tools", page: "CranePickCalculator" },
@@ -117,22 +113,16 @@ export const NAV_GROUPS = [
     label: "USER",
     items: [
       { label: "Settings",        icon: "\u2699", page: "Settings" },
-      { label: "Tutorial / Help", icon: "\ud83d\udcd8", page: "Tutorial" },
     ],
   },
   {
     label: "JOB SETUP",
     items: [
       { label: "Projects",           icon: "\u229F", page: "Projects" },
-      { label: "Onboarding",         icon: "\u25A3", page: "Onboarding" },
-      { label: "Data Exchange",      icon: "\u21C5", page: "DataExchange" },
-      { label: "Integrations",       icon: "\u25CE", page: "Integrations" },
       { label: "Scope & Exclusions", icon: "\u2261", page: "ScopeExclusions" },
       { label: "Contacts",           icon: "\uD83D\uDC64", page: "Contacts" },
       { label: "Alerts",             icon: "\uD83D\uDD14", page: "AlertsCenter", badgeKey: "unread" },
-      { label: "User Management",    icon: "\uD83D\uDC65", page: "UsersManagement" },
       { label: "Project Members",    icon: "\uD83D\uDC65", page: "ProjectMembers" },
-      { label: "Feature Flags",      icon: "\u2691",       page: "FeatureFlagsAdmin" },
     ],
   },
   {
@@ -312,16 +302,10 @@ export const SIDEBAR_GROUPS = [
     label: "ADMINISTRATION",
     collapsible: true,
     items: [
-      { label: "Onboarding",       icon: "\u25A3", page: "Onboarding" },
-      { label: "Data Exchange",    icon: "\u21C5", page: "DataExchange" },
-      { label: "Integrations",     icon: "\u25CE", page: "Integrations" },
       { label: "Contacts",         icon: "\uD83D\uDC64", page: "Contacts" },
       { label: "Vendors",          icon: "\uD83C\uDFE2", page: "Vendors" },
-      { label: "User Management",  icon: "\uD83D\uDC65", page: "UsersManagement" },
       { label: "Project Members",  icon: "\uD83D\uDC65", page: "ProjectMembers" },
-      { label: "Feature Flags",    icon: "\u2691",       page: "FeatureFlagsAdmin" },
       { label: "Settings",         icon: "\u2699", page: "Settings" },
-      { label: "Tutorial / Help",  icon: "\uD83D\uDCD8", page: "Tutorial" },
     ],
   },
   {
@@ -351,6 +335,12 @@ export const PAGE_LABELS = (() => {
     FeatureFlagsAdmin: "Feature Flags",
     Expenses:        "Expenses",
     EmailInbox:      "Email Inbox",
+    // Moved out of the nav into Settings → Setup & Admin, but still routable, so
+    // keep their display labels for breadcrumbs / document title.
+    Onboarding:      "Onboarding",
+    DataExchange:    "Data Exchange",
+    Integrations:    "Integrations",
+    Tutorial:        "Tutorial / Help",
   });
   return labels;
 })();

@@ -14,6 +14,7 @@ import ShortcutsTab from "@/components/settings/ShortcutsTab.jsx";
 import RolesTab from "@/components/settings/RolesTab.jsx";
 import SystemTab from "@/components/settings/SystemTab.jsx";
 import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
+import SetupAdminTab from "@/components/settings/SetupAdminTab.jsx";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -26,6 +27,13 @@ const TAB_GROUPS = [
       { id: 'dashboard',     label: 'Dashboard',     icon: '\u{1F4CA}', desc: 'Pinned modules, KPI order, default project' },
       { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts, digests, and quiet hours' },
       { id: 'shortcuts',     label: 'Shortcuts',     icon: '⌨',    desc: 'Keyboard reference card' },
+    ],
+  },
+  {
+    id: 'setup-help',
+    label: 'Setup & Help',
+    tabs: [
+      { id: 'setup', label: 'Setup & Admin', icon: '🧩', desc: 'Onboarding, data exchange, integrations, users, feature flags, help' },
     ],
   },
   {
@@ -244,6 +252,7 @@ export default function Settings() {
         {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'costcodes' && <CostCodesTab />}
         {activeTab === 'system' && <SystemTab user={user} />}
+        {activeTab === 'setup' && <SetupAdminTab isAdmin={isAdmin} />}
       </div>
     </div>
     </div>
