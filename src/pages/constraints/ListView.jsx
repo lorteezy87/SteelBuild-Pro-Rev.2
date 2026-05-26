@@ -17,7 +17,7 @@ import { Meta, ActionBtn } from "./subcomponents";
 
 const GRID_COLS = "6px 28px 1fr 110px 80px 90px 80px 100px";
 
-export default function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit, onDelete, onLogMitigation }) {
+export default function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit, onDelete }) {
   return (
     <div
       style={{
@@ -240,26 +240,6 @@ export default function ListView({ items, wps, expandedId, setExpandedId, onQuic
                     </button>
                   </>
                 )}
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onLogMitigation(c); }}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid var(--border-default)",
-                    borderRadius: "var(--radius-btn)",
-                    padding: "3px 7px",
-                    color: "var(--text-muted)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    letterSpacing: "0.08em",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-                >
-                  MIT
-                </button>
               </div>
             </div>
 

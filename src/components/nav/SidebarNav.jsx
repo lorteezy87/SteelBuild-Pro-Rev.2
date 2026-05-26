@@ -20,7 +20,7 @@ import {
   // Overview
   LayoutDashboard, Terminal, Sparkles, Grid3x3, Briefcase, BarChart3,
   // Project management
-  CalendarRange, CalendarDays, CheckSquare, HelpCircle, DollarSign, Scale, Users,
+  CalendarRange, CalendarDays, CheckSquare, HelpCircle, DollarSign,
   Mail,
   // Design & drawings
   FileText, Eye, Box, ScanLine,
@@ -73,8 +73,6 @@ const PAGE_ICON = {
   Submittals:                   FileText,
   ChangeOrders:                 DollarSign,
   ChangeRequests:               DollarSign,
-  Mitigations:                  Scale,
-  Meetings:                     Users,
   EmailInbox:                   Mail,
   ProjectCloseout:              Box,
   ProductionNotes:              FileText,
@@ -82,7 +80,6 @@ const PAGE_ICON = {
   // Design & drawings
   Drawings:                     FileText,
   DrawingViewer:                Eye,
-  ModelViewer:                  Box,
   Documents:                    Folder,
 
   // Production
