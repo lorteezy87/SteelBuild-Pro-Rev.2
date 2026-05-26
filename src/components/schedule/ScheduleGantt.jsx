@@ -1031,6 +1031,57 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     }
   };
 
+  // ── "Update Scheduled Dates" ─────────────────────────────────────────
+  // The Gantt renders cascaded (effective) dates, but the DB — and the Task
+  // Drawer — hold the entered start_date/end_date, so a task pushed by a late
+  // predecessor looks one way on the bar and another in the drawer. This
+  // writes the computed dates back so the two agree. Only tasks the cascade
+  // actually shifted are touched; cycle members (whose effective dates fall
+  // back to stored) and tasks without a computed start/end are skipped, so we
+  // never invent a date on a TBD task.
+  const shiftedSyncTasks = useMemo(
+    () =>
+      allTasks.filter((t) => {
+        const eff = effectiveDates[t.id];
+        return eff?.shifted && !eff.cycle && effStart(t) && effEnd(t);
+      }),
+    [allTasks, effectiveDates]
+  );
+
+  const handleSyncScheduledDates = async () => {
+    if (!onSave || saving) return;
+    const n = shiftedSyncTasks.length;
+    if (n === 0) {
+      toast.info("Scheduled dates already match the Gantt — nothing to sync.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Update scheduled dates for ${n} task${n === 1 ? "" : "s"}?\n\n` +
+      "Dependency logic has pushed these tasks past their saved dates, so the Gantt " +
+      "shows later dates than what's stored. This writes the computed start/end back " +
+      "to each task so the saved schedule matches the Gantt. Baselines are not changed."
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    try {
+      const updates = shiftedSyncTasks.map((task) =>
+        onSave({
+          id: task.id,
+          start_date: toDateOnly(effStart(task)),
+          end_date: toDateOnly(effEnd(task)),
+        })
+      );
+      for (let i = 0; i < updates.length; i += 10) {
+        await Promise.all(updates.slice(i, i + 10));
+      }
+      toast.success(`Updated ${n} scheduled date${n === 1 ? "" : "s"} to match the Gantt`);
+    } catch (err) {
+      toast.error("Failed to update scheduled dates: " + (err?.message || "unknown error"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const successorCountById = useMemo(() => {
     const out = {};
     allTasks.forEach((task) => {
@@ -1469,6 +1520,25 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             }}
           >
             Set Baseline
+          </button>
+        )}
+        {onSave && shiftedSyncTasks.length > 0 && (
+          <button
+            onClick={handleSyncScheduledDates}
+            disabled={saving}
+            title="Dependency logic has pushed these tasks past their saved dates. Click to write the computed start/end back so the saved schedule (and the Task Drawer) match the Gantt."
+            style={{
+              padding: "4px 10px", borderRadius: 4,
+              border: "1px solid var(--accent-border)",
+              background: "var(--accent-muted)",
+              color: "var(--accent)",
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800,
+              cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1,
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              whiteSpace: "nowrap",
+            }}
+          >
+            ⟳ Update Scheduled Dates ({shiftedSyncTasks.length})
           </button>
         )}
         <button onClick={scrollToToday} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--accent-border)", background: "transparent", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
