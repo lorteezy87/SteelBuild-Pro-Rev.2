@@ -825,7 +825,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     dragBodyStyleRef.current = null;
   };
 
-  const startTaskBarDrag = (event, task, visibleStart, visibleEnd) => {
+  const startTaskBarDrag = (event, task, visibleStart, visibleEnd, mode = "move") => {
     if (!onSave || saving || !isActionableScheduleTask(task)) return;
     if (event.button != null && event.button !== 0) return;
 
@@ -843,12 +843,13 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       cursor: document.body.style.cursor,
       userSelect: document.body.style.userSelect,
     };
-    document.body.style.cursor = "grabbing";
+    document.body.style.cursor = mode === "move" ? "grabbing" : "ew-resize";
     document.body.style.userSelect = "none";
 
     updateTaskDrag({
       taskId: task.id,
       taskName: sanitizeTaskName(task),
+      mode,
       startX: event.clientX,
       startY: event.clientY,
       x: event.clientX,
@@ -870,7 +871,12 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       if (!current) return;
       const dx = event.clientX - current.startX;
       const dy = event.clientY - current.startY;
-      const daysDelta = Math.round(dx / PX_PER_DAY);
+      let daysDelta = Math.round(dx / PX_PER_DAY);
+      // When resizing one edge, clamp so it can't cross the other edge — the
+      // bar keeps a non-negative duration (whole days between the stored ends).
+      const durDays = Math.round((current.storedEnd - current.storedStart) / 86400000);
+      if (current.mode === "resize-start") daysDelta = Math.min(daysDelta, durDays);
+      else if (current.mode === "resize-end") daysDelta = Math.max(daysDelta, -durDays);
       const hasMoved = current.hasMoved ||
         Math.abs(dx) >= TASK_DRAG_THRESHOLD_PX ||
         Math.abs(dy) >= TASK_DRAG_THRESHOLD_PX;
@@ -893,8 +899,13 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       updateTaskDrag(null);
       if (!current?.hasMoved || current.daysDelta === 0 || !onSave) return;
 
-      const nextStart = toDateOnly(addDaysUTC(current.storedStart, current.daysDelta));
-      const nextEnd = toDateOnly(addDaysUTC(current.storedEnd, current.daysDelta));
+      // move → shift both ends; resize-start → start only; resize-end → end only.
+      const nextStart = toDateOnly(addDaysUTC(
+        current.storedStart, current.mode === "resize-end" ? 0 : current.daysDelta
+      ));
+      const nextEnd = toDateOnly(addDaysUTC(
+        current.storedEnd, current.mode === "resize-start" ? 0 : current.daysDelta
+      ));
       if (!nextStart || !nextEnd) return;
 
       setSaving(true);
@@ -2506,8 +2517,11 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 const taskEffE = effEnd(task);
                 const isDraggingTask = taskDrag?.taskId === task.id;
                 const dragDays = isDraggingTask ? taskDrag.daysDelta : 0;
-                const displayStart = dragDays ? shiftDateOnly(taskEffS, dragDays) : taskEffS;
-                const displayEnd = dragDays ? shiftDateOnly(taskEffE, dragDays) : taskEffE;
+                const dragMode = isDraggingTask ? (taskDrag.mode || "move") : "move";
+                const startDelta = dragMode === "resize-end" ? 0 : dragDays;
+                const endDelta = dragMode === "resize-start" ? 0 : dragDays;
+                const displayStart = startDelta ? shiftDateOnly(taskEffS, startDelta) : taskEffS;
+                const displayEnd = endDelta ? shiftDateOnly(taskEffE, endDelta) : taskEffE;
                 const barLeft = px(displayStart);
                 const barWidth = spanPx(displayStart, displayEnd);
                 const canDragTaskBar = Boolean(onSave && !saving && isActionableScheduleTask(task));
@@ -2566,6 +2580,45 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                             }}
                           />
                         )}
+                        {/* Edge resize handles — drag an edge to change the
+                            task's duration (left = start, right = finish). Sit
+                            above the move zone (zIndex 10) so an edge grab
+                            resizes while the bar body still moves. Hidden on
+                            milestones and bars too narrow to grab safely. */}
+                        {canDragTaskBar && !isMilestone && barWidth >= 24 && (
+                          <>
+                            <div
+                              title="Drag to change this task's start date (duration)"
+                              role="button"
+                              aria-label={`Resize start of ${sanitizeTaskName(task)}`}
+                              onPointerDown={(event) => startTaskBarDrag(event, task, taskEffS, taskEffE, "resize-start")}
+                              onClick={(event) => event.stopPropagation()}
+                              style={{
+                                position: "absolute", left: barLeft - 1, width: 9, height: 24,
+                                top: "50%", transform: "translateY(-50%)",
+                                cursor: "ew-resize", zIndex: 10, touchAction: "none",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              <div style={{ width: 2, height: 14, borderRadius: 2, background: "var(--accent)", opacity: (hovered || isDraggingTask) ? 0.85 : 0, transition: "opacity 0.1s" }} />
+                            </div>
+                            <div
+                              title="Drag to change this task's finish date (duration)"
+                              role="button"
+                              aria-label={`Resize finish of ${sanitizeTaskName(task)}`}
+                              onPointerDown={(event) => startTaskBarDrag(event, task, taskEffS, taskEffE, "resize-end")}
+                              onClick={(event) => event.stopPropagation()}
+                              style={{
+                                position: "absolute", left: barLeft + barWidth - 8, width: 9, height: 24,
+                                top: "50%", transform: "translateY(-50%)",
+                                cursor: "ew-resize", zIndex: 10, touchAction: "none",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              <div style={{ width: 2, height: 14, borderRadius: 2, background: "var(--accent)", opacity: (hovered || isDraggingTask) ? 0.85 : 0, transition: "opacity 0.1s" }} />
+                            </div>
+                          </>
+                        )}
                       </>
                     )}
                     {/* Detailing stage-gate milestones — color-coded
@@ -2620,7 +2673,15 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             {taskDrag.taskName}
           </div>
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.04em" }}>
-            {taskDrag.daysDelta > 0 ? "+" : ""}{taskDrag.daysDelta}d | {fmtDate(addDaysUTC(taskDrag.displayStart, taskDrag.daysDelta))} - {fmtDate(addDaysUTC(taskDrag.displayEnd, taskDrag.daysDelta))}
+            {(() => {
+              const m = taskDrag.mode || "move";
+              const s = addDaysUTC(taskDrag.displayStart, m === "resize-end" ? 0 : taskDrag.daysDelta);
+              const e = addDaysUTC(taskDrag.displayEnd, m === "resize-start" ? 0 : taskDrag.daysDelta);
+              const head = m === "move"
+                ? `${taskDrag.daysDelta > 0 ? "+" : ""}${taskDrag.daysDelta}d`
+                : `${Math.max(0, Math.round((e - s) / 86400000))}d dur`;
+              return `${head} | ${fmtDate(s)} - ${fmtDate(e)}`;
+            })()}
           </div>
         </div>
       )}
