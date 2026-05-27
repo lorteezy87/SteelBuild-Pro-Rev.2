@@ -36,11 +36,11 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
   + query patterns; full verdict in
   [`docs/unused-index-review-2026-05-26.md`](docs/unused-index-review-2026-05-26.md).
   Of 170 `idx_scan = 0` indexes, 125 are constraint- or FK-backing (keep — "unused"
-  is a low-volume artifact, not dead weight). 5 are high-confidence safe drops
-  (one redundant single-col + 4 GIN array/jsonb indexes with no containment query);
-  ready-to-run reversible SQL is in the doc, **not yet executed** (production DDL —
-  awaiting go-ahead). The rest are low-value either way; revisit with a real traffic
-  window. Do NOT bulk-drop.
+  is a low-volume artifact, not dead weight). 5 high-confidence drops (one redundant
+  single-col + 4 GIN array/jsonb indexes with no containment query) were **applied
+  live 2026-05-26** (migration `20260526180000_drop_unused_indexes.sql`; reversible).
+  The rest are low-value either way; revisit with a real traffic window. Do NOT
+  bulk-drop.
 
 - **Stale `.vercel/project.json`:** still names the deleted `steelbuild-pro` Vercel
   project (production is `steelbuildpro-og` / steelbuild-pro.com). Harmless

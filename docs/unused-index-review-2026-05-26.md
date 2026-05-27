@@ -2,10 +2,11 @@
 
 Resolves the "Unused-index review" item in [`TECH_DEBT.md`](../TECH_DEBT.md).
 The Supabase performance advisor flagged a large set of `unused_index` findings
-(`idx_scan = 0`). This is the reviewed drop/keep verdict. **No indexes were
-dropped** as part of writing this — index drops are production DDL with
-planner-regression risk, so the high-confidence drops below are queued with
-ready-to-run, reversible SQL pending an explicit go-ahead.
+(`idx_scan = 0`). This is the reviewed drop/keep verdict. The 5 high-confidence
+drops below were **applied live on 2026-05-26** (via `DROP INDEX CONCURRENTLY`
+through the Supabase MCP) after review; migration
+`supabase/migrations/20260526180000_drop_unused_indexes.sql` is the history
+record. Each drop is reversible (restore `CREATE` listed beside it).
 
 ## Method
 
@@ -48,10 +49,11 @@ their present-day cost is write-amplification on high-churn tables (`drawings`:
   because volume is low; at scale they are exactly the indexes you want. Dropping
   them re-opens the advisor finding the migration closed.
 
-## Drop — high confidence (5)
+## Drop — high confidence (5) — APPLIED 2026-05-26
 
-Reviewed against the codebase; safe to drop now. Each `DROP INDEX CONCURRENTLY`
-is fully reversible (the `CREATE` to restore is listed beside it).
+Reviewed against the codebase and dropped live (migration `20260526180000`). Each
+`DROP INDEX CONCURRENTLY` is fully reversible (the `CREATE` to restore is listed
+beside it).
 
 | Index | Table | Why safe |
 | --- | --- | --- |
