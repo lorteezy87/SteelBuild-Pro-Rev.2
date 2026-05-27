@@ -36,35 +36,21 @@ After toggling, re-check: Supabase dashboard → Advisors → Security should sh
 
 ---
 
-## 2. Sentry — un-minified stack traces (source-map upload)
+## 2. Sentry — un-minified stack traces (source-map upload) — DONE ✅
 
-Today `src/instrument.js` captures errors, but production stack traces are
-minified (bundled JS). Uploading source maps at build time makes them readable.
-`@sentry/react` is already installed; this adds the build-time upload.
+Production stack traces are now symbolicated. `@sentry/vite-plugin` is wired into
+`vite.config.js`, gated on `SENTRY_AUTH_TOKEN`: it emits hidden source maps,
+uploads them, deletes the `.map` files afterward, and swallows upload errors so a
+misconfigured token can never fail a deploy. `org`/`project` default to the
+public slugs (`steelbuild-pro` / `javascript-react`) so only the token is needed
+as a Vercel build secret.
 
-**Code wiring — DONE (committed).** `@sentry/vite-plugin` is installed and wired
-into `vite.config.js`: it's gated on `SENTRY_AUTH_TOKEN` (local/CI builds without
-it are untouched — verified), emits hidden source maps, deletes the `.map` files
-after upload, and swallows upload errors so a misconfigured token can never fail
-a production deploy. Nothing is hardcoded — `org`/`project`/`authToken` are read
-from env at build time.
+Confirmed live 2026-05-26: `SENTRY_AUTH_TOKEN` is set in Vercel (Production +
+Preview); the production build of commit `b5272fd7` created the Sentry release
+`b5272fd7…` and uploaded an artifact bundle (verified via the Sentry API).
 
-**You provide (3 Vercel build env vars):** project `steelbuildpro-og` → Settings
-→ **Environment Variables** (Production + Preview). The slugs below were resolved
-from the Sentry API, so these are the exact values:
-
-| Name | Value | Notes |
-| --- | --- | --- |
-| `SENTRY_ORG` | `steelbuild-pro` | org slug |
-| `SENTRY_PROJECT` | `javascript-react` | project slug (id `4511458819375104`, matches the DSN) |
-| `SENTRY_AUTH_TOKEN` | *(your token)* | mark **Sensitive**; needs scopes `project:releases` + `org:read` |
-
-Redeploy after setting them; the next production build uploads maps and Sentry
-will symbolicate traces. Until then, error capture + masked replay already work —
-only stack-frame readability is affected, so this is **nice-to-have**.
-
-> Security: rotate the auth token in Sentry once you've confirmed symbolication
-> works, since it was shared in chat. The repo never stores it (env-only).
+> Security: **rotate the auth token in Sentry** (it was shared in chat). The repo
+> never stores it (Vercel build env only).
 
 ---
 
