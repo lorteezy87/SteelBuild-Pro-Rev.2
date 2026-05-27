@@ -151,6 +151,9 @@ html[data-accent="slate"] {
 :root,
 [data-theme="dark"] {
 
+  /* Native form controls (date pickers, selects, scrollbars) follow dark. */
+  color-scheme: dark;
+
   /* Background scale — layered dark mode (Industrial OS) */
   --bg-void:                  #060810;
   --bg-page:                  #0B0E11;
@@ -334,6 +337,9 @@ html[data-accent="slate"] {
  * for semantic signals. No purple, no pink.
  * ────────────────────────────────────────────────────────── */
 [data-theme="light"] {
+  /* Native form controls (date pickers, selects, scrollbars) follow light. */
+  color-scheme: light;
+
   /* Backgrounds — 6-step surface scale */
   --bg-void:                  #CBD5E1;  /* slate-300 — offscreen/behind-modal */
   --bg-page:                  #F1F5F9;  /* slate-100 — app canvas */
