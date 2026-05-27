@@ -79,7 +79,9 @@ export function computeDetailingReadiness({
 
   const materialImpacted = !!pkg?.material_impacted;
   const longLeadImpact = !!pkg?.long_lead_impact;
-  const prioritySequence = !!(workPackage?.sequence_number);
+  const sequenceNumber = workPackage?.sequence_number || null;
+  const area = workPackage?.area || pkg?.area_sequence || null;
+  const prioritySequence = !!sequenceNumber;
 
   const fabricationReady = stateIdx >= RELEASED_IDX && !rfiBlocked && !revisionImpacted;
   const erectionReady = stateIdx >= ERECTION_RELEASED_IDX && !rfiBlocked && !revisionImpacted;
@@ -93,8 +95,55 @@ export function computeDetailingReadiness({
     materialImpacted,
     longLeadImpact,
     prioritySequence,
+    sequenceNumber,
+    area,
     fabricationReady,
     erectionReady,
     fullySuperseded,
   };
+}
+
+const MAX_STATE_IDX = DETAILING_STATE_ORDER.length - 1;
+
+/**
+ * Sequence-aware readiness rollup: group packages by erection sequence and
+ * summarize Detailing % / Fab Ready / Erection Ready / At Risk. This is the
+ * sequence-driven view ("what fabricates/erects first") that lets the schedule
+ * pull detailing — design doc §7. Packages with no linked sequence fall into
+ * an "Unsequenced" bucket (sorted last).
+ *
+ * @param {Array<{ sequenceNumber?: string|null, effectiveState?: string,
+ *   fabricationReady?: boolean, erectionReady?: boolean, atRisk?: boolean }>} entries
+ * @returns {Array<{ sequence: string, packageCount: number, detailingPct: number,
+ *   fabReadyCount: number, erectionReadyCount: number, atRiskCount: number }>}
+ */
+export function computeSequenceReadiness(entries) {
+  const groups = new Map();
+  for (const e of entries || []) {
+    const seq = e?.sequenceNumber || "Unsequenced";
+    if (!groups.has(seq)) {
+      groups.set(seq, { sequence: seq, packageCount: 0, _progressSum: 0, fabReadyCount: 0, erectionReadyCount: 0, atRiskCount: 0 });
+    }
+    const g = groups.get(seq);
+    g.packageCount += 1;
+    const idx = DETAILING_STATE_ORDER.indexOf(e?.effectiveState);
+    g._progressSum += MAX_STATE_IDX > 0 ? Math.max(0, idx) / MAX_STATE_IDX : 0;
+    if (e?.fabricationReady) g.fabReadyCount += 1;
+    if (e?.erectionReady) g.erectionReadyCount += 1;
+    if (e?.atRisk) g.atRiskCount += 1;
+  }
+  return Array.from(groups.values())
+    .map((g) => ({
+      sequence: g.sequence,
+      packageCount: g.packageCount,
+      detailingPct: g.packageCount ? Math.round((g._progressSum / g.packageCount) * 100) : 0,
+      fabReadyCount: g.fabReadyCount,
+      erectionReadyCount: g.erectionReadyCount,
+      atRiskCount: g.atRiskCount,
+    }))
+    .sort((a, b) => {
+      if (a.sequence === "Unsequenced") return 1;
+      if (b.sequence === "Unsequenced") return -1;
+      return String(a.sequence).localeCompare(String(b.sequence), undefined, { numeric: true });
+    });
 }

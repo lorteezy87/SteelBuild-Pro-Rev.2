@@ -99,10 +99,11 @@ interface TriageBoardProps {
   onUpdateDueDate: (item: any, date: string) => void;
   onAdvanceDetailing: (item: any, next: string) => void;
   onToggleReadiness: (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
+  sequenceReadiness: Array<{ sequence: string; packageCount: number; detailingPct: number; fabReadyCount: number; erectionReadyCount: number; atRiskCount: number }>;
   isSaving: boolean;
 }
 
-export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, isSaving }: TriageBoardProps) {
+export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, isSaving }: TriageBoardProps) {
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
@@ -272,6 +273,81 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
           onOpenTab={onOpenTab}
         />
       </div>
+
+      <SequenceReadinessSection rows={sequenceReadiness} />
+    </div>
+  );
+}
+
+// ── Sequence Readiness rollup ───────────────────────────────────────────────
+// The sequence-aware view: group packages by erection sequence and show how far
+// each sequence's detailing has progressed + how many packages are fab/erection
+// ready, so the schedule can pull detailing (design doc §7).
+
+interface SequenceReadinessRow {
+  sequence: string;
+  packageCount: number;
+  detailingPct: number;
+  fabReadyCount: number;
+  erectionReadyCount: number;
+  atRiskCount: number;
+}
+
+function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
+  return (
+    <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+        <div>
+          <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>Sequence Readiness</h3>
+          <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
+            Detailing progress + fab/erection readiness by erection sequence.
+          </p>
+        </div>
+        <span className="sbd-badge-info">{rows.length}</span>
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState text="No packages linked to an erection sequence yet — link work packages to drawing sets to populate this." />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {rows.map((row) => (
+            <div key={row.sequence} style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(80px, 0.7fr) minmax(120px, 1.3fr) repeat(3, minmax(64px, 0.5fr))",
+              gap: 10, alignItems: "center",
+              padding: "10px 12px", borderRadius: 10,
+              border: `1px solid ${row.atRiskCount ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
+              background: "var(--bg-surface-low)",
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Seq</div>
+                <div style={{ color: textPrimary, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.sequence}</div>
+                <div style={{ color: textMuted, fontSize: 11 }}>{pluralize(row.packageCount, "pkg")}</div>
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10, color: textPrimary, marginBottom: 4 }}>
+                  <span style={{ color: textMuted }}>Detailing</span>
+                  <span className="sbd-num">{row.detailingPct}%</span>
+                </div>
+                <div style={{ height: 7, borderRadius: 999, background: surface2, overflow: "hidden", border: `1px solid ${border}` }}>
+                  <div style={{ height: "100%", width: `${row.detailingPct}%`, background: accent, boxShadow: `0 0 10px ${accent}` }} />
+                </div>
+              </div>
+              <SeqMetric label="Fab" value={`${row.fabReadyCount}/${row.packageCount}`} tone={row.fabReadyCount === row.packageCount ? success : textMuted} />
+              <SeqMetric label="Erect" value={`${row.erectionReadyCount}/${row.packageCount}`} tone={row.erectionReadyCount === row.packageCount ? success : textMuted} />
+              <SeqMetric label="At risk" value={row.atRiskCount} tone={row.atRiskCount ? warning : success} />
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SeqMetric({ label, value, tone }: { label: string; value: ReactNode; tone: string }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</div>
+      <div className="sbd-num" style={{ color: tone, fontFamily: mono, fontSize: 15, fontWeight: 800, marginTop: 2 }}>{value}</div>
     </div>
   );
 }

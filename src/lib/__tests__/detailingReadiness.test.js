@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeDetailingReadiness } from "@/lib/detailingReadiness";
+import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
 
 const SUB_RELEASED = { status: "Released for Fabrication" }; // → Released
 
@@ -55,6 +55,7 @@ describe("computeDetailingReadiness", () => {
     expect(r.materialImpacted).toBe(true);
     expect(r.longLeadImpact).toBe(true);
     expect(r.prioritySequence).toBe(true);
+    expect(r.sequenceNumber).toBe("SEQ-1");
     expect(r.backwardDates.detailingStart).toBe("2026-04-28"); // worked example
     expect(r.scheduleRisk.atRisk).toBe(false); // today (Jan) is well before any milestone
   });
@@ -67,5 +68,33 @@ describe("computeDetailingReadiness", () => {
     });
     expect(r.scheduleRisk.atRisk).toBe(true);
     expect(r.scheduleRisk.severity).toBe("critical");
+  });
+});
+
+describe("computeSequenceReadiness", () => {
+  const entries = [
+    { sequenceNumber: "1", effectiveState: "Released for Erection", fabricationReady: true, erectionReady: true, atRisk: false },
+    { sequenceNumber: "1", effectiveState: "Not Started", fabricationReady: false, erectionReady: false, atRisk: true },
+    { sequenceNumber: "2", effectiveState: "Released", fabricationReady: true, erectionReady: false, atRisk: false },
+    { sequenceNumber: null, effectiveState: "IFA", fabricationReady: false, erectionReady: false, atRisk: false },
+  ];
+
+  it("groups by sequence, rolls up readiness, and sorts Unsequenced last", () => {
+    const rows = computeSequenceReadiness(entries);
+    expect(rows.map((r) => r.sequence)).toEqual(["1", "2", "Unsequenced"]);
+
+    const s1 = rows[0];
+    expect(s1.packageCount).toBe(2);
+    expect(s1.detailingPct).toBe(50);   // (100% + 0%) / 2
+    expect(s1.fabReadyCount).toBe(1);
+    expect(s1.erectionReadyCount).toBe(1);
+    expect(s1.atRiskCount).toBe(1);
+
+    expect(rows[1].detailingPct).toBe(82);   // "Released" = index 9 of 11
+    expect(rows[2].detailingPct).toBe(36);   // "IFA" = index 4 of 11
+  });
+
+  it("returns [] for no entries", () => {
+    expect(computeSequenceReadiness([])).toEqual([]);
   });
 });
