@@ -98,10 +98,11 @@ interface TriageBoardProps {
   onUpdateOwner: (item: any, owner: string) => void;
   onUpdateDueDate: (item: any, date: string) => void;
   onAdvanceDetailing: (item: any, next: string) => void;
+  onToggleReadiness: (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
   isSaving: boolean;
 }
 
-export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, isSaving }: TriageBoardProps) {
+export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, isSaving }: TriageBoardProps) {
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
@@ -209,6 +210,14 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                 <InlineDetailingControl
                   current={focusItem._detailingStateRaw}
                   onAdvance={(next) => onAdvanceDetailing(focusItem, next)}
+                  disabled={isSaving}
+                />
+              )}
+              {/* ── Backward schedule + readiness (drawing sets) ──────── */}
+              {focusItem.kind === "Drawing Set" && focusItem._readiness && (
+                <ReadinessPanel
+                  readiness={focusItem._readiness}
+                  onToggle={(field, value) => onToggleReadiness(focusItem, field, value)}
                   disabled={isSaving}
                 />
               )}
@@ -521,6 +530,119 @@ function InlineDetailingControl({ current, onAdvance, disabled }: InlineDetailin
         })}
       </div>
     </div>
+  );
+}
+
+// ── Backward schedule + readiness panel ─────────────────────────────────────
+
+const SCHEDULE_ROWS: Array<[string, string]> = [
+  ["detailingStart", "Detailing start"],
+  ["internalReviewDue", "Internal review"],
+  ["submitBy", "Submit by"],
+  ["approvalNeededBy", "Approval by"],
+  ["fabReleaseRequiredBy", "Fab release by"],
+  ["erectionReleaseRequiredBy", "Erection release by"],
+];
+
+interface ReadinessPanelProps {
+  readiness: any;
+  onToggle: (field: "material_impacted" | "long_lead_impact", value: boolean) => void;
+  disabled: boolean;
+}
+
+function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanelProps) {
+  const {
+    backwardDates = {}, scheduleRisk = {}, fabricationReady, erectionReady,
+    rfiBlocked, revisionImpacted, materialImpacted, longLeadImpact, prioritySequence,
+  } = readiness || {};
+  const riskTone = scheduleRisk.severity === "critical" ? error : scheduleRisk.severity === "at_risk" ? warning : success;
+  const riskLabel = scheduleRisk.severity === "critical"
+    ? `Critical · ${scheduleRisk.daysLate}d`
+    : scheduleRisk.severity === "at_risk" ? `At risk · ${scheduleRisk.daysLate}d` : "On track";
+  const hasSchedule = SCHEDULE_ROWS.some(([k]) => backwardDates[k]);
+
+  return (
+    <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: surface1, border: `1px solid ${border}` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+        <div style={{ fontFamily: mono, fontSize: 8, color: textMuted, letterSpacing: "0.12em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
+          <CalendarClock size={10} /> Schedule &amp; readiness
+        </div>
+        <span title={(scheduleRisk.reasons || []).join("; ") || "On track"} style={{
+          fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
+          color: riskTone, padding: "2px 8px", borderRadius: 999,
+          background: `color-mix(in srgb, ${riskTone} 16%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${riskTone} 42%, transparent)`,
+        }}>
+          {riskLabel}
+        </span>
+      </div>
+
+      {hasSchedule ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 12px", marginBottom: 10 }}>
+          {SCHEDULE_ROWS.map(([k, label]) => (
+            <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontFamily: mono, fontSize: 10 }}>
+              <span style={{ color: textMuted }}>{label}</span>
+              <span style={{ color: backwardDates[k] ? textPrimary : textMuted }}>
+                {backwardDates[k] ? fmtDate(backwardDates[k]) : "TBD"}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: 11, color: textMuted, marginBottom: 10, lineHeight: 1.4 }}>
+          Link a work package with an erection date to compute the backward schedule.
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        <ReadyChip ok={!!fabricationReady} label="Fab ready" />
+        <ReadyChip ok={!!erectionReady} label="Erect ready" />
+        {rfiBlocked && <ReadyChip ok={false} label="RFI blocked" bad />}
+        {revisionImpacted && <ReadyChip ok={false} label="Rev impacted" bad />}
+        {prioritySequence && <ReadyChip ok label="Seq" neutral />}
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <FlagToggle label="Material impacted" active={!!materialImpacted} disabled={disabled} onClick={() => onToggle("material_impacted", !materialImpacted)} />
+        <FlagToggle label="Long-lead impact" active={!!longLeadImpact} disabled={disabled} onClick={() => onToggle("long_lead_impact", !longLeadImpact)} />
+      </div>
+    </div>
+  );
+}
+
+function ReadyChip({ ok, label, bad = false, neutral = false }: { ok: boolean; label: string; bad?: boolean; neutral?: boolean }) {
+  const color = neutral ? info : bad ? error : ok ? success : textMuted;
+  return (
+    <span style={{
+      fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase",
+      color, padding: "2px 7px", borderRadius: 999,
+      background: `color-mix(in srgb, ${color} 14%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+    }}>
+      {label}
+    </span>
+  );
+}
+
+function FlagToggle({ label, active, disabled, onClick }: { label: string; active: boolean; disabled: boolean; onClick: () => void }) {
+  const color = active ? warning : textMuted;
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={active ? `Clear: ${label}` : `Flag: ${label}`}
+      style={{
+        fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase",
+        color: active ? "#0b0e14" : color, cursor: disabled ? "default" : "pointer",
+        padding: "4px 9px", borderRadius: 8,
+        background: active ? warning : `color-mix(in srgb, ${textMuted} 10%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {active ? "● " : "○ "}{label}
+    </button>
   );
 }
 
