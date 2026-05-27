@@ -95,8 +95,17 @@ html {
 
 /* Accent color presets — override the gold/teal/blue/amber/slate
    accent token. The rest of the accent-* tokens (muted, border,
-   hover) are recomputed from the new base hue. */
-[data-accent="teal"] {
+   hover) are recomputed from the new base hue.
+
+   Selectors are scoped to `html[data-accent=…]` (specificity 0,1,1) so
+   an explicit accent choice WINS over the `[data-theme="light"]` block
+   (0,1,0) — without this the light theme's own accent always overrode
+   the user's pick, making the Settings → Display accent control a no-op
+   in light mode. In dark mode the `.steelbuild-dark` overlay still wins
+   (it sets --accent with !important), so the dark steel-blue accent is
+   unchanged. Default ("gold") has no rule here, so light mode falls
+   through to its own teal default (the DrawControl look). */
+html[data-accent="teal"] {
   --accent:        #0D9488;
   --accent-light:  #14B8A6;
   --accent-hover:  #14B8A6;
@@ -106,7 +115,7 @@ html {
   --secondary-muted:  var(--accent-muted);
   --secondary-border: var(--accent-border);
 }
-[data-accent="blue"] {
+html[data-accent="blue"] {
   --accent:        #2563EB;
   --accent-light:  #3B82F6;
   --accent-hover:  #3B82F6;
@@ -116,7 +125,7 @@ html {
   --secondary-muted:  var(--accent-muted);
   --secondary-border: var(--accent-border);
 }
-[data-accent="amber"] {
+html[data-accent="amber"] {
   --accent:        #F59E0B;
   --accent-light:  #FBBF24;
   --accent-hover:  #FBBF24;
@@ -126,7 +135,7 @@ html {
   --secondary-muted:  var(--accent-muted);
   --secondary-border: var(--accent-border);
 }
-[data-accent="slate"] {
+html[data-accent="slate"] {
   --accent:        #64748B;
   --accent-light:  #94A3B8;
   --accent-hover:  #94A3B8;
@@ -348,15 +357,19 @@ html {
   --divider:                  #E2E8F0;  /* was rgba(148,163,184,0.25) invisible */
   --outline:                  rgba(2,6,23,0.18);
 
-  /* Accent — executive gold, industrial */
-  --accent:                   #B8860B;
-  --accent-light:             #D4A017;
-  --accent-hover:             #8F6809;
-  --accent-muted:             rgba(184,134,11,0.12);
-  --accent-border:            rgba(184,134,11,0.45);
+  /* Accent — DrawControl teal (primary). The light theme leads with the
+   * teal-on-white aesthetic from the DrawControl reference design; warm
+   * gold lives on as the secondary/"orange" alias for components that
+   * explicitly want a warm tone. No purple/pink/peach anywhere. */
+  --accent:                   #0D9488;  /* teal-600 — DrawControl signature */
+  --accent-light:             #14B8A6;  /* teal-500 */
+  --accent-hover:             #0F766E;  /* teal-700 — darker for hover/press */
+  --accent-muted:             rgba(13,148,136,0.12);
+  --accent-border:            rgba(13,148,136,0.45);
   --accent-text:              #FFFFFF;
   --on-accent:                #FFFFFF;
 
+  /* Secondary — warm executive gold, retained for contrast accents */
   --secondary:                #B8860B;
   --secondary-muted:          rgba(184,134,11,0.10);
   --secondary-border:         rgba(184,134,11,0.35);
@@ -408,8 +421,8 @@ html {
   --shadow-sm:                0 1px 2px rgba(2,6,23,0.06), 0 1px 1px rgba(2,6,23,0.04);
   --shadow-card:              0 1px 3px rgba(2,6,23,0.08), 0 4px 10px rgba(2,6,23,0.04);
   --shadow-lg:                0 4px 12px rgba(2,6,23,0.10), 0 16px 32px rgba(2,6,23,0.08);
-  --shadow-orange-glow:       0 0 16px rgba(184,134,11,0.20);
-  --shadow-cyan-glow:         0 0 16px rgba(184,134,11,0.20);
+  --shadow-orange-glow:       0 0 16px rgba(13,148,136,0.20);   /* teal accent glow */
+  --shadow-cyan-glow:         0 0 16px rgba(13,148,136,0.20);   /* teal accent glow */
   --shadow-glow-gold:         0 0 16px rgba(184,134,11,0.22), 0 0 36px rgba(184,134,11,0.10);
   --shadow-glow-red:          0 0 14px rgba(185,28,28,0.20), 0 0 28px rgba(185,28,28,0.08);
   --shadow-glow-green:        0 0 14px rgba(21,128,61,0.20), 0 0 28px rgba(21,128,61,0.08);
@@ -420,7 +433,7 @@ html {
   --bg-hover:                 rgba(2,6,23,0.05);
   --bg-row-hover:             rgba(2,6,23,0.03);
   --nav-bg:                   rgba(255,255,255,0.98);
-  --nav-hover-bg:             rgba(184,134,11,0.12);
+  --nav-hover-bg:             rgba(13,148,136,0.12);  /* teal hover tint */
 
   /* Glass — more opaque on white so type doesn't wash through */
   --glass-bg:                 rgba(255,255,255,0.92);
