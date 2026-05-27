@@ -209,14 +209,15 @@ status), **Sequence Readiness** (group packages by WP `sequence_number` → Deta
   loads work_packages + RFIs, maps each package to its linked WP, and surfaces an "At
   Risk" command-bar signal + a Schedule & Readiness panel (risk badge, the 6 backward
   dates, readiness chips, manual flag toggles) on the Control Board.
-- **Phase 3 — sequence + dashboard — MOSTLY SHIPPED 2026-05-26:** Sequence
-  Readiness rollup (group by WP `sequence_number` → detailing % / fab-ready /
-  erection-ready / at-risk) shipped on the Control Board (`e9dbe24e`,
-  `computeSequenceReadiness`). Of the 5 design widgets, three already exist in the
-  hub: **Detailing Pipeline** = the "Open Pipeline" panel, **Packages Due Soon** =
-  the "Due Next 7 Days" list, **Approval Bottlenecks** = the Approval Matrix tab
-  (CycleTimeCard + AgingReportTable). Remaining net-new: the **Revision Impact
-  Tracker** (drawing_revision_deltas + downstream fab/ship/erect status).
+- **Phase 3 — sequence + dashboard — SHIPPED 2026-05-26:** all 5 widgets present.
+  **Sequence Readiness** rollup (`e9dbe24e`, `computeSequenceReadiness`) and the
+  **Revision Impact Tracker** (`f51931ee`, `computeRevisionImpact` — change-revisions
+  joined to per-sheet fabricated/delivered/in-field status, worst-first) shipped on
+  the Control Board. The other three pre-existed in the hub: **Detailing Pipeline**
+  = the "Open Pipeline" panel, **Packages Due Soon** = the "Due Next 7 Days" list,
+  **Approval Bottlenecks** = the Approval Matrix tab (CycleTimeCard + AgingReportTable).
+
+**The Detailing Control Center is complete across all three phases.**
 - Each phase ships independently, behind a feature flag if desired, without
   breaking the current Drawings/Submittals pages.
 
