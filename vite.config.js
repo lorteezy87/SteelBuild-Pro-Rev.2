@@ -4,8 +4,17 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import wasm from 'vite-plugin-wasm'
 import topLevelAwait from 'vite-plugin-top-level-await'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// Sentry source-map upload runs ONLY when SENTRY_AUTH_TOKEN is present (set as a
+// Vercel build env var for production). Local + CI builds have no token, so the
+// plugin is skipped entirely and the build is unaffected. org/project come from
+// the SENTRY_ORG / SENTRY_PROJECT env vars (set alongside the token). The token
+// is NEVER hardcoded — it is read from the environment at build time only.
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
+const enableSentrySourceMaps = Boolean(sentryAuthToken)
 
 function vendorChunk(id) {
   const n = id.replace(/\\/g, '/')
@@ -56,6 +65,22 @@ export default defineConfig({
     react(),
     wasm(),
     topLevelAwait(),
+    // Must be LAST so it sees the final emitted bundle + source maps. Gated on
+    // the auth token; uploads are best-effort (errorHandler swallows failures)
+    // so a misconfigured token/slug can never fail a production deploy.
+    ...(enableSentrySourceMaps
+      ? [sentryVitePlugin({
+          org: process.env.SENTRY_ORG,
+          project: process.env.SENTRY_PROJECT,
+          authToken: sentryAuthToken,
+          telemetry: false,
+          release: { name: process.env.VITE_APP_VERSION || undefined },
+          sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+          errorHandler: (err) => {
+            console.warn('[sentry-vite-plugin] source-map upload skipped:', err.message)
+          },
+        })]
+      : []),
   ],
   optimizeDeps: {
     // Exclude web-ifc from Vite's dependency pre-bundling to avoid
@@ -67,6 +92,11 @@ export default defineConfig({
     plugins: () => [wasm(), topLevelAwait()],
   },
   build: {
+    // Emit hidden source maps (no sourceMappingURL comment, so they're not
+    // referenced by the served bundle) only when we're going to upload them to
+    // Sentry; the plugin deletes the .map files from dist after upload. Without
+    // the token, no maps are generated (default).
+    sourcemap: enableSentrySourceMaps ? 'hidden' : false,
     rollupOptions: {
       output: {
         manualChunks: vendorChunk,
