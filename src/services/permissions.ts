@@ -17,19 +17,22 @@
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useProjectId } from "@/hooks/useProjectId";
+import { useProjectRole } from "@/hooks/useProjectRole";
 import { validateTransition, type TransitionResult } from "./workflowEngine";
 import type { AppRole, PermissionAction } from "@/types/rbac";
 
 // ─── Role hierarchy ─────────────────────────────────────────────────────
 // Privilege rank (lower = more privileged). This table must cover BOTH role
-// vocabularies, because canPerform is fed whichever role the caller holds:
-//   • GLOBAL  user_profiles.role  → 'admin' | 'user'   (what usePermissions reads)
+// vocabularies, because canPerform is fed whichever role usePermissions resolves:
 //   • PROJECT user_projects.role  → 'owner' | 'admin' | 'pm' | 'field' | 'viewer'
-// A global 'user' maps to PM-level — full create/edit/approve/export/view, with
-// delete/void/bulk_delete still reserved for admins. 'owner' mirrors 'admin'.
-// Without the 'user' entry a regular account ranked 99 (deny-all), which hid
-// every create/edit/delete control across the app. This gate is display-only —
-// the authoritative guards are RLS and workflowEngine.validateTransition.
+//     (the primary gate — the user's role in the active project)
+//   • GLOBAL  user_profiles.role  → 'admin' | 'user'
+//     (admin overrides to admin everywhere; 'user' is the no-active-project fallback)
+// 'owner' mirrors 'admin'. A global 'user' maps to PM-level (full create/edit/
+// approve/export/view; delete/void/bulk_delete reserved for admins) — used only
+// when no project is active. This gate is display-only — the authoritative
+// guards are RLS and workflowEngine.validateTransition.
 const ROLE_RANK: Record<AppRole, number> & Record<string, number> = {
   owner: 0,
   admin: 0,
@@ -130,12 +133,29 @@ export function usePermissions() {
     initialData: { role: "viewer", email: null, id: null } as UserInfo,
   });
 
-  const role = userInfo?.role || "viewer";
+  // The authoritative UI gate is the user's role IN THE ACTIVE PROJECT
+  // (owner/admin/pm/field/viewer), not their global account role — a project
+  // viewer should see read-only controls even if their global role is "user".
+  // A GLOBAL admin overrides to admin everywhere. With no active project
+  // (portfolio / admin screens) fall back to the global role so those UIs
+  // aren't over-restricted. Still display-only — RLS + validateTransition are
+  // the authoritative guards.
+  const projectId = useProjectId();
+  const { role: projectRole } = useProjectRole(projectId);
+
+  const globalRole = userInfo?.role || "viewer";
+  const isGlobalAdmin = globalRole === "admin";
+  const role = isGlobalAdmin
+    ? "admin"
+    : projectId
+      ? (projectRole ?? "viewer")
+      : globalRole;
   const roleRank = ROLE_RANK[role] ?? 99;
 
   /**
-   * Can the current user perform an action on an entity?
-   * This is for UI gating only — the real guard is in workflowEngine.
+   * Can the current user perform an action on an entity? Resolved against the
+   * effective per-project role above. UI gating only — the real guard is RLS +
+   * workflowEngine.validateTransition.
    */
   const can = useCallback(
     (action: PermissionAction, entity: string | null = null): boolean =>
@@ -163,9 +183,10 @@ export function usePermissions() {
   );
 
   /**
-   * Is the current user an admin?
+   * Is the current user a GLOBAL system admin (user_profiles.role === 'admin')?
+   * Distinct from a per-project admin — use this for app-level admin gates.
    */
-  const isAdmin = useMemo(() => role === "admin", [role]);
+  const isAdmin = useMemo(() => isGlobalAdmin, [isGlobalAdmin]);
 
   return {
     role,
