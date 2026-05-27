@@ -31,9 +31,16 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
   branch protection. Add a rule requiring the "CI" status check (GitHub → Settings →
   Branches). No E2E / a11y / bundle budgets yet.
 
-- **Unused-index review (perf, low priority):** 91 `unused_index` advisor findings.
-  Do NOT bulk-drop — low prod traffic can mask real use; review each against query
-  patterns first.
+- **Unused-index review (perf, low priority) — REVIEWED, drops queued:** the
+  `unused_index` advisor findings were reviewed against live `pg_stat_user_indexes`
+  + query patterns; full verdict in
+  [`docs/unused-index-review-2026-05-26.md`](docs/unused-index-review-2026-05-26.md).
+  Of 170 `idx_scan = 0` indexes, 125 are constraint- or FK-backing (keep — "unused"
+  is a low-volume artifact, not dead weight). 5 are high-confidence safe drops
+  (one redundant single-col + 4 GIN array/jsonb indexes with no containment query);
+  ready-to-run reversible SQL is in the doc, **not yet executed** (production DDL —
+  awaiting go-ahead). The rest are low-value either way; revisit with a real traffic
+  window. Do NOT bulk-drop.
 
 - **Stale `.vercel/project.json`:** still names the deleted `steelbuild-pro` Vercel
   project (production is `steelbuildpro-og` / steelbuild-pro.com). Harmless
