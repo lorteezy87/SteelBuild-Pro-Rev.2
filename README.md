@@ -138,6 +138,16 @@ member-management admin UI is queued (RBAC Phase C).
   auto-builds and publishes. [`CLAUDE.md`](./CLAUDE.md) documents the full
   auto-deploy workflow.
 
+## Error monitoring
+
+Sentry (`@sentry/react`) is initialised in `src/instrument.js` (imported first
+in `main.jsx`): error capture + performance tracing + **masked** session replay
+(`maskAllText` + `blockAllMedia`, so replays never expose readable
+project/financial content). DSN comes from `VITE_SENTRY_DSN` with a baked-in
+public project DSN fallback, so it works out of the box; both ErrorBoundaries
+report React render errors via `Sentry.captureException`. `src/lib/telemetry.js`
+stays a local-only ring buffer (`window.__sbpErrorLog`).
+
 ## Feature flags
 
 Lightweight homegrown system (`feature_flags` Supabase table). Admin UI at
@@ -152,71 +162,15 @@ const isNewDashboard = useFlag("new_dashboard");
 Per-email overrides supported via `feature_flags.user_overrides` jsonb map.
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md#feature-flags) for usage.
 
-## AI Drawing Analysis
-
-Upload a structural-steel PDF (IFC, shop drawings, revisions, IFA) at
-**Drawings → Drawing Analysis (AI)**. The module:
-
-1. Stores the PDF in Supabase Storage (`uploads/` bucket).
-2. Inserts a `drawing_analyses` row with `status='pending'`.
-3. Calls the `llm-proxy` Edge Function with the PDF as a base64 document
-   block and a structured-output tool (`submit_analysis`).
-4. Persists the sheet index (`drawing_sheets`) and findings
-   (`drawing_findings`), and flips the row to `complete`.
-
-**Limits** — 32 MB and ~100 pages per request (Anthropic document-block
-limits). The upload zone enforces the 32 MB cap client-side.
-
-**Tuning the analyst prompt**. The system prompt and tool schema live in
-[`src/lib/analyzeDrawing.js`](src/lib/analyzeDrawing.js). To tune for a
-different drawing type (cold-formed framing, steel joists, misc metals):
-
-- Expand the focus list in `SYSTEM_PROMPT` with the specific callouts
-  you want flagged (e.g. bridging spacing for joists, gauge callouts for
-  cold-formed, field-bolt vs field-weld notes for misc metals).
-- Add new enum values to `finding_type` in both `ANALYSIS_TOOL.input_schema`
-  and the `drawing_findings.finding_type` CHECK constraint (next
-  migration).
-- Update `FINDING_TYPE_LABEL` in
-  [`src/components/drawings/analysis/tokens.js`](src/components/drawings/analysis/tokens.js)
-  so the new type renders a pill.
-
-**Promote a finding to an RFI**. The detail drawer exposes "Create RFI"
-per finding. This inserts a draft row into `rfis` with the sheet number
-as `drawing_reference`, severity-mapped priority, and a back-link via
-`drawing_findings.linked_rfi_id`.
-
-**Phase roadmap**
-- Phase 1 (shipped): schema, upload, analysis, sheet index, findings,
-  RFI creation link.
-- Phase 2 (shipped): full RFI dialog (author, assignees, due date,
-  ball in court, distribution list) replacing the one-click draft —
-  lives at [CreateRfiFromFindingDialog.jsx](src/components/drawings/analysis/CreateRfiFromFindingDialog.jsx).
-- Phase 3 (shipped): revision-delta detection. Use the "Compare
-  Revisions" button (top-right of the page) to pick a FROM and TO
-  analysis — both PDFs are sent to Claude in a single message via the
-  `submit_revision_diff` tool, and the structured deltas land in
-  `drawing_revision_deltas`. Comparisons are project-scoped; each
-  shows up as its own card in a "Revision Comparisons" section below
-  the uploaded sets. The comparator logic lives at
-  [compareRevisions.js](src/lib/compareRevisions.js) and the allowed
-  delta_type values are the same list in both the Anthropic tool
-  schema and the CHECK constraint on
-  `drawing_revision_deltas.delta_type`.
-
 ## Notes on third-party viewers
 
-- `src/pages/ModelViewer.jsx` uses `@thatopen/components` v3.4.x.
-  `FragmentsManager.init()` requires a worker URL — we serve it from
-  `public/thatopen/fragments-worker.mjs`. If you upgrade
-  `@thatopen/fragments`, **re-copy**
-  `node_modules/@thatopen/fragments/dist/Worker/worker.mjs` to the
-  public path. Mismatch between the runtime worker and the package
-  silently produces zero geometry on IFC load.
-- The viewer's camera-fit guards (`didAutoFitRef`,
-  `userHasInteractedRef`) prevent late-arriving tile-stream callbacks
-  from snapping a user-zoomed view back to iso. `infinityDolly` is
-  off (was conflicting with `dollyToCursor`).
+- `src/components/portfolio/PortfolioBimViewer.jsx` is the remaining
+  `@thatopen/components` (IFC/BIM) consumer — the standalone `ModelViewer`
+  page was removed. `@thatopen/fragments` needs a worker served from
+  `public/thatopen/fragments-worker.mjs`; if you upgrade the package,
+  **re-copy** `node_modules/@thatopen/fragments/dist/Worker/worker.mjs`
+  to that public path, or a runtime/package mismatch silently yields
+  zero geometry on IFC load.
 - `src/pages/DrawingViewer.jsx` defaults to a browser-native `<iframe>`
   for reliability; pdf.js canvas mode is available via the toolbar
   toggle for cases that need it.
@@ -226,5 +180,5 @@ as `drawing_reference`, severity-mapped priority, and a back-link via
 - **Architecture + decisions** → [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 - **Known issues + remediation** → [`TECH_DEBT.md`](./TECH_DEBT.md)
 - **Agent / deploy conventions** → [`CLAUDE.md`](./CLAUDE.md)
-- **AI Drawing Analysis tuning** → see `## AI Drawing Analysis` section above
+- **Error monitoring (Sentry)** → `src/instrument.js` + [`CLAUDE.md`](./CLAUDE.md) §11
 - **Drawing/submittal stage glossary** → [`ARCHITECTURE.md#domain-workflow`](./ARCHITECTURE.md#domain-workflow)
