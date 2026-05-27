@@ -56,6 +56,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["draw-detail", pid],        // ProjectDetailView.jsx
       ["drawings-for-wp", pid],    // WorkPackageDetailModal.jsx (uses project_id)
       ["drawing-register", pid],   // DrawingRegisterGrid (drawing_register_view)
+      ["drawing-reviews", pid],    // ReviewQueue (drawing_reviews)
     ],
   },
 
