@@ -251,7 +251,12 @@ function normalizeStatus(raw) {
   if (/^draft$/.test(s)) return "Draft";
   if (/^(submitted|sent|issued)$/.test(s)) return "Submitted";
   if (/^(under\s*review|in\s*review|reviewing|pending)$/.test(s)) return "Under Review";
-  if (/^(approved|executed|accepted|closed)$/.test(s)) return "Approved";
+  if (/^(approved|executed|accepted)$/.test(s)) return "Approved";
+  // "closed" is ambiguous — a CO can be closed-out as approved, rejected, OR
+  // withdrawn — so it must NOT be silently elevated to Approved (that inflated
+  // approved-contract-value rollups). Map it to a neutral Closed the reviewer
+  // can reclassify in the import preview.
+  if (/^(closed|closed\s*out|complete|completed)$/.test(s)) return "Closed";
   if (/^(rejected|denied|declined)$/.test(s)) return "Rejected";
   if (/^(void|cancelled|canceled|withdrawn)$/.test(s)) return "Void";
   // Pass through whatever the user wrote if none matched — the DB
