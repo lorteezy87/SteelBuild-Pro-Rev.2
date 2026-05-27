@@ -201,9 +201,14 @@ status), **Sequence Readiness** (group packages by WP `sequence_number` → Deta
   Package → Sheets → Revisions structure already exists via the hub tabs (Control
   Board / Process Board / Drawing Register / Submittal Register / Approval Matrix);
   a dedicated 4-level tree view is later polish.
-- **Phase 2 — operational layer:** the 2 manual readiness flags + the 6 backward
-  target dates + the derived readiness read-model; "Risk to Schedule" surfaced on
-  each package.
+- **Phase 2 — operational layer — SHIPPED 2026-05-26:** 2A (`569fa06b`) — migration
+  `20260526230000` (`material_impacted` + `long_lead_impact`) + `detailingSchedule.js`
+  (`computeBackwardDates` / `resolveLeadDays` / `computeScheduleRisk`, 9 tests; default
+  chain reproduces the Apr-28-for-Jun-10 worked example). 2B (`4384f308`) —
+  `detailingReadiness.js` per-package read-model (7 tests). 2C (`e655cc89`) — the hub
+  loads work_packages + RFIs, maps each package to its linked WP, and surfaces an "At
+  Risk" command-bar signal + a Schedule & Readiness panel (risk badge, the 6 backward
+  dates, readiness chips, manual flag toggles) on the Control Board.
 - **Phase 3 — sequence + dashboard:** Sequence Readiness rollup (via
   `linked_work_package_ids`) + the 5 dashboard widgets.
 - Each phase ships independently, behind a feature flag if desired, without
