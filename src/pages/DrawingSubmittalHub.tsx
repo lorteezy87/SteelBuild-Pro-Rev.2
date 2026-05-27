@@ -26,6 +26,7 @@ import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components
 import { computeFabReady } from "@/lib/submittalAnalytics";
 import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
 import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
+import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import SubmittalVisualBoardRaw from "@/components/submittals/SubmittalVisualBoard";
 import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
 import {
@@ -115,6 +116,12 @@ export default function DrawingSubmittalHub() {
     enabled: !!projectId,
     staleTime: 60_000,
   });
+  const { data: drawingRevisions = [] } = useQuery({
+    queryKey: ["drawing-revisions", projectId],
+    queryFn: () => base44.entities.DrawingRevision.filter({ project_id: projectId }),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
 
   const setPackages = useMemo(
     () => buildSetPackages(drawings, drawingSets, submittals),
@@ -166,6 +173,16 @@ export default function DrawingSubmittalHub() {
     }
     return m;
   }, [setPackages, wpById, openRfiIds, activeProject]);
+
+  // Revision Impact Tracker: change-revisions joined to their sheet's downstream
+  // status (fabricated / delivered / in-field), worst impact first.
+  const revisionImpact = useMemo(() => {
+    const drawingsById = new Map<string, any>();
+    for (const d of (drawings as any[]) || []) {
+      if (d && d.id) drawingsById.set(String(d.id), d);
+    }
+    return computeRevisionImpact({ revisions: drawingRevisions as any[], drawingsById });
+  }, [drawings, drawingRevisions]);
 
   // Sequence-aware readiness rollup (group packages by erection sequence).
   const sequenceReadiness = useMemo(() => {
@@ -543,6 +560,7 @@ export default function DrawingSubmittalHub() {
                 onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
                 onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
                 sequenceReadiness={sequenceReadiness}
+                revisionImpact={revisionImpact}
                 isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
               />
             )}
