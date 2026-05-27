@@ -36,7 +36,7 @@ For the running list of known issues, see [`TECH_DEBT.md`](./TECH_DEBT.md).
                   │  (LLM via edge fn)     │
                   └────────────────────────┘
 
-         Hosting: Vercel auto-deploys from codex/base44-deploy-nick
+         Hosting: Vercel auto-deploys from main
 ```
 
 There is no separate backend service. The app is a SPA that talks
@@ -403,11 +403,11 @@ Concurrency group cancels redundant runs on rapid iteration.
 
 ### Deployment
 
-Vercel auto-deploys from `codex/base44-deploy-nick`. Workflow:
+Vercel auto-deploys from `main`. Workflow:
 
 1. Develop on a `claude/<slug>` feature branch
 2. Push commits + PR if collaborating
-3. Merge into `codex/base44-deploy-nick` (Vercel builds + deploys)
+3. Merge into `main` (Vercel builds + deploys)
 4. Verify on the live URL
 
 `CLAUDE.md` documents the auto-deploy command sequence used by

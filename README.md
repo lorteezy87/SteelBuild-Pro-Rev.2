@@ -17,7 +17,7 @@ change orders, costs, and field operations from detailing through closeout.
   (`src/styles/tokens.css`) + a small design-system module — NOT Tailwind.
 - **3D / 2D viewers**: `@thatopen/components` v3.4.x (IFC/fragments) and pdf.js
 - **Data**: Supabase (Postgres + RLS + Storage + Auth + Edge Functions)
-- **Hosting**: Vercel (auto-deploys from `codex/base44-deploy-nick`)
+- **Hosting**: Vercel (auto-deploys from `main`)
 - **LLM**: Anthropic Claude via the `llm-proxy` Supabase Edge Function
 
 ## Workflow
@@ -134,7 +134,7 @@ member-management admin UI is queued (RBAC Phase C).
 ## Deployment
 
 - Feature work lands on a `claude/*` branch.
-- Deploys go out via merge into `codex/base44-deploy-nick`, which Vercel
+- Deploys go out via merge into `main`, which Vercel
   auto-builds and publishes. [`CLAUDE.md`](./CLAUDE.md) documents the full
   auto-deploy workflow.
 

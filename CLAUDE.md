@@ -36,7 +36,7 @@ Core platform:
 - Backend/data: Supabase Postgres, Auth, Storage, Edge Functions
 - Hosting: Vercel
 - Production URL: `https://steelbuild-pro.com` (custom domain on the `steelbuildpro-og` Vercel project; `cranky-black.vercel.app` is the same project's auto-alias). Note: `https://steelbuild-pro.vercel.app` is NOT assigned to any project and returns `DEPLOYMENT_NOT_FOUND` — do not use it.
-- Deploy branch: `codex/base44-deploy-nick` (production branch of the `steelbuildpro-og` project. A second Vercel project, `steel-build-pro-rev-2`, is also wired to this repo but only builds previews — ignore/retire it.)
+- Deploy branch: `main` (production branch of the `steelbuildpro-og` project. A second Vercel project, `steel-build-pro-rev-2`, is also wired to this repo but only builds previews — ignore/retire it.)
 - Main local checkout (Windows): `C:\dev\SteelBuild-Pro-Rev.2`
 - Also worked on in Claude Code cloud / Linux sessions (the repo is cloned to a Linux path per session; use bash equivalents there)
 
@@ -84,7 +84,7 @@ Other: `public/` (static assets, wasm, pdf/fragments workers), `scripts/` (perf 
 
 The product is being deliberately narrowed to its strongest workflow. When planning or building, bias toward the killer workflow below; treat everything else as deprioritized and gate new investment behind feature flags.
 
-Status notes here are a snapshot (2026-05-25). Verify against the repo before relying on them, and do not record a goal as "done" without evidence on the deploy branch (`codex/base44-deploy-nick`). These are priorities and direction, not a claim of completion.
+Status notes here are a snapshot (2026-05-25). Verify against the repo before relying on them, and do not record a goal as "done" without evidence on the deploy branch (`main`). These are priorities and direction, not a claim of completion.
 
 ### Killer workflow (the moat — protect and deepen)
 
@@ -297,17 +297,17 @@ Only stash when you understand what will be stashed.
 
 Important branches:
 
-- Deploy branch: `codex/base44-deploy-nick`
+- Deploy branch: `main`
 - Claude Code feature branches: `claude/<short-slug>`
 - Codex feature branches, if used: `codex/<short-slug>`
 
-Vercel auto-deploys from `codex/base44-deploy-nick`.
+Vercel auto-deploys from `main`.
 
-A push to `codex/base44-deploy-nick` is production-impacting. Do it only when the user has asked to deploy, ship, push to app, or publish.
+A push to `main` is production-impacting. Do it only when the user has asked to deploy, ship, push to app, or publish.
 
 ### Deploy From Main Checkout
 
-If already on `codex/base44-deploy-nick` and the user has asked to deploy:
+If already on `main` and the user has asked to deploy:
 
 ```powershell
 Set-Location "C:\dev\SteelBuild-Pro-Rev.2"
@@ -316,7 +316,7 @@ node ./node_modules/vite/bin/vite.js build 2>&1 | Select-Object -Last 40
 Write-Host "EXIT: $LASTEXITCODE"
 git add <explicit-paths>
 git commit -F .git-commit-msg.tmp
-git push origin codex/base44-deploy-nick
+git push origin main
 git rev-parse --short HEAD
 ```
 
@@ -341,11 +341,11 @@ Safe pattern:
 Set-Location "C:\dev\SteelBuild-Pro-Rev.2"
 git status --short
 git branch --show-current
-git pull origin codex/base44-deploy-nick
+git pull origin main
 git merge claude/<short-slug> --no-edit
 node ./node_modules/vite/bin/vite.js build 2>&1 | Select-Object -Last 40
 Write-Host "EXIT: $LASTEXITCODE"
-git push origin codex/base44-deploy-nick
+git push origin main
 git rev-parse --short HEAD
 ```
 

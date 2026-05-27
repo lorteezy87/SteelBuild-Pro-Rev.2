@@ -19,7 +19,7 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
   Vercel for un-minified Sentry stack traces (`@sentry/vite-plugin` is already
   wired into `vite.config.js`, gated on the token; just needs the env vars),
   (3) add a GitHub branch-protection rule requiring the "CI" status check on
-  `codex/base44-deploy-nick`. No E2E / a11y / bundle budgets yet.
+  `main`. No E2E / a11y / bundle budgets yet.
 
 - **Unused-index review (perf, low priority) — REVIEWED, drops queued:** the
   `unused_index` advisor findings were reviewed against live `pg_stat_user_indexes`
@@ -37,10 +37,11 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
   (Vercel/CI use the GitHub integration, not this file) but misleading — refresh via
   `vercel link`.
 
-- **Deploy-branch rename to `main` (deferred):** blocked by a stale existing `main`
-  (collision) and requires updating Vercel's Production-Branch setting
-  (dashboard-only) or prod auto-deploys stop. Full safe sequence captured in the
-  `vercel_production_topology` memory.
+- **Vercel Production-Branch follow-up (after the `main` rename):** the deploy
+  branch was renamed `codex/base44-deploy-nick` → `main` on 2026-05-26. Vercel's
+  Production Branch setting (Settings → Git, dashboard-only) **must** be switched
+  to `main` or production auto-deploys stop firing — verify it's set. (The old
+  branch name still redirects on GitHub during the grace period.)
 
 ---
 
