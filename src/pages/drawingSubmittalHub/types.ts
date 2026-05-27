@@ -67,4 +67,6 @@ export interface TriageItem {
   _canDraft?: boolean;
   /** The raw manual drawing_sets.detailing_state value (null = Not Started). */
   _detailingStateRaw?: string | null;
+  /** Per-package readiness read-model (computeDetailingReadiness output). */
+  _readiness?: any;
 }

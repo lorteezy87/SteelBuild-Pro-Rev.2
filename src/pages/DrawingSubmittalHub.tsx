@@ -25,8 +25,9 @@ import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components/design-system";
 import { computeFabReady } from "@/lib/submittalAnalytics";
 import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
+import { computeDetailingReadiness } from "@/lib/detailingReadiness";
 import SubmittalVisualBoardRaw from "@/components/submittals/SubmittalVisualBoard";
-import { AlertTriangle, Gauge, Link2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
 import {
   ACTION_STATUSES,
   TABS,
@@ -100,10 +101,71 @@ export default function DrawingSubmittalHub() {
     staleTime: 60_000,
   });
 
+  // Work packages (for the erection sequence date → backward scheduling) + RFIs
+  // (to know which linked RFIs are still open → rfiBlocked readiness).
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work-packages", projectId],
+    queryFn: () => base44.entities.WorkPackage.filter({ project_id: projectId }),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["rfis", projectId],
+    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+
   const setPackages = useMemo(
     () => buildSetPackages(drawings, drawingSets, submittals),
     [drawings, drawingSets, submittals]
   );
+
+  // Lookup maps for readiness: WP by id, and the set of OPEN rfi ids.
+  const wpById = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const wp of (workPackages as any[]) || []) {
+      if (wp && !wp.is_deleted && wp.id) m.set(String(wp.id), wp);
+    }
+    return m;
+  }, [workPackages]);
+
+  const CLOSED_RFI = new Set(["Closed", "Void", "Cancelled", "Resolved"]);
+  const openRfiIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of (rfis as any[]) || []) {
+      if (r && !r.is_deleted && r.id && !CLOSED_RFI.has(r.status)) s.add(String(r.id));
+    }
+    return s;
+  }, [rfis]);
+
+  // Per-package readiness read-model, keyed by package key.
+  const readinessByKey = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const pkg of setPackages) {
+      const wpIds: string[] = Array.isArray((pkg.parent as any)?.linked_work_package_ids)
+        ? (pkg.parent as any).linked_work_package_ids
+        : [];
+      // earliest-starting linked WP is the most constraining erection date
+      let workPackage: any = null;
+      for (const id of wpIds) {
+        const wp = wpById.get(String(id));
+        if (!wp) continue;
+        if (!workPackage || (wp.scheduled_start_date && (!workPackage.scheduled_start_date || wp.scheduled_start_date < workPackage.scheduled_start_date))) {
+          workPackage = wp;
+        }
+      }
+      m.set(pkg.key, computeDetailingReadiness({
+        pkg: pkg.parent,
+        submittals: pkg.submittals,
+        sheets: pkg.sheets,
+        project: activeProject,
+        workPackage,
+        openRfiIds,
+      }));
+    }
+    return m;
+  }, [setPackages, wpById, openRfiIds, activeProject]);
 
   // ── Drawing KPIs ───────────────────────────────────────────────────────
   const drawingKpis = useMemo(() => {
@@ -176,6 +238,7 @@ export default function DrawingSubmittalHub() {
         detailingState,
         _canDraft: canDraft,
         _detailingStateRaw: pkg.parent?.detailing_state ?? null,
+        _readiness: readinessByKey.get(pkg.key) || null,
         // Entity references for inline editing
         _submittalId: latestSubmittal?.id || null,
         _drawingSetId: pkg.setId || null,
@@ -245,8 +308,9 @@ export default function DrawingSubmittalHub() {
       overdueUnlinkedSubmittals: overdue.filter((item) => item.kind === "Unlinked Submittal").length,
       dueSoonDrawingSets: dueSoon.filter((item) => item.kind === "Drawing Set").length,
       noDateDrawingSets: noDate.filter((item) => item.kind === "Drawing Set").length,
+      atRiskCount: setItems.filter((item) => item._readiness?.scheduleRisk?.atRisk).length,
     };
-  }, [submittals, setPackages]);
+  }, [submittals, setPackages, readinessByKey]);
 
   const tabCounts = useMemo(() => ({
     overview: triage.openItems.length,
@@ -312,6 +376,20 @@ export default function DrawingSubmittalHub() {
     onError: (err) => toast.error("Failed to set detailing state: " + (err?.message || "Unknown")),
   });
 
+  // Toggle a manual readiness flag (material_impacted / long_lead_impact).
+  const updateReadinessFlagMut = useMutation({
+    mutationFn: async ({ item, field, value }: { item: any; field: "material_impacted" | "long_lead_impact"; value: boolean }) => {
+      if (!item?._drawingSetId) throw new Error("No drawing set to update");
+      await base44.entities.DrawingSet.update(item._drawingSetId, { [field]: value } as any);
+    },
+    onSuccess: (_data, { field, value }) => {
+      invalidateHub();
+      const label = field === "material_impacted" ? "Material impacted" : "Long-lead impact";
+      toast.success(`${label} ${value ? "flagged" : "cleared"}`);
+    },
+    onError: (err) => toast.error("Failed to update readiness flag: " + (err?.message || "Unknown")),
+  });
+
   // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div
@@ -336,6 +414,12 @@ export default function DrawingSubmittalHub() {
           label="Overdue"
           value={triage.overdue.length}
           tone={triage.overdue.length ? error : success}
+        />
+        <HeaderSignal
+          icon={CalendarClock}
+          label="At Risk"
+          value={triage.atRiskCount}
+          tone={triage.atRiskCount ? warning : success}
         />
         <HeaderSignal
           icon={Gauge}
@@ -445,7 +529,8 @@ export default function DrawingSubmittalHub() {
                 onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
                 onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
                 onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
-                isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending}
+                onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
+                isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
               />
             )}
             {activeTab === "process" && (
