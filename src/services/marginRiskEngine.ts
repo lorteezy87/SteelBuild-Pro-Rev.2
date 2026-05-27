@@ -267,7 +267,11 @@ function scoreChangeOrderRisk(changeOrders: SourceRecord[] = []): RiskSignal {
     const status = normalize(co.status);
     if (["approved", "closed", "void", "voided"].includes(status)) continue;
 
-    const amount = Math.abs(num(co.co_amount));
+    // Use the SIGNED amount. A deductive (credit) change order reduces the
+    // contract, so it is NOT positive margin-at-risk exposure — Math.abs() here
+    // turned a -$50k credit into +$50k of "critical" exposure. The guard below
+    // then skips deductive and zero COs (only additive COs are uncertain margin).
+    const amount = num(co.co_amount);
     if (amount <= 0) continue;
 
     const ageDays = daysBetween(co.submitted_date || co.created_at, new Date());

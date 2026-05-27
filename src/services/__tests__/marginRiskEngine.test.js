@@ -508,7 +508,7 @@ describe("margin risk engine", () => {
       expect(result.signals[6].totalExposure).toBe(45000);
     });
 
-    it("handles negative CO amounts (credits)", () => {
+    it("excludes deductive (credit) CO amounts from margin-at-risk exposure", () => {
       const result = calculateMarginRisk({
         changeOrders: [
           {
@@ -522,7 +522,9 @@ describe("margin risk engine", () => {
         ],
       });
 
-      expect(result.signals[6].totalExposure).toBe(12000);
+      // A deductive CO reduces the contract — it is NOT positive margin-at-risk
+      // exposure. Previously Math.abs() inflated this -$12k credit to +$12k.
+      expect(result.signals[6].totalExposure).toBe(0);
     });
 
     it("assigns severity by dollar threshold", () => {
