@@ -50,15 +50,14 @@ a production deploy. Nothing is hardcoded — `org`/`project`/`authToken` are re
 from env at build time.
 
 **You provide (3 Vercel build env vars):** project `steelbuildpro-og` → Settings
-→ **Environment Variables** (Production + Preview):
+→ **Environment Variables** (Production + Preview). The slugs below were resolved
+from the Sentry API, so these are the exact values:
 
-1. `SENTRY_AUTH_TOKEN` — the token you generated (mark **Sensitive**). Scopes
-   needed: `project:releases` + `org:read`.
-2. `SENTRY_ORG` — your org **slug** (the `…/organizations/<slug>/` segment in any
-   Sentry URL; the baked-in DSN org id is `4511458803253248`, but the plugin
-   needs the slug).
-3. `SENTRY_PROJECT` — your project **slug** (Sentry → the project → Settings;
-   DSN project id is `4511458819375104`).
+| Name | Value | Notes |
+| --- | --- | --- |
+| `SENTRY_ORG` | `steelbuild-pro` | org slug |
+| `SENTRY_PROJECT` | `javascript-react` | project slug (id `4511458819375104`, matches the DSN) |
+| `SENTRY_AUTH_TOKEN` | *(your token)* | mark **Sensitive**; needs scopes `project:releases` + `org:read` |
 
 Redeploy after setting them; the next production build uploads maps and Sentry
 will symbolicate traces. Until then, error capture + masked replay already work —
