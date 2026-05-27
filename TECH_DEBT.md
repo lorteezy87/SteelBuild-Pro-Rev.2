@@ -47,12 +47,6 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
   (Vercel/CI use the GitHub integration, not this file) but misleading — refresh via
   `vercel link`.
 
-- **Per-project-role UI gating (optional):** `src/services/permissions.ts` `can()`
-  gates on the GLOBAL role (admin→admin, user→PM), not the per-project role, so a
-  project `viewer` who is a global `user` sees PM-level controls. Display-only
-  (RLS + `validateTransition` are the real guards); sourcing from `useProjectRole`
-  would align the UI with per-project permissions.
-
 - **Deploy-branch rename to `main` (deferred):** blocked by a stale existing `main`
   (collision) and requires updating Vercel's Production-Branch setting
   (dashboard-only) or prod auto-deploys stop. Full safe sequence captured in the
