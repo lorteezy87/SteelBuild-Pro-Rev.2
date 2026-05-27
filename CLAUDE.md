@@ -36,7 +36,7 @@ Core platform:
 - Backend/data: Supabase Postgres, Auth, Storage, Edge Functions
 - Hosting: Vercel
 - Production URL: `https://steelbuild-pro.com` (custom domain on the `steelbuildpro-og` Vercel project; `cranky-black.vercel.app` is the same project's auto-alias). Note: `https://steelbuild-pro.vercel.app` is NOT assigned to any project and returns `DEPLOYMENT_NOT_FOUND` — do not use it.
-- Deploy branch: `main` (production branch of the `steelbuildpro-og` project. A second Vercel project, `steel-build-pro-rev-2`, is also wired to this repo but only builds previews — ignore/retire it.)
+- Deploy branch: `main` — the **permanent** production + GitHub default branch (renamed from `codex/base44-deploy-nick` on 2026-05-26; Vercel's Production Branch is set to `main`, the old name redirects during GitHub's grace period but is deprecated — always use `main`). Production branch of the `steelbuildpro-og` Vercel project. A second Vercel project, `steel-build-pro-rev-2`, is also wired to this repo but only builds previews — ignore/retire it.
 - Main local checkout (Windows): `C:\dev\SteelBuild-Pro-Rev.2`
 - Also worked on in Claude Code cloud / Linux sessions (the repo is cloned to a Linux path per session; use bash equivalents there)
 
@@ -297,7 +297,7 @@ Only stash when you understand what will be stashed.
 
 Important branches:
 
-- Deploy branch: `main`
+- Deploy branch: `main` — the **permanent** production + GitHub default branch (renamed from `codex/base44-deploy-nick` on 2026-05-26; Vercel's Production Branch is `main`). The old name still redirects on GitHub but is deprecated — always target `main`.
 - Claude Code feature branches: `claude/<short-slug>`
 - Codex feature branches, if used: `codex/<short-slug>`
 
