@@ -10,21 +10,14 @@ exactly what's needed.
 
 _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is wide open — these are hardening, scale, and platform-maturity follow-ups._
 
-- **RLS anon-hardening (two Auth dashboard toggles — not code):** the Supabase
-  security advisor flags 86 tables with anonymous-access policies + leaked-password
-  protection disabled. The app uses email/password only (no anonymous sign-in), so
-  the fix is: Auth → Sign In/Providers → disable "Allow anonymous sign-ins"
-  (clears all 86), and Auth → Passwords → enable leaked-password protection
-  (clears 1).
-
-- **Sentry source maps (optional):** `src/instrument.js` captures errors but stack
-  traces are minified. Add `@sentry/vite-plugin` for source-map upload — needs a
-  `SENTRY_AUTH_TOKEN` build secret.
-
-- **CI not enforced:** `.github/workflows/ci.yml` runs blocking lint/typecheck/test/
-  build on every push/PR, but merges to the deploy branch aren't gated by GitHub
-  branch protection. Add a rule requiring the "CI" status check (GitHub → Settings →
-  Branches). No E2E / a11y / bundle budgets yet.
+- **Dashboard / secret hand-offs (need owner access — step-by-step in
+  [`docs/enterprise-readiness-handoff-2026-05-26.md`](docs/enterprise-readiness-handoff-2026-05-26.md)):**
+  three items only the project owner can do — (1) enable Supabase leaked-password
+  protection (the one remaining `auth_leaked_password_protection` WARN; the older
+  "86 anonymous-access" findings are no longer reported by the advisor), (2) add a
+  `SENTRY_AUTH_TOKEN` build secret + `@sentry/vite-plugin` for un-minified Sentry
+  stack traces, (3) add a GitHub branch-protection rule requiring the "CI" status
+  check on `codex/base44-deploy-nick`. No E2E / a11y / bundle budgets yet.
 
 - **Unused-index review (perf, low priority) — REVIEWED, drops queued:** the
   `unused_index` advisor findings were reviewed against live `pg_stat_user_indexes`
