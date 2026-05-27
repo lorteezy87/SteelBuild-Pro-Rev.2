@@ -191,10 +191,16 @@ status), **Sequence Readiness** (group packages by WP `sequence_number` → Deta
 
 ## 8. Phased plan
 
-- **Phase 1 — reframe (low risk, visible):** rename `DrawingSubmittalHub` →
-  "Detailing Control Center" (label + the "Detailing" nav group); restructure the
-  hub UI around Project → Package → Sheets → Revisions; add the drafting + release
-  states to the coalesced state model (additive `detailing_state` column).
+- **Phase 1 — reframe — SHIPPED 2026-05-26:** renamed the hub →
+  "Detailing Control Center" (`e0256ccd`); additive `detailing_state` column
+  (migration `20260526220000`, `32c68af1`); the coalesced operational-state helper
+  `src/lib/detailingPackageState.js` + 12 tests (`32c68af1`); the hub now shows
+  each package's effective operational state (chips on the Control Board + rows)
+  with a manual drafting-state advance control that writes `detailing_state`,
+  gated to packages without a governing submittal (`c4af3ee9`). The Project →
+  Package → Sheets → Revisions structure already exists via the hub tabs (Control
+  Board / Process Board / Drawing Register / Submittal Register / Approval Matrix);
+  a dedicated 4-level tree view is later polish.
 - **Phase 2 — operational layer:** the 2 manual readiness flags + the 6 backward
   target dates + the derived readiness read-model; "Risk to Schedule" surfaced on
   each package.
