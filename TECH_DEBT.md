@@ -22,13 +22,6 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
   per-row eval at scale. Consolidate into one policy per action, table-by-table.
   Perf-only, not a security hole.
 
-- **sharepoint-proxy gate not deployed live:** the org-level browse actions
-  (`list_sites`/`list_drives`/`list_children`/`get_file_meta`) were gated to system
-  admins in `supabase/functions/sharepoint-proxy/index.ts` (commit `a8ef505c`), but
-  edge functions deploy separately from the Vercel frontend. Run
-  `npx supabase functions deploy sharepoint-proxy --project-ref kjrwqagyeswwoxpjkcko`
-  to apply it live.
-
 - **Sentry source maps (optional):** `src/instrument.js` captures errors but stack
   traces are minified. Add `@sentry/vite-plugin` for source-map upload — needs a
   `SENTRY_AUTH_TOKEN` build secret.
@@ -55,6 +48,21 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- 2026-05-26 sharepoint-proxy org-browse gate deployed live: the
+  `userIsSystemAdmin` gate on the org-level browse actions
+  (`list_sites`/`list_drives`/`list_children`/`get_file_meta`) — committed in
+  `a8ef505c` but only on the Vercel frontend branch — was deployed to the live
+  edge function via the Supabase MCP (`sharepoint-proxy` v6, `verify_jwt` true).
+  Verified the live function body now contains the gate; behavior for
+  per-project actions (`sync_folder`) is unchanged.
+
+- 2026-05-26 per-project-role UI gating: `usePermissions().can()` now resolves
+  the effective role from the user's role in the ACTIVE project
+  (`useProjectRole`/`useProjectId`) instead of only the global account role, with
+  a global-admin override and a global-role fallback when no project is active.
+  Display-only — RLS + `workflowEngine.validateTransition` remain authoritative
+  (commit `89d8c302`).
 
 - 2026-05-26 feature + enterprise pass: scheduling ("Update Scheduled Dates"
   sync button + drag-to-resize Gantt bars); SOV import hardening (XLSX + steel
