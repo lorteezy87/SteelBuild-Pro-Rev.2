@@ -29,6 +29,7 @@ import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detai
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { DocControlPanel } from "@/components/drawings/register/DocControlPanel";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import SubmittalVisualBoardRaw from "@/components/submittals/SubmittalVisualBoard";
 import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
 import {
@@ -355,7 +356,10 @@ export default function DrawingSubmittalHub() {
 
   // ── Inline quick-action mutations (Next Decision card) ────────────────
   const invalidateHub = () => {
-    qc.invalidateQueries({ queryKey: ["drawing-sets", projectId] });
+    // Sets read under both "drawing-sets" (hub) and "drawing_sets" (Drawings/
+    // Submittals) keys — invalidate both spellings + the register view so a hub
+    // edit reflects everywhere (and vice-versa).
+    invalidateEntity(qc, "drawingSet", projectId);
     qc.invalidateQueries({ queryKey: ["drawings", projectId] });
     qc.invalidateQueries({ queryKey: ["submittals", projectId] });
   };

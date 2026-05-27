@@ -16,6 +16,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
@@ -275,7 +276,11 @@ export default function Drawings({ embedded = false } = {}) {
   // summary badge lies for up to staleTime (30s) after every action.
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["drawings", projectId] });
-    qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
+    // Sets are read under both "drawing_sets" and "drawing-sets" keys across the
+    // app (Drawings/Submittals vs the Detailing Control Center hub). Invalidate
+    // both spellings + the register view so a set delete/edit never lingers in
+    // another view's cache.
+    invalidateEntity(qc, "drawingSet", projectId);
   };
 
   const createMut = useMutation({
