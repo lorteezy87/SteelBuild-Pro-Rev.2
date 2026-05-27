@@ -76,13 +76,18 @@ export function ProjectProvider({ children }) {
     }
 
     let cancelled = false;
+    let retryTimer = null;
 
     const fetchProjects = async (attempt = 1) => {
       const raw = await base44.entities.Project.list("-created_at");
       const data = [...raw].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-      // If empty and we have retries left, wait and try again
-      if (data.length === 0 && attempt < 3) {
-        await new Promise((r) => setTimeout(r, attempt * 1500));
+      // If empty and we have retries left, wait and try again. Track the
+      // backoff timer so the effect cleanup can clear it on unmount —
+      // otherwise a pending setTimeout (1.5–3s) outlives the component and
+      // keeps the process alive (in vitest's fork pool that surfaces as
+      // "Timeout terminating forks worker").
+      if (data.length === 0 && attempt < 3 && !cancelled) {
+        await new Promise((r) => { retryTimer = setTimeout(r, attempt * 1500); });
         if (!cancelled) return fetchProjects(attempt + 1);
         return [];
       }
@@ -147,7 +152,10 @@ export function ProjectProvider({ children }) {
     };
 
     loadProjects();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
     // defaultProjectIdPref is intentionally excluded from the dep list:
     // we resolve it once at startup. Changing the pref later in the
     // current session shouldn't yank the user out of whatever project

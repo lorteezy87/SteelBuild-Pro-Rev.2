@@ -120,5 +120,11 @@ export default defineConfig({
     // `// @vitest-environment jsdom` pragma at the top of the file.
     environment: 'node',
     setupFiles: ['./vitest.setup.js', './src/setupTests.ts'],
+    // Use the worker_threads pool. Threads are terminated forcibly at teardown,
+    // so a worker whose event loop is briefly busy never produces the forks
+    // pool's "Timeout terminating forks worker" warning (intermittent on slow/
+    // contended machines). Component tests here mock all native I/O (supabase,
+    // base44) and only use jsdom, which runs cleanly under threads.
+    pool: 'threads',
   },
 });
