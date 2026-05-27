@@ -17,11 +17,6 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
   (clears all 86), and Auth → Passwords → enable leaked-password protection
   (clears 1).
 
-- **RLS policy consolidation (perf, deferred):** 143 `multiple_permissive_policies`
-  advisor findings — overlapping permissive policies per table/role/action cost
-  per-row eval at scale. Consolidate into one policy per action, table-by-table.
-  Perf-only, not a security hole.
-
 - **Sentry source maps (optional):** `src/instrument.js` captures errors but stack
   traces are minified. Add `@sentry/vite-plugin` for source-map upload — needs a
   `SENTRY_AUTH_TOKEN` build secret.
@@ -55,6 +50,24 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- 2026-05-26 RLS multiple_permissive_policies consolidation (143 -> 0): collapsed
+  overlapping permissive policies into one per (table, role, action), table-by-
+  table, verifying access byte-identical against pg_policies before/after.
+  Batch 1 (`20260526190000`): dropped the redundant FOR ALL `project_member_access`
+  on 32 standard project-owned tables (fully replicated by the four per-command
+  `project_*` policies), the generic `project_*` duplicates on `drawings` /
+  `drawing_sets` (domain `drawings_*` / `drawing_sets_*` retained, incl. the
+  lock-aware update + admin-only delete), and a duplicate FOR ALL on
+  `drawing_zone_activity`. Batch 2 (`20260526200000`): merged the two `projects`
+  SELECT policies into one, and split the admin FOR ALL on `default_cost_codes` /
+  `feature_flags` into write-only commands (public read already covered SELECT).
+  `user_projects` (`20260526210000`): merged the two SELECT policies AND, while
+  reviewing it, found + fixed a privilege-escalation hole — the re-introduced
+  `users_insert_own_membership` (self-insert with no project/role constraint, no
+  INSERT trigger) let any authenticated user grant themselves `owner` on any
+  project; dropped it (re-applying migration 082's intent; onboarding is handled
+  by the SECURITY DEFINER `create_project()`, member management is admin-only).
 
 - 2026-05-26 sharepoint-proxy org-browse gate deployed live: the
   `userIsSystemAdmin` gate on the org-level browse actions
