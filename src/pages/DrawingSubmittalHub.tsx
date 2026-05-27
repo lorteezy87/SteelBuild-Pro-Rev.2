@@ -25,7 +25,7 @@ import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components/design-system";
 import { computeFabReady } from "@/lib/submittalAnalytics";
 import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
-import { computeDetailingReadiness } from "@/lib/detailingReadiness";
+import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
 import SubmittalVisualBoardRaw from "@/components/submittals/SubmittalVisualBoard";
 import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
 import {
@@ -166,6 +166,18 @@ export default function DrawingSubmittalHub() {
     }
     return m;
   }, [setPackages, wpById, openRfiIds, activeProject]);
+
+  // Sequence-aware readiness rollup (group packages by erection sequence).
+  const sequenceReadiness = useMemo(() => {
+    const entries = Array.from(readinessByKey.values()).map((r: any) => ({
+      sequenceNumber: r.sequenceNumber,
+      effectiveState: r.effectiveState,
+      fabricationReady: r.fabricationReady,
+      erectionReady: r.erectionReady,
+      atRisk: r.scheduleRisk?.atRisk,
+    }));
+    return computeSequenceReadiness(entries);
+  }, [readinessByKey]);
 
   // ── Drawing KPIs ───────────────────────────────────────────────────────
   const drawingKpis = useMemo(() => {
@@ -530,6 +542,7 @@ export default function DrawingSubmittalHub() {
                 onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
                 onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
                 onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
+                sequenceReadiness={sequenceReadiness}
                 isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
               />
             )}
