@@ -1,0 +1,224 @@
+# Detailing Control Center — Design Doc (Phase 0)
+
+Status: **DRAFT for sign-off.** No code yet. This is the verification + design
+output of the "verify-first" decision. It maps the vision onto the *actual*
+current schema/code and proposes a minimal, additive plan that does not break the
+working drawings/submittals flow (the killer workflow / moat).
+
+Vision (verbatim intent): stop tracking *"was it submitted?"* and start tracking
+*"what operational state is this package in, and what does the schedule need from
+it — working backward from the erection sequence."*
+
+---
+
+## 1. The model
+
+```
+Level 1  Project              projects
+Level 2  Drawing Package/Area drawing_sets         ← the operational "Detailing Package"
+Level 3  Sheets               drawings  (drawing_set_id → drawing_sets.id)
+Level 4  Revisions            drawing_revisions  (drawing_id → drawings.id, supersedes_revision_id)
+         Approval workflow    submittals / submittal_rounds / submittal_sheet_responses
+         Sequence             work_packages (sequence_number, area, scheduled_start_date)
+```
+
+**Decision (confirmed): the "Detailing Package" is an additive elevation of the
+existing `drawing_sets` row** — not a new entity. Submittals stay the approval
+state machine. This preserves the working auto-lock, the preserved set names, and
+the submittal-driven rollups.
+
+---
+
+## 2. Current state — what ALREADY exists (verified against the live DB + code)
+
+The foundation is ~70–80% built. Verified facts:
+
+**`drawing_sets` (the Package) already has:** `set_name`, `discipline`,
+`status`, `set_approval_status` / `set_approved_date` / `set_approved_by` /
+`set_approval_notes`, `current_submittal_id` + `submittal_status`,
+`is_locked`/`locked_at`/`locked_by`/`locked_reason`, `eor_reviewer`,
+**`area_sequence`** (an area/sequence tag), **`due_date`**, and
+**`linked_work_package_ids` (uuid[])** — i.e. the Package↔sequence link the
+backward-scheduling needs *already exists*.
+
+**`drawings` (Sheets) already has:** `drawing_set_id`, `sheet_number`, `title`,
+`revision_number`, `stage` (deprecated for rollups per §20), `due_date`,
+`priority_flag`, `is_superseded`, `linked_rfi_ids`, and **per-sheet
+`fabrication_start_date` / `fabrication_finish_date` / `ready_for_install_date` /
+`final_delivery_date`** — sheet-level fab/delivery dates already exist.
+
+**`drawing_revisions` (Revisions):** `revision_code`, `revision_name`,
+`version_number`, `is_current`, `issued_at`, `received_at`,
+`supersedes_revision_id` (the supersede chain). Plus
+`drawing_revision_comparisons` / `drawing_revision_deltas` (the "what changed
+between revs" engine).
+
+**Submittals (approval authority):** `submittals` (status, `ball_in_court`,
+`required_date`, `drawing_set_ids[]`, `linked_rfi_ids[]`, `current_round_id`,
+`days_in_review`), `submittal_rounds` (per-round), and **`submittal_sheet_responses`**
+(per-sheet `response_status` within a round → the data backbone for *Partially
+Released*). Workflow logic in `src/lib/submittalStageMapping.js`: the canonical
+`Not Started → IFA → OFA → BFA → OFS → IFC → Released` flow is **derived** from
+`(status, ball_in_court)`; `derivedSetStage()` rolls a set's submittals up to a
+stage; `useSubmittals.ts` auto-locks linked sets on terminal approval.
+
+**`work_packages` (Sequence):** `sequence_number`, `area`, `scheduled_start_date`/
+`_end_date`, `phase`/`trade_phase`/`shipping_phase`/`install_phase`,
+`drawing_ids[]`, `sequence_confirmed`. The erection-sequence source of truth.
+
+**Engines already built (reuse, don't rebuild):**
+- `scheduleCascade.ts` — `computeEffectiveDates()`, `parseDependencies()`,
+  `applyScheduleGates()` → dependency/backward date cascade.
+- `marginRiskEngine.ts` — `calculateMarginRisk()` → **CO exposure**, RFI aging,
+  schedule-slip exposure scoring.
+- `constraintEngine.ts` — `deriveOperationalConstraints()` → auto-flag blockers
+  (RFI blocked, etc.).
+- `autoLinkEngine.js` — extracts S3.2 / WP-104 / RFI-001 refs and links entities.
+
+**Nav (already partly there):** there is already a sidebar group literally named
+**"Detailing"** containing the unified hub page **`DrawingSubmittalHub`** (label
+"Drawings & Submittals", `src/config/routes.js`). `Submittals` = "Submittal
+Register". So the reframe is mostly relabel + restructure, not a new module.
+
+**Rich UI already built:** `DrawingKanban`, `DrawingsGrid`, `DrawingsTable`,
+`StagePipeline`, `AdvanceStageDialog`, `SetApprovalModal`, `RevisionHistoryPanel`,
+`RevisionUploadModal`, `DrawingSetUploadModal`, `ExportFabReleaseModal`;
+submittals: `SubmittalVisualBoard`, `RoundTimeline`, `SheetResponseGrid`,
+`AgingReportTable`, `CycleTimeCard`; and in the drawing viewer a zone-level
+`ReadinessRing`, `DependenciesTab`, `AddDependencyModal`.
+
+---
+
+## 3. The operational-state model (the crux)
+
+We do **not** build a competing state machine. The package's single
+**operational state** is a *coalesce* across three phases:
+
+```
+DRAFTING (manual, pre-submittal)        SUBMITTAL (derived, authority)         RELEASE (manual/triggered, post-fab)
+Not Started → In Detailing →            Submitted → Under Review →             Released for Fab →
+Internal Review → Ready to Submit       R&R / Approved as Noted / Approved     Partially Released → Released for Erection
+                                                                               (Superseded = orthogonal, from revisions)
+```
+
+- **Submittal phase = existing authority.** When a set has an active submittal,
+  its state is the *derived* stage (`derivedSetStage()`), unchanged. "Submitted /
+  Under Review / R&R / Approved as Noted / Approved / Released for Fab" already
+  map onto IFA→Released — **no new states needed here.**
+- **Drafting phase = net-new, manual.** `Not Started → In Detailing → Internal
+  Review → Ready to Submit` precede any submittal. Stored on the package
+  (`drawing_sets`) because no submittal exists yet.
+- **Release phase = net-new.** `Partially Released` (derive from
+  `submittal_sheet_responses` coverage), `Released for Erection` (manual/triggered
+  downstream of fab). `Superseded` derives from `drawing_revisions`.
+
+Effective state = `released_state` (if set) ELSE `derived submittal stage` (if a
+submittal exists) ELSE `detailing_state` (drafting) ELSE `Not Started`. This keeps
+§20 intact (submittals own the middle) while adding the two ends.
+
+---
+
+## 4. Operational readiness — derived vs stored
+
+Prefer **derived** (deterministic engines) over manual flags wherever possible:
+
+| Readiness signal | Source |
+| --- | --- |
+| RFI Blocked | DERIVED — open linked RFIs via `constraintEngine.deriveOperationalConstraints()` / `linked_rfi_ids` |
+| CO Exposure | DERIVED — `marginRiskEngine.calculateMarginRisk()` |
+| Revision Impacted | DERIVED — a newer `drawing_revisions` rev not yet acknowledged downstream |
+| Fabrication Ready | DERIVED — state ≥ Released for Fab AND not RFI-blocked AND no impacting open revision |
+| Erection Ready | DERIVED — Fabrication Ready AND fab complete (sheet fab dates / WP) AND delivery confirmed |
+| Priority Sequence | DERIVED — linked WP `sequence_number` flagged critical |
+| Material Impacted | **STORED** (manual judgment) — net-new boolean |
+| Long Lead Impact | **STORED** (manual judgment) — net-new boolean |
+
+So only ~2 truly manual flags need storing; the rest are computed read-models.
+
+---
+
+## 5. Backward-date model (sequence-driven)
+
+Source of truth = the linked work package's erection date
+(`work_packages.scheduled_start_date` via `drawing_sets.linked_work_package_ids`).
+Work backward with configurable lead offsets:
+
+```
+Erection start (WP.scheduled_start_date)
+  − erection-prep lead   → Erection Release Required By
+  − ship/install lead    → Fab Release Required By
+  − fab duration         → Approval Needed By
+  − approval cycle       → Submit By
+  − internal review lead → Internal Review Due
+  − detailing duration   → Detailing Start
+```
+
+Computed by reusing `scheduleCascade` patterns (offset/dependency math), surfaced
+as **required-by** dates next to the package's **actual** dates (`submitted_date`,
+`approved_date`, sheet fab dates) to compute slack / "Risk to Schedule." Unknown
+sequence dates stay `null` and render **TBD** (never invent dates — §22).
+
+---
+
+## 6. Schema changes (additive only, minimal)
+
+On `drawing_sets` (all nullable; no backfill of fake data):
+- `detailing_state text` — drafting/release sub-state (only authoritative when no
+  submittal governs; see §3).
+- `material_impacted boolean`, `long_lead_impact boolean` — manual readiness.
+- Backward target dates: `detailing_start_date`, `internal_review_due`,
+  `submit_by_date`, `approval_needed_by`, `fab_release_required_by`,
+  `erection_release_required_by` (dates). (`due_date`, `area_sequence`,
+  `linked_work_package_ids` already exist.)
+
+Everything else (RFI-blocked, CO exposure, revision-impacted, fab/erection ready,
+sequence readiness, partial-release %) is a **computed read-model**, not stored —
+so it can't drift. RLS: new columns inherit the existing `drawing_sets` policies
+(no policy change). Migration is one additive `ALTER TABLE` + `NOTIFY pgrst`.
+
+---
+
+## 7. Dashboard widgets (Phase 3)
+
+All computable from the above + existing engines: **Detailing Pipeline**
+(reuse `StagePipeline` over the coalesced state), **Packages Due Soon** (backward
+dates vs today), **Approval Bottlenecks** (`days_in_review`, `ball_in_court`),
+**Revision Impact Tracker** (`drawing_revision_deltas` + downstream fab/ship/erect
+status), **Sequence Readiness** (group packages by WP `sequence_number` → Detailing
+% / Fab Ready / Delivery Ready / Erection Ready).
+
+---
+
+## 8. Phased plan
+
+- **Phase 1 — reframe (low risk, visible):** rename `DrawingSubmittalHub` →
+  "Detailing Control Center" (label + the "Detailing" nav group); restructure the
+  hub UI around Project → Package → Sheets → Revisions; add the drafting + release
+  states to the coalesced state model (additive `detailing_state` column).
+- **Phase 2 — operational layer:** the 2 manual readiness flags + the 6 backward
+  target dates + the derived readiness read-model; "Risk to Schedule" surfaced on
+  each package.
+- **Phase 3 — sequence + dashboard:** Sequence Readiness rollup (via
+  `linked_work_package_ids`) + the 5 dashboard widgets.
+- Each phase ships independently, behind a feature flag if desired, without
+  breaking the current Drawings/Submittals pages.
+
+---
+
+## 9. Open decisions (need your input before Phase 1)
+
+1. **Manual vs auto state advance for drafting** — should `In Detailing →
+   Internal Review → Ready to Submit` be manual buttons, or auto-inferred (e.g.
+   "Ready to Submit" when all sheets uploaded + checked)? Recommendation: manual
+   buttons in v1, auto-suggest later.
+2. **Lead-time offsets** — are the backward-date leads (detailing duration,
+   approval cycle, fab duration, ship lead, erection prep) **per-project
+   constants**, **per-package overrides**, or **per-discipline defaults**?
+   Recommendation: per-project defaults + per-package override.
+3. **Where does "Detailing Control Center" live** — replace the `DrawingSubmittalHub`
+   page in place (keep `Drawings` + `Submittal Register` as drill-downs), or make
+   it a new top-level landing above them? Recommendation: elevate the existing hub
+   in place.
+4. **Partially Released granularity** — per-sheet (we have `submittal_sheet_responses`)
+   or per-package-with-%-complete? Recommendation: per-sheet, rolled to a % on the
+   package.
