@@ -11,8 +11,10 @@
  */
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Star } from "lucide-react";
 import { useDrawingRegister, type DrawingRegisterRow } from "@/hooks/useDrawingRegister";
 import { usePublishRevision, type ReleaseStatus } from "@/hooks/usePublishRevision";
+import { useMyDrawingWatches, useToggleDrawingWatch } from "@/hooks/useDrawingWatch";
 import { usePermissions } from "@/services/permissions";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 
@@ -74,6 +76,8 @@ export function DrawingRegisterGrid({ projectId }: { projectId: string | null })
   const { can } = usePermissions();
   const canRelease = can("approve", "drawing");
   const publish = usePublishRevision();
+  const { data: watches } = useMyDrawingWatches(projectId);
+  const toggleWatch = useToggleDrawingWatch(projectId);
 
   const release = (row: DrawingRegisterRow, status: ReleaseStatus) => {
     if (!row.current_revision_id) { toast.error("No current revision to release."); return; }
@@ -149,6 +153,7 @@ export function DrawingRegisterGrid({ projectId }: { projectId: string | null })
           <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ textAlign: "left", color: muted, fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                <th style={{ padding: "6px 4px", width: 28 }} aria-label="Watch" />
                 <th style={{ padding: "6px 8px" }}>Sheet</th>
                 <th style={{ padding: "6px 8px" }}>Title</th>
                 <th style={{ padding: "6px 8px" }}>Disc.</th>
@@ -166,6 +171,26 @@ export function DrawingRegisterGrid({ projectId }: { projectId: string | null })
             <tbody>
               {rows.map((r) => (
                 <tr key={r.drawing_id} style={{ borderTop: "1px solid var(--border-default)" }}>
+                  <td style={{ padding: "8px 4px", textAlign: "center" }}>
+                    {(() => {
+                      const watched = !!watches?.has(r.drawing_id);
+                      return (
+                        <button
+                          type="button"
+                          title={watched ? "Unwatch this sheet" : "Watch this sheet"}
+                          aria-pressed={watched}
+                          disabled={toggleWatch.isPending}
+                          onClick={() => toggleWatch.mutate(
+                            { drawingId: r.drawing_id, watched },
+                            { onError: (e) => toast.error("Couldn't update watch: " + ((e as Error)?.message || "unknown")) }
+                          )}
+                          style={{ background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 0, color: watched ? "var(--accent)" : muted }}
+                        >
+                          <Star size={14} fill={watched ? "var(--accent)" : "none"} />
+                        </button>
+                      );
+                    })()}
+                  </td>
                   <td style={{ padding: "8px", fontWeight: 700, color: primary, whiteSpace: "nowrap" }}>{r.sheet_number || "—"}</td>
                   <td style={{ padding: "8px", color: primary, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sheet_title || "—"}</td>
                   <td style={{ padding: "8px", color: muted }}>{r.discipline || "—"}</td>
