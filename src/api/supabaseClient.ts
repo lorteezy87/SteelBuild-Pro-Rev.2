@@ -544,6 +544,17 @@ export const entities = {
   DrawingRevision:       createEntityClient('drawing_revisions'),
   DrawingZone:           createEntityClient('drawing_zones'),
   DrawingLink:           createEntityClient('drawing_links'),
+  // ── Drawing control module (20260526240000) ─────────────────────
+  // Document-control layer on top of drawings/drawing_revisions: transmittal
+  // log, role-based review gates, assignable impacts, markups, and watchers.
+  // All project-scoped via user_has_project_access(project_id); the register
+  // grid reads the drawing_register_view + the publish_drawing_revision RPC.
+  DrawingTransmittal:     createEntityClient('drawing_transmittals'),
+  DrawingTransmittalItem: createEntityClient('drawing_transmittal_items'),
+  DrawingReview:          createEntityClient('drawing_reviews'),
+  DrawingImpact:          createEntityClient('drawing_impacts'),
+  DrawingMarkup:          createEntityClient('drawing_markups'),
+  DrawingWatcher:         createEntityClient('drawing_watchers'),
   // 072: append-only sign-off stamps on drawing revisions (review approval,
   // approved-as-noted, revise-and-resubmit, etc.). Voided rows stay in the
   // table; UI filters them with is_voided=false in listSignoffs.
