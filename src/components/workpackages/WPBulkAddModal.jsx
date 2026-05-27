@@ -59,8 +59,8 @@ const PREVIEW_COLUMNS = [
 const PREVIEW_MIN_WIDTH = PREVIEW_COLUMNS.reduce((sum, col) => sum + col.width, 46);
 const PASTE_INPUT_STYLE = {
   ...inputStyle,
-  background: "rgb(14,20,31)",
-  border: "1px solid rgba(135,154,180,0.28)",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
   color: "var(--text-primary)",
   fontFamily: "var(--font-mono)",
   fontSize: 12,
@@ -385,7 +385,7 @@ export default function WPBulkAddModal({
               borderRadius: 8,
               overflow: "auto",
               maxHeight: 320,
-              background: "rgb(10,15,23)",
+              background: "var(--bg-surface)",
             }}
           >
             <table
@@ -401,7 +401,7 @@ export default function WPBulkAddModal({
             >
               <thead
                 style={{
-                  background: "rgb(12,17,25)",
+                  background: "var(--bg-surface-low)",
                   position: "sticky",
                   top: 0,
                   zIndex: 1,
