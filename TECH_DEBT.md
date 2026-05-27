@@ -8,11 +8,74 @@ exactly what's needed.
 
 ## Active items
 
-_No active items currently tracked._
+_From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is wide open — these are hardening, scale, and platform-maturity follow-ups._
+
+- **RLS anon-hardening (two Auth dashboard toggles — not code):** the Supabase
+  security advisor flags 86 tables with anonymous-access policies + leaked-password
+  protection disabled. The app uses email/password only (no anonymous sign-in), so
+  the fix is: Auth → Sign In/Providers → disable "Allow anonymous sign-ins"
+  (clears all 86), and Auth → Passwords → enable leaked-password protection
+  (clears 1).
+
+- **RLS policy consolidation (perf, deferred):** 143 `multiple_permissive_policies`
+  advisor findings — overlapping permissive policies per table/role/action cost
+  per-row eval at scale. Consolidate into one policy per action, table-by-table.
+  Perf-only, not a security hole.
+
+- **sharepoint-proxy gate not deployed live:** the org-level browse actions
+  (`list_sites`/`list_drives`/`list_children`/`get_file_meta`) were gated to system
+  admins in `supabase/functions/sharepoint-proxy/index.ts` (commit `a8ef505c`), but
+  edge functions deploy separately from the Vercel frontend. Run
+  `npx supabase functions deploy sharepoint-proxy --project-ref kjrwqagyeswwoxpjkcko`
+  to apply it live.
+
+- **Sentry source maps (optional):** `src/instrument.js` captures errors but stack
+  traces are minified. Add `@sentry/vite-plugin` for source-map upload — needs a
+  `SENTRY_AUTH_TOKEN` build secret.
+
+- **CI not enforced:** `.github/workflows/ci.yml` runs blocking lint/typecheck/test/
+  build on every push/PR, but merges to the deploy branch aren't gated by GitHub
+  branch protection. Add a rule requiring the "CI" status check (GitHub → Settings →
+  Branches). No E2E / a11y / bundle budgets yet.
+
+- **Unused-index review (perf, low priority):** 91 `unused_index` advisor findings.
+  Do NOT bulk-drop — low prod traffic can mask real use; review each against query
+  patterns first.
+
+- **Stale `.vercel/project.json`:** still names the deleted `steelbuild-pro` Vercel
+  project (production is `steelbuildpro-og` / steelbuild-pro.com). Harmless
+  (Vercel/CI use the GitHub integration, not this file) but misleading — refresh via
+  `vercel link`.
+
+- **Per-project-role UI gating (optional):** `src/services/permissions.ts` `can()`
+  gates on the GLOBAL role (admin→admin, user→PM), not the per-project role, so a
+  project `viewer` who is a global `user` sees PM-level controls. Display-only
+  (RLS + `validateTransition` are the real guards); sourcing from `useProjectRole`
+  would align the UI with per-project permissions.
+
+- **Deploy-branch rename to `main` (deferred):** blocked by a stale existing `main`
+  (collision) and requires updating Vercel's Production-Branch setting
+  (dashboard-only) or prod auto-deploys stop. Full safe sequence captured in the
+  `vercel_production_topology` memory.
 
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- 2026-05-26 feature + enterprise pass: scheduling ("Update Scheduled Dates"
+  sync button + drag-to-resize Gantt bars); SOV import hardening (XLSX + steel
+  cost-code auto-mapping + pre-import review modal; migration `20260526140000`
+  adds `cost_code`/`cost_code_name` to `sov_items`); CO workflow (convert
+  cost-impact RFIs → change orders + SOV-line link; migration `20260526150000`
+  adds `source_rfi_id`/`sov_line_item_id`/`sov_line_number` to `change_orders`);
+  DB scale pass (migration `20260526160000` = 43 covering indexes for unindexed
+  FKs + 4 duplicate-index drops; `20260526170000` = 4 `auth_rls_initplan` policy
+  wraps); Sentry error monitoring (`src/instrument.js`, masked replay); module
+  trim (removed Project Control Center, Portfolio Schedule, Drawing Analysis,
+  Meetings, Mitigations, 3D Model Viewer; relocated Onboarding/Data Exchange/
+  Integrations/User Management/Feature Flags/Tutorial into Settings); re-landed
+  the previously-unpushed financial-correctness fix (signed deductive-CO amount +
+  CSV "closed" → neutral status).
 
 - RBAC Phase C project-member management resolved: migration
   `20260516012000_resolve_project_members_phase_c.sql` adds the
