@@ -37,15 +37,18 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
   (Vercel/CI use the GitHub integration, not this file) but misleading — refresh via
   `vercel link`.
 
-- **Vercel Production-Branch follow-up (after the `main` rename):** the deploy
-  branch was renamed `codex/base44-deploy-nick` → `main` on 2026-05-26. Vercel's
-  Production Branch setting (Settings → Git, dashboard-only) **must** be switched
-  to `main` or production auto-deploys stop firing — verify it's set. (The old
-  branch name still redirects on GitHub during the grace period.)
-
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- 2026-05-26 deploy/default branch renamed `codex/base44-deploy-nick` → `main`
+  (GitHub-native rename: commits preserved, default branch + open PRs updated,
+  old name redirects during the grace period). The stale prototype `main`
+  (6 abandoned commits) was archived to `archive/old-main-prototype` then
+  deleted before the rename. The project owner switched the Vercel Production
+  Branch to `main` (the Branch Tracking panel now reads "pushed to the `main`
+  branch"). The living docs + CI (`ci.yml`, `CLAUDE.md`, `README`,
+  `ARCHITECTURE`, `AGENTS`) were updated to the new name.
 
 - 2026-05-26 RLS multiple_permissive_policies consolidation (143 -> 0): collapsed
   overlapping permissive policies into one per (table, role, action), table-by-
