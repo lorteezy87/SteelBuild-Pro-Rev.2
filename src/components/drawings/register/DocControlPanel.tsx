@@ -8,10 +8,12 @@ import { useState } from "react";
 import { DrawingRegisterGrid } from "./DrawingRegisterGrid";
 import { TransmittalLog } from "./TransmittalLog";
 import { ReviewQueue } from "./ReviewQueue";
+import { ImpactBoard } from "./ImpactBoard";
 
 const VIEWS = [
   { key: "register", label: "Register" },
   { key: "reviews", label: "Reviews" },
+  { key: "impacts", label: "Impacts" },
   { key: "transmittals", label: "Transmittals" },
 ] as const;
 
@@ -37,6 +39,7 @@ export function DocControlPanel({ projectId }: { projectId: string | null }) {
       </div>
       {view === "register" && <DrawingRegisterGrid projectId={projectId} />}
       {view === "reviews" && <ReviewQueue projectId={projectId} />}
+      {view === "impacts" && <ImpactBoard projectId={projectId} />}
       {view === "transmittals" && <TransmittalLog projectId={projectId} />}
     </div>
   );
