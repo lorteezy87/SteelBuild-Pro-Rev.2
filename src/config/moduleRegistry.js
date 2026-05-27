@@ -54,7 +54,7 @@ export const ALL_MODULES = [
   { icon: "\u2261", name: "Scope & Exclusions",       group: "Setup",         page: "ScopeExclusions" },
   { icon: "\u2630", name: "Contacts",                 group: "Setup",         page: "Contacts" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
-  { icon: "\u25A6", name: "Drawings & Submittals",    group: "Detailing",     page: "DrawingSubmittalHub" },
+  { icon: "\u25A6", name: "Detailing Control Center",    group: "Detailing",     page: "DrawingSubmittalHub" },
   { icon: "\u2691", name: "RFI Hub",                  group: "Comms",         page: "RFIs" },
   { icon: "\uD83D\uDCDD", name: "Production Notes",   group: "Comms",         page: "ProductionNotes" },
   { icon: "\u2713", name: "Action Items",             group: "Comms",         page: "ActionItems" },
@@ -128,7 +128,7 @@ export const NAV_GROUPS = [
   {
     label: "DOCUMENTS & DRAWINGS",
     items: [
-      { label: "Drawings & Submittals", icon: "\u25A6", page: "DrawingSubmittalHub" },
+      { label: "Detailing Control Center", icon: "\u25A6", page: "DrawingSubmittalHub" },
       { label: "Document Repository",   icon: "\uD83D\uDCC1", page: "Documents" },
     ],
   },
@@ -246,7 +246,7 @@ export const SIDEBAR_GROUPS = [
     label: "DESIGN & DRAWINGS",
     collapsible: true,
     items: [
-      { label: "Drawings & Submittals", icon: "\u25A6", page: "DrawingSubmittalHub" },
+      { label: "Detailing Control Center", icon: "\u25A6", page: "DrawingSubmittalHub" },
       { label: "Drawing Viewer",       icon: "\u25A6", page: "DrawingViewer" },
     ],
   },
