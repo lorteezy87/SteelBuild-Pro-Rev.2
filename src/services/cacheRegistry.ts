@@ -55,6 +55,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["drawings-nav-count", pid], // Layout.jsx nav badge
       ["draw-detail", pid],        // ProjectDetailView.jsx
       ["drawings-for-wp", pid],    // WorkPackageDetailModal.jsx (uses project_id)
+      ["drawing-register", pid],   // DrawingRegisterGrid (drawing_register_view)
     ],
   },
 

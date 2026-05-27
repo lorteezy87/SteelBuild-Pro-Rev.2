@@ -1,12 +1,19 @@
 /**
  * DrawingRegisterGrid — register-first document-control view. One row per active
  * sheet: current revision + release status + open-impact / pending-review / RFI /
- * work-package counts, sourced from `drawing_register_view`. Read-only for this
- * MVP slice; review gates, field-release, and publish actions land in later
- * phases of the Drawing Control module.
+ * work-package counts, sourced from `drawing_register_view`.
+ *
+ * Slice 2 adds release control: a status filter (select "Released for field" for
+ * field-release mode — the "one current source of truth" crews work from) and a
+ * per-row Release action (PM+ only) that calls publish_drawing_revision to set
+ * the current revision's release status. The RPC enforces project membership
+ * server-side; the UI gate here is display-only.
  */
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { useDrawingRegister, type DrawingRegisterRow } from "@/hooks/useDrawingRegister";
+import { usePublishRevision, type ReleaseStatus } from "@/hooks/usePublishRevision";
+import { usePermissions } from "@/services/permissions";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 
 const STATUS_TONE: Record<string, string> = {
@@ -20,6 +27,17 @@ const STATUS_TONE: Record<string, string> = {
   superseded: "var(--text-muted)",
   void: "var(--status-error)",
 };
+
+const STATUS_FILTERS = [
+  "all", "received", "pending_review", "reviewed", "released_for_estimate",
+  "released_for_shop", "released_for_field", "on_hold", "superseded", "void",
+];
+
+const RELEASE_OPTIONS: { value: ReleaseStatus; label: string }[] = [
+  { value: "released_for_estimate", label: "Estimate" },
+  { value: "released_for_shop", label: "Shop" },
+  { value: "released_for_field", label: "Field" },
+];
 
 const muted = "var(--text-muted)";
 const primary = "var(--text-primary)";
@@ -52,15 +70,31 @@ function Count({ n, tone }: { n: number | null; tone?: string }) {
 export function DrawingRegisterGrid({ projectId }: { projectId: string | null }) {
   const { data = [], isLoading, error } = useDrawingRegister(projectId);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const { can } = usePermissions();
+  const canRelease = can("approve", "drawing");
+  const publish = usePublishRevision();
+
+  const release = (row: DrawingRegisterRow, status: ReleaseStatus) => {
+    if (!row.current_revision_id) { toast.error("No current revision to release."); return; }
+    publish.mutate(
+      { revisionId: row.current_revision_id, releaseStatus: status },
+      {
+        onSuccess: () => toast.success(`${row.sheet_number ?? "Sheet"} → ${status.replace(/_/g, " ")}`),
+        onError: (e) => toast.error("Release failed: " + ((e as Error)?.message || "unknown")),
+      }
+    );
+  };
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return data;
-    return data.filter((r: DrawingRegisterRow) =>
-      [r.sheet_number, r.sheet_title, r.discipline, r.drawing_set_name, r.current_status]
-        .some((v) => (v || "").toLowerCase().includes(q))
-    );
-  }, [data, query]);
+    return data.filter((r: DrawingRegisterRow) => {
+      if (statusFilter !== "all" && r.current_status !== statusFilter) return false;
+      if (!q) return true;
+      return [r.sheet_number, r.sheet_title, r.discipline, r.drawing_set_name, r.current_status]
+        .some((v) => (v || "").toLowerCase().includes(q));
+    });
+  }, [data, query, statusFilter]);
 
   if (!projectId) {
     return <div style={{ padding: 24, color: muted, fontSize: 13 }}>Select a project to view its drawing register.</div>;
@@ -82,16 +116,28 @@ export function DrawingRegisterGrid({ projectId }: { projectId: string | null })
         <div>
           <h3 style={{ margin: 0, color: primary, fontSize: 16 }}>Drawing Register</h3>
           <p style={{ margin: "4px 0 0", color: muted, fontSize: 12 }}>
-            Current revision + release status + downstream counts per sheet. One source of truth.
+            Current revision + release status + downstream counts per sheet. Filter to “Released for field” for the crew’s current-sheet view.
           </p>
         </div>
-        <input
-          className="sbd-input"
-          placeholder="Filter sheet, title, discipline, set…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          style={{ minWidth: 240, maxWidth: 360 }}
-        />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select
+            className="sbd-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            title="Filter by release status"
+          >
+            {STATUS_FILTERS.map((s) => (
+              <option key={s} value={s}>{s === "all" ? "All statuses" : s.replace(/_/g, " ")}</option>
+            ))}
+          </select>
+          <input
+            className="sbd-input"
+            placeholder="Filter sheet, title, discipline, set…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ minWidth: 220, maxWidth: 360 }}
+          />
+        </div>
       </div>
 
       {rows.length === 0 ? (
@@ -114,6 +160,7 @@ export function DrawingRegisterGrid({ projectId }: { projectId: string | null })
                 <th style={{ padding: "6px 8px", textAlign: "center" }}>RFIs</th>
                 <th style={{ padding: "6px 8px", textAlign: "center" }}>WPs</th>
                 <th style={{ padding: "6px 8px" }}>Last activity</th>
+                {canRelease && <th style={{ padding: "6px 8px" }}>Release</th>}
               </tr>
             </thead>
             <tbody>
@@ -130,6 +177,27 @@ export function DrawingRegisterGrid({ projectId }: { projectId: string | null })
                   <td style={{ padding: "8px", textAlign: "center" }}><Count n={r.rfi_count} /></td>
                   <td style={{ padding: "8px", textAlign: "center" }}><Count n={r.work_package_count} /></td>
                   <td style={{ padding: "8px", color: muted, whiteSpace: "nowrap" }}>{r.last_activity ? fmtDate(r.last_activity) : "—"}</td>
+                  {canRelease && (
+                    <td style={{ padding: "8px" }}>
+                      <select
+                        className="sbd-select"
+                        value=""
+                        disabled={!r.current_revision_id || publish.isPending}
+                        onChange={(e) => {
+                          const v = e.target.value as ReleaseStatus;
+                          if (v) release(r, v);
+                          e.target.value = "";
+                        }}
+                        title={r.current_revision_id ? "Release current revision" : "No current revision"}
+                        style={{ fontSize: 11 }}
+                      >
+                        <option value="">Release…</option>
+                        {RELEASE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
