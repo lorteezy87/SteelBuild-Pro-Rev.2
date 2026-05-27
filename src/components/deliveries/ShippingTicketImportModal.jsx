@@ -499,7 +499,7 @@ function TicketPreviewCard({ ticket, index, projects, onToggle, onRemove, onProj
                     onChange={(e) => onProjectChange(e.target.value)}
                     style={{
                       width: "100%", padding: "4px 8px", fontSize: 11,
-                      background: "#161B22", border: "1px solid var(--border-default)", borderRadius: 2,
+                      background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 2,
                       color: "var(--text-primary)", fontFamily: "var(--font-body)",
                     }}
                   >

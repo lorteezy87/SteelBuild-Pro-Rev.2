@@ -252,7 +252,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
           display: "grid", gridTemplateColumns: COL_WIDTHS,
           minWidth: GRID_MIN_WIDTH,
           gap: 0, padding: "0 16px",
-          height: 32, background: "rgb(10,15,23)",
+          height: 32, background: "var(--bg-surface-low)",
           borderBottom: "1px solid var(--divider)",
           flexShrink: 0, alignItems: "center",
         }}>
@@ -426,7 +426,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
               color: "rgba(200,155,32,0.50)", fontFamily: "var(--font-mono)", fontSize: 10,
               letterSpacing: "0.08em", fontWeight: 700,
               borderBottom: "1px solid var(--hover-bg)",
-              background: "rgb(10,15,23)",
+              background: "var(--bg-surface-low)",
               transition: "color 0.12s",
             }}
             onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
@@ -440,7 +440,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "12px 24px", borderTop: "1px solid var(--bg-surface-high)",
-          background: "rgb(10,15,23)", flexShrink: 0,
+          background: "var(--bg-surface-low)", flexShrink: 0,
         }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
             {rows.filter((r) => r.task_name.trim()).length} of {rows.length} rows ready to save

@@ -789,7 +789,7 @@ function LinkedDrawingSets({ value = [], allSets = [], onChange }: LinkedDrawing
           onBlur={() => setPicking(false)}
           style={{
             fontFamily: "var(--font-mono)", fontSize: 10, padding: "4px 8px",
-            background: "#161B22",
+            background: "var(--bg-input)",
             border: "1px solid var(--accent)", borderRadius: 3,
             color: "var(--text-primary)", outline: "none",
             maxWidth: "100%",

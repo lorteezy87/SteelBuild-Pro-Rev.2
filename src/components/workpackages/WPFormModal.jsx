@@ -336,7 +336,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
               style={inputStyle}
             />
             {showDrawingDropdown && filteredDrawings.length > 0 && (
-               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "rgb(12,17,25)", border: "1px solid rgba(135,154,180,0.28)", borderTop: "none", borderRadius: "0 0 8px 8px", maxHeight: 200, overflowY: "auto", zIndex: 10, boxShadow: "0 16px 34px rgba(0,0,0,0.55)" }}>
+               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderTop: "none", borderRadius: "0 0 8px 8px", maxHeight: 200, overflowY: "auto", zIndex: 10, boxShadow: "var(--shadow-lg)" }}>
                  {filteredDrawings.map(d => (
                    <div
                      key={d.id}

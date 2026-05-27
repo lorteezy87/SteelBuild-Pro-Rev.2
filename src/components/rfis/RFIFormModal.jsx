@@ -745,7 +745,7 @@ const darkSelectButtonStyle = {
   gap: 10,
   textAlign: "left",
   cursor: "pointer",
-  background: "rgba(9, 18, 32, 0.98)",
+  background: "var(--bg-input)",
   borderRadius: 8,
 };
 
@@ -758,7 +758,7 @@ const darkSelectMenuStyle = {
   maxHeight: 220,
   overflowY: "auto",
   padding: 4,
-  background: "linear-gradient(180deg, rgba(7, 13, 24, 0.998), rgba(4, 9, 18, 0.998))",
+  background: "var(--bg-surface-secondary)",
   border: "1px solid color-mix(in srgb, var(--accent) 32%, var(--border-default))",
   borderRadius: 10,
   boxShadow: "0 18px 46px rgba(0,0,0,0.74), inset 0 1px 0 rgba(255,255,255,0.06)",
