@@ -1411,7 +1411,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               height: 28,
               borderRadius: 8,
               border: "1px solid var(--border-default)",
-              background: "rgba(3,8,18,0.72)",
+              background: "var(--bg-input)",
               color: "var(--text-primary)",
               padding: "0 10px",
               fontFamily: "var(--font-body)",
@@ -1584,7 +1584,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         gap: 10,
         padding: "8px 16px",
         borderBottom: "1px solid var(--divider)",
-        background: "linear-gradient(180deg, rgba(8,18,32,0.90), rgba(3,8,18,0.96))",
+        background: "var(--sched-toolbar-bg)",
         overflowX: "auto",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -1597,7 +1597,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 padding: "5px 9px",
                 borderRadius: 999,
                 border: quickFilter === filter.key ? "1px solid var(--accent)" : "1px solid var(--divider)",
-                background: quickFilter === filter.key ? "rgba(86,176,255,0.16)" : "rgba(255,255,255,0.035)",
+                background: quickFilter === filter.key ? "var(--accent-muted)" : "var(--bg-surface-low)",
                 color: quickFilter === filter.key ? "var(--accent)" : "var(--text-secondary)",
                 fontFamily: "var(--font-mono)",
                 fontSize: 8,
@@ -1626,9 +1626,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         ].map((card) => (
           <div key={card.label} style={{
             minWidth: 104,
-            border: "1px solid rgba(255,255,255,0.08)",
+            border: "1px solid var(--border-default)",
             borderRadius: 10,
-            background: "rgba(255,255,255,0.035)",
+            background: "var(--bg-surface-low)",
             padding: "6px 8px",
             boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)",
           }}>

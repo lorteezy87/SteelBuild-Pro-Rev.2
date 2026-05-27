@@ -269,6 +269,13 @@ html[data-accent="slate"] {
   --glass-border:             rgba(255,255,255,0.08);
   --glass-blur:               20px;
 
+  /* Schedule "dark glass" panels — the Rivet brief band and the Gantt
+     sync-header strip. Hardcoded navy in dark (exact legacy look); the
+     light theme re-points these to a light surface gradient so the
+     dark-token text inside them stays readable (see light block). */
+  --sched-band-bg:            linear-gradient(135deg, rgba(3,8,18,0.96), rgba(8,18,32,0.94));
+  --sched-toolbar-bg:         linear-gradient(180deg, rgba(8,18,32,0.90), rgba(3,8,18,0.96));
+
   /* Typography scale — semantic sizes used across the app.
    * Replaces magic-number fontSize values in inline styles.
    * Naming: 2xs→3xl mirrors Tailwind-style progressive scale. */
@@ -439,6 +446,12 @@ html[data-accent="slate"] {
   --glass-bg:                 rgba(255,255,255,0.92);
   --glass-border:             #CBD5E1;
   --glass-blur:               22px;
+
+  /* Schedule panels — light surface gradients (vs the dark navy used in
+     dark mode), so the Rivet brief band + Gantt sync-header strip read as
+     clean light cards with their dark-token text fully legible. */
+  --sched-band-bg:            linear-gradient(135deg, var(--bg-surface), var(--bg-surface-low));
+  --sched-toolbar-bg:         linear-gradient(180deg, var(--bg-surface-low), var(--bg-surface));
 }
 
 /* ───────────────────────────────────────────────────────────────────

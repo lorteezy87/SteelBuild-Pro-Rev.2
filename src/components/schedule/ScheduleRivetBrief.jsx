@@ -1273,7 +1273,7 @@ const shellStyle = {
   margin: "0 24px 12px",
   border: "1px solid color-mix(in srgb, var(--border-default) 84%, white 16%)",
   borderRadius: 18,
-  background: "linear-gradient(135deg, rgba(3, 8, 18, 0.96), rgba(8, 18, 32, 0.94))",
+  background: "var(--sched-band-bg)",
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.055), 0 18px 42px rgba(0,0,0,0.28)",
   padding: 14,
 };
