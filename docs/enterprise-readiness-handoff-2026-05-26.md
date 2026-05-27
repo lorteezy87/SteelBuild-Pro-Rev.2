@@ -42,29 +42,30 @@ Today `src/instrument.js` captures errors, but production stack traces are
 minified (bundled JS). Uploading source maps at build time makes them readable.
 `@sentry/react` is already installed; this adds the build-time upload.
 
-**You provide (secret + identifiers):**
+**Code wiring — DONE (committed).** `@sentry/vite-plugin` is installed and wired
+into `vite.config.js`: it's gated on `SENTRY_AUTH_TOKEN` (local/CI builds without
+it are untouched — verified), emits hidden source maps, deletes the `.map` files
+after upload, and swallows upload errors so a misconfigured token can never fail
+a production deploy. Nothing is hardcoded — `org`/`project`/`authToken` are read
+from env at build time.
 
-1. In Sentry, find your **org slug** and **project slug** (Settings → General;
-   the baked-in DSN is org id `4511458803253248`, project id
-   `4511458819375104` — the plugin needs the human slugs, e.g. `your-org` /
-   `steelbuild-pro`).
-2. Create an auth token: Sentry → Settings → **Auth Tokens** → *Create New
-   Token* with scopes **`project:releases`** + **`org:read`** (read-only
-   otherwise). Name it `steelbuild-pro-sourcemaps`. Copy it once.
-3. Add it to Vercel: project `steelbuildpro-og` → Settings → **Environment
-   Variables** → add `SENTRY_AUTH_TOKEN` (Production + Preview), paste the
-   token, mark **Sensitive**. Optionally add `SENTRY_ORG` and `SENTRY_PROJECT`
-   (the slugs) the same way.
+**You provide (3 Vercel build env vars):** project `steelbuildpro-og` → Settings
+→ **Environment Variables** (Production + Preview):
 
-**Code wiring (I can do this part on request — say the word):** add
-`@sentry/vite-plugin` as a devDependency and, in `vite.config`, register
-`sentryVitePlugin({ org, project, authToken: process.env.SENTRY_AUTH_TOKEN })`
-**gated on the token being present** (so local/CI builds without the token are
-unaffected) and set the build to emit hidden source maps. Once the env var is
-set in Vercel, the next deploy uploads maps and Sentry symbolicates traces.
+1. `SENTRY_AUTH_TOKEN` — the token you generated (mark **Sensitive**). Scopes
+   needed: `project:releases` + `org:read`.
+2. `SENTRY_ORG` — your org **slug** (the `…/organizations/<slug>/` segment in any
+   Sentry URL; the baked-in DSN org id is `4511458803253248`, but the plugin
+   needs the slug).
+3. `SENTRY_PROJECT` — your project **slug** (Sentry → the project → Settings;
+   DSN project id is `4511458819375104`).
 
-Until then, error capture + masked replay already work — only the stack-frame
-readability is affected. This item is **optional / nice-to-have**.
+Redeploy after setting them; the next production build uploads maps and Sentry
+will symbolicate traces. Until then, error capture + masked replay already work —
+only stack-frame readability is affected, so this is **nice-to-have**.
+
+> Security: rotate the auth token in Sentry once you've confirmed symbolication
+> works, since it was shared in chat. The repo never stores it (env-only).
 
 ---
 
