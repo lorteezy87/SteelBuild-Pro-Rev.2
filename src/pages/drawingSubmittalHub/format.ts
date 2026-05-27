@@ -1,4 +1,4 @@
-import { ClipboardList, FileStack, Gauge, Layers3, Workflow } from "lucide-react";
+import { ClipboardList, FileStack, Gauge, Layers3, ShieldCheck, Workflow } from "lucide-react";
 import { compareDrawingSetPackages } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import type { Drawing, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
@@ -25,6 +25,7 @@ export const TABS = [
   { key: "drawings", label: "Drawing Register", icon: FileStack },
   { key: "submittals", label: "Submittal Register", icon: ClipboardList },
   { key: "matrix", label: "Approval Matrix", icon: Workflow },
+  { key: "doccontrol", label: "Doc Control", icon: ShieldCheck },
 ];
 
 // ── Status colors for matrix ───────────────────────────────────────────────
