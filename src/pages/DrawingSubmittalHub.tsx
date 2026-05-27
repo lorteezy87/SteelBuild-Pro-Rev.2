@@ -24,6 +24,7 @@ import ErrorBoundaryRaw from "@/components/shared/ErrorBoundary";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components/design-system";
 import { computeFabReady } from "@/lib/submittalAnalytics";
+import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
 import SubmittalVisualBoardRaw from "@/components/submittals/SubmittalVisualBoard";
 import { AlertTriangle, Gauge, Link2 } from "lucide-react";
 import {
@@ -146,6 +147,11 @@ export default function DrawingSubmittalHub() {
         (latestSubmittal && ACTION_STATUSES.has(latestSubmittal.status)) ||
         pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage));
       const status = latestSubmittal?.status || rollupDrawingStage(pkg.sheets);
+      // Coalesced operational state (drafting → submittal → release). Kept
+      // alongside `status` (additive) so the existing pipeline/row display is
+      // unchanged; surfaced as its own chip + drives the drafting control.
+      const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
+      const canDraft = !hasGoverningSubmittal(pkg.submittals);
       const owner =
         latestSubmittal?.ball_in_court ||
         latestSubmittal?.assigned_to ||
@@ -167,6 +173,9 @@ export default function DrawingSubmittalHub() {
         closed,
         needsAction,
         routeTab: "drawings",
+        detailingState,
+        _canDraft: canDraft,
+        _detailingStateRaw: pkg.parent?.detailing_state ?? null,
         // Entity references for inline editing
         _submittalId: latestSubmittal?.id || null,
         _drawingSetId: pkg.setId || null,
@@ -286,6 +295,21 @@ export default function DrawingSubmittalHub() {
       toast.success("Due date set");
     },
     onError: (err) => toast.error("Failed to set due date: " + (err?.message || "Unknown")),
+  });
+
+  // Advance the manual detailing (drafting/release) state on a drawing set.
+  // Only meaningful when no submittal governs the package (the submittal
+  // machine owns the middle of the flow); the UI gates the control accordingly.
+  const updateDetailingStateMut = useMutation({
+    mutationFn: async ({ item, next }: { item: any; next: string }) => {
+      if (!item?._drawingSetId) throw new Error("No drawing set to update");
+      await base44.entities.DrawingSet.update(item._drawingSetId, { detailing_state: next } as any);
+    },
+    onSuccess: (_data, { next }) => {
+      invalidateHub();
+      toast.success(`Detailing state → ${next}`);
+    },
+    onError: (err) => toast.error("Failed to set detailing state: " + (err?.message || "Unknown")),
   });
 
   // ── Render ─────────────────────────────────────────────────────────────
@@ -420,7 +444,8 @@ export default function DrawingSubmittalHub() {
                 onOpenTab={setActiveTab}
                 onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
                 onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
-                isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending}
+                onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
+                isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending}
               />
             )}
             {activeTab === "process" && (
