@@ -1,5 +1,6 @@
 import { ClipboardList, FileStack, Gauge, Layers3, Workflow } from "lucide-react";
 import { compareDrawingSetPackages } from "@/lib/drawingSetOrdering";
+import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import type { Drawing, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
@@ -228,6 +229,26 @@ export function pluralize(count: number, singular: string, plural = `${singular}
 
 export function getStatusColor(status: string): string {
   return STATUS_COLORS[status] || textMuted;
+}
+
+// Colors for the coalesced OPERATIONAL state vocabulary (drafting + release
+// states; the submittal stages IFA..Released reuse the canonical STAGE_MAP).
+const OPERATIONAL_STATE_COLORS: Record<string, string> = {
+  "Not Started":          "#64748b", // slate
+  "In Detailing":         "#64748b", // slate
+  "Internal Review":      "#38bdf8", // sky
+  "Ready to Submit":      "#818cf8", // indigo
+  "Partially Released":   "#10b981", // emerald
+  "Released for Erection":"#14b8a6", // teal
+};
+
+/** Color for any operational state: drafting/release overrides, then the
+ *  canonical stage color (IFA..Released), then submittal status, then muted. */
+export function getOperationalStateColor(state: string): string {
+  if (OPERATIONAL_STATE_COLORS[state]) return OPERATIONAL_STATE_COLORS[state];
+  const stage = STAGE_MAP[state];
+  if (stage?.color) return stage.color;
+  return STATUS_COLORS[state] || textMuted;
 }
 
 export function getActionTone(item: any): string {

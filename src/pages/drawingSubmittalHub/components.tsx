@@ -18,6 +18,7 @@ import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
 import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import { DRAFTING_STATES } from "@/lib/detailingPackageState";
 import {
   BIC_CHOICES,
   STATUS_COLORS,
@@ -27,6 +28,7 @@ import {
   error,
   fmtDate,
   getActionTone,
+  getOperationalStateColor,
   getStatusColor,
   getSubmittalDueDate,
   info,
@@ -95,10 +97,11 @@ interface TriageBoardProps {
   onOpenTab: (key: string) => void;
   onUpdateOwner: (item: any, owner: string) => void;
   onUpdateDueDate: (item: any, date: string) => void;
+  onAdvanceDetailing: (item: any, next: string) => void;
   isSaving: boolean;
 }
 
-export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, isSaving }: TriageBoardProps) {
+export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, isSaving }: TriageBoardProps) {
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
@@ -181,8 +184,11 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
           </div>
           {focusItem ? (
             <>
-              <div style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.45 }}>
-                {focusItem.group} - {focusItem.status}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.45 }}>
+                  {focusItem.group} - {focusItem.status}
+                </span>
+                {focusItem.detailingState && <OperationalStateChip state={focusItem.detailingState} />}
               </div>
               {/* ── Inline Quick-Action Controls ──────────────────────── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
@@ -198,6 +204,14 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                   disabled={isSaving}
                 />
               </div>
+              {/* ── Detailing-state advance (drafting phase only) ─────── */}
+              {focusItem.kind === "Drawing Set" && focusItem._canDraft && (
+                <InlineDetailingControl
+                  current={focusItem._detailingStateRaw}
+                  onAdvance={(next) => onAdvanceDetailing(focusItem, next)}
+                  disabled={isSaving}
+                />
+              )}
               <button
                 type="button"
                 onClick={() => onOpenTab(focusRoute)}
@@ -432,6 +446,84 @@ function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: Inli
   );
 }
 
+// ── Operational-state chip + drafting-state advance control ─────────────────
+
+function OperationalStateChip({ state }: { state: string }) {
+  const color = getOperationalStateColor(state);
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 8px",
+      borderRadius: 999,
+      fontFamily: mono,
+      fontSize: 9,
+      fontWeight: 800,
+      letterSpacing: "0.06em",
+      textTransform: "uppercase",
+      color,
+      background: `color-mix(in srgb, ${color} 16%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`,
+      whiteSpace: "nowrap",
+    }}>
+      {state}
+    </span>
+  );
+}
+
+interface InlineDetailingControlProps {
+  current: string | null | undefined;
+  onAdvance: (next: string) => void;
+  disabled: boolean;
+}
+
+// Manual drafting-state advance (In Detailing → Internal Review → Ready to
+// Submit). Only rendered for drawing-set packages with NO governing submittal —
+// once a submittal exists, the submittal machine owns the state (§20).
+function InlineDetailingControl({ current, onAdvance, disabled }: InlineDetailingControlProps) {
+  return (
+    <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: surface1, border: `1px solid ${border}` }}>
+      <div style={{
+        fontFamily: mono, fontSize: 8, color: textMuted,
+        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8,
+        display: "flex", alignItems: "center", gap: 5,
+      }}>
+        <ClipboardList size={10} />
+        Detailing state
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {DRAFTING_STATES.map((s) => {
+          const isCurrent = current === s;
+          const color = getOperationalStateColor(s);
+          return (
+            <button
+              key={s}
+              type="button"
+              disabled={disabled || isCurrent}
+              onClick={() => onAdvance(s)}
+              title={isCurrent ? `Already ${s}` : `Set to ${s}`}
+              style={{
+                padding: "5px 9px",
+                borderRadius: 8,
+                fontFamily: mono,
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: "0.04em",
+                cursor: disabled || isCurrent ? "default" : "pointer",
+                color: isCurrent ? "#0b0e14" : color,
+                background: isCurrent ? color : `color-mix(in srgb, ${color} 12%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`,
+                opacity: disabled && !isCurrent ? 0.6 : 1,
+              }}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 interface RiskPillProps {
   icon: IconType;
   label: string;
@@ -594,8 +686,13 @@ function TriageItemRow({ item, onOpen }: { item: any; onOpen: () => void }) {
         <div style={{ color: textPrimary, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: 13 }}>
           {item.title}
         </div>
-        <div style={{ color: textMuted, fontSize: 12, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {item.group} - {item.status}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, minWidth: 0 }}>
+          <span style={{ color: textMuted, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
+            {item.group}
+          </span>
+          {item.detailingState
+            ? <OperationalStateChip state={item.detailingState} />
+            : <span style={{ color: textMuted, fontSize: 12, whiteSpace: "nowrap" }}>- {item.status}</span>}
         </div>
       </div>
       <div>
