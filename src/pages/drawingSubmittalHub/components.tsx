@@ -100,10 +100,11 @@ interface TriageBoardProps {
   onAdvanceDetailing: (item: any, next: string) => void;
   onToggleReadiness: (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
   sequenceReadiness: Array<{ sequence: string; packageCount: number; detailingPct: number; fabReadyCount: number; erectionReadyCount: number; atRiskCount: number }>;
+  revisionImpact: Array<any>;
   isSaving: boolean;
 }
 
-export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, isSaving }: TriageBoardProps) {
+export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving }: TriageBoardProps) {
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
@@ -275,6 +276,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
       </div>
 
       <SequenceReadinessSection rows={sequenceReadiness} />
+      <RevisionImpactSection rows={revisionImpact} />
     </div>
   );
 }
@@ -349,6 +351,70 @@ function SeqMetric({ label, value, tone }: { label: string; value: ReactNode; to
       <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</div>
       <div className="sbd-num" style={{ color: tone, fontFamily: mono, fontSize: 15, fontWeight: 800, marginTop: 2 }}>{value}</div>
     </div>
+  );
+}
+
+// ── Revision Impact Tracker ─────────────────────────────────────────────────
+// Revisions that landed on sheets already moving downstream (fabricated /
+// delivered / in field) — the rework / change-order exposure (design doc §7).
+
+const REV_SEVERITY_TONE: Record<string, string> = { critical: error, high: warning, medium: info, low: textMuted };
+
+function RevisionImpactSection({ rows }: { rows: any[] }) {
+  const shown = (rows || []).slice(0, 8);
+  return (
+    <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+        <div>
+          <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>Revision Impact</h3>
+          <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
+            Revisions that landed on steel already moving downstream (rework / CO risk).
+          </p>
+        </div>
+        <span className="sbd-badge-info">{rows?.length || 0}</span>
+      </div>
+      {shown.length === 0 ? (
+        <EmptyState text="No change-revisions on tracked sheets, or none with downstream exposure." />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {shown.map((r) => {
+            const tone = REV_SEVERITY_TONE[r.severity] || textMuted;
+            const noneReached = !r.fabricated && !r.delivered && !r.inField;
+            return (
+              <div key={r.revisionId} style={{
+                display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(150px, 1fr) auto", gap: 12, alignItems: "center",
+                padding: "10px 12px", borderRadius: 10,
+                border: `1px solid ${r.severity === "critical" ? "color-mix(in srgb, var(--status-error) 56%, transparent)" : border}`,
+                background: "var(--bg-surface-low)",
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: textPrimary, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {(r.sheetNumber || "—")} · {r.revisionCode}
+                  </div>
+                  <div style={{ color: textMuted, fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {r.drawingSetName || "Unassigned set"}{r.issuedAt ? ` · ${fmtDate(r.issuedAt)}` : ""}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {r.fabricated && <ReadyChip ok={false} label="Fabricated" bad />}
+                  {r.delivered && <ReadyChip ok={false} label="Delivered" bad />}
+                  {r.inField && <ReadyChip ok={false} label="In field" bad />}
+                  {noneReached && <span style={{ color: textMuted, fontFamily: mono, fontSize: 10 }}>caught pre-fab</span>}
+                </div>
+                <span style={{
+                  fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
+                  color: tone, padding: "3px 9px", borderRadius: 999,
+                  background: `color-mix(in srgb, ${tone} 16%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${tone} 42%, transparent)`,
+                }}>
+                  {r.severity}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 
