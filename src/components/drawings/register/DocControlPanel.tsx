@@ -7,9 +7,11 @@
 import { useState } from "react";
 import { DrawingRegisterGrid } from "./DrawingRegisterGrid";
 import { TransmittalLog } from "./TransmittalLog";
+import { ReviewQueue } from "./ReviewQueue";
 
 const VIEWS = [
   { key: "register", label: "Register" },
+  { key: "reviews", label: "Reviews" },
   { key: "transmittals", label: "Transmittals" },
 ] as const;
 
@@ -34,6 +36,7 @@ export function DocControlPanel({ projectId }: { projectId: string | null }) {
         ))}
       </div>
       {view === "register" && <DrawingRegisterGrid projectId={projectId} />}
+      {view === "reviews" && <ReviewQueue projectId={projectId} />}
       {view === "transmittals" && <TransmittalLog projectId={projectId} />}
     </div>
   );
