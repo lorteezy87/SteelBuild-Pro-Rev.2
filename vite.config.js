@@ -70,8 +70,12 @@ export default defineConfig({
     // so a misconfigured token/slug can never fail a production deploy.
     ...(enableSentrySourceMaps
       ? [sentryVitePlugin({
-          org: process.env.SENTRY_ORG,
-          project: process.env.SENTRY_PROJECT,
+          // org/project slugs are public identifiers (they appear in the DSN /
+          // Sentry URLs, not secrets), so default to the known values; the
+          // SENTRY_ORG / SENTRY_PROJECT env vars override if ever needed. Only
+          // the auth token must be supplied as a (Vercel) build secret.
+          org: process.env.SENTRY_ORG || 'steelbuild-pro',
+          project: process.env.SENTRY_PROJECT || 'javascript-react',
           authToken: sentryAuthToken,
           telemetry: false,
           release: { name: process.env.VITE_APP_VERSION || undefined },
