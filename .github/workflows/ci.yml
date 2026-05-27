@@ -11,11 +11,11 @@
 # What does NOT run here:
 #   - End-to-end tests (no E2E suite yet)
 #   - Lighthouse / a11y / bundle-size budgets (queued for later)
-#   - Deploy â€” Vercel handles that on push to codex/base44-deploy-nick
+#   - Deploy â€” Vercel handles that on push to main
 #
 # This workflow runs against EVERY push and pull request to any branch
 # so contributors see green/red feedback before merging into deploy.
-# The deploy branch (codex/base44-deploy-nick) gets the same gates plus
+# The deploy branch (main) gets the same gates plus
 # Vercel's own build, so a regression has two chances to be caught.
 
 name: CI
@@ -25,13 +25,11 @@ on:
     branches:
       - main
       - master
-      - codex/base44-deploy-nick
       - "claude/**"
   pull_request:
     branches:
       - main
       - master
-      - codex/base44-deploy-nick
 
 # Cancel any in-progress runs for the same branch when a new push comes in.
 # Avoids piling up redundant CI for rapid iteration on a feature branch.

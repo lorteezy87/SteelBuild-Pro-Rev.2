@@ -7,7 +7,7 @@ click-by-click. Project refs:
 
 - Supabase project: `kjrwqagyeswwoxpjkcko` → https://supabase.com/dashboard/project/kjrwqagyeswwoxpjkcko
 - Vercel project: `steelbuildpro-og` (team `lorteezy87's projects`) → production `steelbuild-pro.com`
-- GitHub repo: `lorteezy87/SteelBuild-Pro-Rev.2`, deploy/default branch `codex/base44-deploy-nick`
+- GitHub repo: `lorteezy87/SteelBuild-Pro-Rev.2`, deploy/default branch `main`
 
 ---
 
@@ -77,10 +77,10 @@ Vitest + production build on every push and PR. The job's status-check name is:
 
 **The catch:** GitHub's "Require status checks to pass" only gates **pull-request
 merges** — it does **not** block direct pushes. This repo currently deploys by
-**pushing directly** to `codex/base44-deploy-nick` (that's the auto-deploy
+**pushing directly** to `main` (that's the auto-deploy
 cadence we've been using). So:
 
-- A plain "require status checks" rule on `codex/base44-deploy-nick` would
+- A plain "require status checks" rule on `main` would
   **do nothing** for the direct-push flow.
 - Making it actually gate deploys means **also** enabling "Require a pull request
   before merging" + "Restrict who can push" — which **switches the deploy branch
@@ -91,7 +91,7 @@ Pick one:
 - **(A) Keep direct-push deploys (status quo).** CI still runs on every push and
   gives red/green signal; it just isn't a hard gate. Lowest friction.
 - **(B) Gate the deploy branch.** GitHub → repo **Settings → Rules → Rulesets**
-  (or Settings → Branches → *Add rule*) → target `codex/base44-deploy-nick` →
+  (or Settings → Branches → *Add rule*) → target `main` →
   enable **Require a pull request before merging** + **Require status checks to
   pass** → search and select **`Lint + Typecheck + Test + Build`** → optionally
   **Require branches to be up to date**. From then on, land work via PR, not
