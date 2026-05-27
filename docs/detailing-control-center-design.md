@@ -1,9 +1,9 @@
 # Detailing Control Center — Design Doc (Phase 0)
 
-Status: **DRAFT for sign-off.** No code yet. This is the verification + design
-output of the "verify-first" decision. It maps the vision onto the *actual*
-current schema/code and proposes a minimal, additive plan that does not break the
-working drawings/submittals flow (the killer workflow / moat).
+Status: **APPROVED 2026-05-26** (design + all §9 decisions signed off). Maps the
+vision onto the *actual* current schema/code and proposes a minimal, additive plan
+that does not break the working drawings/submittals flow (the killer workflow /
+moat). Phase 1 in progress.
 
 Vision (verbatim intent): stop tracking *"was it submitted?"* and start tracking
 *"what operational state is this package in, and what does the schedule need from
@@ -205,20 +205,13 @@ status), **Sequence Readiness** (group packages by WP `sequence_number` → Deta
 
 ---
 
-## 9. Open decisions (need your input before Phase 1)
+## 9. Resolved decisions (signed off 2026-05-26)
 
-1. **Manual vs auto state advance for drafting** — should `In Detailing →
-   Internal Review → Ready to Submit` be manual buttons, or auto-inferred (e.g.
-   "Ready to Submit" when all sheets uploaded + checked)? Recommendation: manual
-   buttons in v1, auto-suggest later.
-2. **Lead-time offsets** — are the backward-date leads (detailing duration,
-   approval cycle, fab duration, ship lead, erection prep) **per-project
-   constants**, **per-package overrides**, or **per-discipline defaults**?
-   Recommendation: per-project defaults + per-package override.
-3. **Where does "Detailing Control Center" live** — replace the `DrawingSubmittalHub`
-   page in place (keep `Drawings` + `Submittal Register` as drill-downs), or make
-   it a new top-level landing above them? Recommendation: elevate the existing hub
-   in place.
-4. **Partially Released granularity** — per-sheet (we have `submittal_sheet_responses`)
-   or per-package-with-%-complete? Recommendation: per-sheet, rolled to a % on the
-   package.
+1. **Drafting state advance** — **manual buttons in v1** (`In Detailing →
+   Internal Review → Ready to Submit`); auto-suggest later.
+2. **Backward-date lead times** — **per-project defaults + per-package override.**
+3. **Placement** — **elevate the existing `DrawingSubmittalHub` in place** (rename
+   to "Detailing Control Center"; keep `Drawings` + `Submittal Register` as
+   drill-downs).
+4. **Partially Released granularity** — **per-sheet** (via
+   `submittal_sheet_responses`), **rolled to a % on the package.**
