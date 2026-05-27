@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { buildRfiNudge, parseEmails } from "../rfiNudge";
 
-const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
-const daysAhead = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+// LOCAL-date helpers (YYYY-MM-DD) to match buildRfiNudge's daysSince/daysUntil,
+// which anchor on local midnight (see src/lib/dateMath.js). The previous
+// `new Date(...).toISOString().slice(0,10)` form computed a UTC date, so after
+// ~5pm in a negative-UTC tz (e.g. Arizona) it drifted one day off the engine
+// and the day-count assertions flaked. Build the date in local time instead.
+const localISO = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const daysAgo = (n) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - n); return localISO(d); };
+const daysAhead = (n) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + n); return localISO(d); };
 
 describe("parseEmails", () => {
   it("extracts and de-dupes emails from a free-text distribution list", () => {
