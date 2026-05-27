@@ -61,6 +61,22 @@ const REGISTRY: Record<string, EntityRegistration> = {
     ],
   },
 
+  // Drawing SETS are read under TWO key spellings across the app — the hub +
+  // FabRelease + CommandCenter use ["drawing-sets", …] (hyphen) while Drawings,
+  // Submittals, and the RFI modal use ["drawing_sets", …] (underscore). A set
+  // mutation that invalidated only one spelling left the other view's cache
+  // stale (e.g. a deleted set lingering in the Detailing Control Center). This
+  // entry invalidates BOTH spellings (broad, project-agnostic prefixes) plus the
+  // register view, so any set mutation refreshes every set-reading screen.
+  drawingSet: {
+    primary:  (pid) => ["drawing-sets", pid],
+    families: (pid) => [
+      ["drawing-sets"],            // hub, FabRelease, CommandCenter (covers scoped + unscoped)
+      ["drawing_sets"],            // Drawings, Submittals, RFIFormModal, upload modal
+      ["drawing-register", pid],   // Doc Control register view (drawing_register_view)
+    ],
+  },
+
   delivery: {
     primary:  (pid) => ["deliveries", pid],
     families: (pid) => [

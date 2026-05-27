@@ -1269,6 +1269,7 @@ export default function DrawingSetUploadModal({
       // aggregate counts, so we just need to refresh the UI caches.
       qc.invalidateQueries({ queryKey: ["drawings"] });
       qc.invalidateQueries({ queryKey: ["drawing_sets"] });
+      qc.invalidateQueries({ queryKey: ["drawing-sets"] }); // hub/FabRelease spelling
       setStep(5);
       if (onComplete) onComplete();
     } catch (err) {
