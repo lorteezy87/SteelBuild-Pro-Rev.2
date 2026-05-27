@@ -28,7 +28,7 @@ import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingP
 import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
-import { DrawingRegisterGrid } from "@/components/drawings/register/DrawingRegisterGrid";
+import { DocControlPanel } from "@/components/drawings/register/DocControlPanel";
 import SubmittalVisualBoardRaw from "@/components/submittals/SubmittalVisualBoard";
 import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
 import {
@@ -613,7 +613,7 @@ export default function DrawingSubmittalHub() {
                 isLoading={isLoading}
               />
             )}
-            {activeTab === "doccontrol" && <DrawingRegisterGrid projectId={projectId} />}
+            {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
           </Suspense>
         </ErrorBoundary>
       </div>
