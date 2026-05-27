@@ -12,14 +12,14 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
 
 - **Dashboard / secret hand-offs (need owner access — step-by-step in
   [`docs/enterprise-readiness-handoff-2026-05-26.md`](docs/enterprise-readiness-handoff-2026-05-26.md)):**
-  three items only the project owner can do — (1) enable Supabase leaked-password
+  two items only the project owner can do — (1) enable Supabase leaked-password
   protection (the one remaining `auth_leaked_password_protection` WARN; the older
-  "86 anonymous-access" findings are no longer reported by the advisor), (2) set
-  the `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` build env vars in
-  Vercel for un-minified Sentry stack traces (`@sentry/vite-plugin` is already
-  wired into `vite.config.js`, gated on the token; just needs the env vars),
-  (3) add a GitHub branch-protection rule requiring the "CI" status check on
-  `main`. No E2E / a11y / bundle budgets yet.
+  "86 anonymous-access" findings are no longer reported by the advisor),
+  (2) optionally add a GitHub branch-protection rule requiring the "CI" status
+  check on `main` (note: only gates PR merges, not the current direct-push deploy
+  flow — see the doc). No E2E / a11y / bundle budgets yet. (Sentry source-map
+  upload is now DONE — confirmed live via release `b5272fd7` + artifact bundle;
+  see the doc §2.)
 
 - **Unused-index review (perf, low priority) — REVIEWED, drops queued:** the
   `unused_index` advisor findings were reviewed against live `pg_stat_user_indexes`
