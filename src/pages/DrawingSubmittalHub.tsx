@@ -10,7 +10,7 @@
  * strip, a shared CommandBar with tab navigation, and the Approval Matrix.
  */
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useSearchParams } from "react-router-dom";
@@ -27,6 +27,7 @@ import { computeFabReady } from "@/lib/submittalAnalytics";
 import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
 import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
+import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import SubmittalVisualBoardRaw from "@/components/submittals/SubmittalVisualBoard";
 import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
 import {
@@ -53,7 +54,7 @@ import {
   textPrimary,
   warning,
 } from "./drawingSubmittalHub/format";
-import { ApprovalMatrix, HeaderSignal, TriageBoard } from "./drawingSubmittalHub/components";
+import { ApprovalMatrix, HeaderSignal, LeadTimesModal, TriageBoard } from "./drawingSubmittalHub/components";
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
 // chunk 404s after a deploy trigger a reload instead of a hard crash.
@@ -70,8 +71,10 @@ const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>
 const SubmittalVisualBoard = SubmittalVisualBoardRaw as unknown as ComponentType<AnyProps>;
 
 export default function DrawingSubmittalHub() {
-  const activeProject = useProjectContext().activeProject as any;
+  const projectCtx = useProjectContext() as any;
+  const activeProject = projectCtx.activeProject as any;
   const [searchParams, setSearchParams] = useSearchParams();
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
   const qc = useQueryClient();
   const projectId = activeProject?.id as string | undefined;
   const projectName = activeProject?.name || activeProject?.project_number || "";
@@ -419,6 +422,23 @@ export default function DrawingSubmittalHub() {
     onError: (err) => toast.error("Failed to update readiness flag: " + (err?.message || "Unknown")),
   });
 
+  // Save per-project lead-time defaults into projects.metadata.detailing_lead_days.
+  // Updates the context's activeProject too, so the backward dates recompute live.
+  const saveLeadsMut = useMutation({
+    mutationFn: async (leads: Record<string, number>) => {
+      if (!projectId) throw new Error("No active project");
+      const nextMetadata = { ...(activeProject?.metadata || {}), detailing_lead_days: leads };
+      await base44.entities.Project.update(projectId, { metadata: nextMetadata } as any);
+      return nextMetadata;
+    },
+    onSuccess: (nextMetadata) => {
+      projectCtx.updateActiveProject?.({ metadata: nextMetadata });
+      setLeadModalOpen(false);
+      toast.success("Lead times updated");
+    },
+    onError: (err) => toast.error("Failed to save lead times: " + (err?.message || "Unknown")),
+  });
+
   // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div
@@ -462,6 +482,16 @@ export default function DrawingSubmittalHub() {
           value={triage.unlinkedSubmittalItems.length}
           tone={triage.unlinkedSubmittalItems.length ? warning : textMuted}
         />
+        <button
+          type="button"
+          className="sbd-btn-ghost"
+          onClick={() => setLeadModalOpen(true)}
+          title="Edit the project's detailing lead times (drives the backward schedule)"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
+        >
+          <CalendarClock size={14} />
+          Lead Times
+        </button>
       </CommandBar>
 
       {/* ── KPI Strip ────────────────────────────────────────────────── */}
@@ -585,6 +615,16 @@ export default function DrawingSubmittalHub() {
           </Suspense>
         </ErrorBoundary>
       </div>
+
+      {leadModalOpen && (
+        <LeadTimesModal
+          leadDays={resolveLeadDays(activeProject, null)}
+          defaults={DEFAULT_LEAD_DAYS}
+          saving={saveLeadsMut.isPending}
+          onSave={(leads) => saveLeadsMut.mutate(leads)}
+          onClose={() => setLeadModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
