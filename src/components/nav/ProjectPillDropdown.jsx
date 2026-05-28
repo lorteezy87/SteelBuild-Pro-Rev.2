@@ -5,7 +5,8 @@ import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../shared/ProjectContext";
 
 export default function ProjectPillDropdown({ compact = false, align = "right" }) {
-  const { projects, activeProject, setActiveProject, loading } = useProjectContext();
+  // `activeProjects` excludes on-hold; the switcher never lists paused projects.
+  const { activeProjects: projects, activeProject, setActiveProject, loading } = useProjectContext();
   // Pages resolve the project id via useProjectId() which checks the URL
   // FIRST (?projectId= / ?project=), then falls back to the active project
   // in context. Without stripping those params on a switch, picking a new

@@ -354,6 +354,12 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     if (SOFT_DELETE_TABLES.has(tableName as string)) {
       q = q.eq('is_deleted', false);
     }
+    // Projects: auto-exclude on-hold (paused) projects from every list. The
+    // /Projects management page bypasses this by querying via the raw
+    // supabase client; everywhere else gets the active subset automatically.
+    if ((tableName as string) === 'projects') {
+      q = q.eq('on_hold', false);
+    }
     const sort = parseSortBy(sortBy);
     if (sort) {
       q = q.order(sort.column, { ascending: sort.ascending });
@@ -374,6 +380,10 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     // Soft-delete filter (unless caller explicitly filters is_deleted)
     if (SOFT_DELETE_TABLES.has(tableName as string) && !('is_deleted' in conditions)) {
       q = q.eq('is_deleted', false);
+    }
+    // Projects: auto-exclude on-hold unless the caller explicitly filters on_hold.
+    if ((tableName as string) === 'projects' && !('on_hold' in conditions)) {
+      q = q.eq('on_hold', false);
     }
     q = applyConditions(q, conditions);
     const sort = parseSortBy(sortBy);
