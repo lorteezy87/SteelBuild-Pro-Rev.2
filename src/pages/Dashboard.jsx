@@ -47,7 +47,12 @@ export default function Dashboard() {
     queryFn: () => base44.entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
-  const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
+  // Portfolio rollups must exclude on-hold projects (and their child entity
+  // contributions); on-hold projects are visible only on the /Projects page.
+  // `liveProjectIds` is the active (non-on-hold) id set used by every
+  // portfolio aggregation downstream (scopePortfolioRows + PortfolioView).
+  const portfolioProjects = useMemo(() => projects.filter((p) => !p.on_hold), [projects]);
+  const liveProjectIds = useMemo(() => new Set(portfolioProjects.map((p) => p.id).filter(Boolean)), [portfolioProjects]);
   const activeProjectIsLive = !pid || projectsLoading || liveProjectIds.has(pid);
 
   useEffect(() => {
@@ -216,7 +221,7 @@ export default function Dashboard() {
       <ErrorBoundary label="Portfolio Dashboard">
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
           <PortfolioView
-            projects={projects}
+            projects={portfolioProjects}
             allRFIs={scopePortfolioRows(allRFIs)}
             allCOs={scopePortfolioRows(allCOs)}
             allCodes={scopePortfolioRows(allCodes)}

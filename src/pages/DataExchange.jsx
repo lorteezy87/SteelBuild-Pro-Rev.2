@@ -159,7 +159,8 @@ function RecordPreview({ rows, fields }) {
 export default function DataExchange() {
   const queryClient = useQueryClient();
   const projectId = useProjectId();
-  const { activeProject, projects, loading: projectsLoading } = useProjectContext();
+  // On-hold projects aren't selectable here — the picker mirrors the switcher.
+  const { activeProject, activeProjects: projects, loading: projectsLoading } = useProjectContext();
   const fileInputRef = useRef(null);
 
   const projectOptions = useMemo(() => {
