@@ -63,6 +63,29 @@ import { ApprovalMatrix, HeaderSignal, LeadTimesModal, TriageBoard } from "./dra
 const DrawingsPage = lazyWithRetry(() => import("@/pages/Drawings"));
 const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
 
+// A package is CLOSED when ANY terminal signal is satisfied — the latest
+// submittal's status is closed (Approved/Approved as Noted/Released for
+// Fabrication/Void), OR the drawing_set is legacy-locked (set_approval_status
+// = "approved"), OR the coalesced detailing_state is at a release-style
+// terminal (Released / Partially Released / Released for Erection), OR every
+// sheet is individually released/approved. Used by the hit-list triage and
+// the "Released" KPI so both surface the same definition of done.
+function isClosedPackage(pkg: any): boolean {
+  if (!pkg) return false;
+  const sorted = (pkg.submittals || []).slice().sort((a: any, b: any) => (b.round_number || 1) - (a.round_number || 1));
+  const latestSubmittal = sorted[0] || null;
+  if (latestSubmittal && isClosedSubmittal(latestSubmittal)) return true;
+  if (pkg.parent?.set_approval_status === "approved") return true;
+  const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
+  if (
+    detailingState === "Released" ||
+    detailingState === "Partially Released" ||
+    detailingState === "Released for Erection"
+  ) return true;
+  if (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)) return true;
+  return false;
+}
+
 // The design-system primitives + these shared screens are still .jsx; cast
 // at the boundary (removable once the shared layer is typed).
 type AnyProps = PropsWithChildren<Record<string, any>>;
@@ -204,7 +227,7 @@ export default function DrawingSubmittalHub() {
   // ── Drawing KPIs ───────────────────────────────────────────────────────
   const drawingKpis = useMemo(() => {
     const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted);
-    const released = setPackages.filter((pkg) => pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)).length;
+    const released = setPackages.filter(isClosedPackage).length;
     // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
     const inReview = setPackages.filter((pkg) =>
       pkg.sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage))
@@ -237,16 +260,26 @@ export default function DrawingSubmittalHub() {
         .slice()
         .sort((a, b) => (b.round_number || 1) - (a.round_number || 1));
       const latestSubmittal = sortedSubmittals[0] || null;
-      const closed = latestSubmittal ? isClosedSubmittal(latestSubmittal) : (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing));
-      const dueDate = getSubmittalDueDate(latestSubmittal) || earliestDate(pkg.sheets.map(getDrawingDueDate));
-      const needsAction =
-        (latestSubmittal && ACTION_STATUSES.has(latestSubmittal.status)) ||
-        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage));
-      const status = latestSubmittal?.status || rollupDrawingStage(pkg.sheets);
       // Coalesced operational state (drafting → submittal → release). Kept
       // alongside `status` (additive) so the existing pipeline/row display is
       // unchanged; surfaced as its own chip + drives the drafting control.
       const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
+      // CLOSED is satisfied by ANY terminal signal — not only a closed
+      // submittal status. Previous logic prioritised `latestSubmittal` and
+      // ignored the set-level lock + the coalesced detailing state, so a
+      // package that was manually released (e.g. anchor bolts: set locked
+      // and/or detailing_state=Released for Erection) whose submittal was
+      // never rolled to "Released for Fabrication" lingered on the hit list.
+      const closed = isClosedPackage(pkg);
+      const dueDate = getSubmittalDueDate(latestSubmittal) || earliestDate(pkg.sheets.map(getDrawingDueDate));
+      // Only surface "needs action" when the package is OPEN (closed items
+      // never reach the hit list anyway, but guard against stale per-sheet
+      // Rejected/Returned stages on packages that have since been released).
+      const needsAction = !closed && (
+        (latestSubmittal && ACTION_STATUSES.has(latestSubmittal.status)) ||
+        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage))
+      );
+      const status = latestSubmittal?.status || rollupDrawingStage(pkg.sheets);
       const canDraft = !hasGoverningSubmittal(pkg.submittals);
       const owner =
         latestSubmittal?.ball_in_court ||
