@@ -368,7 +368,7 @@ export default function CommandCenter() {
   const toggleFilter = (key) => setSnapshotFilter((p) => (p === key ? null : key));
 
   return (
-    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
       <CommandBar
         eyebrow={`${greeting} · ${dateLabel.toUpperCase()}`}
         title="Command Center"
@@ -409,8 +409,8 @@ export default function CommandCenter() {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          padding: "8px 14px",
+          gap: 6,
+          padding: "5px 10px",
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
           borderLeft: `3px solid ${activeRole.color}`,
@@ -478,8 +478,8 @@ export default function CommandCenter() {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 12,
-            padding: "10px 16px",
+            gap: 10,
+            padding: "7px 12px",
             background: "color-mix(in srgb, var(--status-error) 12%, transparent)",
             border: "1px solid var(--status-error)",
             borderRadius: "var(--radius-card)",
@@ -543,7 +543,7 @@ export default function CommandCenter() {
         const visibleTiles = activeRole.tiles.filter((k) => tileSpecs[k]);
         if (visibleTiles.length === 0) return null;
         return (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(128px, 1fr))", gap: 8 }}>
             {visibleTiles.map((key) => {
               const spec = tileSpecs[key];
               return (
@@ -577,7 +577,7 @@ export default function CommandCenter() {
               sectionVisible("todayAgenda") && sectionVisible("weekAhead")
                 ? "minmax(0, 3fr) minmax(0, 2fr)"
                 : "minmax(0, 1fr)",
-            gap: 14,
+            gap: 10,
             alignItems: "start",
           }}
         >
@@ -612,7 +612,7 @@ export default function CommandCenter() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "12px 16px",
+            padding: "9px 14px",
             background: feedExpanded ? "var(--bg-surface-low)" : "transparent",
             border: "none",
             borderBottom: feedExpanded ? "1px solid var(--divider)" : "none",
@@ -662,7 +662,7 @@ export default function CommandCenter() {
         </button>
 
         {feedExpanded && (
-          <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
             <FeedFilters
               projects={projects}
               owners={uniqueOwners}

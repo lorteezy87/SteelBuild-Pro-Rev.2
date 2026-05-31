@@ -184,21 +184,15 @@ export default function Layout({ children, currentPageName }) {
           {/* LEFT: Brand + Hamburger */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
-            {(isDarkTheme || isMobile) && (
-              <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
-                <img src="/logo.png" alt="SteelBuild Pro" style={{ height: isMobile ? 30 : 26, width: "auto", objectFit: "contain" }} />
-              </div>
-            )}
-            {!isMobile && isDarkTheme && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
-            {/* Project selector lives on the LEFT in BOTH themes (was right-side
-                in dark mode) so it sits in one predictable, easy-to-find spot. */}
+            {/* Topbar is now identical in light + dark: logo → divider → project
+                selector → current-page eyebrow. (Branding previously lived in the
+                light sidebar; it now sits in the topbar for both themes.) */}
+            <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
+              <img src="/logo.png" alt="SteelBuild Pro" style={{ height: isMobile ? 30 : 26, width: "auto", objectFit: "contain" }} />
+            </div>
+            {!isMobile && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
             {!isMobile && <ProjectPillDropdown align="left" />}
-            {!isMobile && !isDarkTheme && (
-              <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                Home
-              </span>
-            )}
-            {!isMobile && isDarkTheme && (
+            {!isMobile && (
               <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 {currentPageName?.replace(/([A-Z])/g, " $1").trim() || "Dashboard"}
               </span>
