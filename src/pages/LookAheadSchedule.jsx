@@ -320,16 +320,28 @@ export default function LookAheadSchedule() {
 
   const fmtWindow = (d) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-  // Group items
-  const groupKeys = groupBy === "Phase" ? ["Detailing", "Fabrication", "Delivery", "Erection"]
-    : groupBy === "Project" ? [...new Set(items.map(i => i.project_name).filter(Boolean))]
-    : [...new Set(items.map(i => i.crew || "No Crew").filter(Boolean))];
+  // Group items — bucket once per (groupBy, items) instead of re-filtering the
+  // full list once per group key on every render (was O(groups·items) each pass
+  // and produced new key/array references that defeated row memoization).
+  const { groupKeys, itemsByGroup } = useMemo(() => {
+    const keyOf = (i) =>
+      groupBy === "Phase" ? i.phase
+        : groupBy === "Project" ? i.project_name
+        : (i.crew || "No Crew");
+    const byGroup = new Map();
+    for (const i of items) {
+      const k = keyOf(i);
+      if (!k) continue;
+      if (!byGroup.has(k)) byGroup.set(k, []);
+      byGroup.get(k).push(i);
+    }
+    const keys = groupBy === "Phase"
+      ? ["Detailing", "Fabrication", "Delivery", "Erection"]
+      : Array.from(byGroup.keys());
+    return { groupKeys: keys, itemsByGroup: byGroup };
+  }, [groupBy, items]);
 
-  const getGroupItems = (key) => {
-    if (groupBy === "Phase") return items.filter(i => i.phase === key);
-    if (groupBy === "Project") return items.filter(i => i.project_name === key);
-    return items.filter(i => (i.crew || "No Crew") === key);
-  };
+  const getGroupItems = (key) => itemsByGroup.get(key) || [];
 
   const stats = useMemo(() => {
     const total = items.length;
