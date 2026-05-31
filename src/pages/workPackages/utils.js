@@ -1,3 +1,4 @@
+import { formatLocalDate } from "@/utils/dates";
 /**
  * Pure helpers for the Work Packages page — date formatting, CSV
  * export. No React, no network.
@@ -5,7 +6,7 @@
 
 export const formatDate = (d) =>
   d
-    ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", {
+    ? formatLocalDate(`${d}T00:00:00Z`, "en-US", {
         month: "short",
         day: "numeric",
         year: "numeric",

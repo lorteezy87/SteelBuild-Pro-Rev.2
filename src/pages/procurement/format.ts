@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { formatLocalDate } from "@/utils/dates";
 
 export const PROCUREMENT_CATEGORIES = [
   'Structural Steel — Mill Order',
@@ -94,6 +95,6 @@ export function addWeeks(isoDate: unknown, weeks: any): string | null {
 }
 
 export const fmtDate = (d: unknown): string =>
-  d ? new Date(d as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+  d ? formatLocalDate(d as string, 'en-US', { month: 'short', day: 'numeric' }) : '—';
 
 export const todayISO = (): string => new Date().toISOString().slice(0, 10);

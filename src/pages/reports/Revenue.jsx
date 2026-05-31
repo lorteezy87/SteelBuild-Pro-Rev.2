@@ -22,6 +22,7 @@ import ReportShell from "./ReportShell";
 import { LineChartSVG } from "./charts";
 import { formatCurrencyFull, exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
+import { formatLocalDate } from "@/utils/dates";
 
 function monthKey(date) {
   const d = date instanceof Date ? date : new Date(date);
@@ -30,7 +31,7 @@ function monthKey(date) {
 
 function monthLabel(key) {
   const [y, m] = key.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+  return formatLocalDate(y, m - 1, 1, "en-US", { month: "short", year: "2-digit" });
 }
 
 function lastNMonthKeys(n) {

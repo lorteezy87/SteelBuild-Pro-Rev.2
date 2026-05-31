@@ -1,4 +1,5 @@
 import React from "react";
+import { formatLocalDate } from "@/utils/dates";
 
 export default function DeliveryScheduleCard({ deliveries = [] }) {
   const getStatusColor = (status) => {
@@ -65,7 +66,7 @@ export default function DeliveryScheduleCard({ deliveries = [] }) {
                   color: "var(--text-muted)",
                   marginTop: "2px",
                 }}>
-                  {d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString() : "—"}
+                  {d.scheduled_date ? formatLocalDate(d.scheduled_date) : "—"}
                 </div>
               </div>
               <div

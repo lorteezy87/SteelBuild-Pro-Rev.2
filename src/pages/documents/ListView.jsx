@@ -7,6 +7,7 @@
 import React from "react";
 import { ArrowUpDown } from "lucide-react";
 import { LIST_FILETYPE_STYLES, LIST_STATUS_STYLES, FILETYPE_FALLBACK } from "./utils";
+import { formatLocalDate } from "@/utils/dates";
 
 const GRID = "28px 1fr 100px 80px 70px 80px 90px 100px";
 
@@ -133,7 +134,7 @@ function Row({ doc, isSelected, onToggleSelect, onOpen }) {
   const sizeMB = fsk ? (fsk / 1024).toFixed(1) + " MB" : "\u2014";
   const rawDate = doc.uploadedDate || doc.created_at;
   const dateStr = rawDate
-    ? new Date(rawDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    ? formatLocalDate(rawDate, "en-US", { month: "short", day: "numeric" })
     : "\u2014";
 
   const typeCfg = LIST_FILETYPE_STYLES[doc.fileType] || FILETYPE_FALLBACK;

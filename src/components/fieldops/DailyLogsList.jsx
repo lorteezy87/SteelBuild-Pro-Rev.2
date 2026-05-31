@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
+import { formatLocalDate } from "@/utils/dates";
 
 function asArray(v) {
   if (Array.isArray(v)) return v;
@@ -152,7 +153,7 @@ export default function DailyLogsList({ logs = [] }) {
                   color: "var(--text-primary)",
                 }}
               >
-                {new Date(log.date).toLocaleDateString("en-US", {
+                {formatLocalDate(log.date, "en-US", {
                   weekday: "short",
                   month: "short",
                   day: "numeric",

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { formatLocalDate } from "@/utils/dates";
 
 function asArray(v) {
   if (Array.isArray(v)) return v;
@@ -134,7 +135,7 @@ export default function PunchlistList({
                 </div>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: "8px", color: "var(--text-muted)", minWidth: "20px" }}>{item.percent_complete}%</span>
               </div>
-              {item.target_completion_date && <div style={{ fontSize: "9px", color: "var(--text-muted)" }}>Due: {new Date(item.target_completion_date).toLocaleDateString()}</div>}
+              {item.target_completion_date && <div style={{ fontSize: "9px", color: "var(--text-muted)" }}>Due: {formatLocalDate(item.target_completion_date)}</div>}
             </div>
 
             <div>
@@ -219,7 +220,7 @@ export default function PunchlistList({
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--status-success)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>✓ Verified</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "10px", color: "var(--text-secondary)" }}>
                     <div>By: {item.verified_by}</div>
-                    <div>Date: {new Date(item.verification_date).toLocaleDateString()}</div>
+                    <div>Date: {formatLocalDate(item.verification_date)}</div>
                   </div>
                 </div>
               )}

@@ -63,3 +63,23 @@ export function formatShortDate(input, { withYear = true } = {}) {
     ...(withYear ? { year: "2-digit" } : {}),
   });
 }
+
+/**
+ * Timezone-safe drop-in for `new Date(input).toLocaleDateString(...)`.
+ *
+ * Parses `input` through {@link toLocalDay} (so a date-only string is read as a
+ * LOCAL calendar day, not UTC midnight — the Arizona one-day-early bug) and then
+ * applies the SAME locale + Intl options the caller would have passed to
+ * toLocaleDateString, so the displayed FORMAT is preserved exactly while the
+ * parse is fixed. Returns the em dash for empty / invalid input.
+ *
+ * @param {string|number|Date|null|undefined} input
+ * @param {string} [locale] e.g. "en-US" (omit for the runtime default)
+ * @param {Intl.DateTimeFormatOptions} [options]
+ * @returns {string}
+ */
+export function formatLocalDate(input, locale, options) {
+  const local = toLocalDay(input);
+  if (!local) return "—";
+  return local.toLocaleDateString(locale, options);
+}

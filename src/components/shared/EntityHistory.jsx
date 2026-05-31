@@ -1,6 +1,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
+import { formatLocalDate } from "@/utils/dates";
 
 const ACTION_COLORS = {
   created: "var(--status-success)",
@@ -18,7 +19,7 @@ function timeAgo(ts) {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d ago`;
-  return new Date(ts).toLocaleDateString();
+  return formatLocalDate(ts);
 }
 
 export default function EntityHistory({ entityType, entityName, maxItems = 10 }) {

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { formatLocalDate } from "@/utils/dates";
 
 const RESULT_COLORS = {
   Pass: "var(--status-success)",
@@ -41,7 +42,7 @@ export default function QCList({ records = [] }) {
               </div>
 
               <div>
-                <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {new Date(record.test_date).toLocaleDateString()}</div>
+                <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {formatLocalDate(record.test_date)}</div>
                 {record.test_lab_or_inspector && <div style={{ fontSize: "9px", color: "var(--text-muted)" }}>{record.test_lab_or_inspector}</div>}
                 {record.specification && <div style={{ fontSize: "9px", color: "var(--text-muted)" }}>{record.specification}</div>}
               </div>
@@ -99,7 +100,7 @@ export default function QCList({ records = [] }) {
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--status-success)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>✓ Approved By</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "10px", color: "var(--text-secondary)" }}>
                       <div>{record.approved_by}</div>
-                      {record.approval_date && <div>{new Date(record.approval_date).toLocaleDateString()}</div>}
+                      {record.approval_date && <div>{formatLocalDate(record.approval_date)}</div>}
                     </div>
                   </div>
                 )}

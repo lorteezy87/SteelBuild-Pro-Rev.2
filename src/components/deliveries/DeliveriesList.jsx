@@ -1,5 +1,6 @@
 import React, { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { formatLocalDate } from "@/utils/dates";
 
 const STATUS_COLORS = {
   Scheduled: { bg: "var(--status-warning)", text: "#000" },
@@ -161,7 +162,7 @@ export default function DeliveriesList({ deliveries = [], onEdit }) {
                       fontWeight: isOverdue ? 600 : 400,
                     }}
                   >
-                    {new Date(delivery.scheduled_date).toLocaleDateString()}
+                    {formatLocalDate(delivery.scheduled_date)}
                     {isOverdue && <span style={{ marginLeft: "4px" }}>⚠</span>}
                   </div>
 

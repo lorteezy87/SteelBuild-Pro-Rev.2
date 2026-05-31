@@ -8,6 +8,7 @@ import { CommandBar } from "@/components/design-system";
 import { ArrowLeft } from "lucide-react";
 import ProjectHandoffChecklist from "@/components/projects/ProjectHandoffChecklist";
 import ProjectKickoffChecklist, { KickoffPill } from "@/components/projects/ProjectKickoffChecklist";
+import { formatLocalDate } from "@/utils/dates";
 
 const HEALTH_COLORS = {
   "On Track": "var(--status-success)",
@@ -169,7 +170,7 @@ export default function ProjectDetail() {
           {
             label: "Target Completion",
             value: project.target_completion_date
-              ? new Date(project.target_completion_date).toLocaleDateString()
+              ? formatLocalDate(project.target_completion_date)
               : "—",
           },
         ].map(({ label, value }) => (
@@ -505,7 +506,7 @@ export default function ProjectDetail() {
                           marginTop: "2px",
                         }}
                       >
-                        {new Date(d.scheduled_date).toLocaleDateString()}
+                        {formatLocalDate(d.scheduled_date)}
                       </div>
                     </div>
                     <span
