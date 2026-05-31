@@ -390,10 +390,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const name = err instanceof Error ? err.name : "Error";
     const message = err instanceof Error ? err.message : String(err);
     const stack = err instanceof Error && err.stack ? err.stack : null;
+    // Log the stack server-side only — do NOT return it to the client (it can
+    // disclose internal file paths / structure). Surface a generic message.
+    console.error(`[llm-proxy] Unhandled ${name}: ${message}`, stack || "");
     return json(
       {
         error: `Unhandled ${name}: ${message}`,
-        stack: stack ? stack.split("\n").slice(0, 10).join("\n") : null,
         protocol_version: PROTOCOL_VERSION,
       },
       500,

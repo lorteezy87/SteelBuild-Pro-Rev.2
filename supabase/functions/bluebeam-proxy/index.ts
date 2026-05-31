@@ -662,6 +662,11 @@ Deno.serve(async (req: Request) => {
         if (!sessionId || !fileUrl || !fileName) {
           return errorResponse(400, "Missing 'sessionId', 'fileUrl', or 'fileName'");
         }
+        // Enforce session membership BEFORE pushing a file — matches every other
+        // session-scoped action. Without this a connected user could push a file
+        // into a Bluebeam session mapped to another SteelBuild project.
+        const denied = await assertSessionMembership(supabase, user.id, sessionId);
+        if (denied) return denied;
         const { token } = await getValidToken(supabase, user.id);
         const result = await uploadToSession(token, sessionId, fileUrl, fileName);
 

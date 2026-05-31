@@ -780,9 +780,11 @@ async function handle(req: Request): Promise<Response> {
     }
   }
 
+  // Avoid logging sender address + subject (correspondence PII). Keep ids,
+  // classification, and counts — enough to debug ingestion without leaking
+  // who wrote what.
   console.log(
     `[email-ingest] Ingested: project=${projectId} messageId=${messageId} ` +
-    `from=${email.senderEmail} subject="${email.subject?.slice(0, 60)}" ` +
     `type=${classification.type}(${classification.confidence}) ` +
     `attachments=${storedAttachments.length}/${email.attachments.length}`
   );
