@@ -25,10 +25,30 @@
 import { useContext, useMemo } from "react";
 import { AuthContext } from "@/lib/AuthContext";
 
+// Canonical KPI ids the Dashboard header can render — kept in one place so the
+// Settings tab and the dashboard agree. Every id maps to a real, computable
+// metric (no placeholders).
+export const DASHBOARD_KPI_IDS = [
+  "open_rfis",
+  "pending_cos",
+  "contract_value",
+  "work_packages",
+  "deliveries",
+  "overdue_items",
+  "open_submittals",
+  "expenses",
+];
+
 const DEFAULTS = {
   default_project_id: null,
   auto_refresh_secs: 0,         // 0 = off
   week_start: "sunday",         // sunday | monday
+  default_landing: "Dashboard",
+  pinned_modules: [],
+  visible_kpis: DASHBOARD_KPI_IDS,
+  kpi_order: DASHBOARD_KPI_IDS,
+  dashboard_density: "normal",  // compact | normal | comfortable
+  show_welcome: true,
 };
 
 /**
@@ -54,6 +74,23 @@ export function useUserPrefs() {
         user.week_start === "monday" || user.week_start === "sunday"
           ? user.week_start
           : DEFAULTS.week_start,
+      default_landing:
+        typeof user.default_landing === "string" && user.default_landing
+          ? user.default_landing
+          : DEFAULTS.default_landing,
+      pinned_modules: Array.isArray(user.pinned_modules)
+        ? user.pinned_modules.filter((m) => typeof m === "string")
+        : DEFAULTS.pinned_modules,
+      visible_kpis: Array.isArray(user.visible_kpis)
+        ? user.visible_kpis.filter((k) => DASHBOARD_KPI_IDS.includes(k))
+        : DEFAULTS.visible_kpis,
+      kpi_order: Array.isArray(user.kpi_order)
+        ? user.kpi_order.filter((k) => DASHBOARD_KPI_IDS.includes(k))
+        : DEFAULTS.kpi_order,
+      dashboard_density: ["compact", "normal", "comfortable"].includes(user.dashboard_density)
+        ? user.dashboard_density
+        : DEFAULTS.dashboard_density,
+      show_welcome: user.show_welcome !== false,
     };
   }, [user]);
 }

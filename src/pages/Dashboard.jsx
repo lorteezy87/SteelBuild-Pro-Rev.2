@@ -4,10 +4,37 @@ import { useNavigate } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
-import { useUserPrefs, refetchIntervalFromPref } from "@/hooks/useUserPrefs";
+import { useUserPrefs, refetchIntervalFromPref, DASHBOARD_KPI_IDS } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import ProjectDashboard from "./dashboard/ProjectDashboard";
+import DashboardHeader from "./dashboard/DashboardHeader";
+
+// KPI presentation specs — value is filled per-scope below. Ids match
+// DASHBOARD_KPI_IDS so Settings (visible_kpis / kpi_order) drive this strip.
+const KPI_SPECS = {
+  open_rfis:       { label: "Open RFIs",          color: "var(--accent)" },
+  pending_cos:     { label: "Pending COs",        color: "var(--status-warning)" },
+  contract_value:  { label: "Contract Value",     color: "var(--accent)" },
+  work_packages:   { label: "Work Packages",      color: "#0EA5E9" },
+  deliveries:      { label: "Upcoming Deliveries",color: "var(--phase-delivery, #F59E0B)" },
+  overdue_items:   { label: "Overdue Items",      color: "var(--status-error)" },
+  open_submittals: { label: "Open Submittals",    color: "var(--accent)" },
+  expenses:        { label: "Expenses",           color: "var(--status-warning)" },
+};
+
+const RFI_OPEN_EXCLUDE = ["Closed", "Void", "Cancelled", "Resolved", "Answered"];
+const CO_CLOSED = ["Approved", "Approved as Noted", "Rejected", "Void", "Executed"];
+const DEL_DONE = ["Delivered", "Complete", "Completed", "Received"];
+const SUB_TERMINAL = ["Approved", "Approved as Noted", "Released for Fabrication", "Void"];
+const AI_DONE = ["Complete", "Completed", "Done", "Closed"];
+
+function fmtMoney(n) {
+  const v = Number(n) || 0;
+  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `$${Math.round(v / 1_000)}K`;
+  return `$${Math.round(v)}`;
+}
 
 const PortfolioView = lazyWithRetry(() => import("../components/dashboard/PortfolioView"));
 
@@ -38,7 +65,8 @@ export default function Dashboard() {
   // auto_refresh_secs (0/30/60/300/900); 0 disables. We keep the
   // existing staleTime so when the pref is off, react-query still
   // dedupes during the short window after a mutation.
-  const { auto_refresh_secs } = useUserPrefs();
+  const prefs = useUserPrefs();
+  const { auto_refresh_secs } = prefs;
   const refetchMs = refetchIntervalFromPref(auto_refresh_secs);
 
   /* ── Portfolio-wide queries (always loaded) ── */
@@ -212,33 +240,100 @@ export default function Dashboard() {
 
   const isLoading = projectsLoading || rfisLoading;
 
+  // ── Settings → Dashboard header (welcome banner + configurable KPI strip) ──
+  // Real metrics computed from the data already loaded above, scoped to the
+  // active project or the portfolio. visible_kpis / kpi_order / show_welcome /
+  // dashboard_density all come from Settings → Dashboard.
+  const kpiList = useMemo(() => {
+    const scoped = (all) => all.filter((r) => r?.project_id && liveProjectIds.has(r.project_id));
+    const rfiArr = pid ? rfis : scoped(allRFIs);
+    const coArr  = pid ? cos : scoped(allCOs);
+    const wpArr  = pid ? wps : scoped(allWPs);
+    const delArr = pid ? deliveries : scoped(allDeliveries);
+    const aiArr  = pid ? actionItems : scoped(allActionItems);
+    const subArr = pid ? submittals : scoped(allSubmittals);
+    const expArr = pid ? expenses : scoped(allExpenses);
+    const contractVal = pid
+      ? Number(activeProject?.original_contract_value) || 0
+      : portfolioProjects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const values = {
+      open_rfis:       rfiArr.filter((r) => !RFI_OPEN_EXCLUDE.includes(r.status)).length,
+      pending_cos:     coArr.filter((c) => !CO_CLOSED.includes(c.status)).length,
+      contract_value:  fmtMoney(contractVal),
+      work_packages:   wpArr.length,
+      deliveries:      delArr.filter((d) => !DEL_DONE.includes(d.status)).length,
+      overdue_items:   aiArr.filter((a) => a.due_date && new Date(a.due_date) < today && !AI_DONE.includes(a.status)).length,
+      open_submittals: subArr.filter((s) => !SUB_TERMINAL.includes(s.status)).length,
+      expenses:        fmtMoney(expArr.reduce((s, e) => s + (Number(e.amount) || 0), 0)),
+    };
+
+    const order = (prefs.kpi_order && prefs.kpi_order.length ? prefs.kpi_order : DASHBOARD_KPI_IDS);
+    const orderedIds = [...order, ...DASHBOARD_KPI_IDS.filter((id) => !order.includes(id))];
+    const visible = new Set(prefs.visible_kpis && prefs.visible_kpis.length ? prefs.visible_kpis : DASHBOARD_KPI_IDS);
+    return orderedIds
+      .filter((id) => visible.has(id) && KPI_SPECS[id])
+      .map((id) => ({ id, label: KPI_SPECS[id].label, color: KPI_SPECS[id].color, value: values[id] }));
+  }, [pid, rfis, cos, wps, deliveries, actionItems, submittals, expenses, activeProject,
+      allRFIs, allCOs, allWPs, allDeliveries, allActionItems, allSubmittals, allExpenses,
+      portfolioProjects, liveProjectIds, prefs.kpi_order, prefs.visible_kpis]);
+
+  const now = new Date();
+  const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
+  const dateLabel = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const overdueCount = kpiList.find((k) => k.id === "overdue_items")?.value || 0;
+  const openRfiCount = kpiList.find((k) => k.id === "open_rfis")?.value || 0;
+  const scopeCount = pid ? 1 : portfolioProjects.length;
+  const summary = `${overdueCount} overdue · ${openRfiCount} open RFIs · ${scopeCount} ${pid ? "project" : `project${scopeCount !== 1 ? "s" : ""}`}`;
+
+  const dashboardHeader = (
+    <DashboardHeader
+      showWelcome={prefs.show_welcome}
+      greeting={greeting}
+      dateLabel={dateLabel}
+      summary={summary}
+      kpis={kpiList}
+      density={prefs.dashboard_density}
+    />
+  );
+  // Density also drives the gap between the header and the dashboard body.
+  const bodyGap = prefs.dashboard_density === "compact" ? 10 : prefs.dashboard_density === "comfortable" ? 18 : 14;
+  const showHeader = prefs.show_welcome || kpiList.length > 0;
+
   if (isLoading) {
     return <LoadingSkeleton variant="page" />;
   }
 
   if (!pid) {
     return (
-      <ErrorBoundary label="Portfolio Dashboard">
-        <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <PortfolioView
-            projects={portfolioProjects}
-            allRFIs={scopePortfolioRows(allRFIs)}
-            allCOs={scopePortfolioRows(allCOs)}
-            allCodes={scopePortfolioRows(allCodes)}
-            allWPs={scopePortfolioRows(allWPs)}
-            allDeliveries={scopePortfolioRows(allDeliveries)}
-            allActionItems={scopePortfolioRows(allActionItems)}
-            allExpenses={scopePortfolioRows(allExpenses)}
-            allScheduleTasks={scopePortfolioRows(allScheduleTasks)}
-          />
-        </Suspense>
-      </ErrorBoundary>
+      <div data-dashboard-density={prefs.dashboard_density} style={{ display: "flex", flexDirection: "column", gap: bodyGap }}>
+        {showHeader && dashboardHeader}
+        <ErrorBoundary label="Portfolio Dashboard">
+          <Suspense fallback={<LoadingSkeleton variant="page" />}>
+            <PortfolioView
+              projects={portfolioProjects}
+              allRFIs={scopePortfolioRows(allRFIs)}
+              allCOs={scopePortfolioRows(allCOs)}
+              allCodes={scopePortfolioRows(allCodes)}
+              allWPs={scopePortfolioRows(allWPs)}
+              allDeliveries={scopePortfolioRows(allDeliveries)}
+              allActionItems={scopePortfolioRows(allActionItems)}
+              allExpenses={scopePortfolioRows(allExpenses)}
+              allScheduleTasks={scopePortfolioRows(allScheduleTasks)}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      </div>
     );
   }
 
   return (
-    <ErrorBoundary label="Project Dashboard">
-      <ProjectDashboard
+    <div data-dashboard-density={prefs.dashboard_density} style={{ display: "flex", flexDirection: "column", gap: bodyGap }}>
+      {showHeader && dashboardHeader}
+      <ErrorBoundary label="Project Dashboard">
+        <ProjectDashboard
         project={activeProject}
         rfis={rfis}
         cos={cos}
@@ -300,6 +395,7 @@ export default function Dashboard() {
           navigate(params.length ? `${path}?${params.join("&")}` : path);
         }}
       />
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </div>
   );
 }
