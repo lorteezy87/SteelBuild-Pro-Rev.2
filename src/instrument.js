@@ -37,8 +37,8 @@ if (DSN) {
     tracesSampleRate: 0.1,
     // Trace-propagation adds `sentry-trace` + `baggage` request headers to
     // matched outgoing calls. Do NOT match *.supabase.co: the Edge Functions
-    // (llm-proxy, schedule-assistant, bluebeam/sharepoint-proxy, email-send)
-    // use a fixed Access-Control-Allow-Headers list that does not include those
+    // (llm-proxy, schedule-assistant, email-send) use a fixed
+    // Access-Control-Allow-Headers list that does not include those
     // headers, so the browser's CORS preflight fails and every browser→function
     // call is blocked ("Request header field baggage is not allowed…" →
     // "Failed to send a request to the Edge Function"). Restrict propagation to

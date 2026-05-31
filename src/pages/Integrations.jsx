@@ -26,7 +26,6 @@ import { createPageUrl } from "@/utils";
 import { useProjectId } from "@/hooks/useProjectId";
 import EmailAccountSettings from "@/components/email/EmailAccountSettings";
 import DocumentStorageSettings from "@/components/dms/DocumentStorageSettings";
-import BluebeamSettings from "@/components/integrations/BluebeamSettings";
 import {
   INTEGRATION_AREAS,
   INTEGRATION_BUILD_ORDER,
@@ -41,7 +40,6 @@ const AREA_ICONS = {
   email: Mail,
   accounting: DollarSign,
   "document-storage": FolderOpen,
-  "bluebeam-pdf": FileText,
   scheduling: CalendarDays,
   "autodesk-bim": Box,
 };
@@ -244,12 +242,6 @@ export default function Integrations() {
             <div className="integrations-detail-section" style={{ marginTop: 20 }}>
               <h3>Live Configuration</h3>
               <DocumentStorageSettings projectId={projectId} />
-            </div>
-          )}
-          {selectedKey === "bluebeam-pdf" && (
-            <div className="integrations-detail-section" style={{ marginTop: 20 }}>
-              <h3>Bluebeam Max Connection</h3>
-              <BluebeamSettings projectId={projectId} />
             </div>
           )}
         </aside>

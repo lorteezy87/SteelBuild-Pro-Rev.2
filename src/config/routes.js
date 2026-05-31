@@ -148,7 +148,6 @@ const ROUTE_DOMAINS = {
     Vendors:          r(lazyWithRetry(() => import("@/pages/Vendors")),          "Vendors"),
     DataExchange:     r(lazyWithRetry(() => import("@/pages/DataExchange")),     "Data Exchange",       { projectScoped: true }),
     Integrations:     r(lazyWithRetry(() => import("@/pages/Integrations")),     "Integrations"),
-    BluebeamCallback: r(lazyWithRetry(() => import("@/pages/BluebeamCallback")), "Bluebeam Callback"),
     Settings:         r(lazyWithRetry(() => import("@/pages/Settings")),         "Settings"),
     UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management"),
     ProjectMembers:   r(lazyWithRetry(() => import("@/pages/ProjectMembers")),   "Project Members"),
