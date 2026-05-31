@@ -71,7 +71,9 @@ export default function DrawingViewer() {
   // Sheet Navigator, so starting it closed keeps the drawing surface clean.
   // One click on the toolbar's filmstrip toggle brings it back.
   const [filmstripOpen, setFilmstripOpen] = useState(false);
-  const [contextOpen, setContextOpen] = useState(true);
+  // Right-side Sheet Intelligence panel starts CLOSED for a drawing-first view;
+  // the toolbar's CONTEXT toggle opens it on demand.
+  const [contextOpen, setContextOpen] = useState(false);
   const [zoom, setZoom] = useState(1.0);
   const [rotation, setRotation] = useState(0); // 0 | 90 | 180 | 270
   // "canvas" = pdfjs canvas render (enables clickable hyperlinks + cross-sheet nav)
