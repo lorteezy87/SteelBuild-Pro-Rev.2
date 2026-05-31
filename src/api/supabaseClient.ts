@@ -957,15 +957,23 @@ export const auth = {
    * Update the current user's metadata.
    */
   updateMe: async (updates: Record<string, unknown>): Promise<AuthMeResult> => {
-    // C1 fix: whitelist safe fields to prevent privilege escalation via
-    // arbitrary user_metadata writes (e.g. setting role to "admin").
-    const ALLOWED_FIELDS = new Set([
-      'full_name', 'job_title', 'company', 'phone', 'timezone', 'bio',
-      'avatar_url', 'preferences', 'notification_settings',
+    // The Settings tabs persist their preferences as flat keys on
+    // user_metadata (and `auth.me()` reads them back the same way), so we
+    // can't use a fixed allow-list — that silently dropped every preference
+    // and settings never saved. Instead DENY only the identity / privilege-
+    // bearing keys (so a user can't escalate by writing role:"admin", etc.)
+    // and allow all other (preference) keys through. Note: client admin gates
+    // read meta.role only cosmetically — real authorization is server-side via
+    // user_profiles.role + RLS (user_is_system_admin), which never trusts
+    // user_metadata — so this is the correct boundary.
+    const BLOCKED_FIELDS = new Set([
+      'role', 'roles', 'is_admin', 'isAdmin', 'admin', 'permissions', 'perms',
+      'id', 'user_id', 'uid', 'sub', 'email', 'email_verified', 'phone_verified',
+      'aud', 'exp', 'iat', 'iss', 'app_metadata',
     ]);
     const safeUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
-      if (ALLOWED_FIELDS.has(key)) safeUpdates[key] = value;
+      if (!BLOCKED_FIELDS.has(key)) safeUpdates[key] = value;
     }
     const { data, error } = await supabase.auth.updateUser({ data: safeUpdates });
     if (error) throw error;
