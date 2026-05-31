@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import {
   AlertTriangle,
@@ -41,6 +41,7 @@ import {
   surface2,
   textMuted,
   textPrimary,
+  toDateInputValue,
   warning,
 } from "./format";
 import type { DueInfo, Submittal } from "./types";
@@ -570,7 +571,7 @@ function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: Inli
           type="date"
           autoFocus
           disabled={disabled}
-          defaultValue={currentDate ? new Date(currentDate).toISOString().split("T")[0] : ""}
+          defaultValue={toDateInputValue(currentDate)}
           onChange={(e) => {
             if (e.target.value) {
               onSetDate(e.target.value);
@@ -1462,6 +1463,16 @@ interface LeadTimesModalProps {
 
 export function LeadTimesModal({ leadDays, defaults, saving, onSave, onClose }: LeadTimesModalProps) {
   const [draft, setDraft] = useState<Record<string, number>>(() => ({ ...defaults, ...leadDays }));
+
+  // Escape closes the modal (keyboard accessibility — §25). Guarded by `saving`
+  // so a mid-save Escape can't drop the dialog before the mutation settles.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !saving) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [saving, onClose]);
 
   const setField = (key: string, value: string) => {
     const n = Math.max(0, Math.round(Number(value) || 0));
