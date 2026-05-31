@@ -88,7 +88,7 @@ function corsHeaders(req?: Request): Record<string, string> {
   if (!req || configured.length === 0 || configured.includes("*")) {
     return {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, sentry-trace, baggage",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
     };
   }
@@ -98,7 +98,7 @@ function corsHeaders(req?: Request): Record<string, string> {
   const allowOrigin = configured.includes(origin) || isLocalhost ? origin : "null";
   return {
     "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, sentry-trace, baggage",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
