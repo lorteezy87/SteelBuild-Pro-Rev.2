@@ -8,6 +8,7 @@ import React from "react";
 import { mono, statusColumns, PRIORITY_CFG, BIC_COLORS } from "./constants";
 import { isOverdue, daysOpen } from "./utils";
 import { Pill } from "./subcomponents";
+import { formatLocalDate } from "@/utils/dates";
 
 export default function BoardView({ filtered, onSelect }) {
   return (
@@ -46,7 +47,7 @@ export default function BoardView({ filtered, onSelect }) {
                     <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8 }}>
                       <Pill label={r.ball_in_court || "Contractor"} color={bic.text} bg={bic.bg} />
                       <span style={{ ...mono, fontSize: 8, color: overdue ? "var(--status-error)" : "var(--text-muted)", fontWeight: overdue ? 700 : 500 }}>
-                        {r.date_required ? new Date(r.date_required + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                        {r.date_required ? formatLocalDate(r.date_required + "T00:00:00", "en-US", { month: "short", day: "numeric" }) : "—"}
                       </span>
                       <span style={{ ...mono, fontSize: 8, color: "var(--text-secondary)" }}>{daysOpen(r)}d</span>
                     </div>

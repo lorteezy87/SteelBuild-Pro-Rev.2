@@ -7,6 +7,7 @@ import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProgressBar from "../shared/ProgressBar";
 import { computeWeightedHealth, HealthPill, HEALTH_ORDER, healthColor } from "./portfolioHealth";
+import { formatLocalDate } from "@/utils/dates";
 import {
   PHASE_DOT,
   summarizeProjectSchedule,
@@ -2016,7 +2017,7 @@ export default function PortfolioView({
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Next Delivery</div>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 2 }}>{deliveriesStats.nextDelivery.description || deliveriesStats.nextDelivery.vendor || "—"}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>{projectMap[deliveriesStats.nextDelivery.project_id] || "—"}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>{new Date(deliveriesStats.nextDelivery.scheduled_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>{formatLocalDate(deliveriesStats.nextDelivery.scheduled_date, "en-US", { weekday: "short", month: "short", day: "numeric" })}</div>
           </div>
         )}
 

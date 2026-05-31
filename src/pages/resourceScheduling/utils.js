@@ -10,6 +10,7 @@
 
 // ─── Calendar helpers ────────────────────────────────────────────────
 import { GANTT_GRADIENT, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
+import { formatLocalDate } from "@/utils/dates";
 
 export const addDays = (date, n) => {
   const d = new Date(date);
@@ -28,7 +29,7 @@ export const snapToMonday = (date) => {
 };
 
 export const fmt = (d) =>
-  new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  formatLocalDate(d, "en-US", { month: "short", day: "numeric" });
 
 export const isThisWeek = (date) => {
   const today = new Date();

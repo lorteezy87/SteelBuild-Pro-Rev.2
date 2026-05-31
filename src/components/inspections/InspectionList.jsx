@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { formatLocalDate } from "@/utils/dates";
 
 const STATUS_COLORS = {
   Scheduled: "var(--status-info)",
@@ -72,7 +73,7 @@ export default function InspectionList({ inspections, onConvertToPunchlist }) {
 
             <div>
               <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>
-                {new Date(inspection.inspection_date).toLocaleDateString()}
+                {formatLocalDate(inspection.inspection_date)}
               </div>
               {inspection.inspector_name && (
                 <div style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "2px" }}>
@@ -337,7 +338,7 @@ export default function InspectionList({ inspections, onConvertToPunchlist }) {
                       Signed
                     </div>
                     <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>
-                      {new Date(inspection.sign_off_date).toLocaleDateString()}
+                      {formatLocalDate(inspection.sign_off_date)}
                     </div>
                   </div>
                   {inspection.sign_off_by && (

@@ -1,5 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
+import { formatLocalDate } from "@/utils/dates";
 
 export default function TodayLogCard({ 
   todayLog, 
@@ -15,7 +16,7 @@ export default function TodayLogCard({
     year: 'numeric' 
   });
 
-  const lastLogDate = lastLog ? new Date(lastLog.date).toLocaleDateString('en-US', { 
+  const lastLogDate = lastLog ? formatLocalDate(lastLog.date, 'en-US', { 
     month: 'short', 
     day: 'numeric' 
   }) : null;

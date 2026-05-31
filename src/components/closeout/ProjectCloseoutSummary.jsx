@@ -1,4 +1,5 @@
 import React from "react";
+import { formatLocalDate } from "@/utils/dates";
 
 export default function ProjectCloseoutSummary({ closeout }) {
   if (!closeout) return null;
@@ -34,7 +35,7 @@ export default function ProjectCloseoutSummary({ closeout }) {
           <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--status-success)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "8px" }}>✓ Client Sign-Off</div>
           <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "2px" }}>{closeout.client_signed_by}</div>
           {closeout.client_sign_off_date && (
-            <div style={{ fontSize: "10px", color: "var(--text-muted)" }}>Signed {new Date(closeout.client_sign_off_date).toLocaleDateString()}</div>
+            <div style={{ fontSize: "10px", color: "var(--text-muted)" }}>Signed {formatLocalDate(closeout.client_sign_off_date)}</div>
           )}
         </div>
       )}

@@ -10,6 +10,7 @@ import { calcWpProgress, calcLaborBurn, calcContractValue, calcDaysToDeadline, c
 import { CommandBar } from "@/components/design-system";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { Plus, PauseCircle } from "lucide-react";
+import { formatLocalDate } from "@/utils/dates";
 
 /* ─────────────────────────────────────────────
    Phase + Health configs
@@ -1033,7 +1034,7 @@ export default function Projects() {
               const { pct: wpPct } = calcWpProgress(pWPs);
               const pRFIs  = rfis.filter(r => r.project_id === p.id && (r.status === "Open" || r.status === "Under Review")).length;
               const target = p.target_completion_date
-                ? new Date(p.target_completion_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })
+                ? formatLocalDate(p.target_completion_date, "en-US", { month: "short", day: "numeric", year: "2-digit" })
                 : "—";
               const contractVal = formatCurrency(Number(p.original_contract_value) || 0);
 

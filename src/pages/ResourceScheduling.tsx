@@ -5,6 +5,7 @@ import { useProjectContext } from "../components/shared/ProjectContext";
 import { toast } from "sonner";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
 import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
+import { formatLocalDate } from "@/utils/dates";
 import {
   addDays, subDays, snapToMonday, fmt, isThisWeek,
   PHASE_COLORS, PX_PER_DAY,
@@ -296,7 +297,7 @@ export default function ResourceScheduling() {
           banners.push({ label: currentLabel, width: currentWidth });
         }
         currentMonth = h.month;
-        currentLabel = new Date(h.date).toLocaleDateString("en-US", {
+        currentLabel = formatLocalDate(h.date, "en-US", {
           month: "long",
           year: "numeric",
         });

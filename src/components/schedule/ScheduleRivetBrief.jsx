@@ -4,6 +4,7 @@ import { computeEffectiveDates } from "@/services/scheduleCascade";
 import { PHASES } from "@/utils/phases";
 import { Button } from "@/components/design-system";
 import { formatDateShort } from "@/components/shared/formatters";
+import { formatLocalDate } from "@/utils/dates";
 
 const RIVET_COLLAPSED_KEY = "steelbuild:schedule-brief-collapsed";
 
@@ -562,7 +563,7 @@ function buildBrief(tasks) {
   });
 
   const clipboardText = [
-    `Rivet Schedule Brief - ${new Date().toLocaleDateString()}`,
+    `Rivet Schedule Brief - ${formatLocalDate()}`,
     `Project: ${tasks[0]?.project_name || "Selected Project"}`,
     `Pressure: ${riskScore}%`,
     `Risk: ${aiNarrative.riskLevel}`,

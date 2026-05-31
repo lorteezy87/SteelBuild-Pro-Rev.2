@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { entities } from "@/api/supabaseClient";
+import { formatLocalDate } from "@/utils/dates";
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -73,7 +74,7 @@ export default function RolesTab({ user }) {
                   </span>
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  {member.created_date ? new Date(member.created_date).toLocaleDateString() : '—'}
+                  {member.created_date ? formatLocalDate(member.created_date) : '—'}
                 </div>
               </div>
             </div>

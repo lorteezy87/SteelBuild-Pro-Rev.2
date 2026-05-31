@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
+import { formatLocalDate } from "@/utils/dates";
 import {
   Archive,
   CheckCircle2,
@@ -76,7 +77,7 @@ export function timeAgo(dateStr?: string): string {
   if (hrs < 24) return `${hrs}h`;
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d`;
-  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return formatLocalDate(dateStr, "en-US", { month: "short", day: "numeric" });
 }
 
 export function formatDate(dateStr?: string): string {

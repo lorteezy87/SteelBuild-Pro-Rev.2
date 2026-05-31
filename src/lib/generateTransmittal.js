@@ -4,6 +4,7 @@
  * Produces a clean, professionally formatted construction transmittal letter.
  */
 import { jsPDF } from "jspdf";
+import { formatLocalDate } from "@/utils/dates";
 
 // ── Color palette (RGB) ──────────────────────────────────────────────────────
 const C = {
@@ -220,7 +221,7 @@ export function generateTransmittal({
     color(C.muted);
     font(7);
     const d = doc.revision_date || doc.revisionDate || doc.uploaded_date || "";
-    const dateStr = d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" }) : "—";
+    const dateStr = d ? formatLocalDate(d, "en-US", { month: "short", day: "numeric", year: "2-digit" }) : "—";
     pdf.text(dateStr, COL.date.x + COL.date.w - 2, y + 13, { align: "right" });
 
     y += rowH;
