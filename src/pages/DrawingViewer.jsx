@@ -67,7 +67,10 @@ export default function DrawingViewer() {
   const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [filmstripOpen, setFilmstripOpen] = useState(true);
+  // Closed by default — the bottom thumbnail filmstrip duplicates the left
+  // Sheet Navigator, so starting it closed keeps the drawing surface clean.
+  // One click on the toolbar's filmstrip toggle brings it back.
+  const [filmstripOpen, setFilmstripOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
   const [zoom, setZoom] = useState(1.0);
   const [rotation, setRotation] = useState(0); // 0 | 90 | 180 | 270

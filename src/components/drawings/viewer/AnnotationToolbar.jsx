@@ -7,8 +7,8 @@
  * always agree.
  */
 
-import React from "react";
-import { MousePointer2, Pencil, Square, ArrowUpRight, StickyNote, Highlighter, Ruler, Scaling, Trash2 } from "lucide-react";
+import React, { useState } from "react";
+import { MousePointer2, Pencil, Square, ArrowUpRight, StickyNote, Highlighter, Ruler, Scaling, Trash2, X } from "lucide-react";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -50,6 +50,65 @@ export default function AnnotationToolbar({
   saving,
   saveError,
 }) {
+  // Collapsed by default so the markup palette doesn't sit on top of the
+  // drawing while the user is just reviewing. It auto-expands the moment a
+  // markup tool is active (chosen by mouse OR keyboard shortcut), and the
+  // user can pin/close it manually. Keeps the sheet clean for plain viewing
+  // while leaving markup one click away.
+  const [expanded, setExpanded] = useState(false);
+  const open = expanded || activeTool !== "select";
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        title="Markup tools (V select · P redline · B box · A arrow · M measure · T note)"
+        style={{
+          position: "absolute",
+          top: 12,
+          left: 12,
+          zIndex: 10,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 7,
+          background: "rgba(17,22,30,0.92)",
+          border: "1px solid var(--border-strong)",
+          borderRadius: 6,
+          padding: "7px 11px",
+          boxShadow: "0 6px 18px rgba(0,0,0,0.45)",
+          backdropFilter: "blur(3px)",
+          color: "var(--text-secondary)",
+          cursor: "pointer",
+          ...mono,
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+        }}
+      >
+        <Pencil size={14} />
+        Markup
+        {markupCount > 0 && (
+          <span
+            style={{
+              ...mono,
+              fontSize: 9,
+              fontWeight: 700,
+              color: "var(--accent-text)",
+              background: "var(--accent)",
+              borderRadius: 999,
+              padding: "1px 6px",
+              lineHeight: 1.4,
+            }}
+          >
+            {markupCount}
+          </span>
+        )}
+      </button>
+    );
+  }
+
   return (
     <div
       style={{
@@ -69,7 +128,7 @@ export default function AnnotationToolbar({
       }}
     >
       {/* Tool buttons */}
-      <div style={{ display: "flex", gap: 4 }}>
+      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
         {MARKUP_TOOLS.map((tool) => {
           const Icon = tool.icon;
           const active = activeTool === tool.key;
@@ -98,6 +157,28 @@ export default function AnnotationToolbar({
             </button>
           );
         })}
+        {/* Collapse — return to plain viewing (select tool + hide palette) */}
+        <button
+          type="button"
+          onClick={() => { onToolChange("select"); setExpanded(false); }}
+          title="Close markup tools"
+          style={{
+            width: 28,
+            height: 32,
+            marginLeft: 2,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "transparent",
+            color: "var(--text-muted)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 4,
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          <X size={14} />
+        </button>
       </div>
 
       {/* Color swatches */}
