@@ -617,11 +617,13 @@ async function handle(req: Request): Promise<Response> {
     attachmentsStored = await storeSentAttachments(supabaseUrl, serviceKey, body.project_id, storedId, attachments);
   }
 
+  // Log recipient COUNT, not addresses, and omit the subject — avoid leaking
+  // correspondence PII into function logs. from=project mailbox is retained for
+  // mailbox-level debugging.
   console.log(
     `[email-send] Sent: project=${body.project_id} from=${fromEmail} ` +
-    `to=${body.to.join(",")} subject="${body.subject.slice(0, 60)}" ` +
-    `provider=${result.provider} stored=${storedId || "failed"} ` +
-    `attachments=${attachmentsStored}/${attachments.length}`,
+    `recipients=${body.to.length} provider=${result.provider} ` +
+    `stored=${storedId || "failed"} attachments=${attachmentsStored}/${attachments.length}`,
   );
 
   return jsonResponse({

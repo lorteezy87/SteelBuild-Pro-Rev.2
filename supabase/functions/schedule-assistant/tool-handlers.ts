@@ -370,9 +370,16 @@ async function getDeliveryStatus(
 
   if (status) query = query.ilike("status", status);
   if (material_type) {
-    query = query.or(
-      `load_category.ilike.%${material_type}%,procurement_category.ilike.%${material_type}%`,
-    );
+    // material_type is interpolated into the PostgREST .or() filter DSL, so a
+    // value containing , . ( ) * could break out of the ilike into another
+    // column/operator. Strip those metacharacters before building the string.
+    // (The client is RLS-scoped, so this is defense-in-depth.)
+    const safe = material_type.replace(/[,.()*\\]/g, " ").trim();
+    if (safe) {
+      query = query.or(
+        `load_category.ilike.%${safe}%,procurement_category.ilike.%${safe}%`,
+      );
+    }
   }
 
   const { data, error } = await query.order("scheduled_date", { ascending: true });

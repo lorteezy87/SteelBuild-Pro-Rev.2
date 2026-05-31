@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
         calls.push({ table, op: "order", column, value });
         return chain;
       }),
+      limit: vi.fn((_n: number) => chain),
       update: vi.fn((value: Record<string, unknown>) => {
         calls.push({ table, op: "update", value });
         return chain;

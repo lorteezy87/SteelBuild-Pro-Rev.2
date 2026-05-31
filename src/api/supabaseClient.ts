@@ -343,6 +343,25 @@ export type EntityClient<T extends TableName> = {
   bulkCreate: (records: Insert<T>[]) => Promise<Array<RowWithAliases<T>>>;
 };
 
+// Default row cap for list()/filter() when the caller passes no explicit limit.
+// PostgREST already enforces a server-side max-rows ceiling (≈1000), so an
+// uncapped read silently truncates with no signal. Applying an explicit default
+// makes the bound intentional, consistent with the centralized hooks
+// (useDrawings/useSubmittals pass 2000), and lets us warn on likely truncation
+// in dev. Callers needing more must paginate or filter server-side.
+const DEFAULT_LIST_LIMIT = 2000;
+
+// Dev-only: warn when a read comes back at the cap (likely truncated) so the
+// silent-1000-row failure mode surfaces during development.
+const warnIfTruncated = (tableName: string, op: string, count: number, cap: number) => {
+  if (import.meta.env.DEV && count >= cap) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[supabaseClient] ${tableName}.${op}() returned ${count} rows at the ${cap}-row cap — results may be TRUNCATED. Add server-side filtering or pagination.`,
+    );
+  }
+};
+
 const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> => ({
   /**
    * List all records, optionally sorted.
@@ -367,8 +386,10 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     } else {
       q = q.order('created_at', { ascending: false });
     }
+    q = q.limit(DEFAULT_LIST_LIMIT);
     const { data, error } = await q;
     if (error) throw new SupabaseOperationError(tableName as string, 'list', error);
+    warnIfTruncated(tableName as string, 'list', data?.length ?? 0, DEFAULT_LIST_LIMIT);
     return addAliasesToList<RowWithAliases<T>>(data, tableName as string);
   },
 
@@ -393,9 +414,11 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     } else {
       q = q.order('created_at', { ascending: false });
     }
-    if (limit) q = q.limit(limit);
+    const effectiveLimit = limit ?? DEFAULT_LIST_LIMIT;
+    q = q.limit(effectiveLimit);
     const { data, error } = await q;
     if (error) throw new SupabaseOperationError(tableName as string, 'filter', error);
+    warnIfTruncated(tableName as string, 'filter', data?.length ?? 0, effectiveLimit);
     return addAliasesToList<RowWithAliases<T>>(data, tableName as string);
   },
 
