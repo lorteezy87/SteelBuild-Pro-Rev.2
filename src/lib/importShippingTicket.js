@@ -15,7 +15,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
-import { base44 } from "@/api/base44Client";
+import { integrations } from "@/api/supabaseClient";
 
 /**
  * Call llm-proxy with proper error detail extraction. supabase-js returns
@@ -142,7 +142,7 @@ export async function uploadShippingTicket(file) {
   if (file.size > MAX_PDF_BYTES) {
     throw new Error(`PDF exceeds 32 MB (${(file.size / 1e6).toFixed(1)} MB).`);
   }
-  const { file_url, path } = await base44.integrations.Core.UploadFile({ file });
+  const { file_url, path } = await integrations.Core.UploadFile({ file });
   return { file_url, storage_path: path || "", file_name: file.name };
 }
 

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44, resolveFileUrl } from "@/api/base44Client";
+import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import {
   X,
@@ -89,7 +89,7 @@ export default function PhotoGallery({ photos = [] }) {
   // ── Mutations ──
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
-      await base44.entities.Photo.update(id, { is_deleted: true, deleted_at: new Date().toISOString() });
+      await entities.Photo.update(id, { is_deleted: true, deleted_at: new Date().toISOString() });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["photos"] });
@@ -99,7 +99,7 @@ export default function PhotoGallery({ photos = [] }) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, patch }) => base44.entities.Photo.update(id, patch),
+    mutationFn: async ({ id, patch }) => entities.Photo.update(id, patch),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["photos"] });
       toast.success("Photo updated");

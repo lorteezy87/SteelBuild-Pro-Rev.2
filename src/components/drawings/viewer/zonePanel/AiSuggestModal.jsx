@@ -17,7 +17,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Check } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { suggestLinksForZone, LINKABLE_TYPE_LABELS } from "@/lib/drawingHub";
 import { mono, display } from "./zonePanelConstants";
 
@@ -43,10 +43,10 @@ export function AiSuggestModal({ zone, sheet, existingItems, onClose, onAccept }
           return [];
         });
       const [rfis, wps, dels, cos] = await Promise.all([
-        safeFetch(base44.entities.RFI.filter({ project_id: zone.project_id }), "RFIs"),
-        safeFetch(base44.entities.WorkPackage.filter({ project_id: zone.project_id }), "Work Packages"),
-        safeFetch(base44.entities.Delivery.filter({ project_id: zone.project_id }), "Deliveries"),
-        safeFetch(base44.entities.ChangeOrder.filter({ project_id: zone.project_id }), "Change Orders"),
+        safeFetch(entities.RFI.filter({ project_id: zone.project_id }), "RFIs"),
+        safeFetch(entities.WorkPackage.filter({ project_id: zone.project_id }), "Work Packages"),
+        safeFetch(entities.Delivery.filter({ project_id: zone.project_id }), "Deliveries"),
+        safeFetch(entities.ChangeOrder.filter({ project_id: zone.project_id }), "Change Orders"),
       ]);
       const isRfiOpen = (r) => !/^(answered|closed|void)$/i.test(r.status || "");
       const isDelOpen = (d) => !/^(delivered|received)$/i.test(d.status || "");

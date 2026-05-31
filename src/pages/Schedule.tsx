@@ -1,6 +1,6 @@
 import { useRef, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -81,14 +81,14 @@ export default function Schedule() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   // Fetch submittals linked to this project for Gantt overlay
   const { data: submittals = [] } = useQuery({
     queryKey: ["documents", projectId],
-    queryFn: () => projectId ? base44.entities.Document.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.Document.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     select: (docs: any[]) => docs.filter((d) => d.is_submittal && d.linked_wp_id),
   });
@@ -162,7 +162,7 @@ export default function Schedule() {
     if (toBackfill.length > 0) {
       batchProcess(
         toBackfill,
-        ({ id, wbs }) => base44.entities.ScheduleTask.update(id, { wbs_code: wbs }).catch(() => {}),
+        ({ id, wbs }) => entities.ScheduleTask.update(id, { wbs_code: wbs }).catch(() => {}),
       ).then(({ succeeded, failed }) => {
         invalidateEntity(qc, "schedule_task", projectId);
         if (failed.length > 0) {
@@ -201,7 +201,7 @@ export default function Schedule() {
   const updateTaskMut = useMutation({
     mutationFn: (data: ScheduleTask) => {
       const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-      return base44.entities.ScheduleTask.update(id, fields);
+      return entities.ScheduleTask.update(id, fields);
     },
     onSuccess: () => {
       invalidateEntity(qc, "schedule_task", projectId);
@@ -217,7 +217,7 @@ export default function Schedule() {
       const pid = data.project_id || projectId;
       if (!pid) throw new Error("Select a project first");
       const wbs = data.wbs_code || generateWBS(data.phase, scheduleTasks);
-      return base44.entities.ScheduleTask.create({ ...data, project_id: pid, wbs_code: wbs } as any);
+      return entities.ScheduleTask.create({ ...data, project_id: pid, wbs_code: wbs } as any);
     },
     onSuccess: () => {
       invalidateEntity(qc, "schedule_task", projectId);
@@ -228,7 +228,7 @@ export default function Schedule() {
   });
 
   const deleteTaskMut = useMutation({
-    mutationFn: (id: string) => base44.entities.ScheduleTask.delete(id),
+    mutationFn: (id: string) => entities.ScheduleTask.delete(id),
     onSuccess: () => {
       invalidateEntity(qc, "schedule_task", projectId);
       setShowDrawer(false);
@@ -248,7 +248,7 @@ export default function Schedule() {
     mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
       const results = await batchProcess(
         ids,
-        (id) => base44.entities.ScheduleTask.update(id, {
+        (id) => entities.ScheduleTask.update(id, {
           status,
           percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
         }),
@@ -272,7 +272,7 @@ export default function Schedule() {
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids: string[]) => {
-      const results = await batchProcess(ids, (id) => base44.entities.ScheduleTask.delete(id));
+      const results = await batchProcess(ids, (id) => entities.ScheduleTask.delete(id));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }
@@ -298,7 +298,7 @@ export default function Schedule() {
     mutationFn: async ({ ids, resource_names }: { ids: string[]; resource_names: string }) => {
       const results = await batchProcess(
         ids,
-        (id) => base44.entities.ScheduleTask.update(id, { resource_names, assigned_to: resource_names }),
+        (id) => entities.ScheduleTask.update(id, { resource_names, assigned_to: resource_names }),
       );
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
@@ -331,7 +331,7 @@ export default function Schedule() {
 
       const results = await batchProcess(
         editable.map((task) => task.id),
-        (id) => base44.entities.ScheduleTask.update(id, fields),
+        (id) => entities.ScheduleTask.update(id, fields),
       );
 
       if (results.failed.length > 0 && results.succeeded.length === 0) {
@@ -384,7 +384,7 @@ export default function Schedule() {
               fields.end_date = d.toISOString().split("T")[0];
             }
           }
-          return base44.entities.ScheduleTask.update(task.id, fields);
+          return entities.ScheduleTask.update(task.id, fields);
         },
       );
 
@@ -420,7 +420,7 @@ export default function Schedule() {
       for (const row of rows) {
         const wbs = row.wbs_code || generateWBS(row.phase, snapshot);
         const task = { ...row, project_id: pid, wbs_code: wbs };
-        await base44.entities.ScheduleTask.create(task);
+        await entities.ScheduleTask.create(task);
         snapshot.push(task); // include in snapshot for next WBS calculation
       }
       invalidateEntity(qc, "schedule_task", projectId);
@@ -483,7 +483,7 @@ export default function Schedule() {
         const parentUid = uidToParentUid[t.uid];
         const parentDbId = parentUid ? uidToDbId[parentUid] : null;
 
-        const record = await base44.entities.ScheduleTask.create({
+        const record = await entities.ScheduleTask.create({
           project_id: pid,
           task_name: t.name,
           task_type: inferTaskType(t.name, t.isSummary, t.milestone),
@@ -538,7 +538,7 @@ export default function Schedule() {
       if (depItems.length > 0) {
         await batchProcess(
           depItems,
-          ({ dbId, predLinks }) => base44.entities.ScheduleTask.update(dbId, {
+          ({ dbId, predLinks }) => entities.ScheduleTask.update(dbId, {
             dependencies: JSON.stringify(predLinks),
           }),
         );
@@ -830,7 +830,7 @@ export default function Schedule() {
               onSave={async (data) => {
                 const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                 try {
-                  await base44.entities.ScheduleTask.update(id, fields);
+                  await entities.ScheduleTask.update(id, fields);
                   invalidateEntity(qc, "schedule_task", projectId);
                   toast.success("Task saved");
                 } catch (err: any) {
@@ -874,7 +874,7 @@ export default function Schedule() {
               onSave={async (data) => {
                 const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                 try {
-                  await base44.entities.ScheduleTask.update(id, fields);
+                  await entities.ScheduleTask.update(id, fields);
                   invalidateEntity(qc, "schedule_task", projectId);
                   toast.success("Task saved");
                 } catch (err: any) {

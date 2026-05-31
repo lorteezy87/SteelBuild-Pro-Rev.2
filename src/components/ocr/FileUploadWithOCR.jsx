@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { base44 } from '@/api/base44Client';
+import { entities, integrations } from "@/api/supabaseClient";
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'];
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
@@ -43,7 +43,7 @@ const OCR_PROMPTS = {
 async function runOCR(file, fileType) {
   const prompt = OCR_PROMPTS[fileType] || OCR_PROMPTS.site_photo;
 
-  const raw = await base44.integrations.Core.InvokeLLM({
+  const raw = await integrations.Core.InvokeLLM({
     useCase: 'photo-ocr',
     prompt,
     system: 'You are an OCR data extraction engine for a structural steel construction management app. Extract data accurately from construction documents and photos. Always return valid JSON only. Use null for missing numeric fields. Use empty string for missing text fields.',
@@ -172,9 +172,9 @@ export default function FileUploadWithOCR({ fileType, linkedEntityId, linkedEnti
     }
 
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await integrations.Core.UploadFile({ file });
 
-      const uploadRecord = await base44.entities.UploadedFile.create({
+      const uploadRecord = await entities.UploadedFile.create({
         project_id: projectId,
         file_name: file.name,
         file_url,
@@ -190,7 +190,7 @@ export default function FileUploadWithOCR({ fileType, linkedEntityId, linkedEnti
 
       const extracted = await runOCR(file, fileType);
 
-      await base44.entities.UploadedFile.update(uploadRecord.id, {
+      await entities.UploadedFile.update(uploadRecord.id, {
         ocr_status: 'complete',
         ocr_extracted_data: JSON.stringify(extracted),
         ocr_processed_at: new Date().toISOString(),

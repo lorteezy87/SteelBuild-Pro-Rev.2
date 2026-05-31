@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../shared/ProjectContext";
 
 export default function ProjectPillDropdown({ compact = false, align = "right" }) {
@@ -21,7 +21,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
   // Fetch RFI counts for quick stats when dropdown is open
   const { data: allRFIs = [] } = useQuery({
     queryKey: ["pill-rfis-quick"],
-    queryFn: () => base44.entities.RFI.list(),
+    queryFn: () => entities.RFI.list(),
     enabled: open,
     staleTime: 60_000,
     initialData: [],

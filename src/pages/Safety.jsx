@@ -1,6 +1,6 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import SafetyIncidentFormModal from "@/components/safety/SafetyIncidentFormModal";
@@ -21,8 +21,8 @@ export default function Safety() {
     queryKey: ["safety-incidents", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.SafetyIncident.filter({ project_id: projectId })
-        : base44.entities.SafetyIncident.list("-incident_date"),
+        ? entities.SafetyIncident.filter({ project_id: projectId })
+        : entities.SafetyIncident.list("-incident_date"),
   });
 
   useRealtimeInvalidation("safety_incidents", projectId, [["safety-incidents", projectId]]);
@@ -31,7 +31,7 @@ export default function Safety() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -49,7 +49,7 @@ export default function Safety() {
   });
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.SafetyIncident.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.SafetyIncident.create({ ...data, project_id: data.project_id || projectId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["safety-incidents", projectId] });
       setShowForm(false);
@@ -60,7 +60,7 @@ export default function Safety() {
   });
 
   const updateMut = useMutation({
-    mutationFn: (data) => base44.entities.SafetyIncident.update(data.id, data),
+    mutationFn: (data) => entities.SafetyIncident.update(data.id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["safety-incidents", projectId] });
       setShowForm(false);
@@ -71,7 +71,7 @@ export default function Safety() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.SafetyIncident.delete(id),
+    mutationFn: (id) => entities.SafetyIncident.delete(id),
     onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["safety-incidents", projectId] });
       if (editing?.id === deletedId) {

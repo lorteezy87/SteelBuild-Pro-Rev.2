@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { batchProcess } from "@/utils/batchProcess";
 
 /**
@@ -46,7 +46,7 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
         // This avoids 400 errors if `is_dismissed` column doesn't exist yet
         // on a freshly-deployed environment that hasn't run the latest
         // migration.
-        const raw = await base44.entities.Alert.filter({ project_id: projectId });
+        const raw = await entities.Alert.filter({ project_id: projectId });
         return raw.filter((a) => !a.is_dismissed && !a.dismissed_at);
       } catch (err) {
         console.warn("[Layout] alerts query failed:", err?.message || err);
@@ -61,7 +61,7 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
 
   const { data: navRFIs = [] } = useQuery({
     queryKey: ["rfis-nav-count", projectId],
-    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }),
+    queryFn: () => entities.RFI.filter({ project_id: projectId }),
     refetchInterval: 120_000,
     staleTime: 60_000,
     enabled: moduleCountsEnabled,
@@ -69,7 +69,7 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
 
   const { data: navDrawings = [] } = useQuery({
     queryKey: ["drawings-nav-count", projectId],
-    queryFn: () => base44.entities.Drawing.filter({ project_id: projectId }),
+    queryFn: () => entities.Drawing.filter({ project_id: projectId }),
     refetchInterval: 120_000,
     staleTime: 60_000,
     enabled: moduleCountsEnabled,
@@ -77,7 +77,7 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
 
   const { data: navDeliveries = [] } = useQuery({
     queryKey: ["deliveries-nav-count", projectId],
-    queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
+    queryFn: () => entities.Delivery.filter({ project_id: projectId }),
     refetchInterval: 120_000,
     staleTime: 60_000,
     enabled: moduleCountsEnabled,
@@ -143,7 +143,7 @@ export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}
       const unread = unreadAlerts;
       try {
         return await batchProcess(unread, (a) =>
-          base44.entities.Alert.update(a.id, { is_read: true })
+          entities.Alert.update(a.id, { is_read: true })
         );
       } catch {
         // is_read column may not exist yet — silently degrade. Alerts page

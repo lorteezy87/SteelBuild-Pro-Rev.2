@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Drawings smoke test — renders the real Drawings page inside the
- * router + QueryClient + ProjectContext stack. base44 entity reads
+ * router + QueryClient + ProjectContext stack. entity reads
  * are mocked to return empty arrays so the page renders its
  * empty-state CommandBar without any network traffic.
  *
@@ -16,7 +16,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@/api/base44Client", () => {
+vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
     filter: vi.fn().mockResolvedValue([]),
@@ -25,7 +25,7 @@ vi.mock("@/api/base44Client", () => {
     create: vi.fn().mockResolvedValue(null),
   };
   return {
-    base44: { entities: new Proxy({}, { get: () => noop }) },
+    entities: new Proxy({}, { get: () => noop }),
     resolveFileUrl: vi.fn((u) => u),
   };
 });

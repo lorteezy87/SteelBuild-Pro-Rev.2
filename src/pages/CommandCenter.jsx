@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import ActionFeed from "@/components/commandcenter/ActionFeed";
 import FeedFilters from "@/components/commandcenter/FeedFilters";
@@ -123,63 +123,63 @@ export default function CommandCenter() {
   // no special wiring needed per-mutation site, no cache-key drift.
   const { data: projects = EMPTY_LIST, isLoading: projLoading } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: rfis = EMPTY_LIST, isLoading: rfiLoading } = useQuery({
     queryKey: ["rfis"],
-    queryFn: () => base44.entities.RFI.list("-submitted_date"),
+    queryFn: () => entities.RFI.list("-submitted_date"),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: drawings = EMPTY_LIST } = useQuery({
     queryKey: ["drawings"],
-    queryFn: () => base44.entities.Drawing.list(),
+    queryFn: () => entities.Drawing.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: drawingSets = EMPTY_LIST } = useQuery({
     queryKey: ["drawing-sets"],
-    queryFn: () => base44.entities.DrawingSet.list(),
+    queryFn: () => entities.DrawingSet.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: changeOrders = EMPTY_LIST } = useQuery({
     queryKey: ["change-orders"],
-    queryFn: () => base44.entities.ChangeOrder.list(),
+    queryFn: () => entities.ChangeOrder.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: deliveries = EMPTY_LIST } = useQuery({
     queryKey: ["deliveries"],
-    queryFn: () => base44.entities.Delivery.list(),
+    queryFn: () => entities.Delivery.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: workPackages = EMPTY_LIST } = useQuery({
     queryKey: ["work-packages"],
-    queryFn: () => base44.entities.WorkPackage.list(),
+    queryFn: () => entities.WorkPackage.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: sovItems = EMPTY_LIST } = useQuery({
     queryKey: ["sov-items"],
-    queryFn: () => base44.entities.SOVItem.list(),
+    queryFn: () => entities.SOVItem.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: productionNotes = EMPTY_LIST } = useQuery({
     queryKey: ["production-notes"],
-    queryFn: () => base44.entities.ProductionNote.list("-note_date"),
+    queryFn: () => entities.ProductionNote.list("-note_date"),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
@@ -189,7 +189,7 @@ export default function CommandCenter() {
   // sees on the Gantt also shows up here.
   const { data: scheduleTasks = EMPTY_LIST } = useQuery({
     queryKey: ["schedule-tasks"],
-    queryFn: () => base44.entities.ScheduleTask.list("-start_date"),
+    queryFn: () => entities.ScheduleTask.list("-start_date"),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
@@ -320,7 +320,7 @@ export default function CommandCenter() {
             const it = filteredFeed[selectedIndex];
             if (it.itemType === "NOTE" && it.raw?.id) {
               e.preventDefault();
-              base44.entities.ProductionNote
+              entities.ProductionNote
                 .update(it.raw.id, { is_resolved: true, resolved_date: new Date().toISOString() })
                 .catch(() => {});
             }

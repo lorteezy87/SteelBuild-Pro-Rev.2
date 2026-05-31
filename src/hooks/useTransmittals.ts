@@ -5,7 +5,7 @@
  * member, so is_deleted is filtered here, not by the entity client.
  */
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 
 export interface TransmittalRow {
   id: string;
@@ -31,8 +31,8 @@ export function useTransmittals(projectId: string | null) {
     staleTime: 60_000,
     queryFn: async (): Promise<TransmittalRow[]> => {
       const [rawTransmittals, rawItems] = await Promise.all([
-        base44.entities.DrawingTransmittal.filter({ project_id: projectId }),
-        base44.entities.DrawingTransmittalItem.filter({ project_id: projectId }),
+        entities.DrawingTransmittal.filter({ project_id: projectId }),
+        entities.DrawingTransmittalItem.filter({ project_id: projectId }),
       ]);
       const counts = new Map<string, number>();
       for (const it of (rawItems as any[]) ?? []) {

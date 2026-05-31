@@ -15,7 +15,7 @@
 
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44, resolveFileUrl } from "@/api/base44Client";
+import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -88,7 +88,7 @@ export default function Documents() {
     queryKey: ["documents", activeProject?.id],
     queryFn: () =>
       activeProject?.id
-        ? base44.entities.Document.filter({ project_id: activeProject.id })
+        ? entities.Document.filter({ project_id: activeProject.id })
         : [],
     enabled: !!activeProject?.id,
   });
@@ -100,14 +100,14 @@ export default function Documents() {
     queryKey: ["document-folders", activeProject?.id],
     queryFn: () =>
       activeProject?.id
-        ? base44.entities.DocumentFolder.filter({ project_id: activeProject.id })
+        ? entities.DocumentFolder.filter({ project_id: activeProject.id })
         : [],
     enabled: !!activeProject?.id,
   });
 
   const createFolderMut = useMutation({
     mutationFn: ({ name, parentFolderId }) =>
-      base44.entities.DocumentFolder.create({
+      entities.DocumentFolder.create({
         project_id: activeProject.id,
         parent_folder_id: parentFolderId,
         name,
@@ -128,7 +128,7 @@ export default function Documents() {
   });
 
   const renameFolderMut = useMutation({
-    mutationFn: ({ id, name }) => base44.entities.DocumentFolder.update(id, { name }),
+    mutationFn: ({ id, name }) => entities.DocumentFolder.update(id, { name }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
       toast.success("Folder renamed");
@@ -151,7 +151,7 @@ export default function Documents() {
   // folder's parent OR null their folder_id; for now the simple path is
   // good enough.
   const deleteFolderMut = useMutation({
-    mutationFn: (id) => base44.entities.DocumentFolder.delete(id),
+    mutationFn: (id) => entities.DocumentFolder.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
       // Also invalidate documents so the list re-renders without the
@@ -171,7 +171,7 @@ export default function Documents() {
   const moveDocsMut = useMutation({
     mutationFn: async ({ docIds, destFolderId }) => {
       const { succeeded, failed } = await batchProcess(docIds, (id) =>
-        base44.entities.Document.update(id, { folder_id: destFolderId }),
+        entities.Document.update(id, { folder_id: destFolderId }),
       );
       return { succeeded, failed };
     },
@@ -197,7 +197,7 @@ export default function Documents() {
   const moveFoldersMut = useMutation({
     mutationFn: async ({ folderIds, destFolderId }) => {
       const { succeeded, failed } = await batchProcess(folderIds, (id) =>
-        base44.entities.DocumentFolder.update(id, { parent_folder_id: destFolderId }),
+        entities.DocumentFolder.update(id, { parent_folder_id: destFolderId }),
       );
       return { succeeded, failed };
     },
@@ -222,7 +222,7 @@ export default function Documents() {
   const bulkDeleteFoldersMut = useMutation({
     mutationFn: async (folderIds) => {
       const { succeeded, failed } = await batchProcess(folderIds, (id) =>
-        base44.entities.DocumentFolder.delete(id),
+        entities.DocumentFolder.delete(id),
       );
       return { succeeded, failed };
     },
@@ -255,7 +255,7 @@ export default function Documents() {
         ? (currentFolderId ?? null)
         : (stack[item.depth - 1] ?? currentFolderId ?? null);
       try {
-        const row = await base44.entities.DocumentFolder.create({
+        const row = await entities.DocumentFolder.create({
           project_id: activeProject.id,
           parent_folder_id: parentId,
           name: item.name,
@@ -330,7 +330,7 @@ export default function Documents() {
     mutationFn: async (newStatus) => {
       const ids = [...selectedIds];
       const { succeeded, failed } = await batchProcess(ids, (id) =>
-        base44.entities.Document.update(id, { status: newStatus })
+        entities.Document.update(id, { status: newStatus })
       );
       if (failed.length > 0 && succeeded.length === 0) {
         throw new Error(`All ${failed.length} updates failed.`);
@@ -353,7 +353,7 @@ export default function Documents() {
     mutationFn: async () => {
       const ids = [...selectedIds];
       const { succeeded, failed } = await batchProcess(ids, (id) =>
-        base44.entities.Document.delete(id)
+        entities.Document.delete(id)
       );
       if (failed.length > 0 && succeeded.length === 0) {
         throw new Error(`All ${failed.length} deletes failed.`);
@@ -398,7 +398,7 @@ export default function Documents() {
 
   const handleDeleteDoc = async (doc) => {
     try {
-      await base44.entities.Document.delete(doc.id);
+      await entities.Document.delete(doc.id);
       queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
       toast.success("Document deleted");
     } catch {

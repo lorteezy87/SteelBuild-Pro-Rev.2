@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Modal, Button } from "@/components/design-system";
@@ -36,13 +36,13 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.Contact.create(data),
+    mutationFn: (data) => entities.Contact.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       toast.success("Contact created");

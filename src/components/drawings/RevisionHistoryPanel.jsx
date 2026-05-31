@@ -1,7 +1,7 @@
 import React from "react";
 import { X, Upload } from "lucide-react";
 import { formatDate } from "../shared/formatters";
-import { resolveFileUrl } from "@/api/base44Client";
+import { resolveFileUrl } from "@/api/supabaseClient";
 
 export default function RevisionHistoryPanel({ drawingSet, onClose, onUploadNewRevision }) {
   if (!drawingSet) return null;

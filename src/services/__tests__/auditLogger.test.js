@@ -1,7 +1,7 @@
 /**
  * auditLogger.test.js — activity record construction + fire-and-forget safety.
  *
- * logActivity/logTransition write to base44.entities.Activity. The logic worth
+ * logActivity/logTransition write to entities.Activity. The logic worth
  * pinning: entity-label mapping, human name extraction, status-change
  * descriptions, user resolution (auth session, not localStorage), and the
  * guarantee that an audit failure never throws into the caller.
@@ -14,8 +14,8 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
 }));
 
-vi.mock("@/api/base44Client", () => ({
-  base44: { entities: { Activity: { create: mocks.create } } },
+vi.mock("@/api/supabaseClient", () => ({
+  entities: { Activity: { create: mocks.create } },
 }));
 vi.mock("@/lib/supabase", () => ({
   supabase: { auth: { getUser: mocks.getUser } },

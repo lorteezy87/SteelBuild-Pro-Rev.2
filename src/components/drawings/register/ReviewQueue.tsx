@@ -8,7 +8,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { usePermissions } from "@/services/permissions";
 import { useDrawingReviews, type DrawingReviewRow } from "@/hooks/useDrawingReviews";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
@@ -68,7 +68,7 @@ export function ReviewQueue({ projectId }: { projectId: string | null }) {
     mutationFn: async () => {
       const sheet = attachable.find((r) => r.drawing_id === reqDrawing);
       if (!sheet?.current_revision_id) throw new Error("Pick a sheet with a current revision");
-      await base44.entities.DrawingReview.create({
+      await entities.DrawingReview.create({
         project_id: projectId as string,
         drawing_revision_id: sheet.current_revision_id,
         review_role: reqRole,
@@ -84,7 +84,7 @@ export function ReviewQueue({ projectId }: { projectId: string | null }) {
 
   const decideMut = useMutation({
     mutationFn: async ({ id, decision }: { id: string; decision: string }) => {
-      await base44.entities.DrawingReview.update(id, {
+      await entities.DrawingReview.update(id, {
         decision,
         reviewed_at: new Date().toISOString(),
         reviewer_id: userId ?? null,

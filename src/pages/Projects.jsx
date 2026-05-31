@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/components/shared/formatters";
@@ -543,7 +543,7 @@ export default function Projects() {
 
   /* ── Data fetching ──
      The /Projects page is the ONE place that sees on-hold projects. We
-     bypass base44.entities.Project.list() (which now auto-excludes
+     bypass entities.Project.list() (which now auto-excludes
      on_hold=true) and query the table directly, still honouring soft-delete
      and project-membership RLS. Every other consumer keeps using
      Project.list() and silently gets the active subset. */
@@ -560,9 +560,9 @@ export default function Projects() {
     },
     staleTime: 5 * 60 * 1000,
   });
-  const { data: rawWorkPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => base44.entities.WorkPackage.list() });
-  const { data: rawRfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => base44.entities.RFI.list() });
-  const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => base44.entities.ChangeOrder.list() });
+  const { data: rawWorkPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => entities.WorkPackage.list() });
+  const { data: rawRfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => entities.RFI.list() });
+  const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => entities.ChangeOrder.list() });
 
   const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
   // Subset used by every page-level KPI rollup: on-hold projects (and their
@@ -590,17 +590,17 @@ export default function Projects() {
 
   /* ── Mutations ── */
   const createMut = useMutation({
-    mutationFn: (d) => base44.entities.Project.create(d),
+    mutationFn: (d) => entities.Project.create(d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project created"); },
     onError: (err) => toast.error(err.message),
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Project.update(id, data),
+    mutationFn: ({ id, data }) => entities.Project.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project updated"); },
     onError: (err) => toast.error(err.message),
   });
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.Project.delete(id),
+    mutationFn: (id) => entities.Project.delete(id),
     onSuccess: (_result, id) => {
       removeProject(id);
       qc.invalidateQueries();

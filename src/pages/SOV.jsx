@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo, useCallback } from "react";
 import { useProjectContext } from "../components/shared/ProjectContext";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -156,7 +156,7 @@ export default function SOV() {
   const { data: costCodes = [] } = useQuery({
     queryKey: ["cost-codes", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.CostCode.filter({ project_id: activeProject.id }, "cost_code_number")
+      ? entities.CostCode.filter({ project_id: activeProject.id }, "cost_code_number")
       : [],
     enabled: !!activeProject?.id,
     staleTime: 5 * 60 * 1000,
@@ -165,21 +165,21 @@ export default function SOV() {
   const { data: sovs = [], isLoading, refetch } = useQuery({
     queryKey: ["sov-items", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.SOVItem.filter({ project_id: activeProject.id }, "-created_at")
+      ? entities.SOVItem.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.Expense.filter({ project_id: activeProject.id })
+      ? entities.Expense.filter({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
   });
@@ -199,7 +199,7 @@ export default function SOV() {
       if (!sovId) {
         sovId = `SOV-${String((sovs.length || 0) + 1).padStart(3, '0')}`;
       }
-      return base44.entities.SOVItem.create({
+      return entities.SOVItem.create({
         ...d,
         sov_id: sovId,
         project_id: d.project_id || activeProject?.id,
@@ -217,7 +217,7 @@ export default function SOV() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.SOVItem.update(id, data),
+    mutationFn: ({ id, data }) => entities.SOVItem.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setModalOpen(false);
@@ -230,7 +230,7 @@ export default function SOV() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.SOVItem.delete(id),
+    mutationFn: (id) => entities.SOVItem.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setDeleteTarget(null);
@@ -243,7 +243,7 @@ export default function SOV() {
 
   /* Requirement 7 — Fill to Complete mutation (separate so it doesn't close modal) */
   const fillCompleteMut = useMutation({
-    mutationFn: ({ id }) => base44.entities.SOVItem.update(id, { current_percent_complete: 100 }),
+    mutationFn: ({ id }) => entities.SOVItem.update(id, { current_percent_complete: 100 }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       toast.success("Filled to 100%");
@@ -252,7 +252,7 @@ export default function SOV() {
   });
 
   const bulkDeleteMut = useMutation({
-    mutationFn: (ids) => Promise.allSettled(ids.map((id) => base44.entities.SOVItem.delete(id))),
+    mutationFn: (ids) => Promise.allSettled(ids.map((id) => entities.SOVItem.delete(id))),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setSelectedIds(new Set());
@@ -263,7 +263,7 @@ export default function SOV() {
   });
 
   const bulkStatusMut = useMutation({
-    mutationFn: ({ ids, status }) => Promise.allSettled(ids.map((id) => base44.entities.SOVItem.update(id, { status }))),
+    mutationFn: ({ ids, status }) => Promise.allSettled(ids.map((id) => entities.SOVItem.update(id, { status }))),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setSelectedIds(new Set());
@@ -273,7 +273,7 @@ export default function SOV() {
   });
 
   const bulkFillMut = useMutation({
-    mutationFn: (ids) => Promise.allSettled(ids.map((id) => base44.entities.SOVItem.update(id, { current_percent_complete: 100 }))),
+    mutationFn: (ids) => Promise.allSettled(ids.map((id) => entities.SOVItem.update(id, { current_percent_complete: 100 }))),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setSelectedIds(new Set());
@@ -376,7 +376,7 @@ export default function SOV() {
     if (!validRecords?.length) return;
     setImporting(true);
     try {
-      await base44.entities.SOVItem.bulkCreate(validRecords);
+      await entities.SOVItem.bulkCreate(validRecords);
       await qc.invalidateQueries({ queryKey: ["sov-items"] });
       toast.success(`Imported ${validRecords.length} SOV line item${validRecords.length === 1 ? "" : "s"}`);
       setReviewOpen(false);

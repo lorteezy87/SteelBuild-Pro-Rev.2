@@ -8,13 +8,13 @@
  * stays UI-agnostic and reusable.
  *
  * Extracted from Financials.jsx as part of moving the data layer behind hooks
- * (base44 stays only inside the hook).
+ * (Supabase access stays only inside the hook).
  *
  * @param {string|null|undefined} projectId
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -41,14 +41,14 @@ export function useCostCodes(projectId) {
     queryKey: ["cost-codes", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.CostCode.filter({ project_id: projectId }, "cost_code_number")
+        ? entities.CostCode.filter({ project_id: projectId }, "cost_code_number")
         : [],
     select: sortCostCodes,
     enabled: !!projectId,
   });
 
   const createCostCode = useMutation({
-    mutationFn: (data) => base44.entities.CostCode.create(data),
+    mutationFn: (data) => entities.CostCode.create(data),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, queryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       await invalidateCrudQueries(qc, queryKeys);
@@ -57,7 +57,7 @@ export function useCostCodes(projectId) {
   });
 
   const updateCostCode = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.CostCode.update(id, data),
+    mutationFn: ({ id, data }) => entities.CostCode.update(id, data),
     onSuccess: async (updated) => {
       replaceRecordInCaches(qc, queryKeys, updated);
       await invalidateCrudQueries(qc, queryKeys);
@@ -66,7 +66,7 @@ export function useCostCodes(projectId) {
   });
 
   const deleteCostCode = useMutation({
-    mutationFn: (id) => base44.entities.CostCode.delete(id),
+    mutationFn: (id) => entities.CostCode.delete(id),
     onSuccess: async (_, deletedId) => {
       removeRecordFromCaches(qc, queryKeys, deletedId);
       await invalidateCrudQueries(qc, queryKeys);
@@ -75,13 +75,13 @@ export function useCostCodes(projectId) {
   });
 
   const bulkDeleteCostCodes = useMutation({
-    mutationFn: (ids) => Promise.allSettled(ids.map((id) => base44.entities.CostCode.delete(id))),
+    mutationFn: (ids) => Promise.allSettled(ids.map((id) => entities.CostCode.delete(id))),
     onSuccess: async () => { await invalidateCrudQueries(qc, queryKeys); },
     onError: (error) => toastCrudError(error, "Bulk delete failed"),
   });
 
   const bulkUpdateCostCodes = useMutation({
-    mutationFn: ({ ids, data }) => Promise.allSettled(ids.map((id) => base44.entities.CostCode.update(id, data))),
+    mutationFn: ({ ids, data }) => Promise.allSettled(ids.map((id) => entities.CostCode.update(id, data))),
     onSuccess: async () => { await invalidateCrudQueries(qc, queryKeys); },
     onError: (error) => toastCrudError(error, "Bulk update failed"),
   });

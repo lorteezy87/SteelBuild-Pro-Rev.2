@@ -1,4 +1,4 @@
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 
 function normalizeSetName(value) {
   const trimmed = (value || "").trim();
@@ -107,7 +107,7 @@ export async function syncDrawingScheduleTasks({ projectId, projectName, drawing
 
   const activeDrawings = drawings.filter((drawing) => !drawing.is_superseded);
   const groups = groupDrawings(activeDrawings);
-  const scheduleTasks = await base44.entities.ScheduleTask.filter({ project_id: projectId });
+  const scheduleTasks = await entities.ScheduleTask.filter({ project_id: projectId });
 
   const drawingTasks = scheduleTasks.filter((task) => task.linked_entity_type === "Drawing");
   const setTasks = scheduleTasks.filter((task) => task.linked_entity_type === "DrawingSet");
@@ -136,10 +136,10 @@ export async function syncDrawingScheduleTasks({ projectId, projectName, drawing
     const setPayload = buildSetTaskPayload(setName, setDrawings, projectId, projectName);
 
     if (!parentTask) {
-      parentTask = await base44.entities.ScheduleTask.create(setPayload);
+      parentTask = await entities.ScheduleTask.create(setPayload);
       created += 1;
     } else if (needsUpdate(parentTask, setPayload)) {
-      parentTask = await base44.entities.ScheduleTask.update(parentTask.id, setPayload);
+      parentTask = await entities.ScheduleTask.update(parentTask.id, setPayload);
       updated += 1;
     }
 
@@ -153,10 +153,10 @@ export async function syncDrawingScheduleTasks({ projectId, projectName, drawing
       const childPayload = buildDrawingTaskPayload(drawing, projectId, projectName, parentTask.id);
 
       if (!childTask) {
-        childTask = await base44.entities.ScheduleTask.create(childPayload);
+        childTask = await entities.ScheduleTask.create(childPayload);
         created += 1;
       } else if (needsUpdate(childTask, childPayload)) {
-        childTask = await base44.entities.ScheduleTask.update(childTask.id, childPayload);
+        childTask = await entities.ScheduleTask.update(childTask.id, childPayload);
         updated += 1;
       }
 
@@ -166,14 +166,14 @@ export async function syncDrawingScheduleTasks({ projectId, projectName, drawing
 
   for (const task of drawingTasks) {
     if (!seenDrawingIds.has(task.id)) {
-      await base44.entities.ScheduleTask.delete(task.id);
+      await entities.ScheduleTask.delete(task.id);
       deleted += 1;
     }
   }
 
   for (const task of setTasks) {
     if (!seenSetIds.has(task.id)) {
-      await base44.entities.ScheduleTask.delete(task.id);
+      await entities.ScheduleTask.delete(task.id);
       deleted += 1;
     }
   }

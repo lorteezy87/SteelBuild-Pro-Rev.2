@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -16,7 +16,7 @@ export default function UserEditModal({ open, onClose, user }) {
   }, [user, open]);
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.User.update(id, data),
+    mutationFn: ({ id, data }) => entities.User.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["users"] });
       toast.success("User updated");

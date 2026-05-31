@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities, integrations } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Upload, Camera, Trash2, Check, AlertCircle } from "lucide-react";
@@ -130,7 +130,7 @@ export default function PhotoUploadModal({ projectId, onClose }) {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
@@ -239,8 +239,8 @@ export default function PhotoUploadModal({ projectId, onClose }) {
         updateItem(item.id, { status: "uploading", error: null });
         try {
           const compressed = await compressImage(item.file);
-          const fileData = await base44.integrations.Core.UploadFile({ file: compressed });
-          await base44.entities.Photo.create({
+          const fileData = await integrations.Core.UploadFile({ file: compressed });
+          await entities.Photo.create({
             project_id: globalProjectId,
             category: item.category,
             title: item.title,

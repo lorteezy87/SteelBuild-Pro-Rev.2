@@ -8,8 +8,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 
-// The hook module imports the supabase-backed base44 client at load; stub it.
-vi.mock("@/api/base44Client", () => ({ base44: { entities: {} } }));
+// The hook module imports the supabase-backed entity client at load; stub it.
+vi.mock("@/api/supabaseClient", () => ({ entities: {} }));
 
 import { toRfiOption, toChangeOrderOption, toActionItemOption } from "../useTaskLinkOptions";
 

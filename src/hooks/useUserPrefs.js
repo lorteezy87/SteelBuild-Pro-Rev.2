@@ -2,7 +2,7 @@
  * useUserPrefs — single read-side accessor for the prefs the user
  * configures on Settings.
  *
- * The Settings tabs save prefs through `base44.auth.updateMe(prefs)`,
+ * The Settings tabs save prefs through `auth.updateMe(prefs)`,
  * which writes them onto Supabase auth's `user_metadata`. AuthContext
  * spreads that metadata onto the AppUser object on login, so every
  * pref is already reachable as `useAuth().user.<pref_key>` once the

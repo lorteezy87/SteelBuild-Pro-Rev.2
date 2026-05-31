@@ -10,7 +10,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
@@ -55,11 +55,11 @@ export default function Projects() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
   });
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages-global"],
-    queryFn: () => base44.entities.WorkPackage.list(),
+    queryFn: () => entities.WorkPackage.list(),
   });
 
   const rows = useMemo(() => {

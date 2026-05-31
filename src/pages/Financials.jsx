@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useFinancials } from "@/hooks/useFinancials";
@@ -42,7 +42,7 @@ export default function Financials() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -57,19 +57,19 @@ export default function Financials() {
 
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["change-orders", projectId],
-    queryFn: () => (projectId ? base44.entities.ChangeOrder.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? entities.ChangeOrder.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
   });
 
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses", projectId],
-    queryFn: () => (projectId ? base44.entities.Expense.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? entities.Expense.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
   });
 
   const { data: sovItems = [] } = useQuery({
     queryKey: ["sov-items", projectId],
-    queryFn: () => (projectId ? base44.entities.SOVItem.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? entities.SOVItem.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
   });
 

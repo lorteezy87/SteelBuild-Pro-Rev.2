@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect, useContext, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
 
 export const ProjectContext = createContext({
@@ -87,7 +87,7 @@ export function ProjectProvider({ children }) {
     let retryTimer = null;
 
     const fetchProjects = async (attempt = 1) => {
-      const raw = await base44.entities.Project.list("-created_at");
+      const raw = await entities.Project.list("-created_at");
       const data = [...raw].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       // If empty and we have retries left, wait and try again. Track the
       // backoff timer so the effect cleanup can clear it on unmount —

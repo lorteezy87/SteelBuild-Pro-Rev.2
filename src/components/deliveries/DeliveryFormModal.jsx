@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useFormValidation } from "@/hooks/useFormValidation";
@@ -49,7 +49,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   // ─── Queries MUST be declared before any useEffect that reads them ─────
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
@@ -57,13 +57,13 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", formData.project_id],
     queryFn: () =>
-      formData.project_id ? base44.entities.WorkPackage.filter({ project_id: formData.project_id }) : Promise.resolve([]),
+      formData.project_id ? entities.WorkPackage.filter({ project_id: formData.project_id }) : Promise.resolve([]),
   });
 
   const { data: projectDrawings = [] } = useQuery({
     queryKey: ["drawings", formData.project_id],
     queryFn: () =>
-      formData.project_id ? base44.entities.Drawing.filter({ project_id: formData.project_id }) : Promise.resolve([]),
+      formData.project_id ? entities.Drawing.filter({ project_id: formData.project_id }) : Promise.resolve([]),
     enabled: Boolean(formData.project_id),
     staleTime: 60_000,
   });
@@ -71,7 +71,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   const { data: projectRfis = [] } = useQuery({
     queryKey: ["rfis", formData.project_id],
     queryFn: () =>
-      formData.project_id ? base44.entities.RFI.filter({ project_id: formData.project_id }) : Promise.resolve([]),
+      formData.project_id ? entities.RFI.filter({ project_id: formData.project_id }) : Promise.resolve([]),
     enabled: Boolean(formData.project_id),
     staleTime: 60_000,
   });
@@ -95,7 +95,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
 
   const mutation = useMutation({
     mutationFn: (data) =>
-      isEdit ? base44.entities.Delivery.update(delivery.id, data) : base44.entities.Delivery.create(data),
+      isEdit ? entities.Delivery.update(delivery.id, data) : entities.Delivery.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["deliveries"] });
       toast.success(isEdit ? "Delivery updated" : "Delivery created");

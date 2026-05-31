@@ -4,7 +4,7 @@ import { FileText, Flag, PenLine, ChevronDown, ChevronRight, AlertTriangle } fro
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { batchProcess } from "@/utils/batchProcess";
-import { resolveFileUrl } from "@/api/base44Client";
+import { resolveFileUrl } from "@/api/supabaseClient";
 
 // Canonical 7-stage flow (corrected May 2026):
 //   Not Started → IFA → OFA → BFA → OFS → IFC → Released

@@ -120,7 +120,7 @@ export default function Layout({ children, currentPageName }) {
   // Page tracking (non-critical)
   useEffect(() => {
     if (!currentPageName) return;
-    try { /* Base44 internal page tracking */ } catch { /* suppress */ }
+    try { /* internal page tracking */ } catch { /* suppress */ }
   }, [currentPageName]);
 
   // Keep document.title in sync with the current route.

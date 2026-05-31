@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { toast } from "sonner";
  * admin toggle global flags, edit descriptions, and add per-email overrides
  * for opt-in betas without flipping the global flag.
  *
- * Writes go straight through `base44.entities.FeatureFlag` — RLS is
+ * Writes go straight through `entities.FeatureFlag` — RLS is
  * permissive on writes for authenticated users, so the only thing keeping a
  * non-admin out of this surface is the AdminRoute wrap below.
  */
@@ -61,7 +61,7 @@ function FeatureFlagsAdminContent() {
 
   const { data: flags = [], isLoading, refetch } = useQuery({
     queryKey: ["feature_flags_admin"],
-    queryFn: () => base44.entities.FeatureFlag.list("flag_key"),
+    queryFn: () => entities.FeatureFlag.list("flag_key"),
     staleTime: 30 * 1000,
   });
 
@@ -77,13 +77,13 @@ function FeatureFlagsAdminContent() {
   }, [qc]);
 
   const updateMut = useMutation({
-    mutationFn: ({ id, updates }) => base44.entities.FeatureFlag.update(id, updates),
+    mutationFn: ({ id, updates }) => entities.FeatureFlag.update(id, updates),
     onSuccess: () => invalidate(),
     onError: (err) => toast.error(err?.message || "Failed to update flag"),
   });
 
   const createMut = useMutation({
-    mutationFn: (record) => base44.entities.FeatureFlag.create(record),
+    mutationFn: (record) => entities.FeatureFlag.create(record),
     onSuccess: () => {
       invalidate();
       setNewFlag({ flag_key: "", description: "", enabled: false });
@@ -93,7 +93,7 @@ function FeatureFlagsAdminContent() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.FeatureFlag.delete(id),
+    mutationFn: (id) => entities.FeatureFlag.delete(id),
     onSuccess: () => {
       invalidate();
       setDeleteTarget(null);

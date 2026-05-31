@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { auth } from "@/api/supabaseClient";
 import { toast } from 'sonner';
 
 const S = {
@@ -29,7 +29,7 @@ export default function UserSettingsTab({ user, onSave }) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await base44.auth.updateMe(form);
+      await auth.updateMe(form);
       onSave(form);
       toast.success('Profile updated');
     } catch (err) {

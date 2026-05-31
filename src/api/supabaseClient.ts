@@ -1,14 +1,15 @@
 /**
  * supabaseClient.ts
  *
- * Drop-in replacement for the Base44 client — enterprise-hardened.
- * Exports a `base44` object with the same API shape:
- *   base44.entities.X.list / filter / get / create / update / delete
- *   base44.auth.me / loginViaEmailPassword / logout / redirectToLogin / updateMe
- *   base44.integrations.Core.UploadFile / InvokeLLM
- *   base44.functions.invoke
+ * The app's Supabase-backed data layer. Exports the surfaces directly as
+ * named values — import exactly what you need:
+ *   entities.X.list / filter / get / create / update / delete
+ *   auth.me / loginViaEmailPassword / logout / redirectToLogin / updateMe
+ *   integrations.Core.UploadFile / InvokeLLM
+ *   functions.invoke
+ *   getSignedUrl / resolveFileUrl
  *
- * Enterprise improvements over original Base44 adapter:
+ * Capabilities:
  *   - Soft-delete support: list/filter auto-exclude is_deleted rows
  *   - Atomic number sequencing via DB RPC (no race conditions)
  *   - Structured error messages with table/operation context
@@ -45,7 +46,7 @@ export type RowWithAliases<T extends TableName> = Row<T> & {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Base44 used `created_date` / `updated_date` as timestamp field names.
+ * The legacy backend used `created_date` / `updated_date` as timestamp field names.
  * Our Postgres schema uses the standard `created_at` / `updated_at`.
  * Map them transparently so all existing code continues to work.
  */
@@ -57,7 +58,7 @@ const COLUMN_MAP: Record<string, string> = {
 const mapColumn = (col: string): string => COLUMN_MAP[col] || col;
 
 /**
- * After fetching, add Base44-style aliases to each record so UI code
+ * After fetching, add legacy aliases to each record so UI code
  * reading `record.created_date` still works.
  */
 const addAliases = <R>(record: R, tableName?: string): R => {
@@ -65,12 +66,12 @@ const addAliases = <R>(record: R, tableName?: string): R => {
   const out: Record<string, unknown> = { ...(record as Record<string, unknown>) };
   // Project-scoped reads embed the parent project only to enforce
   // `projects.is_deleted = false`; callers should still receive the
-  // Base44-compatible flat row shape they expect.
+  // legacy-compatible flat row shape they expect.
   delete out.projects;
   if (out.created_at !== undefined && out.created_date === undefined) out.created_date = out.created_at;
   if (out.updated_at !== undefined && out.updated_date === undefined) out.updated_date = out.updated_at;
   // The activities table stores audit columns in snake_case; the legacy
-  // Activity-feed UI (dashboard/ActivityFeed) reads Base44-style camelCase.
+  // Activity-feed UI (dashboard/ActivityFeed) reads legacy camelCase.
   // Mirror them so both shapes resolve off the same row. cleanRecord() strips
   // any uppercase-containing key on write, so these mirrors never persist back.
   if (tableName === 'activities') {
@@ -134,7 +135,7 @@ const normalizeJsonbArray = (v: unknown): unknown[] => {
 };
 
 /**
- * Parse Base44-style sort string ("-column" = descending, "column" = ascending)
+ * Parse legacy sort string ("-column" = descending, "column" = ascending)
  */
 const parseSortBy = (sortBy?: string | null): { column: string; ascending: boolean } | null => {
   if (!sortBy) return null;
@@ -144,7 +145,7 @@ const parseSortBy = (sortBy?: string | null): { column: string; ascending: boole
 };
 
 /**
- * Build a filtered Supabase query from a Base44-style conditions object.
+ * Build a filtered Supabase query from a legacy conditions object.
  * Supports:
  *   - Simple equality: { status: 'Open' }
  *   - IN-array:        { status: ['Open', 'Closed'] }
@@ -879,7 +880,7 @@ export type AuthMeResult = {
 export const auth = {
   /**
    * Get the currently authenticated user.
-   * Returns a user object compatible with what Base44 returned.
+   * Returns a user object compatible with what the legacy backend returned.
    */
   me: async (): Promise<AuthMeResult> => {
     const { data: { user }, error } = await supabase.auth.getUser();
@@ -1351,7 +1352,6 @@ export const functions = {
   },
 };
 
-// ─── Main export (matches Base44 client API) ─────────────────────────────────
-
-export const base44 = { entities, auth, integrations, functions, getSignedUrl, resolveFileUrl };
-export type Base44Client = typeof base44;
+// The data surfaces (entities, auth, integrations, functions) and the storage
+// helpers (getSignedUrl, resolveFileUrl) are exported individually above —
+// import them by name where used.

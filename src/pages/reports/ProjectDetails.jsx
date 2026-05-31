@@ -17,7 +17,7 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import {
   isRfiOpen,
@@ -105,7 +105,7 @@ export default function ProjectDetails() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
   });
 
   // Auto-select the first project if none chosen.
@@ -121,32 +121,32 @@ export default function ProjectDetails() {
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis-by-project", project?.id],
-    queryFn: () => base44.entities.RFI.list(),
+    queryFn: () => entities.RFI.list(),
     enabled,
   });
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["change-orders-by-project", project?.id],
-    queryFn: () => base44.entities.ChangeOrder.list(),
+    queryFn: () => entities.ChangeOrder.list(),
     enabled,
   });
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages-by-project", project?.id],
-    queryFn: () => base44.entities.WorkPackage.list(),
+    queryFn: () => entities.WorkPackage.list(),
     enabled,
   });
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries-by-project", project?.id],
-    queryFn: () => base44.entities.Delivery.list(),
+    queryFn: () => entities.Delivery.list(),
     enabled,
   });
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses-by-project", project?.id],
-    queryFn: () => base44.entities.Expense.list(),
+    queryFn: () => entities.Expense.list(),
     enabled,
   });
   const { data: actionItems = [] } = useQuery({
     queryKey: ["action-items-by-project", project?.id],
-    queryFn: () => base44.entities.ActionItem.list(),
+    queryFn: () => entities.ActionItem.list(),
     enabled,
   });
 

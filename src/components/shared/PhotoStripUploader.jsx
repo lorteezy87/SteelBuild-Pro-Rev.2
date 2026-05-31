@@ -2,7 +2,7 @@
  * PhotoStripUploader.jsx — small, reusable multi-photo uploader for inline
  * use inside forms (Daily Logs, Punchlist).
  *
- * Wraps base44.integrations.Core.UploadFile (the same path Mitigations,
+ * Wraps integrations.Core.UploadFile (the same path Mitigations,
  * Photos, Inspections, Drawings, etc. use).  Stores results as an array of
  * `{ file_url, name, uploaded_at }` objects on whatever JSONB column the
  * caller persists (e.g. daily_logs.photos, punchlist_items.photos).
@@ -15,7 +15,7 @@
  */
 
 import React, { useRef, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { integrations } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { compressImage } from "@/utils/compressImage";
 
@@ -54,7 +54,7 @@ export default function PhotoStripUploader({
       for (const rawFile of files) {
         try {
           const file = await compressImage(rawFile);
-          const result = await base44.integrations.Core.UploadFile({ file });
+          const result = await integrations.Core.UploadFile({ file });
           uploaded.push({
             file_url: result.file_url || result.path,
             path: result.path,

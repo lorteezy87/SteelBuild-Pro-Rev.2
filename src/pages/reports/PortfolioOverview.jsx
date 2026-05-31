@@ -50,7 +50,7 @@
  */
 
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -341,33 +341,33 @@ export default function PortfolioOverview() {
   /* ── Data queries ── */
   const { data: rawProjects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
   const { data: rawRfis = [] } = useQuery({
     queryKey: ["rfis"],
-    queryFn: () => base44.entities.RFI.list(),
+    queryFn: () => entities.RFI.list(),
   });
   const { data: rawCOs = [] } = useQuery({
     queryKey: ["change-orders-global"],
-    queryFn: () => base44.entities.ChangeOrder.list(),
+    queryFn: () => entities.ChangeOrder.list(),
   });
   const { data: rawActions = [] } = useQuery({
     queryKey: ["action-items-all"],
-    queryFn: () => base44.entities.ActionItem.list(),
+    queryFn: () => entities.ActionItem.list(),
   });
   const { data: rawDeliveries = [] } = useQuery({
     queryKey: ["deliveries-all"],
-    queryFn: () => base44.entities.Delivery.list(),
+    queryFn: () => entities.Delivery.list(),
   });
   const { data: rawWPs = [] } = useQuery({
     queryKey: ["work-packages-global"],
-    queryFn: () => base44.entities.WorkPackage.list(),
+    queryFn: () => entities.WorkPackage.list(),
   });
   const { data: rawCostCodes = [] } = useQuery({
     queryKey: ["cost-codes-global"],
-    queryFn: () => base44.entities.CostCode.list(),
+    queryFn: () => entities.CostCode.list(),
   });
   // Expenses carry the real "actuals" — `cost_codes.actual_cost` is
   // populated on only ~2 of 150 rows in production, so the matrix
@@ -375,11 +375,11 @@ export default function PortfolioOverview() {
   // expenses (excluding Voided) per project to get the real number.
   const { data: rawExpenses = [] } = useQuery({
     queryKey: ["expenses-all"],
-    queryFn: () => base44.entities.Expense.list(),
+    queryFn: () => entities.Expense.list(),
   });
   const { data: rawRisks = [] } = useQuery({
     queryKey: ["risks-all"],
-    queryFn: () => base44.entities.Risk.list(),
+    queryFn: () => entities.Risk.list(),
   });
 
   /* ── Defensive soft-delete filters. Most of these collections come

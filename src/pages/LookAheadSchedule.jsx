@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { Button } from "@/components/ui/button";
@@ -237,7 +237,7 @@ export default function LookAheadSchedule() {
   const { data: items = [], isLoading, refetch } = useQuery({
     queryKey: ["lookahead", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.LookAhead.filter({ project_id: activeProject.id }, "-created_at")
+      ? entities.LookAhead.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });
@@ -249,14 +249,14 @@ export default function LookAheadSchedule() {
   const { data: rfis = [] } = useQuery({
     queryKey: ["lookahead-rfis", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.RFI.filter({ project_id: activeProject.id })
+      ? entities.RFI.filter({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
   });
   const { data: workPackages = [] } = useQuery({
     queryKey: ["lookahead-wps", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.WorkPackage.filter({ project_id: activeProject.id })
+      ? entities.WorkPackage.filter({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
   });
@@ -274,7 +274,7 @@ export default function LookAheadSchedule() {
   );
 
   const createMut = useMutation({
-    mutationFn: d => base44.entities.LookAhead.create(d),
+    mutationFn: d => entities.LookAhead.create(d),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lookahead"] });
       setModalOpen(false);
@@ -286,7 +286,7 @@ export default function LookAheadSchedule() {
     },
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.LookAhead.update(id, data),
+    mutationFn: ({ id, data }) => entities.LookAhead.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lookahead"] });
       setModalOpen(false);
@@ -298,7 +298,7 @@ export default function LookAheadSchedule() {
     },
   });
   const deleteMut = useMutation({
-    mutationFn: id => base44.entities.LookAhead.delete(id),
+    mutationFn: id => entities.LookAhead.delete(id),
     onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["lookahead"] });
       if (editing?.id === deletedId) {

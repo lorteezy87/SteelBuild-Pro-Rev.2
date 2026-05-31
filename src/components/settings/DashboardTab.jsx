@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Pin, GripVertical, Eye, EyeOff } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { entities } from "@/api/supabaseClient";
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -64,7 +64,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
   // staleTime the rest of the app uses for the project list.
   const { data: projects = [] } = useQuery({
     queryKey: ['projects-for-settings'],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 

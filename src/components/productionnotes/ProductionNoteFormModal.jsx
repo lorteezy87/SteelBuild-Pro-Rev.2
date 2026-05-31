@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -188,13 +188,13 @@ export default function ProductionNoteFormModal({ projectId, onClose, note = nul
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
 
   const mutation = useMutation({
-    mutationFn: (data) => base44.entities.ProductionNote.create(data),
+    mutationFn: (data) => entities.ProductionNote.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["production-notes"] });
       toast.success("Production note created");

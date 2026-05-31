@@ -3,7 +3,7 @@ import type { ComponentType, Dispatch, PropsWithChildren, SetStateAction } from 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FileText, Link2, Paperclip, Plus, Reply, ReplyAll, Send, X } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { Modal as ModalRaw } from "@/components/design-system";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { sendEmail, buildReplyDefaults } from "@/services/emailSendService";
@@ -86,7 +86,7 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
       const aiPriority = extracted?.priority ? (priorityMap[extracted.priority] || "Medium") : "Medium";
 
       if (entityType === "rfi") {
-        createdRecord = await base44.entities.RFI.create({
+        createdRecord = await entities.RFI.create({
           project_id: projectId, subject: title, question: description,
           status: "Open", priority: aiPriority,
           ...(extracted?.rfi_number ? { rfi_number: extracted.rfi_number } : {}),
@@ -95,27 +95,27 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
         } as any);
         invalidateEntity(qc, "rfi", projectId);
       } else if (entityType === "action_item") {
-        createdRecord = await base44.entities.ActionItem.create({
+        createdRecord = await entities.ActionItem.create({
           project_id: projectId, title, description, status: "Open", priority: aiPriority,
           ...(extracted?.due_date ? { due_date: extracted.due_date } : {}),
           ...(extracted?.responsible_party ? { assigned_to_name: extracted.responsible_party } : {}),
         } as any);
         invalidateEntity(qc, "action_item", projectId);
       } else if (entityType === "submittal") {
-        createdRecord = await base44.entities.Submittal.create({
+        createdRecord = await entities.Submittal.create({
           project_id: projectId, title, description, status: "Open",
           ...(extracted?.submittal_number ? { submittal_number: extracted.submittal_number } : {}),
         } as any);
         invalidateEntity(qc, "submittal", projectId);
       } else if (entityType === "change_order") {
-        createdRecord = await base44.entities.ChangeOrder.create({
+        createdRecord = await entities.ChangeOrder.create({
           project_id: projectId, title, description, status: "Pending",
           ...(extracted?.due_date ? { response_due: extracted.due_date } : {}),
         } as any);
         invalidateEntity(qc, "change_order", projectId);
       }
       if (createdRecord) {
-        await base44.entities.EmailMessage.update(message.id, {
+        await entities.EmailMessage.update(message.id, {
           import_status: "approved", linked_entity_type: entityType,
           linked_entity_id: createdRecord.id, reviewed_at: new Date().toISOString(),
         });
@@ -129,7 +129,7 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
             try {
               const ext = (att.filename || "").split(".").pop()?.toLowerCase() || "other";
               const knownTypes = ["pdf","dwg","dxf","ifc","rvt","jpg","jpeg","png","xlsx","xls","docx","doc","csv","zip"];
-              await base44.entities.Document.create({
+              await entities.Document.create({
                 project_id: projectId,
                 display_name: att.filename,
                 description: `Filed from email: ${message.subject || "(no subject)"}\nFrom: ${message.sender_name || message.sender_email}`,
@@ -299,17 +299,17 @@ export function LinkToExistingModal({ message, projectId, onClose, onSuccess }: 
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId, "link-search"],
-    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }),
+    queryFn: () => entities.RFI.filter({ project_id: projectId }),
     enabled: !!projectId && searchType === "rfi",
   });
   const { data: actionItems = [] } = useQuery({
     queryKey: ["action-items", projectId, "link-search"],
-    queryFn: () => base44.entities.ActionItem.filter({ project_id: projectId }),
+    queryFn: () => entities.ActionItem.filter({ project_id: projectId }),
     enabled: !!projectId && searchType === "action_item",
   });
   const { data: submittals = [] } = useQuery({
     queryKey: ["submittals", projectId, "link-search"],
-    queryFn: () => base44.entities.Submittal.filter({ project_id: projectId }),
+    queryFn: () => entities.Submittal.filter({ project_id: projectId }),
     enabled: !!projectId && searchType === "submittal",
   });
 
@@ -327,7 +327,7 @@ export function LinkToExistingModal({ message, projectId, onClose, onSuccess }: 
   const handleLink = async (record: any) => {
     setSaving(true);
     try {
-      await base44.entities.EmailMessage.update(message.id, {
+      await entities.EmailMessage.update(message.id, {
         import_status: "linked", linked_entity_type: searchType,
         linked_entity_id: record.id, reviewed_at: new Date().toISOString(),
       });

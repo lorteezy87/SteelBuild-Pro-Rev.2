@@ -18,7 +18,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { PHASES } from "@/utils/phases";
 import {
@@ -43,15 +43,15 @@ export default function Profit() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
   });
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["change-orders-global"],
-    queryFn: () => base44.entities.ChangeOrder.list(),
+    queryFn: () => entities.ChangeOrder.list(),
   });
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses-all"],
-    queryFn: () => base44.entities.Expense.list(),
+    queryFn: () => entities.Expense.list(),
   });
 
   const rows = useMemo(() => {

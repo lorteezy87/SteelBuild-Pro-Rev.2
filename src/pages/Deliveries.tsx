@@ -9,7 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Clock3, PackageCheck, Search, Truck } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
@@ -103,7 +103,7 @@ export default function Deliveries() {
   const { data: deliveries = [], isLoading } = useQuery({
     queryKey: ["deliveries", projectId || "all"],
     queryFn: () =>
-      projectId ? base44.entities.Delivery.filter({ project_id: projectId }) : base44.entities.Delivery.list(),
+      projectId ? entities.Delivery.filter({ project_id: projectId }) : entities.Delivery.list(),
     staleTime: 60000,
     refetchInterval: 60000,
   });
@@ -112,14 +112,14 @@ export default function Deliveries() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", projectId || "all"],
     queryFn: () =>
-      projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : base44.entities.WorkPackage.list(),
+      projectId ? entities.WorkPackage.filter({ project_id: projectId }) : entities.WorkPackage.list(),
     staleTime: 60000,
   });
 
@@ -171,7 +171,7 @@ export default function Deliveries() {
 
   const transitMut = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      base44.entities.Delivery.update(id, data),
+      entities.Delivery.update(id, data),
     onSuccess: async (updated, variables) => {
       replaceRecordInCaches(qc, deliveryQueryKeys, updated);
       await invalidateDeliveries();
@@ -182,7 +182,7 @@ export default function Deliveries() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: string) => base44.entities.Delivery.delete(id),
+    mutationFn: (id: string) => entities.Delivery.delete(id),
     onSuccess: async (_result, deletedId) => {
       removeRecordFromCaches(qc, deliveryQueryKeys, deletedId);
       await invalidateDeliveries();
@@ -202,7 +202,7 @@ export default function Deliveries() {
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
       const { succeeded, failed } = await batchProcess(ids, (id) =>
-        base44.entities.Delivery.update(id, {
+        entities.Delivery.update(id, {
           status,
           actual_date: status === "Delivered" ? todayIso() : null,
         })
@@ -278,7 +278,7 @@ export default function Deliveries() {
     if (!projectId || !metrics.overdue.length) return undefined;
     const createDeliveryAlerts = async () => {
       try {
-        const existing = await base44.entities.Alert.filter({ alert_type: "Delivery_Overdue" });
+        const existing = await entities.Alert.filter({ alert_type: "Delivery_Overdue" });
         const existingIds = new Set(existing.map((alert) => alert.related_record_id).filter(Boolean));
         const existingTitles = new Set(existing.map((alert) => alert.title));
         for (const delivery of metrics.overdue) {
@@ -289,7 +289,7 @@ export default function Deliveries() {
           const daysLate = delivery._signals.flags.find((flag) => flag.key === "overdue")?.label || "late";
           const alertTitle = `Delivery from ${delivery.vendor || "Unknown"} is ${daysLate}`;
           if (existingTitles.has(alertTitle)) continue;
-          await base44.entities.Alert.create({
+          await entities.Alert.create({
             alert_type: "Delivery_Overdue",
             severity: delivery._signals.risk === "high" ? "High" : "Medium",
             title: alertTitle,

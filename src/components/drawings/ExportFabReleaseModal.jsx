@@ -19,7 +19,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import { resolveFileUrl } from "@/api/base44Client";
+import { resolveFileUrl } from "@/api/supabaseClient";
 import {
   isApprovedForFab,
   isClaimable,

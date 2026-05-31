@@ -11,7 +11,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/api/base44Client", () => {
+vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
     filter: vi.fn().mockResolvedValue([]),
@@ -21,7 +21,7 @@ vi.mock("@/api/base44Client", () => {
     delete: vi.fn().mockResolvedValue(null),
   };
   return {
-    base44: { entities: new Proxy({}, { get: () => noop }) },
+    entities: new Proxy({}, { get: () => noop }),
     resolveFileUrl: vi.fn((u) => u),
   };
 });

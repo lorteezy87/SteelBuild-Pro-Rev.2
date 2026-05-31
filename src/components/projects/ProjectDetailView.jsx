@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { differenceInDays } from 'date-fns';
 import { formatDate, formatDateShort, parseUTCDate } from '@/components/shared/formatters';
@@ -497,7 +497,7 @@ export default function ProjectDetailView({ project, onClose }) {
   const { patchProject } = useProjectContext();
   const setHoldMut = useMutation({
     mutationFn: ({ on_hold, reason }) =>
-      base44.entities.Project.update(project.id, on_hold
+      entities.Project.update(project.id, on_hold
         ? { on_hold: true,  on_hold_reason: reason || null }
         : { on_hold: false }
       ),
@@ -537,37 +537,37 @@ export default function ProjectDetailView({ project, onClose }) {
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ['wp-detail', project.id],
-    queryFn: () => base44.entities.WorkPackage.filter({ project_id: project.id }),
+    queryFn: () => entities.WorkPackage.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: rfis = [] } = useQuery({
     queryKey: ['rfi-detail', project.id],
-    queryFn: () => base44.entities.RFI.filter({ project_id: project.id }),
+    queryFn: () => entities.RFI.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: changeOrders = [] } = useQuery({
     queryKey: ['co-detail', project.id],
-    queryFn: () => base44.entities.ChangeOrder.filter({ project_id: project.id }),
+    queryFn: () => entities.ChangeOrder.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: deliveries = [] } = useQuery({
     queryKey: ['del-detail', project.id],
-    queryFn: () => base44.entities.Delivery.filter({ project_id: project.id }),
+    queryFn: () => entities.Delivery.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: drawings = [] } = useQuery({
     queryKey: ['draw-detail', project.id],
-    queryFn: () => base44.entities.Drawing.filter({ project_id: project.id }),
+    queryFn: () => entities.Drawing.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: scheduleTasks = [] } = useQuery({
     queryKey: ['sched-detail', project.id],
-    queryFn: () => base44.entities.ScheduleTask.filter({ project_id: project.id }),
+    queryFn: () => entities.ScheduleTask.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: costCodes = [] } = useQuery({
     queryKey: ['cc-detail', project.id],
-    queryFn: () => base44.entities.CostCode.filter({ project_id: project.id }, "cost_code_number"),
+    queryFn: () => entities.CostCode.filter({ project_id: project.id }, "cost_code_number"),
     select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     initialData: [],
   });

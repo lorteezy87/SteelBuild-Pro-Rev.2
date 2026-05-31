@@ -18,7 +18,7 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
 import { useSubmittals } from "@/hooks/useSubmittals";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import ErrorBoundaryRaw from "@/components/shared/ErrorBoundary";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
@@ -125,7 +125,7 @@ export default function DrawingSubmittalHub() {
   // Drawing sets (for matrix)
   const { data: drawingSets = [] } = useQuery({
     queryKey: ["drawing-sets", projectId],
-    queryFn: () => base44.entities.DrawingSet.filter({ project_id: projectId }),
+    queryFn: () => entities.DrawingSet.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -134,19 +134,19 @@ export default function DrawingSubmittalHub() {
   // (to know which linked RFIs are still open → rfiBlocked readiness).
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", projectId],
-    queryFn: () => base44.entities.WorkPackage.filter({ project_id: projectId }),
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }),
+    queryFn: () => entities.RFI.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
   const { data: drawingRevisions = [] } = useQuery({
     queryKey: ["drawing-revisions", projectId],
-    queryFn: () => base44.entities.DrawingRevision.filter({ project_id: projectId }),
+    queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -400,9 +400,9 @@ export default function DrawingSubmittalHub() {
   const updateOwnerMut = useMutation({
     mutationFn: async ({ item, owner }: { item: any; owner: string }) => {
       if (item._submittalId) {
-        await base44.entities.Submittal.update(item._submittalId, { ball_in_court: owner });
+        await entities.Submittal.update(item._submittalId, { ball_in_court: owner });
       } else if (item._firstSheetId) {
-        await base44.entities.Drawing.update(item._firstSheetId, { assigned_to: owner } as any);
+        await entities.Drawing.update(item._firstSheetId, { assigned_to: owner } as any);
       } else {
         throw new Error("No entity available to assign owner");
       }
@@ -417,9 +417,9 @@ export default function DrawingSubmittalHub() {
   const updateDueDateMut = useMutation({
     mutationFn: async ({ item, date }: { item: any; date: string }) => {
       if (item._submittalId) {
-        await base44.entities.Submittal.update(item._submittalId, { required_date: date });
+        await entities.Submittal.update(item._submittalId, { required_date: date });
       } else if (item._firstSheetId) {
-        await base44.entities.Drawing.update(item._firstSheetId, { due_date: date });
+        await entities.Drawing.update(item._firstSheetId, { due_date: date });
       } else {
         throw new Error("No entity available to set due date");
       }
@@ -437,7 +437,7 @@ export default function DrawingSubmittalHub() {
   const updateDetailingStateMut = useMutation({
     mutationFn: async ({ item, next }: { item: any; next: string }) => {
       if (!item?._drawingSetId) throw new Error("No drawing set to update");
-      await base44.entities.DrawingSet.update(item._drawingSetId, { detailing_state: next } as any);
+      await entities.DrawingSet.update(item._drawingSetId, { detailing_state: next } as any);
     },
     onSuccess: (_data, { next }) => {
       invalidateHub();
@@ -450,7 +450,7 @@ export default function DrawingSubmittalHub() {
   const updateReadinessFlagMut = useMutation({
     mutationFn: async ({ item, field, value }: { item: any; field: "material_impacted" | "long_lead_impact"; value: boolean }) => {
       if (!item?._drawingSetId) throw new Error("No drawing set to update");
-      await base44.entities.DrawingSet.update(item._drawingSetId, { [field]: value } as any);
+      await entities.DrawingSet.update(item._drawingSetId, { [field]: value } as any);
     },
     onSuccess: (_data, { field, value }) => {
       invalidateHub();
@@ -466,7 +466,7 @@ export default function DrawingSubmittalHub() {
     mutationFn: async (leads: Record<string, number>) => {
       if (!projectId) throw new Error("No active project");
       const nextMetadata = { ...(activeProject?.metadata || {}), detailing_lead_days: leads };
-      await base44.entities.Project.update(projectId, { metadata: nextMetadata } as any);
+      await entities.Project.update(projectId, { metadata: nextMetadata } as any);
       return nextMetadata;
     },
     onSuccess: (nextMetadata) => {

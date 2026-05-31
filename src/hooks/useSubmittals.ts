@@ -18,7 +18,7 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
@@ -131,7 +131,7 @@ export function useSubmittals(projectId: string | null | undefined) {
   } = useQuery<Submittal[]>({
     queryKey,
     queryFn: () =>
-      base44.entities.Submittal.filter(
+      entities.Submittal.filter(
         { project_id: projectId },
         "-submitted_date",
         2000
@@ -146,7 +146,7 @@ export function useSubmittals(projectId: string | null | undefined) {
   >({
     queryKey: roundsQueryKey,
     queryFn: () =>
-      base44.entities.SubmittalRound.filter(
+      entities.SubmittalRound.filter(
         { project_id: projectId },
         "-round_number",
         2000
@@ -245,7 +245,7 @@ export function useSubmittals(projectId: string | null | undefined) {
           errors.map((e: { message: string }) => e.message).join(" ")
         );
       }
-      return await base44.entities.Submittal.create(
+      return await entities.Submittal.create(
         normalized as Insert<"submittals">
       );
     },
@@ -263,7 +263,7 @@ export function useSubmittals(projectId: string | null | undefined) {
   const updateMut = useMutation<Submittal, Error, UpdateInput, { previous: Submittal[] | undefined }>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      const updated = await base44.entities.Submittal.update(
+      const updated = await entities.Submittal.update(
         id,
         data as Update<"submittals">
       );
@@ -296,7 +296,7 @@ export function useSubmittals(projectId: string | null | undefined) {
   const deleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
-      await base44.entities.Submittal.delete(id);
+      await entities.Submittal.delete(id);
       return id;
     },
     onSuccess: async () => {
@@ -319,12 +319,12 @@ export function useSubmittals(projectId: string | null | undefined) {
           errors.map((e: { message: string }) => e.message).join(" ")
         );
       }
-      const round = await base44.entities.SubmittalRound.create(
+      const round = await entities.SubmittalRound.create(
         normalized as Insert<"submittal_rounds">
       );
       // Update parent submittal's total_rounds & current_round_id
       if (round?.id && data.submittal_id) {
-        await base44.entities.Submittal.update(
+        await entities.Submittal.update(
           data.submittal_id as string,
           {
             current_round_id: round.id,
@@ -350,7 +350,7 @@ export function useSubmittals(projectId: string | null | undefined) {
   const updateRoundMut = useMutation<SubmittalRound, Error, UpdateRoundInput>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      return await base44.entities.SubmittalRound.update(
+      return await entities.SubmittalRound.update(
         id,
         data as Update<"submittal_rounds">
       );
@@ -383,7 +383,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       }
       for (const id of ids) {
         try {
-          const updated = await base44.entities.Submittal.update(
+          const updated = await entities.Submittal.update(
             id,
             patch as Update<"submittals">
           );
@@ -432,7 +432,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
         try {
-          await base44.entities.Submittal.delete(id);
+          await entities.Submittal.delete(id);
           results.succeeded++;
         } catch (err: unknown) {
           const msg =

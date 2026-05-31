@@ -101,8 +101,8 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
-vi.mock("@/api/base44Client", () => ({
-  base44: { entities: {} },
+vi.mock("@/api/supabaseClient", () => ({
+  entities: {},
 }));
 
 import {

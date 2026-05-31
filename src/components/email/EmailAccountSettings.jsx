@@ -8,7 +8,7 @@
  */
 
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -40,13 +40,13 @@ export default function EmailAccountSettings({ projectId }) {
   // ── Data ─────────────────────────────────────────────────────────────
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ["email-accounts", projectId],
-    queryFn: () => base44.entities.EmailAccount.filter({ project_id: projectId }),
+    queryFn: () => entities.EmailAccount.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   // ── Mutations ────────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.EmailAccount.create(data),
+    mutationFn: (data) => entities.EmailAccount.create(data),
     onSuccess: () => {
       invalidateEntity(qc, "email_account", projectId);
       toast.success("Email account added");
@@ -58,7 +58,7 @@ export default function EmailAccountSettings({ projectId }) {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.EmailAccount.update(id, data),
+    mutationFn: ({ id, data }) => entities.EmailAccount.update(id, data),
     onSuccess: () => {
       invalidateEntity(qc, "email_account", projectId);
     },
@@ -66,7 +66,7 @@ export default function EmailAccountSettings({ projectId }) {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.EmailAccount.delete(id),
+    mutationFn: (id) => entities.EmailAccount.delete(id),
     onSuccess: () => {
       invalidateEntity(qc, "email_account", projectId);
       toast.success("Email account removed");

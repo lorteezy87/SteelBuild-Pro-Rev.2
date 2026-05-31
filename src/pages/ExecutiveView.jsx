@@ -1,5 +1,5 @@
 import React from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -56,12 +56,12 @@ const healthColors = [
 
 export default function ExecutiveView() {
   const navigate = useNavigate();
-  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), staleTime: 5 * 60 * 1000 });
-  const { data: rfis = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list() });
-  const { data: cos = [] } = useQuery({ queryKey: ["change-orders-global"], queryFn: () => base44.entities.ChangeOrder.list() });
-  const { data: codes = [] } = useQuery({ queryKey: ["cost-codes-global"], queryFn: () => base44.entities.CostCode.list() });
-  const { data: wps = [] } = useQuery({ queryKey: ["work-packages-global"], queryFn: () => base44.entities.WorkPackage.list() });
-  const { data: tasks = [] } = useQuery({ queryKey: ['schedule-tasks-global'], queryFn: () => base44.entities.ScheduleTask.list() });
+  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => entities.Project.list(), staleTime: 5 * 60 * 1000 });
+  const { data: rfis = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => entities.RFI.list() });
+  const { data: cos = [] } = useQuery({ queryKey: ["change-orders-global"], queryFn: () => entities.ChangeOrder.list() });
+  const { data: codes = [] } = useQuery({ queryKey: ["cost-codes-global"], queryFn: () => entities.CostCode.list() });
+  const { data: wps = [] } = useQuery({ queryKey: ["work-packages-global"], queryFn: () => entities.WorkPackage.list() });
+  const { data: tasks = [] } = useQuery({ queryKey: ['schedule-tasks-global'], queryFn: () => entities.ScheduleTask.list() });
 
   const totalContract = projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
   const approvedCOVal = cos.filter((c) => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);

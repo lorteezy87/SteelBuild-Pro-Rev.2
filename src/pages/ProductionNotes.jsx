@@ -18,7 +18,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, Trash2, X, Highlighter, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { CommandBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
 
@@ -72,20 +72,20 @@ export default function ProductionNotes() {
   // ─── Data ───────────────────────────────────────────────────────────────
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   // All notes for the selected meeting date.
   const { data: notes = [], isLoading: notesLoading } = useQuery({
     queryKey: ["production-notes", meetingDate],
-    queryFn: () => base44.entities.ProductionNote.filter({ note_date: meetingDate }, "created_at"),
+    queryFn: () => entities.ProductionNote.filter({ note_date: meetingDate }, "created_at"),
     staleTime: 30 * 1000,
   });
 
   // ─── Mutations ──────────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.ProductionNote.create(data),
+    mutationFn: (data) => entities.ProductionNote.create(data),
     onMutate: async (data) => {
       await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
       const previous = qc.getQueryData(["production-notes", meetingDate]);
@@ -108,7 +108,7 @@ export default function ProductionNotes() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ProductionNote.update(id, data),
+    mutationFn: ({ id, data }) => entities.ProductionNote.update(id, data),
     onMutate: async ({ id, data }) => {
       await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
       const previous = qc.getQueryData(["production-notes", meetingDate]);
@@ -125,7 +125,7 @@ export default function ProductionNotes() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.ProductionNote.delete(id),
+    mutationFn: (id) => entities.ProductionNote.delete(id),
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
       const previous = qc.getQueryData(["production-notes", meetingDate]);

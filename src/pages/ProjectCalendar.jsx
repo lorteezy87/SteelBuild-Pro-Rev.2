@@ -27,7 +27,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Printer, Download } from "lucide-react";
 
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
@@ -144,50 +144,50 @@ export default function ProjectCalendar() {
   const { data: scheduleTasks = [] } = useQuery({
     queryKey: ["schedule-tasks", projectId],
     queryFn: () => projectId
-      ? base44.entities.ScheduleTask.filter({ project_id: projectId }, "start_date")
+      ? entities.ScheduleTask.filter({ project_id: projectId }, "start_date")
       : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
   });
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries", projectId],
-    queryFn: () => projectId ? base44.entities.Delivery.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.Delivery.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
   });
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () => projectId ? base44.entities.RFI.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.RFI.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
   });
   const { data: submittals = [] } = useQuery({
     queryKey: ["submittals", projectId],
-    queryFn: () => projectId ? base44.entities.Submittal.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.Submittal.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
   });
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["change-orders", projectId],
-    queryFn: () => projectId ? base44.entities.ChangeOrder.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.ChangeOrder.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
   });
   const { data: actionItems = [] } = useQuery({
     queryKey: ["action-items", projectId],
-    queryFn: () => projectId ? base44.entities.ActionItem.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.ActionItem.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
   });
   const { data: inspections = [] } = useQuery({
     queryKey: ["inspections", projectId],
-    queryFn: () => projectId ? base44.entities.Inspection.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.Inspection.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
   });
   const { data: dailyLogs = [] } = useQuery({
     queryKey: ["daily-logs", projectId],
-    queryFn: () => projectId ? base44.entities.DailyLog.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.DailyLog.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
   });

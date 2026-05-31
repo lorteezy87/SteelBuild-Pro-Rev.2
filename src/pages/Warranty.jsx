@@ -1,6 +1,6 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import WarrantyFormModal from "@/components/warranty/WarrantyFormModal";
@@ -18,13 +18,13 @@ export default function Warranty() {
     queryKey: ["warranties", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.Warranty.filter({ project_id: projectId })
-        : base44.entities.Warranty.list("-start_date"),
+        ? entities.Warranty.filter({ project_id: projectId })
+        : entities.Warranty.list("-start_date"),
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -37,7 +37,7 @@ export default function Warranty() {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.Warranty.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.Warranty.create({ ...data, project_id: data.project_id || projectId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["warranties", projectId] });
       setShowForm(false);
@@ -48,7 +48,7 @@ export default function Warranty() {
   });
 
   const updateMut = useMutation({
-    mutationFn: (data) => base44.entities.Warranty.update(data.id, data),
+    mutationFn: (data) => entities.Warranty.update(data.id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["warranties", projectId] });
       setShowForm(false);
@@ -59,7 +59,7 @@ export default function Warranty() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.Warranty.delete(id),
+    mutationFn: (id) => entities.Warranty.delete(id),
     onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["warranties", projectId] });
       if (editing?.id === deletedId) {

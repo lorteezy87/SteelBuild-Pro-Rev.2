@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import PhotoStripUploader from "@/components/shared/PhotoStripUploader";
 import { MapPin } from "lucide-react";
@@ -81,7 +81,7 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
@@ -93,7 +93,7 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
     queryKey: ["drawings-for-punchlist", formData.project_id],
     queryFn: () =>
       formData.project_id
-        ? base44.entities.Drawing.filter({ project_id: formData.project_id }, "-updated_at", 200)
+        ? entities.Drawing.filter({ project_id: formData.project_id }, "-updated_at", 200)
         : Promise.resolve([]),
     enabled: !!formData.project_id,
     staleTime: 60 * 1000,

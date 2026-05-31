@@ -1,7 +1,7 @@
 import React, { Suspense, useEffect, useMemo } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { useUserPrefs, refetchIntervalFromPref } from "@/hooks/useUserPrefs";
@@ -44,7 +44,7 @@ export default function Dashboard() {
   /* ── Portfolio-wide queries (always loaded) ── */
   const { data: projects = [], isLoading: projectsLoading } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
   // Portfolio rollups must exclude on-hold projects (and their child entity
@@ -66,60 +66,60 @@ export default function Dashboard() {
 
   const { data: allRFIs = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["rfis-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.RFI),
+    queryFn: () => listForDashboard(entities.RFI),
     refetchInterval: refetchMs,
   });
   const { data: allCOs = [] } = useQuery({
     queryKey: ["cos-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.ChangeOrder),
+    queryFn: () => listForDashboard(entities.ChangeOrder),
   });
   const { data: allCodes = [] } = useQuery({
     queryKey: ["codes-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.CostCode),
+    queryFn: () => listForDashboard(entities.CostCode),
   });
   const { data: allWPs = [] } = useQuery({
     queryKey: ["work-packages-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.WorkPackage),
+    queryFn: () => listForDashboard(entities.WorkPackage),
     staleTime: 30000,
   });
   const { data: allDeliveries = [] } = useQuery({
     queryKey: ["deliveries-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.Delivery),
+    queryFn: () => listForDashboard(entities.Delivery),
     refetchInterval: refetchMs,
   });
   const { data: allActionItems = [] } = useQuery({
     queryKey: ["action-items-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.ActionItem),
+    queryFn: () => listForDashboard(entities.ActionItem),
     refetchInterval: refetchMs,
   });
   const { data: allExpenses = [] } = useQuery({
     queryKey: ["expenses-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.Expense),
+    queryFn: () => listForDashboard(entities.Expense),
   });
   // Portfolio timeline column needs schedule_tasks for every project.
   // Tiny payload — one row per task, a few date columns — so fetching
   // them globally is cheaper than per-project drilldown round-trips.
   const { data: allScheduleTasks = [] } = useQuery({
     queryKey: ["schedule-tasks-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.ScheduleTask, "-start_date"),
+    queryFn: () => listForDashboard(entities.ScheduleTask, "-start_date"),
     staleTime: 60 * 1000,
   });
   // Used by the Document Hub submittal pipeline + Drawings count tile.
   const { data: allSubmittals = [] } = useQuery({
     queryKey: ["submittals-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.Submittal),
+    queryFn: () => listForDashboard(entities.Submittal),
     staleTime: 30 * 1000,
   });
   const { data: allDrawings = [] } = useQuery({
     queryKey: ["drawings-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.Drawing),
+    queryFn: () => listForDashboard(entities.Drawing),
     staleTime: 30 * 1000,
   });
   // Cash-flow figures (total billed / collected / pending payment /
   // retention) on the Financial Controls section come from SOV items.
   const { data: allSovItems = [] } = useQuery({
     queryKey: ["sov-items-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.SOVItem),
+    queryFn: () => listForDashboard(entities.SOVItem),
     staleTime: 60 * 1000,
   });
   // Recent Activity feed pulls from drawing_activity (the only
@@ -130,17 +130,17 @@ export default function Dashboard() {
   // so portfolio mode doesn't pay for a query that has no consumer.
   const { data: budgetHourItems = [] } = useQuery({
     queryKey: ["budget-hour-items", pid],
-    queryFn: () => (pid ? base44.entities.BudgetHourItem.filter({ project_id: pid }, "sort_order") : []),
+    queryFn: () => (pid ? entities.BudgetHourItem.filter({ project_id: pid }, "sort_order") : []),
     enabled: !!pid,
     staleTime: 30 * 1000,
   });
   const { data: allDrawingActivity = [] } = useQuery({
     queryKey: ["drawing-activity-recent", projectScope],
     queryFn: () =>
-      base44.entities.DrawingActivity
+      entities.DrawingActivity
         ? pid
-          ? base44.entities.DrawingActivity.filter({ project_id: pid }, "-created_at", 50)
-          : base44.entities.DrawingActivity.list("-created_at", 50)
+          ? entities.DrawingActivity.filter({ project_id: pid }, "-created_at", 50)
+          : entities.DrawingActivity.list("-created_at", 50)
         : Promise.resolve([]),
     staleTime: 30 * 1000,
     refetchInterval: refetchMs,
@@ -152,32 +152,32 @@ export default function Dashboard() {
   // so we don't duplicate fetches across the two consumers.
   const { data: allDailyLogs = [] } = useQuery({
     queryKey: ["daily-logs-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.DailyLog, "-date"),
+    queryFn: () => listForDashboard(entities.DailyLog, "-date"),
     staleTime: 60 * 1000,
   });
   const { data: allPhotos = [] } = useQuery({
     queryKey: ["photos-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.Photo, "-taken_date"),
+    queryFn: () => listForDashboard(entities.Photo, "-taken_date"),
     staleTime: 60 * 1000,
   });
   const { data: allPunchlist = [] } = useQuery({
     queryKey: ["punchlist-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.PunchlistItem),
+    queryFn: () => listForDashboard(entities.PunchlistItem),
     staleTime: 60 * 1000,
   });
   const { data: allInspections = [] } = useQuery({
     queryKey: ["inspections-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.Inspection, "-inspection_date"),
+    queryFn: () => listForDashboard(entities.Inspection, "-inspection_date"),
     staleTime: 60 * 1000,
   });
   const { data: allSafetyIncidents = [] } = useQuery({
     queryKey: ["safety-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.SafetyIncident, "-incident_date"),
+    queryFn: () => listForDashboard(entities.SafetyIncident, "-incident_date"),
     staleTime: 60 * 1000,
   });
   const { data: allQualityRecords = [] } = useQuery({
     queryKey: ["qc-records-dashboard", projectScope],
-    queryFn: () => listForDashboard(base44.entities.QualityControlRecord, "-test_date"),
+    queryFn: () => listForDashboard(entities.QualityControlRecord, "-test_date"),
     staleTime: 60 * 1000,
   });
 

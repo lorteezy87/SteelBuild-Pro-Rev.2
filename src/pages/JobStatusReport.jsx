@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44, resolveFileUrl } from "@/api/base44Client";
+import { entities, functions, resolveFileUrl } from "@/api/supabaseClient";
 import { Download, Loader2, CheckCircle2,
   AlertCircle, Building2, RefreshCw, Search, X,
   Eye, Filter, Clock, AlertTriangle, FileSpreadsheet,
@@ -475,7 +475,7 @@ function PreviewDrawer({ project, onClose, onGenerate }) {
 export default function JobStatusReport() {
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -550,7 +550,7 @@ export default function JobStatusReport() {
   const handleRowDownload = async (project) => {
     setRowStates(s => ({ ...s, [project.id]: "loading" }));
     try {
-      const response = await base44.functions.invoke("generateExecutivePDF", { project_id: project.id });
+      const response = await functions.invoke("generateExecutivePDF", { project_id: project.id });
       const data = response.data;
       let blob;
       if (data instanceof ArrayBuffer || data?.byteLength !== undefined) {
@@ -581,7 +581,7 @@ export default function JobStatusReport() {
     setBulkError("");
     try {
       const ids = selectedIds.size > 0 ? Array.from(selectedIds) : undefined;
-      const res = await base44.functions.invoke("generateExecutivePDF", ids ? { project_ids: ids } : {});
+      const res = await functions.invoke("generateExecutivePDF", ids ? { project_ids: ids } : {});
       const data = res.data;
       if (data?.reports) {
         setBulkResults(data.reports);
