@@ -1,11 +1,12 @@
 import { Suspense } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { PAGES } from "@/config/routes";
 import PageNotFound from "@/lib/PageNotFound";
 import PageErrorBoundary from "@/components/shared/ErrorBoundary";
 import LayoutRoute from "@/boot/LayoutRoute";
 import PageLoader from "@/boot/PageLoader";
+import { useUserPrefs } from "@/hooks/useUserPrefs";
 
 // Two pages keep dedicated lazy bindings here (rather than going through the
 // PAGES registry) because they're mounted at non-canonical URLs:
@@ -29,6 +30,30 @@ function LazyRoute({ label, children }) {
   );
 }
 
+const LANDING_REDIRECT_KEY = "sbp-landing-redirected";
+
+/**
+ * Index route ("/"): honour Settings → Dashboard → "Default Landing Page".
+ * Redirects ONCE per browser session on first load (the "page you see when you
+ * open the app each morning"), so clicking the logo/home later still shows the
+ * Dashboard rather than bouncing away.
+ */
+function IndexRoute() {
+  const { default_landing } = useUserPrefs();
+  const target = default_landing && default_landing !== "Dashboard" ? default_landing : null;
+  let alreadyRedirected = true;
+  try { alreadyRedirected = sessionStorage.getItem(LANDING_REDIRECT_KEY) === "1"; } catch { /* ignore */ }
+  if (target && !alreadyRedirected) {
+    try { sessionStorage.setItem(LANDING_REDIRECT_KEY, "1"); } catch { /* ignore */ }
+    return <Navigate to={`/${target}`} replace />;
+  }
+  return (
+    <LazyRoute label="Dashboard">
+      <Dashboard />
+    </LazyRoute>
+  );
+}
+
 /**
  * AppRoutes — the full route table.
  *
@@ -41,14 +66,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route element={<LayoutRoute />}>
-        <Route
-          index
-          element={
-            <LazyRoute label="Dashboard">
-              <Dashboard />
-            </LazyRoute>
-          }
-        />
+        <Route index element={<IndexRoute />} />
 
         {Object.entries(PAGES).map(([path, Page]) => (
           <Route

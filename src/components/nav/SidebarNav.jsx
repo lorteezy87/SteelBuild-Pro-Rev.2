@@ -46,6 +46,7 @@ import {
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
+import { useUserPrefs } from "@/hooks/useUserPrefs";
 
 // ── Page → lucide icon map ──────────────────────────────────────────
 //
@@ -172,6 +173,8 @@ function saveFavorites(pages) {
 export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   const { theme } = useTheme();
   const isLightTheme = theme === "light";
+  // Settings → Dashboard → "Pinned Modules" merges into the sidebar favorites.
+  const { pinned_modules } = useUserPrefs();
   const [collapsed, setCollapsed] = useState(loadSidebarState);
   const [railModeState, setRailMode] = useState(loadRailState);
   const [recents, setRecents]     = useState(loadRecents);
@@ -232,10 +235,16 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
     const flat = SIDEBAR_GROUPS.flatMap((g) =>
       g.items.map((it) => ({ ...it, _group: g.label }))
     );
-    return favorites
+    // Union of star-favorites (localStorage) + Settings "Pinned Modules" pref,
+    // deduped, favorites first.
+    const merged = [
+      ...favorites,
+      ...(pinned_modules || []).filter((p) => !favorites.includes(p)),
+    ];
+    return merged
       .map((p) => flat.find((it) => it.page === p))
       .filter(Boolean);
-  }, [favorites]);
+  }, [favorites, pinned_modules]);
 
   // Recents filtered against the flat registry so a deleted/renamed
   // page falls out cleanly instead of rendering a dead entry.
