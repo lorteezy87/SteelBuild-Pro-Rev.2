@@ -106,6 +106,14 @@ export function dueInfo(input: any, closed = false): DueInfo {
   return { label: fmtDate(input), days, overdue: false, dueSoon: false, tone: textMuted, sort: days };
 }
 
+/** YYYY-MM-DD for an `<input type="date">`, read as a LOCAL calendar day so a
+ *  stored value round-trips without the UTC shift that `toISOString()` causes. */
+export function toDateInputValue(input: any): string {
+  const local = toLocalDay(input);
+  if (!local) return "";
+  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+}
+
 export function getSubmittalDueDate(submittal: Submittal | null | undefined): string | null {
   return submittal?.required_date || submittal?.due_date || submittal?.date_required || null;
 }
@@ -261,9 +269,13 @@ export function getActionTone(item: any): string {
 
 export function fmtDate(d: any): string {
   if (!d) return "—";
-  try {
-    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
-  } catch {
-    return "—";
-  }
+  // Parse through toLocalDay so a date-only string ("2026-06-10") is read as a
+  // LOCAL calendar day, not UTC midnight. Arizona is UTC-7 with no DST, so the
+  // naive `new Date("2026-06-10").toLocaleDateString()` renders one day early
+  // (the value lands at 17:00 the previous local day). toLocalDay already backs
+  // daysUntil/dueInfo — fmtDate must agree with it or the chip label and the
+  // printed date disagree by a day.
+  const local = toLocalDay(d);
+  if (!local) return "—";
+  return local.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
 }
