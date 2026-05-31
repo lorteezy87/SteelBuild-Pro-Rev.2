@@ -11,6 +11,7 @@
 
 import React, { useMemo, useState } from "react";
 import { computeAgingReport } from "@/lib/submittalAnalytics";
+import { formatShortDate } from "@/utils/dates";
 
 const THRESHOLDS = [3, 7, 14, 30];
 const COLUMNS = [
@@ -218,13 +219,7 @@ function stuckColor(days) {
   return "var(--text-primary)";
 }
 
-function fmtDate(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("en-US", {
-      month: "short", day: "numeric", year: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
-}
+// Timezone-safe: lastActivityIso can derive from a date-only column (UTC
+// midnight), which a bare new Date(...).toLocaleDateString renders a day early
+// in MST. formatShortDate reads the calendar day as written.
+const fmtDate = (iso) => formatShortDate(iso);

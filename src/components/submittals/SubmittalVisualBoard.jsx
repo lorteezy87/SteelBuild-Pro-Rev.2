@@ -20,6 +20,7 @@ import {
   submittalStatusToStage,
 } from "@/lib/submittalStageMapping";
 import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import { formatShortDate } from "@/utils/dates";
 
 const surfaceLow = "var(--bg-surface-low)";
 const surfaceHigh = "var(--bg-surface-high)";
@@ -71,18 +72,9 @@ function daysUntil(input) {
   return Math.round((due.getTime() - today.getTime()) / 86_400_000);
 }
 
-function fmtDate(input) {
-  if (!input) return "-";
-  try {
-    return new Date(input).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "2-digit",
-    });
-  } catch {
-    return "-";
-  }
-}
+// Timezone-safe (matches the toLocalDay-based daysUntil above): a bare
+// new Date("2026-06-10") is UTC midnight and renders a day early in MST.
+const fmtDate = (input) => formatShortDate(input);
 
 function dueInfo(input, closed = false) {
   if (closed) {
