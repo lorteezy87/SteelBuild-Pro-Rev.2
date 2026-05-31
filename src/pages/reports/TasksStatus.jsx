@@ -8,7 +8,7 @@
 
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { exportTableCSV } from "./utils";
@@ -28,7 +28,7 @@ const STATUSES = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold"
 export default function TasksStatus() {
   const { data: tasks = [] } = useQuery({
     queryKey: ["schedule-tasks-all"],
-    queryFn: () => base44.entities.ScheduleTask.list(),
+    queryFn: () => entities.ScheduleTask.list(),
   });
 
   const totals = useMemo(() => {

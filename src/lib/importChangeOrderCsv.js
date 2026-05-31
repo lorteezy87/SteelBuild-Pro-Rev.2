@@ -5,7 +5,7 @@
  * importer (src/lib/importRfiCsv.js) — no AI, no credits, no
  * network; parses client-side and returns a `{ header, cos }` shape
  * the modal's commit step can feed into
- * base44.entities.ChangeOrder.create().
+ * entities.ChangeOrder.create().
  *
  * Supports the common GC / owner export formats (Procore, Sage,
  * Vista, Newforma, plain Excel "Save As CSV"). Column headers are

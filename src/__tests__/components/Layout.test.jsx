@@ -7,7 +7,7 @@
  *   2. The accessibility skip-to-main-content link is present
  *
  * Goal is proof-of-life for the test infrastructure, not coverage of
- * Layout's internals. Heavy I/O (base44 entity reads, supabase auth)
+ * Layout's internals. Heavy I/O (entity reads, supabase auth)
  * is mocked to no-ops; the chrome itself runs exactly as it does in
  * production.
  */
@@ -18,10 +18,10 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ── Mock base44 entities to no-op reads ──────────────────────────────
+// ── Mock entity clients to no-op reads ──────────────────────────────
 // useLayoutNavData fans out to Alert/RFI/Drawing/Delivery; ProjectProvider
 // fetches Project. All return [] / null without hitting the network.
-vi.mock("@/api/base44Client", () => {
+vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
     filter: vi.fn().mockResolvedValue([]),
@@ -30,9 +30,7 @@ vi.mock("@/api/base44Client", () => {
     create: vi.fn().mockResolvedValue(null),
   };
   return {
-    base44: {
-      entities: new Proxy({}, { get: () => noop }),
-    },
+    entities: new Proxy({}, { get: () => noop }),
     resolveFileUrl: vi.fn((u) => u),
   };
 });

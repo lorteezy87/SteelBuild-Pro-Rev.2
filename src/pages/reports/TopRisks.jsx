@@ -10,7 +10,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import ReportShell from "./ReportShell";
 import { FilterBar, SelectFilter } from "./ReportFilters";
 import { CARD, mono } from "./constants";
@@ -244,11 +244,11 @@ export default function TopRisks() {
 
   const { data: risks = [] } = useQuery({
     queryKey: ["risks"],
-    queryFn: () => base44.entities.Risk.list(),
+    queryFn: () => entities.Risk.list(),
   });
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
   });
   const projectById = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p])),

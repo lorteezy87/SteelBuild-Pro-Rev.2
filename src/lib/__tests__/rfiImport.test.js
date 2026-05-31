@@ -8,10 +8,8 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
-vi.mock("@/api/base44Client", () => ({
-  base44: {
-    integrations: { Core: { UploadFile: vi.fn() } },
-  },
+vi.mock("@/api/supabaseClient", () => ({
+  integrations: { Core: { UploadFile: vi.fn() } },
 }));
 
 import { parseRfiCsv } from "../importRfiCsv";

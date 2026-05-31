@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { formatBudgetPercent } from "../shared/formatters";
 import { getDraftDrawingsWarning } from "../shared/workflowValidation";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
@@ -44,7 +44,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const activeProjectId = form.project_id || (wp && wp.project_id);
   const { data: projectRfis = [] } = useQuery({
     queryKey: ["rfis", activeProjectId],
-    queryFn: () => activeProjectId ? base44.entities.RFI.filter({ project_id: activeProjectId }) : [],
+    queryFn: () => activeProjectId ? entities.RFI.filter({ project_id: activeProjectId }) : [],
     enabled: Boolean(activeProjectId),
     staleTime: 60_000,
   });

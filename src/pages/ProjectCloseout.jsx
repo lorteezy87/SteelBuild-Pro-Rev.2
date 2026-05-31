@@ -1,6 +1,6 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import ProjectCloseoutForm from "@/components/closeout/ProjectCloseoutForm";
@@ -14,7 +14,7 @@ export default function ProjectCloseout() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -22,8 +22,8 @@ export default function ProjectCloseout() {
     queryKey: ["closeouts", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.ProjectCloseout.filter({ project_id: projectId })
-        : base44.entities.ProjectCloseout.list(),
+        ? entities.ProjectCloseout.filter({ project_id: projectId })
+        : entities.ProjectCloseout.list(),
   });
 
   const selectedProject = projectId
@@ -34,7 +34,7 @@ export default function ProjectCloseout() {
   const qc = useQueryClient();
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.ProjectCloseout.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.ProjectCloseout.create({ ...data, project_id: data.project_id || projectId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["closeouts", projectId] });
       toast.success("Closeout record created");
@@ -43,7 +43,7 @@ export default function ProjectCloseout() {
   });
 
   const updateMut = useMutation({
-    mutationFn: (data) => base44.entities.ProjectCloseout.update(data.id, data),
+    mutationFn: (data) => entities.ProjectCloseout.update(data.id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["closeouts", projectId] });
       toast.success("Closeout updated");

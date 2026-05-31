@@ -12,7 +12,7 @@ import { supabase } from "@/lib/supabase";
  * best-effort actor email from `user_profiles` or `auth.users` if the
  * project has a profile table; otherwise returns just the actor_id.
  *
- * Uses Supabase's PostgREST directly rather than the base44 entity
+ * Uses Supabase's PostgREST directly rather than the entity
  * wrapper because drawing_zone_activity is append-only (no update/
  * delete) and we want a bounded limit.
  */

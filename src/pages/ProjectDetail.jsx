@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -35,27 +35,27 @@ export default function ProjectDetail() {
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
-    queryFn: () => base44.entities.Project.get(projectId),
+    queryFn: () => entities.Project.get(projectId),
     enabled: !!projectId,
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: () =>
-      base44.entities.WorkPackage.filter({ project_id: projectId }),
+      entities.WorkPackage.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }),
+    queryFn: () => entities.RFI.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries", projectId],
     queryFn: () =>
-      base44.entities.Delivery.filter({ project_id: projectId }),
+      entities.Delivery.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 

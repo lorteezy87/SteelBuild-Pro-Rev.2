@@ -8,7 +8,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { usePermissions } from "@/services/permissions";
 import { useDrawingImpacts, type DrawingImpactRow } from "@/hooks/useDrawingImpacts";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
@@ -72,7 +72,7 @@ export function ImpactBoard({ projectId }: { projectId: string | null }) {
       const sheet = attachable.find((r) => r.drawing_id === form.drawing_id);
       if (!sheet?.current_revision_id) throw new Error("Pick a sheet with a current revision");
       if (!form.title.trim()) throw new Error("Title is required");
-      await base44.entities.DrawingImpact.create({
+      await entities.DrawingImpact.create({
         project_id: projectId as string,
         drawing_revision_id: sheet.current_revision_id,
         impact_type: form.impact_type,
@@ -89,7 +89,7 @@ export function ImpactBoard({ projectId }: { projectId: string | null }) {
   const statusMut = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const done = status === "resolved" || status === "closed";
-      await base44.entities.DrawingImpact.update(id, {
+      await entities.DrawingImpact.update(id, {
         status,
         resolved_at: done ? new Date().toISOString() : null,
       } as never);

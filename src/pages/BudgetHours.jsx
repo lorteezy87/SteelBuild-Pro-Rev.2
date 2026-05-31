@@ -25,7 +25,7 @@ import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus, Trash2, X } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { OperationsPageShell, OpsActionButton } from "@/components/operations/OperationsPageShell";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -496,13 +496,13 @@ export default function BudgetHours() {
   // user actually sees the row disappear after they click Remove.
   const { data: rawRows = [], isLoading } = useQuery({
     queryKey: ["budget-hour-items", projectId],
-    queryFn: () => (projectId ? base44.entities.BudgetHourItem.filter({ project_id: projectId }, "sort_order") : []),
+    queryFn: () => (projectId ? entities.BudgetHourItem.filter({ project_id: projectId }, "sort_order") : []),
     enabled: !!projectId,
   });
   const rows = useMemo(() => rawRows.filter((r) => !r?.is_deleted), [rawRows]);
   const { data: wps = [] } = useQuery({
     queryKey: ["work-packages", projectId],
-    queryFn: () => (projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? entities.WorkPackage.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
   });
   const wpsById = useMemo(() => {
@@ -513,19 +513,19 @@ export default function BudgetHours() {
 
   /* ── Mutations ── */
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.BudgetHourItem.create(data),
+    mutationFn: (data) => entities.BudgetHourItem.create(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] }),
     onError: (e) => toast.error(`Create failed: ${e.message || "unknown error"}`),
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, patch }) => base44.entities.BudgetHourItem.update(id, patch),
+    mutationFn: ({ id, patch }) => entities.BudgetHourItem.update(id, patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] }),
     onError: (e) => toast.error(`Save failed: ${e.message || "unknown error"}`),
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.BudgetHourItem.update(id, { is_deleted: true, deleted_at: new Date().toISOString() }),
+    mutationFn: (id) => entities.BudgetHourItem.update(id, { is_deleted: true, deleted_at: new Date().toISOString() }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] });
       toast.success("Row removed");
@@ -589,7 +589,7 @@ export default function BudgetHours() {
     // Sequentially create so sort_order stays stable; small list (≤12).
     for (const row of built) {
       try {
-        await base44.entities.BudgetHourItem.create({ ...row, project_id: projectId });
+        await entities.BudgetHourItem.create({ ...row, project_id: projectId });
       } catch (e) {
         toast.error(`Preset row "${row.scope_item}" failed: ${e.message || "unknown"}`);
       }
@@ -741,7 +741,7 @@ export default function BudgetHours() {
           projectId={projectId}
           missesRow={missesRow}
           onCreateRow={async (payload) => {
-            const created = await base44.entities.BudgetHourItem.create(payload);
+            const created = await entities.BudgetHourItem.create(payload);
             qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] });
             return created;
           }}

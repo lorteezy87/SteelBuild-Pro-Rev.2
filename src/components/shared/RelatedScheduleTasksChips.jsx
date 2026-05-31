@@ -23,7 +23,7 @@
 
 import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { entities } from "@/api/supabaseClient";
 import { computeEffectiveDates } from '@/services/scheduleCascade';
 
 const VALID_FIELDS = new Set([
@@ -88,7 +88,7 @@ export default function RelatedScheduleTasksChips({
     queryKey: ['schedule-tasks-for-link', projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.ScheduleTask.filter({ project_id: projectId })
+        ? entities.ScheduleTask.filter({ project_id: projectId })
         : Promise.resolve([]),
     enabled: !!projectId && !!targetId,
     staleTime: 60 * 1000,

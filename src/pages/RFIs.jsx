@@ -8,7 +8,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./rfis/RFIs.css";
-import { base44 } from "@/api/base44Client";
+import { entities, auth, integrations } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -110,13 +110,13 @@ export default function RFIs() {
   /* ── Data ── */
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: rfis = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
+    queryFn: () => entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
     enabled: !!projectId,
   });
   const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
@@ -142,7 +142,7 @@ export default function RFIs() {
 
   /* ── Mutations ── */
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.RFI.create(data),
+    mutationFn: (data) => entities.RFI.create(data),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, rfiQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       await invalidateCrudQueries(qc, rfiQueryKeys);
@@ -152,7 +152,7 @@ export default function RFIs() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.RFI.update(id, data),
+    mutationFn: ({ id, data }) => entities.RFI.update(id, data),
     onSuccess: async (updated) => {
       replaceRecordInCaches(qc, rfiQueryKeys, updated);
       if (selectedRFI?.id === updated.id) setSelectedRFI(updated);
@@ -163,7 +163,7 @@ export default function RFIs() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.RFI.delete(id),
+    mutationFn: (id) => entities.RFI.delete(id),
     onSuccess: async (_, deletedId) => {
       removeRecordFromCaches(qc, rfiQueryKeys, deletedId);
       if (selectedRFI?.id === deleteTarget?.id) setSelectedRFI(null);
@@ -176,7 +176,7 @@ export default function RFIs() {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, data }) => {
-      const results = await batchProcess(ids, (id) => base44.entities.RFI.update(id, data));
+      const results = await batchProcess(ids, (id) => entities.RFI.update(id, data));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
       }
@@ -196,7 +196,7 @@ export default function RFIs() {
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids) => {
-      const results = await batchProcess(ids, (id) => base44.entities.RFI.delete(id));
+      const results = await batchProcess(ids, (id) => entities.RFI.delete(id));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }
@@ -283,7 +283,7 @@ export default function RFIs() {
     if (!rfis.length) return;
     const createRFIAlerts = async () => {
       try {
-        const existing = await base44.entities.Alert.filter({ alert_type: "RFI_Overdue" });
+        const existing = await entities.Alert.filter({ alert_type: "RFI_Overdue" });
         const existingIds = new Set(existing.map((a) => a.related_record_id).filter(Boolean));
         const existingTitles = new Set(existing.map((a) => a.title));
         const today = new Date();
@@ -302,7 +302,7 @@ export default function RFIs() {
           const liveProjectName = projectMap[r.project_id] || "";
           const alertTitle = isOD ? `${r.rfi_number} OVERDUE — ${daysLate}d` : `${r.rfi_number} due in ≤3 days`;
           if (existingTitles.has(alertTitle)) continue;
-          await base44.entities.Alert.create({
+          await entities.Alert.create({
             alert_type: "RFI_Overdue",
             severity: r.priority === "Critical" || daysLate >= 7 ? "Critical" : daysLate >= 3 || r.priority === "High" ? "High" : "Medium",
             title: alertTitle,
@@ -336,15 +336,15 @@ export default function RFIs() {
 
     setSavingAttachments(true);
     try {
-      const uploadedBy = await base44.auth.me?.()
+      const uploadedBy = await auth.me?.()
         .then((user) => user?.email)
         .catch(() => "");
       const project = projects.find((p) => p.id === (rfiRecord.project_id || projectId));
       const now = new Date().toISOString();
 
       for (const file of files) {
-        const uploaded = await base44.integrations.Core.UploadFile({ file });
-        await base44.entities.Document.create({
+        const uploaded = await integrations.Core.UploadFile({ file });
+        await entities.Document.create({
           project_id: rfiRecord.project_id || projectId,
           project_name: rfiRecord.project_name || project?.name || "",
           rfi_id: rfiRecord.id,

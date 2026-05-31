@@ -6,7 +6,7 @@
  * owned/trackable action items a human commits to, not the always-on signals.
  */
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 
 export interface DrawingImpactRow {
   id: string;
@@ -34,8 +34,8 @@ export function useDrawingImpacts(projectId: string | null) {
     staleTime: 60_000,
     queryFn: async (): Promise<DrawingImpactRow[]> => {
       const [rawImpacts, rawRevisions] = await Promise.all([
-        base44.entities.DrawingImpact.filter({ project_id: projectId }),
-        base44.entities.DrawingRevision.filter({ project_id: projectId }),
+        entities.DrawingImpact.filter({ project_id: projectId }),
+        entities.DrawingRevision.filter({ project_id: projectId }),
       ]);
       const revById = new Map<string, any>();
       for (const r of (rawRevisions as any[]) ?? []) {

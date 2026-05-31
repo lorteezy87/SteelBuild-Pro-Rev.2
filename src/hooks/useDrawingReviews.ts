@@ -4,7 +4,7 @@
  * number / title / revision code for a readable Review Queue.
  */
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 
 export interface DrawingReviewRow {
   id: string;
@@ -29,8 +29,8 @@ export function useDrawingReviews(projectId: string | null) {
     staleTime: 60_000,
     queryFn: async (): Promise<DrawingReviewRow[]> => {
       const [rawReviews, rawRevisions] = await Promise.all([
-        base44.entities.DrawingReview.filter({ project_id: projectId }),
-        base44.entities.DrawingRevision.filter({ project_id: projectId }),
+        entities.DrawingReview.filter({ project_id: projectId }),
+        entities.DrawingRevision.filter({ project_id: projectId }),
       ]);
       const revById = new Map<string, any>();
       for (const r of (rawRevisions as any[]) ?? []) {

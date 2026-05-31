@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Download, Upload, FileText, X, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { entities } from "@/api/supabaseClient";
 import { COST_CODES } from '../shared/costCodes';
 import { getNextNumber } from '../shared/numberSequencing';
 import { toast } from 'sonner';
@@ -296,7 +296,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
           notes: rec.notes || '',
         };
 
-        await base44.entities.Expense.create(payload);
+        await entities.Expense.create(payload);
         succeeded += 1;
       } catch (e) {
         failed += 1;

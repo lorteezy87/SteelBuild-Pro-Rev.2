@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
-import { resolveFileUrl } from "@/api/base44Client";
+import { resolveFileUrl } from "@/api/supabaseClient";
 import { extractStoragePathFromSignedUrl } from "@/components/drawings/viewer/storageUrl";
 
 // Resolves the active drawing's `file_url` to a signed URL and (when the

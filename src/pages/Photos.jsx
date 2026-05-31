@@ -1,7 +1,7 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import PhotoUploadModal from "@/components/photos/PhotoUploadModal";
 import PhotoGallery from "@/components/photos/PhotoGallery";
@@ -21,15 +21,15 @@ export default function Photos() {
     queryKey: ["photos", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.Photo.filter({ project_id: projectId })
-        : base44.entities.Photo.list("-taken_date"),
+        ? entities.Photo.filter({ project_id: projectId })
+        : entities.Photo.list("-taken_date"),
   });
   // Defensive soft-delete filter (matches DailyLogs / Procurement pattern).
   const photos = React.useMemo(() => rawPhotos.filter((r) => !r.is_deleted), [rawPhotos]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 

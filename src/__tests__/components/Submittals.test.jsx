@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Submittals smoke test — renders the real Submittals page with router,
- * QueryClient, and a synthetic active project. base44 entity reads
+ * QueryClient, and a synthetic active project. entity reads
  * are mocked to empty arrays so the page renders its empty CommandBar
  * state without network traffic.
  */
@@ -12,7 +12,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@/api/base44Client", () => {
+vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
     filter: vi.fn().mockResolvedValue([]),
@@ -21,7 +21,7 @@ vi.mock("@/api/base44Client", () => {
     create: vi.fn().mockResolvedValue(null),
   };
   return {
-    base44: { entities: new Proxy({}, { get: () => noop }) },
+    entities: new Proxy({}, { get: () => noop }),
     resolveFileUrl: vi.fn((u) => u),
   };
 });

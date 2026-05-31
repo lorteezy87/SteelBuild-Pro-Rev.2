@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { CommandBar } from "@/components/design-system";
@@ -66,7 +66,7 @@ export default function ExpensesPage() {
     queryKey: ["expenses", activeProject?.id],
     queryFn: async () => {
       if (!activeProject?.id) return [];
-      const projectExpenses = await base44.entities.Expense.filter({ project_id: activeProject.id });
+      const projectExpenses = await entities.Expense.filter({ project_id: activeProject.id });
       return projectExpenses.sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date));
     },
     enabled: !!activeProject?.id,
@@ -74,18 +74,18 @@ export default function ExpensesPage() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
   });
 
   const { data: sovItems = [] } = useQuery({
     queryKey: ["sov-items", activeProject?.id],
-    queryFn: () => (activeProject?.id ? base44.entities.SOVItem.filter({ project_id: activeProject.id }) : []),
+    queryFn: () => (activeProject?.id ? entities.SOVItem.filter({ project_id: activeProject.id }) : []),
     enabled: !!activeProject?.id,
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", activeProject?.id],
-    queryFn: () => (activeProject?.id ? base44.entities.WorkPackage.filter({ project_id: activeProject.id }) : []),
+    queryFn: () => (activeProject?.id ? entities.WorkPackage.filter({ project_id: activeProject.id }) : []),
     enabled: !!activeProject?.id,
   });
 
@@ -93,7 +93,7 @@ export default function ExpensesPage() {
     queryKey: ["cost-codes", activeProject?.id],
     queryFn: () =>
       activeProject?.id
-        ? base44.entities.CostCode.filter({ project_id: activeProject.id }, "cost_code_number")
+        ? entities.CostCode.filter({ project_id: activeProject.id }, "cost_code_number")
         : [],
     select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     enabled: !!activeProject?.id,
@@ -109,7 +109,7 @@ export default function ExpensesPage() {
         expenseNumber = null;
       }
       if (!expenseNumber) expenseNumber = `EXP-${String((expenses.length || 0) + 1).padStart(3, "0")}`;
-      return base44.entities.Expense.create({ ...d, expense_number: expenseNumber, project_id: d.project_id || activeProject?.id });
+      return entities.Expense.create({ ...d, expense_number: expenseNumber, project_id: d.project_id || activeProject?.id });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
@@ -121,7 +121,7 @@ export default function ExpensesPage() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Expense.update(id, data),
+    mutationFn: ({ id, data }) => entities.Expense.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
       setModalOpen(false);
@@ -132,7 +132,7 @@ export default function ExpensesPage() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.Expense.delete(id),
+    mutationFn: (id) => entities.Expense.delete(id),
     onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
       if (editing?.id === deletedId) {
@@ -149,7 +149,7 @@ export default function ExpensesPage() {
     mutationFn: async ({ ids, data }) => {
       let succeeded = 0, failed = 0;
       for (const id of ids) {
-        try { await base44.entities.Expense.update(id, data); succeeded++; } catch { failed++; }
+        try { await entities.Expense.update(id, data); succeeded++; } catch { failed++; }
       }
       if (failed > 0) throw new Error(`${failed} of ${ids.length} updates failed`);
       return { succeeded };
@@ -170,7 +170,7 @@ export default function ExpensesPage() {
     mutationFn: async (ids) => {
       let succeeded = 0, failed = 0;
       for (const id of ids) {
-        try { await base44.entities.Expense.delete(id); succeeded++; } catch { failed++; }
+        try { await entities.Expense.delete(id); succeeded++; } catch { failed++; }
       }
       if (failed > 0) throw new Error(`${failed} of ${ids.length} deletes failed`);
       return { succeeded };

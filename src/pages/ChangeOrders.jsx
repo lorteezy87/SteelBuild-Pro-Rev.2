@@ -14,7 +14,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -86,7 +86,7 @@ export default function ChangeOrders() {
     queryKey: ["change-orders", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.ChangeOrder.filter({ project_id: projectId }, "-created_at")
+        ? entities.ChangeOrder.filter({ project_id: projectId }, "-created_at")
         : [],
     enabled: !!projectId,
   });
@@ -97,7 +97,7 @@ export default function ChangeOrders() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -106,7 +106,7 @@ export default function ChangeOrders() {
   const { data: sovItems = [] } = useQuery({
     queryKey: ["sov-items", projectId],
     queryFn: () => projectId
-      ? base44.entities.SOVItem.filter({ project_id: projectId }, "line_item_number")
+      ? entities.SOVItem.filter({ project_id: projectId }, "line_item_number")
       : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
@@ -115,7 +115,7 @@ export default function ChangeOrders() {
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: () => projectId
-      ? base44.entities.RFI.filter({ project_id: projectId }, "-created_at")
+      ? entities.RFI.filter({ project_id: projectId }, "-created_at")
       : [],
     enabled: !!projectId,
     staleTime: 60 * 1000,
@@ -184,7 +184,7 @@ export default function ChangeOrders() {
       if (!coNumber) {
         coNumber = `CO #${String((cos.length || 0) + 1).padStart(3, "0")}`;
       }
-      return base44.entities.ChangeOrder.create({
+      return entities.ChangeOrder.create({
         ...d,
         co_number: coNumber,
         project_id: targetProjectId,
@@ -202,7 +202,7 @@ export default function ChangeOrders() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ChangeOrder.update(id, data),
+    mutationFn: ({ id, data }) => entities.ChangeOrder.update(id, data),
     onSuccess: (updated) => {
       replaceRecordInCaches(qc, coQueryKeys, updated);
       qc.invalidateQueries({ queryKey: ["change-orders"] });
@@ -215,7 +215,7 @@ export default function ChangeOrders() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.ChangeOrder.delete(id),
+    mutationFn: (id) => entities.ChangeOrder.delete(id),
     onSuccess: (_result, deletedId) => {
       removeRecordFromCaches(qc, coQueryKeys, deletedId);
       qc.invalidateQueries({ queryKey: ["change-orders"] });

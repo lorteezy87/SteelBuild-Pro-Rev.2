@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { toast } from "sonner";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
@@ -56,7 +56,7 @@ export default function ResourceScheduling() {
   const [newRes, setNewRes] = useState(emptyNewRes);
 
   const createResMut = useMutation({
-    mutationFn: (data: any) => base44.entities.Resource.create({ ...data, project_id: activeProject?.id, project_name: activeProject?.name || "" }),
+    mutationFn: (data: any) => entities.Resource.create({ ...data, project_id: activeProject?.id, project_name: activeProject?.name || "" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["resources"] });
       setShowNewResource(false);
@@ -71,7 +71,7 @@ export default function ResourceScheduling() {
     queryKey: ["work-packages", activeProject?.id],
     queryFn: async () => {
       if (!activeProject?.id) return [];
-      return base44.entities.WorkPackage.filter({
+      return entities.WorkPackage.filter({
         project_id: activeProject.id,
       });
     },
@@ -81,7 +81,7 @@ export default function ResourceScheduling() {
     queryKey: ["resources", activeProject?.id],
     queryFn: async () => {
       if (!activeProject?.id) return [];
-      return base44.entities.Resource.filter({
+      return entities.Resource.filter({
         project_id: activeProject.id,
       });
     },
@@ -651,7 +651,7 @@ export default function ResourceScheduling() {
         } : wp) || []
       );
       try {
-        await base44.entities.WorkPackage.update(d.wpId, {
+        await entities.WorkPackage.update(d.wpId, {
           scheduled_start_date: newStartISO,
           scheduled_end_date:   newEndISO,
           crew: newResourceName || "",
@@ -706,7 +706,7 @@ export default function ResourceScheduling() {
         ...autoHours,
       };
       if (resourceChanged) updatePayload.crew = newResourceName;
-      await base44.entities.WorkPackage.update(d.wpId, updatePayload);
+      await entities.WorkPackage.update(d.wpId, updatePayload);
     } catch (err) {
       console.error("WP update failed:", err);
       qc.invalidateQueries({ queryKey: ["work-packages"] });

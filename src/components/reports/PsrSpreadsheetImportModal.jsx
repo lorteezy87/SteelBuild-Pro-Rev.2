@@ -3,7 +3,7 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { ArrowRight, CheckCircle2, FileSpreadsheet, Loader2, Upload, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { logActivity } from "@/services/auditLogger";
 import {
   buildPsrProjectPatch,
@@ -131,7 +131,7 @@ export default function PsrSpreadsheetImportModal({
         const patch = buildPsrProjectPatch(project, item.parsed, {
           applyHealthStatus: item.applyHealthStatus,
         });
-        await base44.entities.Project.update(project.id, patch);
+        await entities.Project.update(project.id, patch);
         updated += 1;
 
         logActivity("project", "updated", { ...project, ...patch }, {

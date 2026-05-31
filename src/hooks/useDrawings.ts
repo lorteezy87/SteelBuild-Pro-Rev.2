@@ -22,7 +22,7 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
@@ -53,7 +53,7 @@ export function useDrawings(projectId: string | null | undefined) {
     refetch,
   } = useQuery<Drawing[]>({
     queryKey,
-    queryFn: () => base44.entities.Drawing.filter({ project_id: projectId }, undefined, 2000),
+    queryFn: () => entities.Drawing.filter({ project_id: projectId }, undefined, 2000),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -106,7 +106,7 @@ export function useDrawings(projectId: string | null | undefined) {
       if (warnings.length) {
         console.warn("[useDrawings.create] payload coerced:", warnings);
       }
-      return await base44.entities.Drawing.create(record as Insert<'drawings'>);
+      return await entities.Drawing.create(record as Insert<'drawings'>);
     },
     onSuccess: async (created) => {
       await invalidateAll();
@@ -141,7 +141,7 @@ export function useDrawings(projectId: string | null | undefined) {
       if (warnings.length) {
         console.warn("[useDrawings.update] payload coerced:", warnings);
       }
-      return await base44.entities.Drawing.update(id, record as Update<'drawings'>);
+      return await entities.Drawing.update(id, record as Update<'drawings'>);
     },
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey });
@@ -169,7 +169,7 @@ export function useDrawings(projectId: string | null | undefined) {
   const deleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
-      await base44.entities.Drawing.delete(id);
+      await entities.Drawing.delete(id);
       return id;
     },
     onSuccess: async () => {
@@ -188,7 +188,7 @@ export function useDrawings(projectId: string | null | undefined) {
       const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
         try {
-          await base44.entities.Drawing.update(id, { stage } as Update<'drawings'>);
+          await entities.Drawing.update(id, { stage } as Update<'drawings'>);
           results.succeeded++;
         } catch (err: unknown) {
           const msg = (err as { message?: string } | undefined)?.message ?? String(err);
@@ -233,7 +233,7 @@ export function useDrawings(projectId: string | null | undefined) {
       const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
         try {
-          await base44.entities.Drawing.delete(id);
+          await entities.Drawing.delete(id);
           results.succeeded++;
         } catch (err: unknown) {
           const msg = (err as { message?: string } | undefined)?.message ?? String(err);
@@ -275,7 +275,7 @@ export function useDrawings(projectId: string | null | undefined) {
           if (revisionNumber) updateData.revision_number = revisionNumber;
           if (notes) updateData.notes = notes;
 
-          await base44.entities.Drawing.update(sheet.id, updateData as Update<'drawings'>);
+          await entities.Drawing.update(sheet.id, updateData as Update<'drawings'>);
           results.succeeded++;
         } catch (err: unknown) {
           const msg = (err as { message?: string } | undefined)?.message ?? String(err);
@@ -312,7 +312,7 @@ export function useDrawings(projectId: string | null | undefined) {
       const results: BulkResult = { succeeded: 0, failed: [] };
       for (const sheet of sheets) {
         try {
-          await base44.entities.Drawing.update(sheet.id, {
+          await entities.Drawing.update(sheet.id, {
             set_approval_status: "rejected",
             notes: notes.trim(),
           } as Update<'drawings'>);
@@ -344,7 +344,7 @@ export function useDrawings(projectId: string | null | undefined) {
       const results: BulkResult = { succeeded: 0, failed: [] };
       for (const sheet of sheets) {
         try {
-          await base44.entities.Drawing.update(sheet.id, {
+          await entities.Drawing.update(sheet.id, {
             is_superseded: true,
             set_approval_status: "superseded",
           } as Update<'drawings'>);

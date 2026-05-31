@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
@@ -45,7 +45,7 @@ export default function FieldPlan() {
       if (!projectId) return [];
       const end = new Date();
       end.setDate(end.getDate() + horizonDays);
-      return base44.entities.ScheduleTask.filter({
+      return entities.ScheduleTask.filter({
         project_id: projectId,
         "end_date.gte": startOfToday().toISOString().slice(0, 10),
         "start_date.lte": end.toISOString().slice(0, 10),
@@ -57,19 +57,19 @@ export default function FieldPlan() {
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["field-plan-rfis", projectId],
-    queryFn: () => projectId ? base44.entities.RFI.filter({ project_id: projectId, status: ["Open", "Submitted", "Under Review"] }) : [],
+    queryFn: () => projectId ? entities.RFI.filter({ project_id: projectId, status: ["Open", "Submitted", "Under Review"] }) : [],
     enabled: !!projectId,
   });
 
   const { data: submittals = [] } = useQuery({
     queryKey: ["field-plan-submittals", projectId],
-    queryFn: () => projectId ? base44.entities.Submittal.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.Submittal.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["field-plan-deliveries", projectId],
-    queryFn: () => projectId ? base44.entities.Delivery.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.Delivery.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
   });
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -79,7 +79,7 @@ export default function ActionItems() {
 
   // ─── Mutations ───────────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.ActionItem.create(data),
+    mutationFn: (data) => entities.ActionItem.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
       qc.invalidateQueries({ queryKey: ["action-items-all"] });
@@ -90,7 +90,7 @@ export default function ActionItems() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ActionItem.update(id, data),
+    mutationFn: ({ id, data }) => entities.ActionItem.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
       qc.invalidateQueries({ queryKey: ["action-items-all"] });
@@ -102,7 +102,7 @@ export default function ActionItems() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.ActionItem.delete(id),
+    mutationFn: (id) => entities.ActionItem.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
       qc.invalidateQueries({ queryKey: ["action-items-all"] });
@@ -117,7 +117,7 @@ export default function ActionItems() {
     mutationFn: async (updates) => {
       // updates is an array of { id, data } objects
       const results = await Promise.allSettled(
-        updates.map(({ id, data }) => base44.entities.ActionItem.update(id, data))
+        updates.map(({ id, data }) => entities.ActionItem.update(id, data))
       );
       const failed = results.filter((r) => r.status === "rejected");
       if (failed.length > 0) {
@@ -142,15 +142,15 @@ export default function ActionItems() {
     queryKey: ["action-items", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.ActionItem.filter({ project_id: projectId }, "-due_date")
-        : base44.entities.ActionItem.list("-due_date"),
+        ? entities.ActionItem.filter({ project_id: projectId }, "-due_date")
+        : entities.ActionItem.list("-due_date"),
   });
 
   useRealtimeInvalidation("action_items", projectId, [["action-items", projectId]]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 

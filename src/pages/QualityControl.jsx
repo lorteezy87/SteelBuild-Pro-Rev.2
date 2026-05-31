@@ -1,6 +1,6 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import QCFormModal from "@/components/qc/QCFormModal";
@@ -21,19 +21,19 @@ export default function QualityControl() {
   const qc = useQueryClient();
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.QualityControlRecord.create(data),
+    mutationFn: (data) => entities.QualityControlRecord.create(data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records"] }); toast.success("Record created"); setShowForm(false); setEditing(null); },
     onError: (e) => toast.error(e.message),
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, ...data }) => base44.entities.QualityControlRecord.update(id, data),
+    mutationFn: ({ id, ...data }) => entities.QualityControlRecord.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records"] }); toast.success("Record updated"); setShowForm(false); setEditing(null); },
     onError: (e) => toast.error(e.message),
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.QualityControlRecord.delete(id),
+    mutationFn: (id) => entities.QualityControlRecord.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records"] }); toast.success("Record deleted"); setDeleteTarget(null); },
     onError: (e) => toast.error(e.message),
   });
@@ -47,15 +47,15 @@ export default function QualityControl() {
     queryKey: ["qc-records", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.QualityControlRecord.filter({ project_id: projectId })
-        : base44.entities.QualityControlRecord.list("-test_date"),
+        ? entities.QualityControlRecord.filter({ project_id: projectId })
+        : entities.QualityControlRecord.list("-test_date"),
   });
   // Defensive soft-delete filter (entity layer also does this at fetch).
   const qcRecords = useMemo(() => rawQcRecords.filter((r) => !r.is_deleted), [rawQcRecords]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 

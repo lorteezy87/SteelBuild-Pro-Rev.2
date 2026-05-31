@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, FileText, Layers, Link2, X } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import SignoffStampPanel from "@/components/drawings/SignoffStampPanel";
 
@@ -31,7 +31,7 @@ export default function ContextPanel({
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: () =>
-      projectId ? base44.entities.RFI.filter({ project_id: projectId }) : [],
+      projectId ? entities.RFI.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60_000,
   });

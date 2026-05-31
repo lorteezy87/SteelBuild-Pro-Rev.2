@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -26,7 +26,7 @@ const ACTION_ICONS = {
 export default function ActivityFeed({ limit = 8 }) {
   const { data: activities = [] } = useQuery({
     queryKey: ["activities"],
-    queryFn: () => base44.entities.Activity.list("-timestamp", limit),
+    queryFn: () => entities.Activity.list("-timestamp", limit),
     initialData: [],
   });
 

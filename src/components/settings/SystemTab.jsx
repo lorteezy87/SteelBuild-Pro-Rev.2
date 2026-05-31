@@ -89,7 +89,7 @@ export default function SystemTab({ user }) {
       {/* Integrations */}
       <div style={sectionStyle}>
         <label style={labelStyle}>Connected Services</label>
-        {[{ label: 'Base44 Backend', ok: true }, { label: 'Project Database', ok: true }, { label: 'Authentication', ok: true }].map(s => (
+        {[{ label: 'Supabase Backend', ok: true }, { label: 'Project Database', ok: true }, { label: 'Authentication', ok: true }].map(s => (
           <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--divider)', fontSize: 11, color: 'var(--text-secondary)' }}>
             <span style={{ color: s.ok ? 'var(--status-success)' : 'var(--status-error)' }}>{s.ok ? '●' : '○'}</span>
             {s.label}

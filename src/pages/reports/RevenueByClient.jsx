@@ -8,7 +8,7 @@
 
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { latestCertifiedPerLineItem } from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
@@ -18,11 +18,11 @@ import { mono, body, CARD, CARD_TITLE } from "./constants";
 export default function RevenueByClient() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
   });
   const { data: sov = [] } = useQuery({
     queryKey: ["sov-items"],
-    queryFn: () => base44.entities.SOVItem.list(),
+    queryFn: () => entities.SOVItem.list(),
   });
 
   // Billed = latest Certified row per (project, line_item). Pre-fix

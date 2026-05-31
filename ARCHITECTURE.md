@@ -455,8 +455,9 @@ Setup:
 Pattern (see `Layout.test.jsx`, `Drawings.test.jsx`,
 `Submittals.test.jsx` for live examples):
 
-1. `vi.mock("@/api/base44Client", ...)` — return a Proxy whose
-   entities resolve to empty arrays / nulls. No network.
+1. `vi.mock("@/api/supabaseClient", ...)` — provide the named `entities`
+   surface as a Proxy whose entity clients resolve to empty arrays / nulls
+   (plus `resolveFileUrl` where the component needs it). No network.
 2. `vi.mock("@/lib/supabase", ...)` — stub `auth.getSession`,
    `auth.onAuthStateChange`, `from()` chains, `rpc()`.
 3. Render the real component inside `MemoryRouter` +

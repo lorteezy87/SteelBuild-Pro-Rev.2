@@ -1,6 +1,6 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ResourceFormModal from "@/components/resources/ResourceFormModal";
@@ -58,8 +58,8 @@ export default function ResourceManagement() {
     queryKey: ["resources", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.Resource.filter({ project_id: projectId })
-        : base44.entities.Resource.list(),
+        ? entities.Resource.filter({ project_id: projectId })
+        : entities.Resource.list(),
   });
 
   // Pull in WPs so each resource row can show what's assigned to it.
@@ -68,13 +68,13 @@ export default function ResourceManagement() {
     queryKey: ["work-packages", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.WorkPackage.filter({ project_id: projectId })
-        : base44.entities.WorkPackage.list(),
+        ? entities.WorkPackage.filter({ project_id: projectId })
+        : entities.WorkPackage.list(),
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -111,13 +111,13 @@ export default function ResourceManagement() {
   //   availability (=status), notes, metadata (JSONB with actual_hours, forecast_hours)
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Resource.update(id, data),
+    mutationFn: ({ id, data }) => entities.Resource.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["resources"] }); toast.success("Resource updated"); setShowForm(false); setEditing(null); },
     onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.Resource.delete(id),
+    mutationFn: (id) => entities.Resource.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["resources"] }); toast.success("Resource deleted"); setDeleteTarget(null); },
     onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
   });

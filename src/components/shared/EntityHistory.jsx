@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 
 const ACTION_COLORS = {
   created: "var(--status-success)",
@@ -25,7 +25,7 @@ export default function EntityHistory({ entityType, entityName, maxItems = 10 })
   const { data: history = [], isLoading } = useQuery({
     queryKey: ["entity-history", entityType, entityName],
     queryFn: async () => {
-      const all = await base44.entities.Activity.filter(
+      const all = await entities.Activity.filter(
         { entityType, entityName },
         "-timestamp"
       );

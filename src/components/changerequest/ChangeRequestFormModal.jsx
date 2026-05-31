@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 
 const emptyForm = {
@@ -68,7 +68,7 @@ export default function ChangeRequestFormModal({
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });

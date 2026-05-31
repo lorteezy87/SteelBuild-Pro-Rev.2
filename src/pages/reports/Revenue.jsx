@@ -16,7 +16,7 @@
 
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { certifiedPeriodDeltas } from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import { LineChartSVG } from "./charts";
@@ -46,7 +46,7 @@ function lastNMonthKeys(n) {
 export default function Revenue() {
   const { data: sov = [] } = useQuery({
     queryKey: ["sov-items"],
-    queryFn: () => base44.entities.SOVItem.list(),
+    queryFn: () => entities.SOVItem.list(),
   });
 
   const monthKeys = useMemo(() => lastNMonthKeys(12), []);

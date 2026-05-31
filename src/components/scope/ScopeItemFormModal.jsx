@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { base44 } from "@/api/base44Client";
+import { entities, integrations } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Paperclip, Upload, X as XIcon } from "lucide-react";
@@ -24,13 +24,13 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.ScopeItem.create(data),
+    mutationFn: (data) => entities.ScopeItem.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scope-items"] });
       toast.success("Scope item created");
@@ -60,7 +60,7 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
     }
     setUploading(true);
     try {
-      const { file_url, path } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url, path } = await integrations.Core.UploadFile({ file });
       setFormData(prev => ({ ...prev, file_url, storage_path: path || "", file_name: file.name }));
       toast.success("PDF attached");
     } catch (err) {

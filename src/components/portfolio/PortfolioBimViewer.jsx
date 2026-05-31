@@ -1,5 +1,5 @@
 import { Children, useEffect, useMemo, useRef, useState } from "react";
-import { resolveFileUrl } from "@/api/base44Client";
+import { resolveFileUrl } from "@/api/supabaseClient";
 
 const FRAGMENTS_WORKER_URL = "/thatopen/fragments-worker.mjs";
 

@@ -8,7 +8,7 @@
  *   - Involved Parties — detailer (FK), joist mfr, deck mfr, deck installer,
  *                       special coatings, engineering firm
  *
- * Persists every field directly on the `projects` row via base44. Each
+ * Persists every field directly on the `projects` row via Supabase. Each
  * cell is click-to-edit — no separate save button — so the page works
  * the same way as InlineEditField does on the dashboard.
  *
@@ -20,7 +20,7 @@
 import React, { useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import InlineEditField from "@/components/shared/InlineEditField";
 
 const JOB_TYPES = [
@@ -202,7 +202,7 @@ function DetailerCell({ projectId, project, contacts }) {
   const current = contacts.find((c) => c.id === project?.detailer_contact_id) || null;
 
   const updateMut = useMutation({
-    mutationFn: (patch) => base44.entities.Project.update(projectId, patch),
+    mutationFn: (patch) => entities.Project.update(projectId, patch),
     onSuccess: (_, patch) => {
       qc.invalidateQueries({ queryKey: ["project", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });
@@ -340,12 +340,12 @@ export default function ProjectKickoffChecklist({ project }) {
 
   const { data: contacts = [] } = useQuery({
     queryKey: ["contacts"],
-    queryFn: () => base44.entities.Contact.list(),
+    queryFn: () => entities.Contact.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const updateMut = useMutation({
-    mutationFn: (patch) => base44.entities.Project.update(projectId, patch),
+    mutationFn: (patch) => entities.Project.update(projectId, patch),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });

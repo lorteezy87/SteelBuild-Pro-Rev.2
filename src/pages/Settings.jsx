@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback } from "react";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { auth } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
 import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -75,7 +75,7 @@ export default function Settings() {
     queryKey: ['user-settings', user?.id],
     queryFn: async () => {
       if (!user?.id) return {};
-      const me = await base44.auth.me();
+      const me = await auth.me();
       return me || {};
     },
     enabled: !!user?.id,
@@ -86,7 +86,7 @@ export default function Settings() {
   }, [userSettings]);
 
   const updatePrefsMut = useMutation({
-    mutationFn: async (prefs) => base44.auth.updateMe(prefs),
+    mutationFn: async (prefs) => auth.updateMe(prefs),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['user-settings'] });
       toast.success('Settings saved');

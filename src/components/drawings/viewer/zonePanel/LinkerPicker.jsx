@@ -13,7 +13,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, Search, ExternalLink } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { mono, display, PICKER_TYPES } from "./zonePanelConstants";
 
 export function LinkerPicker({ zone, onClose, onPick }) {
@@ -29,7 +29,7 @@ export function LinkerPicker({ zone, onClose, onPick }) {
     queryKey: ["zone-linker-candidates", zone?.project_id, typeKey],
     queryFn: async () => {
       if (!zone?.project_id) return [];
-      const entity = base44.entities[typeSpec.entity];
+      const entity = entities[typeSpec.entity];
       if (!entity?.filter) return [];
       const rows = await entity.filter({ project_id: zone.project_id });
       return Array.isArray(rows) ? rows.slice(0, 300) : [];

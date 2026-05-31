@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { base44 } from '@/api/base44Client';
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DeleteDialog from '@/components/shared/DeleteDialog';
 import PhoenixModal, { FormField, btnPrimary, btnSecondary, inputStyle } from '@/components/shared/PhoenixModal';
@@ -40,48 +40,48 @@ export default function DecisionLog() {
 
   const { data: decisions = [], isLoading: loadingD } = useQuery({
     queryKey: ['decisions', projectId],
-    queryFn: () => base44.entities.PmaDecision.filter({ project_id: projectId }, '-created_date'),
+    queryFn: () => entities.PmaDecision.filter({ project_id: projectId }, '-created_date'),
     enabled: !!projectId,
   });
 
   const { data: assumptions = [], isLoading: loadingA } = useQuery({
     queryKey: ['assumptions', projectId],
-    queryFn: () => base44.entities.PmaAssumption.filter({ project_id: projectId }, '-created_date'),
+    queryFn: () => entities.PmaAssumption.filter({ project_id: projectId }, '-created_date'),
     enabled: !!projectId,
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
   });
 
   const createDecision = useMutation({
-    mutationFn: (data) => base44.entities.PmaDecision.create({ ...data, project_id: projectId, created_date: data.created_date || new Date().toISOString().split('T')[0] }),
+    mutationFn: (data) => entities.PmaDecision.create({ ...data, project_id: projectId, created_date: data.created_date || new Date().toISOString().split('T')[0] }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['decisions'] }); toast.success('Decision logged'); setShowDecisionForm(false); setEditingDecision(null); },
     onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
   });
   const updateDecision = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.PmaDecision.update(id, data),
+    mutationFn: ({ id, data }) => entities.PmaDecision.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['decisions'] }); toast.success('Decision updated'); setShowDecisionForm(false); setEditingDecision(null); },
     onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
   });
   const deleteDecision = useMutation({
-    mutationFn: (id) => base44.entities.PmaDecision.delete(id),
+    mutationFn: (id) => entities.PmaDecision.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['decisions'] }); toast.success('Decision removed'); setDeleteTarget(null); },
     onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
   });
   const createAssumption = useMutation({
-    mutationFn: (data) => base44.entities.PmaAssumption.create({ ...data, project_id: projectId, created_date: data.created_date || new Date().toISOString().split('T')[0] }),
+    mutationFn: (data) => entities.PmaAssumption.create({ ...data, project_id: projectId, created_date: data.created_date || new Date().toISOString().split('T')[0] }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['assumptions'] }); toast.success('Assumption logged'); setShowAssumptionForm(false); setEditingAssumption(null); },
     onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
   });
   const updateAssumption = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.PmaAssumption.update(id, data),
+    mutationFn: ({ id, data }) => entities.PmaAssumption.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['assumptions'] }); toast.success('Assumption updated'); setShowAssumptionForm(false); setEditingAssumption(null); },
     onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
   });
   const deleteAssumption = useMutation({
-    mutationFn: (id) => base44.entities.PmaAssumption.delete(id),
+    mutationFn: (id) => entities.PmaAssumption.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['assumptions'] }); toast.success('Assumption removed'); setDeleteTarget(null); },
     onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
   });

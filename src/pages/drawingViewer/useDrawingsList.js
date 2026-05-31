@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 
 // Loads every drawing for the current project, applies an optional
 // case-insensitive search filter (matches sheet_number OR title), and
@@ -19,7 +19,7 @@ import { base44 } from "@/api/base44Client";
 export function useDrawingsList({ projectId, activeId, search }) {
   const { data: rawDrawings = [] } = useQuery({
     queryKey: ["drawings", projectId],
-    queryFn: () => projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.Drawing.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 30000,
   });

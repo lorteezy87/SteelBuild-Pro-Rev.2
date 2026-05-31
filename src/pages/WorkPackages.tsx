@@ -11,7 +11,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -73,15 +73,15 @@ export default function WorkPackages() {
   const { data: rawWorkPackages = [], isLoading: wpLoading } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: async () => {
-      if (projectId) return base44.entities.WorkPackage.filter({ project_id: projectId });
-      const all = await base44.entities.WorkPackage.list();
+      if (projectId) return entities.WorkPackage.filter({ project_id: projectId });
+      const all = await entities.WorkPackage.list();
       return all.sort((a, b) => (a.project_name || "").localeCompare(b.project_name || ""));
     },
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -98,8 +98,8 @@ export default function WorkPackages() {
   const { data: drawings = [] } = useQuery({
     queryKey: ["drawings", projectId],
     queryFn: async () => {
-      if (projectId) return base44.entities.Drawing.filter({ project_id: projectId });
-      return base44.entities.Drawing.list();
+      if (projectId) return entities.Drawing.filter({ project_id: projectId });
+      return entities.Drawing.list();
     },
     staleTime: 30 * 1000,
   });
@@ -107,7 +107,7 @@ export default function WorkPackages() {
   const { data: projectDeliveries = [] } = useQuery({
     queryKey: ["deliveries-for-wps", projectId],
     queryFn: () => projectId
-      ? base44.entities.Delivery.filter({ project_id: projectId })
+      ? entities.Delivery.filter({ project_id: projectId })
       : [],
     enabled: !!projectId,
     staleTime: 30 * 1000,
@@ -123,7 +123,7 @@ export default function WorkPackages() {
   };
 
   const updateWPMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => base44.entities.WorkPackage.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => entities.WorkPackage.update(id, data),
     onSuccess: async (updated) => {
       replaceRecordInCaches(qc, wpQueryKeys, updated);
       invalidateWps();
@@ -136,7 +136,7 @@ export default function WorkPackages() {
   });
 
   const createWPMut = useMutation({
-    mutationFn: (data: any) => base44.entities.WorkPackage.create(data),
+    mutationFn: (data: any) => entities.WorkPackage.create(data),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, wpQueryKeys, created, ((record, key) => !key[1] || record.project_id === key[1]) as any);
       invalidateWps();
@@ -149,7 +149,7 @@ export default function WorkPackages() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: string) => base44.entities.WorkPackage.delete(id),
+    mutationFn: (id: string) => entities.WorkPackage.delete(id),
     onSuccess: (_, deletedId) => {
       removeRecordFromCaches(qc, wpQueryKeys, deletedId);
       invalidateWps();
@@ -186,7 +186,7 @@ export default function WorkPackages() {
         }
         return { ...row, wp_number: wpNumber, project_id: effectiveProjectId, project_name: row.project_name || undefined };
       });
-      return batchProcess(prepared, (data) => base44.entities.WorkPackage.create(data), 5);
+      return batchProcess(prepared, (data) => entities.WorkPackage.create(data), 5);
     },
     onSuccess: (results) => {
       invalidateWps();
@@ -207,7 +207,7 @@ export default function WorkPackages() {
 
   const bulkStatusMut = useMutation({
     mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      const results = await batchProcess(ids, (id) => base44.entities.WorkPackage.update(id, { status }));
+      const results = await batchProcess(ids, (id) => entities.WorkPackage.update(id, { status }));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
       }

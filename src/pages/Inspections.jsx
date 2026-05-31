@@ -1,6 +1,6 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import InspectionFormModal from "@/components/inspections/InspectionFormModal";
@@ -48,8 +48,8 @@ export default function Inspections() {
     queryKey: ["inspections", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.Inspection.filter({ project_id: projectId })
-        : base44.entities.Inspection.list("-inspection_date"),
+        ? entities.Inspection.filter({ project_id: projectId })
+        : entities.Inspection.list("-inspection_date"),
   });
 
   useRealtimeInvalidation("inspections", projectId, [["inspections", projectId]]);
@@ -58,7 +58,7 @@ export default function Inspections() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -71,7 +71,7 @@ export default function Inspections() {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.Inspection.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.Inspection.create({ ...data, project_id: data.project_id || projectId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inspections", projectId] });
       setShowForm(false);
@@ -82,7 +82,7 @@ export default function Inspections() {
   });
 
   const updateMut = useMutation({
-    mutationFn: (data) => base44.entities.Inspection.update(data.id, data),
+    mutationFn: (data) => entities.Inspection.update(data.id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inspections", projectId] });
       setShowForm(false);
@@ -93,7 +93,7 @@ export default function Inspections() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.Inspection.delete(id),
+    mutationFn: (id) => entities.Inspection.delete(id),
     onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["inspections", projectId] });
       if (editing?.id === deletedId) {
@@ -121,7 +121,7 @@ export default function Inspections() {
         const desc = count > 1
           ? `[${inspNumber} #${i + 1}/${count}] ${baseDescription}`
           : `[${inspNumber}] ${baseDescription}`;
-        items.push(await base44.entities.PunchlistItem.create({
+        items.push(await entities.PunchlistItem.create({
           project_id: inspection.project_id,
           description: desc,
           category: "Other",
@@ -142,7 +142,7 @@ export default function Inspections() {
         }));
       }
       // Stamp the inspection so the convert button hides on re-render
-      await base44.entities.Inspection.update(inspection.id, {
+      await entities.Inspection.update(inspection.id, {
         metadata: {
           ...(inspection.metadata || {}),
           punchlist_converted: {

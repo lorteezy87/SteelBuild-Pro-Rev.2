@@ -11,7 +11,7 @@ import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -105,49 +105,49 @@ export default function FabRelease() {
 
   const { data: workPackages = [], isLoading: wpLoading } = useQuery({
     queryKey: ["wps-fab", projectId],
-    queryFn: () => (projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? entities.WorkPackage.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
     staleTime: 30000,
   });
 
   const { data: drawings = [], isLoading: drawingLoading } = useQuery({
     queryKey: ["drawings", projectId],
-    queryFn: () => (projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? entities.Drawing.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
     staleTime: 30000,
   });
 
   const { data: drawingSets = [] } = useQuery({
     queryKey: ["drawing-sets", projectId],
-    queryFn: () => (projectId ? base44.entities.DrawingSet.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? entities.DrawingSet.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
     staleTime: 30000,
   });
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () => (projectId ? base44.entities.RFI.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? entities.RFI.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
     staleTime: 30000,
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries", projectId],
-    queryFn: () => (projectId ? base44.entities.Delivery.filter({ project_id: projectId }) : []),
+    queryFn: () => (projectId ? entities.Delivery.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
     staleTime: 30000,
   });
 
   const { data: submittals = [] } = useQuery({
     queryKey: ["submittals", projectId],
-    queryFn: () => (projectId ? base44.entities.Submittal.filter({ project_id: projectId }) : Promise.resolve([])),
+    queryFn: () => (projectId ? entities.Submittal.filter({ project_id: projectId }) : Promise.resolve([])),
     enabled: Boolean(projectId),
     staleTime: 30000,
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -160,7 +160,7 @@ export default function FabRelease() {
   const invalidateWorkPackages = () => invalidateEntity(qc, "work_package", projectId);
 
   const createWPMut = useMutation({
-    mutationFn: (data: any) => base44.entities.WorkPackage.create(data),
+    mutationFn: (data: any) => entities.WorkPackage.create(data),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, wpQueryKeys, created, ((record: any, key: any) => !key[1] || record.project_id === key[1]) as unknown as () => boolean);
       await invalidateWorkPackages();
@@ -172,7 +172,7 @@ export default function FabRelease() {
   });
 
   const updateWPMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => base44.entities.WorkPackage.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => entities.WorkPackage.update(id, data),
     onSuccess: async (updated, variables) => {
       replaceRecordInCaches(qc, wpQueryKeys, updated);
       await invalidateWorkPackages();
@@ -185,7 +185,7 @@ export default function FabRelease() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: string) => base44.entities.WorkPackage.delete(id),
+    mutationFn: (id: string) => entities.WorkPackage.delete(id),
     onSuccess: async (_, deletedId) => {
       removeRecordFromCaches(qc, wpQueryKeys, deletedId);
       await invalidateWorkPackages();
@@ -198,7 +198,7 @@ export default function FabRelease() {
 
   const completeMut = useMutation({
     mutationFn: (id: string) =>
-      base44.entities.WorkPackage.update(id, {
+      entities.WorkPackage.update(id, {
         status: "Complete",
         percent_complete: 100,
       }),

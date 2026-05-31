@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { base44, resolveFileUrl } from "@/api/base44Client";
+import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { supabase } from "@/lib/supabase";
 import * as pdfjsLib from "pdfjs-dist";
@@ -174,7 +174,7 @@ export default function DrawingViewer() {
     }
     const scale = realInches / pdfInches;
     try {
-      await base44.entities.Drawing.update(activeDrawing.id, { markup_scale: scale });
+      await entities.Drawing.update(activeDrawing.id, { markup_scale: scale });
       qc.invalidateQueries({ queryKey: ["drawings", projectId] });
       toast.success(
         `Calibrated · 1 page inch = ${scale.toFixed(1)} real inches ` +
@@ -206,7 +206,7 @@ export default function DrawingViewer() {
         toast.info("No scale pattern found in the PDF text layer. Use Calibrate (K) to set manually.");
         return;
       }
-      await base44.entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
+      await entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
       qc.invalidateQueries({ queryKey: ["drawings", projectId] });
       const confidence = hit.confidence === "high" ? "" : " (low confidence — verify with Calibrate if needed)";
       toast.success(`Detected scale ${hit.label} on page ${hit.page}${confidence}`);
@@ -231,7 +231,7 @@ export default function DrawingViewer() {
       try {
         const hit = await detectScaleFromPdf(pdfDoc);
         if (cancelled || !hit || hit.confidence !== "high") return;
-        await base44.entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
+        await entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
         if (cancelled) return;
         qc.invalidateQueries({ queryKey: ["drawings", projectId] });
         const drawingIdForUndo = activeDrawing.id;
@@ -241,7 +241,7 @@ export default function DrawingViewer() {
             label: "Undo",
             onClick: async () => {
               try {
-                await base44.entities.Drawing.update(drawingIdForUndo, { markup_scale: null });
+                await entities.Drawing.update(drawingIdForUndo, { markup_scale: null });
                 qc.invalidateQueries({ queryKey: ["drawings", projectId] });
                 toast.info("Scale reset — use Calibrate (K) to set manually.");
               } catch (err) {

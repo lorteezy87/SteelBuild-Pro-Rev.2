@@ -14,7 +14,7 @@
  */
 
 import React, { useMemo, useRef } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -37,7 +37,7 @@ export default function ProjectHandoffChecklist({ projectId }) {
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["project-handoff-items", projectId],
     queryFn: () =>
-      base44.entities.ProjectHandoffItem.filter(
+      entities.ProjectHandoffItem.filter(
         { project_id: projectId },
         "seq"
       ),
@@ -59,7 +59,7 @@ export default function ProjectHandoffChecklist({ projectId }) {
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) =>
-      base44.entities.ProjectHandoffItem.update(id, data),
+      entities.ProjectHandoffItem.update(id, data),
     // Optimistic update so typing feels instant.
     onMutate: async ({ id, data }) => {
       const key = ["project-handoff-items", projectId];

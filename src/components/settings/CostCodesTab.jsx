@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { entities } from "@/api/supabaseClient";
 import { toast } from 'sonner';
 import { CATEGORY_COLORS } from '@/components/shared/costCodes';
 
@@ -22,12 +22,12 @@ export default function CostCodesTab() {
 
   const { data: defaults = [], isLoading } = useQuery({
     queryKey: ['default-cost-codes'],
-    queryFn: () => base44.entities.DefaultCostCode.list('sort_order'),
+    queryFn: () => entities.DefaultCostCode.list('sort_order'),
   });
 
   const toggleMut = useMutation({
     mutationFn: async ({ id, is_active }) => {
-      await base44.entities.DefaultCostCode.update(id, { is_active });
+      await entities.DefaultCostCode.update(id, { is_active });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['default-cost-codes'] });
@@ -37,7 +37,7 @@ export default function CostCodesTab() {
 
   const budgetMut = useMutation({
     mutationFn: async ({ id, default_budget_amount }) => {
-      await base44.entities.DefaultCostCode.update(id, { default_budget_amount });
+      await entities.DefaultCostCode.update(id, { default_budget_amount });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['default-cost-codes'] });

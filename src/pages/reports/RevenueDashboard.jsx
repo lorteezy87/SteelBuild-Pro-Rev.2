@@ -17,7 +17,7 @@
 
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import {
   totalBilled,
   cashCollected,
@@ -49,11 +49,11 @@ const PALETTE = [
 export default function RevenueDashboard() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
   });
   const { data: sovItems = [] } = useQuery({
     queryKey: ["sov-items-all"],
-    queryFn: () => base44.entities.SOVItem.list(),
+    queryFn: () => entities.SOVItem.list(),
   });
 
   const projectsById = useMemo(

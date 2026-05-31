@@ -5,7 +5,7 @@
  *
  * Extracted from TaskDetailDrawer so the data fetching + option shaping live
  * behind a hook (testable in isolation, reusable by other link UIs) instead
- * of inline useQuery/base44 calls in the component.
+ * of inline useQuery/entity calls in the component.
  *
  * @param {string|null|undefined} projectId  Project to scope the lists to.
  * @param {boolean} enabled  Only fetch while truthy (e.g. the drawer is open).
@@ -15,7 +15,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 
 const filterByProject = (entity, projectId) =>
   projectId ? entity.filter({ project_id: projectId }) : Promise.resolve([]);
@@ -47,17 +47,17 @@ export function useTaskLinkOptions(projectId, enabled = true) {
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis-for-task-link", projectId],
-    queryFn: () => filterByProject(base44.entities.RFI, projectId),
+    queryFn: () => filterByProject(entities.RFI, projectId),
     ...shared,
   });
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["change-orders-for-task-link", projectId],
-    queryFn: () => filterByProject(base44.entities.ChangeOrder, projectId),
+    queryFn: () => filterByProject(entities.ChangeOrder, projectId),
     ...shared,
   });
   const { data: actionItems = [] } = useQuery({
     queryKey: ["action-items-for-task-link", projectId],
-    queryFn: () => filterByProject(base44.entities.ActionItem, projectId),
+    queryFn: () => filterByProject(entities.ActionItem, projectId),
     ...shared,
   });
 

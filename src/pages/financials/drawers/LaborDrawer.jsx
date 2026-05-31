@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { formatCurrency, formatCurrencyShort, formatDate } from "@/components/shared/formatters";
 import { mono, body, HEALTH_COLOR, safeNumber } from "../utils";
 import { DrawerTile, drawerTd, drawerTdRight, FinancialDrawer } from "../DrawerAtoms";
@@ -26,7 +26,7 @@ export function LaborDrawer({ open, onClose, kpi, selectedProject }) {
   // Atomic mutation: sets BOTH scope_complete_pct_override + scope_complete_pct_override_date
   // in a single update call. Cache invalidation triggers useFinancials refetch — no page reload.
   const updateMut = useMutation({
-    mutationFn: async ({ id, data }) => base44.entities.Project.update(id, data),
+    mutationFn: async ({ id, data }) => entities.Project.update(id, data),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["projects"] });
       await qc.invalidateQueries({ queryKey: ["project"] });

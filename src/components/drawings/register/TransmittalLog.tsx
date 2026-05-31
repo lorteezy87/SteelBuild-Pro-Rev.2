@@ -7,7 +7,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { usePermissions } from "@/services/permissions";
 import { useTransmittals } from "@/hooks/useTransmittals";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
@@ -58,7 +58,7 @@ export function TransmittalLog({ projectId }: { projectId: string | null }) {
       const num = form.transmittal_number.trim();
       if (!num) throw new Error("Transmittal number is required");
       const incoming = form.direction === "incoming";
-      const transmittal = await base44.entities.DrawingTransmittal.create({
+      const transmittal = await entities.DrawingTransmittal.create({
         project_id: projectId as string,
         transmittal_number: num,
         direction: form.direction,
@@ -74,7 +74,7 @@ export function TransmittalLog({ projectId }: { projectId: string | null }) {
         .map((drawingId) => attachable.find((r) => r.drawing_id === drawingId)?.current_revision_id)
         .filter(Boolean) as string[];
       for (const revId of items) {
-        await base44.entities.DrawingTransmittalItem.create({
+        await entities.DrawingTransmittalItem.create({
           project_id: projectId as string,
           transmittal_id: tid,
           drawing_revision_id: revId,

@@ -1,5 +1,5 @@
 import React from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import KPICard from "./KPICard";
 import ProjectHealthTable from "./ProjectHealthTable";
@@ -12,36 +12,36 @@ export default function ExecutiveDashboard() {
   // Fetch all necessary data
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis"],
-    queryFn: () => base44.entities.RFI.list(),
+    queryFn: () => entities.RFI.list(),
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries"],
-    queryFn: () => base44.entities.Delivery.list(),
+    queryFn: () => entities.Delivery.list(),
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages"],
-    queryFn: () => base44.entities.WorkPackage.list(),
+    queryFn: () => entities.WorkPackage.list(),
   });
 
   const { data: tasks = [] } = useQuery({
     queryKey: ["action-items"],
-    queryFn: () => base44.entities.ActionItem.list(),
+    queryFn: () => entities.ActionItem.list(),
   });
 
   const { data: alerts = [] } = useQuery({
     queryKey: ["alerts"],
     queryFn: async () => {
       try {
-        const raw = await base44.entities.Alert.list();
+        const raw = await entities.Alert.list();
         return raw.filter((a) => !a.is_dismissed && !a.dismissed_at);
       } catch {
         return [];

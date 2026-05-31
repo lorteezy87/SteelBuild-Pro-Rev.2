@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 
 const INPUT_STYLE = {
   width: "100%",
@@ -70,7 +70,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
   }, [doc]);
 
   const mut = useMutation({
-    mutationFn: (payload) => base44.entities.Document.update(doc.id, payload),
+    mutationFn: (payload) => entities.Document.update(doc.id, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["documents", projectId] });
       toast.success("Document updated");

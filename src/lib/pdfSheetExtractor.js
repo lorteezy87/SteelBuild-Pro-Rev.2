@@ -27,7 +27,7 @@
 
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { base44 } from "@/api/base44Client";
+import { integrations } from "@/api/supabaseClient";
 import { extractTextFromRect } from "@/lib/pdfTitleblockText";
 import { parseTitleblockRect } from "@/lib/titleblock";
 
@@ -604,7 +604,7 @@ export async function extractSheetsFromPdf(file, options = {}) {
   let llmResult;
   for (let attempt = 0; ; attempt++) {
     try {
-      llmResult = await base44.integrations.Core.InvokeLLM({
+      llmResult = await integrations.Core.InvokeLLM({
         useCase:    "sheet-extraction",
         system:     SYSTEM_PROMPT,
         prompt:     buildUserPrompt(extracted, file.name),

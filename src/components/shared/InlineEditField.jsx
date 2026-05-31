@@ -20,7 +20,7 @@
  *   Esc    → cancel
  *   Tab    → save and move to next focusable
  *
- * The component handles its own mutation through the base44 Project
+ * The component handles its own mutation through the Supabase Project
  * entity, invalidates the projects + projects/:id query keys so the
  * dashboard refreshes immediately, and shows a toast on error.
  */
@@ -29,7 +29,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { formatCurrency } from "@/components/shared/formatters";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 
@@ -71,7 +71,7 @@ export default function InlineEditField({
     mutationFn: async (newValue) => {
       if (!project?.id) throw new Error("Missing project id");
       const patch = { [field]: newValue };
-      await base44.entities.Project.update(project.id, patch);
+      await entities.Project.update(project.id, patch);
       return patch;
     },
     onSuccess: (patch) => {

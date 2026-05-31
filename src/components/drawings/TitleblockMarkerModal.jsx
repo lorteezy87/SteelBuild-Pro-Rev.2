@@ -23,7 +23,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { base44, resolveFileUrl } from "@/api/base44Client";
+import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { parseTitleblockRect } from "@/lib/titleblock";
 import { extractTextFromRect } from "@/lib/pdfTitleblockText";
 import { toast } from "sonner";
@@ -347,7 +347,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     setReExtractProgress(null);
     try {
       // 1. Persist the rectangles on the drawing_sets row.
-      await base44.entities.DrawingSet.update(set.id, {
+      await entities.DrawingSet.update(set.id, {
         titleblock_title_rect: titleRect,
         titleblock_number_rect: numberRect,
       });
@@ -363,7 +363,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
       let failed = 0;
       let total = 0;
       try {
-        const sheets = await base44.entities.Drawing.filter({
+        const sheets = await entities.Drawing.filter({
           project_id: set.project_id,
           drawing_set_id: set.id,
         });
@@ -390,7 +390,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
                   if (titleSame && numberSame) {
                     unchanged++;
                   } else {
-                    await base44.entities.Drawing.update(sheet.id, patch);
+                    await entities.Drawing.update(sheet.id, patch);
                     updated++;
                   }
                 } else {

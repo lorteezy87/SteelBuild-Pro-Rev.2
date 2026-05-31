@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button, Modal } from "@/components/design-system";
@@ -65,7 +65,7 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
@@ -77,7 +77,7 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
   const { data: projectResources = [] } = useQuery({
     queryKey: ["resources", formData.project_id],
     queryFn: () => formData.project_id
-      ? base44.entities.Resource.filter({ project_id: formData.project_id })
+      ? entities.Resource.filter({ project_id: formData.project_id })
       : Promise.resolve([]),
     enabled: !!formData.project_id,
     staleTime: 30 * 1000,
@@ -87,7 +87,7 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
   );
 
   const mutation = useMutation({
-    mutationFn: (data) => base44.entities.Resource.create(toEntity(data, projectId)),
+    mutationFn: (data) => entities.Resource.create(toEntity(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["resources"] });
       toast.success("Resource added");

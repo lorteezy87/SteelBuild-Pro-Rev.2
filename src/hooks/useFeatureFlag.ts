@@ -11,7 +11,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 
 const STALE_TIME = 60_000;
@@ -75,7 +75,7 @@ export function useAllFlags() {
     staleTime: STALE_TIME,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      const rows = (await base44.entities.FeatureFlag.list()) as unknown as FeatureFlagRow[];
+      const rows = (await entities.FeatureFlag.list()) as unknown as FeatureFlagRow[];
       return resolveFlagsForEmail(rows, email);
     },
   });

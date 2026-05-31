@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { resolveFileUrl } from "@/api/base44Client";
+import { resolveFileUrl } from "@/api/supabaseClient";
 
 const cache = new Map();
 

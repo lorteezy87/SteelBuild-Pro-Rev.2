@@ -9,7 +9,7 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
@@ -67,7 +67,7 @@ export default function ProjectsHealth() {
   const navigate = useNavigate();
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
   });
 
   const buckets = useMemo(() => {
