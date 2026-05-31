@@ -190,7 +190,9 @@ export default function Layout({ children, currentPageName }) {
               </div>
             )}
             {!isMobile && isDarkTheme && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
-            {!isMobile && !isDarkTheme && <ProjectPillDropdown align="left" />}
+            {/* Project selector lives on the LEFT in BOTH themes (was right-side
+                in dark mode) so it sits in one predictable, easy-to-find spot. */}
+            {!isMobile && <ProjectPillDropdown align="left" />}
             {!isMobile && !isDarkTheme && (
               <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 Home
@@ -263,8 +265,9 @@ export default function Layout({ children, currentPageName }) {
             {/* User + Sign Out */}
             {!isMobile && <UserSignOutBlock user={user} onLogout={logout} />}
 
-            {/* Project pill dropdown */}
-            {(isDarkTheme || isMobile) && <ProjectPillDropdown compact={isMobile} />}
+            {/* Project pill dropdown — mobile keeps it on the right (compact);
+                desktop renders it on the left in both themes (see above). */}
+            {isMobile && <ProjectPillDropdown compact />}
           </div>
         </nav>
 
