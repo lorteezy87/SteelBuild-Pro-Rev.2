@@ -27,7 +27,7 @@ export const PRIMARY_TABS = [
   { label: "SCHEDULE",    pages: ["Schedule", "GanttChart", "ProjectCalendar"] },
   { label: "FIELD",       pages: ["FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "COST",        pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
-  { label: "REPORTS",     pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
+  { label: "REPORTS",     pages: ["PortfolioHub", "AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
 
@@ -41,7 +41,7 @@ export const TAB_DEFAULT_PAGE = {
   SCHEDULE:    "Schedule",
   FIELD:       "FieldHub",
   COST:        "Financials",
-  REPORTS:     "AIInsights",
+  REPORTS:     "PortfolioHub",
   CLOSEOUT:    "ProjectCloseout",
 };
 
@@ -49,6 +49,7 @@ export const TAB_DEFAULT_PAGE = {
 export const ALL_MODULES = [
   { icon: "\u25C8", name: "Dashboard",               group: "Overview",      page: "Dashboard" },
   { icon: "\u2318", name: "Command Center",          group: "Overview",      page: "CommandCenter" },
+  { icon: "\u2726", name: "Portfolio Overview",       group: "Overview",      page: "PortfolioHub" },
   { icon: "\u25C9", name: "Executive View",           group: "Overview",      page: "ExecutiveView" },
   { icon: "\u25A4", name: "Projects",                 group: "Projects",      page: "Projects" },
   { icon: "\u2261", name: "Scope & Exclusions",       group: "Projects",      page: "ScopeExclusions" },
@@ -85,7 +86,7 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDC65", name: "Resource Register",  group: "Resources",     page: "ResourceManagement" },
   { icon: "\u25A8", name: "Crew Scheduling",          group: "Resources",     page: "ResourceScheduling" },
   { icon: "\uD83D\uDCCB", name: "Job Status Report",  group: "Reporting",     page: "JobStatusReport" },
-  { icon: "\u2728", name: "Portfolio Overview",       group: "Reporting",     page: "AIInsights" },
+  { icon: "\u2728", name: "Portfolio Analytics",      group: "Reporting",     page: "AIInsights" },
   { icon: "\uD83D\uDCCA", name: "Activity Log",       group: "Reporting",     page: "Activity" },
   { icon: "\uD83D\uDD0D", name: "Inspections",        group: "Quality",       page: "Inspections" },
   { icon: "\u26A0", name: "Safety",                   group: "Quality",       page: "Safety" },
@@ -107,10 +108,11 @@ export const NAV_GROUPS = [
   {
     label: "OVERVIEW",
     items: [
-      { label: "Dashboard",       icon: "\u25C8", page: "Dashboard" },
-      { label: "Command Center", icon: "\u2318", page: "CommandCenter" },
-      { label: "Executive View", icon: "\u25A4", page: "ExecutiveView" },
-      { label: "Alerts",         icon: "\uD83D\uDD14", page: "AlertsCenter", badgeKey: "unread" },
+      { label: "Dashboard",        icon: "\u25C8", page: "Dashboard" },
+      { label: "Command Center",  icon: "\u2318", page: "CommandCenter" },
+      { label: "Portfolio Overview", icon: "\u2726", page: "PortfolioHub" },
+      { label: "Alerts",          icon: "\uD83D\uDD14", page: "AlertsCenter", badgeKey: "unread" },
+      // Executive View is now a tab inside Portfolio Overview (PortfolioHub).
     ],
   },
   {
@@ -200,8 +202,9 @@ export const NAV_GROUPS = [
     items: [
       { label: "Job Status Report",  icon: "\uD83D\uDCCB", page: "JobStatusReport" },
       { label: "Decision Log",       icon: "\uD83D\uDCCB", page: "DecisionLog" },
-      { label: "Portfolio Overview",  icon: "\u2726", page: "AIInsights" },
       { label: "Activity Log",       icon: "\uD83D\uDCCA", page: "Activity" },
+      // Portfolio Overview lives under OVERVIEW now (PortfolioHub, with the
+      // Executive View tab); not duplicated here.
     ],
   },
   {
@@ -235,7 +238,7 @@ export const SIDEBAR_GROUPS = [
     items: [
       { label: "Dashboard",          icon: "\u25C8", page: "Dashboard" },
       { label: "Command Center",    icon: "\u2318", page: "CommandCenter" },
-      { label: "Portfolio Overview",  icon: "\u2726", page: "AIInsights" },
+      { label: "Portfolio Overview",  icon: "\u2726", page: "PortfolioHub" },
     ],
   },
   {

@@ -60,6 +60,7 @@ const ROUTE_DOMAINS = {
     Projects:               r(lazyWithRetry(() => import("@/pages/Projects")),              "Projects"),
     Onboarding:             r(lazyWithRetry(() => import("@/pages/Onboarding")),            "Onboarding"),
     ProjectDetail:          r(lazyWithRetry(() => import("@/pages/ProjectDetail")),         "Project Detail"),
+    PortfolioHub:           r(lazyWithRetry(() => import("@/pages/PortfolioHub")),          "Portfolio Overview"),
     AIInsights:             r(lazyWithRetry(() => import("@/pages/AIInsights")),            "Portfolio Overview"),
   },
 
