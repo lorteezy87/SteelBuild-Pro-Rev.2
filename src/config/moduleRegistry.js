@@ -18,14 +18,16 @@ export const PRIMARY_TABS = [
   { label: "PROJECTS",    pages: ["Projects", "ScopeExclusions", "Contacts", "ProjectMembers", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingViewer", "Documents"] },
-  { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule"] },
+  // Consolidation (Phase 1): RESOURCES folded into FABRICATION and QUALITY
+  // folded into FIELD — fewer logical groups, and every page stays reachable
+  // (these arrays drive route-reachability + tab mapping, not a visible tab bar).
+  // FieldPlan added here so it's no longer orphaned from the registry.
+  { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule", "ResourceScheduling", "ResourceManagement"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["Schedule", "GanttChart", "ProjectCalendar"] },
-  { label: "FIELD",       pages: ["Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs"] },
+  { label: "FIELD",       pages: ["Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "COST",        pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
-  { label: "RESOURCES",   pages: ["ResourceScheduling", "ResourceManagement"] },
   { label: "REPORTS",     pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
-  { label: "QUALITY",     pages: ["Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
 
@@ -39,9 +41,7 @@ export const TAB_DEFAULT_PAGE = {
   SCHEDULE:    "Schedule",
   FIELD:       "Field",
   COST:        "Financials",
-  RESOURCES:   "ResourceScheduling",
   REPORTS:     "AIInsights",
-  QUALITY:     "Inspections",
   CLOSEOUT:    "ProjectCloseout",
 };
 
@@ -141,8 +141,9 @@ export const NAV_GROUPS = [
     items: [
       { label: "RFI Hub",          icon: "\u2691", page: "RFIs", badgeKey: "rfi" },
       { label: "Action Items",     icon: "\u2611", page: "ActionItems" },
-      { label: "Email Inbox",      icon: "\u2709", page: "EmailInbox" },
       { label: "Production Notes", icon: "\uD83D\uDCDD", page: "ProductionNotes" },
+      // Email Inbox hidden from nav (deprioritized \u2014 CLAUDE.md \u00A72.5). Route
+      // kept in routes.js; restore this item to re-surface it.
     ],
   },
   {
@@ -252,7 +253,6 @@ export const SIDEBAR_GROUPS = [
       { label: "Project Calendar", icon: "📅", page: "ProjectCalendar" },
       { label: "Schedule",       icon: "\u25A5", page: "Schedule" },
       { label: "Action Items",   icon: "\u2611", page: "ActionItems" },
-      { label: "Email Inbox",   icon: "\u2709", page: "EmailInbox" },
       { label: "RFIs",                icon: "\u2691", page: "RFIs" },
       { label: "Change Orders",  icon: "$",  page: "ChangeOrders" },
     ],
@@ -307,10 +307,11 @@ export const SIDEBAR_GROUPS = [
       { label: "Daily Logs",       icon: "\uD83D\uDCCB", page: "DailyLogs" },
       { label: "Photos",           icon: "\uD83D\uDCF7", page: "Photos" },
       { label: "Inspections",      icon: "\uD83D\uDD0D", page: "Inspections" },
-      { label: "Safety",           icon: "\u26A0", page: "Safety" },
-      { label: "Quality Control",  icon: "\uD83E\uDDEA", page: "QualityControl" },
       { label: "Punchlist",        icon: "\u2713", page: "Punchlist" },
       { label: "LEMs",             icon: "\u2699", page: "LEMs" },
+      // Safety + Quality Control hidden from nav (deprioritized \u2014 CLAUDE.md
+      // \u00A72.5). Routes kept; the Field Hub still rolls up their KPIs. Restore
+      // these items to re-surface the full registers.
     ],
   },
   {
