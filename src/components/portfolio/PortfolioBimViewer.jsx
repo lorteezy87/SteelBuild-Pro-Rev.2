@@ -511,6 +511,7 @@ export default function PortfolioBimViewer({
   const [mode, setMode] = useState("model");
   const [isolated, setIsolated] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasEnteredViewport, setHasEnteredViewport] = useState(false);
   const [modelState, setModelState] = useState({ source: "generated", status: "idle", message: "", count: 0 });
   const [uploading, setUploading] = useState(false);
@@ -526,6 +527,31 @@ export default function PortfolioBimViewer({
   useEffect(() => {
     isolatedRef.current = isolated;
   }, [isolated]);
+
+  // Fullscreen: the section element goes fullscreen; the renderer's
+  // ResizeObserver picks up the size change and fills the screen automatically.
+  // Sync state off the native event so the toggle stays correct when the user
+  // exits via Esc / browser chrome.
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(document.fullscreenElement === sectionRef.current);
+    document.addEventListener("fullscreenchange", onFsChange);
+    document.addEventListener("webkitfullscreenchange", onFsChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange);
+      document.removeEventListener("webkitfullscreenchange", onFsChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    } else {
+      (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+    }
+  };
 
   const pieces = useMemo(() => {
     const source = (workPackages || []).slice(0, 42);
@@ -1375,12 +1401,16 @@ export default function PortfolioBimViewer({
     <section
       ref={sectionRef}
       style={{
-        minHeight: isCompact ? 0 : 520,
+        // In fullscreen the section fills the screen over a black backdrop, so
+        // use an opaque surface (the --bg-surface token is translucent) and let
+        // the grid stretch to the full height.
+        minHeight: isFullscreen ? "100vh" : (isCompact ? 0 : 520),
+        height: isFullscreen ? "100vh" : undefined,
         display: "grid",
         gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 1.45fr) minmax(320px, 0.55fr)",
-        background: "var(--bg-surface)",
+        background: isFullscreen ? "var(--bg-base, #0D1117)" : "var(--bg-surface)",
         border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
+        borderRadius: isFullscreen ? 0 : "var(--radius-card)",
         overflow: "hidden",
       }}
     >
@@ -1468,6 +1498,18 @@ export default function PortfolioBimViewer({
             }}
           >
             Isolate
+          </button>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            style={{
+              ...toolbarButtonStyle,
+              borderColor: isFullscreen ? "var(--accent)" : "rgba(255,255,255,0.18)",
+              color: isFullscreen ? "var(--accent)" : "#cbd5e1",
+            }}
+            title={isFullscreen ? "Exit fullscreen (Esc)" : "View model fullscreen"}
+          >
+            {isFullscreen ? "Exit Full" : "Fullscreen"}
           </button>
           <button
             type="button"
