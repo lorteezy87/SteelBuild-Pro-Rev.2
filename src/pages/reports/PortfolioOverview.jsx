@@ -54,6 +54,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { computeCostCodeTotals } from "@/services/costRollup";
 import {
   Activity, AlertTriangle, BarChart3, Building2, CalendarDays,
   CircleDot, DollarSign, Layers, ShieldAlert, Sparkles, TrendingUp,
@@ -465,7 +466,8 @@ export default function PortfolioOverview() {
   const projectRows = useMemo(() => {
     return projects.map((p) => {
       const pCodes = costCodes.filter((c) => c.project_id === p.id);
-      const ccBudget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
+      const pCodeTotals = computeCostCodeTotals(pCodes);
+      const ccBudget = pCodeTotals.budget;
       const baseContract = Number(p.original_contract_value) || 0;
       // Approved-CO delta lifts the working budget so a project that
       // gained $200K in approved COs reads as "in budget" against the
@@ -485,7 +487,7 @@ export default function PortfolioOverview() {
       // expenses table).
       const pExpenses = expenses.filter((e) => e.project_id === p.id && e.payment_status !== "Voided");
       const expenseActual = pExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-      const ccActual = pCodes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
+      const ccActual = pCodeTotals.actual;
       const actual = expenseActual > 0 ? expenseActual : ccActual;
       const variance = budget > 0 ? actual - budget : 0;
       const var_pct = budget > 0 ? (variance / budget) * 100 : 0;
