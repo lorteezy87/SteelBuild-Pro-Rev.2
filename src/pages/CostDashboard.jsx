@@ -10,6 +10,7 @@ import KPIStrip from "../components/shared/KPIStrip";
 import ProgressBar from "../components/shared/ProgressBar";
 import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent, formatDateShort } from "../components/shared/formatters";
+import { computeCostCodeTotals } from "@/services/costRollup";
 import { COST_CODES, CATEGORY_COLORS, CATEGORY_ORDER } from "../components/shared/costCodes";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -176,12 +177,16 @@ export default function CostDashboard() {
     ? (Number(project.original_contract_value) || 0) + cos.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0)
     : 0;
 
-  const totalBudget = codes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-  const totalActual = codes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
-  const totalCommitted = codes.reduce((s, c) => s + (Number(c.committed_cost) || 0), 0);
-  const totalForecast = codes.reduce((s, c) => s + (Number(c.forecast_to_complete) || 0), 0);
-  const totalVariance = totalActual - totalBudget;
-  const eac = totalActual + totalForecast;
+  // Cost-code column rollup — centralized in src/services/costRollup.ts so this
+  // page, ExecutiveView, and the report scorecards all sum identically.
+  const {
+    budget: totalBudget,
+    actual: totalActual,
+    committed: totalCommitted,
+    forecast: totalForecast,
+    variance: totalVariance,
+    eac,
+  } = computeCostCodeTotals(codes);
 
   const barChartData = useMemo(() => {
     return codes.map(c => {

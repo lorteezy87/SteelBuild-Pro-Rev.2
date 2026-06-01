@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatBudgetPercent } from "../components/shared/formatters";
+import { computeCostCodeTotals } from "@/services/costRollup";
 import StatusBadge from "../components/shared/StatusBadge";
 import KPIStrip from "../components/shared/KPIStrip";
 import {
@@ -66,8 +67,7 @@ export default function ExecutiveView() {
   const totalContract = projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
   const approvedCOVal = cos.filter((c) => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
   const revisedTotal = totalContract + approvedCOVal;
-  const totalBudget = codes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-  const totalSpend = codes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
+  const { budget: totalBudget, actual: totalSpend } = computeCostCodeTotals(codes);
   const totalBudgetHrs = wps.reduce((s, w) => s + (Number(w.shop_hours_budget) || 0) + (Number(w.field_hours_budget) || 0), 0);
   const totalActualHrs = wps.reduce((s, w) => s + (Number(w.shop_hours_actual) || 0) + (Number(w.field_hours_actual) || 0), 0);
 
@@ -100,10 +100,11 @@ export default function ExecutiveView() {
   const projectBudgetData = projects.map((p) => {
     const pc = codes.filter((c) => c.project_id === p.id);
     const approvedCO = cos.filter((c) => c.project_id === p.id && c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+    const pcTotals = computeCostCodeTotals(pc);
     return {
       name: p.project_number || p.name?.slice(0, 10),
-      budget: pc.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0),
-      actual: pc.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0),
+      budget: pcTotals.budget,
+      actual: pcTotals.actual,
       revised: (Number(p.original_contract_value) || 0) + approvedCO,
     };
   });
@@ -382,8 +383,7 @@ export default function ExecutiveView() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
           {projects.map((p) => {
             const pc = codes.filter((c) => c.project_id === p.id);
-            const budget = pc.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-            const actual = pc.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
+            const { budget, actual } = computeCostCodeTotals(pc);
             const pctSpend = budget > 0 ? actual / budget * 100 : 0;
             const projRFIs = rfis.filter((r) => r.project_id === p.id && (r.status === "Open" || r.status === "Under Review")).length;
             return (
