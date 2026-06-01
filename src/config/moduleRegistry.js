@@ -22,7 +22,7 @@ export const PRIMARY_TABS = [
   // folded into FIELD — fewer logical groups, and every page stays reachable
   // (these arrays drive route-reachability + tab mapping, not a visible tab bar).
   // FieldPlan added here so it's no longer orphaned from the registry.
-  { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule", "ResourceScheduling", "ResourceManagement"] },
+  { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule", "ResourceHub", "ResourceScheduling", "ResourceManagement"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["Schedule", "GanttChart", "ProjectCalendar"] },
   { label: "FIELD",       pages: ["Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
@@ -80,7 +80,8 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDCB0", name: "Cost Dashboard",     group: "Cost",          page: "CostDashboard" },
   { icon: "\uD83D\uDCCA", name: "SOV",                group: "Cost",          page: "SOV" },
   { icon: "$",  name: "Change Orders",               group: "Cost",          page: "ChangeOrders" },
-  { icon: "\uD83D\uDC65", name: "Resources",          group: "Resources",     page: "ResourceManagement" },
+  { icon: "\uD83D\uDC65", name: "Resources",          group: "Fabrication",   page: "ResourceHub" },
+  { icon: "\uD83D\uDC65", name: "Resource Register",  group: "Resources",     page: "ResourceManagement" },
   { icon: "\u25A8", name: "Crew Scheduling",          group: "Resources",     page: "ResourceScheduling" },
   { icon: "\uD83D\uDCCB", name: "Job Status Report",  group: "Reporting",     page: "JobStatusReport" },
   { icon: "\u2728", name: "Portfolio Overview",       group: "Reporting",     page: "AIInsights" },
@@ -179,7 +180,7 @@ export const NAV_GROUPS = [
     items: [
       { label: "Project Calendar", icon: "📅", page: "ProjectCalendar" },
       { label: "Gantt Schedule",  icon: "\u25A5", page: "Schedule" },
-      { label: "Resource Board",  icon: "\uD83D\uDC65", page: "ResourceManagement" },
+      { label: "Resources",  icon: "\uD83D\uDC65", page: "ResourceHub" },
     ],
   },
   {
@@ -276,8 +277,7 @@ export const SIDEBAR_GROUPS = [
       { label: "Constraints",          icon: "🚧", page: "Constraints" },
       { label: "Procurement",          icon: "📦", page: "Procurement" },
       { label: "Look-Ahead Schedule",  icon: "👁", page: "LookAheadSchedule" },
-      { label: "Crew Scheduling",      icon: "\u25A8", page: "ResourceScheduling" },
-      { label: "Resource Management",   icon: "\uD83D\uDC65", page: "ResourceManagement" },
+      { label: "Resources",            icon: "\uD83D\uDC65", page: "ResourceHub" },
       { label: "Deliveries",           icon: "\uD83D\uDCE6", page: "Deliveries" },
     ],
   },
