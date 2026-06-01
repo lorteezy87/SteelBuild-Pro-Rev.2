@@ -26,7 +26,7 @@ export const PRIMARY_TABS = [
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["Schedule", "GanttChart", "ProjectCalendar"] },
   { label: "FIELD",       pages: ["FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
-  { label: "COST",        pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
+  { label: "COST",        pages: ["CostHub", "Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
   { label: "REPORTS",     pages: ["PortfolioHub", "AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
@@ -40,7 +40,7 @@ export const TAB_DEFAULT_PAGE = {
   DELIVERIES:  "Deliveries",
   SCHEDULE:    "Schedule",
   FIELD:       "FieldHub",
-  COST:        "Financials",
+  COST:        "CostHub",
   REPORTS:     "PortfolioHub",
   CLOSEOUT:    "ProjectCloseout",
 };
@@ -78,7 +78,8 @@ export const ALL_MODULES = [
   { icon: "\u25A5", name: "Schedule",                 group: "Field",         page: "Schedule" },
   { icon: "\uD83D\uDCCB", name: "Daily Logs",         group: "Field",         page: "DailyLogs" },
   { icon: "\uD83D\uDCF7", name: "Photos",             group: "Field",         page: "Photos" },
-  { icon: "\u25CE", name: "Budget Control",           group: "Cost",          page: "Financials" },
+  { icon: "\u25CE", name: "Budget Control",           group: "Cost",          page: "CostHub" },
+  { icon: "\u25CE", name: "Budget Detail",            group: "Cost",          page: "Financials" },
   { icon: "\uD83D\uDCB0", name: "Cost Dashboard",     group: "Cost",          page: "CostDashboard" },
   { icon: "\uD83D\uDCCA", name: "SOV",                group: "Cost",          page: "SOV" },
   { icon: "$",  name: "Change Orders",               group: "Cost",          page: "ChangeOrders" },
@@ -190,7 +191,7 @@ export const NAV_GROUPS = [
   {
     label: "COST CONTROL",
     items: [
-      { label: "Budget Control",      icon: "\u25CE", page: "Financials" },
+      { label: "Budget Control",      icon: "\u25CE", page: "CostHub" },
       { label: "Contract Management",  icon: "\uD83D\uDCCB", page: "ContractManagement" },
       { label: "Schedule of Values",   icon: "\uD83D\uDCCA", page: "SOV" },
       { label: "Change Orders",        icon: "$",  page: "ChangeOrders", badgeKey: "co" },

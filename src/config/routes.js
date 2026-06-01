@@ -118,6 +118,7 @@ const ROUTE_DOMAINS = {
 
   // ── Cost & Finance ──
   cost: {
+    CostHub:             r(lazyWithRetry(() => import("@/pages/CostHub")),             "Budget Control",       { projectScoped: true }),
     Financials:          r(lazyWithRetry(() => import("@/pages/Financials")),          "Budget Control",       { projectScoped: true }),
     CostDashboard:       r(lazyWithRetry(() => import("@/pages/CostDashboard")),       "Cost Dashboard",       { projectScoped: true }),
     ChangeOrders:        r(lazyWithRetry(() => import("@/pages/ChangeOrders")),        "Change Orders",        { projectScoped: true }),
