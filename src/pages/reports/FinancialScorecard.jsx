@@ -23,6 +23,7 @@ import {
   calcLaborBurn,
 } from "@/utils/projectKpis";
 import { calculateMarginRisk } from "@/services/marginRiskEngine";
+import { computeCostCodeTotals } from "@/services/costRollup";
 import ReportShell from "./ReportShell";
 import { mono, body, CARD, LABEL, HEALTH_COLORS } from "./constants";
 import {
@@ -206,7 +207,7 @@ export default function FinancialScorecard() {
     const labor = calcLaborBurn(workPackages);
 
     // Budget
-    const totalBudget = costCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
+    const totalBudget = computeCostCodeTotals(costCodes).budget;
     const committed = validExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
     const paid = validExpenses
       .filter((e) => e.payment_status === "Paid")
