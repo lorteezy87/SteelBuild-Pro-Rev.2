@@ -174,6 +174,7 @@ const ROUTE_DOMAINS = {
   // ── Reporting ──
   reporting: {
     JobStatusReport: r(lazyWithRetry(() => import("@/pages/JobStatusReport")), "Job Status Report",   { projectScoped: true }),
+    ReportsHub:      r(lazyWithRetry(() => import("@/pages/ReportsHub")),      "Reports"),
     Reports:         r(lazyWithRetry(() => import("@/pages/Reports")),         "Reports"),
     Activity:        r(lazyWithRetry(() => import("@/pages/Activity")),        "Activity Log"),
   },
