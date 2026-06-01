@@ -94,6 +94,7 @@ const ROUTE_DOMAINS = {
 
   // ── Scheduling & Resources ──
   scheduling: {
+    ScheduleHub:          r(lazyWithRetry(() => import("@/pages/ScheduleHub")),         "Schedule",             { projectScoped: true }),
     Schedule:             r(lazyWithRetry(() => import("@/pages/Schedule")),            "Schedule",             { projectScoped: true }),
     GanttChart:           r(lazyWithRetry(() => import("@/pages/GanttChart")),          "Gantt Chart",          { projectScoped: true }),
     ProjectCalendar:      r(lazyWithRetry(() => import("@/pages/ProjectCalendar")),     "Project Calendar",     { projectScoped: true }),
