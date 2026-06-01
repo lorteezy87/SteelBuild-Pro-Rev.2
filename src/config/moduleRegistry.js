@@ -27,7 +27,7 @@ export const PRIMARY_TABS = [
   { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "GanttChart", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "COST",        pages: ["CostHub", "Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
-  { label: "REPORTS",     pages: ["PortfolioHub", "AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
+  { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "AIInsights", "JobStatusReport", "DecisionLog", "Reports", "AlertsCenter", "Activity"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
 
@@ -88,6 +88,7 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDC65", name: "Resources",          group: "Fabrication",   page: "ResourceHub" },
   { icon: "\uD83D\uDC65", name: "Resource Register",  group: "Resources",     page: "ResourceManagement" },
   { icon: "\u25A8", name: "Crew Scheduling",          group: "Resources",     page: "ResourceScheduling" },
+  { icon: "\uD83D\uDCCB", name: "Reports",            group: "Reporting",     page: "ReportsHub" },
   { icon: "\uD83D\uDCCB", name: "Job Status Report",  group: "Reporting",     page: "JobStatusReport" },
   { icon: "\u2728", name: "Portfolio Analytics",      group: "Reporting",     page: "AIInsights" },
   { icon: "\uD83D\uDCCA", name: "Activity Log",       group: "Reporting",     page: "Activity" },
@@ -201,11 +202,9 @@ export const NAV_GROUPS = [
   {
     label: "REPORTING",
     items: [
-      { label: "Job Status Report",  icon: "\uD83D\uDCCB", page: "JobStatusReport" },
-      { label: "Decision Log",       icon: "\uD83D\uDCCB", page: "DecisionLog" },
-      { label: "Activity Log",       icon: "\uD83D\uDCCA", page: "Activity" },
-      // Portfolio Overview lives under OVERVIEW now (PortfolioHub, with the
-      // Executive View tab); not duplicated here.
+      { label: "Reports", icon: "\uD83D\uDCCB", page: "ReportsHub" },
+      // Job Status / Decision Log / Activity Log are now tabs inside the Reports
+      // hub. Portfolio Overview lives under OVERVIEW (PortfolioHub).
     ],
   },
   {
@@ -298,8 +297,8 @@ export const SIDEBAR_GROUPS = [
     collapsible: true,
     items: [
       { label: "Documents",     icon: "\uD83D\uDCC1", page: "Documents" },
-      { label: "Reports",       icon: "\uD83D\uDCCB", page: "Reports" },
-      { label: "Activity Log",  icon: "\uD83D\uDCCA", page: "Activity" },
+      { label: "Reports",       icon: "\uD83D\uDCCB", page: "ReportsHub" },
+      // Activity Log is now a tab inside the Reports hub.
     ],
   },
   {
