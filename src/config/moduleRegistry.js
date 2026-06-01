@@ -15,7 +15,7 @@
 // ── Tab definitions ──────────────────────────────────────────────────
 export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
-  { label: "PROJECTS",    pages: ["Projects", "ExecutiveView"] },
+  { label: "PROJECTS",    pages: ["Projects", "ScopeExclusions", "Contacts", "ProjectMembers", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingViewer", "Documents"] },
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule"] },
@@ -50,9 +50,10 @@ export const ALL_MODULES = [
   { icon: "\u25C8", name: "Dashboard",               group: "Overview",      page: "Dashboard" },
   { icon: "\u2318", name: "Command Center",          group: "Overview",      page: "CommandCenter" },
   { icon: "\u25C9", name: "Executive View",           group: "Overview",      page: "ExecutiveView" },
-  { icon: "\u25A4", name: "Projects",                 group: "Overview",      page: "Projects" },
-  { icon: "\u2261", name: "Scope & Exclusions",       group: "Setup",         page: "ScopeExclusions" },
-  { icon: "\u2630", name: "Contacts",                 group: "Setup",         page: "Contacts" },
+  { icon: "\u25A4", name: "Projects",                 group: "Projects",      page: "Projects" },
+  { icon: "\u2261", name: "Scope & Exclusions",       group: "Projects",      page: "ScopeExclusions" },
+  { icon: "\u2630", name: "Contacts",                 group: "Projects",      page: "Contacts" },
+  { icon: "\uD83D\uDC65", name: "Project Members",          group: "Projects",      page: "ProjectMembers" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
   { icon: "\u25A6", name: "Detailing Control Center",    group: "Detailing",     page: "DrawingSubmittalHub" },
   { icon: "\u2691", name: "RFI Hub",                  group: "Comms",         page: "RFIs" },
@@ -107,6 +108,7 @@ export const NAV_GROUPS = [
       { label: "Dashboard",       icon: "\u25C8", page: "Dashboard" },
       { label: "Command Center", icon: "\u2318", page: "CommandCenter" },
       { label: "Executive View", icon: "\u25A4", page: "ExecutiveView" },
+      { label: "Alerts",         icon: "\uD83D\uDD14", page: "AlertsCenter", badgeKey: "unread" },
     ],
   },
   {
@@ -116,12 +118,14 @@ export const NAV_GROUPS = [
     ],
   },
   {
-    label: "JOB SETUP",
+    // Projects module \u2014 the project record plus everything that sets a job up:
+    // scope, contacts, and team membership. Consolidated here so all
+    // project-setup pages live as sub-items under one module.
+    label: "PROJECTS",
     items: [
       { label: "Projects",           icon: "\u229F", page: "Projects" },
       { label: "Scope & Exclusions", icon: "\u2261", page: "ScopeExclusions" },
       { label: "Contacts",           icon: "\uD83D\uDC64", page: "Contacts" },
-      { label: "Alerts",             icon: "\uD83D\uDD14", page: "AlertsCenter", badgeKey: "unread" },
       { label: "Project Members",    icon: "\uD83D\uDC65", page: "ProjectMembers" },
     ],
   },
@@ -209,7 +213,7 @@ export const NAV_GROUPS = [
 ];
 
 // Column assignment for the 3-column modules dropdown
-const COLUMN_1_GROUPS = ["OVERVIEW", "JOB SETUP", "DOCUMENTS & DRAWINGS", "COMMUNICATIONS"];
+const COLUMN_1_GROUPS = ["OVERVIEW", "PROJECTS", "DOCUMENTS & DRAWINGS", "COMMUNICATIONS"];
 const COLUMN_2_GROUPS = ["FABRICATION", "DELIVERIES", "FIELD", "SCHEDULING"];
 const COLUMN_3_GROUPS = ["COST CONTROL", "REPORTING", "TOOLS"];
 
@@ -228,6 +232,17 @@ export const SIDEBAR_GROUPS = [
       { label: "Dashboard",          icon: "\u25C8", page: "Dashboard" },
       { label: "Command Center",    icon: "\u2318", page: "CommandCenter" },
       { label: "Portfolio Overview",  icon: "\u2726", page: "AIInsights" },
+    ],
+  },
+  {
+    // Projects module \u2014 project record + job-setup pages as sub-items.
+    label: "PROJECTS",
+    collapsible: true,
+    items: [
+      { label: "Projects",           icon: "\u229F", page: "Projects" },
+      { label: "Scope & Exclusions", icon: "\u2261", page: "ScopeExclusions" },
+      { label: "Contacts",           icon: "\uD83D\uDC64", page: "Contacts" },
+      { label: "Project Members",    icon: "\uD83D\uDC65", page: "ProjectMembers" },
     ],
   },
   {
@@ -302,9 +317,7 @@ export const SIDEBAR_GROUPS = [
     label: "ADMINISTRATION",
     collapsible: true,
     items: [
-      { label: "Contacts",         icon: "\uD83D\uDC64", page: "Contacts" },
       { label: "Vendors",          icon: "\uD83C\uDFE2", page: "Vendors" },
-      { label: "Project Members",  icon: "\uD83D\uDC65", page: "ProjectMembers" },
       { label: "Settings",         icon: "\u2699", page: "Settings" },
     ],
   },
