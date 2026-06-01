@@ -1,4 +1,4 @@
-﻿/**
+/**
  * moduleRegistry.js - Central navigation and module configuration
  *
  * Single source of truth for:
@@ -22,9 +22,9 @@ export const PRIMARY_TABS = [
   // folded into FIELD — fewer logical groups, and every page stays reachable
   // (these arrays drive route-reachability + tab mapping, not a visible tab bar).
   // FieldPlan added here so it's no longer orphaned from the registry.
-  { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule", "ResourceHub", "ResourceScheduling", "ResourceManagement"] },
+  { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling", "ResourceManagement"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
-  { label: "SCHEDULE",    pages: ["Schedule", "GanttChart", "ProjectCalendar"] },
+  { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "GanttChart", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "COST",        pages: ["CostHub", "Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
   { label: "REPORTS",     pages: ["PortfolioHub", "AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
@@ -38,7 +38,7 @@ export const TAB_DEFAULT_PAGE = {
   DRAWINGS:    "DrawingSubmittalHub",
   FABRICATION: "WorkPackages",
   DELIVERIES:  "Deliveries",
-  SCHEDULE:    "Schedule",
+  SCHEDULE:    "ScheduleHub",
   FIELD:       "FieldHub",
   COST:        "CostHub",
   REPORTS:     "PortfolioHub",
@@ -75,7 +75,8 @@ export const ALL_MODULES = [
   { icon: "\u2699", name: "LEMs",                     group: "Field",         page: "LEMs" },
   { icon: "\uD83D\uDCCB", name: "Contract Management", group: "Cost",         page: "ContractManagement" },
   { icon: "\uD83D\uDCE6", name: "Deliveries",         group: "Logistics",     page: "Deliveries" },
-  { icon: "\u25A5", name: "Schedule",                 group: "Field",         page: "Schedule" },
+  { icon: "\u25A5", name: "Schedule",                 group: "Field",         page: "ScheduleHub" },
+  { icon: "\u25A5", name: "Schedule Board",           group: "Field",         page: "Schedule" },
   { icon: "\uD83D\uDCCB", name: "Daily Logs",         group: "Field",         page: "DailyLogs" },
   { icon: "\uD83D\uDCF7", name: "Photos",             group: "Field",         page: "Photos" },
   { icon: "\u25CE", name: "Budget Control",           group: "Cost",          page: "CostHub" },
@@ -160,7 +161,7 @@ export const NAV_GROUPS = [
       { label: "Margin Risk",   icon: "\u26A0", page: "MarginRisk" },
       { label: "Budget Hours",  icon: "\u23F1", page: "BudgetHours" },
       { label: "Procurement",   icon: "\uD83D\uDCE6", page: "Procurement" },
-      { label: "Look-Ahead",    icon: "\uD83D\uDC41", page: "LookAheadSchedule" },
+      // Look-Ahead is now a tab inside the Schedule hub.
     ],
   },
   {
@@ -183,8 +184,7 @@ export const NAV_GROUPS = [
   {
     label: "SCHEDULING",
     items: [
-      { label: "Project Calendar", icon: "📅", page: "ProjectCalendar" },
-      { label: "Gantt Schedule",  icon: "\u25A5", page: "Schedule" },
+      { label: "Schedule",   icon: "\u25A5", page: "ScheduleHub" },
       { label: "Resources",  icon: "\uD83D\uDC65", page: "ResourceHub" },
     ],
   },
@@ -257,8 +257,7 @@ export const SIDEBAR_GROUPS = [
     label: "PROJECT MANAGEMENT",
     collapsible: true,
     items: [
-      { label: "Project Calendar", icon: "📅", page: "ProjectCalendar" },
-      { label: "Schedule",       icon: "\u25A5", page: "Schedule" },
+      { label: "Schedule",       icon: "\u25A5", page: "ScheduleHub" },
       { label: "Action Items",   icon: "\u2611", page: "ActionItems" },
       { label: "RFIs",                icon: "\u2691", page: "RFIs" },
       { label: "Change Orders",  icon: "$",  page: "ChangeOrders" },
@@ -282,7 +281,6 @@ export const SIDEBAR_GROUPS = [
       { label: "Budget Hours",         icon: "⏱",  page: "BudgetHours" },
       { label: "Constraints",          icon: "🚧", page: "Constraints" },
       { label: "Procurement",          icon: "📦", page: "Procurement" },
-      { label: "Look-Ahead Schedule",  icon: "👁", page: "LookAheadSchedule" },
       { label: "Resources",            icon: "\uD83D\uDC65", page: "ResourceHub" },
       { label: "Deliveries",           icon: "\uD83D\uDCE6", page: "Deliveries" },
     ],
