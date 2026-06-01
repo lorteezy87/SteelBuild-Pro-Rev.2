@@ -25,7 +25,7 @@ export const PRIMARY_TABS = [
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule", "ResourceHub", "ResourceScheduling", "ResourceManagement"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["Schedule", "GanttChart", "ProjectCalendar"] },
-  { label: "FIELD",       pages: ["Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
+  { label: "FIELD",       pages: ["FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "COST",        pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
   { label: "REPORTS",     pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
@@ -39,7 +39,7 @@ export const TAB_DEFAULT_PAGE = {
   FABRICATION: "WorkPackages",
   DELIVERIES:  "Deliveries",
   SCHEDULE:    "Schedule",
-  FIELD:       "Field",
+  FIELD:       "FieldHub",
   COST:        "Financials",
   REPORTS:     "AIInsights",
   CLOSEOUT:    "ProjectCloseout",
@@ -69,7 +69,8 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDC41", name: "Look-Ahead",         group: "Fab",           page: "LookAheadSchedule" },
   { icon: "\u25A5", name: "Gantt Chart",              group: "Fab",           page: "GanttChart" },
   { icon: "📅", name: "Project Calendar",         group: "Field",         page: "ProjectCalendar" },
-  { icon: "\ud83c\udfd7", name: "Field Hub",                    group: "Field",         page: "Field" },
+  { icon: "\ud83c\udfd7", name: "Field Hub",                    group: "Field",         page: "FieldHub" },
+  { icon: "\ud83c\udfd7", name: "Field Overview",               group: "Field",         page: "Field" },
   { icon: "\u2699", name: "LEMs",                     group: "Field",         page: "LEMs" },
   { icon: "\uD83D\uDCCB", name: "Contract Management", group: "Cost",         page: "ContractManagement" },
   { icon: "\uD83D\uDCE6", name: "Deliveries",         group: "Logistics",     page: "Deliveries" },
@@ -168,11 +169,12 @@ export const NAV_GROUPS = [
   {
     label: "FIELD",
     items: [
-      { label: "Field Hub",  icon: "\uD83C\uDFD7", page: "Field" },
+      { label: "Field Hub",  icon: "\uD83C\uDFD7", page: "FieldHub" },
       { label: "Daily Logs", icon: "\uD83D\uDCCB", page: "DailyLogs" },
       { label: "LEMs",       icon: "\u2699", page: "LEMs" },
       { label: "Photos",     icon: "\uD83D\uDCF7", page: "Photos" },
-      { label: "Punchlist",  icon: "\u2713", page: "Punchlist" },
+      // Inspections / Safety / Punchlist / Quality Control are now tabs inside
+      // the Field Hub.
     ],
   },
   {
@@ -303,15 +305,13 @@ export const SIDEBAR_GROUPS = [
     label: "FIELD",
     collapsible: true,
     items: [
-      { label: "Field Hub",        icon: "\uD83C\uDFD7", page: "Field" },
+      { label: "Field Hub",        icon: "\uD83C\uDFD7", page: "FieldHub" },
       { label: "Daily Logs",       icon: "\uD83D\uDCCB", page: "DailyLogs" },
       { label: "Photos",           icon: "\uD83D\uDCF7", page: "Photos" },
-      { label: "Inspections",      icon: "\uD83D\uDD0D", page: "Inspections" },
-      { label: "Punchlist",        icon: "\u2713", page: "Punchlist" },
       { label: "LEMs",             icon: "\u2699", page: "LEMs" },
-      // Safety + Quality Control hidden from nav (deprioritized \u2014 CLAUDE.md
-      // \u00A72.5). Routes kept; the Field Hub still rolls up their KPIs. Restore
-      // these items to re-surface the full registers.
+      // Inspections / Safety / Punchlist / Quality Control are now tabs inside
+      // the Field Hub (Safety + QC were nav-hidden in Phase 1 but stay reachable
+      // there). Routes kept; restore items here to re-surface them standalone.
     ],
   },
   {
