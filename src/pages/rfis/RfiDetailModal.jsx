@@ -1,6 +1,7 @@
 import React from "react";
 import { Modal, Button, StatusPill, BicPill, PhaseChevron, Icon } from "@/components/design-system";
 import { daysOpen, isOverdue } from "./utils";
+import RfiCopilotPanel from "@/components/rfis/RfiCopilotPanel";
 
 const STAGE_INDEX = { Open: 0, "Under Review": 1, "Incomplete Response": 2, Answered: 3, Closed: 4 };
 
@@ -100,6 +101,8 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
           {rfi.question || rfi.description || rfi.title || "No question text recorded."}
         </div>
       </section>
+
+      <RfiCopilotPanel rfi={rfi} />
 
       {rfi.answer && (
         <section className="rfi-detail-section">
