@@ -76,6 +76,69 @@ export async function lockLinkedSetsIfApproved(
   }
 }
 
+/**
+ * The single AUDITED write path for a submittal workflow move. Atomically:
+ *   1. inserts a `submittal_rounds` row (the audit event),
+ *   2. patches the submittal (status / ball_in_court / current_round_id /
+ *      total_rounds, optional submitted/returned dates, optional revision bump
+ *      on a Revise-and-Resubmit), and
+ *   3. runs the terminal-approval auto-lock (§20 moat).
+ *
+ * Every status move (verb CTA, inline select, Kanban drag) should funnel
+ * through this so the round log can never drift from the current status — which
+ * is why the `submittal_rounds` table sat empty (moves bypassed it). Exported
+ * (not on the hook) so the Submittals page + hub, which own their own query
+ * stacks, can call it directly.
+ */
+export interface AddRoundInput {
+  submittal: {
+    id: string;
+    project_id: string;
+    drawing_set_ids?: string[] | null;
+    total_rounds?: number | null;
+    round_number?: number | null;
+  };
+  status: string;
+  ball_in_court?: string | null;
+  submitted_date?: string | null;
+  returned_date?: string | null;
+  notes?: string | null;
+  /** Bump the submittal's revision round_number (true on Revise & Resubmit). */
+  bumpRevision?: boolean;
+}
+
+export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal> {
+  const s = input.submittal;
+  const eventRound = (Number(s.total_rounds) || 0) + 1;
+
+  const round = await entities.SubmittalRound.create({
+    project_id: s.project_id,
+    submittal_id: s.id,
+    round_number: eventRound,
+    status: input.status,
+    ball_in_court: input.ball_in_court ?? null,
+    submitted_date: input.submitted_date ?? null,
+    returned_date: input.returned_date ?? null,
+    response_notes: input.notes ?? null,
+    drawing_set_ids: Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [],
+    metadata: {},
+  } as Insert<"submittal_rounds">);
+
+  const patch: Record<string, unknown> = {
+    status: input.status,
+    ball_in_court: input.ball_in_court ?? null,
+    current_round_id: round?.id,
+    total_rounds: eventRound,
+  };
+  if (input.submitted_date) patch.submitted_date = input.submitted_date;
+  if (input.returned_date) patch.returned_date = input.returned_date;
+  if (input.bumpRevision) patch.round_number = (Number(s.round_number) || 1) + 1;
+
+  const updated = await entities.Submittal.update(s.id, patch as Update<"submittals">);
+  await lockLinkedSetsIfApproved(updated);
+  return updated as Submittal;
+}
+
 type BulkResult = {
   succeeded: number;
   failed: Array<{ id: string; error: string }>;

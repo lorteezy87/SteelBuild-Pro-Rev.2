@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
-import { lockLinkedSetsIfApproved } from "@/hooks/useSubmittals";
+import { lockLinkedSetsIfApproved, addSubmittalRound } from "@/hooks/useSubmittals";
+import { localToday } from "@/utils/dates";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import {
   CommandBar as CommandBarRaw,
@@ -184,6 +185,13 @@ export default function Submittals() {
     },
     onSuccess: () => { invalidate(); toast.success("Updated"); },
     onError: (err: any) => toast.error(`Update failed: ${err.message}`),
+  });
+  // Verb CTA → the single audited write path: logs a submittal_rounds row +
+  // patches + auto-locks, atomically (activates the previously-empty round log).
+  const advanceMut = useMutation({
+    mutationFn: (input: Parameters<typeof addSubmittalRound>[0]) => addSubmittalRound(input),
+    onSuccess: () => { invalidate(); toast.success("Round logged"); },
+    onError: (err: any) => toast.error(`Advance failed: ${err.message}`),
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => entities.Submittal.delete(id),
@@ -521,12 +529,20 @@ export default function Submittals() {
             onDelete={() => selected && setToDelete(selected.id)}
             onStatusChange={(status) => selected && updateMut.mutate({ id: selected.id, status })}
             onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
-            // Verb CTA — advance status + ball-in-court together in one move.
-            // Goes through the same updateMut, which already fires the
-            // terminal-approval auto-lock via useSubmittals.
+            // Verb CTA — advance via the audited write path: logs a round +
+            // patches + auto-locks atomically. Stamps the submitted date when
+            // sending out (→OFA) and the returned date when logging a return
+            // (→BFA); never a fake date otherwise (§22).
             onAdvance={(action) => {
               if (!selected || !action.nextStatus) return;
-              updateMut.mutate({ id: selected.id, status: action.nextStatus, ball_in_court: action.nextBallInCourt });
+              const today = localToday();
+              advanceMut.mutate({
+                submittal: selected as any,
+                status: action.nextStatus,
+                ball_in_court: action.nextBallInCourt,
+                submitted_date: action.nextStage === "OFA" ? today : undefined,
+                returned_date: action.nextStage === "BFA" ? today : undefined,
+              });
             }}
             // Inline-edit hook — every editable cell in the detail
             // panel calls this with a single-field patch so we don't
