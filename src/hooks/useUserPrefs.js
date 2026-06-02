@@ -37,6 +37,7 @@ export const DASHBOARD_KPI_IDS = [
   "overdue_items",
   "open_submittals",
   "expenses",
+  "rfis_blocking_fab",
 ];
 
 const DEFAULTS = {

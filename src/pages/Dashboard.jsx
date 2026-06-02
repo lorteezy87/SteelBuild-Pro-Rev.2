@@ -5,6 +5,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { useUserPrefs, refetchIntervalFromPref, DASHBOARD_KPI_IDS } from "@/hooks/useUserPrefs";
+import { findBlockingRfis } from "@/lib/fabReleaseGate";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import ProjectDashboard from "./dashboard/ProjectDashboard";
@@ -21,6 +22,7 @@ const KPI_SPECS = {
   overdue_items:   { label: "Overdue Items",      color: "var(--status-error)" },
   open_submittals: { label: "Open Submittals",    color: "var(--accent)" },
   expenses:        { label: "Expenses",           color: "var(--status-warning)" },
+  rfis_blocking_fab: { label: "RFIs Blocking Fab", color: "var(--status-error)" },
 };
 
 const RFI_OPEN_EXCLUDE = ["Closed", "Void", "Cancelled", "Resolved", "Answered"];
@@ -268,6 +270,9 @@ export default function Dashboard() {
       overdue_items:   aiArr.filter((a) => a.due_date && new Date(a.due_date) < today && !AI_DONE.includes(a.status)).length,
       open_submittals: subArr.filter((s) => !SUB_TERMINAL.includes(s.status)).length,
       expenses:        fmtMoney(expArr.reduce((s, e) => s + (Number(e.amount) || 0), 0)),
+      // Open RFIs linked to sheets that would block a Fab Release export (same
+      // engine as the gate on ExportFabReleaseModal).
+      rfis_blocking_fab: findBlockingRfis({ drawings: pid ? drawings : scoped(allDrawings), rfis: rfiArr }).length,
     };
 
     const order = (prefs.kpi_order && prefs.kpi_order.length ? prefs.kpi_order : DASHBOARD_KPI_IDS);
@@ -278,6 +283,7 @@ export default function Dashboard() {
       .map((id) => ({ id, label: KPI_SPECS[id].label, color: KPI_SPECS[id].color, value: values[id] }));
   }, [pid, rfis, cos, wps, deliveries, actionItems, submittals, expenses, activeProject,
       allRFIs, allCOs, allWPs, allDeliveries, allActionItems, allSubmittals, allExpenses,
+      drawings, allDrawings,
       portfolioProjects, liveProjectIds, prefs.kpi_order, prefs.visible_kpis]);
 
   const now = new Date();
