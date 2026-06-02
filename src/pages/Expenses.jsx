@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { getNextNumber } from "../components/shared/numberSequencing";
 
 import { safeNum, buildRedFlagAlerts, exportExpensesCSV } from "./expenses/utils";
+import { computeCostCodeTotals } from "@/services/costRollup";
 import KpiStrip      from "./expenses/KpiStrip";
 import AnalyticsGrid from "./expenses/AnalyticsGrid";
 import AlertChips    from "./expenses/AlertChips";
@@ -193,7 +194,7 @@ export default function ExpensesPage() {
   };
 
   /* ── KPI rollups ── */
-  const totalBudget     = roundCurrency(costCodes.reduce((s, c) => s + safeNum(c.budget_amount), 0));
+  const totalBudget     = roundCurrency(computeCostCodeTotals(costCodes).budget);
   const activeExpenses  = useMemo(() => expenses.filter((e) => e.payment_status !== "Voided"), [expenses]);
   const totalCommitted  = roundCurrency(activeExpenses.reduce((s, e) => s + safeNum(e.amount), 0));
   const totalPaid       = roundCurrency(activeExpenses.filter((e) => e.payment_status === "Paid").reduce((s, e) => s + safeNum(e.amount), 0));
