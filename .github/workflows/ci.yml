@@ -1,17 +1,18 @@
-﻿# CI â€” lint + typecheck + test + build on every push and PR.
+﻿# CI — lint + typecheck + test + build on every push and PR.
 #
 # What runs here:
 #   1. Install (cached node_modules via actions/setup-node)
 #   2. ESLint (warnings allowed, errors fail the build)
 #   3. TypeScript checks for both .ts (tsconfig) and .js/.jsx (jsconfig)
-#   4. Vitest unit tests (currently 480 passing)
+#   4. Vitest unit tests (the full unit suite — `npm test`)
 #   5. Production Vite build (catches dead-imports / runtime-only refs
 #      that the lint + typecheck passes don't notice)
 #
 # What does NOT run here:
-#   - End-to-end tests (no E2E suite yet)
+#   - End-to-end tests (no Playwright/E2E suite committed to this repo yet —
+#     `npm run test:e2e` will be wired in as a non-blocking job once it lands)
 #   - Lighthouse / a11y / bundle-size budgets (queued for later)
-#   - Deploy â€” Vercel handles that on push to main
+#   - Deploy — Vercel handles that on push to main
 #
 # This workflow runs against EVERY push and pull request to any branch
 # so contributors see green/red feedback before merging into deploy.
