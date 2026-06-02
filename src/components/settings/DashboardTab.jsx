@@ -38,6 +38,7 @@ const AVAILABLE_KPIS = [
   { id: 'overdue_items',    label: 'Overdue Items' },
   { id: 'open_submittals',  label: 'Open Submittals' },
   { id: 'expenses',         label: 'Expenses' },
+  { id: 'rfis_blocking_fab', label: 'RFIs Blocking Fab' },
 ];
 const KPI_IDS = AVAILABLE_KPIS.map((k) => k.id);
 // Drop any stale/unknown ids (the KPI set was revised); fall back to all.
