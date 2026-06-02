@@ -7,43 +7,53 @@
  * about to change. This engine surfaces that exposure so the export can be
  * blocked (with an explicit PM override).
  *
- * Primary link signal is `drawings.linked_rfi_ids` (the per-sheet RFI links the
- * app already maintains). "Open" reuses the canonical predicate in
- * entityPredicates.js so this gate agrees with every other open-RFI rollup.
+ * LINK MODEL: `drawings.linked_rfi_ids` is a COMMA-SEPARATED STRING of RFI
+ * *numbers* (e.g. "RFI-001, RFI #002"), NOT an id array — matching how the
+ * Drawings grid / drawingsUtils read it. We match those numbers against the
+ * project's RFIs by a normalized rfi_number (upper-cased, non-alphanumerics
+ * stripped) so "RFI #001" links to "RFI-001". "Open" reuses the canonical
+ * isRfiOpen predicate so this gate agrees with every other open-RFI rollup.
  *
- * Pure + side-effect free (no fetching, no `new Date()`); callers pass the
- * package's drawings + the project's RFIs.
+ * Pure + side-effect free (no fetching, no `new Date()`).
  */
 import { isRfiOpen } from "@/lib/entityPredicates";
 
-/** Set of RFI ids (as strings) linked from any sheet in the package. */
-function collectLinkedRfiIds(drawings) {
-  const ids = new Set();
-  for (const d of drawings || []) {
-    const arr = Array.isArray(d?.linked_rfi_ids) ? d.linked_rfi_ids : [];
-    for (const id of arr) if (id != null && id !== "") ids.add(String(id));
-  }
-  return ids;
+/** Normalize an RFI number for matching: "RFI #001" → "RFI001". */
+function normNum(value) {
+  return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+/** Parse a drawing's linked RFI numbers (CSV string; array tolerated defensively). */
+export function linkedRfiNumbers(drawing) {
+  const raw = drawing?.linked_rfi_ids;
+  if (!raw) return [];
+  const parts = Array.isArray(raw) ? raw : String(raw).split(",");
+  return parts.map((s) => String(s).trim()).filter(Boolean);
 }
 
 /**
- * The OPEN RFIs that reference a sheet in the package (deduped by id).
+ * The OPEN RFIs that reference a sheet in the package (deduped).
  * @param {{ drawings?: any[], rfis?: any[] }} args
  * @returns {any[]} open blocking RFIs
  */
 export function findBlockingRfis({ drawings = [], rfis = [] } = {}) {
-  const linkedIds = collectLinkedRfiIds(drawings);
-  if (linkedIds.size === 0) return [];
-  const byId = new Map();
+  // Index OPEN, non-deleted RFIs by normalized number.
+  const openByNum = new Map();
   for (const r of rfis || []) {
-    if (r && r.id != null) byId.set(String(r.id), r);
+    if (!r || r.is_deleted || !isRfiOpen(r)) continue;
+    const key = normNum(r.rfi_number);
+    if (key) openByNum.set(key, r);
   }
-  const blocking = [];
-  for (const id of linkedIds) {
-    const rfi = byId.get(id);
-    if (rfi && !rfi.is_deleted && isRfiOpen(rfi)) blocking.push(rfi);
+  if (openByNum.size === 0) return [];
+
+  const blocking = new Map(); // dedupe by id (fallback rfi_number)
+  for (const d of drawings || []) {
+    for (const num of linkedRfiNumbers(d)) {
+      const r = openByNum.get(normNum(num));
+      if (r) blocking.set(r.id ?? r.rfi_number, r);
+    }
   }
-  return blocking;
+  return Array.from(blocking.values());
 }
 
 /**
@@ -53,11 +63,9 @@ export function findBlockingRfis({ drawings = [], rfis = [] } = {}) {
  */
 export function computeFabReleaseGate({ drawings = [], rfis = [] } = {}) {
   const blockingRfis = findBlockingRfis({ drawings, rfis });
-  const blockingIds = new Set(blockingRfis.map((r) => String(r.id)));
-  const affectedSheets = (drawings || []).filter(
-    (d) =>
-      Array.isArray(d?.linked_rfi_ids) &&
-      d.linked_rfi_ids.some((id) => blockingIds.has(String(id))),
+  const blockingNums = new Set(blockingRfis.map((r) => normNum(r.rfi_number)));
+  const affectedSheets = (drawings || []).filter((d) =>
+    linkedRfiNumbers(d).some((num) => blockingNums.has(normNum(num))),
   );
   return {
     blocked: blockingRfis.length > 0,
