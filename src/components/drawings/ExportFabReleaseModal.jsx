@@ -230,6 +230,22 @@ export default function ExportFabReleaseModal({
         );
       }
 
+      // Audit the override: if the user shipped despite the gate, record who,
+      // which package, and which RFIs were still open (server stamps the user).
+      if (override && gate.blocked && project?.id) {
+        try {
+          await supabase.from("fab_release_overrides").insert({
+            project_id: project.id,
+            package_kind: kind,
+            package_name: stem,
+            drawing_count: filteredDrawings.length,
+            blocking_rfi_numbers: gate.blockingRfis.map((r) => r.rfi_number).filter(Boolean),
+          });
+        } catch (err) {
+          console.warn("[ExportFabReleaseModal] override audit log failed:", err);
+        }
+      }
+
       toast.success(`Package exported (${totalCount} item${totalCount === 1 ? "" : "s"})`);
       onClose?.();
     } catch (err) {
