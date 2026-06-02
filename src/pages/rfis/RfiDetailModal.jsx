@@ -130,6 +130,25 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
           </div>
         </section>
       )}
+
+      {(rfi.metadata?.fab_hold || rfi.metadata?.piece_marks) && (
+        <section className="rfi-detail-section">
+          <SectionLabel>Fabrication</SectionLabel>
+          <div className="rfi-reference-row">
+            {rfi.metadata?.fab_hold && (
+              <div
+                className="rfi-reference-chip"
+                style={{ color: "var(--status-error)", borderColor: "var(--status-error)", fontWeight: 700 }}
+              >
+                ⛔ Fab Hold
+              </div>
+            )}
+            {rfi.metadata?.piece_marks && (
+              <div className="rfi-reference-chip">Pieces / {rfi.metadata.piece_marks}</div>
+            )}
+          </div>
+        </section>
+      )}
     </Modal>
   );
 }
