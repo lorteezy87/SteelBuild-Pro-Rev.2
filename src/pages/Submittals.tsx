@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
+import { lockLinkedSetsIfApproved } from "@/hooks/useSubmittals";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import {
   CommandBar as CommandBarRaw,
@@ -172,7 +173,15 @@ export default function Submittals() {
     onError: (err: any) => toast.error(`Create failed: ${err.message}`),
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, ...data }: { id: string; [key: string]: any }) => entities.Submittal.update(id, data),
+    // Lock-aware: terminal-approved statuses auto-lock the linked drawing sets
+    // (§20 moat). Routes through the canonical lockLinkedSetsIfApproved so this
+    // page's inline status edits + the verb CTA can't release a package to fab
+    // without locking it. (Previously this page's update bypassed the lock.)
+    mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
+      const updated = await entities.Submittal.update(id, data);
+      await lockLinkedSetsIfApproved(updated as any);
+      return updated;
+    },
     onSuccess: () => { invalidate(); toast.success("Updated"); },
     onError: (err: any) => toast.error(`Update failed: ${err.message}`),
   });
@@ -512,6 +521,13 @@ export default function Submittals() {
             onDelete={() => selected && setToDelete(selected.id)}
             onStatusChange={(status) => selected && updateMut.mutate({ id: selected.id, status })}
             onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
+            // Verb CTA — advance status + ball-in-court together in one move.
+            // Goes through the same updateMut, which already fires the
+            // terminal-approval auto-lock via useSubmittals.
+            onAdvance={(action) => {
+              if (!selected || !action.nextStatus) return;
+              updateMut.mutate({ id: selected.id, status: action.nextStatus, ball_in_court: action.nextBallInCourt });
+            }}
             // Inline-edit hook — every editable cell in the detail
             // panel calls this with a single-field patch so we don't
             // need to round-trip through the modal for trivial fixes
