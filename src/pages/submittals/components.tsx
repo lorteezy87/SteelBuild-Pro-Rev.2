@@ -4,6 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { daysUntil } from "@/lib/dateMath";
 import { formatDate } from "@/components/shared/formatters";
 import { submittalStatusToStage, isRRStatus } from "@/lib/submittalStageMapping";
+import { nextSubmittalAction } from "@/lib/submittalActionEngine";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 import CommentThreadRaw from "@/components/collaboration/CommentThread";
@@ -229,9 +230,11 @@ interface SubmittalDetailProps {
   onFieldChange: (patch: Record<string, any>) => void;
   onNewRound?: () => void;
   onReturnRound: (roundId: string) => void;
+  /** Advance the submittal one step in the canonical flow (status + BIC together). */
+  onAdvance?: (action: { nextStatus: string | null; nextBallInCourt: string | null; label: string; nextStage: string | null }) => void;
 }
 
-export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound }: SubmittalDetailProps) {
+export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, onAdvance }: SubmittalDetailProps) {
   // Wrap onFieldChange so a no-op edit (typing the same value back)
   // doesn't fire a network update — small UX nicety, also stops
   // accidental "Updated" toasts when the user just tabs through.
@@ -289,6 +292,27 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, marginLeft: 10 }}>×</button>
         </div>
+
+        {/* Verb-driven next-step CTA — one click advances the canonical
+            workflow (status + ball-in-court together). Disabled at terminals. */}
+        {onAdvance && (() => {
+          const action = nextSubmittalAction(submittal);
+          return (
+            <button
+              type="button"
+              className="sbd-btn-primary"
+              disabled={action.disabled}
+              onClick={() => !action.disabled && onAdvance(action)}
+              title={action.disabled ? "No further workflow step" : `Set to ${action.nextStage} (${action.nextStatus}${action.nextBallInCourt ? ` · BIC ${action.nextBallInCourt}` : ""})`}
+              style={{
+                marginTop: 12, width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+                minHeight: 38, opacity: action.disabled ? 0.55 : 1, cursor: action.disabled ? "default" : "pointer",
+              }}
+            >
+              {action.label}{!action.disabled && " →"}
+            </button>
+          );
+        })()}
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "14px 20px" }}>
