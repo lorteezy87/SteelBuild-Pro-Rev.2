@@ -20,7 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { resolveFileUrl } from "@/api/supabaseClient";
-import { computeFabReleaseGate } from "@/lib/fabReleaseGate";
+import { computeFabReleaseGate, linkedRfiNumbers } from "@/lib/fabReleaseGate";
 import {
   isApprovedForFab,
   isClaimable,
@@ -104,14 +104,10 @@ export default function ExportFabReleaseModal({
       setLinkedRfis([]);
       return;
     }
-    const linkedIds = Array.from(
-      new Set(
-        filteredDrawings.flatMap((d) =>
-          Array.isArray(d?.linked_rfi_ids) ? d.linked_rfi_ids : [],
-        ).filter(Boolean).map(String),
-      ),
-    );
-    if (linkedIds.length === 0) {
+    // linked_rfi_ids is a CSV of RFI *numbers*, so we can't query by id — fetch
+    // the project's (non-deleted) RFIs and let the gate match by number.
+    const hasLinks = filteredDrawings.some((d) => linkedRfiNumbers(d).length > 0);
+    if (!hasLinks) {
       setLinkedRfis([]);
       return;
     }
@@ -120,13 +116,12 @@ export default function ExportFabReleaseModal({
       try {
         const { data, error } = await supabase
           .from("rfis")
-          .select("id, rfi_number, subject, title, status, is_deleted, ball_in_court")
+          .select("id, rfi_number, title, status, is_deleted, ball_in_court")
           .eq("project_id", project.id)
-          .eq("is_deleted", false)
-          .in("id", linkedIds);
+          .eq("is_deleted", false);
         if (!cancelled && !error) setLinkedRfis(data || []);
       } catch (err) {
-        console.warn("[ExportFabReleaseModal] linked-RFI fetch for gate failed:", err);
+        console.warn("[ExportFabReleaseModal] RFI fetch for fab gate failed:", err);
       }
     })();
     return () => { cancelled = true; };
