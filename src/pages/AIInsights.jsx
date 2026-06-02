@@ -20,6 +20,7 @@ import {
 } from "recharts";
 import { AlertTriangle, DollarSign, Layers3, Search, ShieldCheck, Truck } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { computeCostCodeTotals } from "@/services/costRollup";
 import { toast } from "sonner";
 import { entities, auth, integrations } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
@@ -123,8 +124,9 @@ function computeProjectModel(project, data) {
   const projectActions = actionItems.filter((a) => a.project_id === project.id);
   const projectTasks = scheduleTasks.filter((t) => t.project_id === project.id);
 
-  const budget = projectCodes.reduce((sum, c) => sum + n(c.budget_amount), 0);
-  const actual = projectCodes.reduce((sum, c) => sum + n(c.actual_cost), 0);
+  // budget + actual via the shared rollup (n() ≡ its coercion); committed keeps
+  // this page's deliberate max(committed, actual) variant.
+  const { budget, actual } = computeCostCodeTotals(projectCodes);
   const committed = projectCodes.reduce((sum, c) => sum + Math.max(n(c.committed_cost), n(c.actual_cost)), 0);
   const contract = n(project.original_contract_value);
   const approvedCo = projectCos.filter((c) => c.status === "Approved").reduce((sum, c) => sum + n(c.co_amount), 0);
