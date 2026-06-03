@@ -34,6 +34,16 @@ function vendorChunk(id) {
   if (n.includes('/node_modules/jspdf/')) return 'vendor-pdf'
   if (n.includes('/node_modules/xlsx/')) return 'vendor-xlsx'
 
+  // Tiny class-name utilities shared by the design system's cn() helper AND by
+  // recharts. These MUST be matched before vendor-charts: clsx is a transitive
+  // dep of recharts, so without an explicit home Rollup pools it into the first
+  // chunk that referenced it (vendor-charts). That gave every component using
+  // cn() — i.e. nearly the whole app — a STATIC import edge to the 596 kB
+  // vendor-charts chunk, even on chart-free routes. Isolating them in their own
+  // small chunk breaks that edge so vendor-charts loads only where a chart renders.
+  if (n.includes('/node_modules/clsx/')) return 'vendor-ui-utils'
+  if (n.includes('/node_modules/tailwind-merge/')) return 'vendor-ui-utils'
+
   // Charts (recharts + transitive deps)
   if (n.includes('/node_modules/recharts/')) return 'vendor-charts'
   if (n.includes('/node_modules/d3-')) return 'vendor-charts'
