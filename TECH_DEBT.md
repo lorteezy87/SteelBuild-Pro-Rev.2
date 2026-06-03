@@ -41,6 +41,24 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
 
 ## Recently-resolved (last 30 days, kept here for context)
 
+- 2026-06-03 `vendor-xlsx` (~683 kB / ~179 kB gzip) bundle audit — **already
+  async-only; no code change needed.** Follow-up to the PR #55–#59 enterprise
+  perf-hardening line (PDF view/export chunk splits). Audited every `xlsx`
+  reference: the only real consumers are `src/pages/SOV.jsx`,
+  `src/pages/Onboarding.jsx`, `src/pages/DataExchange.jsx`, and
+  `src/lib/importPsrSpreadsheet.js` (used by `JobStatusReport` via
+  `PsrSpreadsheetImportModal`) — all four load the library with
+  `await import("xlsx")` inside explicit import handlers (`handleImportFile` /
+  `handleImportClick`), never at module top-level or on mount. The remaining
+  ~14 `xlsx` matches are file-extension strings / MIME types, not library
+  imports. Production build evidence: `vendor-xlsx-*.js` is referenced **only**
+  via `import("./vendor-xlsx-*.js")` (dynamic) in exactly the 4 consumer route
+  chunks; zero static `import … from "./vendor-xlsx-*.js"`; the entry
+  (`index-*.js`) and router (`AppRoutes-*.js`) chunks never reference it. So
+  xlsx is fetched on-demand only when a user invokes a spreadsheet
+  import/export action and stays out of every common route's initial load.
+  Per CLAUDE.md §1 (smallest complete change), no source edit was made.
+
 - 2026-05-26 deploy/default branch renamed `codex/base44-deploy-nick` → `main`
   (GitHub-native rename: commits preserved, default branch + open PRs updated,
   old name redirects during the grace period). The stale prototype `main`
