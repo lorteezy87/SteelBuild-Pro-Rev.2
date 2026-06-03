@@ -1,19 +1,14 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
+import { env } from '@/lib/env';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing Supabase environment variables.\n' +
-    'Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env.local file.'
-  );
-}
-
+// Config (and its validation) is centralized in @/lib/env — importing it here
+// makes this module the fail-fast entry point: a missing/malformed
+// VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY throws a clear EnvValidationError
+// at startup instead of an opaque auth failure later.
 export const supabase: SupabaseClient<Database> = createClient<Database>(
-  supabaseUrl,
-  supabaseAnonKey,
+  env.supabaseUrl,
+  env.supabaseAnonKey,
   {
     auth: {
       persistSession: true,
