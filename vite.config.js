@@ -18,6 +18,19 @@ const enableSentrySourceMaps = Boolean(sentryAuthToken)
 
 function vendorChunk(id) {
   const n = id.replace(/\\/g, '/')
+
+  // Vite's runtime preload helper (`\0vite/preload-helper`) is imported
+  // statically by the entry AND by every chunk that uses dynamic import().
+  // If Rollup co-locates it with a heavy library chunk, the entry's static
+  // `import { __vitePreload } from '<that chunk>'` edge makes the whole library
+  // an eager dependency of the entry — Vite then emits a `modulepreload` for it
+  // in index.html, pulling megabytes onto the critical path for users who never
+  // open that route. pdfjs-dist uses top-level await, which made `vendor-pdf`
+  // the anchor the helper attached to, eagerly preloading ~1.2 MB of PDF libs
+  // on every page load. Pin the helper to its own tiny chunk so no heavy
+  // library can ever be dragged into the boot path through it.
+  if (n.includes('vite/preload-helper')) return 'vendor-vite-runtime'
+
   if (!n.includes('/node_modules/')) return undefined
 
   // BIM / 3D
