@@ -34,6 +34,20 @@ function vendorChunk(id) {
   if (n.includes('/node_modules/jspdf/')) return 'vendor-pdf'
   if (n.includes('/node_modules/xlsx/')) return 'vendor-xlsx'
 
+  // Shared styling micro-utils. These are pulled in by the app-wide `cn()`
+  // helper (src/lib/utils -> clsx + tailwind-merge) and by `class-variance-
+  // authority`, so they ride along on EVERY route via the shared Button/`cn`
+  // chunk. recharts ALSO depends on clsx, so without this rule Rollup parks the
+  // single shared clsx module inside `vendor-charts` (one of its importers) and
+  // the shared Button/util chunks then statically import it back — dragging the
+  // ~596 kB charts bundle onto chart-free routes (RFIs, Drawings, Submittals,
+  // WorkPackages, …). Giving these tiny utils their own chunk breaks that bridge
+  // so charts only load where they're actually rendered. Keep BEFORE the charts
+  // rule (clsx must land here, not in vendor-charts).
+  if (n.includes('/node_modules/clsx/')) return 'vendor-ui-utils'
+  if (n.includes('/node_modules/tailwind-merge/')) return 'vendor-ui-utils'
+  if (n.includes('/node_modules/class-variance-authority/')) return 'vendor-ui-utils'
+
   // Charts (recharts + transitive deps)
   if (n.includes('/node_modules/recharts/')) return 'vendor-charts'
   if (n.includes('/node_modules/d3-')) return 'vendor-charts'
