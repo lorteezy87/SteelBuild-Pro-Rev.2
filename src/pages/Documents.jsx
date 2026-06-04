@@ -18,13 +18,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DocumentCard from "@/components/dms/DocumentCard";
 import DocumentFilters from "@/components/dms/DocumentFilters";
 import DocumentLeftPanel from "@/components/dms/DocumentLeftPanel";
 import DocumentDetailPanel from "@/components/dms/DocumentDetailPanel";
-import UploadModal from "@/components/dms/UploadModal";
-import DocumentEditModal from "@/components/dms/DocumentEditModal";
 import FolderPicker, { collectFolderAndDescendants } from "@/components/dms/FolderPicker";
 import { batchProcess } from "@/utils/batchProcess";
 import EmptyStateAction from "@/components/shared/EmptyStateAction";
@@ -33,7 +32,6 @@ import { STATUS_TABS } from "./documents/constants";
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
 import FolderSection from "./documents/FolderSection";
 import FolderBar from "./documents/FolderBar";
-import BulkCreateFoldersModal from "./documents/BulkCreateFoldersModal";
 import Toolbar from "./documents/Toolbar";
 import BatchActionBar from "./documents/BatchActionBar";
 import ListView from "./documents/ListView";
@@ -42,6 +40,13 @@ import EmptyState from "./documents/EmptyState";
 // the static graph means the Documents page does not download the PDF export
 // libs until the user actually generates a transmittal.
 const TransmittalModal = lazy(() => import("./documents/TransmittalModal"));
+
+// Upload / edit / bulk-folder modals only render when their dialog is open, so
+// keep them off the Documents route chunk. lazyWithRetry survives stale-chunk
+// 404s after a deploy (matches the app-wide route/modal split pattern).
+const UploadModal = lazyWithRetry(() => import("@/components/dms/UploadModal"));
+const DocumentEditModal = lazyWithRetry(() => import("@/components/dms/DocumentEditModal"));
+const BulkCreateFoldersModal = lazyWithRetry(() => import("./documents/BulkCreateFoldersModal"));
 
 const SORT_FNS = {
   "name-asc":   (a, b) => (a.displayName || "").localeCompare(b.displayName || ""),
@@ -693,18 +698,22 @@ export default function Documents() {
         />
       )}
       {editingDoc && (
-        <DocumentEditModal
-          projectId={activeProject?.id}
-          doc={editingDoc}
-          onClose={() => setEditingDoc(null)}
-        />
+        <Suspense fallback={null}>
+          <DocumentEditModal
+            projectId={activeProject?.id}
+            doc={editingDoc}
+            onClose={() => setEditingDoc(null)}
+          />
+        </Suspense>
       )}
       {uploadOpen && (
-        <UploadModal
-          projectId={activeProject.id}
-          folderId={currentFolderId}
-          onClose={() => setUploadOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <UploadModal
+            projectId={activeProject.id}
+            folderId={currentFolderId}
+            onClose={() => setUploadOpen(false)}
+          />
+        </Suspense>
       )}
 
       {transmittalOpen && (
@@ -725,17 +734,22 @@ export default function Documents() {
         </Suspense>
       )}
 
-      {/* Bulk-create folders dialog */}
-      <BulkCreateFoldersModal
-        open={bulkCreateOpen}
-        parentLabel={
-          currentFolderId
-            ? folders.find((f) => f.id === currentFolderId)?.name || "Current folder"
-            : "(Root)"
-        }
-        onClose={() => setBulkCreateOpen(false)}
-        onSubmit={handleBulkCreateFolders}
-      />
+      {/* Bulk-create folders dialog — mounted only while open so its lazy chunk
+          loads on demand. */}
+      {bulkCreateOpen && (
+        <Suspense fallback={null}>
+          <BulkCreateFoldersModal
+            open={bulkCreateOpen}
+            parentLabel={
+              currentFolderId
+                ? folders.find((f) => f.id === currentFolderId)?.name || "Current folder"
+                : "(Root)"
+            }
+            onClose={() => setBulkCreateOpen(false)}
+            onSubmit={handleBulkCreateFolders}
+          />
+        </Suspense>
+      )}
 
       {/* Folder picker — reused for both moving documents and folders.
           When moving folders, the picker disables the moved folders +
