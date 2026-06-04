@@ -87,6 +87,13 @@ jobs:
         # Catches dead imports / runtime-only refs that the type checks
         # don't see. Output is discarded — we just want the failure
         # signal.
+        #
+        # The build script itself raises the V8 heap to 4 GB
+        # (node --max-old-space-size=4096 ...vite build) because the large
+        # BIM/PDF/three vendor chunks OOM Rollup at Node's default heap. That
+        # limit now lives in package.json so it applies everywhere the build
+        # runs — CI here, Vercel production (vercel.json runs `npm run build`),
+        # and local. This NODE_OPTIONS is kept as a redundant safety net only.
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
