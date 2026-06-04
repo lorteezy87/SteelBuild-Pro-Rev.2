@@ -14,6 +14,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { env } from "@/lib/env";
 
 export interface EmailAttachment {
   filename: string;
@@ -66,10 +67,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     return { success: false, error: "Not authenticated" };
   }
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
-    return { success: false, error: "VITE_SUPABASE_URL not configured" };
-  }
+  const supabaseUrl = env.supabaseUrl;
 
   try {
     const resp = await fetch(`${supabaseUrl}${EDGE_FN_PATH}`, {
