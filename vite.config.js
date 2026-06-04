@@ -18,6 +18,19 @@ const enableSentrySourceMaps = Boolean(sentryAuthToken)
 
 function vendorChunk(id) {
   const n = id.replace(/\\/g, '/')
+
+  // Vite's runtime preload helper (`\0vite/preload-helper`) is imported
+  // statically by the entry AND by every chunk that uses dynamic import().
+  // If Rollup co-locates it with a heavy library chunk, the entry's static
+  // `import { __vitePreload } from '<that chunk>'` edge makes the whole library
+  // an eager dependency of the entry — Vite then emits a `modulepreload` for it
+  // in index.html, pulling megabytes onto the critical path for users who never
+  // open that route. pdfjs-dist uses top-level await, which made `vendor-pdf`
+  // the anchor the helper attached to, eagerly preloading ~1.2 MB of PDF libs
+  // on every page load. Pin the helper to its own tiny chunk so no heavy
+  // library can ever be dragged into the boot path through it.
+  if (n.includes('vite/preload-helper')) return 'vendor-vite-runtime'
+
   if (!n.includes('/node_modules/')) return undefined
 
   // BIM / 3D
@@ -29,9 +42,17 @@ function vendorChunk(id) {
   if (n.includes('/node_modules/three/examples/')) return 'vendor-three-examples'
   if (n.includes('/node_modules/three/')) return 'vendor-three-core'
 
-  // Heavy export libs
+  // PDF viewing (pdfjs-dist) is loaded by DrawingViewer + thumbnail/extraction
+  // flows; keep it isolated so the viewer never pays for export-only weight.
   if (n.includes('/node_modules/pdfjs-dist/')) return 'vendor-pdf'
-  if (n.includes('/node_modules/jspdf/')) return 'vendor-pdf'
+  // PDF export libs (jspdf + html2canvas) are intentionally NOT pinned to a
+  // manual vendor chunk. Pinning them forces a shared static chunk that the
+  // vite-plugin-top-level-await dynamic-import helper then makes DrawingViewer
+  // import eagerly (the viewer would download ~900 kB of export-only code on
+  // open). Leaving them unpinned lets Rollup fold them into the async-only
+  // chunk graph reachable solely from the export entry points
+  // (ExportMarkupPDFModal, generateTransmittal, exportGanttPdf), so they load
+  // on-demand from the export action and never alongside the viewer.
   if (n.includes('/node_modules/xlsx/')) return 'vendor-xlsx'
 
   // Charts (recharts + transitive deps)
