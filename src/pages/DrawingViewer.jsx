@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -12,7 +12,10 @@ import * as pdfjsLib from "pdfjs-dist";
 // drawing to fail to render.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import ViewerHeader from "@/components/drawings/viewer/ViewerHeader";
-import ExportMarkupPDFModal from "@/components/drawings/ExportMarkupPDFModal";
+// Lazily loaded: pulls in the PDF export libs (jspdf via markupPDF). Keeping it
+// out of the static import graph means opening a drawing does not download the
+// vendor-pdf-export chunk until the user actually exports markups.
+const ExportMarkupPDFModal = lazy(() => import("@/components/drawings/ExportMarkupPDFModal"));
 import ShortcutsOverlay from "@/components/drawings/viewer/ShortcutsOverlay";
 import RenderSkeleton from "@/components/drawings/viewer/RenderSkeleton";
 import ThumbnailFilmstrip from "@/components/drawings/viewer/ThumbnailFilmstrip";
@@ -1018,13 +1021,17 @@ export default function DrawingViewer() {
           Export Markups
         </button>
       )}
-      <ExportMarkupPDFModal
-        open={exportMarkupOpen}
-        onClose={() => setExportMarkupOpen(false)}
-        project={activeProject}
-        activeDrawing={activeDrawing}
-        drawings={drawings}
-      />
+      {exportMarkupOpen && (
+        <Suspense fallback={null}>
+          <ExportMarkupPDFModal
+            open={exportMarkupOpen}
+            onClose={() => setExportMarkupOpen(false)}
+            project={activeProject}
+            activeDrawing={activeDrawing}
+            drawings={drawings}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
