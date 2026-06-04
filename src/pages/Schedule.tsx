@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState } from "react";
+import { Suspense, useRef, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -6,16 +6,12 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import ScheduleGanttRaw from "@/components/schedule/ScheduleGantt";
+import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import ScheduleRivetBrief from "@/components/schedule/ScheduleRivetBrief";
 import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
 import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
-import AddTaskModalRaw from "@/components/schedule/AddTaskModal";
-import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
-import BulkDateEditModal from "@/components/schedule/BulkDateEditModal";
-import BulkDurationEditModal from "@/components/schedule/BulkDurationEditModal";
-import WbsBuilderModalRaw from "@/components/schedule/WbsBuilderModal";
 import { PHASES, PHASE_NUMBER } from "@/utils/phases";
 import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw, Button as ButtonRaw } from "@/components/design-system";
@@ -33,15 +29,35 @@ import type { ScheduleTask } from "./schedule/types";
 // The design-system primitives are still .jsx; these casts are removable
 // once the shared layer is typed.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
+const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
 const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
-// These schedule child screens are still .jsx; their inferred prop types are
-// stricter than what the page passes. Cast at the boundary (removable once
-// the components are typed) — runtime behavior is unchanged.
-const ScheduleGantt = ScheduleGanttRaw as unknown as ComponentType<AnyProps>;
-const AddTaskModal = AddTaskModalRaw as unknown as ComponentType<AnyProps>;
-const WbsBuilderModal = WbsBuilderModalRaw as unknown as ComponentType<AnyProps>;
+// Code-split the heaviest, view-/modal-gated schedule screens out of the
+// Schedule route chunk. ScheduleGantt is by far the largest child (only renders
+// on the Gantt tab) and the add/bulk/WBS modals only matter once opened, so
+// deferring their fetch keeps the initial Schedule payload lean. Each is gated
+// in JSX (view tab / open flag) so the chunk fetches lazily on first use, and a
+// Suspense boundary at each render site shows a skeleton while it streams in.
+// Casts at the boundary remain removable once these .jsx components are typed.
+const ScheduleGantt = lazyWithRetry(
+  () => import("@/components/schedule/ScheduleGantt"),
+) as unknown as ComponentType<AnyProps>;
+const AddTaskModal = lazyWithRetry(
+  () => import("@/components/schedule/AddTaskModal"),
+) as unknown as ComponentType<AnyProps>;
+const BulkAddTaskModal = lazyWithRetry(
+  () => import("@/components/schedule/BulkAddTaskModal"),
+) as unknown as ComponentType<AnyProps>;
+const BulkDateEditModal = lazyWithRetry(
+  () => import("@/components/schedule/BulkDateEditModal"),
+) as unknown as ComponentType<AnyProps>;
+const BulkDurationEditModal = lazyWithRetry(
+  () => import("@/components/schedule/BulkDurationEditModal"),
+) as unknown as ComponentType<AnyProps>;
+const WbsBuilderModal = lazyWithRetry(
+  () => import("@/components/schedule/WbsBuilderModal"),
+) as unknown as ComponentType<AnyProps>;
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
@@ -820,27 +836,29 @@ export default function Schedule() {
       <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
         {view === "gantt" && (
           <ErrorBoundary label="Gantt Chart">
-            <ScheduleGantt
-              tasks={enrichedTasks}
-              submittals={submittals}
-              weatherRisk={weatherRisk}
-              expandedTask={expandedTask}
-              setExpandedTask={setExpandedTask}
-              onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
-              onSave={async (data) => {
-                const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-                try {
-                  await entities.ScheduleTask.update(id, fields);
-                  invalidateEntity(qc, "schedule_task", projectId);
-                  toast.success("Task saved");
-                } catch (err: any) {
-                  toast.error("Save failed: " + (err?.message || "unknown error"));
-                  throw err;
-                }
-              }}
-              phaseFilter={phaseFilter}
-              externalFocus={ganttFocus}
-            />
+            <Suspense fallback={<LoadingSkeleton variant="page" />}>
+              <ScheduleGantt
+                tasks={enrichedTasks}
+                submittals={submittals}
+                weatherRisk={weatherRisk}
+                expandedTask={expandedTask}
+                setExpandedTask={setExpandedTask}
+                onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
+                onSave={async (data) => {
+                  const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
+                  try {
+                    await entities.ScheduleTask.update(id, fields);
+                    invalidateEntity(qc, "schedule_task", projectId);
+                    toast.success("Task saved");
+                  } catch (err: any) {
+                    toast.error("Save failed: " + (err?.message || "unknown error"));
+                    throw err;
+                  }
+                }}
+                phaseFilter={phaseFilter}
+                externalFocus={ganttFocus}
+              />
+            </Suspense>
           </ErrorBoundary>
         )}
 
@@ -900,53 +918,76 @@ export default function Schedule() {
         effectiveDates={effectiveDatesMap}
       />
 
-      {/* Add Task Modal */}
-      <AddTaskModal
-        open={showAddTask}
-        onClose={() => setShowAddTask(false)}
-        onSubmit={(data) =>
-          createTaskMut.mutate({
-            ...data,
-            project_id: projectId,
-            percent_complete: 0,
-          })
-        }
-        isSaving={createTaskMut.isPending}
-        projectName={selectedProject?.name || ""}
-        prefilledDate={new Date().toISOString().split("T")[0]}
-        existingTasks={enrichedTasks}
-      />
+      {/* Add/bulk/WBS modals are lazy-loaded; gate the mount on the open flag so
+          the chunk only fetches on first open. Each renders null when closed,
+          so this is behavior-preserving. A null Suspense fallback avoids a
+          flash before the (already-overlay) modal paints. */}
+      {showAddTask && (
+        <Suspense fallback={null}>
+          <AddTaskModal
+            open={showAddTask}
+            onClose={() => setShowAddTask(false)}
+            onSubmit={(data) =>
+              createTaskMut.mutate({
+                ...data,
+                project_id: projectId,
+                percent_complete: 0,
+              })
+            }
+            isSaving={createTaskMut.isPending}
+            projectName={selectedProject?.name || ""}
+            prefilledDate={new Date().toISOString().split("T")[0]}
+            existingTasks={enrichedTasks}
+          />
+        </Suspense>
+      )}
 
-      <BulkAddTaskModal
-        open={showBulkAdd}
-        onClose={() => setShowBulkAdd(false)}
-        onSubmit={handleBulkAdd}
-        projectName={selectedProject?.name || ""}
-        isSaving={bulkSaving}
-        existingTasks={enrichedTasks}
-      />
+      {showBulkAdd && (
+        <Suspense fallback={null}>
+          <BulkAddTaskModal
+            open={showBulkAdd}
+            onClose={() => setShowBulkAdd(false)}
+            onSubmit={handleBulkAdd}
+            projectName={selectedProject?.name || ""}
+            isSaving={bulkSaving}
+            existingTasks={enrichedTasks}
+          />
+        </Suspense>
+      )}
 
-      <BulkDateEditModal
-        open={showBulkDates}
-        count={selectedIds.size}
-        isSaving={bulkDateMut.isPending}
-        onClose={() => setShowBulkDates(false)}
-        onSubmit={bulkUpdateDates}
-      />
+      {showBulkDates && (
+        <Suspense fallback={null}>
+          <BulkDateEditModal
+            open={showBulkDates}
+            count={selectedIds.size}
+            isSaving={bulkDateMut.isPending}
+            onClose={() => setShowBulkDates(false)}
+            onSubmit={bulkUpdateDates}
+          />
+        </Suspense>
+      )}
 
-      <BulkDurationEditModal
-        open={showBulkDuration}
-        count={selectedIds.size}
-        isSaving={bulkDurationMut.isPending}
-        onClose={() => setShowBulkDuration(false)}
-        onSubmit={bulkUpdateDuration}
-      />
+      {showBulkDuration && (
+        <Suspense fallback={null}>
+          <BulkDurationEditModal
+            open={showBulkDuration}
+            count={selectedIds.size}
+            isSaving={bulkDurationMut.isPending}
+            onClose={() => setShowBulkDuration(false)}
+            onSubmit={bulkUpdateDuration}
+          />
+        </Suspense>
+      )}
 
-      <WbsBuilderModal
-        open={showWbsBuilder}
-        projectId={projectId}
-        onClose={() => setShowWbsBuilder(false)}
-      />
+      {showWbsBuilder && (
+        <Suspense fallback={null}>
+          <WbsBuilderModal
+            open={showWbsBuilder}
+            projectId={projectId}
+            onClose={() => setShowWbsBuilder(false)}
+          />
+        </Suspense>
+      )}
 
       <DeleteDialog
         open={!!deleteTarget}
