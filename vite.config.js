@@ -42,9 +42,17 @@ function vendorChunk(id) {
   if (n.includes('/node_modules/three/examples/')) return 'vendor-three-examples'
   if (n.includes('/node_modules/three/')) return 'vendor-three-core'
 
-  // Heavy export libs
+  // PDF viewing (pdfjs-dist) is loaded by DrawingViewer + thumbnail/extraction
+  // flows; keep it isolated so the viewer never pays for export-only weight.
   if (n.includes('/node_modules/pdfjs-dist/')) return 'vendor-pdf'
-  if (n.includes('/node_modules/jspdf/')) return 'vendor-pdf'
+  // PDF export libs (jspdf + html2canvas) are intentionally NOT pinned to a
+  // manual vendor chunk. Pinning them forces a shared static chunk that the
+  // vite-plugin-top-level-await dynamic-import helper then makes DrawingViewer
+  // import eagerly (the viewer would download ~900 kB of export-only code on
+  // open). Leaving them unpinned lets Rollup fold them into the async-only
+  // chunk graph reachable solely from the export entry points
+  // (ExportMarkupPDFModal, generateTransmittal, exportGanttPdf), so they load
+  // on-demand from the export action and never alongside the viewer.
   if (n.includes('/node_modules/xlsx/')) return 'vendor-xlsx'
 
   // Charts (recharts + transitive deps)
