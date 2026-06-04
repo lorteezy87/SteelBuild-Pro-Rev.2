@@ -13,7 +13,7 @@
  *   ListView / EmptyState / TransmittalModal.
  */
 
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, Suspense, lazy } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { toast } from "sonner";
@@ -38,7 +38,10 @@ import Toolbar from "./documents/Toolbar";
 import BatchActionBar from "./documents/BatchActionBar";
 import ListView from "./documents/ListView";
 import EmptyState from "./documents/EmptyState";
-import TransmittalModal from "./documents/TransmittalModal";
+// Lazily loaded: generateTransmittal pulls in jspdf. Keeping the modal out of
+// the static graph means the Documents page does not download the PDF export
+// libs until the user actually generates a transmittal.
+const TransmittalModal = lazy(() => import("./documents/TransmittalModal"));
 
 const SORT_FNS = {
   "name-asc":   (a, b) => (a.displayName || "").localeCompare(b.displayName || ""),
@@ -704,19 +707,23 @@ export default function Documents() {
         />
       )}
 
-      <TransmittalModal
-        open={transmittalOpen}
-        project={activeProject}
-        selectedDocs={allDocuments.filter((d) => selectedIds.has(d.id))}
-        form={transmittalForm}
-        onFormChange={(key, value) => setTransmittalForm((prev) => ({ ...prev, [key]: value }))}
-        onClose={() => setTransmittalOpen(false)}
-        onGenerated={() => {
-          setTransmittalOpen(false);
-          setTransmittalForm({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
-          setSelectedIds(new Set());
-        }}
-      />
+      {transmittalOpen && (
+        <Suspense fallback={null}>
+          <TransmittalModal
+            open={transmittalOpen}
+            project={activeProject}
+            selectedDocs={allDocuments.filter((d) => selectedIds.has(d.id))}
+            form={transmittalForm}
+            onFormChange={(key, value) => setTransmittalForm((prev) => ({ ...prev, [key]: value }))}
+            onClose={() => setTransmittalOpen(false)}
+            onGenerated={() => {
+              setTransmittalOpen(false);
+              setTransmittalForm({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
+              setSelectedIds(new Set());
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* Bulk-create folders dialog */}
       <BulkCreateFoldersModal
