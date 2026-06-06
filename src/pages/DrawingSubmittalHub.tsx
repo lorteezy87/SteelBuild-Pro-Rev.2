@@ -28,9 +28,7 @@ import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingP
 import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
-import { DocControlPanel } from "@/components/drawings/register/DocControlPanel";
 import { invalidateEntity } from "@/services/cacheRegistry";
-import SubmittalVisualBoardRaw from "@/components/submittals/SubmittalVisualBoard";
 import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
 import {
   ACTION_STATUSES,
@@ -62,6 +60,17 @@ import { ApprovalMatrix, HeaderSignal, LeadTimesModal, TriageBoard } from "./dra
 // chunk 404s after a deploy trigger a reload instead of a hard crash.
 const DrawingsPage = lazyWithRetry(() => import("@/pages/Drawings"));
 const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
+// Heavy tab panels — each only renders on its own tab, so code-split them off
+// the hub's route chunk. They already mount conditionally inside the <Suspense>
+// boundary below, so deferring the import is behavior-preserving.
+const SubmittalVisualBoard = lazyWithRetry(
+  () => import("@/components/submittals/SubmittalVisualBoard"),
+) as unknown as ComponentType<AnyProps>;
+const DocControlPanel = lazyWithRetry(() =>
+  import("@/components/drawings/register/DocControlPanel").then((m) => ({
+    default: m.DocControlPanel,
+  })),
+) as unknown as ComponentType<AnyProps>;
 
 // A package is CLOSED when ANY terminal signal is satisfied — the latest
 // submittal's status is closed (Approved/Approved as Noted/Released for
@@ -93,7 +102,6 @@ const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
 const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const ErrorBoundary = ErrorBoundaryRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
-const SubmittalVisualBoard = SubmittalVisualBoardRaw as unknown as ComponentType<AnyProps>;
 
 export default function DrawingSubmittalHub() {
   const projectCtx = useProjectContext() as any;
