@@ -2,7 +2,7 @@
 /**
  * ProjectMembers smoke test — renders the real page inside a router +
  * QueryClient + ProjectContext stack with an admin user mocked into
- * AuthContext. base44 entity reads are mocked to return empty arrays so the page renders the
+ * AuthContext. entity reads are mocked to return empty arrays so the page renders the
  * "pick a project" empty state without any network traffic.
  *
  * Mirrors the Drawings / Layout smoke-test idiom — proof of life that
@@ -29,7 +29,7 @@ vi.mock("@/lib/AuthContext", () => ({
   }),
 }));
 
-vi.mock("@/api/base44Client", () => {
+vi.mock("@/api/supabaseClient", () => {
   const noop = {
     list: vi.fn().mockResolvedValue([]),
     filter: vi.fn().mockResolvedValue([]),
@@ -39,7 +39,7 @@ vi.mock("@/api/base44Client", () => {
     delete: vi.fn().mockResolvedValue({ success: true }),
   };
   return {
-    base44: { entities: new Proxy({}, { get: () => noop }) },
+    entities: new Proxy({}, { get: () => noop }),
     resolveFileUrl: vi.fn((u) => u),
   };
 });

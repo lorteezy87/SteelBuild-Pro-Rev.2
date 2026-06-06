@@ -55,8 +55,8 @@ const INPUT_STYLE = {
   minWidth: 0,
   height: 34,
   boxSizing: "border-box",
-  background: "rgb(14,20,31)",
-  border: "1px solid rgba(135,154,180,0.24)",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
   borderRadius: 6,
   outline: "none",
   color: "var(--text-primary)",
@@ -71,8 +71,8 @@ const SELECT_STYLE = {
   minWidth: 0,
   height: 34,
   boxSizing: "border-box",
-  background: "rgb(14,20,31)",
-  border: "1px solid rgba(135,154,180,0.24)",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-default)",
   borderRadius: 6,
   color: "var(--text-primary)",
   fontFamily: "var(--font-mono)",
@@ -85,10 +85,10 @@ const SELECT_STYLE = {
 
 const COL_WIDTHS = "40px minmax(220px, 1.3fr) 108px 132px 150px 68px 150px 120px 100px 140px 160px 54px";
 const GRID_MIN_WIDTH = 1512;
-const ROW_BG = "rgb(10,15,23)";
-const ROW_ALT_BG = "rgb(13,19,29)";
-const ROW_ERROR_BG = "rgb(41,19,24)";
-const PANEL_BG = "linear-gradient(180deg, rgb(12,17,25) 0%, rgb(7,10,16) 100%)";
+const ROW_BG = "var(--bg-surface)";
+const ROW_ALT_BG = "var(--bg-surface-low)";
+const ROW_ERROR_BG = "var(--danger-muted)";
+const PANEL_BG = "var(--bg-surface-secondary)";
 
 export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName, isSaving, existingTasks }) {
   const [rows, setRows] = useState(() => [emptyRow(1), emptyRow(2), emptyRow(3)]);
@@ -228,8 +228,8 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
       <div style={{
         position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
         width: "min(1420px, 96vw)", maxHeight: "88vh",
-        background: PANEL_BG, border: "1px solid rgba(200,155,32,0.38)",
-        borderRadius: 14, boxShadow: "0 24px 64px rgba(0,0,0,0.80)", zIndex: 999,
+        background: PANEL_BG, border: "1px solid var(--accent-border)",
+        borderRadius: 14, boxShadow: "var(--shadow-lg)", zIndex: 999,
         display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
         {/* Header */}
@@ -252,7 +252,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
           display: "grid", gridTemplateColumns: COL_WIDTHS,
           minWidth: GRID_MIN_WIDTH,
           gap: 0, padding: "0 16px",
-          height: 32, background: "rgb(10,15,23)",
+          height: 32, background: "var(--bg-surface-low)",
           borderBottom: "1px solid var(--divider)",
           flexShrink: 0, alignItems: "center",
         }}>
@@ -324,7 +324,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                     onKeyDown={handleCellKeyDown}
                     data-row={idx}
                     data-col="start_date"
-                    inputStyle={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark", padding: "7px 8px" }}
+                    inputStyle={{ ...INPUT_STYLE, fontSize: 11, padding: "7px 8px" }}
                   />
                 </div>
 
@@ -352,7 +352,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                     onKeyDown={handleCellKeyDown}
                     data-row={idx}
                     data-col="end_date"
-                    inputStyle={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark", padding: "7px 8px" }}
+                    inputStyle={{ ...INPUT_STYLE, fontSize: 11, padding: "7px 8px" }}
                   />
                 </div>
 
@@ -426,7 +426,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
               color: "rgba(200,155,32,0.50)", fontFamily: "var(--font-mono)", fontSize: 10,
               letterSpacing: "0.08em", fontWeight: 700,
               borderBottom: "1px solid var(--hover-bg)",
-              background: "rgb(10,15,23)",
+              background: "var(--bg-surface-low)",
               transition: "color 0.12s",
             }}
             onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
@@ -440,7 +440,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "12px 24px", borderTop: "1px solid var(--bg-surface-high)",
-          background: "rgb(10,15,23)", flexShrink: 0,
+          background: "var(--bg-surface-low)", flexShrink: 0,
         }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
             {rows.filter((r) => r.task_name.trim()).length} of {rows.length} rows ready to save

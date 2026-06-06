@@ -39,7 +39,7 @@ import SectionCard from "./SectionCard";
 import { taskDistributionByType } from "../projectMetrics";
 import InlineEditField from "@/components/shared/InlineEditField";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 
@@ -303,7 +303,7 @@ function MetadataInlineEdit({ project, metaKey, value, placeholder, emptyText })
         ...(project?.metadata && typeof project.metadata === "object" ? project.metadata : {}),
         [metaKey]: newValue,
       };
-      await base44.entities.Project.update(project.id, { metadata: merged });
+      await entities.Project.update(project.id, { metadata: merged });
       return merged;
     },
     onSuccess: (mergedMetadata) => {

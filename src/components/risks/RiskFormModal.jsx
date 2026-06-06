@@ -14,7 +14,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { Modal, Button } from "@/components/design-system";
 import {
   RISK_CATEGORIES,
@@ -115,7 +115,7 @@ export default function RiskFormModal({
   // Project list — used to lock or display the project on the row.
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     enabled: open,
   });
 
@@ -159,9 +159,9 @@ export default function RiskFormModal({
         target_close_date: form.target_close_date || null,
       };
       if (isEdit) {
-        return base44.entities.Risk.update(initial.id, payload);
+        return entities.Risk.update(initial.id, payload);
       }
-      return base44.entities.Risk.create(payload);
+      return entities.Risk.create(payload);
     },
     onSuccess: (saved) => {
       qc.invalidateQueries({ queryKey: ["risks"] });
@@ -175,7 +175,7 @@ export default function RiskFormModal({
   const handleDelete = useMutation({
     mutationFn: async () => {
       if (!isEdit) return null;
-      return base44.entities.Risk.delete(initial.id);
+      return entities.Risk.delete(initial.id);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["risks"] });

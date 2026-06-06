@@ -14,7 +14,7 @@
 
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import {
   calcContractValue,
@@ -23,6 +23,7 @@ import {
   calcLaborBurn,
 } from "@/utils/projectKpis";
 import { calculateMarginRisk } from "@/services/marginRiskEngine";
+import { computeCostCodeTotals } from "@/services/costRollup";
 import ReportShell from "./ReportShell";
 import { mono, body, CARD, LABEL, HEALTH_COLORS } from "./constants";
 import {
@@ -136,62 +137,62 @@ export default function FinancialScorecard() {
 
   const { data: project } = useQuery({
     queryKey: ["project-detail", projectId],
-    queryFn: () => base44.entities.Project.get(projectId),
+    queryFn: () => entities.Project.get(projectId),
     enabled: !!projectId,
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", projectId],
-    queryFn: () => base44.entities.WorkPackage.filter({ project_id: projectId }),
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses", projectId],
-    queryFn: () => base44.entities.Expense.filter({ project_id: projectId }),
+    queryFn: () => entities.Expense.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["change-orders", projectId],
-    queryFn: () => base44.entities.ChangeOrder.filter({ project_id: projectId }),
+    queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: sovItems = [] } = useQuery({
     queryKey: ["sov-items", projectId],
-    queryFn: () => base44.entities.SOVItem.filter({ project_id: projectId }),
+    queryFn: () => entities.SOVItem.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: costCodes = [] } = useQuery({
     queryKey: ["cost-codes", projectId],
-    queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }, "cost_code_number"),
+    queryFn: () => entities.CostCode.filter({ project_id: projectId }, "cost_code_number"),
     select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     enabled: !!projectId,
   });
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis-scorecard", projectId],
-    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }),
+    queryFn: () => entities.RFI.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries-scorecard", projectId],
-    queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
+    queryFn: () => entities.Delivery.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: inspections = [] } = useQuery({
     queryKey: ["inspections-scorecard", projectId],
-    queryFn: () => base44.entities.Inspection.filter({ project_id: projectId }),
+    queryFn: () => entities.Inspection.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: scheduleTasks = [] } = useQuery({
     queryKey: ["schedule-tasks-scorecard", projectId],
-    queryFn: () => base44.entities.ScheduleTask.filter({ project_id: projectId }),
+    queryFn: () => entities.ScheduleTask.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
@@ -206,7 +207,7 @@ export default function FinancialScorecard() {
     const labor = calcLaborBurn(workPackages);
 
     // Budget
-    const totalBudget = costCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
+    const totalBudget = computeCostCodeTotals(costCodes).budget;
     const committed = validExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
     const paid = validExpenses
       .filter((e) => e.payment_status === "Paid")

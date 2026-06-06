@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities, integrations } from "@/api/supabaseClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -764,7 +764,7 @@ export default function DrawingSetUploadModal({
     try {
       const setName = (meta.setName || "").trim();
       if (setName && activeProject?.id) {
-        const existing = await base44.entities.DrawingSet.filter({
+        const existing = await entities.DrawingSet.filter({
           project_id: activeProject.id,
           set_name:   setName,
         });
@@ -796,7 +796,7 @@ export default function DrawingSetUploadModal({
         let fileUrl;
         try {
           const res = await withTimeout(
-            base44.integrations.Core.UploadFile({ file }),
+            integrations.Core.UploadFile({ file }),
             UPLOAD_TIMEOUT_MS,
             "File upload"
           );
@@ -985,7 +985,7 @@ export default function DrawingSetUploadModal({
       let parentSetMetadata = null;
       try {
         // First check active (non-deleted) sets
-        const existing = await base44.entities.DrawingSet.filter({
+        const existing = await entities.DrawingSet.filter({
           project_id: activeProject?.id,
           set_name:   resolvedSetName,
         });
@@ -998,7 +998,7 @@ export default function DrawingSetUploadModal({
         // The DB unique index covers ALL rows (including is_deleted=true),
         // so creating a new row with the same name would violate the constraint.
         if (!parentSetId) {
-          const deleted = await base44.entities.DrawingSet.filter({
+          const deleted = await entities.DrawingSet.filter({
             project_id: activeProject?.id,
             set_name:   resolvedSetName,
             is_deleted:  true,
@@ -1007,7 +1007,7 @@ export default function DrawingSetUploadModal({
             parentSetId = deleted[0].id;
             parentSetMetadata = deleted[0].metadata;
             // Restore the soft-deleted row
-            await base44.entities.DrawingSet.update(parentSetId, {
+            await entities.DrawingSet.update(parentSetId, {
               is_deleted: false,
               deleted_at: null,
             });
@@ -1017,7 +1017,7 @@ export default function DrawingSetUploadModal({
         // Refresh the parent's metadata to reflect this upload
         if (parentSetId) {
           try {
-            await base44.entities.DrawingSet.update(parentSetId, {
+            await entities.DrawingSet.update(parentSetId, {
               upload_batch_id: batchId,
               revision:        meta.revision || "",
               issued_date:     meta.issueDate || null,
@@ -1062,7 +1062,7 @@ export default function DrawingSetUploadModal({
           failed_count:       0,
         });
         try {
-          const created = await base44.entities.DrawingSet.create(sanitizedSet);
+          const created = await entities.DrawingSet.create(sanitizedSet);
           parentSetId = created?.id;
         } catch (createErr) {
           const msg = String(createErr?.message || createErr || "").toLowerCase();
@@ -1076,7 +1076,7 @@ export default function DrawingSetUploadModal({
           console.warn(
             `[DrawingSetUploadModal] race on set "${resolvedSetName}" — another session created it first; re-looking up.`,
           );
-          const winner = await base44.entities.DrawingSet.filter({
+          const winner = await entities.DrawingSet.filter({
             project_id: activeProject?.id,
             set_name:   resolvedSetName,
           });
@@ -1204,7 +1204,7 @@ export default function DrawingSetUploadModal({
 
       const insertedRows = [];
       try {
-        const inserted = await base44.entities.Drawing.bulkCreate(sanitizedRecords);
+        const inserted = await entities.Drawing.bulkCreate(sanitizedRecords);
         if (Array.isArray(inserted)) insertedRows.push(...inserted);
         createdRows = Array.isArray(inserted) ? inserted.length : sanitizedRecords.length;
       } catch (bulkErr) {
@@ -1216,7 +1216,7 @@ export default function DrawingSetUploadModal({
           if (cancelledRef.current) break;
           const sheet = selectedSheets[i];
           try {
-            const row = await base44.entities.Drawing.create(sanitizedRecords[i]);
+            const row = await entities.Drawing.create(sanitizedRecords[i]);
             if (row) insertedRows.push(row);
             createdRows++;
           } catch (err) {
@@ -1269,6 +1269,7 @@ export default function DrawingSetUploadModal({
       // aggregate counts, so we just need to refresh the UI caches.
       qc.invalidateQueries({ queryKey: ["drawings"] });
       qc.invalidateQueries({ queryKey: ["drawing_sets"] });
+      qc.invalidateQueries({ queryKey: ["drawing-sets"] }); // hub/FabRelease spelling
       setStep(5);
       if (onComplete) onComplete();
     } catch (err) {

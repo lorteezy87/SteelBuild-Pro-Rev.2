@@ -3,7 +3,7 @@
  *
  * Mirrors RfiLogImportModal exactly: upload → preview (project match
  * + row-by-row table with removable rows) → commit (bulk insert
- * via base44.entities.ChangeOrder.create, deduped on co_number
+ * via entities.ChangeOrder.create, deduped on co_number
  * within the target project).
  *
  * No AI, no credits — every step is local or a direct Supabase
@@ -16,7 +16,7 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { X, Upload, FileText, CheckCircle2, ArrowRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { readChangeOrderCsvFile } from "@/lib/importChangeOrderCsv";
 
@@ -171,7 +171,7 @@ export default function ChangeOrderImportModal({
       let created = 0;
       for (const row of toInsert) {
          
-        await base44.entities.ChangeOrder.create(row);
+        await entities.ChangeOrder.create(row);
         created += 1;
       }
 

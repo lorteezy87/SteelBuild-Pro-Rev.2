@@ -35,8 +35,8 @@ Core platform:
 - Frontend: Vite, React, React Query, mixed JS/TS
 - Backend/data: Supabase Postgres, Auth, Storage, Edge Functions
 - Hosting: Vercel
-- Production URL: `https://steelbuild-pro.vercel.app`
-- Deploy branch: `codex/base44-deploy-nick`
+- Production URL: `https://steelbuild-pro.com` (custom domain on the `steelbuildpro-og` Vercel project; `cranky-black.vercel.app` is the same project's auto-alias). Note: `https://steelbuild-pro.vercel.app` is NOT assigned to any project and returns `DEPLOYMENT_NOT_FOUND` — do not use it.
+- Deploy branch: `main` — the **permanent** production + GitHub default branch (renamed from `codex/base44-deploy-nick` on 2026-05-26; Vercel's Production Branch is set to `main`, the old name redirects during GitHub's grace period but is deprecated — always use `main`). Production branch of the `steelbuildpro-og` Vercel project. A second Vercel project, `steel-build-pro-rev-2`, is also wired to this repo but only builds previews — ignore/retire it.
 - Main local checkout (Windows): `C:\dev\SteelBuild-Pro-Rev.2`
 - Also worked on in Claude Code cloud / Linux sessions (the repo is cloned to a Linux path per session; use bash equivalents there)
 
@@ -66,7 +66,7 @@ Frontend (`src/`):
 - `components/` — feature-scoped UI grouped by domain (`drawings/`, `submittals/`, `financials/`, `sov/`, `expenses/`, `gantt/`, `schedule/`, `email/`, `integrations/`, `commandcenter/`, `dms/`, `rfis/`, `workpackages/`, `qc/`, `safety/`, …), plus `ui/` (radix/shadcn primitives), `design-system/`, and `shared/`.
 - `services/` — deterministic domain engines: `marginRiskEngine`, `autoLinkEngine`, `constraintEngine`, `scheduleCascade`, `workflowEngine`, `permissions`, `validation`, `auditLogger`, `cacheRegistry`, `emailSendService`.
 - `hooks/` — TanStack Query CRUD + state hooks (`useDrawings`, `useSubmittals`, `useFinancials`, `useDeliveries`, `useAlerts`, `useProjectRole`, `useFeatureFlag`, `useCrudMutation`, `useSaveMutation`, `useRealtimeInvalidation`, `useProjectId`, …).
-- `api/` — `supabaseClient.ts` (Supabase client + storage helpers), `base44Client.ts`.
+- `api/` — `supabaseClient.ts` (the Supabase data layer: exports the `entities`, `auth`, `integrations`, `functions` surfaces + `getSignedUrl`/`resolveFileUrl` storage helpers as named values — import them directly).
 - `lib/` — shared utilities + domain mapping: `AuthContext.tsx`, `submittalStageMapping.js`, `drawingSetOrdering.js`, `analyzeDrawing.js`, `compareRevisions.js`, `dataExchange.js`, `integrationCatalog.js`, `featureFlags.jsx`, `query-client.ts`, importers (`importAnalyzedDrawings.js`, `importRfiCsv.js`, `importPsrSpreadsheet.js`, …), and the `commandCenter/`, `integrations/`, `exports/`, `drawingHub/` subfolders.
 - `utils/` — pure helpers (`dates.js`, `fractionConversion.js`, `riggingCalculations.js`, `projectKpis.js`, `operationalGraph.js`, `compressImage.js`, …).
 - `styles/` — SteelBuild Dark token/CSS system. `data/` — static reference (`aiscShapes.js`). `dev/` — mock data. `types/supabase.ts` — generated DB types.
@@ -84,7 +84,7 @@ Other: `public/` (static assets, wasm, pdf/fragments workers), `scripts/` (perf 
 
 The product is being deliberately narrowed to its strongest workflow. When planning or building, bias toward the killer workflow below; treat everything else as deprioritized and gate new investment behind feature flags.
 
-Status notes here are a snapshot (2026-05-25). Verify against the repo before relying on them, and do not record a goal as "done" without evidence on the deploy branch (`codex/base44-deploy-nick`). These are priorities and direction, not a claim of completion.
+Status notes here are a snapshot (2026-05-25). Verify against the repo before relying on them, and do not record a goal as "done" without evidence on the deploy branch (`main`). These are priorities and direction, not a claim of completion.
 
 ### Killer workflow (the moat — protect and deepen)
 
@@ -106,7 +106,7 @@ Full 3D IFC viewer, email inbox, Bluebeam deep integration, advanced financials 
 
 - TypeScript conversion: `src/services/` is fully `.ts` (10 files). The rest of the app is still mixed JS/TS (~750 `.js/.jsx` vs ~56 `.ts/.tsx` on the deploy branch). Convert incrementally, preserving runtime behavior and existing tests.
   - Large-page pattern (first applied to `FabRelease`, the largest page at 2324 lines, on branch `claude/refactor-large-pages`): extract a `src/pages/<page>/` folder — `styles.ts` (CSS string, moved verbatim), `format.ts` (constants + pure helpers), `types.ts` (shared shapes), `components.tsx` (presentational components, prop-typed) — leave any deterministic engine (e.g. `fabRelease/analytics.js`) untouched, then convert the thinned container to `.tsx`. Verify the CSS relocation is byte-identical.
-  - Shared-infra-first ordering: converting a page to `.tsx` forces boundary casts wherever it consumes still-untyped JS — the design-system primitives (`Button`, `ProgressBar`, `EmptyState`, …), `LoadingSkeleton`, `crudFeedback`, and the `base44` client surface. Prefer typing those shared modules first (or in parallel) so page conversions don't each re-introduce permissive casts. Where casts are unavoidable in the interim, mark them in-code as removable once the shared layer is typed.
+  - Shared-infra-first ordering: converting a page to `.tsx` forces boundary casts wherever it consumes still-untyped JS — the design-system primitives (`Button`, `ProgressBar`, `EmptyState`, …), `LoadingSkeleton`, `crudFeedback`, and the `supabaseClient` entity surface. Prefer typing those shared modules first (or in parallel) so page conversions don't each re-introduce permissive casts. Where casts are unavoidable in the interim, mark them in-code as removable once the shared layer is typed.
   - Watch for the JS→TS gotchas that `strict:false` still flags: `useState(null)`/`useState([])` narrow inference (annotate the state), and untyped `useMutation` mutationFns inferring `TVariables` as `void` (annotate the mutationFn parameter).
 - RBAC cleanup (finish "Phase C" properly): keep the server/DB boundary authoritative (sections 13-15); converge legacy role names on the canonical `user_projects.role` set; never weaken RLS to fix a UI bug.
 - Strengthen audit logging on everything mutable: the `activities` audit trail is fixed and `activities`/`uploaded_files` RLS is hardened (canonical per-command `user_has_project_access` policies; legacy `project_member_access` leftovers removed). Extend coverage to the remaining mutable workflows via `src/services/auditLogger.ts`.
@@ -297,17 +297,17 @@ Only stash when you understand what will be stashed.
 
 Important branches:
 
-- Deploy branch: `codex/base44-deploy-nick`
+- Deploy branch: `main` — the **permanent** production + GitHub default branch (renamed from `codex/base44-deploy-nick` on 2026-05-26; Vercel's Production Branch is `main`). The old name still redirects on GitHub but is deprecated — always target `main`.
 - Claude Code feature branches: `claude/<short-slug>`
 - Codex feature branches, if used: `codex/<short-slug>`
 
-Vercel auto-deploys from `codex/base44-deploy-nick`.
+Vercel auto-deploys from `main`.
 
-A push to `codex/base44-deploy-nick` is production-impacting. Do it only when the user has asked to deploy, ship, push to app, or publish.
+A push to `main` is production-impacting. Do it only when the user has asked to deploy, ship, push to app, or publish.
 
 ### Deploy From Main Checkout
 
-If already on `codex/base44-deploy-nick` and the user has asked to deploy:
+If already on `main` and the user has asked to deploy:
 
 ```powershell
 Set-Location "C:\dev\SteelBuild-Pro-Rev.2"
@@ -316,7 +316,7 @@ node ./node_modules/vite/bin/vite.js build 2>&1 | Select-Object -Last 40
 Write-Host "EXIT: $LASTEXITCODE"
 git add <explicit-paths>
 git commit -F .git-commit-msg.tmp
-git push origin codex/base44-deploy-nick
+git push origin main
 git rev-parse --short HEAD
 ```
 
@@ -341,11 +341,11 @@ Safe pattern:
 Set-Location "C:\dev\SteelBuild-Pro-Rev.2"
 git status --short
 git branch --show-current
-git pull origin codex/base44-deploy-nick
+git pull origin main
 git merge claude/<short-slug> --no-edit
 node ./node_modules/vite/bin/vite.js build 2>&1 | Select-Object -Last 40
 Write-Host "EXIT: $LASTEXITCODE"
-git push origin codex/base44-deploy-nick
+git push origin main
 git rev-parse --short HEAD
 ```
 
@@ -512,6 +512,15 @@ For page crashes, check first-render/runtime issues early:
 - Data shape assumptions
 - Error boundary output
 - Browser console errors
+
+### Error monitoring (production)
+
+Client errors + performance are captured by Sentry (`@sentry/react`), initialised in `src/instrument.js` (imported FIRST in `src/main.jsx`):
+
+- `Sentry.init` runs error capture + performance tracing + **masked** session replay (`maskAllText` + `blockAllMedia` — replays never expose readable project/financial content). DSN comes from `VITE_SENTRY_DSN` (env override) with a baked-in public project DSN as a fallback so monitoring works out of the box. Optional source maps via `@sentry/vite-plugin` (needs a `SENTRY_AUTH_TOKEN`).
+- React render errors are reported via `Sentry.captureException` in both ErrorBoundaries (`src/components/ErrorBoundary.jsx` top-level, `src/components/shared/ErrorBoundary.jsx` per-route). `window.onerror` / `unhandledrejection` are caught by Sentry's global handlers.
+- `src/lib/telemetry.js` is a **local** ring buffer (`window.__sbpErrorLog`) only — it deliberately does NOT forward to Sentry (avoids double-reporting). `llm_telemetry` (see §17) is separate, LLM-specific.
+- Never log sensitive project/financial data to Sentry; rely on the replay masking above.
 
 ---
 

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from "react";
-import { resolveFileUrl } from "@/api/base44Client";
+import { resolveFileUrl } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { formatLocalDate } from "@/utils/dates";
 
 const STATUS_COLORS = {
   "Draft":                   { bg: "rgba(100,116,139,0.15)", color: "#94a3b8" },
@@ -53,7 +54,7 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "\u2014";
-    return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return formatLocalDate(dateStr, "en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
   const fileSizeKb = doc.fileSizeKb ?? doc.file_size_kb ?? 0;

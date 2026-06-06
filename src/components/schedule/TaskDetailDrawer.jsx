@@ -59,13 +59,13 @@ function parseDeps(raw) {
   return parseDependencies(raw);
 }
 
-const drawerSurface = 'linear-gradient(180deg, rgba(8,12,19,0.99) 0%, rgba(5,8,13,1) 100%)';
-const drawerPanel = 'rgba(14,20,30,0.98)';
-const drawerPanelStrong = 'rgba(18,25,36,0.99)';
-const drawerBorder = 'rgba(135,154,180,0.22)';
-const drawerMutedBorder = 'rgba(135,154,180,0.14)';
-const drawerText = 'rgba(238,244,252,0.96)';
-const drawerMutedText = 'rgba(177,191,211,0.78)';
+const drawerSurface = 'var(--bg-surface-secondary)';
+const drawerPanel = 'var(--bg-surface-low)';
+const drawerPanelStrong = 'var(--bg-surface-high)';
+const drawerBorder = 'var(--border-default)';
+const drawerMutedBorder = 'var(--divider)';
+const drawerText = 'var(--text-primary)';
+const drawerMutedText = 'var(--text-muted)';
 
 const drawerControlStyle = {
   width: '100%',
@@ -193,7 +193,7 @@ function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search tasks..
           style={{
             position: 'absolute', left: 0, right: 0, top: '100%',
             marginTop: 4,
-            background: 'rgba(12,17,25,0.99)',
+            background: 'var(--bg-surface-low)',
             border: `1px solid ${drawerBorder}`,
             borderRadius: 8,
             maxHeight: 220,
@@ -473,7 +473,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         }}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: `1px solid ${drawerMutedBorder}`, background: 'rgba(12,17,25,0.99)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: `1px solid ${drawerMutedBorder}`, background: 'var(--bg-surface-low)' }}>
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: drawerMutedText, letterSpacing: '0.12em', marginBottom: 4 }}>
               {formData.task_type}{formData.wbs_code ? ` · ${formData.wbs_code}` : ''}
@@ -515,7 +515,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: `1px solid ${drawerMutedBorder}`, background: 'rgba(9,13,20,0.99)' }}>
+        <div style={{ display: 'flex', borderBottom: `1px solid ${drawerMutedBorder}`, background: 'var(--bg-surface-low)' }}>
           {['DETAILS', 'DEPENDENCIES', 'LINKS', 'NOTES', 'HISTORY'].map(tab => (
             <button
               key={tab}
@@ -851,7 +851,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', gap: 10, padding: 18, borderTop: `1px solid ${drawerMutedBorder}`, background: 'rgba(7,10,16,0.99)' }}>
+        <div style={{ display: 'flex', gap: 10, padding: 18, borderTop: `1px solid ${drawerMutedBorder}`, background: 'var(--bg-surface-low)' }}>
           <button
             onClick={onClose}
             style={{

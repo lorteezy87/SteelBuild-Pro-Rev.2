@@ -1,23 +1,29 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import { formatCurrency, isOverdue, daysOverdue, parseUTCDate, statusIn } from "../shared/formatters";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProgressBar from "../shared/ProgressBar";
 import { computeWeightedHealth, HealthPill, HEALTH_ORDER, healthColor } from "./portfolioHealth";
+import { formatLocalDate } from "@/utils/dates";
 import {
   PHASE_DOT,
   summarizeProjectSchedule,
   MiniProjectTimeline,
 } from "./portfolioTimeline";
 import { Button } from "@/components/design-system";
-import { MiniSparkline, PhoenixTooltip, Card, HeaderBar, KPIBlock } from "./portfolioPrimitives";
+import { MiniSparkline, Card, HeaderBar, KPIBlock } from "./portfolioPrimitives";
 import DeliveryRail from "./DeliveryRail";
 import CoExposurePanel from "./CoExposurePanel";
 
 const ROW_HEIGHT = 40;
+
+// Lazy-load the only recharts visual on this route so the ~600 kB
+// vendor-charts chunk is fetched on demand (when the Financial Control
+// panel renders) instead of eagerly blocking the portfolio landing.
+const PortfolioBudgetChart = lazyWithRetry(() => import("./PortfolioBudgetChart"));
 
 export default function PortfolioView({
   projects = [],
@@ -1606,23 +1612,13 @@ export default function PortfolioView({
             <div style={{ padding: "12px 16px", borderRight: "1px solid var(--divider)", height: budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? Math.max(320, budgetChartData.length * 44 + 56) : 320 }}>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Budget vs Actual</div>
               {budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? (
-                <ResponsiveContainer width="100%" height="90%">
-                  <BarChart data={budgetChartData} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
-                    <YAxis dataKey="name" type="category" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} width={80} />
-                    <XAxis type="number" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} />
-                    <Tooltip content={<PhoenixTooltip />} />
-                    <Bar dataKey="Budget" name="Budget" fill="var(--bg-surface-highest)" barSize={14} />
-                    <Bar dataKey="Actual" name="Actual" barSize={14}>
-                      {budgetChartData.map((entry, index) => {
-                        let fill = "var(--accent)";
-                        if (entry.overBudget) fill = "var(--status-error)";
-                        else if (entry.accountingDelayed) fill = "var(--status-warning)"; // work happening but not invoiced
-                        else if (entry.notStarted) fill = "var(--text-muted)"; // not started
-                        return <Cell key={`cell-${index}`} fill={fill} />;
-                      })}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <Suspense fallback={
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "90%", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", color: "var(--text-muted)" }}>
+                    LOADING CHART…
+                  </div>
+                }>
+                  <PortfolioBudgetChart data={budgetChartData} />
+                </Suspense>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "80%", gap: 10 }}>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--status-warning)", fontWeight: 600 }}>NO FINANCIAL DATA</div>
@@ -2016,7 +2012,7 @@ export default function PortfolioView({
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Next Delivery</div>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 2 }}>{deliveriesStats.nextDelivery.description || deliveriesStats.nextDelivery.vendor || "—"}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>{projectMap[deliveriesStats.nextDelivery.project_id] || "—"}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>{new Date(deliveriesStats.nextDelivery.scheduled_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>{formatLocalDate(deliveriesStats.nextDelivery.scheduled_date, "en-US", { weekday: "short", month: "short", day: "numeric" })}</div>
           </div>
         )}
 

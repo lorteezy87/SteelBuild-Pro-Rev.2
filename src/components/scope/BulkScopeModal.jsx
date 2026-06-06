@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { base44 } from "@/api/base44Client";
+import { integrations } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -65,7 +65,7 @@ export default function BulkScopeModal({ projectId, onClose, onCreated }) {
       // Upload the shared PDF once if present
       let file_url = null, storage_path = null, file_name = null;
       if (file) {
-        const up = await base44.integrations.Core.UploadFile({ file });
+        const up = await integrations.Core.UploadFile({ file });
         file_url     = up.file_url || null;
         storage_path = up.path || null;
         file_name    = file.name;

@@ -7,7 +7,7 @@
 
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { exportTableCSV } from "./utils";
@@ -16,7 +16,7 @@ import { mono, body, CARD, CARD_TITLE } from "./constants";
 export default function Workload() {
   const { data: tasks = [] } = useQuery({
     queryKey: ["schedule-tasks-all"],
-    queryFn: () => base44.entities.ScheduleTask.list(),
+    queryFn: () => entities.ScheduleTask.list(),
   });
 
   const rows = useMemo(() => {

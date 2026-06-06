@@ -2,9 +2,9 @@ import React from "react";
 import { useAuth } from "@/lib/AuthContext";
 
 export default function AdminRoute({ children }) {
-  const { user, loading } = useAuth();
+  const { user, isLoadingAuth } = useAuth();
 
-  if (loading) {
+  if (isLoadingAuth) {
     return (
       <div style={{ padding: "40px", textAlign: "center", color: "rgba(160,175,210,0.55)" }}>
         Checking permissions...

@@ -1,3 +1,6 @@
+// Sentry must initialise before any other app code — keep this import FIRST.
+import './instrument'
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'

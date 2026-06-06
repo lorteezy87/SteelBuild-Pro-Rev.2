@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { auth } from "@/api/supabaseClient";
 import { toast } from 'sonner';
+import { formatLocalDate } from "@/utils/dates";
 
 const S = {
   input: { width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none', boxSizing: 'border-box' },
@@ -29,7 +30,7 @@ export default function UserSettingsTab({ user, onSave }) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await base44.auth.updateMe(form);
+      await auth.updateMe(form);
       onSave(form);
       toast.success('Profile updated');
     } catch (err) {
@@ -93,7 +94,7 @@ export default function UserSettingsTab({ user, onSave }) {
           <div>
             <label style={S.label}>Member Since</label>
             <div style={{ padding: '8px 12px', background: 'var(--bg-surface-low)', borderRadius: 8, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-              {user?.created_date ? new Date(user.created_date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}
+              {user?.created_date ? formatLocalDate(user.created_date, 'en-US', { month: 'long', year: 'numeric' }) : '—'}
             </div>
           </div>
         </div>

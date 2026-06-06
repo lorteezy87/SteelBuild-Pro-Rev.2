@@ -122,6 +122,39 @@ async function checkProjectAccess(
   }
 }
 
+// ── Project Role Check ──────────────────────────────────────────────────────────
+
+// Outbound/mutating actions require an elevated project role. Sending email is
+// a mutation (it creates correspondence and persists records), so a viewer or
+// field user must not be able to send even though they have project access.
+const SEND_ALLOWED_ROLES = new Set(["owner", "admin", "pm"]);
+
+async function getProjectRole(
+  userId: string,
+  projectId: string,
+  supabaseUrl: string,
+  serviceKey: string,
+): Promise<string | null> {
+  try {
+    const resp = await fetch(
+      `${supabaseUrl}/rest/v1/user_projects?user_id=eq.${userId}&project_id=eq.${projectId}&select=role&limit=1`,
+      {
+        headers: {
+          "apikey": serviceKey,
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+      },
+    );
+    if (!resp.ok) return null;
+    const rows = await resp.json();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const role = rows[0]?.role;
+    return typeof role === "string" ? role.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Resend Provider ───────────────────────────────────────────────────────────
 
 async function sendViaResend(
@@ -484,6 +517,14 @@ async function handle(req: Request): Promise<Response> {
   const hasAccess = await checkProjectAccess(user.userId, body.project_id, supabaseUrl, serviceKey);
   if (!hasAccess) return errorResponse(403, "No access to this project");
 
+  // Verify project role. Membership alone is not enough to send outbound email —
+  // per the RBAC contract, mutating/outbound actions require owner/admin/pm.
+  // A viewer or field user is a member but must not be able to send.
+  const projectRole = await getProjectRole(user.userId, body.project_id, supabaseUrl, serviceKey);
+  if (!projectRole || !SEND_ALLOWED_ROLES.has(projectRole)) {
+    return errorResponse(403, "Your project role does not permit sending email");
+  }
+
   // Determine the from address. A caller-supplied from_email must be one of the
   // project's ACTIVE email accounts — otherwise a member could send as any
   // address (spoofing) and the spoofed message would be persisted as legitimate
@@ -576,11 +617,13 @@ async function handle(req: Request): Promise<Response> {
     attachmentsStored = await storeSentAttachments(supabaseUrl, serviceKey, body.project_id, storedId, attachments);
   }
 
+  // Log recipient COUNT, not addresses, and omit the subject — avoid leaking
+  // correspondence PII into function logs. from=project mailbox is retained for
+  // mailbox-level debugging.
   console.log(
     `[email-send] Sent: project=${body.project_id} from=${fromEmail} ` +
-    `to=${body.to.join(",")} subject="${body.subject.slice(0, 60)}" ` +
-    `provider=${result.provider} stored=${storedId || "failed"} ` +
-    `attachments=${attachmentsStored}/${attachments.length}`,
+    `recipients=${body.to.length} provider=${result.provider} ` +
+    `stored=${storedId || "failed"} attachments=${attachmentsStored}/${attachments.length}`,
   );
 
   return jsonResponse({

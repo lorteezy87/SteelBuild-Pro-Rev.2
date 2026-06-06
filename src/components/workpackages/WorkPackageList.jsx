@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import StatusBadge from "../shared/StatusBadge";
+import { formatLocalDate } from "@/utils/dates";
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -29,7 +30,7 @@ const STAGE_STYLES = {
 
 const formatDate = (d) =>
   d
-    ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    ? formatLocalDate(`${d}T00:00:00Z`, "en-US", { month: "short", day: "numeric", year: "numeric" })
     : "—";
 
 export default function WorkPackageList({

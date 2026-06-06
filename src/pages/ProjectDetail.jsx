@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -8,6 +8,7 @@ import { CommandBar } from "@/components/design-system";
 import { ArrowLeft } from "lucide-react";
 import ProjectHandoffChecklist from "@/components/projects/ProjectHandoffChecklist";
 import ProjectKickoffChecklist, { KickoffPill } from "@/components/projects/ProjectKickoffChecklist";
+import { formatLocalDate } from "@/utils/dates";
 
 const HEALTH_COLORS = {
   "On Track": "var(--status-success)",
@@ -35,27 +36,27 @@ export default function ProjectDetail() {
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
-    queryFn: () => base44.entities.Project.get(projectId),
+    queryFn: () => entities.Project.get(projectId),
     enabled: !!projectId,
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: () =>
-      base44.entities.WorkPackage.filter({ project_id: projectId }),
+      entities.WorkPackage.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }),
+    queryFn: () => entities.RFI.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries", projectId],
     queryFn: () =>
-      base44.entities.Delivery.filter({ project_id: projectId }),
+      entities.Delivery.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
@@ -169,7 +170,7 @@ export default function ProjectDetail() {
           {
             label: "Target Completion",
             value: project.target_completion_date
-              ? new Date(project.target_completion_date).toLocaleDateString()
+              ? formatLocalDate(project.target_completion_date)
               : "—",
           },
         ].map(({ label, value }) => (
@@ -505,7 +506,7 @@ export default function ProjectDetail() {
                           marginTop: "2px",
                         }}
                       >
-                        {new Date(d.scheduled_date).toLocaleDateString()}
+                        {formatLocalDate(d.scheduled_date)}
                       </div>
                     </div>
                     <span

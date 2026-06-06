@@ -8,12 +8,10 @@ const mocks = vi.hoisted(() => ({
   projectListMock: vi.fn(),
 }));
 
-vi.mock("@/api/base44Client", () => ({
-  base44: {
-    entities: {
-      Project: {
-        list: mocks.projectListMock,
-      },
+vi.mock("@/api/supabaseClient", () => ({
+  entities: {
+    Project: {
+      list: mocks.projectListMock,
     },
   },
 }));

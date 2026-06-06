@@ -1,21 +1,17 @@
-import { useRef, useMemo, useState } from "react";
+import { Suspense, useRef, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import ScheduleGanttRaw from "@/components/schedule/ScheduleGantt";
+import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import ScheduleRivetBrief from "@/components/schedule/ScheduleRivetBrief";
 import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
 import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
-import AddTaskModalRaw from "@/components/schedule/AddTaskModal";
-import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
-import BulkDateEditModal from "@/components/schedule/BulkDateEditModal";
-import BulkDurationEditModal from "@/components/schedule/BulkDurationEditModal";
-import WbsBuilderModalRaw from "@/components/schedule/WbsBuilderModal";
 import { PHASES, PHASE_NUMBER } from "@/utils/phases";
 import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw, Button as ButtonRaw } from "@/components/design-system";
@@ -33,15 +29,35 @@ import type { ScheduleTask } from "./schedule/types";
 // The design-system primitives are still .jsx; these casts are removable
 // once the shared layer is typed.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
+const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
 const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
-// These schedule child screens are still .jsx; their inferred prop types are
-// stricter than what the page passes. Cast at the boundary (removable once
-// the components are typed) — runtime behavior is unchanged.
-const ScheduleGantt = ScheduleGanttRaw as unknown as ComponentType<AnyProps>;
-const AddTaskModal = AddTaskModalRaw as unknown as ComponentType<AnyProps>;
-const WbsBuilderModal = WbsBuilderModalRaw as unknown as ComponentType<AnyProps>;
+// Code-split the heaviest, view-/modal-gated schedule screens out of the
+// Schedule route chunk. ScheduleGantt is by far the largest child (only renders
+// on the Gantt tab) and the add/bulk/WBS modals only matter once opened, so
+// deferring their fetch keeps the initial Schedule payload lean. Each is gated
+// in JSX (view tab / open flag) so the chunk fetches lazily on first use, and a
+// Suspense boundary at each render site shows a skeleton while it streams in.
+// Casts at the boundary remain removable once these .jsx components are typed.
+const ScheduleGantt = lazyWithRetry(
+  () => import("@/components/schedule/ScheduleGantt"),
+) as unknown as ComponentType<AnyProps>;
+const AddTaskModal = lazyWithRetry(
+  () => import("@/components/schedule/AddTaskModal"),
+) as unknown as ComponentType<AnyProps>;
+const BulkAddTaskModal = lazyWithRetry(
+  () => import("@/components/schedule/BulkAddTaskModal"),
+) as unknown as ComponentType<AnyProps>;
+const BulkDateEditModal = lazyWithRetry(
+  () => import("@/components/schedule/BulkDateEditModal"),
+) as unknown as ComponentType<AnyProps>;
+const BulkDurationEditModal = lazyWithRetry(
+  () => import("@/components/schedule/BulkDurationEditModal"),
+) as unknown as ComponentType<AnyProps>;
+const WbsBuilderModal = lazyWithRetry(
+  () => import("@/components/schedule/WbsBuilderModal"),
+) as unknown as ComponentType<AnyProps>;
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
@@ -81,14 +97,14 @@ export default function Schedule() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   // Fetch submittals linked to this project for Gantt overlay
   const { data: submittals = [] } = useQuery({
     queryKey: ["documents", projectId],
-    queryFn: () => projectId ? base44.entities.Document.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.Document.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     select: (docs: any[]) => docs.filter((d) => d.is_submittal && d.linked_wp_id),
   });
@@ -162,7 +178,7 @@ export default function Schedule() {
     if (toBackfill.length > 0) {
       batchProcess(
         toBackfill,
-        ({ id, wbs }) => base44.entities.ScheduleTask.update(id, { wbs_code: wbs }).catch(() => {}),
+        ({ id, wbs }) => entities.ScheduleTask.update(id, { wbs_code: wbs }).catch(() => {}),
       ).then(({ succeeded, failed }) => {
         invalidateEntity(qc, "schedule_task", projectId);
         if (failed.length > 0) {
@@ -201,7 +217,7 @@ export default function Schedule() {
   const updateTaskMut = useMutation({
     mutationFn: (data: ScheduleTask) => {
       const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-      return base44.entities.ScheduleTask.update(id, fields);
+      return entities.ScheduleTask.update(id, fields);
     },
     onSuccess: () => {
       invalidateEntity(qc, "schedule_task", projectId);
@@ -217,7 +233,7 @@ export default function Schedule() {
       const pid = data.project_id || projectId;
       if (!pid) throw new Error("Select a project first");
       const wbs = data.wbs_code || generateWBS(data.phase, scheduleTasks);
-      return base44.entities.ScheduleTask.create({ ...data, project_id: pid, wbs_code: wbs } as any);
+      return entities.ScheduleTask.create({ ...data, project_id: pid, wbs_code: wbs } as any);
     },
     onSuccess: () => {
       invalidateEntity(qc, "schedule_task", projectId);
@@ -228,7 +244,7 @@ export default function Schedule() {
   });
 
   const deleteTaskMut = useMutation({
-    mutationFn: (id: string) => base44.entities.ScheduleTask.delete(id),
+    mutationFn: (id: string) => entities.ScheduleTask.delete(id),
     onSuccess: () => {
       invalidateEntity(qc, "schedule_task", projectId);
       setShowDrawer(false);
@@ -248,7 +264,7 @@ export default function Schedule() {
     mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
       const results = await batchProcess(
         ids,
-        (id) => base44.entities.ScheduleTask.update(id, {
+        (id) => entities.ScheduleTask.update(id, {
           status,
           percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
         }),
@@ -272,7 +288,7 @@ export default function Schedule() {
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids: string[]) => {
-      const results = await batchProcess(ids, (id) => base44.entities.ScheduleTask.delete(id));
+      const results = await batchProcess(ids, (id) => entities.ScheduleTask.delete(id));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }
@@ -298,7 +314,7 @@ export default function Schedule() {
     mutationFn: async ({ ids, resource_names }: { ids: string[]; resource_names: string }) => {
       const results = await batchProcess(
         ids,
-        (id) => base44.entities.ScheduleTask.update(id, { resource_names, assigned_to: resource_names }),
+        (id) => entities.ScheduleTask.update(id, { resource_names, assigned_to: resource_names }),
       );
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
@@ -331,7 +347,7 @@ export default function Schedule() {
 
       const results = await batchProcess(
         editable.map((task) => task.id),
-        (id) => base44.entities.ScheduleTask.update(id, fields),
+        (id) => entities.ScheduleTask.update(id, fields),
       );
 
       if (results.failed.length > 0 && results.succeeded.length === 0) {
@@ -384,7 +400,7 @@ export default function Schedule() {
               fields.end_date = d.toISOString().split("T")[0];
             }
           }
-          return base44.entities.ScheduleTask.update(task.id, fields);
+          return entities.ScheduleTask.update(task.id, fields);
         },
       );
 
@@ -420,7 +436,7 @@ export default function Schedule() {
       for (const row of rows) {
         const wbs = row.wbs_code || generateWBS(row.phase, snapshot);
         const task = { ...row, project_id: pid, wbs_code: wbs };
-        await base44.entities.ScheduleTask.create(task);
+        await entities.ScheduleTask.create(task);
         snapshot.push(task); // include in snapshot for next WBS calculation
       }
       invalidateEntity(qc, "schedule_task", projectId);
@@ -483,7 +499,7 @@ export default function Schedule() {
         const parentUid = uidToParentUid[t.uid];
         const parentDbId = parentUid ? uidToDbId[parentUid] : null;
 
-        const record = await base44.entities.ScheduleTask.create({
+        const record = await entities.ScheduleTask.create({
           project_id: pid,
           task_name: t.name,
           task_type: inferTaskType(t.name, t.isSummary, t.milestone),
@@ -538,7 +554,7 @@ export default function Schedule() {
       if (depItems.length > 0) {
         await batchProcess(
           depItems,
-          ({ dbId, predLinks }) => base44.entities.ScheduleTask.update(dbId, {
+          ({ dbId, predLinks }) => entities.ScheduleTask.update(dbId, {
             dependencies: JSON.stringify(predLinks),
           }),
         );
@@ -820,27 +836,29 @@ export default function Schedule() {
       <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
         {view === "gantt" && (
           <ErrorBoundary label="Gantt Chart">
-            <ScheduleGantt
-              tasks={enrichedTasks}
-              submittals={submittals}
-              weatherRisk={weatherRisk}
-              expandedTask={expandedTask}
-              setExpandedTask={setExpandedTask}
-              onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
-              onSave={async (data) => {
-                const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-                try {
-                  await base44.entities.ScheduleTask.update(id, fields);
-                  invalidateEntity(qc, "schedule_task", projectId);
-                  toast.success("Task saved");
-                } catch (err: any) {
-                  toast.error("Save failed: " + (err?.message || "unknown error"));
-                  throw err;
-                }
-              }}
-              phaseFilter={phaseFilter}
-              externalFocus={ganttFocus}
-            />
+            <Suspense fallback={<LoadingSkeleton variant="page" />}>
+              <ScheduleGantt
+                tasks={enrichedTasks}
+                submittals={submittals}
+                weatherRisk={weatherRisk}
+                expandedTask={expandedTask}
+                setExpandedTask={setExpandedTask}
+                onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
+                onSave={async (data) => {
+                  const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
+                  try {
+                    await entities.ScheduleTask.update(id, fields);
+                    invalidateEntity(qc, "schedule_task", projectId);
+                    toast.success("Task saved");
+                  } catch (err: any) {
+                    toast.error("Save failed: " + (err?.message || "unknown error"));
+                    throw err;
+                  }
+                }}
+                phaseFilter={phaseFilter}
+                externalFocus={ganttFocus}
+              />
+            </Suspense>
           </ErrorBoundary>
         )}
 
@@ -874,7 +892,7 @@ export default function Schedule() {
               onSave={async (data) => {
                 const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                 try {
-                  await base44.entities.ScheduleTask.update(id, fields);
+                  await entities.ScheduleTask.update(id, fields);
                   invalidateEntity(qc, "schedule_task", projectId);
                   toast.success("Task saved");
                 } catch (err: any) {
@@ -900,53 +918,76 @@ export default function Schedule() {
         effectiveDates={effectiveDatesMap}
       />
 
-      {/* Add Task Modal */}
-      <AddTaskModal
-        open={showAddTask}
-        onClose={() => setShowAddTask(false)}
-        onSubmit={(data) =>
-          createTaskMut.mutate({
-            ...data,
-            project_id: projectId,
-            percent_complete: 0,
-          })
-        }
-        isSaving={createTaskMut.isPending}
-        projectName={selectedProject?.name || ""}
-        prefilledDate={new Date().toISOString().split("T")[0]}
-        existingTasks={enrichedTasks}
-      />
+      {/* Add/bulk/WBS modals are lazy-loaded; gate the mount on the open flag so
+          the chunk only fetches on first open. Each renders null when closed,
+          so this is behavior-preserving. A null Suspense fallback avoids a
+          flash before the (already-overlay) modal paints. */}
+      {showAddTask && (
+        <Suspense fallback={null}>
+          <AddTaskModal
+            open={showAddTask}
+            onClose={() => setShowAddTask(false)}
+            onSubmit={(data) =>
+              createTaskMut.mutate({
+                ...data,
+                project_id: projectId,
+                percent_complete: 0,
+              })
+            }
+            isSaving={createTaskMut.isPending}
+            projectName={selectedProject?.name || ""}
+            prefilledDate={new Date().toISOString().split("T")[0]}
+            existingTasks={enrichedTasks}
+          />
+        </Suspense>
+      )}
 
-      <BulkAddTaskModal
-        open={showBulkAdd}
-        onClose={() => setShowBulkAdd(false)}
-        onSubmit={handleBulkAdd}
-        projectName={selectedProject?.name || ""}
-        isSaving={bulkSaving}
-        existingTasks={enrichedTasks}
-      />
+      {showBulkAdd && (
+        <Suspense fallback={null}>
+          <BulkAddTaskModal
+            open={showBulkAdd}
+            onClose={() => setShowBulkAdd(false)}
+            onSubmit={handleBulkAdd}
+            projectName={selectedProject?.name || ""}
+            isSaving={bulkSaving}
+            existingTasks={enrichedTasks}
+          />
+        </Suspense>
+      )}
 
-      <BulkDateEditModal
-        open={showBulkDates}
-        count={selectedIds.size}
-        isSaving={bulkDateMut.isPending}
-        onClose={() => setShowBulkDates(false)}
-        onSubmit={bulkUpdateDates}
-      />
+      {showBulkDates && (
+        <Suspense fallback={null}>
+          <BulkDateEditModal
+            open={showBulkDates}
+            count={selectedIds.size}
+            isSaving={bulkDateMut.isPending}
+            onClose={() => setShowBulkDates(false)}
+            onSubmit={bulkUpdateDates}
+          />
+        </Suspense>
+      )}
 
-      <BulkDurationEditModal
-        open={showBulkDuration}
-        count={selectedIds.size}
-        isSaving={bulkDurationMut.isPending}
-        onClose={() => setShowBulkDuration(false)}
-        onSubmit={bulkUpdateDuration}
-      />
+      {showBulkDuration && (
+        <Suspense fallback={null}>
+          <BulkDurationEditModal
+            open={showBulkDuration}
+            count={selectedIds.size}
+            isSaving={bulkDurationMut.isPending}
+            onClose={() => setShowBulkDuration(false)}
+            onSubmit={bulkUpdateDuration}
+          />
+        </Suspense>
+      )}
 
-      <WbsBuilderModal
-        open={showWbsBuilder}
-        projectId={projectId}
-        onClose={() => setShowWbsBuilder(false)}
-      />
+      {showWbsBuilder && (
+        <Suspense fallback={null}>
+          <WbsBuilderModal
+            open={showWbsBuilder}
+            projectId={projectId}
+            onClose={() => setShowWbsBuilder(false)}
+          />
+        </Suspense>
+      )}
 
       <DeleteDialog
         open={!!deleteTarget}

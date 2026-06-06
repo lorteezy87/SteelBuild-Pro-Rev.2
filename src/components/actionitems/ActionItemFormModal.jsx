@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useFormValidation } from "@/hooks/useFormValidation";
@@ -59,13 +59,13 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
 
   const mutation = useMutation({
-    mutationFn: (data) => base44.entities.ActionItem.create(data),
+    mutationFn: (data) => entities.ActionItem.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
       toast.success("Action item created");

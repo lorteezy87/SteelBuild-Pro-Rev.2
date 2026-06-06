@@ -175,17 +175,21 @@ function scoreProcurementRisk(deliveries: SourceRecord[] = []): RiskSignal {
     if (!requiredDate) continue;
 
     const daysLate = Math.round((today.getTime() - requiredDate.getTime()) / DAY_MS);
-    const isLate = daysLate > 0;
     const isAtRisk = normalize(del.status).includes("delay") || normalize(del.status).includes("hold");
+    // A delivery explicitly flagged delayed/on-hold is a flat "at-risk" exposure,
+    // NOT a per-day acceleration charge. Only treat as "late" (per-day cost) when
+    // it has slipped past its required date AND is not already flagged at-risk —
+    // otherwise the flat $2k tier would be silently overwritten by daysLate*$3.5k.
+    const isLate = daysLate > 0 && !isAtRisk;
 
     if (isLate || isAtRisk) {
-      // Late material = acceleration cost + idle crew cost
+      // Late material = acceleration cost + idle crew cost; at-risk = flat exposure
       const exposure = isLate ? daysLate * 3500 : 2000;
       totalExposure += exposure;
       items.push({
         signal: "late_procurement",
         label: `${del.delivery_number || del.po_number || "Delivery"}: ${del.description || ""}`,
-        severity: daysLate > 7 ? "critical" : isLate ? "high" : "medium",
+        severity: isLate && daysLate > 7 ? "critical" : isLate ? "high" : "medium",
         exposure,
         detail: isLate ? `${daysLate}d late — acceleration/idle crew cost` : "At risk — potential delay",
         entityType: "Delivery",
@@ -267,7 +271,11 @@ function scoreChangeOrderRisk(changeOrders: SourceRecord[] = []): RiskSignal {
     const status = normalize(co.status);
     if (["approved", "closed", "void", "voided"].includes(status)) continue;
 
-    const amount = Math.abs(num(co.co_amount));
+    // Use the SIGNED amount. A deductive (credit) change order reduces the
+    // contract, so it is NOT positive margin-at-risk exposure — Math.abs() here
+    // turned a -$50k credit into +$50k of "critical" exposure. The guard below
+    // then skips deductive and zero COs (only additive COs are uncertain margin).
+    const amount = num(co.co_amount);
     if (amount <= 0) continue;
 
     const ageDays = daysBetween(co.submitted_date || co.created_at, new Date());

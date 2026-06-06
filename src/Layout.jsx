@@ -120,7 +120,7 @@ export default function Layout({ children, currentPageName }) {
   // Page tracking (non-critical)
   useEffect(() => {
     if (!currentPageName) return;
-    try { /* Base44 internal page tracking */ } catch { /* suppress */ }
+    try { /* internal page tracking */ } catch { /* suppress */ }
   }, [currentPageName]);
 
   // Keep document.title in sync with the current route.
@@ -184,19 +184,15 @@ export default function Layout({ children, currentPageName }) {
           {/* LEFT: Brand + Hamburger */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
-            {(isDarkTheme || isMobile) && (
-              <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
-                <img src="/logo.png" alt="SteelBuild Pro" style={{ height: isMobile ? 30 : 26, width: "auto", objectFit: "contain" }} />
-              </div>
-            )}
-            {!isMobile && isDarkTheme && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
-            {!isMobile && !isDarkTheme && <ProjectPillDropdown align="left" />}
-            {!isMobile && !isDarkTheme && (
-              <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                Home
-              </span>
-            )}
-            {!isMobile && isDarkTheme && (
+            {/* Topbar is now identical in light + dark: logo → divider → project
+                selector → current-page eyebrow. (Branding previously lived in the
+                light sidebar; it now sits in the topbar for both themes.) */}
+            <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
+              <img src="/logo.png" alt="SteelBuild Pro" style={{ height: isMobile ? 30 : 26, width: "auto", objectFit: "contain" }} />
+            </div>
+            {!isMobile && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
+            {!isMobile && <ProjectPillDropdown align="left" />}
+            {!isMobile && (
               <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 {currentPageName?.replace(/([A-Z])/g, " $1").trim() || "Dashboard"}
               </span>
@@ -263,8 +259,9 @@ export default function Layout({ children, currentPageName }) {
             {/* User + Sign Out */}
             {!isMobile && <UserSignOutBlock user={user} onLogout={logout} />}
 
-            {/* Project pill dropdown */}
-            {(isDarkTheme || isMobile) && <ProjectPillDropdown compact={isMobile} />}
+            {/* Project pill dropdown — mobile keeps it on the right (compact);
+                desktop renders it on the left in both themes (see above). */}
+            {isMobile && <ProjectPillDropdown compact />}
           </div>
         </nav>
 

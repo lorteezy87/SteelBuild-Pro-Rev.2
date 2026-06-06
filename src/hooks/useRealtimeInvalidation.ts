@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 
@@ -24,6 +24,15 @@ export function useRealtimeInvalidation(
 ) {
   const qc = useQueryClient();
 
+  // Callers almost always pass an inline queryKeys array (new identity every
+  // render). Keep it in a ref so the subscription callback always reads the
+  // latest keys WITHOUT putting queryKeys in the effect deps — adding it there
+  // would tear down and re-subscribe the Supabase channel on every render
+  // (a real-world perf/connection-churn bug), while omitting it (the previous
+  // code) captured the mount-time keys and could invalidate stale ones.
+  const queryKeysRef = useRef(queryKeys);
+  queryKeysRef.current = queryKeys;
+
   useEffect(() => {
     if (!table) return;
 
@@ -39,7 +48,7 @@ export function useRealtimeInvalidation(
         "postgres_changes",
         { event: "*", schema: "public", table, filter },
         () => {
-          for (const key of queryKeys) {
+          for (const key of queryKeysRef.current) {
             qc.invalidateQueries({ queryKey: key });
           }
         },

@@ -29,7 +29,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { base44 } from '@/api/base44Client';
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -90,25 +90,25 @@ export default function Procurement() {
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['procurement', projectId],
     queryFn: () => projectId
-      ? base44.entities.Delivery.filter({ project_id: projectId })
+      ? entities.Delivery.filter({ project_id: projectId })
       : [],
     enabled: !!projectId,
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
   });
 
   const { data: vendors = [] } = useQuery({
     queryKey: ['vendors'],
-    queryFn: () => base44.entities.Vendor.list(),
+    queryFn: () => entities.Vendor.list(),
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ['work-packages', projectId],
     queryFn: () => projectId
-      ? base44.entities.WorkPackage.filter({ project_id: projectId })
+      ? entities.WorkPackage.filter({ project_id: projectId })
       : [],
     enabled: !!projectId,
   });
@@ -122,7 +122,7 @@ export default function Procurement() {
   );
 
   const createMut = useMutation({
-    mutationFn: (data: any) => base44.entities.Delivery.create({
+    mutationFn: (data: any) => entities.Delivery.create({
       ...data,
       delivery_type: 'PROCUREMENT',
       project_id: projectId,
@@ -138,7 +138,7 @@ export default function Procurement() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => base44.entities.Delivery.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => entities.Delivery.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement'] });
       qc.invalidateQueries({ queryKey: ['deliveries-all'] });
@@ -153,7 +153,7 @@ export default function Procurement() {
   // destructive - losing PO history when a user mis-clicked the X
   // button was the original bug report on this page.
   const deleteMut = useMutation({
-    mutationFn: (id: string) => base44.entities.Delivery.update(id, {
+    mutationFn: (id: string) => entities.Delivery.update(id, {
       is_deleted: true,
       deleted_at: new Date().toISOString(),
     }),

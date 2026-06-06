@@ -8,9 +8,9 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./rfis/RFIs.css";
-import { base44 } from "@/api/base44Client";
+import { entities, auth, integrations } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
@@ -41,8 +41,11 @@ import { compareRfisByNumber, isOverdue, exportRFIsToCSV } from "./rfis/utils";
 import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import RfiRow, { RFI_ROW_GRID } from "./rfis/RfiRow";
 import RfiDetailModal from "./rfis/RfiDetailModal";
+import NudgeDraftModal from "./rfis/NudgeDraftModal";
 import RfiInsightsStrip from "./rfis/RfiInsightsStrip";
 import RfiCommandCenter from "./rfis/RfiCommandCenter";
+import AgendaPanel from "./rfis/AgendaPanel";
+import { buildRfiAgenda } from "@/lib/commandCenter/rfiAgenda";
 
 const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
 
@@ -70,6 +73,7 @@ function loadInsightsCollapsed() {
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const projectId = useProjectId();
   const qc = useQueryClient();
   const { can } = usePermissions();
@@ -81,6 +85,7 @@ export default function RFIs() {
   const [showLogImport, setShowLogImport] = useState(false);
   const [editingRFI, setEditingRFI] = useState(null);
   const [selectedRFI, setSelectedRFI] = useState(null);
+  const [nudgeRFI, setNudgeRFI] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
@@ -105,13 +110,13 @@ export default function RFIs() {
   /* ── Data ── */
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: rfis = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
+    queryFn: () => entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
     enabled: !!projectId,
   });
   const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
@@ -137,7 +142,7 @@ export default function RFIs() {
 
   /* ── Mutations ── */
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.RFI.create(data),
+    mutationFn: (data) => entities.RFI.create(data),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, rfiQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       await invalidateCrudQueries(qc, rfiQueryKeys);
@@ -147,7 +152,7 @@ export default function RFIs() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.RFI.update(id, data),
+    mutationFn: ({ id, data }) => entities.RFI.update(id, data),
     onSuccess: async (updated) => {
       replaceRecordInCaches(qc, rfiQueryKeys, updated);
       if (selectedRFI?.id === updated.id) setSelectedRFI(updated);
@@ -158,7 +163,7 @@ export default function RFIs() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.RFI.delete(id),
+    mutationFn: (id) => entities.RFI.delete(id),
     onSuccess: async (_, deletedId) => {
       removeRecordFromCaches(qc, rfiQueryKeys, deletedId);
       if (selectedRFI?.id === deleteTarget?.id) setSelectedRFI(null);
@@ -171,7 +176,7 @@ export default function RFIs() {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, data }) => {
-      const results = await batchProcess(ids, (id) => base44.entities.RFI.update(id, data));
+      const results = await batchProcess(ids, (id) => entities.RFI.update(id, data));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
       }
@@ -191,7 +196,7 @@ export default function RFIs() {
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids) => {
-      const results = await batchProcess(ids, (id) => base44.entities.RFI.delete(id));
+      const results = await batchProcess(ids, (id) => entities.RFI.delete(id));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }
@@ -211,6 +216,13 @@ export default function RFIs() {
     },
     onError: (e) => toastCrudError(e, "Bulk delete failed"),
   });
+
+  /* ── Today's RFI Agenda (meeting view) ── */
+  const [agendaOpen, setAgendaOpen] = useState(false);
+  const agenda = useMemo(() => buildRfiAgenda(rfis), [rfis]);
+  // Overdue + blocking RFIs are the ones that warrant pulling the eye to the
+  // agenda toggle; drive its "urgent" treatment off that count.
+  const agendaUrgent = (agenda.counts?.overdue ?? 0) + (agenda.counts?.blocking ?? 0);
 
   /* ── Counts & filtered list ── */
   const counts = useMemo(() => {
@@ -271,7 +283,7 @@ export default function RFIs() {
     if (!rfis.length) return;
     const createRFIAlerts = async () => {
       try {
-        const existing = await base44.entities.Alert.filter({ alert_type: "RFI_Overdue" });
+        const existing = await entities.Alert.filter({ alert_type: "RFI_Overdue" });
         const existingIds = new Set(existing.map((a) => a.related_record_id).filter(Boolean));
         const existingTitles = new Set(existing.map((a) => a.title));
         const today = new Date();
@@ -290,7 +302,7 @@ export default function RFIs() {
           const liveProjectName = projectMap[r.project_id] || "";
           const alertTitle = isOD ? `${r.rfi_number} OVERDUE — ${daysLate}d` : `${r.rfi_number} due in ≤3 days`;
           if (existingTitles.has(alertTitle)) continue;
-          await base44.entities.Alert.create({
+          await entities.Alert.create({
             alert_type: "RFI_Overdue",
             severity: r.priority === "Critical" || daysLate >= 7 ? "Critical" : daysLate >= 3 || r.priority === "High" ? "High" : "Medium",
             title: alertTitle,
@@ -324,15 +336,15 @@ export default function RFIs() {
 
     setSavingAttachments(true);
     try {
-      const uploadedBy = await base44.auth.me?.()
+      const uploadedBy = await auth.me?.()
         .then((user) => user?.email)
         .catch(() => "");
       const project = projects.find((p) => p.id === (rfiRecord.project_id || projectId));
       const now = new Date().toISOString();
 
       for (const file of files) {
-        const uploaded = await base44.integrations.Core.UploadFile({ file });
-        await base44.entities.Document.create({
+        const uploaded = await integrations.Core.UploadFile({ file });
+        await entities.Document.create({
           project_id: rfiRecord.project_id || projectId,
           project_name: rfiRecord.project_name || project?.name || "",
           rfi_id: rfiRecord.id,
@@ -446,8 +458,29 @@ export default function RFIs() {
 
         <SequenceFilter items={rfis} value={seqFilter} onChange={setSeqFilter} />
 
+        <button
+          type="button"
+          className={`rfi-agenda-toggle${agendaOpen ? " is-active" : ""}${agendaUrgent > 0 ? " is-urgent" : ""}`}
+          onClick={() => setAgendaOpen((v) => !v)}
+          title="Today's RFI Agenda — overdue, blocking, due-soon, and awaiting RFIs for the production meeting"
+        >
+          <span className="rfi-agenda-toggle__icon" aria-hidden="true">⚑</span>
+          Today's Agenda
+          {agenda.total > 0 ? (
+            <span className="rfi-agenda-toggle__count">{agenda.total}</span>
+          ) : null}
+        </button>
+
         <span className="rfi-toolbar-count">{filtered.length} of {rfis.length}</span>
       </div>
+
+      {agendaOpen && (
+        <AgendaPanel
+          agenda={agenda}
+          onOpenRfi={setSelectedRFI}
+          onClose={() => setAgendaOpen(false)}
+        />
+      )}
 
       {/* Table */}
       <div className="rfi-table-shell">
@@ -556,6 +589,16 @@ export default function RFIs() {
             : {};
           updateMut.mutate({ id: selectedRFI.id, data: { status, ...extra } });
         }}
+        onNudge={() => setNudgeRFI(selectedRFI)}
+        onCreateCO={() => {
+          if (selectedRFI) navigate(`/ChangeOrders?fromRfi=${selectedRFI.id}`);
+        }}
+      />
+
+      <NudgeDraftModal
+        rfi={nudgeRFI}
+        open={!!nudgeRFI}
+        onClose={() => setNudgeRFI(null)}
       />
 
       <RfiLogImportModal

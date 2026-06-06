@@ -19,7 +19,7 @@ export type UseSaveMutationOptions<TData> = {
  *
  * Usage:
  *   const saveMut = useSaveMutation(
- *     (data) => base44.entities.Foo.create(data),
+ *     (data) => entities.Foo.create(data),
  *     {
  *       invalidateKeys: [['foo', projectId], ['foo']],
  *       successMsg: 'Item created',

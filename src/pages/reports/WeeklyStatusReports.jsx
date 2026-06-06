@@ -11,7 +11,7 @@
 
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import ReportShell from "./ReportShell";
 import { exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
@@ -48,7 +48,7 @@ function lastNWeekKeys(n) {
 export default function WeeklyStatusReports() {
   const { data: activity = [] } = useQuery({
     queryKey: ["drawing-activity-all"],
-    queryFn: () => base44.entities.DrawingActivity.list(),
+    queryFn: () => entities.DrawingActivity.list(),
   });
 
   const weekKeys = useMemo(() => lastNWeekKeys(8), []);

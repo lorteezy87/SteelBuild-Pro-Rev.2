@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { base44 } from "@/api/base44Client";
-import { resolveFileUrl } from "@/api/base44Client";
+import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNextFormattedNumber } from "../shared/numberSequencing";
@@ -129,6 +128,11 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     // required.
     rfi_type: "",
     proposed_solution: "",
+    // Fabrication-protection fields — also metadata-held (no schema change):
+    //   fab_hold     → mark that this RFI should hold fabrication of its sheets
+    //   piece_marks  → affected piece marks (comma/space separated)
+    fab_hold: false,
+    piece_marks: "",
   };
 
   // Seed the workflow-backbone fields from metadata when editing an existing
@@ -138,6 +142,8 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     ...r,
     rfi_type: r?.metadata?.rfi_type || "",
     proposed_solution: r?.metadata?.proposed_solution || "",
+    fab_hold: !!r?.metadata?.fab_hold,
+    piece_marks: r?.metadata?.piece_marks || "",
   });
 
   // Pre-fill drawing_reference when the modal is opened for a NEW
@@ -161,13 +167,13 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
   const { data: existingPdfDocs = [] } = useQuery({
     queryKey: ["rfi-documents", rfi?.id],
-    queryFn: () => rfi?.id ? base44.entities.Document.filter({ rfi_id: rfi.id }, "-uploaded_date") : [],
+    queryFn: () => rfi?.id ? entities.Document.filter({ rfi_id: rfi.id }, "-uploaded_date") : [],
     enabled: !!rfi?.id,
     initialData: [],
     staleTime: 30 * 1000,
@@ -177,7 +183,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   const activeProjectId = formData.project_id || projectId;
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work_packages", activeProjectId],
-    queryFn: () => base44.entities.WorkPackage.filter({ project_id: activeProjectId }),
+    queryFn: () => entities.WorkPackage.filter({ project_id: activeProjectId }),
     enabled: !!activeProjectId,
     initialData: [],
     staleTime: 60 * 1000,
@@ -186,7 +192,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   // Drawing sets for the active project — used in the Linking section
   const { data: drawingSets = [] } = useQuery({
     queryKey: ["drawing_sets", activeProjectId],
-    queryFn: () => base44.entities.DrawingSet.filter({ project_id: activeProjectId }),
+    queryFn: () => entities.DrawingSet.filter({ project_id: activeProjectId }),
     enabled: !!activeProjectId,
     initialData: [],
     staleTime: 60 * 1000,
@@ -195,7 +201,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   // Drawings for the active project — used by AutoLinkSuggestions
   const { data: projectDrawings = [] } = useQuery({
     queryKey: ["drawings", activeProjectId],
-    queryFn: () => activeProjectId ? base44.entities.Drawing.filter({ project_id: activeProjectId }) : Promise.resolve([]),
+    queryFn: () => activeProjectId ? entities.Drawing.filter({ project_id: activeProjectId }) : Promise.resolve([]),
     enabled: Boolean(activeProjectId),
     staleTime: 60_000,
   });
@@ -203,7 +209,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   // Existing RFIs for the active project — used by AutoLinkSuggestions
   const { data: existingRfis = [] } = useQuery({
     queryKey: ["rfis", activeProjectId],
-    queryFn: () => activeProjectId ? base44.entities.RFI.filter({ project_id: activeProjectId }) : Promise.resolve([]),
+    queryFn: () => activeProjectId ? entities.RFI.filter({ project_id: activeProjectId }) : Promise.resolve([]),
     enabled: Boolean(activeProjectId),
     staleTime: 60_000,
   });
@@ -218,7 +224,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
         schedule_impact_days: data.schedule_impact_days === "" ? null : data.schedule_impact_days !== undefined ? Number(data.schedule_impact_days) : null,
       };
       if (rfi) {
-        return base44.entities.RFI.update(rfi.id, clean);
+        return entities.RFI.update(rfi.id, clean);
       }
       let rfiNumber;
       if (clean.project_id) {
@@ -231,14 +237,14 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
         });
       } else {
         // No project — scan ALL RFIs to find the global max number
-        const allRFIs = await base44.entities.RFI.list();
+        const allRFIs = await entities.RFI.list();
         const maxNum = (allRFIs || []).reduce((max, r) => {
           const m = String(r.rfi_number || "").match(/(\d+)(?!.*\d)/);
           return m ? Math.max(max, Number(m[1])) : max;
         }, 0);
         rfiNumber = `RFI #${String(maxNum + 1).padStart(3, "0")}`;
       }
-      return base44.entities.RFI.create({
+      return entities.RFI.create({
         ...clean,
         rfi_number: rfiNumber,
       });
@@ -255,7 +261,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   });
 
   const quickStatusMut = useMutation({
-    mutationFn: (status) => base44.entities.RFI.update(rfi.id, { status }),
+    mutationFn: (status) => entities.RFI.update(rfi.id, { status }),
     onSuccess: (_, status) => {
       qc.invalidateQueries({ queryKey: ["rfis"] });
       if (projectId) qc.invalidateQueries({ queryKey: ["rfis", projectId] });
@@ -315,10 +321,16 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     // rfi_type / proposed_solution are local-only fields — fold them into the
     // existing metadata JSON and strip the top-level keys so we never send a
     // non-column (no schema dependency).
-    const { rfi_type, proposed_solution, ...rest } = formData;
+    const { rfi_type, proposed_solution, fab_hold, piece_marks, ...rest } = formData;
     return {
       ...rest,
-      metadata: { ...(formData.metadata || {}), rfi_type, proposed_solution },
+      metadata: {
+        ...(formData.metadata || {}),
+        rfi_type,
+        proposed_solution,
+        fab_hold: !!fab_hold,
+        piece_marks: (piece_marks || "").trim(),
+      },
     };
   };
 
@@ -445,6 +457,26 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
+            </Field>
+            <Field label="Piece Marks" span={2}>
+              <input
+                style={iStyle}
+                value={formData.piece_marks}
+                onChange={(e) => set("piece_marks", e.target.value)}
+                placeholder="Affected pieces, e.g. C-12, B-7"
+              />
+            </Field>
+            <Field label="Fab Hold" span={1}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", minHeight: 38 }}>
+                <input
+                  type="checkbox"
+                  checked={!!formData.fab_hold}
+                  onChange={(e) => set("fab_hold", e.target.checked)}
+                />
+                <span style={{ fontSize: 12, color: formData.fab_hold ? "var(--status-error)" : "var(--text-secondary)", fontWeight: formData.fab_hold ? 700 : 400 }}>
+                  Hold fabrication
+                </span>
+              </label>
             </Field>
             {/* Section — Linking (work package + drawing set) */}
             <SectionLabel>Linking</SectionLabel>
@@ -745,7 +777,7 @@ const darkSelectButtonStyle = {
   gap: 10,
   textAlign: "left",
   cursor: "pointer",
-  background: "rgba(9, 18, 32, 0.98)",
+  background: "var(--bg-input)",
   borderRadius: 8,
 };
 
@@ -758,7 +790,7 @@ const darkSelectMenuStyle = {
   maxHeight: 220,
   overflowY: "auto",
   padding: 4,
-  background: "linear-gradient(180deg, rgba(7, 13, 24, 0.998), rgba(4, 9, 18, 0.998))",
+  background: "var(--bg-surface-secondary)",
   border: "1px solid color-mix(in srgb, var(--accent) 32%, var(--border-default))",
   borderRadius: 10,
   boxShadow: "0 18px 46px rgba(0,0,0,0.74), inset 0 1px 0 rgba(255,255,255,0.06)",

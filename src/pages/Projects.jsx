@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/components/shared/formatters";
 import ProjectFormModal from "@/components/projects/ProjectFormModal";
@@ -8,7 +9,8 @@ import { toast } from "sonner";
 import { calcWpProgress, calcLaborBurn, calcContractValue, calcDaysToDeadline, calcRfiHealth } from "@/utils/projectKpis";
 import { CommandBar } from "@/components/design-system";
 import { useProjectContext } from "@/components/shared/ProjectContext";
-import { Plus } from "lucide-react";
+import { Plus, PauseCircle } from "lucide-react";
+import { formatLocalDate } from "@/utils/dates";
 
 /* ─────────────────────────────────────────────
    Phase + Health configs
@@ -201,9 +203,9 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
       }}
     >
       {/* Card header */}
-      <div style={{ padding: "16px 18px 12px 16px" }}>
-        {/* Row 1: phase pill + number */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <div style={{ padding: "16px 18px 12px 16px", opacity: project.on_hold ? 0.78 : 1 }}>
+        {/* Row 1: phase pill + number (+ on-hold badge) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
           <PhasePill phase={project.phase || "—"} config={phase} />
           <span style={{
             fontFamily: "var(--font-mono)",
@@ -214,6 +216,22 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
           }}>
             {project.project_number || "—"}
           </span>
+          {project.on_hold && (
+            <span
+              title={project.on_hold_reason || "Paused — excluded from every KPI rollup"}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3,
+                fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 800,
+                color: "var(--status-warning)",
+                background: "var(--warning-muted)",
+                border: "1px solid var(--warning-border)",
+                padding: "2px 6px", borderRadius: 3,
+                textTransform: "uppercase", letterSpacing: "0.10em",
+              }}
+            >
+              <PauseCircle size={9} /> On Hold
+            </span>
+          )}
         </div>
 
         {/* Row 2: project name + progress ring */}
@@ -524,13 +542,37 @@ export default function Projects() {
   const [editing,       setEditing]       = useState(null);
   const [detailProject, setDetailProject] = useState(null);
 
-  /* ── Data fetching ── */
-  const { data: projects     = [] } = useQuery({ queryKey: ["projects"],          queryFn: () => base44.entities.Project.list("-created_at"),    staleTime: 5 * 60 * 1000 });
-  const { data: rawWorkPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => base44.entities.WorkPackage.list() });
-  const { data: rawRfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => base44.entities.RFI.list() });
-  const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => base44.entities.ChangeOrder.list() });
+  /* ── Data fetching ──
+     The /Projects page is the ONE place that sees on-hold projects. We
+     bypass entities.Project.list() (which now auto-excludes
+     on_hold=true) and query the table directly, still honouring soft-delete
+     and project-membership RLS. Every other consumer keeps using
+     Project.list() and silently gets the active subset. */
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects", "all-including-on-hold"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("is_deleted", false)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: rawWorkPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => entities.WorkPackage.list() });
+  const { data: rawRfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => entities.RFI.list() });
+  const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => entities.ChangeOrder.list() });
 
   const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
+  // Subset used by every page-level KPI rollup: on-hold projects (and their
+  // child entities) must NOT contribute. Per-card stats still show the
+  // project's own counts so users can see what's parked in a paused project.
+  const activeProjectIds = useMemo(
+    () => new Set(projects.filter((p) => !p.on_hold).map((p) => p.id).filter(Boolean)),
+    [projects]
+  );
   const workPackages = useMemo(
     () => rawWorkPackages.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
     [liveProjectIds, rawWorkPackages]
@@ -543,20 +585,23 @@ export default function Projects() {
     () => rawChangeOrders.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
     [liveProjectIds, rawChangeOrders]
   );
+  // For KPI aggregation only: child entities scoped to active (non-on-hold) projects.
+  const kpiRfis          = useMemo(() => rfis.filter((r) => activeProjectIds.has(r.project_id)),         [rfis, activeProjectIds]);
+  const kpiChangeOrders  = useMemo(() => changeOrders.filter((c) => activeProjectIds.has(c.project_id)), [changeOrders, activeProjectIds]);
 
   /* ── Mutations ── */
   const createMut = useMutation({
-    mutationFn: (d) => base44.entities.Project.create(d),
+    mutationFn: (d) => entities.Project.create(d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project created"); },
     onError: (err) => toast.error(err.message),
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Project.update(id, data),
+    mutationFn: ({ id, data }) => entities.Project.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project updated"); },
     onError: (err) => toast.error(err.message),
   });
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.Project.delete(id),
+    mutationFn: (id) => entities.Project.delete(id),
     onSuccess: (_result, id) => {
       removeProject(id);
       qc.invalidateQueries();
@@ -575,17 +620,22 @@ export default function Projects() {
     }
   };
 
-  /* ── KPI calculations ── */
+  /* ── KPI calculations ──
+     On-hold projects (and their child entities) are excluded from every
+     aggregate — they show up in the cards/list below with an ON HOLD badge
+     but their data does not contribute to the portfolio rollup. */
   const kpis = useMemo(() => {
-    const active       = projects.filter(p => p.phase !== "Closeout");
-    const atRisk       = projects.filter(p => p.health_status === "At Risk").length;
-    const totalVal     = projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
-    const openRFIs     = rfis.filter(r => r.status === "Open" || r.status === "Under Review").length;
-    const overdueRFIs  = rfis.filter(r => r.date_required && new Date(r.date_required) < new Date() && !["Answered","Closed"].includes(r.status)).length;
-    const pendingCOVal = changeOrders.filter(c => ["Submitted","Under Review"].includes(c.status)).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-    const pendingCOCount = changeOrders.filter(c => ["Submitted","Under Review"].includes(c.status)).length;
-    return { total: projects.length, active: active.length, atRisk, totalVal, openRFIs, overdueRFIs, pendingCOVal, pendingCOCount };
-  }, [projects, rfis, changeOrders]);
+    const activeProjs   = projects.filter(p => !p.on_hold);
+    const onHoldCount   = projects.length - activeProjs.length;
+    const active        = activeProjs.filter(p => p.phase !== "Closeout");
+    const atRisk        = activeProjs.filter(p => p.health_status === "At Risk").length;
+    const totalVal      = activeProjs.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
+    const openRFIs      = kpiRfis.filter(r => r.status === "Open" || r.status === "Under Review").length;
+    const overdueRFIs   = kpiRfis.filter(r => r.date_required && new Date(r.date_required) < new Date() && !["Answered","Closed"].includes(r.status)).length;
+    const pendingCOVal  = kpiChangeOrders.filter(c => ["Submitted","Under Review"].includes(c.status)).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+    const pendingCOCount = kpiChangeOrders.filter(c => ["Submitted","Under Review"].includes(c.status)).length;
+    return { total: projects.length, active: active.length, atRisk, totalVal, openRFIs, overdueRFIs, pendingCOVal, pendingCOCount, onHoldCount };
+  }, [projects, kpiRfis, kpiChangeOrders]);
 
   /* ── Filtered list ── */
   const filtered = useMemo(() => projects.filter(p => {
@@ -623,7 +673,7 @@ export default function Projects() {
           title="Projects"
           count={projects.length}
           unit=" · ACTIVE + HISTORY"
-          subtitle={`${formatCurrency(kpis.totalVal)} portfolio value · ${kpis.active} active · ${kpis.atRisk} at risk`}
+          subtitle={`${formatCurrency(kpis.totalVal)} portfolio value · ${kpis.active} active · ${kpis.atRisk} at risk${kpis.onHoldCount > 0 ? ` · ${kpis.onHoldCount} on hold` : ""}`}
         >
           <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
             {[["cards", "CARDS"], ["list", "LIST"]].map(([v, label]) => (
@@ -984,7 +1034,7 @@ export default function Projects() {
               const { pct: wpPct } = calcWpProgress(pWPs);
               const pRFIs  = rfis.filter(r => r.project_id === p.id && (r.status === "Open" || r.status === "Under Review")).length;
               const target = p.target_completion_date
-                ? new Date(p.target_completion_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })
+                ? formatLocalDate(p.target_completion_date, "en-US", { month: "short", day: "numeric", year: "2-digit" })
                 : "—";
               const contractVal = formatCurrency(Number(p.original_contract_value) || 0);
 
@@ -1011,15 +1061,29 @@ export default function Projects() {
                   {/* Project name + number */}
                   <div style={{ paddingRight: 12, minWidth: 0 }}>
                     <div style={{
+                      display: "flex", alignItems: "center", gap: 6, minWidth: 0,
                       fontSize: 13,
                       fontWeight: 600,
                       color: "var(--text-primary)",
                       lineHeight: 1.3,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
                     }}>
-                      {p.name}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{p.name}</span>
+                      {p.on_hold && (
+                        <span
+                          title={p.on_hold_reason || "Paused — excluded from every KPI rollup"}
+                          style={{
+                            fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 800,
+                            color: "var(--status-warning)",
+                            background: "var(--warning-muted)",
+                            border: "1px solid var(--warning-border)",
+                            padding: "1px 5px", borderRadius: 3,
+                            textTransform: "uppercase", letterSpacing: "0.10em",
+                            whiteSpace: "nowrap", flexShrink: 0,
+                          }}
+                        >
+                          On Hold
+                        </span>
+                      )}
                     </div>
                     <div style={{
                       fontFamily: "var(--font-mono)",

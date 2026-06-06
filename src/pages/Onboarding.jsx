@@ -19,7 +19,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import {
   IMPORT_TARGETS,
@@ -127,7 +127,7 @@ async function createSeedRecords(seedPayloads) {
 
   for (const payloadKey of SEED_ORDER) {
     const entityKey = SEED_ENTITY_MAP[payloadKey];
-    const entity = base44.entities[entityKey];
+    const entity = entities[entityKey];
     let records = seedPayloads[payloadKey] || [];
     if (!entity || records.length === 0) {
       createdByKey[payloadKey] = [];
@@ -232,7 +232,7 @@ export default function Onboarding() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list("-created_at"),
+    queryFn: () => entities.Project.list("-created_at"),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -265,7 +265,7 @@ export default function Onboarding() {
 
   const createProjectMutation = useMutation({
     mutationFn: async () => {
-      const project = await base44.entities.Project.create(
+      const project = await entities.Project.create(
         buildPayloadWithTeamPlan(projectForm, templateKey, teamRows),
       );
       const seedPayloads = buildSeedPayloads(project, templateKey);
@@ -289,7 +289,7 @@ export default function Onboarding() {
     mutationFn: async () => {
       if (!selectedProject?.id) throw new Error("Select or create a project before importing.");
       if (stagedImport.invalidRows.length) throw new Error("Resolve invalid import rows before committing.");
-      const entity = base44.entities[stagedImport.target.entityKey];
+      const entity = entities[stagedImport.target.entityKey];
       return bulkCreateWithFallback(entity, stagedImport.validRecords);
     },
     onSuccess: (rows) => {

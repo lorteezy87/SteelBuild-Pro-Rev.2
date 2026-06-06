@@ -1,5 +1,5 @@
-import { createContext, useState, useEffect, useContext } from "react";
-import { base44 } from "@/api/base44Client";
+import { createContext, useState, useEffect, useContext, useMemo } from "react";
+import { entities } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
 
 export const ProjectContext = createContext({
@@ -11,8 +11,16 @@ export const ProjectContext = createContext({
   // `project` prop reflects the new value without waiting on a
   // refetch. Returns the merged project so callers can react to it.
   updateActiveProject: () => null,
+  patchProject: () => null,
   removeProject: () => {},
   projects: [],
+  // Same shape as `projects` but with on_hold=true projects removed. Used by
+  // the switcher, portfolio, dashboards and every cross-project KPI rollup —
+  // on-hold projects are visible only on the /Projects management page.
+  activeProjects: [],
+  // Fast lookup: id-set of active (non-on-hold) projects. KPI/aggregator
+  // consumers filter child entities via `activeProjectIds.has(row.project_id)`.
+  activeProjectIds: new Set(),
   loading: false,
   projectLoadError: null,
 });
@@ -76,13 +84,18 @@ export function ProjectProvider({ children }) {
     }
 
     let cancelled = false;
+    let retryTimer = null;
 
     const fetchProjects = async (attempt = 1) => {
-      const raw = await base44.entities.Project.list("-created_at");
+      const raw = await entities.Project.list("-created_at");
       const data = [...raw].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-      // If empty and we have retries left, wait and try again
-      if (data.length === 0 && attempt < 3) {
-        await new Promise((r) => setTimeout(r, attempt * 1500));
+      // If empty and we have retries left, wait and try again. Track the
+      // backoff timer so the effect cleanup can clear it on unmount —
+      // otherwise a pending setTimeout (1.5–3s) outlives the component and
+      // keeps the process alive (in vitest's fork pool that surfaces as
+      // "Timeout terminating forks worker").
+      if (data.length === 0 && attempt < 3 && !cancelled) {
+        await new Promise((r) => { retryTimer = setTimeout(r, attempt * 1500); });
         if (!cancelled) return fetchProjects(attempt + 1);
         return [];
       }
@@ -147,7 +160,10 @@ export function ProjectProvider({ children }) {
     };
 
     loadProjects();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
     // defaultProjectIdPref is intentionally excluded from the dep list:
     // we resolve it once at startup. Changing the pref later in the
     // current session shouldn't yank the user out of whatever project
@@ -185,6 +201,24 @@ export function ProjectProvider({ children }) {
     return merged;
   };
 
+  // Patch any project in the list (not just the active one). Used by edits
+  // outside the active-project flow — e.g. toggling on_hold on a project
+  // shown on the /Projects page — so the switcher's `activeProjects` (which
+  // filters on_hold) reflects the change without waiting for the next
+  // ProjectContext refetch on page load.
+  const patchProject = (projectId, patch) => {
+    if (!projectId || !patch || typeof patch !== "object") return null;
+    setProjects((list) => {
+      const next = list.map((p) => (p.id === projectId ? { ...p, ...patch } : p));
+      try { writeProjectsCache(next); } catch {}
+      return next;
+    });
+    if (activeProject?.id === projectId) {
+      setActiveProject((prev) => (prev ? { ...prev, ...patch } : prev));
+    }
+    return null;
+  };
+
   const removeProject = (projectId) => {
     if (!projectId) return;
     setProjects((list) => {
@@ -197,13 +231,39 @@ export function ProjectProvider({ children }) {
     }
   };
 
+  // Active (non-on-hold) projects + id set. Derived from `projects` and
+  // memoised so consumers can use them as stable React dependencies. An
+  // on-hold project is paused and must not appear in the switcher, portfolio,
+  // dashboards or any KPI rollup — only the /Projects page sees them.
+  const activeProjects = useMemo(
+    () => projects.filter((p) => p && p.on_hold !== true),
+    [projects]
+  );
+  const activeProjectIds = useMemo(
+    () => new Set(activeProjects.map((p) => p.id).filter(Boolean)),
+    [activeProjects]
+  );
+
+  // If the currently-active project is put on hold, auto-deselect it so the
+  // user isn't silently working in a paused project. The /Projects page
+  // remains the way to drill back in.
+  useEffect(() => {
+    if (activeProject?.on_hold === true) {
+      handleProjectSelect(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProject?.id, activeProject?.on_hold]);
+
   return (
     <ProjectContext.Provider value={{
       activeProject,
       setActiveProject: handleProjectSelect,
       updateActiveProject,
+      patchProject,
       removeProject,
       projects,
+      activeProjects,
+      activeProjectIds,
       loading,
       projectLoadError,
     }}>

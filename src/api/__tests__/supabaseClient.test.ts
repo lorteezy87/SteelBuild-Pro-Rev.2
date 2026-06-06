@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
         calls.push({ table, op: "order", column, value });
         return chain;
       }),
+      limit: vi.fn((_n: number) => chain),
       update: vi.fn((value: Record<string, unknown>) => {
         calls.push({ table, op: "update", value });
         return chain;
@@ -53,7 +54,7 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
-import { base44 } from "@/api/supabaseClient";
+import { entities } from "@/api/supabaseClient";
 
 describe("supabase entity client", () => {
   beforeEach(() => {
@@ -62,7 +63,7 @@ describe("supabase entity client", () => {
   });
 
   it("scopes project child list reads to non-archived projects", async () => {
-    await base44.entities.WorkPackage.list();
+    await entities.WorkPackage.list();
 
     expect(mocks.calls).toContainEqual({
       table: "work_packages",
@@ -84,7 +85,7 @@ describe("supabase entity client", () => {
   });
 
   it("does not add parent-project joins to project root reads", async () => {
-    await base44.entities.Project.list();
+    await entities.Project.list();
 
     expect(mocks.calls).toContainEqual({
       table: "projects",
@@ -100,7 +101,7 @@ describe("supabase entity client", () => {
   });
 
   it("archives the project root even when cleaning project children", async () => {
-    await base44.entities.Project.delete("project-1");
+    await entities.Project.delete("project-1");
 
     expect(mocks.calls).toContainEqual({
       table: "work_packages",

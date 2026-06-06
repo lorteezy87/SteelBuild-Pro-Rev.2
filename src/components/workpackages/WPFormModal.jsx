@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { formatBudgetPercent } from "../shared/formatters";
 import { getDraftDrawingsWarning } from "../shared/workflowValidation";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
@@ -44,7 +44,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const activeProjectId = form.project_id || (wp && wp.project_id);
   const { data: projectRfis = [] } = useQuery({
     queryKey: ["rfis", activeProjectId],
-    queryFn: () => activeProjectId ? base44.entities.RFI.filter({ project_id: activeProjectId }) : [],
+    queryFn: () => activeProjectId ? entities.RFI.filter({ project_id: activeProjectId }) : [],
     enabled: Boolean(activeProjectId),
     staleTime: 60_000,
   });
@@ -336,7 +336,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
               style={inputStyle}
             />
             {showDrawingDropdown && filteredDrawings.length > 0 && (
-               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "rgb(12,17,25)", border: "1px solid rgba(135,154,180,0.28)", borderTop: "none", borderRadius: "0 0 8px 8px", maxHeight: 200, overflowY: "auto", zIndex: 10, boxShadow: "0 16px 34px rgba(0,0,0,0.55)" }}>
+               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderTop: "none", borderRadius: "0 0 8px 8px", maxHeight: 200, overflowY: "auto", zIndex: 10, boxShadow: "var(--shadow-lg)" }}>
                  {filteredDrawings.map(d => (
                    <div
                      key={d.id}

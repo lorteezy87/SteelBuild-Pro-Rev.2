@@ -1,21 +1,22 @@
-﻿# CI â€” lint + typecheck + test + build on every push and PR.
+﻿# CI — lint + typecheck + test + build on every push and PR.
 #
 # What runs here:
 #   1. Install (cached node_modules via actions/setup-node)
 #   2. ESLint (warnings allowed, errors fail the build)
 #   3. TypeScript checks for both .ts (tsconfig) and .js/.jsx (jsconfig)
-#   4. Vitest unit tests (currently 480 passing)
+#   4. Vitest unit tests (the full unit suite — `npm test`)
 #   5. Production Vite build (catches dead-imports / runtime-only refs
 #      that the lint + typecheck passes don't notice)
 #
 # What does NOT run here:
-#   - End-to-end tests (no E2E suite yet)
+#   - End-to-end tests (no Playwright/E2E suite committed to this repo yet —
+#     `npm run test:e2e` will be wired in as a non-blocking job once it lands)
 #   - Lighthouse / a11y / bundle-size budgets (queued for later)
-#   - Deploy â€” Vercel handles that on push to codex/base44-deploy-nick
+#   - Deploy — Vercel handles that on push to main
 #
 # This workflow runs against EVERY push and pull request to any branch
 # so contributors see green/red feedback before merging into deploy.
-# The deploy branch (codex/base44-deploy-nick) gets the same gates plus
+# The deploy branch (main) gets the same gates plus
 # Vercel's own build, so a regression has two chances to be caught.
 
 name: CI
@@ -25,13 +26,11 @@ on:
     branches:
       - main
       - master
-      - codex/base44-deploy-nick
       - "claude/**"
   pull_request:
     branches:
       - main
       - master
-      - codex/base44-deploy-nick
 
 # Cancel any in-progress runs for the same branch when a new push comes in.
 # Avoids piling up redundant CI for rapid iteration on a feature branch.
@@ -88,6 +87,13 @@ jobs:
         # Catches dead imports / runtime-only refs that the type checks
         # don't see. Output is discarded — we just want the failure
         # signal.
+        #
+        # The build script itself raises the V8 heap to 4 GB
+        # (node --max-old-space-size=4096 ...vite build) because the large
+        # BIM/PDF/three vendor chunks OOM Rollup at Node's default heap. That
+        # limit now lives in package.json so it applies everywhere the build
+        # runs — CI here, Vercel production (vercel.json runs `npm run build`),
+        # and local. This NODE_OPTIONS is kept as a redundant safety net only.
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096

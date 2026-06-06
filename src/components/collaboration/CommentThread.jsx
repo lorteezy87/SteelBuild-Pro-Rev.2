@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
 
 // Comment-resolution status (migration 073). Cycle matches the markup
@@ -128,7 +128,7 @@ export default function CommentThread({
         || user?.user_metadata?.full_name
         || user?.email?.split("@")[0]
         || "User";
-      return await base44.entities.Comment.create({
+      return await entities.Comment.create({
         project_id:  projectId,
         entity_type: entityType,
         entity_id:   entityId,
@@ -153,7 +153,7 @@ export default function CommentThread({
 
   const handleDelete = async (commentId) => {
     try {
-      await base44.entities.Comment.delete(commentId);
+      await entities.Comment.delete(commentId);
       qc.invalidateQueries({ queryKey: QKEY(entityType, entityId) });
     } catch (err) {
       toast.error(`Delete failed: ${err.message}`);
@@ -161,14 +161,14 @@ export default function CommentThread({
   };
 
   const handleCycleStatus = async (comment) => {
-    // Optimistic-ish: write through base44.entities.Comment.update so the
+    // Optimistic-ish: write through entities.Comment.update so the
     // realtime subscription reflects the change for the rest of the
     // thread. If the write fails we still invalidate to surface the
     // server-truth state.
     const next = nextCommentStatus(comment.status);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      await base44.entities.Comment.update(comment.id, {
+      await entities.Comment.update(comment.id, {
         status: next,
         status_changed_at: new Date().toISOString(),
         status_changed_by: user?.id || null,

@@ -1,6 +1,7 @@
 import React from "react";
 import { Modal, Button, StatusPill, BicPill, PhaseChevron, Icon } from "@/components/design-system";
 import { daysOpen, isOverdue } from "./utils";
+import RfiCopilotPanel from "@/components/rfis/RfiCopilotPanel";
 
 const STAGE_INDEX = { Open: 0, "Under Review": 1, "Incomplete Response": 2, Answered: 3, Closed: 4 };
 
@@ -30,7 +31,7 @@ function impactValue(rfi) {
   return parts.join(" / ") || "No known impact";
 }
 
-export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge }) {
+export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO }) {
   if (!rfi) return null;
 
   const age = daysOpen(rfi);
@@ -52,6 +53,9 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Close</Button>
+          {onCreateCO && rfi.cost_impact && (
+            <Button variant="secondary" onClick={onCreateCO}>Create CO</Button>
+          )}
           {onNudge && <Button variant="secondary" icon="bell" onClick={onNudge}>Nudge BIC</Button>}
           {onEdit && <Button variant="outline" icon="ai" onClick={onEdit}>Edit</Button>}
           {onAdvanceStatus && rfi.status !== "Answered" && rfi.status !== "Closed" && (
@@ -98,6 +102,8 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
         </div>
       </section>
 
+      <RfiCopilotPanel rfi={rfi} />
+
       {rfi.answer && (
         <section className="rfi-detail-section">
           <SectionLabel>Answer</SectionLabel>
@@ -121,6 +127,25 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
               </div>
             )}
             {rfi.spec_section && <div className="rfi-reference-chip">Spec / {rfi.spec_section}</div>}
+          </div>
+        </section>
+      )}
+
+      {(rfi.metadata?.fab_hold || rfi.metadata?.piece_marks) && (
+        <section className="rfi-detail-section">
+          <SectionLabel>Fabrication</SectionLabel>
+          <div className="rfi-reference-row">
+            {rfi.metadata?.fab_hold && (
+              <div
+                className="rfi-reference-chip"
+                style={{ color: "var(--status-error)", borderColor: "var(--status-error)", fontWeight: 700 }}
+              >
+                ⛔ Fab Hold
+              </div>
+            )}
+            {rfi.metadata?.piece_marks && (
+              <div className="rfi-reference-chip">Pieces / {rfi.metadata.piece_marks}</div>
+            )}
           </div>
         </section>
       )}

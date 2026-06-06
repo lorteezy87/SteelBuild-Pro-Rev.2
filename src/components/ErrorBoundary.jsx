@@ -1,4 +1,5 @@
 import React from 'react';
+import * as Sentry from '@sentry/react';
 import { logError } from '@/lib/telemetry';
 
 /**
@@ -16,9 +17,13 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    // Forward to telemetry so the error survives a manual reload via
-    // window.__sbpErrorLog and any wired log forwarder picks it up.
+    // Local ring buffer (window.__sbpErrorLog) for in-page debugging.
     logError(error, { boundary: 'top-level', componentStack: info?.componentStack });
+    // Report React render errors to Sentry (no-op if no DSN is configured).
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: info?.componentStack } },
+      tags: { boundary: 'top-level' },
+    });
   }
 
   render() {

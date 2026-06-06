@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
+import { formatLocalDate } from "@/utils/dates";
 
 function asArray(v) {
   if (Array.isArray(v)) return v;
@@ -43,10 +44,10 @@ export default function DailyLogsList({ logs = [] }) {
     queryKey: ["action-items-link-labels", projectIds.join(",")],
     queryFn: async () => {
       if (projectIds.length === 1) {
-        return base44.entities.ActionItem.filter({ project_id: projectIds[0] });
+        return entities.ActionItem.filter({ project_id: projectIds[0] });
       }
       if (projectIds.length === 0) return [];
-      return base44.entities.ActionItem.list();
+      return entities.ActionItem.list();
     },
     staleTime: 60 * 1000,
     enabled: projectIds.length > 0,
@@ -56,10 +57,10 @@ export default function DailyLogsList({ logs = [] }) {
     queryKey: ["rfis-link-labels", projectIds.join(",")],
     queryFn: async () => {
       if (projectIds.length === 1) {
-        return base44.entities.RFI.filter({ project_id: projectIds[0] });
+        return entities.RFI.filter({ project_id: projectIds[0] });
       }
       if (projectIds.length === 0) return [];
-      return base44.entities.RFI.list();
+      return entities.RFI.list();
     },
     staleTime: 60 * 1000,
     enabled: projectIds.length > 0,
@@ -152,7 +153,7 @@ export default function DailyLogsList({ logs = [] }) {
                   color: "var(--text-primary)",
                 }}
               >
-                {new Date(log.date).toLocaleDateString("en-US", {
+                {formatLocalDate(log.date, "en-US", {
                   weekday: "short",
                   month: "short",
                   day: "numeric",

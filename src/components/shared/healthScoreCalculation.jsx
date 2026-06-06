@@ -4,7 +4,9 @@
  * All factors default to 100 (healthy) when data is missing.
  */
 
-export async function calculateProjectHealthScore(projectId, base44) {
+import { entities } from "@/api/supabaseClient";
+
+export async function calculateProjectHealthScore(projectId) {
   if (!projectId) return 0;
   try {
     // Load all data in parallel
@@ -17,13 +19,13 @@ export async function calculateProjectHealthScore(projectId, base44) {
       });
     const [rfis, changeOrders, deliveries, actionItems, costCodes, tasks, dailyLogs] =
       await Promise.all([
-        safeFetch(base44.entities.RFI.filter({ project_id: projectId }), "RFIs"),
-        safeFetch(base44.entities.ChangeOrder.filter({ project_id: projectId }), "Change Orders"),
-        safeFetch(base44.entities.Delivery.filter({ project_id: projectId }), "Deliveries"),
-        safeFetch(base44.entities.ActionItem.filter({ project_id: projectId }), "Action Items"),
-        safeFetch(base44.entities.CostCode.filter({ project_id: projectId }), "Cost Codes"),
-        safeFetch(base44.entities.ScheduleTask.filter({ project_id: projectId }), "Schedule Tasks"),
-        safeFetch(base44.entities.DailyLog.filter({ project_id: projectId }), "Daily Logs"),
+        safeFetch(entities.RFI.filter({ project_id: projectId }), "RFIs"),
+        safeFetch(entities.ChangeOrder.filter({ project_id: projectId }), "Change Orders"),
+        safeFetch(entities.Delivery.filter({ project_id: projectId }), "Deliveries"),
+        safeFetch(entities.ActionItem.filter({ project_id: projectId }), "Action Items"),
+        safeFetch(entities.CostCode.filter({ project_id: projectId }), "Cost Codes"),
+        safeFetch(entities.ScheduleTask.filter({ project_id: projectId }), "Schedule Tasks"),
+        safeFetch(entities.DailyLog.filter({ project_id: projectId }), "Daily Logs"),
       ]);
     if (fetchFailures > 0) {
       console.warn(`[HealthScore] ${fetchFailures}/7 data sources failed — score may be inaccurate`);

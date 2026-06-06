@@ -16,10 +16,11 @@
  * The user is told this in the modal.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import { resolveFileUrl } from "@/api/base44Client";
+import { resolveFileUrl } from "@/api/supabaseClient";
+import { computeFabReleaseGate, linkedRfiNumbers } from "@/lib/fabReleaseGate";
 import {
   isApprovedForFab,
   isClaimable,
@@ -86,6 +87,54 @@ export default function ExportFabReleaseModal({
 
   const groups = useMemo(() => groupBySet(filteredDrawings), [filteredDrawings]);
 
+  // ── Fab Release gate ─────────────────────────────────────────────────
+  // Don't let a package ship to the shop while an open RFI references one of
+  // its sheets. Fetch the RFIs linked from the matched drawings and compute a
+  // deterministic gate; a PM can override with an explicit acknowledgement.
+  // (Gate applies to fab_release / turnover; claims packages bundle everything
+  // by design, so they're never gated.)
+  const gated = kind !== "claims";
+  const [linkedRfis, setLinkedRfis] = useState([]);
+  const [override, setOverride] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setOverride(false);
+    if (!gated || !project?.id) {
+      setLinkedRfis([]);
+      return;
+    }
+    // linked_rfi_ids is a CSV of RFI *numbers*, so we can't query by id — fetch
+    // the project's (non-deleted) RFIs and let the gate match by number.
+    const hasLinks = filteredDrawings.some((d) => linkedRfiNumbers(d).length > 0);
+    if (!hasLinks) {
+      setLinkedRfis([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("rfis")
+          .select("id, rfi_number, title, status, is_deleted, ball_in_court")
+          .eq("project_id", project.id)
+          .eq("is_deleted", false);
+        if (!cancelled && !error) setLinkedRfis(data || []);
+      } catch (err) {
+        console.warn("[ExportFabReleaseModal] RFI fetch for fab gate failed:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, gated, project?.id, filteredDrawings]);
+
+  const gate = useMemo(
+    () => (gated
+      ? computeFabReleaseGate({ drawings: filteredDrawings, rfis: linkedRfis })
+      : { blocked: false, blockingRfis: [], affectedSheets: [], blockingCount: 0 }),
+    [gated, filteredDrawings, linkedRfis],
+  );
+  const exportLocked = gate.blocked && !override;
+
   if (!open) return null;
 
   const handleExport = async () => {
@@ -95,6 +144,10 @@ export default function ExportFabReleaseModal({
     }
     if (filteredDrawings.length === 0 && kind !== "claims") {
       toast.error(`No drawings match: ${cfg.filterLabel}.`);
+      return;
+    }
+    if (exportLocked) {
+      toast.error(`${gate.blockingCount} open RFI${gate.blockingCount === 1 ? "" : "s"} block this release — resolve them or check the PM override.`);
       return;
     }
 
@@ -177,6 +230,22 @@ export default function ExportFabReleaseModal({
         );
       }
 
+      // Audit the override: if the user shipped despite the gate, record who,
+      // which package, and which RFIs were still open (server stamps the user).
+      if (override && gate.blocked && project?.id) {
+        try {
+          await supabase.from("fab_release_overrides").insert({
+            project_id: project.id,
+            package_kind: kind,
+            package_name: stem,
+            drawing_count: filteredDrawings.length,
+            blocking_rfi_numbers: gate.blockingRfis.map((r) => r.rfi_number).filter(Boolean),
+          });
+        } catch (err) {
+          console.warn("[ExportFabReleaseModal] override audit log failed:", err);
+        }
+      }
+
       toast.success(`Package exported (${totalCount} item${totalCount === 1 ? "" : "s"})`);
       onClose?.();
     } catch (err) {
@@ -234,6 +303,38 @@ export default function ExportFabReleaseModal({
           )}
         </div>
 
+        {gated && gate.blocked && (
+          <div style={{
+            background: "color-mix(in srgb, var(--status-error) 12%, transparent)",
+            border: "1px solid var(--status-error)",
+            borderRadius: 2, padding: "12px 14px", marginBottom: 14,
+          }}>
+            <div style={{ ...mono, fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", color: "var(--status-error)", textTransform: "uppercase", marginBottom: 8 }}>
+              ⚠ Fab release blocked — {gate.blockingCount} open RFI{gate.blockingCount === 1 ? "" : "s"}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 8 }}>
+              Open RFIs reference {gate.affectedSheets.length} sheet{gate.affectedSheets.length === 1 ? "" : "s"} in this package. Releasing now risks fabricating to a detail that may change.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+              {gate.blockingRfis.slice(0, 6).map((r) => (
+                <div key={r.id} style={{ ...mono, fontSize: 11, color: "var(--text-primary)", display: "flex", gap: 8 }}>
+                  <span style={{ color: "var(--status-error)", fontWeight: 700, flex: "0 0 auto" }}>{r.rfi_number || "RFI"}</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.subject || r.title || "—"}{r.status ? ` · ${r.status}` : ""}
+                  </span>
+                </div>
+              ))}
+              {gate.blockingRfis.length > 6 && (
+                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>+ {gate.blockingRfis.length - 6} more…</div>
+              )}
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 11, color: "var(--text-secondary)" }}>
+              <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} />
+              <span><strong style={{ color: "var(--text-primary)" }}>PM override</strong> — release despite the open RFI{gate.blockingCount === 1 ? "" : "s"} (I accept the rework risk).</span>
+            </label>
+          </div>
+        )}
+
         <div style={{
           background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.3)",
           borderRadius: 2, padding: "10px 12px", marginBottom: 18,
@@ -254,16 +355,18 @@ export default function ExportFabReleaseModal({
           </button>
           <button
             onClick={handleExport}
-            disabled={busy || (kind !== "claims" && filteredDrawings.length === 0)}
+            disabled={busy || (kind !== "claims" && filteredDrawings.length === 0) || exportLocked}
+            title={exportLocked ? "Resolve the open RFIs or check the PM override to release" : undefined}
             style={{
               ...btnBase,
-              background: "rgba(200,155,32,0.2)",
-              borderColor: "var(--accent)",
-              color: "var(--accent)",
-              opacity: busy ? 0.6 : 1,
+              background: exportLocked ? "var(--bg-page)" : "rgba(200,155,32,0.2)",
+              borderColor: exportLocked ? "var(--border-default)" : "var(--accent)",
+              color: exportLocked ? "var(--text-muted)" : "var(--accent)",
+              opacity: busy || exportLocked ? 0.6 : 1,
+              cursor: exportLocked ? "not-allowed" : "pointer",
             }}
           >
-            {busy ? "Exporting…" : "Export Package"}
+            {busy ? "Exporting…" : exportLocked ? "Blocked by open RFIs" : "Export Package"}
           </button>
         </div>
       </div>

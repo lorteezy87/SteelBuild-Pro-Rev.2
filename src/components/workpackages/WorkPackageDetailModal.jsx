@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { formatLocalDate } from "@/utils/dates";
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -154,7 +155,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
 function OverviewTab({ wp, phaseColor, statusColor, percent }) {
   const formatDate = (d) =>
     d
-      ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      ? formatLocalDate(`${d}T00:00:00Z`, "en-US", { month: "short", day: "numeric", year: "numeric" })
       : "—";
 
   return (
@@ -191,7 +192,7 @@ function DrawingsTab({ wp, drawingMap }) {
 
   const formatDate = (d) =>
     d
-      ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      ? formatLocalDate(`${d}T00:00:00Z`, "en-US", { month: "short", day: "numeric", year: "numeric" })
       : "—";
 
   return (

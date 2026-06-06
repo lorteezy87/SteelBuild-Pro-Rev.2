@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { invalidateEntity, invalidateEntities } from "@/services/cacheRegistry";
@@ -75,7 +75,7 @@ export default function LinkedFolderBrowser({
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["document-import-queue", projectId, folderId],
     queryFn: () =>
-      base44.entities.DocumentImportQueue.filter({
+      entities.DocumentImportQueue.filter({
         project_id: projectId,
         linked_folder_id: folderId,
       }),
@@ -96,7 +96,7 @@ export default function LinkedFolderBrowser({
   // ── Mutations ───────────────────────────────────────────────────────
   const updateMut = useMutation({
     mutationFn: ({ id, data }) =>
-      base44.entities.DocumentImportQueue.update(id, data),
+      entities.DocumentImportQueue.update(id, data),
     onSuccess: () => {
       invalidateEntity(qc, "document_import", projectId);
     },
@@ -106,7 +106,7 @@ export default function LinkedFolderBrowser({
   const importMut = useMutation({
     mutationFn: async ({ queueItem }) => {
       // 1. Create a document record
-      const doc = await base44.entities.Document.create({
+      const doc = await entities.Document.create({
         project_id: projectId,
         title: queueItem.file_name,
         file_name: queueItem.file_name,
@@ -117,7 +117,7 @@ export default function LinkedFolderBrowser({
         source: "linked_folder",
       });
       // 2. Update queue item to imported
-      await base44.entities.DocumentImportQueue.update(queueItem.id, {
+      await entities.DocumentImportQueue.update(queueItem.id, {
         import_status: "imported",
         reviewed_at: new Date().toISOString(),
         created_document_id: doc.id,
@@ -152,7 +152,7 @@ export default function LinkedFolderBrowser({
     const now = new Date().toISOString();
     Promise.all(
       ids.map((id) =>
-        base44.entities.DocumentImportQueue.update(id, {
+        entities.DocumentImportQueue.update(id, {
           import_status: status,
           reviewed_at: now,
         })

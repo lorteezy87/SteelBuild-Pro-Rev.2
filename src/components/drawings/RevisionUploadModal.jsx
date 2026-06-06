@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities, integrations } from "@/api/supabaseClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
@@ -556,7 +556,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   const [derivedSets, setDerivedSets] = React.useState([]);
   useEffect(() => {
     if (!open || !activeProject?.id) return;
-    base44.entities.Drawing.filter({ project_id: activeProject.id }).then(drawings => {
+    entities.Drawing.filter({ project_id: activeProject.id }).then(drawings => {
       // Build a map of set_name -> virtual set objects for any set_name not already in drawingSets
       const existingNames = new Set(drawingSets.map(ds => ds.set_name));
       const byName = {};
@@ -612,7 +612,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       setStep("processing");
       setProcessingMsg("Uploading PDF...");
       setProcessingPct(10);
-      const res = await base44.integrations.Core.UploadFile({ file: pdfFile });
+      const res = await integrations.Core.UploadFile({ file: pdfFile });
       setProcessingMsg("AI is reading the drawing set...");
       setProcessingPct(40);
       // Forward the set's saved titleblock template (if any) so the
@@ -632,7 +632,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     // Get old sheets from existing Drawing records
     let oldSheets = [];
     try {
-      const existing = await base44.entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
+      const existing = await entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
       oldSheets = existing.filter(d => !d.is_superseded).map(d => ({ sheetNumber: d.sheet_number, sheetTitle: d.title, fileUrl: d.file_url }));
     } catch (e) { console.error("Failed to fetch existing drawings:", e); }
 
@@ -690,7 +690,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
 
     // Update DrawingSet (only if a real DrawingSet record exists)
     if (selectedSet.id) {
-      await base44.entities.DrawingSet.update(selectedSet.id, {
+      await entities.DrawingSet.update(selectedSet.id, {
         revision: revMeta.revisionLabel,
         issued_date: revMeta.issueDate,
         issued_by: revMeta.issuedBy || selectedSet.issued_by,
@@ -707,7 +707,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     // Load existing drawings for this set
     let existingDrawings = [];
     try {
-      existingDrawings = await base44.entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
+      existingDrawings = await entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
     } catch (e) { console.error("Failed to fetch drawings for apply:", e); }
 
     let updated = 0, added = 0, removed = 0, failed = 0;
@@ -715,7 +715,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       try {
         const existing = existingDrawings.find(d => d.sheet_number === match.sheetNumber && !d.is_superseded);
         if (match.change === "removed") {
-          if (existing) { await base44.entities.Drawing.update(existing.id, { is_superseded: true }); removed++; }
+          if (existing) { await entities.Drawing.update(existing.id, { is_superseded: true }); removed++; }
         } else if (match.change === "added") {
           const addedPage = validatePdfPage(match.newSheet?.pdfPage);
           if (addedPage === null) {
@@ -723,7 +723,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               `[RevisionUploadModal] Added sheet "${match.sheetNumber}" has invalid pdfPage=${JSON.stringify(match.newSheet?.pdfPage)} — defaulting to 1.`,
             );
           }
-          await base44.entities.Drawing.create({
+          await entities.Drawing.create({
             sheet_number: match.newSheet.sheetNumber,
             title: match.newSheet.sheetTitle,
             project_id: activeProject?.id,
@@ -753,7 +753,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
                 `[RevisionUploadModal] Updated sheet "${match.sheetNumber}" has invalid pdfPage=${JSON.stringify(match.newSheet?.pdfPage)} — defaulting to 1.`,
               );
             }
-            await base44.entities.Drawing.update(existing.id, {
+            await entities.Drawing.update(existing.id, {
               revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
               issue_date: revMeta.issueDate,
               issued_by: revMeta.issuedBy || existing.issued_by,

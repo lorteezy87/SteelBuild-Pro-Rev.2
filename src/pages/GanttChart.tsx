@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { ComponentType, PropsWithChildren } from "react";
@@ -54,7 +54,7 @@ export default function GanttChart() {
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ["lookahead-gantt", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.LookAhead.filter({ project_id: activeProject.id }, "-created_at")
+      ? entities.LookAhead.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });
@@ -76,17 +76,17 @@ export default function GanttChart() {
   }, [qc, activeProject?.id]);
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => base44.entities.LookAhead.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => entities.LookAhead.update(id, data),
     onSuccess: invalidate,
     onError: (e: any) => toast.error(`Update failed: ${e?.message || "Unknown error"}`),
   });
   const createMut = useMutation({
-    mutationFn: (d: any) => base44.entities.LookAhead.create(d),
+    mutationFn: (d: any) => entities.LookAhead.create(d),
     onSuccess: invalidate,
     onError: (e: any) => toast.error(`Create failed: ${e?.message || "Unknown error"}`),
   });
   const deleteMut = useMutation({
-    mutationFn: (id: string) => base44.entities.LookAhead.delete(id),
+    mutationFn: (id: string) => entities.LookAhead.delete(id),
     onSuccess: invalidate,
     onError: (e) => toast.error(`Delete failed: ${e?.message || "Unknown error"}`),
   });

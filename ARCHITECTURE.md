@@ -36,7 +36,7 @@ For the running list of known issues, see [`TECH_DEBT.md`](./TECH_DEBT.md).
                   │  (LLM via edge fn)     │
                   └────────────────────────┘
 
-         Hosting: Vercel auto-deploys from codex/base44-deploy-nick
+         Hosting: Vercel auto-deploys from main
 ```
 
 There is no separate backend service. The app is a SPA that talks
@@ -403,11 +403,11 @@ Concurrency group cancels redundant runs on rapid iteration.
 
 ### Deployment
 
-Vercel auto-deploys from `codex/base44-deploy-nick`. Workflow:
+Vercel auto-deploys from `main`. Workflow:
 
 1. Develop on a `claude/<slug>` feature branch
 2. Push commits + PR if collaborating
-3. Merge into `codex/base44-deploy-nick` (Vercel builds + deploys)
+3. Merge into `main` (Vercel builds + deploys)
 4. Verify on the live URL
 
 `CLAUDE.md` documents the auto-deploy command sequence used by
@@ -455,8 +455,9 @@ Setup:
 Pattern (see `Layout.test.jsx`, `Drawings.test.jsx`,
 `Submittals.test.jsx` for live examples):
 
-1. `vi.mock("@/api/base44Client", ...)` — return a Proxy whose
-   entities resolve to empty arrays / nulls. No network.
+1. `vi.mock("@/api/supabaseClient", ...)` — provide the named `entities`
+   surface as a Proxy whose entity clients resolve to empty arrays / nulls
+   (plus `resolveFileUrl` where the component needs it). No network.
 2. `vi.mock("@/lib/supabase", ...)` — stub `auth.getSession`,
    `auth.onAuthStateChange`, `from()` chains, `rpc()`.
 3. Render the real component inside `MemoryRouter` +

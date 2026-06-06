@@ -1,11 +1,14 @@
 /**
- * Lightweight error telemetry shim.
+ * Lightweight error telemetry shim — LOCAL ring buffer only.
  *
- * Right now this only logs to the console + a ring buffer that survives in
- * `window.__sbpErrorLog` (handy for debugging in production). When we wire
- * a real provider (Sentry, Logtail, Supabase Edge Function, …) we plug it
- * in here and every ErrorBoundary, mutation, and toast gets coverage for
- * free.
+ * Keeps the last N errors/events in `window.__sbpErrorLog` (handy for debugging
+ * in production via devtools). This is deliberately NOT wired to Sentry:
+ * Sentry initialisation lives in `src/instrument.js` (imported first in
+ * main.jsx), whose default integrations already capture window.onerror /
+ * unhandledrejection, and the ErrorBoundaries call `Sentry.captureException`
+ * directly for React render errors. Forwarding logError() here too would
+ * double-report. Use this buffer for the in-page debug log; use Sentry for
+ * aggregation/alerting.
  */
 
 const MAX_BUFFER = 50;
@@ -44,8 +47,8 @@ export function logError(error, context = {}) {
     };
     pushBuffer(entry);
     // Loud console.error so it shows up in dev tools and any log forwarder
-    // hooked into the console (e.g. LogRocket, Sentry's BrowserTracing).
-     
+    // hooked into the console.
+
     console.error("[telemetry]", entry);
   } catch {
     /* never throw from telemetry */
@@ -65,7 +68,7 @@ export function logEvent(name, data = {}) {
       data: safeStringify(data),
     };
     pushBuffer({ event: entry });
-     
+
     if (typeof console !== "undefined" && console.debug) console.debug("[event]", entry);
   } catch { /* no-op */ }
 }

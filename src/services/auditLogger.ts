@@ -1,7 +1,7 @@
 /**
  * auditLogger.ts — Centralized audit trail for all entity operations.
  *
- * Writes to base44.entities.Activity so the Activity page + ActivityFeed
+ * Writes to entities.Activity so the Activity page + ActivityFeed
  * component actually have data to display.
  *
  * Called automatically by useCrudMutation after every successful create/update/delete.
@@ -9,10 +9,10 @@
  *
  * The `activities` table stores columns in snake_case (entity_type, entity_name,
  * performed_by, project_id, project_name). Read-side aliasing in supabaseClient
- * mirrors them to the Base44-style camelCase that legacy feed UI still reads.
+ * mirrors them to the legacy camelCase that legacy feed UI still reads.
  */
 
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 
 type EntityRecord = Record<string, any>;
@@ -144,7 +144,7 @@ export async function logActivity(
       description: options.description || statusChange || "",
     };
 
-    await base44.entities.Activity.create(activityRecord);
+    await entities.Activity.create(activityRecord);
   } catch (err: any) {
     // Never block the primary operation — audit is best-effort
     console.warn("[auditLogger] Failed to log activity:", err?.message);

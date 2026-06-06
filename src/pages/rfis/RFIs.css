@@ -449,6 +449,100 @@
   background: var(--accent-muted);
 }
 
+/* Today's Agenda toggle — promoted out of the plain .rfi-chip look so it is
+   easy to spot in the filter bar, with a red "urgent" treatment + pulsing
+   count when the agenda contains overdue/blocking RFIs. */
+.rfi-agenda-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.rfi-agenda-toggle:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.rfi-agenda-toggle.is-active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg-base, #0d1117);
+}
+
+.rfi-agenda-toggle__icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.rfi-agenda-toggle__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.rfi-agenda-toggle.is-active .rfi-agenda-toggle__count {
+  background: color-mix(in srgb, #000 20%, transparent);
+  color: var(--bg-base, #0d1117);
+}
+
+.rfi-agenda-toggle.is-urgent {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border-default));
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg-surface-low));
+  color: var(--danger);
+}
+
+.rfi-agenda-toggle.is-urgent:hover {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.rfi-agenda-toggle.is-urgent .rfi-agenda-toggle__count {
+  background: var(--danger);
+  color: #fff;
+  animation: rfi-agenda-pulse 1.8s ease-in-out infinite;
+}
+
+.rfi-agenda-toggle.is-urgent.is-active {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+
+.rfi-agenda-toggle.is-urgent.is-active .rfi-agenda-toggle__count {
+  background: color-mix(in srgb, #000 22%, transparent);
+  color: #fff;
+  animation: none;
+}
+
+@keyframes rfi-agenda-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 50%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rfi-agenda-toggle.is-urgent .rfi-agenda-toggle__count { animation: none; }
+}
+
 .rfi-toolbar-count {
   margin-left: auto;
   color: var(--text-muted);

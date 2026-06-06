@@ -11,10 +11,9 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 
 import { useProjectId } from "@/hooks/useProjectId";
@@ -33,7 +32,6 @@ import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/Seque
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus, Search } from "lucide-react";
 import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
-import { setDraft } from "@/lib/draftStorage";
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
 
 const EMPTY_ENGINE_SOURCES = {
@@ -49,7 +47,6 @@ export default function Constraints() {
   const qc = useQueryClient();
   const projectId = useProjectId();
   const { activeProject } = useProjectContext();
-  const navigate = useNavigate();
 
   const [view, setView] = useState("list");
   const [showForm, setShowForm] = useState(false);
@@ -67,8 +64,8 @@ export default function Constraints() {
     queryKey: ["constraints", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.ActionItem.filter({ project_id: projectId, category: "CONSTRAINT" })
-        : base44.entities.ActionItem.filter({ category: "CONSTRAINT" }),
+        ? entities.ActionItem.filter({ project_id: projectId, category: "CONSTRAINT" })
+        : entities.ActionItem.filter({ category: "CONSTRAINT" }),
     enabled: true,
   });
 
@@ -76,14 +73,14 @@ export default function Constraints() {
     queryKey: ["work-packages", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.WorkPackage.filter({ project_id: projectId })
-        : base44.entities.WorkPackage.list(),
+        ? entities.WorkPackage.filter({ project_id: projectId })
+        : entities.WorkPackage.list(),
     enabled: true,
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -96,12 +93,12 @@ export default function Constraints() {
           ? entity.filter({ project_id: projectId }, order).catch(() => [])
           : entity.filter({ project_id: projectId }).catch(() => []);
       const [rfis, submittals, deliveries, scheduleTasks, drawings, inspections] = await Promise.all([
-        read(base44.entities.RFI, "-submitted_date"),
-        read(base44.entities.Submittal, "-submitted_date"),
-        read(base44.entities.Delivery, "-scheduled_date"),
-        read(base44.entities.ScheduleTask, "start_date"),
-        read(base44.entities.Drawing),
-        read(base44.entities.Inspection, "-inspection_date"),
+        read(entities.RFI, "-submitted_date"),
+        read(entities.Submittal, "-submitted_date"),
+        read(entities.Delivery, "-scheduled_date"),
+        read(entities.ScheduleTask, "start_date"),
+        read(entities.Drawing),
+        read(entities.Inspection, "-inspection_date"),
       ]);
       return { rfis, submittals, deliveries, scheduleTasks, drawings, inspections };
     },
@@ -111,7 +108,7 @@ export default function Constraints() {
 
   // -- Mutations ----------------------------------------------------------------------
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.ActionItem.create(data),
+    mutationFn: (data) => entities.ActionItem.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["constraints"] });
       toast.success("Constraint logged");
@@ -122,7 +119,7 @@ export default function Constraints() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ActionItem.update(id, data),
+    mutationFn: ({ id, data }) => entities.ActionItem.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["constraints"] });
       toast.success("Constraint updated");
@@ -133,7 +130,7 @@ export default function Constraints() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.ActionItem.delete(id),
+    mutationFn: (id) => entities.ActionItem.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["constraints"] });
       setDeleteTarget(null);
@@ -231,17 +228,6 @@ export default function Constraints() {
   const overdueCount = kpis.overdue.length;
 
   // -- Handlers ----------------------------------------------------------------------
-  const handleLogMitigation = (c) => {
-    setDraft("new-mitigation", {
-      issue_source: "Constraint",
-      source_entity_ref: c._source_ref || c.constraint_number || "Constraint",
-      source_entity_id: c._source_id || c.id,
-      title: c.title,
-      identified_date: new Date().toISOString().split("T")[0],
-      status: CONSTRAINT_STATUS.OPEN,
-    });
-    navigate("/Mitigations");
-  };
 
   const handleSave = (data) => {
     if (editing) {
@@ -382,7 +368,6 @@ export default function Constraints() {
           onQuickUpdate={(id, data) => updateMut.mutate({ id, data })}
           onEdit={(c) => { setEditing(c); setShowForm(true); }}
           onDelete={(c) => setDeleteTarget(c)}
-          onLogMitigation={handleLogMitigation}
         />
       ) : (
         <BoardView
@@ -391,7 +376,6 @@ export default function Constraints() {
           onQuickUpdate={(id, data) => updateMut.mutate({ id, data })}
           onEdit={(c) => { setEditing(c); setShowForm(true); }}
           onDelete={(c) => setDeleteTarget(c)}
-          onLogMitigation={handleLogMitigation}
         />
       )}
 

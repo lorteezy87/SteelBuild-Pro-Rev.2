@@ -14,6 +14,7 @@
 import React from "react";
 import { ACTIVITY_COLOR, STATUS_DOT, RELATIONSHIP_LABEL } from "./zonePanelConstants";
 import { LINKABLE_TYPE_LABELS } from "@/lib/drawingHub";
+import { formatLocalDate } from "@/utils/dates";
 
 /**
  * Compose the drawing_reference string that pre-fills the RFI form.
@@ -53,7 +54,7 @@ export function formatRelative(iso) {
   const m = Math.floor(ms / 60_000); if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);      if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);      if (d <= 30) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return formatLocalDate(iso, "en-US", { month: "short", day: "numeric" });
 }
 
 export function describeActivity(r) {

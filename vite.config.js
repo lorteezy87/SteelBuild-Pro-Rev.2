@@ -4,11 +4,33 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import wasm from 'vite-plugin-wasm'
 import topLevelAwait from 'vite-plugin-top-level-await'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// Sentry source-map upload runs ONLY when SENTRY_AUTH_TOKEN is present (set as a
+// Vercel build env var for production). Local + CI builds have no token, so the
+// plugin is skipped entirely and the build is unaffected. org/project come from
+// the SENTRY_ORG / SENTRY_PROJECT env vars (set alongside the token). The token
+// is NEVER hardcoded — it is read from the environment at build time only.
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
+const enableSentrySourceMaps = Boolean(sentryAuthToken)
+
 function vendorChunk(id) {
   const n = id.replace(/\\/g, '/')
+
+  // Vite's runtime preload helper (`\0vite/preload-helper`) is imported
+  // statically by the entry AND by every chunk that uses dynamic import().
+  // If Rollup co-locates it with a heavy library chunk, the entry's static
+  // `import { __vitePreload } from '<that chunk>'` edge makes the whole library
+  // an eager dependency of the entry — Vite then emits a `modulepreload` for it
+  // in index.html, pulling megabytes onto the critical path for users who never
+  // open that route. pdfjs-dist uses top-level await, which made `vendor-pdf`
+  // the anchor the helper attached to, eagerly preloading ~1.2 MB of PDF libs
+  // on every page load. Pin the helper to its own tiny chunk so no heavy
+  // library can ever be dragged into the boot path through it.
+  if (n.includes('vite/preload-helper')) return 'vendor-vite-runtime'
+
   if (!n.includes('/node_modules/')) return undefined
 
   // BIM / 3D
@@ -20,10 +42,32 @@ function vendorChunk(id) {
   if (n.includes('/node_modules/three/examples/')) return 'vendor-three-examples'
   if (n.includes('/node_modules/three/')) return 'vendor-three-core'
 
-  // Heavy export libs
+  // PDF viewing (pdfjs-dist) is loaded by DrawingViewer + thumbnail/extraction
+  // flows; keep it isolated so the viewer never pays for export-only weight.
   if (n.includes('/node_modules/pdfjs-dist/')) return 'vendor-pdf'
-  if (n.includes('/node_modules/jspdf/')) return 'vendor-pdf'
+  // PDF export libs (jspdf + html2canvas) are intentionally NOT pinned to a
+  // manual vendor chunk. Pinning them forces a shared static chunk that the
+  // vite-plugin-top-level-await dynamic-import helper then makes DrawingViewer
+  // import eagerly (the viewer would download ~900 kB of export-only code on
+  // open). Leaving them unpinned lets Rollup fold them into the async-only
+  // chunk graph reachable solely from the export entry points
+  // (ExportMarkupPDFModal, generateTransmittal, exportGanttPdf), so they load
+  // on-demand from the export action and never alongside the viewer.
   if (n.includes('/node_modules/xlsx/')) return 'vendor-xlsx'
+
+  // Shared styling micro-utils. These are pulled in by the app-wide `cn()`
+  // helper (src/lib/utils -> clsx + tailwind-merge) and by `class-variance-
+  // authority`, so they ride along on EVERY route via the shared Button/`cn`
+  // chunk. recharts ALSO depends on clsx, so without this rule Rollup parks the
+  // single shared clsx module inside `vendor-charts` (one of its importers) and
+  // the shared Button/util chunks then statically import it back — dragging the
+  // ~596 kB charts bundle onto chart-free routes (RFIs, Drawings, Submittals,
+  // WorkPackages, …). Giving these tiny utils their own chunk breaks that bridge
+  // so charts only load where they're actually rendered. Keep BEFORE the charts
+  // rule (clsx must land here, not in vendor-charts).
+  if (n.includes('/node_modules/clsx/')) return 'vendor-ui-utils'
+  if (n.includes('/node_modules/tailwind-merge/')) return 'vendor-ui-utils'
+  if (n.includes('/node_modules/class-variance-authority/')) return 'vendor-ui-utils'
 
   // Charts (recharts + transitive deps)
   if (n.includes('/node_modules/recharts/')) return 'vendor-charts'
@@ -56,6 +100,26 @@ export default defineConfig({
     react(),
     wasm(),
     topLevelAwait(),
+    // Must be LAST so it sees the final emitted bundle + source maps. Gated on
+    // the auth token; uploads are best-effort (errorHandler swallows failures)
+    // so a misconfigured token/slug can never fail a production deploy.
+    ...(enableSentrySourceMaps
+      ? [sentryVitePlugin({
+          // org/project slugs are public identifiers (they appear in the DSN /
+          // Sentry URLs, not secrets), so default to the known values; the
+          // SENTRY_ORG / SENTRY_PROJECT env vars override if ever needed. Only
+          // the auth token must be supplied as a (Vercel) build secret.
+          org: process.env.SENTRY_ORG || 'steelbuild-pro',
+          project: process.env.SENTRY_PROJECT || 'javascript-react',
+          authToken: sentryAuthToken,
+          telemetry: false,
+          release: { name: process.env.VITE_APP_VERSION || undefined },
+          sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+          errorHandler: (err) => {
+            console.warn('[sentry-vite-plugin] source-map upload skipped:', err.message)
+          },
+        })]
+      : []),
   ],
   optimizeDeps: {
     // Exclude web-ifc from Vite's dependency pre-bundling to avoid
@@ -67,6 +131,11 @@ export default defineConfig({
     plugins: () => [wasm(), topLevelAwait()],
   },
   build: {
+    // Emit hidden source maps (no sourceMappingURL comment, so they're not
+    // referenced by the served bundle) only when we're going to upload them to
+    // Sentry; the plugin deletes the .map files from dist after upload. Without
+    // the token, no maps are generated (default).
+    sourcemap: enableSentrySourceMaps ? 'hidden' : false,
     rollupOptions: {
       output: {
         manualChunks: vendorChunk,
@@ -86,5 +155,11 @@ export default defineConfig({
     // `// @vitest-environment jsdom` pragma at the top of the file.
     environment: 'node',
     setupFiles: ['./vitest.setup.js', './src/setupTests.ts'],
+    // Use the worker_threads pool. Threads are terminated forcibly at teardown,
+    // so a worker whose event loop is briefly busy never produces the forks
+    // pool's "Timeout terminating forks worker" warning (intermittent on slow/
+    // contended machines). Component tests here mock all native I/O (supabase,
+    // base44) and only use jsdom, which runs cleanly under threads.
+    pool: 'threads',
   },
 });

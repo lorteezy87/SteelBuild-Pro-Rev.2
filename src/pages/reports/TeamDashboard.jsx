@@ -10,7 +10,7 @@
 
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { isRfiOpen, isActionItemOpen } from "@/lib/entityPredicates";
 import ReportShell from "./ReportShell";
 import { exportTableCSV } from "./utils";
@@ -26,15 +26,15 @@ const isOpenTask = (t) => t?.status !== "Complete" && t?.status !== "Cancelled";
 export default function TeamDashboard() {
   const { data: tasks = [] } = useQuery({
     queryKey: ["schedule-tasks-all"],
-    queryFn: () => base44.entities.ScheduleTask.list(),
+    queryFn: () => entities.ScheduleTask.list(),
   });
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis-all"],
-    queryFn: () => base44.entities.RFI.list(),
+    queryFn: () => entities.RFI.list(),
   });
   const { data: actionItems = [] } = useQuery({
     queryKey: ["action-items-all"],
-    queryFn: () => base44.entities.ActionItem.list(),
+    queryFn: () => entities.ActionItem.list(),
   });
 
   const people = useMemo(() => {

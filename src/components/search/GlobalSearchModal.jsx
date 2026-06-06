@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { Search } from "lucide-react";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -33,7 +33,6 @@ const COLOR_MAP = {
 /* ── Quick-nav modules for empty-query state ────────────────────────────── */
 const QUICK_NAV = [
   { icon: "◈", name: "Dashboard",    page: "Dashboard",               group: "Navigate" },
-  { icon: "⊕", name: "PCC",          page: "ProjectControlCenter",    group: "Navigate" },
   { icon: "⚑", name: "RFI Hub",      page: "RFIs",                    group: "Navigate" },
   { icon: "▦", name: "Drawings",     page: "Drawings",                group: "Navigate" },
   { icon: "☰", name: "Work Packages",page: "WorkPackages",            group: "Navigate" },
@@ -73,42 +72,42 @@ export default function GlobalSearchModal({ open, onClose }) {
 
   const { data: cachedProjects = EMPTY, isLoading: loadingProjects } = useQuery({
     queryKey: ["search-projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });
 
   const { data: cachedRFIs = EMPTY, isLoading: loadingRFIs } = useQuery({
     queryKey: ["search-rfis"],
-    queryFn: () => base44.entities.RFI.list(),
+    queryFn: () => entities.RFI.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });
 
   const { data: cachedDrawings = EMPTY, isLoading: loadingDrawings } = useQuery({
     queryKey: ["search-drawings"],
-    queryFn: () => base44.entities.Drawing.list(),
+    queryFn: () => entities.Drawing.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });
 
   const { data: cachedWPs = EMPTY, isLoading: loadingWPs } = useQuery({
     queryKey: ["search-workpackages"],
-    queryFn: () => base44.entities.WorkPackage.list(),
+    queryFn: () => entities.WorkPackage.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });
 
   const { data: cachedCOs = EMPTY, isLoading: loadingCOs } = useQuery({
     queryKey: ["search-changeorders"],
-    queryFn: () => base44.entities.ChangeOrder.list(),
+    queryFn: () => entities.ChangeOrder.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });
 
   const { data: cachedContacts = EMPTY, isLoading: loadingContacts } = useQuery({
     queryKey: ["search-contacts"],
-    queryFn: () => base44.entities.Contact.list(),
+    queryFn: () => entities.Contact.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });

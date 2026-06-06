@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
+import { lockLinkedSetsIfApproved, addSubmittalRound } from "@/hooks/useSubmittals";
+import { localToday } from "@/utils/dates";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import {
   CommandBar as CommandBarRaw,
@@ -73,7 +75,7 @@ export default function Submittals() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["submittals", projectId],
     queryFn: () => projectId
-      ? base44.entities.Submittal.filter({ project_id: projectId }, "-submitted_date")
+      ? entities.Submittal.filter({ project_id: projectId }, "-submitted_date")
       : [],
     enabled: !!projectId,
     staleTime: 30_000,
@@ -85,7 +87,7 @@ export default function Submittals() {
   const { data: drawingSets = [] } = useQuery({
     queryKey: ["drawing_sets", projectId],
     queryFn: () => projectId
-      ? base44.entities.DrawingSet.filter({ project_id: projectId })
+      ? entities.DrawingSet.filter({ project_id: projectId })
       : [],
     enabled: !!projectId,
     staleTime: 60_000,
@@ -103,7 +105,7 @@ export default function Submittals() {
   const { data: allRounds = [] } = useQuery({
     queryKey: ["submittal-rounds", projectId],
     queryFn: () => projectId
-      ? base44.entities.SubmittalRound.filter({ project_id: projectId }, "round_number")
+      ? entities.SubmittalRound.filter({ project_id: projectId }, "round_number")
       : [],
     enabled: !!projectId,
     staleTime: 30_000,
@@ -124,7 +126,7 @@ export default function Submittals() {
   const { data: allRfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: () => projectId
-      ? base44.entities.RFI.filter({ project_id: projectId })
+      ? entities.RFI.filter({ project_id: projectId })
       : [],
     enabled: !!projectId,
     staleTime: 60_000,
@@ -134,7 +136,7 @@ export default function Submittals() {
   const { data: allTasks = [] } = useQuery({
     queryKey: ["schedule-tasks", projectId],
     queryFn: () => projectId
-      ? base44.entities.ScheduleTask.filter({ project_id: projectId })
+      ? entities.ScheduleTask.filter({ project_id: projectId })
       : [],
     enabled: !!projectId,
     staleTime: 60_000,
@@ -144,7 +146,7 @@ export default function Submittals() {
   const { data: allDrawings = [] } = useQuery({
     queryKey: ["drawings", projectId],
     queryFn: () => projectId
-      ? base44.entities.Drawing.filter({ project_id: projectId })
+      ? entities.Drawing.filter({ project_id: projectId })
       : [],
     enabled: !!projectId,
     staleTime: 60_000,
@@ -154,7 +156,7 @@ export default function Submittals() {
   const { data: allSheetResponses = [] } = useQuery({
     queryKey: ["sheet-responses", projectId],
     queryFn: () => projectId
-      ? base44.entities.SubmittalSheetResponse.filter({ project_id: projectId })
+      ? entities.SubmittalSheetResponse.filter({ project_id: projectId })
       : [],
     enabled: !!projectId,
     staleTime: 30_000,
@@ -167,17 +169,32 @@ export default function Submittals() {
   }, [qc, projectId]);
 
   const createMut = useMutation({
-    mutationFn: (data: any) => base44.entities.Submittal.create(data),
+    mutationFn: (data: any) => entities.Submittal.create(data),
     onSuccess: (row) => { invalidate(); setSelectedId(row?.id || null); toast.success("Submittal created"); },
     onError: (err: any) => toast.error(`Create failed: ${err.message}`),
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, ...data }: { id: string; [key: string]: any }) => base44.entities.Submittal.update(id, data),
+    // Lock-aware: terminal-approved statuses auto-lock the linked drawing sets
+    // (§20 moat). Routes through the canonical lockLinkedSetsIfApproved so this
+    // page's inline status edits + the verb CTA can't release a package to fab
+    // without locking it. (Previously this page's update bypassed the lock.)
+    mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
+      const updated = await entities.Submittal.update(id, data);
+      await lockLinkedSetsIfApproved(updated as any);
+      return updated;
+    },
     onSuccess: () => { invalidate(); toast.success("Updated"); },
     onError: (err: any) => toast.error(`Update failed: ${err.message}`),
   });
+  // Verb CTA → the single audited write path: logs a submittal_rounds row +
+  // patches + auto-locks, atomically (activates the previously-empty round log).
+  const advanceMut = useMutation({
+    mutationFn: (input: Parameters<typeof addSubmittalRound>[0]) => addSubmittalRound(input),
+    onSuccess: () => { invalidate(); toast.success("Round logged"); },
+    onError: (err: any) => toast.error(`Advance failed: ${err.message}`),
+  });
   const deleteMut = useMutation({
-    mutationFn: (id: string) => base44.entities.Submittal.delete(id),
+    mutationFn: (id: string) => entities.Submittal.delete(id),
     onSuccess: () => { invalidate(); setSelectedId(null); setToDelete(null); toast.success("Deleted"); },
     onError: (err: any) => toast.error(`Delete failed: ${err.message}`),
   });
@@ -200,7 +217,7 @@ export default function Submittals() {
           const prior = (existing?.notes || "").trimEnd();
           rowPatch.notes = prior ? `${prior}\n\n${notesAppend}` : notesAppend;
         }
-        return base44.entities.Submittal.update(id, rowPatch);
+        return entities.Submittal.update(id, rowPatch);
       });
     },
     onSuccess: (results) => {
@@ -217,7 +234,7 @@ export default function Submittals() {
   });
 
   const bulkDeleteMut = useMutation({
-    mutationFn: async (ids: string[]) => batchProcess(ids, (id) => base44.entities.Submittal.delete(id)),
+    mutationFn: async (ids: string[]) => batchProcess(ids, (id) => entities.Submittal.delete(id)),
     onSuccess: (results) => {
       invalidate();
       const ok = results.succeeded.length;
@@ -235,7 +252,7 @@ export default function Submittals() {
 
   const bulkCreateMut = useMutation({
     mutationFn: async (newRows: any[]) => batchProcess(newRows, (row) =>
-      base44.entities.Submittal.create({
+      entities.Submittal.create({
         project_id: projectId,
         project_name: activeProject?.project_name || activeProject?.name || "",
         round_number: 1,
@@ -258,13 +275,13 @@ export default function Submittals() {
   // ── Round mutations ───────────────────────────────────────────────
   const createRoundMut = useMutation({
     mutationFn: async (data: any) => {
-      const round = await base44.entities.SubmittalRound.create({
+      const round = await entities.SubmittalRound.create({
         ...data,
         project_id: projectId,
       });
       // Update parent submittal
       if (round?.id && data.submittal_id) {
-        await base44.entities.Submittal.update(data.submittal_id, {
+        await entities.Submittal.update(data.submittal_id, {
           current_round_id: round.id,
           total_rounds: data.round_number || 1,
           status: "Submitted",
@@ -285,12 +302,12 @@ export default function Submittals() {
       for (const resp of responses) {
         try {
           if (resp.id) {
-            await base44.entities.SubmittalSheetResponse.update(resp.id, {
+            await entities.SubmittalSheetResponse.update(resp.id, {
               response_status: resp.response_status,
               reviewer_comment: resp.reviewer_comment || null,
             });
           } else {
-            await base44.entities.SubmittalSheetResponse.create({
+            await entities.SubmittalSheetResponse.create({
               project_id: projectId,
               submittal_round_id: roundId,
               drawing_id: resp.drawing_id || null,
@@ -512,6 +529,21 @@ export default function Submittals() {
             onDelete={() => selected && setToDelete(selected.id)}
             onStatusChange={(status) => selected && updateMut.mutate({ id: selected.id, status })}
             onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
+            // Verb CTA — advance via the audited write path: logs a round +
+            // patches + auto-locks atomically. Stamps the submitted date when
+            // sending out (→OFA) and the returned date when logging a return
+            // (→BFA); never a fake date otherwise (§22).
+            onAdvance={(action) => {
+              if (!selected || !action.nextStatus) return;
+              const today = localToday();
+              advanceMut.mutate({
+                submittal: selected as any,
+                status: action.nextStatus,
+                ball_in_court: action.nextBallInCourt,
+                submitted_date: action.nextStage === "OFA" ? today : undefined,
+                returned_date: action.nextStage === "BFA" ? today : undefined,
+              });
+            }}
             // Inline-edit hook — every editable cell in the detail
             // panel calls this with a single-field patch so we don't
             // need to round-trip through the modal for trivial fixes

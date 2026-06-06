@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../shared/ProjectContext";
 
 export default function ProjectPillDropdown({ compact = false, align = "right" }) {
-  const { projects, activeProject, setActiveProject, loading } = useProjectContext();
+  // `activeProjects` excludes on-hold; the switcher never lists paused projects.
+  const { activeProjects: projects, activeProject, setActiveProject, loading } = useProjectContext();
   // Pages resolve the project id via useProjectId() which checks the URL
   // FIRST (?projectId= / ?project=), then falls back to the active project
   // in context. Without stripping those params on a switch, picking a new
@@ -20,7 +21,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
   // Fetch RFI counts for quick stats when dropdown is open
   const { data: allRFIs = [] } = useQuery({
     queryKey: ["pill-rfis-quick"],
-    queryFn: () => base44.entities.RFI.list(),
+    queryFn: () => entities.RFI.list(),
     enabled: open,
     staleTime: 60_000,
     initialData: [],
@@ -134,12 +135,16 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
           background: "var(--accent-muted)",
           border: "1px solid var(--accent-border)",
           borderRadius: 20,
-          minHeight: compact ? 34 : undefined,
-          padding: compact ? "6px 10px" : "5px 12px",
+          minHeight: compact ? 34 : 28,
+          padding: compact ? "6px 10px" : "5px 13px",
           fontFamily: "var(--font-mono)",
-          fontSize: 9,
-          color: "var(--status-warning)",
-          letterSpacing: "0.10em",
+          // Was 9px warning-orange (hard to read, looked like an alert). Larger,
+          // primary-colored, lighter tracking → legible and clearly the project
+          // switcher. The health dot (left) still carries the status color.
+          fontSize: 11,
+          fontWeight: 600,
+          color: "var(--text-primary)",
+          letterSpacing: "0.04em",
           cursor: "pointer",
           whiteSpace: "nowrap",
           transition: "all 0.15s",

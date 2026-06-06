@@ -1,3 +1,5 @@
+import { buildGateMap, type GateOptions, type TaskGate } from "./scheduleGatekeeper";
+
 // Module-scoped set of cycle keys that have already been warned about.
 // Persists across calls to computeEffectiveDates so the same cycle
 // doesn't spam the console on every cascade pass (Schedule page can
@@ -404,6 +406,49 @@ export function computeEffectiveDates(tasks: ScheduleTask[]): Record<string, Eff
  */
 export function __resetCycleWarnings(): void {
   _WARNED_CYCLES.clear();
+}
+
+// ── Constraint gating overlay ────────────────────────────────────────────
+//
+// The cascade above answers "where does this task sit on the calendar". The
+// gatekeeper (services/scheduleGatekeeper) answers "is this task allowed to
+// proceed given the unresolved RFI constraints on its work package". Schedule
+// consumers want both, so we expose a thin overlay here — the date math above
+// stays pure and untouched; this just annotates each task with its gate so a
+// Gantt/look-ahead/board renderer can refuse to advance a blocked task.
+
+export type { TaskGate } from "./scheduleGatekeeper";
+
+/**
+ * Annotate each task with its constraint gate under `_gate`. Pure: returns
+ * shallow copies, never mutates inputs. Tasks without an id pass through.
+ */
+export function applyScheduleGates(
+  tasks: ScheduleTask[],
+  constraints: Record<string, any>[] = [],
+  options: GateOptions = {},
+): ScheduleTask[] {
+  if (!Array.isArray(tasks) || tasks.length === 0) return [];
+  const gates = buildGateMap(tasks, constraints, options);
+  return tasks.map((t) => {
+    if (!t || !t.id) return t;
+    return { ...t, _gate: gates[String(t.id)] || null };
+  });
+}
+
+/**
+ * Convenience: run the effective-date cascade and the constraint gate in one
+ * pass. Returns tasks overlaid with effective dates (see applyEffectiveDates)
+ * AND a `_gate` field. Gates are computed against the effective-date view so
+ * overdue/age logic lines up with where tasks actually sit.
+ */
+export function applyEffectiveDatesWithGates(
+  tasks: ScheduleTask[],
+  constraints: Record<string, any>[] = [],
+  options: GateOptions = {},
+): ScheduleTask[] {
+  const withDates = applyEffectiveDates(tasks);
+  return applyScheduleGates(withDates, constraints, options);
 }
 
 /**

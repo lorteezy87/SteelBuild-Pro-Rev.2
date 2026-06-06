@@ -1,14 +1,15 @@
 /**
  * supabaseClient.ts
  *
- * Drop-in replacement for the Base44 client — enterprise-hardened.
- * Exports a `base44` object with the same API shape:
- *   base44.entities.X.list / filter / get / create / update / delete
- *   base44.auth.me / loginViaEmailPassword / logout / redirectToLogin / updateMe
- *   base44.integrations.Core.UploadFile / InvokeLLM
- *   base44.functions.invoke
+ * The app's Supabase-backed data layer. Exports the surfaces directly as
+ * named values — import exactly what you need:
+ *   entities.X.list / filter / get / create / update / delete
+ *   auth.me / loginViaEmailPassword / logout / redirectToLogin / updateMe
+ *   integrations.Core.UploadFile / InvokeLLM
+ *   functions.invoke
+ *   getSignedUrl / resolveFileUrl
  *
- * Enterprise improvements over original Base44 adapter:
+ * Capabilities:
  *   - Soft-delete support: list/filter auto-exclude is_deleted rows
  *   - Atomic number sequencing via DB RPC (no race conditions)
  *   - Structured error messages with table/operation context
@@ -45,7 +46,7 @@ export type RowWithAliases<T extends TableName> = Row<T> & {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Base44 used `created_date` / `updated_date` as timestamp field names.
+ * The legacy backend used `created_date` / `updated_date` as timestamp field names.
  * Our Postgres schema uses the standard `created_at` / `updated_at`.
  * Map them transparently so all existing code continues to work.
  */
@@ -57,7 +58,7 @@ const COLUMN_MAP: Record<string, string> = {
 const mapColumn = (col: string): string => COLUMN_MAP[col] || col;
 
 /**
- * After fetching, add Base44-style aliases to each record so UI code
+ * After fetching, add legacy aliases to each record so UI code
  * reading `record.created_date` still works.
  */
 const addAliases = <R>(record: R, tableName?: string): R => {
@@ -65,12 +66,12 @@ const addAliases = <R>(record: R, tableName?: string): R => {
   const out: Record<string, unknown> = { ...(record as Record<string, unknown>) };
   // Project-scoped reads embed the parent project only to enforce
   // `projects.is_deleted = false`; callers should still receive the
-  // Base44-compatible flat row shape they expect.
+  // legacy-compatible flat row shape they expect.
   delete out.projects;
   if (out.created_at !== undefined && out.created_date === undefined) out.created_date = out.created_at;
   if (out.updated_at !== undefined && out.updated_date === undefined) out.updated_date = out.updated_at;
   // The activities table stores audit columns in snake_case; the legacy
-  // Activity-feed UI (dashboard/ActivityFeed) reads Base44-style camelCase.
+  // Activity-feed UI (dashboard/ActivityFeed) reads legacy camelCase.
   // Mirror them so both shapes resolve off the same row. cleanRecord() strips
   // any uppercase-containing key on write, so these mirrors never persist back.
   if (tableName === 'activities') {
@@ -134,7 +135,7 @@ const normalizeJsonbArray = (v: unknown): unknown[] => {
 };
 
 /**
- * Parse Base44-style sort string ("-column" = descending, "column" = ascending)
+ * Parse legacy sort string ("-column" = descending, "column" = ascending)
  */
 const parseSortBy = (sortBy?: string | null): { column: string; ascending: boolean } | null => {
   if (!sortBy) return null;
@@ -144,7 +145,7 @@ const parseSortBy = (sortBy?: string | null): { column: string; ascending: boole
 };
 
 /**
- * Build a filtered Supabase query from a Base44-style conditions object.
+ * Build a filtered Supabase query from a legacy conditions object.
  * Supports:
  *   - Simple equality: { status: 'Open' }
  *   - IN-array:        { status: ['Open', 'Closed'] }
@@ -342,6 +343,25 @@ export type EntityClient<T extends TableName> = {
   bulkCreate: (records: Insert<T>[]) => Promise<Array<RowWithAliases<T>>>;
 };
 
+// Default row cap for list()/filter() when the caller passes no explicit limit.
+// PostgREST already enforces a server-side max-rows ceiling (≈1000), so an
+// uncapped read silently truncates with no signal. Applying an explicit default
+// makes the bound intentional, consistent with the centralized hooks
+// (useDrawings/useSubmittals pass 2000), and lets us warn on likely truncation
+// in dev. Callers needing more must paginate or filter server-side.
+const DEFAULT_LIST_LIMIT = 2000;
+
+// Dev-only: warn when a read comes back at the cap (likely truncated) so the
+// silent-1000-row failure mode surfaces during development.
+const warnIfTruncated = (tableName: string, op: string, count: number, cap: number) => {
+  if (import.meta.env.DEV && count >= cap) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[supabaseClient] ${tableName}.${op}() returned ${count} rows at the ${cap}-row cap — results may be TRUNCATED. Add server-side filtering or pagination.`,
+    );
+  }
+};
+
 const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> => ({
   /**
    * List all records, optionally sorted.
@@ -354,14 +374,22 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     if (SOFT_DELETE_TABLES.has(tableName as string)) {
       q = q.eq('is_deleted', false);
     }
+    // Projects: auto-exclude on-hold (paused) projects from every list. The
+    // /Projects management page bypasses this by querying via the raw
+    // supabase client; everywhere else gets the active subset automatically.
+    if ((tableName as string) === 'projects') {
+      q = q.eq('on_hold', false);
+    }
     const sort = parseSortBy(sortBy);
     if (sort) {
       q = q.order(sort.column, { ascending: sort.ascending });
     } else {
       q = q.order('created_at', { ascending: false });
     }
+    q = q.limit(DEFAULT_LIST_LIMIT);
     const { data, error } = await q;
     if (error) throw new SupabaseOperationError(tableName as string, 'list', error);
+    warnIfTruncated(tableName as string, 'list', data?.length ?? 0, DEFAULT_LIST_LIMIT);
     return addAliasesToList<RowWithAliases<T>>(data, tableName as string);
   },
 
@@ -375,6 +403,10 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     if (SOFT_DELETE_TABLES.has(tableName as string) && !('is_deleted' in conditions)) {
       q = q.eq('is_deleted', false);
     }
+    // Projects: auto-exclude on-hold unless the caller explicitly filters on_hold.
+    if ((tableName as string) === 'projects' && !('on_hold' in conditions)) {
+      q = q.eq('on_hold', false);
+    }
     q = applyConditions(q, conditions);
     const sort = parseSortBy(sortBy);
     if (sort) {
@@ -382,9 +414,11 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     } else {
       q = q.order('created_at', { ascending: false });
     }
-    if (limit) q = q.limit(limit);
+    const effectiveLimit = limit ?? DEFAULT_LIST_LIMIT;
+    q = q.limit(effectiveLimit);
     const { data, error } = await q;
     if (error) throw new SupabaseOperationError(tableName as string, 'filter', error);
+    warnIfTruncated(tableName as string, 'filter', data?.length ?? 0, effectiveLimit);
     return addAliasesToList<RowWithAliases<T>>(data, tableName as string);
   },
 
@@ -544,6 +578,17 @@ export const entities = {
   DrawingRevision:       createEntityClient('drawing_revisions'),
   DrawingZone:           createEntityClient('drawing_zones'),
   DrawingLink:           createEntityClient('drawing_links'),
+  // ── Drawing control module (20260526240000) ─────────────────────
+  // Document-control layer on top of drawings/drawing_revisions: transmittal
+  // log, role-based review gates, assignable impacts, markups, and watchers.
+  // All project-scoped via user_has_project_access(project_id); the register
+  // grid reads the drawing_register_view + the publish_drawing_revision RPC.
+  DrawingTransmittal:     createEntityClient('drawing_transmittals'),
+  DrawingTransmittalItem: createEntityClient('drawing_transmittal_items'),
+  DrawingReview:          createEntityClient('drawing_reviews'),
+  DrawingImpact:          createEntityClient('drawing_impacts'),
+  DrawingMarkup:          createEntityClient('drawing_markups'),
+  DrawingWatcher:         createEntityClient('drawing_watchers'),
   // 072: append-only sign-off stamps on drawing revisions (review approval,
   // approved-as-noted, revise-and-resubmit, etc.). Voided rows stay in the
   // table; UI filters them with is_voided=false in listSignoffs.
@@ -858,7 +903,7 @@ export type AuthMeResult = {
 export const auth = {
   /**
    * Get the currently authenticated user.
-   * Returns a user object compatible with what Base44 returned.
+   * Returns a user object compatible with what the legacy backend returned.
    */
   me: async (): Promise<AuthMeResult> => {
     const { data: { user }, error } = await supabase.auth.getUser();
@@ -912,15 +957,23 @@ export const auth = {
    * Update the current user's metadata.
    */
   updateMe: async (updates: Record<string, unknown>): Promise<AuthMeResult> => {
-    // C1 fix: whitelist safe fields to prevent privilege escalation via
-    // arbitrary user_metadata writes (e.g. setting role to "admin").
-    const ALLOWED_FIELDS = new Set([
-      'full_name', 'job_title', 'company', 'phone', 'timezone', 'bio',
-      'avatar_url', 'preferences', 'notification_settings',
+    // The Settings tabs persist their preferences as flat keys on
+    // user_metadata (and `auth.me()` reads them back the same way), so we
+    // can't use a fixed allow-list — that silently dropped every preference
+    // and settings never saved. Instead DENY only the identity / privilege-
+    // bearing keys (so a user can't escalate by writing role:"admin", etc.)
+    // and allow all other (preference) keys through. Note: client admin gates
+    // read meta.role only cosmetically — real authorization is server-side via
+    // user_profiles.role + RLS (user_is_system_admin), which never trusts
+    // user_metadata — so this is the correct boundary.
+    const BLOCKED_FIELDS = new Set([
+      'role', 'roles', 'is_admin', 'isAdmin', 'admin', 'permissions', 'perms',
+      'id', 'user_id', 'uid', 'sub', 'email', 'email_verified', 'phone_verified',
+      'aud', 'exp', 'iat', 'iss', 'app_metadata',
     ]);
     const safeUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
-      if (ALLOWED_FIELDS.has(key)) safeUpdates[key] = value;
+      if (!BLOCKED_FIELDS.has(key)) safeUpdates[key] = value;
     }
     const { data, error } = await supabase.auth.updateUser({ data: safeUpdates });
     if (error) throw error;
@@ -1330,7 +1383,6 @@ export const functions = {
   },
 };
 
-// ─── Main export (matches Base44 client API) ─────────────────────────────────
-
-export const base44 = { entities, auth, integrations, functions, getSignedUrl, resolveFileUrl };
-export type Base44Client = typeof base44;
+// The data surfaces (entities, auth, integrations, functions) and the storage
+// helpers (getSignedUrl, resolveFileUrl) are exported individually above —
+// import them by name where used.

@@ -8,7 +8,7 @@
  */
 
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -73,13 +73,13 @@ export default function DocumentStorageSettings({ projectId }) {
   // ── Data ────────────────────────────────────────────────────────────
   const { data: folders = [], isLoading } = useQuery({
     queryKey: ["linked-folders", projectId],
-    queryFn: () => base44.entities.LinkedFolder.filter({ project_id: projectId }),
+    queryFn: () => entities.LinkedFolder.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   // ── Mutations ───────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.LinkedFolder.create(data),
+    mutationFn: (data) => entities.LinkedFolder.create(data),
     onSuccess: () => {
       invalidateEntity(qc, "linked_folder", projectId);
       toast.success("Folder linked successfully");
@@ -89,7 +89,7 @@ export default function DocumentStorageSettings({ projectId }) {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.LinkedFolder.update(id, data),
+    mutationFn: ({ id, data }) => entities.LinkedFolder.update(id, data),
     onSuccess: () => {
       invalidateEntity(qc, "linked_folder", projectId);
     },
@@ -97,7 +97,7 @@ export default function DocumentStorageSettings({ projectId }) {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.LinkedFolder.delete(id),
+    mutationFn: (id) => entities.LinkedFolder.delete(id),
     onSuccess: () => {
       invalidateEntity(qc, "linked_folder", projectId);
       toast.success("Folder unlinked");

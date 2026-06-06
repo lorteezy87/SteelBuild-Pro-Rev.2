@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getQueryKey } from "@/services/cacheRegistry";
@@ -663,7 +663,7 @@ export default function ContractManagement() {
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: project, isLoading: projectLoading } = useQuery({
     queryKey: getQueryKey("project", projectId),
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
     select: (projects) => (projects || []).find((p) => p.id === projectId),
@@ -671,21 +671,21 @@ export default function ContractManagement() {
 
   const { data: changeOrders = [], isLoading: cosLoading } = useQuery({
     queryKey: getQueryKey("change_order", projectId),
-    queryFn: () => base44.entities.ChangeOrder.filter({ project_id: projectId }),
+    queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: sovItems = [], isLoading: sovLoading } = useQuery({
     queryKey: getQueryKey("sov_item", projectId),
-    queryFn: () => base44.entities.SOVItem.filter({ project_id: projectId }),
+    queryFn: () => entities.SOVItem.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: expenses = [], isLoading: expensesLoading } = useQuery({
     queryKey: getQueryKey("expense", projectId),
-    queryFn: () => base44.entities.Expense.filter({ project_id: projectId }),
+    queryFn: () => entities.Expense.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
@@ -700,7 +700,7 @@ export default function ContractManagement() {
 
   // ── SOV Item Mutations ───────────────────────────────────────────────────
   const createSOVMut = useMutation({
-    mutationFn: (data) => base44.entities.SOVItem.create({ ...data, project_id: projectId }),
+    mutationFn: (data) => entities.SOVItem.create({ ...data, project_id: projectId }),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, sovQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       await invalidateCrudQueries(qc, sovQueryKeys);
@@ -711,7 +711,7 @@ export default function ContractManagement() {
   });
 
   const updateSOVMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.SOVItem.update(id, data),
+    mutationFn: ({ id, data }) => entities.SOVItem.update(id, data),
     onSuccess: async (updated) => {
       replaceRecordInCaches(qc, sovQueryKeys, updated);
       await invalidateCrudQueries(qc, sovQueryKeys);
@@ -723,7 +723,7 @@ export default function ContractManagement() {
   });
 
   const deleteSOVMut = useMutation({
-    mutationFn: (id) => base44.entities.SOVItem.delete(id),
+    mutationFn: (id) => entities.SOVItem.delete(id),
     onSuccess: async (_, deletedId) => {
       removeRecordFromCaches(qc, sovQueryKeys, deletedId);
       await invalidateCrudQueries(qc, sovQueryKeys);
@@ -735,7 +735,7 @@ export default function ContractManagement() {
 
   // ── Contract detail update mutation ──────────────────────────────────────
   const updateContractMut = useMutation({
-    mutationFn: (data) => base44.entities.Project.update(projectId, data),
+    mutationFn: (data) => entities.Project.update(projectId, data),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: getQueryKey("project", projectId) });
       toast.success("Contract details updated");

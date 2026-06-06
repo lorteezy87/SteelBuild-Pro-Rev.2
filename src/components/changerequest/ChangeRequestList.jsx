@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { formatLocalDate } from "@/utils/dates";
 
 const STATUS_COLORS = {
   Submitted: "var(--status-warning)",
@@ -41,7 +42,7 @@ export default function ChangeRequestList({ requests = [] }) {
             </div>
 
             <div>
-              <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {request.request_date ? new Date(request.request_date).toLocaleDateString() : "—"}</div>
+              <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {request.request_date ? formatLocalDate(request.request_date) : "—"}</div>
               {request.estimated_cost_impact !== 0 && (
                 <div style={{ fontSize: "10px", fontWeight: 600, color: request.estimated_cost_impact > 0 ? "var(--status-warning)" : "var(--status-success)" }}>
                   {request.estimated_cost_impact > 0 ? "+" : ""} ${Math.abs(request.estimated_cost_impact || 0).toLocaleString()}
@@ -95,12 +96,12 @@ export default function ChangeRequestList({ requests = [] }) {
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--status-success)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Approvals</div>
                   {request.approver_1 && (
                     <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>
-                      ✓ {request.approver_1} {request.approver_1_date && `(${new Date(request.approver_1_date).toLocaleDateString()})`}
+                      ✓ {request.approver_1} {request.approver_1_date && `(${formatLocalDate(request.approver_1_date)})`}
                     </div>
                   )}
                   {request.approver_2 && (
                     <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>
-                      ✓ {request.approver_2} {request.approver_2_date && `(${new Date(request.approver_2_date).toLocaleDateString()})`}
+                      ✓ {request.approver_2} {request.approver_2_date && `(${formatLocalDate(request.approver_2_date)})`}
                     </div>
                   )}
                 </div>

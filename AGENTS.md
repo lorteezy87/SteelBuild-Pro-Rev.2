@@ -25,4 +25,4 @@ SteelBuild Pro is a Vite + React 18 + Supabase project-management app for struct
 Vitest defaults to the `node` environment for fast pure-helper tests; component tests opt into jsdom with a `// @vitest-environment jsdom` pragma. Mock the Supabase client — no test should hit the network. Prefer targeted tests for status mapping, permissions, and schedule/cost calculations.
 
 ## Commit & Pull Request Guidelines
-Use Conventional Commit prefixes seen in history: `feat:`, `fix:`, `docs:`, `refactor:`, `ui:`, `security:`. CI (`.github/workflows/ci.yml`) runs lint + both typechecks + Vitest + production build on every push/PR. Feature work lands on `claude/*` branches; deploys go through merge into `codex/base44-deploy-nick`, which Vercel auto-publishes.
+Use Conventional Commit prefixes seen in history: `feat:`, `fix:`, `docs:`, `refactor:`, `ui:`, `security:`. CI (`.github/workflows/ci.yml`) runs lint + both typechecks + Vitest + production build on every push/PR. Feature work lands on `claude/*` branches; deploys go through merge into `main`, which Vercel auto-publishes.

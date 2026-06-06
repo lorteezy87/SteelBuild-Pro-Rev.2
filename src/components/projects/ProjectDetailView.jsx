@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
-import { useQuery } from '@tanstack/react-query';
+import { entities } from "@/api/supabaseClient";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { differenceInDays } from 'date-fns';
 import { formatDate, formatDateShort, parseUTCDate } from '@/components/shared/formatters';
-import { X, BarChart2, CheckSquare, Calendar, FileText, AlertTriangle, Package, DollarSign, ClipboardCheck } from 'lucide-react';
+import { X, BarChart2, CheckSquare, Calendar, FileText, AlertTriangle, Package, DollarSign, ClipboardCheck, PauseCircle, PlayCircle } from 'lucide-react';
 import { formatCurrency } from '@/components/shared/formatters';
 import ProjectHandoffChecklist from '@/components/projects/ProjectHandoffChecklist';
+import { useProjectContext } from '@/components/shared/ProjectContext';
+import { toast } from 'sonner';
 
 const mono = { fontFamily: 'JetBrains Mono, monospace' };
 
@@ -486,39 +488,86 @@ export default function ProjectDetailView({ project, onClose }) {
   const [activeTab, setActiveTab] = useState('overview');
   const phase = PHASE_CONFIG[project.phase] || PHASE_CONFIG.Detailing;
 
+  // ── On-hold toggle ──────────────────────────────────────────────────────
+  // Paused projects disappear from the switcher, portfolio, dashboards and
+  // every KPI rollup; they remain visible only on the /Projects page (with
+  // the ON HOLD badge below). The DB trigger stamps on_hold_at + on_hold_by
+  // (= auth.uid()) on flip; we just send the boolean (+ optional reason).
+  const qc = useQueryClient();
+  const { patchProject } = useProjectContext();
+  const setHoldMut = useMutation({
+    mutationFn: ({ on_hold, reason }) =>
+      entities.Project.update(project.id, on_hold
+        ? { on_hold: true,  on_hold_reason: reason || null }
+        : { on_hold: false }
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      // Patch ProjectContext immediately so the switcher's activeProjects
+      // (which filters on_hold) reflects the change without waiting for a
+      // context refetch. If this is the active project, the context's
+      // useEffect will auto-deselect it when on_hold flips to true.
+      patchProject(project.id, {
+        on_hold: vars.on_hold,
+        on_hold_reason: vars.on_hold ? (vars.reason || null) : null,
+      });
+      toast.success(vars.on_hold ? 'Project placed on hold' : 'Project resumed');
+    },
+    onError: (err) => toast.error(err?.message || 'Failed to update on-hold state'),
+  });
+  const handleToggleHold = () => {
+    if (setHoldMut.isPending) return;
+    if (project.on_hold) {
+      if (window.confirm(`Resume "${project.name}"? It will reappear in the switcher, portfolio and KPI rollups.`)) {
+        setHoldMut.mutate({ on_hold: false });
+      }
+    } else {
+      // window.prompt returns null on cancel, "" on submit-empty — both fine.
+      const reason = window.prompt(
+        `Place "${project.name}" on hold?\n\n` +
+        `It will be hidden from the switcher, portfolio and every KPI rollup ` +
+        `(visible only on /Projects). Optional reason:`,
+        ''
+      );
+      if (reason !== null) {
+        setHoldMut.mutate({ on_hold: true, reason: reason.trim() });
+      }
+    }
+  };
+
   const { data: workPackages = [] } = useQuery({
     queryKey: ['wp-detail', project.id],
-    queryFn: () => base44.entities.WorkPackage.filter({ project_id: project.id }),
+    queryFn: () => entities.WorkPackage.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: rfis = [] } = useQuery({
     queryKey: ['rfi-detail', project.id],
-    queryFn: () => base44.entities.RFI.filter({ project_id: project.id }),
+    queryFn: () => entities.RFI.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: changeOrders = [] } = useQuery({
     queryKey: ['co-detail', project.id],
-    queryFn: () => base44.entities.ChangeOrder.filter({ project_id: project.id }),
+    queryFn: () => entities.ChangeOrder.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: deliveries = [] } = useQuery({
     queryKey: ['del-detail', project.id],
-    queryFn: () => base44.entities.Delivery.filter({ project_id: project.id }),
+    queryFn: () => entities.Delivery.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: drawings = [] } = useQuery({
     queryKey: ['draw-detail', project.id],
-    queryFn: () => base44.entities.Drawing.filter({ project_id: project.id }),
+    queryFn: () => entities.Drawing.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: scheduleTasks = [] } = useQuery({
     queryKey: ['sched-detail', project.id],
-    queryFn: () => base44.entities.ScheduleTask.filter({ project_id: project.id }),
+    queryFn: () => entities.ScheduleTask.filter({ project_id: project.id }),
     initialData: [],
   });
   const { data: costCodes = [] } = useQuery({
     queryKey: ['cc-detail', project.id],
-    queryFn: () => base44.entities.CostCode.filter({ project_id: project.id }, "cost_code_number"),
+    queryFn: () => entities.CostCode.filter({ project_id: project.id }, "cost_code_number"),
     select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     initialData: [],
   });
@@ -562,8 +611,45 @@ export default function ProjectDetailView({ project, onClose }) {
                   Due {formatDate(project.target_completion_date)}
                 </span>
               )}
+              {project.on_hold && (
+                <span
+                  title={project.on_hold_reason || 'Paused — excluded from every KPI rollup'}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    ...mono, fontSize: 8, fontWeight: 800,
+                    color: 'var(--status-warning)',
+                    background: 'var(--warning-muted)',
+                    border: '1px solid var(--warning-border)',
+                    padding: '2px 7px', borderRadius: 3,
+                    textTransform: 'uppercase', letterSpacing: '0.10em',
+                  }}
+                >
+                  <PauseCircle size={10} /> On Hold
+                </span>
+              )}
             </div>
           </div>
+          <button
+            onClick={handleToggleHold}
+            disabled={setHoldMut.isPending}
+            title={project.on_hold ? 'Resume this project' : 'Place this project on hold'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: project.on_hold ? 'var(--success-muted)' : 'var(--warning-muted)',
+              border: `1px solid ${project.on_hold ? 'var(--success-border)' : 'var(--warning-border)'}`,
+              borderRadius: 4, padding: '6px 12px',
+              color: project.on_hold ? 'var(--status-success)' : 'var(--status-warning)',
+              ...mono, fontSize: 9, fontWeight: 700,
+              letterSpacing: '0.08em', textTransform: 'uppercase',
+              cursor: setHoldMut.isPending ? 'wait' : 'pointer',
+              opacity: setHoldMut.isPending ? 0.6 : 1,
+              flexShrink: 0, transition: 'background 0.12s',
+            }}
+          >
+            {project.on_hold
+              ? (<><PlayCircle size={12} /> Resume</>)
+              : (<><PauseCircle size={12} /> On Hold</>)}
+          </button>
           <button
             onClick={onClose}
             style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 6, display: 'flex', borderRadius: 4, flexShrink: 0, transition: 'all 0.1s' }}

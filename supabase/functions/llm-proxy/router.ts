@@ -49,6 +49,12 @@ export const ROUTING_TABLE: Record<string, RoutingTarget> = {
   "rfi-log-import":        { provider: "openai",    model: "gpt-4o-mini" },
   "photo-ocr":             { provider: "openai",    model: "gpt-4o-mini" },
   "email-classify":        { provider: "openai",    model: "gpt-4o-mini" },
+
+  // RFI Copilot — drafts RFI responses / clarifies questions for the user to
+  // review. Uses the full gpt-4o (not mini) for response quality. Until the
+  // next llm-proxy deploy this key falls back to "general" (also gpt-4o), so
+  // the live copilot already works against the deployed gateway.
+  "rfi-copilot":           { provider: "openai",    model: "gpt-4o" },
 };
 
 /**

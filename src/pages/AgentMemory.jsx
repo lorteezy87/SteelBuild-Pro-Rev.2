@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { functions } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
@@ -14,7 +14,7 @@ function AgentMemoryPage() {
   const { data: memories = [], isLoading } = useQuery({
     queryKey: ['agent-memory'],
     queryFn: async () => {
-      const { data } = await base44.functions.invoke('agentMemory', {});
+      const { data } = await functions.invoke('agentMemory', {});
       return Array.isArray(data) ? data : [];
     },
     staleTime: 5 * 60 * 1000,
@@ -22,7 +22,7 @@ function AgentMemoryPage() {
 
   const addMut = useMutation({
     mutationFn: ({ content, category }) =>
-      base44.functions.invoke('agentMemory', { method: 'POST', content, category }),
+      functions.invoke('agentMemory', { method: 'POST', content, category }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['agent-memory'] });
       setNewMemory('');
@@ -34,7 +34,7 @@ function AgentMemoryPage() {
 
   const deleteMut = useMutation({
     mutationFn: (memoryId) =>
-      base44.functions.invoke('agentMemory', { method: 'DELETE', memoryId }),
+      functions.invoke('agentMemory', { method: 'DELETE', memoryId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['agent-memory'] });
       toast.success('Memory deleted');

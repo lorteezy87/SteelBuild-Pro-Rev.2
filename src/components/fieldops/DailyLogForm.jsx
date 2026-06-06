@@ -22,7 +22,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import PhotoStripUploader from "@/components/shared/PhotoStripUploader";
 import MultiSelectChips from "@/components/shared/MultiSelectChips";
@@ -172,7 +172,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
   // ── Project context ──
   const { data: projects = [] } = useQuery({
     queryKey: ["projects-for-daily-log", formData.project_id],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
@@ -247,7 +247,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
     queryKey: ["action-items-for-link", formData.project_id],
     queryFn: () =>
       formData.project_id
-        ? base44.entities.ActionItem.filter({ project_id: formData.project_id })
+        ? entities.ActionItem.filter({ project_id: formData.project_id })
         : Promise.resolve([]),
     enabled: !!formData.project_id,
     staleTime: 60 * 1000,
@@ -257,7 +257,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
     queryKey: ["rfis-for-link", formData.project_id],
     queryFn: () =>
       formData.project_id
-        ? base44.entities.RFI.filter({ project_id: formData.project_id })
+        ? entities.RFI.filter({ project_id: formData.project_id })
         : Promise.resolve([]),
     enabled: !!formData.project_id,
     staleTime: 60 * 1000,
@@ -277,7 +277,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
     queryKey: ["deliveries-for-link", formData.project_id],
     queryFn: () =>
       formData.project_id
-        ? base44.entities.Delivery.filter({ project_id: formData.project_id })
+        ? entities.Delivery.filter({ project_id: formData.project_id })
         : Promise.resolve([]),
     enabled: !!formData.project_id,
     staleTime: 60 * 1000,

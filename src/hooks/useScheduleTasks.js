@@ -2,7 +2,7 @@
  * useScheduleTasks — project-scoped schedule-task list with realtime refresh.
  *
  * First extraction of the ScheduleTask data layer out of Schedule.jsx as part
- * of moving data access behind hooks (base44 stays inside the hook). Covers
+ * of moving data access behind hooks (Supabase access stays inside the hook). Covers
  * the read + realtime invalidation; the create/update/delete and bulk
  * mutations remain in Schedule.jsx for now and will move in later increments.
  *
@@ -11,7 +11,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 export function useScheduleTasks(projectId) {
@@ -19,7 +19,7 @@ export function useScheduleTasks(projectId) {
     queryKey: ["schedule-tasks", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.ScheduleTask.filter({ project_id: projectId }, "start_date")
+        ? entities.ScheduleTask.filter({ project_id: projectId }, "start_date")
         : [],
     enabled: !!projectId,
   });

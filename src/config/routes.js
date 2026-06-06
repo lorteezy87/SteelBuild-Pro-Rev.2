@@ -56,19 +56,17 @@ const ROUTE_DOMAINS = {
   overview: {
     Dashboard:              r(lazyWithRetry(() => import("@/pages/Dashboard")),             "Dashboard",                 { projectScoped: true }),
     CommandCenter:          r(lazyWithRetry(() => import("@/pages/CommandCenter")),         "Command Center"),
-    ProjectControlCenter:   r(lazyWithRetry(() => import("@/pages/ProjectControlCenter")),  "Project Control Center",    { projectScoped: true }),
     ExecutiveView:          r(lazyWithRetry(() => import("@/pages/ExecutiveView")),         "Executive View"),
     Projects:               r(lazyWithRetry(() => import("@/pages/Projects")),              "Projects"),
-    PortfolioGantt:         r(lazyWithRetry(() => import("@/pages/PortfolioGantt")),        "Portfolio Schedule"),
     Onboarding:             r(lazyWithRetry(() => import("@/pages/Onboarding")),            "Onboarding"),
     ProjectDetail:          r(lazyWithRetry(() => import("@/pages/ProjectDetail")),         "Project Detail"),
+    PortfolioHub:           r(lazyWithRetry(() => import("@/pages/PortfolioHub")),          "Portfolio Overview"),
     AIInsights:             r(lazyWithRetry(() => import("@/pages/AIInsights")),            "Portfolio Overview"),
   },
 
   // ── Communications ──
   communications: {
     RFIs:             r(lazyWithRetry(() => import("@/pages/RFIs")),             "RFIs",                { projectScoped: true }),
-    Meetings:         r(lazyWithRetry(() => import("@/pages/Meetings")),         "Meetings",            { projectScoped: true }),
     ActionItems:      r(lazyWithRetry(() => import("@/pages/ActionItems")),      "Action Items",        { projectScoped: true }),
     ProductionNotes:  r(lazyWithRetry(() => import("@/pages/ProductionNotes")),  "Production Notes",    { projectScoped: true }),
     EmailInbox:       r(lazyWithRetry(() => import("@/pages/EmailInbox")),       "Email Inbox",         { projectScoped: true }),
@@ -76,12 +74,10 @@ const ROUTE_DOMAINS = {
 
   // ── Design & Documents ──
   documents: {
-    DrawingSubmittalHub: r(lazyWithRetry(() => import("@/pages/DrawingSubmittalHub")), "Drawings & Submittals", { projectScoped: true }),
+    DrawingSubmittalHub: r(lazyWithRetry(() => import("@/pages/DrawingSubmittalHub")), "Detailing Control Center", { projectScoped: true }),
     Drawings:         r(lazyWithRetry(() => import("@/pages/Drawings")),         "Drawings",            { projectScoped: true }),
-    DrawingAnalysis:  r(lazyWithRetry(() => import("@/pages/DrawingAnalysis")),  "Drawing Analysis",    { projectScoped: true }),
     DrawingViewer:    r(lazyWithRetry(() => import("@/pages/DrawingViewer")),    "Drawing Viewer",      { projectScoped: true }),
     Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents",           { projectScoped: true }),
-    ModelViewer:      r(lazyWithRetry(() => import("@/pages/ModelViewer")),      "3D Model Viewer",     { projectScoped: true }),
     Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittal Register",  { projectScoped: true }),
   },
 
@@ -90,6 +86,7 @@ const ROUTE_DOMAINS = {
     WorkPackages:       r(lazyWithRetry(() => import("@/pages/WorkPackages")),       "Work Packages",       { projectScoped: true }),
     Constraints:        r(lazyWithRetry(() => import("@/pages/Constraints")),        "Constraints",         { projectScoped: true }),
     FabRelease:         r(lazyWithRetry(() => import("@/pages/FabRelease")),         "Fab Release",         { projectScoped: true }),
+    RiskHub:            r(lazyWithRetry(() => import("@/pages/RiskHub")),            "Risk",                { projectScoped: true }),
     MarginRisk:         r(lazyWithRetry(() => import("@/pages/MarginRisk")),         "Margin Risk",         { projectScoped: true }),
     BudgetHours:        r(lazyWithRetry(() => import("@/pages/BudgetHours")),        "Budget Hours",        { projectScoped: true }),
     Procurement:        r(lazyWithRetry(() => import("@/pages/Procurement")),        "Procurement",         { projectScoped: true }),
@@ -98,16 +95,19 @@ const ROUTE_DOMAINS = {
 
   // ── Scheduling & Resources ──
   scheduling: {
+    ScheduleHub:          r(lazyWithRetry(() => import("@/pages/ScheduleHub")),         "Schedule",             { projectScoped: true }),
     Schedule:             r(lazyWithRetry(() => import("@/pages/Schedule")),            "Schedule",             { projectScoped: true }),
     GanttChart:           r(lazyWithRetry(() => import("@/pages/GanttChart")),          "Gantt Chart",          { projectScoped: true }),
     ProjectCalendar:      r(lazyWithRetry(() => import("@/pages/ProjectCalendar")),     "Project Calendar",     { projectScoped: true }),
     FieldPlan:            r(lazyWithRetry(() => import("@/pages/FieldPlan")),           "Field Plan",          { projectScoped: true }),
+    ResourceHub:          r(lazyWithRetry(() => import("@/pages/ResourceHub")),         "Resources"),
     ResourceManagement:   r(lazyWithRetry(() => import("@/pages/ResourceManagement")),  "Resource Management"),
     ResourceScheduling:   r(lazyWithRetry(() => import("@/pages/ResourceScheduling")),  "Crew Scheduling"),
   },
 
   // ── Field Operations ──
   field: {
+    FieldHub:        r(lazyWithRetry(() => import("@/pages/FieldHub")),        "Field",               { projectScoped: true }),
     Field:           r(lazyWithRetry(() => import("@/pages/Field")),           "Field",               { projectScoped: true }),
     DailyLogs:       r(lazyWithRetry(() => import("@/pages/DailyLogs")),       "Daily Logs",          { projectScoped: true }),
     Photos:          r(lazyWithRetry(() => import("@/pages/Photos")),          "Photos",              { projectScoped: true }),
@@ -120,6 +120,7 @@ const ROUTE_DOMAINS = {
 
   // ── Cost & Finance ──
   cost: {
+    CostHub:             r(lazyWithRetry(() => import("@/pages/CostHub")),             "Budget Control",       { projectScoped: true }),
     Financials:          r(lazyWithRetry(() => import("@/pages/Financials")),          "Budget Control",       { projectScoped: true }),
     CostDashboard:       r(lazyWithRetry(() => import("@/pages/CostDashboard")),       "Cost Dashboard",       { projectScoped: true }),
     ChangeOrders:        r(lazyWithRetry(() => import("@/pages/ChangeOrders")),        "Change Orders",        { projectScoped: true }),
@@ -135,7 +136,6 @@ const ROUTE_DOMAINS = {
 
   // ── Risk & Compliance ──
   risk: {
-    Mitigations:     r(lazyWithRetry(() => import("@/pages/Mitigations")),     "Mitigations",         { projectScoped: true }),
     ChangeRequests:  r(lazyWithRetry(() => import("@/pages/ChangeRequests")),  "Change Requests",     { projectScoped: true }),
     DecisionLog:     r(lazyWithRetry(() => import("@/pages/DecisionLog")),     "Decision Log"),
     AlertsCenter:    r(lazyWithRetry(() => import("@/pages/AlertsCenter")),    "Alerts Center"),
@@ -154,7 +154,6 @@ const ROUTE_DOMAINS = {
     Vendors:          r(lazyWithRetry(() => import("@/pages/Vendors")),          "Vendors"),
     DataExchange:     r(lazyWithRetry(() => import("@/pages/DataExchange")),     "Data Exchange",       { projectScoped: true }),
     Integrations:     r(lazyWithRetry(() => import("@/pages/Integrations")),     "Integrations"),
-    BluebeamCallback: r(lazyWithRetry(() => import("@/pages/BluebeamCallback")), "Bluebeam Callback"),
     Settings:         r(lazyWithRetry(() => import("@/pages/Settings")),         "Settings"),
     UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management"),
     ProjectMembers:   r(lazyWithRetry(() => import("@/pages/ProjectMembers")),   "Project Members"),
@@ -175,6 +174,7 @@ const ROUTE_DOMAINS = {
   // ── Reporting ──
   reporting: {
     JobStatusReport: r(lazyWithRetry(() => import("@/pages/JobStatusReport")), "Job Status Report",   { projectScoped: true }),
+    ReportsHub:      r(lazyWithRetry(() => import("@/pages/ReportsHub")),      "Reports"),
     Reports:         r(lazyWithRetry(() => import("@/pages/Reports")),         "Reports"),
     Activity:        r(lazyWithRetry(() => import("@/pages/Activity")),        "Activity Log"),
   },

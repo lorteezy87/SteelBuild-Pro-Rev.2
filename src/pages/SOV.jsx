@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo, useCallback } from "react";
 import { useProjectContext } from "../components/shared/ProjectContext";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,6 +21,14 @@ import { formatCurrency, formatPercent, roundCurrency } from "../components/shar
 import { getNextNumber } from "../components/shared/numberSequencing";
 import { toast } from "sonner";
 import { usePermissions } from "@/services/permissions";
+import SovImportReviewModal from "../components/sov/SovImportReviewModal";
+import {
+  parseCsvToAoa,
+  aoaToRows,
+  buildSovStaged,
+  SOV_TEMPLATE_COLUMNS,
+  SOV_TEMPLATE_SAMPLE,
+} from "../lib/importSovSpreadsheet";
 
 /* ═══════════════════════════════════════════════════════════════════
    1. Progress Visualization — slim horizontal bar
@@ -126,6 +134,8 @@ export default function SOV() {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [stagedImport, setStagedImport] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const fileInputRef = useRef(null);
@@ -142,24 +152,34 @@ export default function SOV() {
   const [hoveredRow, setHoveredRow] = useState(null);
 
   /* ── Queries ── */
+  // Project cost codes — used to auto-map imported SOV lines to a steel code.
+  const { data: costCodes = [] } = useQuery({
+    queryKey: ["cost-codes", activeProject?.id],
+    queryFn: () => activeProject?.id
+      ? entities.CostCode.filter({ project_id: activeProject.id }, "cost_code_number")
+      : [],
+    enabled: !!activeProject?.id,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data: sovs = [], isLoading, refetch } = useQuery({
     queryKey: ["sov-items", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.SOVItem.filter({ project_id: activeProject.id }, "-created_at")
+      ? entities.SOVItem.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.Expense.filter({ project_id: activeProject.id })
+      ? entities.Expense.filter({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
   });
@@ -179,7 +199,7 @@ export default function SOV() {
       if (!sovId) {
         sovId = `SOV-${String((sovs.length || 0) + 1).padStart(3, '0')}`;
       }
-      return base44.entities.SOVItem.create({
+      return entities.SOVItem.create({
         ...d,
         sov_id: sovId,
         project_id: d.project_id || activeProject?.id,
@@ -197,7 +217,7 @@ export default function SOV() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.SOVItem.update(id, data),
+    mutationFn: ({ id, data }) => entities.SOVItem.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setModalOpen(false);
@@ -210,7 +230,7 @@ export default function SOV() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.SOVItem.delete(id),
+    mutationFn: (id) => entities.SOVItem.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setDeleteTarget(null);
@@ -223,7 +243,7 @@ export default function SOV() {
 
   /* Requirement 7 — Fill to Complete mutation (separate so it doesn't close modal) */
   const fillCompleteMut = useMutation({
-    mutationFn: ({ id }) => base44.entities.SOVItem.update(id, { current_percent_complete: 100 }),
+    mutationFn: ({ id }) => entities.SOVItem.update(id, { current_percent_complete: 100 }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       toast.success("Filled to 100%");
@@ -232,7 +252,7 @@ export default function SOV() {
   });
 
   const bulkDeleteMut = useMutation({
-    mutationFn: (ids) => Promise.allSettled(ids.map((id) => base44.entities.SOVItem.delete(id))),
+    mutationFn: (ids) => Promise.allSettled(ids.map((id) => entities.SOVItem.delete(id))),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setSelectedIds(new Set());
@@ -243,7 +263,7 @@ export default function SOV() {
   });
 
   const bulkStatusMut = useMutation({
-    mutationFn: ({ ids, status }) => Promise.allSettled(ids.map((id) => base44.entities.SOVItem.update(id, { status }))),
+    mutationFn: ({ ids, status }) => Promise.allSettled(ids.map((id) => entities.SOVItem.update(id, { status }))),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setSelectedIds(new Set());
@@ -253,7 +273,7 @@ export default function SOV() {
   });
 
   const bulkFillMut = useMutation({
-    mutationFn: (ids) => Promise.allSettled(ids.map((id) => base44.entities.SOVItem.update(id, { current_percent_complete: 100 }))),
+    mutationFn: (ids) => Promise.allSettled(ids.map((id) => entities.SOVItem.update(id, { current_percent_complete: 100 }))),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setSelectedIds(new Set());
@@ -282,29 +302,10 @@ export default function SOV() {
   /* ═══════════════════════════════════════════════════════════════════
      Import template — downloadable CSV template + CSV import
      ═══════════════════════════════════════════════════════════════════ */
-  const TEMPLATE_COLUMNS = [
-    "line_item_number",
-    "description",
-    "scheduled_value",
-    "application_number",
-    "period_from",
-    "period_to",
-    "previous_percent_complete",
-    "current_percent_complete",
-    "retainage_percent",
-    "status",
-  ];
-
   const downloadTemplate = () => {
-    const sampleRows = [
-      ["1", "Mobilization",                     "25000",  "1", "2026-01-01", "2026-01-31", "0", "100", "10", "Draft"],
-      ["2", "Site Preparation",                 "45000",  "1", "2026-01-01", "2026-01-31", "0", "50",  "10", "Draft"],
-      ["3", "Structural Steel - Fabrication",   "180000", "1", "2026-01-01", "2026-01-31", "0", "25",  "10", "Draft"],
-      ["4", "Structural Steel - Erection",      "120000", "1", "2026-01-01", "2026-01-31", "0", "0",   "10", "Draft"],
-    ];
     const lines = [
-      TEMPLATE_COLUMNS.join(","),
-      ...sampleRows.map(r => r.map(c => `"${c}"`).join(",")),
+      SOV_TEMPLATE_COLUMNS.join(","),
+      ...SOV_TEMPLATE_SAMPLE.map((r) => r.map((c) => `"${c}"`).join(",")),
     ];
     const csv = lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -317,52 +318,14 @@ export default function SOV() {
     toast.success("SOV template downloaded");
   };
 
-  // Minimal RFC-4180 CSV parser (handles quoted fields, escaped quotes, CRLF).
-  const parseCSV = (text) => {
-    const rows = [];
-    let field = "";
-    let row = [];
-    let inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i];
-      if (inQuotes) {
-        if (ch === '"') {
-          if (text[i + 1] === '"') { field += '"'; i++; }
-          else { inQuotes = false; }
-        } else {
-          field += ch;
-        }
-      } else {
-        if (ch === '"') {
-          inQuotes = true;
-        } else if (ch === ",") {
-          row.push(field); field = "";
-        } else if (ch === "\n") {
-          row.push(field); rows.push(row); row = []; field = "";
-        } else if (ch === "\r") {
-          // handled by \n
-        } else {
-          field += ch;
-        }
-      }
-    }
-    if (field.length || row.length) { row.push(field); rows.push(row); }
-    if (rows.length === 0) return [];
-    const headers = rows[0].map(h => h.trim());
-    return rows.slice(1)
-      .filter(r => r.some(c => String(c).trim() !== ""))
-      .map(r => {
-        const obj = {};
-        headers.forEach((h, idx) => { obj[h] = (r[idx] ?? "").trim(); });
-        return obj;
-      });
-  };
-
   const handleImportClick = () => fileInputRef.current?.click();
 
+  // Parse a CSV or XLSX file into canonical rows, stage them (with auto-mapped
+  // steel cost codes + validity), and open the review modal. Nothing is written
+  // until the user confirms in SovImportReviewModal.
   const handleImportFile = async (e) => {
     const file = e.target.files?.[0];
-    e.target.value = ""; // reset so same file can be re-picked
+    e.target.value = ""; // reset so the same file can be re-picked
     if (!file) return;
     if (!activeProject?.id) {
       toast.error("Select a project before importing SOV items");
@@ -370,52 +333,54 @@ export default function SOV() {
     }
     setImporting(true);
     try {
-      const text = await file.text();
-      const parsed = parseCSV(text);
-      if (parsed.length === 0) {
-        toast.error("CSV is empty — nothing to import");
+      const name = (file.name || "").toLowerCase();
+      let rows;
+      if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        const XLSX = await import("xlsx");
+        const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = aoaToRows(XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" }));
+      } else {
+        rows = aoaToRows(parseCsvToAoa(await file.text()));
+      }
+      if (rows.length === 0) {
+        toast.error("File is empty — nothing to import");
         return;
       }
-
-      const first = parsed[0];
+      const first = rows[0];
       if (!("description" in first) || !("scheduled_value" in first)) {
-        toast.error("CSV missing required columns (description, scheduled_value). Download the template for the correct format.");
+        toast.error("File missing required columns (description, scheduled_value). Download the template for the correct format.");
         return;
       }
-
-      const existingCount = sovs.length || 0;
-      const baseApp = Number(parsed[0].application_number) || 1;
-      const records = parsed.map((row, idx) => {
-        const lineNum = Number(row.line_item_number) || (existingCount + idx + 1);
-        const sovId = `SOV-${String(existingCount + idx + 1).padStart(3, "0")}`;
-        return {
-          sov_id: sovId,
-          project_id: activeProject.id,
-          project_name: activeProject.name || "",
-          line_item_number: lineNum,
-          description: row.description || "",
-          scheduled_value: Number(row.scheduled_value) || 0,
-          application_number: Number(row.application_number) || baseApp,
-          period_from: row.period_from || null,
-          period_to: row.period_to || null,
-          previous_percent_complete: Number(row.previous_percent_complete) || 0,
-          current_percent_complete: Number(row.current_percent_complete) || 0,
-          retainage_percent: row.retainage_percent === "" || row.retainage_percent == null
-            ? 10
-            : Number(row.retainage_percent),
-          status: row.status || "Draft",
-        };
+      const staged = buildSovStaged(rows, {
+        project: activeProject,
+        existingCount: sovs.length || 0,
+        costCodes,
       });
-
-      const invalid = records.filter(r => !r.description.trim() || !(r.scheduled_value > 0));
-      if (invalid.length) {
-        toast.error(`${invalid.length} row(s) invalid — description and scheduled_value > 0 required`);
+      if (!staged.some((s) => s.valid)) {
+        toast.error("No valid rows — each row needs a description and scheduled_value > 0");
         return;
       }
+      setStagedImport(staged);
+      setReviewOpen(true);
+    } catch (err) {
+      console.error("SOV import parse failed:", err);
+      toast.error("Could not read file: " + (err?.message || "unknown error"));
+    } finally {
+      setImporting(false);
+    }
+  };
 
-      await base44.entities.SOVItem.bulkCreate(records);
+  // Commit the reviewed valid records (from SovImportReviewModal).
+  const handleConfirmImport = async (validRecords) => {
+    if (!validRecords?.length) return;
+    setImporting(true);
+    try {
+      await entities.SOVItem.bulkCreate(validRecords);
       await qc.invalidateQueries({ queryKey: ["sov-items"] });
-      toast.success(`Imported ${records.length} SOV line item${records.length === 1 ? "" : "s"}`);
+      toast.success(`Imported ${validRecords.length} SOV line item${validRecords.length === 1 ? "" : "s"}`);
+      setReviewOpen(false);
+      setStagedImport([]);
     } catch (err) {
       console.error("SOV import failed:", err);
       toast.error("Import failed: " + (err?.message || "unknown error"));
@@ -986,7 +951,7 @@ export default function SOV() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             onChange={handleImportFile}
             style={{ display: "none" }}
           />
@@ -1109,6 +1074,13 @@ export default function SOV() {
         projects={projects}
         nextId={nextSovId}
         activeProject={activeProject}
+      />
+      <SovImportReviewModal
+        open={reviewOpen}
+        onClose={() => { setReviewOpen(false); setStagedImport([]); }}
+        staged={stagedImport}
+        onConfirm={handleConfirmImport}
+        importing={importing}
       />
       <DeleteDialog
         open={!!deleteTarget}

@@ -1,6 +1,6 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
@@ -39,8 +39,8 @@ export default function Punchlist() {
     queryKey: ["punchlist", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.PunchlistItem.filter({ project_id: projectId })
-        : base44.entities.PunchlistItem.list(),
+        ? entities.PunchlistItem.filter({ project_id: projectId })
+        : entities.PunchlistItem.list(),
   });
 
   useRealtimeInvalidation("punchlist_items", projectId, [["punchlist", projectId]]);
@@ -49,7 +49,7 @@ export default function Punchlist() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -59,7 +59,7 @@ export default function Punchlist() {
 
   const createMut = useMutation({
     mutationFn: (data) =>
-      base44.entities.PunchlistItem.create({ ...data, project_id: data.project_id || projectId }),
+      entities.PunchlistItem.create({ ...data, project_id: data.project_id || projectId }),
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       setShowForm(false);
@@ -77,7 +77,7 @@ export default function Punchlist() {
   // status_changed activity (and a "Completed" close event) deterministically
   // from the page rather than guessing on the backend.
   const updateMut = useMutation({
-    mutationFn: ({ _prevStatus, ...data }) => base44.entities.PunchlistItem.update(data.id, data),
+    mutationFn: ({ _prevStatus, ...data }) => entities.PunchlistItem.update(data.id, data),
     onSuccess: (updated, vars) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       setShowForm(false);
@@ -105,7 +105,7 @@ export default function Punchlist() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.PunchlistItem.delete(id),
+    mutationFn: (id) => entities.PunchlistItem.delete(id),
     onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       if (editing?.id === deletedId) {
@@ -130,7 +130,7 @@ export default function Punchlist() {
       const stamp = new Date().toISOString();
       const updated = [];
       for (const id of ids) {
-        const row = await base44.entities.PunchlistItem.update(id, {
+        const row = await entities.PunchlistItem.update(id, {
           status: "Completed",
           percent_complete: 100,
           closed_by: signature.trim(),

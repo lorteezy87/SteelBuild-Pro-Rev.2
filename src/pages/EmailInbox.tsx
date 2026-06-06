@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { toast } from "sonner";
@@ -68,18 +68,18 @@ export default function EmailInbox() {
   const [replyState, setReplyState] = useState<{ mode: ReplyMode; message: EmailMessage } | null>(null);
 
   // ── Data fetching ──────────────────────────────────────────────────
-  // base44's generated row types lag the live schema (missing labels/direction/
+  // the generated generated row types lag the live schema (missing labels/direction/
   // is_read/etc.), so cast to the local EmailMessage/EmailAttachment shapes.
   const { data: messagesData = [], isLoading, error } = useQuery({
     queryKey: ["email-messages", projectId],
-    queryFn: () => base44.entities.EmailMessage.filter({ project_id: projectId }, "-received_at"),
+    queryFn: () => entities.EmailMessage.filter({ project_id: projectId }, "-received_at"),
     enabled: !!projectId,
   });
   const messages = messagesData as unknown as EmailMessage[];
 
   const { data: attachmentsData = [] } = useQuery({
     queryKey: ["email-attachments", projectId],
-    queryFn: () => base44.entities.EmailAttachment.filter({ project_id: projectId }),
+    queryFn: () => entities.EmailAttachment.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
   const attachments = attachmentsData as unknown as EmailAttachment[];
@@ -103,7 +103,7 @@ export default function EmailInbox() {
 
   // ── Mutations ──────────────────────────────────────────────────────
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => base44.entities.EmailMessage.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => entities.EmailMessage.update(id, data),
     onSuccess: () => {
       invalidateEntity(qc, "email_message", projectId);
     },
@@ -112,7 +112,7 @@ export default function EmailInbox() {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, data }: { ids: string[]; data: any }) => {
-      await Promise.all(ids.map((id) => base44.entities.EmailMessage.update(id, data)));
+      await Promise.all(ids.map((id) => entities.EmailMessage.update(id, data)));
     },
     onSuccess: () => {
       invalidateEntity(qc, "email_message", projectId);

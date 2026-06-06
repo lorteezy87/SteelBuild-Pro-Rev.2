@@ -16,12 +16,12 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import type { Insert, Update } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 
-// Loose Delivery shape — base44Client is still untyped (Phase 3). The DB row
+// Loose Delivery shape — the entity client is still untyped (Phase 3). The DB row
 // type from src/types/supabase.ts will replace this once the entity boundary
 // is converted.
 export type Delivery = {
@@ -66,7 +66,7 @@ export function useDeliveries(projectId: string | null | undefined, filters: Del
     refetch,
   } = useQuery<Delivery[]>({
     queryKey,
-    queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }, "-scheduled_date", 2000),
+    queryFn: () => entities.Delivery.filter({ project_id: projectId }, "-scheduled_date", 2000),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -163,7 +163,7 @@ export function useDeliveries(projectId: string | null | undefined, filters: Del
       if (errors.length > 0) {
         throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
       }
-      return await base44.entities.Delivery.create({
+      return await entities.Delivery.create({
         ...data,
         description: data.description?.trim(),
         pieces: parseInt(String(data.pieces ?? "")) || 0,
@@ -184,7 +184,7 @@ export function useDeliveries(projectId: string | null | undefined, filters: Del
       if (!id) throw new Error("Update requires an id.");
       if (data.pieces !== undefined) data.pieces = parseInt(String(data.pieces)) || 0;
       if (data.weight_tons !== undefined) data.weight_tons = parseFloat(String(data.weight_tons)) || 0;
-      return await base44.entities.Delivery.update(id, data);
+      return await entities.Delivery.update(id, data);
     },
     onSuccess: async () => {
       await invalidateAll();
@@ -197,7 +197,7 @@ export function useDeliveries(projectId: string | null | undefined, filters: Del
   const deleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
-      await base44.entities.Delivery.delete(id);
+      await entities.Delivery.delete(id);
       return id;
     },
     onSuccess: async () => {
@@ -220,7 +220,7 @@ export function useDeliveries(projectId: string | null | undefined, filters: Del
       if (nextStatus === "Delivered") {
         updateData.actual_date = new Date().toISOString().split("T")[0];
       }
-      return await base44.entities.Delivery.update(id, updateData);
+      return await entities.Delivery.update(id, updateData);
     },
     onSuccess: async () => {
       await invalidateAll();
@@ -237,7 +237,7 @@ export function useDeliveries(projectId: string | null | undefined, filters: Del
       const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
         try {
-          await base44.entities.Delivery.update(id, data);
+          await entities.Delivery.update(id, data);
           results.succeeded++;
         } catch (err: unknown) {
           const msg = (err as { message?: string } | undefined)?.message ?? String(err);
@@ -269,7 +269,7 @@ export function useDeliveries(projectId: string | null | undefined, filters: Del
       const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
         try {
-          await base44.entities.Delivery.delete(id);
+          await entities.Delivery.delete(id);
           results.succeeded++;
         } catch (err: unknown) {
           const msg = (err as { message?: string } | undefined)?.message ?? String(err);

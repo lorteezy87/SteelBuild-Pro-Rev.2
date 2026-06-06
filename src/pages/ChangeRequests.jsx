@@ -1,6 +1,6 @@
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import ChangeRequestFormModal from "@/components/changerequest/ChangeRequestFormModal";
@@ -24,13 +24,13 @@ export default function ChangeRequests() {
     queryKey: ["change-requests", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.ChangeRequest.filter({ project_id: projectId })
-        : base44.entities.ChangeRequest.list("-request_date"),
+        ? entities.ChangeRequest.filter({ project_id: projectId })
+        : entities.ChangeRequest.list("-request_date"),
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -53,7 +53,7 @@ export default function ChangeRequests() {
   };
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.ChangeRequest.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.ChangeRequest.create({ ...data, project_id: data.project_id || projectId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["change-requests", projectId] });
       setShowForm(false);
@@ -64,7 +64,7 @@ export default function ChangeRequests() {
   });
 
   const updateMut = useMutation({
-    mutationFn: (data) => base44.entities.ChangeRequest.update(data.id, data),
+    mutationFn: (data) => entities.ChangeRequest.update(data.id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["change-requests", projectId] });
       setShowForm(false);
@@ -75,7 +75,7 @@ export default function ChangeRequests() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.ChangeRequest.delete(id),
+    mutationFn: (id) => entities.ChangeRequest.delete(id),
     onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["change-requests", projectId] });
       if (editing?.id === deletedId) {

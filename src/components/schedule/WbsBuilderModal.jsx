@@ -5,7 +5,7 @@
  *   1. INPUT    — user pastes their scope, picks a start date
  *   2. PREVIEW  — parser + builder render a phase-grouped task list;
  *                 user can delete rows or edit durations inline
- *   3. SAVE     — bulk insert schedule_tasks via base44.entities,
+ *   3. SAVE     — bulk insert schedule_tasks via entities,
  *                 invalidate the Schedule query, toast "N tasks added"
  *
  * Phase containment: the UI groups tasks by the canonical PHASES
@@ -23,7 +23,7 @@ import React, { useMemo, useState, useRef } from "react";
 import { X, Sparkles, Play, Check, AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import {
@@ -213,7 +213,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
       const created = [];
       for (const row of payload) {
          
-        const row2 = await base44.entities.ScheduleTask.create(row);
+        const row2 = await entities.ScheduleTask.create(row);
         created.push(row2);
       }
       // Resolve dependsOn wbs → real id, then update. Silent on per-
@@ -228,7 +228,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
         if (!taskId || !depId) continue;
         try {
            
-          await base44.entities.ScheduleTask.update(taskId, {
+          await entities.ScheduleTask.update(taskId, {
             dependencies: JSON.stringify([depId]),
           });
         } catch { /* advisory */ }

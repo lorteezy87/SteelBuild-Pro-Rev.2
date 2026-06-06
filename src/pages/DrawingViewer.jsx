@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { base44, resolveFileUrl } from "@/api/base44Client";
+import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { supabase } from "@/lib/supabase";
 import * as pdfjsLib from "pdfjs-dist";
@@ -12,7 +12,10 @@ import * as pdfjsLib from "pdfjs-dist";
 // drawing to fail to render.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import ViewerHeader from "@/components/drawings/viewer/ViewerHeader";
-import ExportMarkupPDFModal from "@/components/drawings/ExportMarkupPDFModal";
+// Lazily loaded: pulls in the PDF export libs (jspdf via markupPDF). Keeping it
+// out of the static import graph means opening a drawing does not download the
+// vendor-pdf-export chunk until the user actually exports markups.
+const ExportMarkupPDFModal = lazy(() => import("@/components/drawings/ExportMarkupPDFModal"));
 import ShortcutsOverlay from "@/components/drawings/viewer/ShortcutsOverlay";
 import RenderSkeleton from "@/components/drawings/viewer/RenderSkeleton";
 import ThumbnailFilmstrip from "@/components/drawings/viewer/ThumbnailFilmstrip";
@@ -67,8 +70,13 @@ export default function DrawingViewer() {
   const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [filmstripOpen, setFilmstripOpen] = useState(true);
-  const [contextOpen, setContextOpen] = useState(true);
+  // Closed by default — the bottom thumbnail filmstrip duplicates the left
+  // Sheet Navigator, so starting it closed keeps the drawing surface clean.
+  // One click on the toolbar's filmstrip toggle brings it back.
+  const [filmstripOpen, setFilmstripOpen] = useState(false);
+  // Right-side Sheet Intelligence panel starts CLOSED for a drawing-first view;
+  // the toolbar's CONTEXT toggle opens it on demand.
+  const [contextOpen, setContextOpen] = useState(false);
   const [zoom, setZoom] = useState(1.0);
   const [rotation, setRotation] = useState(0); // 0 | 90 | 180 | 270
   // "canvas" = pdfjs canvas render (enables clickable hyperlinks + cross-sheet nav)
@@ -174,7 +182,7 @@ export default function DrawingViewer() {
     }
     const scale = realInches / pdfInches;
     try {
-      await base44.entities.Drawing.update(activeDrawing.id, { markup_scale: scale });
+      await entities.Drawing.update(activeDrawing.id, { markup_scale: scale });
       qc.invalidateQueries({ queryKey: ["drawings", projectId] });
       toast.success(
         `Calibrated · 1 page inch = ${scale.toFixed(1)} real inches ` +
@@ -206,7 +214,7 @@ export default function DrawingViewer() {
         toast.info("No scale pattern found in the PDF text layer. Use Calibrate (K) to set manually.");
         return;
       }
-      await base44.entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
+      await entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
       qc.invalidateQueries({ queryKey: ["drawings", projectId] });
       const confidence = hit.confidence === "high" ? "" : " (low confidence — verify with Calibrate if needed)";
       toast.success(`Detected scale ${hit.label} on page ${hit.page}${confidence}`);
@@ -231,7 +239,7 @@ export default function DrawingViewer() {
       try {
         const hit = await detectScaleFromPdf(pdfDoc);
         if (cancelled || !hit || hit.confidence !== "high") return;
-        await base44.entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
+        await entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
         if (cancelled) return;
         qc.invalidateQueries({ queryKey: ["drawings", projectId] });
         const drawingIdForUndo = activeDrawing.id;
@@ -241,7 +249,7 @@ export default function DrawingViewer() {
             label: "Undo",
             onClick: async () => {
               try {
-                await base44.entities.Drawing.update(drawingIdForUndo, { markup_scale: null });
+                await entities.Drawing.update(drawingIdForUndo, { markup_scale: null });
                 qc.invalidateQueries({ queryKey: ["drawings", projectId] });
                 toast.info("Scale reset — use Calibrate (K) to set manually.");
               } catch (err) {
@@ -1013,13 +1021,17 @@ export default function DrawingViewer() {
           Export Markups
         </button>
       )}
-      <ExportMarkupPDFModal
-        open={exportMarkupOpen}
-        onClose={() => setExportMarkupOpen(false)}
-        project={activeProject}
-        activeDrawing={activeDrawing}
-        drawings={drawings}
-      />
+      {exportMarkupOpen && (
+        <Suspense fallback={null}>
+          <ExportMarkupPDFModal
+            open={exportMarkupOpen}
+            onClose={() => setExportMarkupOpen(false)}
+            project={activeProject}
+            activeDrawing={activeDrawing}
+            drawings={drawings}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

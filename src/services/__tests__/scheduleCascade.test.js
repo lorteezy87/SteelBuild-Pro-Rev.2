@@ -147,6 +147,45 @@ describe("computeEffectiveDates — FS+1 regression bar", () => {
   });
 });
 
+describe("computeEffectiveDates — orphaned dependency", () => {
+  it("ignores a dependency pointing at a non-existent task (keeps its own dates)", () => {
+    const tasks = [
+      {
+        id: "B",
+        start_date: "2026-05-01",
+        end_date: "2026-05-05",
+        dependencies: JSON.stringify([{ id: "GHOST", type: "FS", lag_days: 1 }]),
+      },
+    ];
+    const eff = computeEffectiveDates(tasks);
+    expect(eff.B).toEqual({
+      start: "2026-05-01",
+      end: "2026-05-05",
+      shifted: false,
+      shiftedBy: 0,
+      cycle: false,
+    });
+  });
+
+  it("honours a real predecessor while ignoring an orphaned one in the same list", () => {
+    const tasks = [
+      { id: "A", start_date: "2026-05-10", end_date: "2026-05-14" },
+      {
+        id: "B",
+        start_date: "2026-05-01",
+        end_date: "2026-05-05",
+        dependencies: JSON.stringify([
+          { id: "GHOST", type: "FS", lag_days: 1 },
+          { id: "A", type: "FS", lag_days: 1 },
+        ]),
+      },
+    ];
+    const eff = computeEffectiveDates(tasks);
+    expect(eff.B.shifted).toBe(true);
+    expect(eff.B.start).toBe("2026-05-15"); // day after A ends; GHOST ignored
+  });
+});
+
 describe("computeEffectiveDates — link-type semantics", () => {
   const A = { id: "A", start_date: "2026-05-10", end_date: "2026-05-14" };
 

@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sentry from "@sentry/react";
 import { logError } from "@/lib/telemetry";
 
 export default class ErrorBoundary extends React.Component {
@@ -16,6 +17,11 @@ export default class ErrorBoundary extends React.Component {
       boundary: "section",
       label: this.props.label || "section",
       componentStack: errorInfo?.componentStack,
+    });
+    // Report React render errors to Sentry (no-op if no DSN is configured).
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: errorInfo?.componentStack } },
+      tags: { boundary: "section", section: this.props.label || "section" },
     });
   }
 

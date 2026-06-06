@@ -14,7 +14,7 @@ import {
   ShieldCheck,
   Upload,
 } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { IMPORT_TARGETS, stageImportText } from "@/lib/onboardingTemplates";
@@ -159,7 +159,8 @@ function RecordPreview({ rows, fields }) {
 export default function DataExchange() {
   const queryClient = useQueryClient();
   const projectId = useProjectId();
-  const { activeProject, projects, loading: projectsLoading } = useProjectContext();
+  // On-hold projects aren't selectable here — the picker mirrors the switcher.
+  const { activeProject, activeProjects: projects, loading: projectsLoading } = useProjectContext();
   const fileInputRef = useRef(null);
 
   const projectOptions = useMemo(() => {
@@ -195,7 +196,7 @@ export default function DataExchange() {
   ), [projectOptions, selectedProjectId]);
 
   const selectedTarget = IMPORT_TARGETS[targetKey] || IMPORT_TARGETS[DATASET_KEYS[0]];
-  const selectedEntity = base44.entities[selectedTarget.entityKey];
+  const selectedEntity = entities[selectedTarget.entityKey];
 
   const recordsQuery = useQuery({
     queryKey: ["data-exchange", selectedTarget.entityKey, selectedProjectId],

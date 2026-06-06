@@ -10,7 +10,7 @@
  * strip, a shared CommandBar with tab navigation, and the Approval Matrix.
  */
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useSearchParams } from "react-router-dom";
@@ -18,14 +18,18 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
 import { useSubmittals } from "@/hooks/useSubmittals";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import ErrorBoundaryRaw from "@/components/shared/ErrorBoundary";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components/design-system";
 import { computeFabReady } from "@/lib/submittalAnalytics";
-import SubmittalVisualBoardRaw from "@/components/submittals/SubmittalVisualBoard";
-import { AlertTriangle, Gauge, Link2 } from "lucide-react";
+import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
+import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
+import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
+import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
+import { invalidateEntity } from "@/services/cacheRegistry";
+import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
 import {
   ACTION_STATUSES,
   TABS,
@@ -50,12 +54,46 @@ import {
   textPrimary,
   warning,
 } from "./drawingSubmittalHub/format";
-import { ApprovalMatrix, HeaderSignal, TriageBoard } from "./drawingSubmittalHub/components";
+import { ApprovalMatrix, HeaderSignal, LeadTimesModal, TriageBoard } from "./drawingSubmittalHub/components";
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
 // chunk 404s after a deploy trigger a reload instead of a hard crash.
 const DrawingsPage = lazyWithRetry(() => import("@/pages/Drawings"));
 const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
+// Heavy tab panels — each only renders on its own tab, so code-split them off
+// the hub's route chunk. They already mount conditionally inside the <Suspense>
+// boundary below, so deferring the import is behavior-preserving.
+const SubmittalVisualBoard = lazyWithRetry(
+  () => import("@/components/submittals/SubmittalVisualBoard"),
+) as unknown as ComponentType<AnyProps>;
+const DocControlPanel = lazyWithRetry(() =>
+  import("@/components/drawings/register/DocControlPanel").then((m) => ({
+    default: m.DocControlPanel,
+  })),
+) as unknown as ComponentType<AnyProps>;
+
+// A package is CLOSED when ANY terminal signal is satisfied — the latest
+// submittal's status is closed (Approved/Approved as Noted/Released for
+// Fabrication/Void), OR the drawing_set is legacy-locked (set_approval_status
+// = "approved"), OR the coalesced detailing_state is at a release-style
+// terminal (Released / Partially Released / Released for Erection), OR every
+// sheet is individually released/approved. Used by the hit-list triage and
+// the "Released" KPI so both surface the same definition of done.
+function isClosedPackage(pkg: any): boolean {
+  if (!pkg) return false;
+  const sorted = (pkg.submittals || []).slice().sort((a: any, b: any) => (b.round_number || 1) - (a.round_number || 1));
+  const latestSubmittal = sorted[0] || null;
+  if (latestSubmittal && isClosedSubmittal(latestSubmittal)) return true;
+  if (pkg.parent?.set_approval_status === "approved") return true;
+  const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
+  if (
+    detailingState === "Released" ||
+    detailingState === "Partially Released" ||
+    detailingState === "Released for Erection"
+  ) return true;
+  if (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)) return true;
+  return false;
+}
 
 // The design-system primitives + these shared screens are still .jsx; cast
 // at the boundary (removable once the shared layer is typed).
@@ -64,11 +102,12 @@ const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
 const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const ErrorBoundary = ErrorBoundaryRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
-const SubmittalVisualBoard = SubmittalVisualBoardRaw as unknown as ComponentType<AnyProps>;
 
 export default function DrawingSubmittalHub() {
-  const activeProject = useProjectContext().activeProject as any;
+  const projectCtx = useProjectContext() as any;
+  const activeProject = projectCtx.activeProject as any;
   const [searchParams, setSearchParams] = useSearchParams();
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
   const qc = useQueryClient();
   const projectId = activeProject?.id as string | undefined;
   const projectName = activeProject?.name || activeProject?.project_number || "";
@@ -94,7 +133,28 @@ export default function DrawingSubmittalHub() {
   // Drawing sets (for matrix)
   const { data: drawingSets = [] } = useQuery({
     queryKey: ["drawing-sets", projectId],
-    queryFn: () => base44.entities.DrawingSet.filter({ project_id: projectId }),
+    queryFn: () => entities.DrawingSet.filter({ project_id: projectId }),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+
+  // Work packages (for the erection sequence date → backward scheduling) + RFIs
+  // (to know which linked RFIs are still open → rfiBlocked readiness).
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work-packages", projectId],
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["rfis", projectId],
+    queryFn: () => entities.RFI.filter({ project_id: projectId }),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+  const { data: drawingRevisions = [] } = useQuery({
+    queryKey: ["drawing-revisions", projectId],
+    queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -104,10 +164,78 @@ export default function DrawingSubmittalHub() {
     [drawings, drawingSets, submittals]
   );
 
+  // Lookup maps for readiness: WP by id, and the set of OPEN rfi ids.
+  const wpById = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const wp of (workPackages as any[]) || []) {
+      if (wp && !wp.is_deleted && wp.id) m.set(String(wp.id), wp);
+    }
+    return m;
+  }, [workPackages]);
+
+  const CLOSED_RFI = new Set(["Closed", "Void", "Cancelled", "Resolved"]);
+  const openRfiIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of (rfis as any[]) || []) {
+      if (r && !r.is_deleted && r.id && !CLOSED_RFI.has(r.status)) s.add(String(r.id));
+    }
+    return s;
+  }, [rfis]);
+
+  // Per-package readiness read-model, keyed by package key.
+  const readinessByKey = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const pkg of setPackages) {
+      const wpIds: string[] = Array.isArray((pkg.parent as any)?.linked_work_package_ids)
+        ? (pkg.parent as any).linked_work_package_ids
+        : [];
+      // earliest-starting linked WP is the most constraining erection date
+      let workPackage: any = null;
+      for (const id of wpIds) {
+        const wp = wpById.get(String(id));
+        if (!wp) continue;
+        if (!workPackage || (wp.scheduled_start_date && (!workPackage.scheduled_start_date || wp.scheduled_start_date < workPackage.scheduled_start_date))) {
+          workPackage = wp;
+        }
+      }
+      m.set(pkg.key, computeDetailingReadiness({
+        pkg: pkg.parent,
+        submittals: pkg.submittals,
+        sheets: pkg.sheets,
+        project: activeProject,
+        workPackage,
+        openRfiIds,
+      }));
+    }
+    return m;
+  }, [setPackages, wpById, openRfiIds, activeProject]);
+
+  // Revision Impact Tracker: change-revisions joined to their sheet's downstream
+  // status (fabricated / delivered / in-field), worst impact first.
+  const revisionImpact = useMemo(() => {
+    const drawingsById = new Map<string, any>();
+    for (const d of (drawings as any[]) || []) {
+      if (d && d.id) drawingsById.set(String(d.id), d);
+    }
+    return computeRevisionImpact({ revisions: drawingRevisions as any[], drawingsById });
+  }, [drawings, drawingRevisions]);
+
+  // Sequence-aware readiness rollup (group packages by erection sequence).
+  const sequenceReadiness = useMemo(() => {
+    const entries = Array.from(readinessByKey.values()).map((r: any) => ({
+      sequenceNumber: r.sequenceNumber,
+      effectiveState: r.effectiveState,
+      fabricationReady: r.fabricationReady,
+      erectionReady: r.erectionReady,
+      atRisk: r.scheduleRisk?.atRisk,
+    }));
+    return computeSequenceReadiness(entries);
+  }, [readinessByKey]);
+
   // ── Drawing KPIs ───────────────────────────────────────────────────────
   const drawingKpis = useMemo(() => {
     const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted);
-    const released = setPackages.filter((pkg) => pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)).length;
+    const released = setPackages.filter(isClosedPackage).length;
     // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
     const inReview = setPackages.filter((pkg) =>
       pkg.sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage))
@@ -140,12 +268,27 @@ export default function DrawingSubmittalHub() {
         .slice()
         .sort((a, b) => (b.round_number || 1) - (a.round_number || 1));
       const latestSubmittal = sortedSubmittals[0] || null;
-      const closed = latestSubmittal ? isClosedSubmittal(latestSubmittal) : (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing));
+      // Coalesced operational state (drafting → submittal → release). Kept
+      // alongside `status` (additive) so the existing pipeline/row display is
+      // unchanged; surfaced as its own chip + drives the drafting control.
+      const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
+      // CLOSED is satisfied by ANY terminal signal — not only a closed
+      // submittal status. Previous logic prioritised `latestSubmittal` and
+      // ignored the set-level lock + the coalesced detailing state, so a
+      // package that was manually released (e.g. anchor bolts: set locked
+      // and/or detailing_state=Released for Erection) whose submittal was
+      // never rolled to "Released for Fabrication" lingered on the hit list.
+      const closed = isClosedPackage(pkg);
       const dueDate = getSubmittalDueDate(latestSubmittal) || earliestDate(pkg.sheets.map(getDrawingDueDate));
-      const needsAction =
+      // Only surface "needs action" when the package is OPEN (closed items
+      // never reach the hit list anyway, but guard against stale per-sheet
+      // Rejected/Returned stages on packages that have since been released).
+      const needsAction = !closed && (
         (latestSubmittal && ACTION_STATUSES.has(latestSubmittal.status)) ||
-        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage));
+        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage))
+      );
       const status = latestSubmittal?.status || rollupDrawingStage(pkg.sheets);
+      const canDraft = !hasGoverningSubmittal(pkg.submittals);
       const owner =
         latestSubmittal?.ball_in_court ||
         latestSubmittal?.assigned_to ||
@@ -167,6 +310,10 @@ export default function DrawingSubmittalHub() {
         closed,
         needsAction,
         routeTab: "drawings",
+        detailingState,
+        _canDraft: canDraft,
+        _detailingStateRaw: pkg.parent?.detailing_state ?? null,
+        _readiness: readinessByKey.get(pkg.key) || null,
         // Entity references for inline editing
         _submittalId: latestSubmittal?.id || null,
         _drawingSetId: pkg.setId || null,
@@ -236,8 +383,9 @@ export default function DrawingSubmittalHub() {
       overdueUnlinkedSubmittals: overdue.filter((item) => item.kind === "Unlinked Submittal").length,
       dueSoonDrawingSets: dueSoon.filter((item) => item.kind === "Drawing Set").length,
       noDateDrawingSets: noDate.filter((item) => item.kind === "Drawing Set").length,
+      atRiskCount: setItems.filter((item) => item._readiness?.scheduleRisk?.atRisk).length,
     };
-  }, [submittals, setPackages]);
+  }, [submittals, setPackages, readinessByKey]);
 
   const tabCounts = useMemo(() => ({
     overview: triage.openItems.length,
@@ -249,7 +397,10 @@ export default function DrawingSubmittalHub() {
 
   // ── Inline quick-action mutations (Next Decision card) ────────────────
   const invalidateHub = () => {
-    qc.invalidateQueries({ queryKey: ["drawing-sets", projectId] });
+    // Sets read under both "drawing-sets" (hub) and "drawing_sets" (Drawings/
+    // Submittals) keys — invalidate both spellings + the register view so a hub
+    // edit reflects everywhere (and vice-versa).
+    invalidateEntity(qc, "drawingSet", projectId);
     qc.invalidateQueries({ queryKey: ["drawings", projectId] });
     qc.invalidateQueries({ queryKey: ["submittals", projectId] });
   };
@@ -257,9 +408,9 @@ export default function DrawingSubmittalHub() {
   const updateOwnerMut = useMutation({
     mutationFn: async ({ item, owner }: { item: any; owner: string }) => {
       if (item._submittalId) {
-        await base44.entities.Submittal.update(item._submittalId, { ball_in_court: owner });
+        await entities.Submittal.update(item._submittalId, { ball_in_court: owner });
       } else if (item._firstSheetId) {
-        await base44.entities.Drawing.update(item._firstSheetId, { assigned_to: owner } as any);
+        await entities.Drawing.update(item._firstSheetId, { assigned_to: owner } as any);
       } else {
         throw new Error("No entity available to assign owner");
       }
@@ -274,9 +425,9 @@ export default function DrawingSubmittalHub() {
   const updateDueDateMut = useMutation({
     mutationFn: async ({ item, date }: { item: any; date: string }) => {
       if (item._submittalId) {
-        await base44.entities.Submittal.update(item._submittalId, { required_date: date });
+        await entities.Submittal.update(item._submittalId, { required_date: date });
       } else if (item._firstSheetId) {
-        await base44.entities.Drawing.update(item._firstSheetId, { due_date: date });
+        await entities.Drawing.update(item._firstSheetId, { due_date: date });
       } else {
         throw new Error("No entity available to set due date");
       }
@@ -286,6 +437,52 @@ export default function DrawingSubmittalHub() {
       toast.success("Due date set");
     },
     onError: (err) => toast.error("Failed to set due date: " + (err?.message || "Unknown")),
+  });
+
+  // Advance the manual detailing (drafting/release) state on a drawing set.
+  // Only meaningful when no submittal governs the package (the submittal
+  // machine owns the middle of the flow); the UI gates the control accordingly.
+  const updateDetailingStateMut = useMutation({
+    mutationFn: async ({ item, next }: { item: any; next: string }) => {
+      if (!item?._drawingSetId) throw new Error("No drawing set to update");
+      await entities.DrawingSet.update(item._drawingSetId, { detailing_state: next } as any);
+    },
+    onSuccess: (_data, { next }) => {
+      invalidateHub();
+      toast.success(`Detailing state → ${next}`);
+    },
+    onError: (err) => toast.error("Failed to set detailing state: " + (err?.message || "Unknown")),
+  });
+
+  // Toggle a manual readiness flag (material_impacted / long_lead_impact).
+  const updateReadinessFlagMut = useMutation({
+    mutationFn: async ({ item, field, value }: { item: any; field: "material_impacted" | "long_lead_impact"; value: boolean }) => {
+      if (!item?._drawingSetId) throw new Error("No drawing set to update");
+      await entities.DrawingSet.update(item._drawingSetId, { [field]: value } as any);
+    },
+    onSuccess: (_data, { field, value }) => {
+      invalidateHub();
+      const label = field === "material_impacted" ? "Material impacted" : "Long-lead impact";
+      toast.success(`${label} ${value ? "flagged" : "cleared"}`);
+    },
+    onError: (err) => toast.error("Failed to update readiness flag: " + (err?.message || "Unknown")),
+  });
+
+  // Save per-project lead-time defaults into projects.metadata.detailing_lead_days.
+  // Updates the context's activeProject too, so the backward dates recompute live.
+  const saveLeadsMut = useMutation({
+    mutationFn: async (leads: Record<string, number>) => {
+      if (!projectId) throw new Error("No active project");
+      const nextMetadata = { ...(activeProject?.metadata || {}), detailing_lead_days: leads };
+      await entities.Project.update(projectId, { metadata: nextMetadata } as any);
+      return nextMetadata;
+    },
+    onSuccess: (nextMetadata) => {
+      projectCtx.updateActiveProject?.({ metadata: nextMetadata });
+      setLeadModalOpen(false);
+      toast.success("Lead times updated");
+    },
+    onError: (err) => toast.error("Failed to save lead times: " + (err?.message || "Unknown")),
   });
 
   // ── Render ─────────────────────────────────────────────────────────────
@@ -314,6 +511,12 @@ export default function DrawingSubmittalHub() {
           tone={triage.overdue.length ? error : success}
         />
         <HeaderSignal
+          icon={CalendarClock}
+          label="At Risk"
+          value={triage.atRiskCount}
+          tone={triage.atRiskCount ? warning : success}
+        />
+        <HeaderSignal
           icon={Gauge}
           label="In Review"
           value={drawingKpis.inReview}
@@ -325,6 +528,16 @@ export default function DrawingSubmittalHub() {
           value={triage.unlinkedSubmittalItems.length}
           tone={triage.unlinkedSubmittalItems.length ? warning : textMuted}
         />
+        <button
+          type="button"
+          className="sbd-btn-ghost"
+          onClick={() => setLeadModalOpen(true)}
+          title="Edit the project's detailing lead times (drives the backward schedule)"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
+        >
+          <CalendarClock size={14} />
+          Lead Times
+        </button>
       </CommandBar>
 
       {/* ── KPI Strip ────────────────────────────────────────────────── */}
@@ -420,7 +633,11 @@ export default function DrawingSubmittalHub() {
                 onOpenTab={setActiveTab}
                 onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
                 onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
-                isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending}
+                onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
+                onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
+                sequenceReadiness={sequenceReadiness}
+                revisionImpact={revisionImpact}
+                isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
               />
             )}
             {activeTab === "process" && (
@@ -441,9 +658,20 @@ export default function DrawingSubmittalHub() {
                 isLoading={isLoading}
               />
             )}
+            {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
           </Suspense>
         </ErrorBoundary>
       </div>
+
+      {leadModalOpen && (
+        <LeadTimesModal
+          leadDays={resolveLeadDays(activeProject, null)}
+          defaults={DEFAULT_LEAD_DAYS}
+          saving={saveLeadsMut.isPending}
+          onSave={(leads) => saveLeadsMut.mutate(leads)}
+          onClose={() => setLeadModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

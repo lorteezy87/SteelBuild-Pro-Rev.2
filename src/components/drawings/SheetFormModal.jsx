@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { base44 } from "@/api/base44Client";
+import { integrations } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { STAGES, DISCIPLINES, EMPTY_FORM, mono, surface } from "./drawingsConfig";
 
 /**
  * Modal for creating or editing a single drawing sheet.
- * Handles file upload via base44 integration.
+ * Handles file upload via Supabase integration.
  *
  * @param {{ initial?: object, onSave: (form: object) => void, onClose: () => void, saving: boolean }} props
  */
@@ -34,7 +34,7 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
     if (uploadFile) {
       setUploading(true);
       try {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file: uploadFile });
+        const { file_url } = await integrations.Core.UploadFile({ file: uploadFile });
         fileUrl = file_url;
       } catch (err) {
         toast.error("File upload failed: " + (err?.message || "Unknown error"));

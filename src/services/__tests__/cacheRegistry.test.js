@@ -59,7 +59,6 @@ describe("getQueryFamilies", () => {
     expect(families).toContainEqual(["all-cos-portfolio"]);
     expect(families).toContainEqual(["change-orders-global"]);
     expect(families).toContainEqual(["change-orders-dash", "proj-1"]);
-    expect(families).toContainEqual(["pcc-cos", "proj-1"]);
     expect(families).toContainEqual(["modal-cos", "proj-1"]);
   });
 
@@ -81,7 +80,6 @@ describe("getQueryFamilies", () => {
     expect(families).toContainEqual(["all-wps-portfolio"]);
     expect(families).toContainEqual(["work-packages-global"]);
     expect(families).toContainEqual(["wps-fab", "proj-1"]);
-    expect(families).toContainEqual(["pcc-wps", "proj-1"]);
   });
 
   it("returns all rfi query keys", () => {
@@ -90,7 +88,6 @@ describe("getQueryFamilies", () => {
     expect(families).toContainEqual(["rfis", "hub"]);
     expect(families).toContainEqual(["rfis-nav-count", "proj-1"]);
     expect(families).toContainEqual(["pill-rfis-quick"]);
-    expect(families).toContainEqual(["pcc-rfis", "proj-1"]);
     expect(families).toContainEqual(["modal-rfis", "proj-1"]);
   });
 });
@@ -124,7 +121,6 @@ describe("invalidateEntity", () => {
     expect(calls).toContainEqual(["drawings-all"]);
     expect(calls).toContainEqual(["drawings-nav-count", "proj-1"]);
     expect(calls).toContainEqual(["draw-detail", "proj-1"]);
-    expect(calls).toContainEqual(["pcc-drawings", "proj-1"]);
   });
 
   it("falls back for unknown entity", async () => {

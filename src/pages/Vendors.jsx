@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { toast } from "sonner";
@@ -30,7 +30,7 @@ export default function Vendors() {
   // ── Queries ──
   const { data: vendors = [], refetch } = useQuery({
     queryKey: ["vendors"],
-    queryFn: () => base44.entities.Vendor.list("-is_preferred"),
+    queryFn: () => entities.Vendor.list("-is_preferred"),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -38,7 +38,7 @@ export default function Vendors() {
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.Delivery.filter({ project_id: activeProject.id })
+      ? entities.Delivery.filter({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
     staleTime: 2 * 60 * 1000,
@@ -47,7 +47,7 @@ export default function Vendors() {
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["change-orders", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id })
+      ? entities.ChangeOrder.filter({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
     staleTime: 2 * 60 * 1000,
@@ -56,7 +56,7 @@ export default function Vendors() {
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.Expense.filter({ project_id: activeProject.id })
+      ? entities.Expense.filter({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
     staleTime: 2 * 60 * 1000,
@@ -122,7 +122,7 @@ export default function Vendors() {
 
   // ── Mutations ──
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.Vendor.create(data),
+    mutationFn: (data) => entities.Vendor.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendors"] });
       setShowForm(false);
@@ -133,7 +133,7 @@ export default function Vendors() {
   });
 
   const updateMut = useMutation({
-    mutationFn: (data) => base44.entities.Vendor.update(data.id, data),
+    mutationFn: (data) => entities.Vendor.update(data.id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendors"] });
       setShowForm(false);
@@ -144,7 +144,7 @@ export default function Vendors() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.Vendor.delete(id),
+    mutationFn: (id) => entities.Vendor.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendors"] });
       setDeleteTarget(null);

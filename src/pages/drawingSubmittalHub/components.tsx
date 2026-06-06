@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import {
   AlertTriangle,
@@ -18,6 +18,7 @@ import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
 import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import { DRAFTING_STATES } from "@/lib/detailingPackageState";
 import {
   BIC_CHOICES,
   STATUS_COLORS,
@@ -27,6 +28,7 @@ import {
   error,
   fmtDate,
   getActionTone,
+  getOperationalStateColor,
   getStatusColor,
   getSubmittalDueDate,
   info,
@@ -39,6 +41,7 @@ import {
   surface2,
   textMuted,
   textPrimary,
+  toDateInputValue,
   warning,
 } from "./format";
 import type { DueInfo, Submittal } from "./types";
@@ -95,10 +98,14 @@ interface TriageBoardProps {
   onOpenTab: (key: string) => void;
   onUpdateOwner: (item: any, owner: string) => void;
   onUpdateDueDate: (item: any, date: string) => void;
+  onAdvanceDetailing: (item: any, next: string) => void;
+  onToggleReadiness: (item: any, field: "material_impacted" | "long_lead_impact", value: boolean) => void;
+  sequenceReadiness: Array<{ sequence: string; packageCount: number; detailingPct: number; fabReadyCount: number; erectionReadyCount: number; atRiskCount: number }>;
+  revisionImpact: Array<any>;
   isSaving: boolean;
 }
 
-export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, isSaving }: TriageBoardProps) {
+export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving }: TriageBoardProps) {
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
@@ -181,8 +188,11 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
           </div>
           {focusItem ? (
             <>
-              <div style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.45 }}>
-                {focusItem.group} - {focusItem.status}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.45 }}>
+                  {focusItem.group} - {focusItem.status}
+                </span>
+                {focusItem.detailingState && <OperationalStateChip state={focusItem.detailingState} />}
               </div>
               {/* ── Inline Quick-Action Controls ──────────────────────── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
@@ -198,6 +208,22 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                   disabled={isSaving}
                 />
               </div>
+              {/* ── Detailing-state advance (drafting phase only) ─────── */}
+              {focusItem.kind === "Drawing Set" && focusItem._canDraft && (
+                <InlineDetailingControl
+                  current={focusItem._detailingStateRaw}
+                  onAdvance={(next) => onAdvanceDetailing(focusItem, next)}
+                  disabled={isSaving}
+                />
+              )}
+              {/* ── Backward schedule + readiness (drawing sets) ──────── */}
+              {focusItem.kind === "Drawing Set" && focusItem._readiness && (
+                <ReadinessPanel
+                  readiness={focusItem._readiness}
+                  onToggle={(field, value) => onToggleReadiness(focusItem, field, value)}
+                  disabled={isSaving}
+                />
+              )}
               <button
                 type="button"
                 onClick={() => onOpenTab(focusRoute)}
@@ -249,7 +275,147 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
           onOpenTab={onOpenTab}
         />
       </div>
+
+      <SequenceReadinessSection rows={sequenceReadiness} />
+      <RevisionImpactSection rows={revisionImpact} />
     </div>
+  );
+}
+
+// ── Sequence Readiness rollup ───────────────────────────────────────────────
+// The sequence-aware view: group packages by erection sequence and show how far
+// each sequence's detailing has progressed + how many packages are fab/erection
+// ready, so the schedule can pull detailing (design doc §7).
+
+interface SequenceReadinessRow {
+  sequence: string;
+  packageCount: number;
+  detailingPct: number;
+  fabReadyCount: number;
+  erectionReadyCount: number;
+  atRiskCount: number;
+}
+
+function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
+  return (
+    <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+        <div>
+          <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>Sequence Readiness</h3>
+          <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
+            Detailing progress + fab/erection readiness by erection sequence.
+          </p>
+        </div>
+        <span className="sbd-badge-info">{rows.length}</span>
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState text="No packages linked to an erection sequence yet — link work packages to drawing sets to populate this." />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {rows.map((row) => (
+            <div key={row.sequence} style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(80px, 0.7fr) minmax(120px, 1.3fr) repeat(3, minmax(64px, 0.5fr))",
+              gap: 10, alignItems: "center",
+              padding: "10px 12px", borderRadius: 10,
+              border: `1px solid ${row.atRiskCount ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
+              background: "var(--bg-surface-low)",
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Seq</div>
+                <div style={{ color: textPrimary, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.sequence}</div>
+                <div style={{ color: textMuted, fontSize: 11 }}>{pluralize(row.packageCount, "pkg")}</div>
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10, color: textPrimary, marginBottom: 4 }}>
+                  <span style={{ color: textMuted }}>Detailing</span>
+                  <span className="sbd-num">{row.detailingPct}%</span>
+                </div>
+                <div style={{ height: 7, borderRadius: 999, background: surface2, overflow: "hidden", border: `1px solid ${border}` }}>
+                  <div style={{ height: "100%", width: `${row.detailingPct}%`, background: accent, boxShadow: `0 0 10px ${accent}` }} />
+                </div>
+              </div>
+              <SeqMetric label="Fab" value={`${row.fabReadyCount}/${row.packageCount}`} tone={row.fabReadyCount === row.packageCount ? success : textMuted} />
+              <SeqMetric label="Erect" value={`${row.erectionReadyCount}/${row.packageCount}`} tone={row.erectionReadyCount === row.packageCount ? success : textMuted} />
+              <SeqMetric label="At risk" value={row.atRiskCount} tone={row.atRiskCount ? warning : success} />
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SeqMetric({ label, value, tone }: { label: string; value: ReactNode; tone: string }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</div>
+      <div className="sbd-num" style={{ color: tone, fontFamily: mono, fontSize: 15, fontWeight: 800, marginTop: 2 }}>{value}</div>
+    </div>
+  );
+}
+
+// ── Revision Impact Tracker ─────────────────────────────────────────────────
+// Revisions that landed on sheets already moving downstream (fabricated /
+// delivered / in field) — the rework / change-order exposure (design doc §7).
+
+const REV_SEVERITY_TONE: Record<string, string> = { critical: error, high: warning, medium: info, low: textMuted };
+
+function RevisionImpactSection({ rows }: { rows: any[] }) {
+  const shown = (rows || []).slice(0, 8);
+  return (
+    <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+        <div>
+          <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>Revision Impact</h3>
+          <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
+            Revisions that landed on steel already moving downstream (rework / CO risk).
+          </p>
+        </div>
+        <span className="sbd-badge-info">{rows?.length || 0}</span>
+      </div>
+      {shown.length === 0 ? (
+        <EmptyState text="No change-revisions on tracked sheets, or none with downstream exposure." />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {shown.map((r) => {
+            const tone = REV_SEVERITY_TONE[r.severity] || textMuted;
+            const noneReached = !r.fabricated && !r.delivered && !r.inField;
+            return (
+              <div key={r.revisionId} style={{
+                display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(150px, 1fr) auto", gap: 12, alignItems: "center",
+                padding: "10px 12px", borderRadius: 10,
+                border: `1px solid ${r.severity === "critical" ? "color-mix(in srgb, var(--status-error) 56%, transparent)" : border}`,
+                background: "var(--bg-surface-low)",
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: textPrimary, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {(r.sheetNumber || "—")} · {r.revisionCode}
+                  </div>
+                  <div style={{ color: textMuted, fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {r.drawingSetName || "Unassigned set"}{r.issuedAt ? ` · ${fmtDate(r.issuedAt)}` : ""}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {r.fabricated && <ReadyChip ok={false} label="Fabricated" bad />}
+                  {r.delivered && <ReadyChip ok={false} label="Delivered" bad />}
+                  {r.inField && <ReadyChip ok={false} label="In field" bad />}
+                  {noneReached && <span style={{ color: textMuted, fontFamily: mono, fontSize: 10 }}>caught pre-fab</span>}
+                </div>
+                <span style={{
+                  fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
+                  color: tone, padding: "3px 9px", borderRadius: 999,
+                  background: `color-mix(in srgb, ${tone} 16%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${tone} 42%, transparent)`,
+                }}>
+                  {r.severity}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -405,7 +571,7 @@ function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: Inli
           type="date"
           autoFocus
           disabled={disabled}
-          defaultValue={currentDate ? new Date(currentDate).toISOString().split("T")[0] : ""}
+          defaultValue={toDateInputValue(currentDate)}
           onChange={(e) => {
             if (e.target.value) {
               onSetDate(e.target.value);
@@ -429,6 +595,197 @@ function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: Inli
         />
       )}
     </div>
+  );
+}
+
+// ── Operational-state chip + drafting-state advance control ─────────────────
+
+function OperationalStateChip({ state }: { state: string }) {
+  const color = getOperationalStateColor(state);
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 8px",
+      borderRadius: 999,
+      fontFamily: mono,
+      fontSize: 9,
+      fontWeight: 800,
+      letterSpacing: "0.06em",
+      textTransform: "uppercase",
+      color,
+      background: `color-mix(in srgb, ${color} 16%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`,
+      whiteSpace: "nowrap",
+    }}>
+      {state}
+    </span>
+  );
+}
+
+interface InlineDetailingControlProps {
+  current: string | null | undefined;
+  onAdvance: (next: string) => void;
+  disabled: boolean;
+}
+
+// Manual drafting-state advance (In Detailing → Internal Review → Ready to
+// Submit). Only rendered for drawing-set packages with NO governing submittal —
+// once a submittal exists, the submittal machine owns the state (§20).
+function InlineDetailingControl({ current, onAdvance, disabled }: InlineDetailingControlProps) {
+  return (
+    <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: surface1, border: `1px solid ${border}` }}>
+      <div style={{
+        fontFamily: mono, fontSize: 8, color: textMuted,
+        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8,
+        display: "flex", alignItems: "center", gap: 5,
+      }}>
+        <ClipboardList size={10} />
+        Detailing state
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {DRAFTING_STATES.map((s) => {
+          const isCurrent = current === s;
+          const color = getOperationalStateColor(s);
+          return (
+            <button
+              key={s}
+              type="button"
+              disabled={disabled || isCurrent}
+              onClick={() => onAdvance(s)}
+              title={isCurrent ? `Already ${s}` : `Set to ${s}`}
+              style={{
+                padding: "5px 9px",
+                borderRadius: 8,
+                fontFamily: mono,
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: "0.04em",
+                cursor: disabled || isCurrent ? "default" : "pointer",
+                color: isCurrent ? "#0b0e14" : color,
+                background: isCurrent ? color : `color-mix(in srgb, ${color} 12%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`,
+                opacity: disabled && !isCurrent ? 0.6 : 1,
+              }}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Backward schedule + readiness panel ─────────────────────────────────────
+
+const SCHEDULE_ROWS: Array<[string, string]> = [
+  ["detailingStart", "Detailing start"],
+  ["internalReviewDue", "Internal review"],
+  ["submitBy", "Submit by"],
+  ["approvalNeededBy", "Approval by"],
+  ["fabReleaseRequiredBy", "Fab release by"],
+  ["erectionReleaseRequiredBy", "Erection release by"],
+];
+
+interface ReadinessPanelProps {
+  readiness: any;
+  onToggle: (field: "material_impacted" | "long_lead_impact", value: boolean) => void;
+  disabled: boolean;
+}
+
+function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanelProps) {
+  const {
+    backwardDates = {}, scheduleRisk = {}, fabricationReady, erectionReady,
+    rfiBlocked, revisionImpacted, materialImpacted, longLeadImpact, prioritySequence,
+  } = readiness || {};
+  const riskTone = scheduleRisk.severity === "critical" ? error : scheduleRisk.severity === "at_risk" ? warning : success;
+  const riskLabel = scheduleRisk.severity === "critical"
+    ? `Critical · ${scheduleRisk.daysLate}d`
+    : scheduleRisk.severity === "at_risk" ? `At risk · ${scheduleRisk.daysLate}d` : "On track";
+  const hasSchedule = SCHEDULE_ROWS.some(([k]) => backwardDates[k]);
+
+  return (
+    <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: surface1, border: `1px solid ${border}` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+        <div style={{ fontFamily: mono, fontSize: 8, color: textMuted, letterSpacing: "0.12em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
+          <CalendarClock size={10} /> Schedule &amp; readiness
+        </div>
+        <span title={(scheduleRisk.reasons || []).join("; ") || "On track"} style={{
+          fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
+          color: riskTone, padding: "2px 8px", borderRadius: 999,
+          background: `color-mix(in srgb, ${riskTone} 16%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${riskTone} 42%, transparent)`,
+        }}>
+          {riskLabel}
+        </span>
+      </div>
+
+      {hasSchedule ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 12px", marginBottom: 10 }}>
+          {SCHEDULE_ROWS.map(([k, label]) => (
+            <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontFamily: mono, fontSize: 10 }}>
+              <span style={{ color: textMuted }}>{label}</span>
+              <span style={{ color: backwardDates[k] ? textPrimary : textMuted }}>
+                {backwardDates[k] ? fmtDate(backwardDates[k]) : "TBD"}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: 11, color: textMuted, marginBottom: 10, lineHeight: 1.4 }}>
+          Link a work package with an erection date to compute the backward schedule.
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        <ReadyChip ok={!!fabricationReady} label="Fab ready" />
+        <ReadyChip ok={!!erectionReady} label="Erect ready" />
+        {rfiBlocked && <ReadyChip ok={false} label="RFI blocked" bad />}
+        {revisionImpacted && <ReadyChip ok={false} label="Rev impacted" bad />}
+        {prioritySequence && <ReadyChip ok label="Seq" neutral />}
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <FlagToggle label="Material impacted" active={!!materialImpacted} disabled={disabled} onClick={() => onToggle("material_impacted", !materialImpacted)} />
+        <FlagToggle label="Long-lead impact" active={!!longLeadImpact} disabled={disabled} onClick={() => onToggle("long_lead_impact", !longLeadImpact)} />
+      </div>
+    </div>
+  );
+}
+
+function ReadyChip({ ok, label, bad = false, neutral = false }: { ok: boolean; label: string; bad?: boolean; neutral?: boolean }) {
+  const color = neutral ? info : bad ? error : ok ? success : textMuted;
+  return (
+    <span style={{
+      fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase",
+      color, padding: "2px 7px", borderRadius: 999,
+      background: `color-mix(in srgb, ${color} 14%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+    }}>
+      {label}
+    </span>
+  );
+}
+
+function FlagToggle({ label, active, disabled, onClick }: { label: string; active: boolean; disabled: boolean; onClick: () => void }) {
+  const color = active ? warning : textMuted;
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={active ? `Clear: ${label}` : `Flag: ${label}`}
+      style={{
+        fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase",
+        color: active ? "#0b0e14" : color, cursor: disabled ? "default" : "pointer",
+        padding: "4px 9px", borderRadius: 8,
+        background: active ? warning : `color-mix(in srgb, ${textMuted} 10%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {active ? "● " : "○ "}{label}
+    </button>
   );
 }
 
@@ -594,8 +951,13 @@ function TriageItemRow({ item, onOpen }: { item: any; onOpen: () => void }) {
         <div style={{ color: textPrimary, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: 13 }}>
           {item.title}
         </div>
-        <div style={{ color: textMuted, fontSize: 12, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {item.group} - {item.status}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, minWidth: 0 }}>
+          <span style={{ color: textMuted, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
+            {item.group}
+          </span>
+          {item.detailingState
+            ? <OperationalStateChip state={item.detailingState} />
+            : <span style={{ color: textMuted, fontSize: 12, whiteSpace: "nowrap" }}>- {item.status}</span>}
         </div>
       </div>
       <div>
@@ -1073,6 +1435,117 @@ function SummaryChip({ icon: Icon, label, value, color }: SummaryChipProps) {
       <span className="sbd-num" style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color }}>
         {value}
       </span>
+    </div>
+  );
+}
+
+// ── Lead-times settings modal ───────────────────────────────────────────────
+// Edits the per-project backward-schedule lead times (projects.metadata.
+// detailing_lead_days). Opaque panel bg per the dark-theme modal rule (a
+// translucent --bg-surface/--bg-card would render see-through over the scrim).
+
+const LEAD_FIELDS: Array<{ key: string; label: string; hint: string }> = [
+  { key: "detailing",      label: "Detailing duration", hint: "Detailing start → internal review" },
+  { key: "internalReview", label: "Internal review",    hint: "Internal review → submit" },
+  { key: "approval",       label: "Approval cycle",     hint: "Submit → approval (EOR)" },
+  { key: "fabRelease",     label: "Release buffer",     hint: "Approval → fab release" },
+  { key: "fab",            label: "Fab + ship",         hint: "Fab release → erection release" },
+  { key: "erectionPrep",   label: "Field prep",         hint: "Erection release → erection start" },
+];
+
+interface LeadTimesModalProps {
+  leadDays: Record<string, number>;
+  defaults: Record<string, number>;
+  saving: boolean;
+  onSave: (leads: Record<string, number>) => void;
+  onClose: () => void;
+}
+
+export function LeadTimesModal({ leadDays, defaults, saving, onSave, onClose }: LeadTimesModalProps) {
+  const [draft, setDraft] = useState<Record<string, number>>(() => ({ ...defaults, ...leadDays }));
+
+  // Escape closes the modal (keyboard accessibility — §25). Guarded by `saving`
+  // so a mid-save Escape can't drop the dialog before the mutation settles.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !saving) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [saving, onClose]);
+
+  const setField = (key: string, value: string) => {
+    const n = Math.max(0, Math.round(Number(value) || 0));
+    setDraft((d) => ({ ...d, [key]: n }));
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(0,0,0,0.6)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(480px, 100%)", maxHeight: "85vh", overflowY: "auto",
+          background: "var(--bg-surface-secondary)",
+          border: `1px solid ${border}`, borderRadius: 16,
+          boxShadow: "var(--shadow-card)", padding: 20,
+        }}
+      >
+        <div style={{ marginBottom: 4, fontFamily: mono, fontSize: 9, color: textMuted, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+          Detailing Control Center
+        </div>
+        <h2 style={{ margin: "0 0 6px", color: textPrimary, fontSize: 20 }}>Lead Times</h2>
+        <p style={{ margin: "0 0 16px", color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.5 }}>
+          Calendar-day gaps used to schedule each package <strong>backward</strong> from its linked
+          erection date. Saved as this project&apos;s defaults; an individual package can still
+          override them in its metadata.
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {LEAD_FIELDS.map((f) => (
+            <label key={f.key} style={{ display: "grid", gridTemplateColumns: "1fr 92px", gap: 10, alignItems: "center" }}>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: "block", color: textPrimary, fontSize: 13, fontWeight: 700 }}>{f.label}</span>
+                <span style={{ display: "block", color: textMuted, fontSize: 11 }}>{f.hint}</span>
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6, justifySelf: "end" }}>
+                <input
+                  type="number" min={0} inputMode="numeric"
+                  value={draft[f.key] ?? 0}
+                  disabled={saving}
+                  onChange={(e) => setField(f.key, e.target.value)}
+                  style={{
+                    width: 56, background: "var(--bg-input, var(--bg-surface-low))",
+                    border: `1px solid ${border}`, borderRadius: 8, padding: "6px 8px",
+                    color: textPrimary, fontFamily: mono, fontSize: 13, textAlign: "right", outline: "none",
+                  }}
+                />
+                <span style={{ color: textMuted, fontFamily: mono, fontSize: 11 }}>d</span>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 20 }}>
+          <button type="button" className="sbd-btn-ghost" disabled={saving} onClick={() => setDraft({ ...defaults })}>
+            Reset to defaults
+          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="sbd-btn-ghost" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="button" className="sbd-btn-primary" disabled={saving} onClick={() => onSave(draft)}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

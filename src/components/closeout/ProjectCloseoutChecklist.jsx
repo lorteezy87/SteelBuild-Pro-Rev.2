@@ -1,4 +1,5 @@
 import React from "react";
+import { formatLocalDate } from "@/utils/dates";
 
 export default function ProjectCloseoutChecklist({ closeout, onUpdate }) {
   if (!closeout) return null;
@@ -78,25 +79,25 @@ export default function ProjectCloseoutChecklist({ closeout, onUpdate }) {
           {closeout.completion_date && (
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Completion</div>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{new Date(closeout.completion_date).toLocaleDateString()}</div>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{formatLocalDate(closeout.completion_date)}</div>
             </div>
           )}
           {closeout.handover_date && (
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Handover</div>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{new Date(closeout.handover_date).toLocaleDateString()}</div>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{formatLocalDate(closeout.handover_date)}</div>
             </div>
           )}
           {closeout.client_sign_off_date && (
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Client Sign-Off</div>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--status-success)" }}>{new Date(closeout.client_sign_off_date).toLocaleDateString()}</div>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--status-success)" }}>{formatLocalDate(closeout.client_sign_off_date)}</div>
             </div>
           )}
           {closeout.archive_date && (
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Archived</div>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{new Date(closeout.archive_date).toLocaleDateString()}</div>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{formatLocalDate(closeout.archive_date)}</div>
             </div>
           )}
         </div>

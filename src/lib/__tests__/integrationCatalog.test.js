@@ -15,7 +15,6 @@ describe("integrationCatalog", () => {
       "email",
       "accounting",
       "document-storage",
-      "bluebeam-pdf",
       "scheduling",
       "autodesk-bim",
     ]));

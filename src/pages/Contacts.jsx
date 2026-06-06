@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import ContactFormModal from "@/components/contacts/ContactFormModal";
@@ -35,18 +35,18 @@ export default function Contacts() {
     queryKey: ["contacts", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.Contact.filter({ project_id: projectId })
-        : base44.entities.Contact.list(),
+        ? entities.Contact.filter({ project_id: projectId })
+        : entities.Contact.list(),
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.Contact.create(data),
+    mutationFn: (data) => entities.Contact.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       toast.success("Contact created");
@@ -56,7 +56,7 @@ export default function Contacts() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Contact.update(id, data),
+    mutationFn: ({ id, data }) => entities.Contact.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       setEditingContact(null);
@@ -67,7 +67,7 @@ export default function Contacts() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.Contact.delete(id),
+    mutationFn: (id) => entities.Contact.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       setDeleteTarget(null);

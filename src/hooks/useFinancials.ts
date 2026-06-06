@@ -16,7 +16,7 @@
 import { useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
@@ -103,7 +103,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   // ── Queries ─────────────────────────────────────────────────────────
   const { data: costCodes = [], isLoading: loadingCC } = useQuery<CostCode[]>({
     queryKey: getQueryKey("cost_code", projectId),
-    queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }, "cost_code_number", 2000),
+    queryFn: () => entities.CostCode.filter({ project_id: projectId }, "cost_code_number", 2000),
     select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     enabled: !!projectId,
     staleTime: 60_000,
@@ -111,21 +111,21 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
 
   const { data: expenses = [], isLoading: loadingExp } = useQuery<Expense[]>({
     queryKey: getQueryKey("expense", projectId),
-    queryFn: () => base44.entities.Expense.filter({ project_id: projectId }, "-created_at", 2000),
+    queryFn: () => entities.Expense.filter({ project_id: projectId }, "-created_at", 2000),
     enabled: !!projectId,
     staleTime: 60_000,
   });
 
   const { data: sovItems = [], isLoading: loadingSOV } = useQuery<SOVItem[]>({
     queryKey: getQueryKey("sov_item", projectId),
-    queryFn: () => base44.entities.SOVItem.filter({ project_id: projectId }, undefined, 2000),
+    queryFn: () => entities.SOVItem.filter({ project_id: projectId }, undefined, 2000),
     enabled: !!projectId,
     staleTime: 60_000,
   });
 
   const { data: changeOrders = [], isLoading: loadingCO } = useQuery<ChangeOrder[]>({
     queryKey: getQueryKey("change_order", projectId),
-    queryFn: () => base44.entities.ChangeOrder.filter({ project_id: projectId }, undefined, 2000),
+    queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }, undefined, 2000),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -133,7 +133,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   // Work packages — needed for EVM-derived scope % in Labor Utilization KPI
   const { data: workPackages = [], isLoading: loadingWP } = useQuery<WorkPackage[]>({
     queryKey: getQueryKey("work_package", projectId),
-    queryFn: () => base44.entities.WorkPackage.filter({ project_id: projectId }, undefined, 2000),
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }, undefined, 2000),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -552,7 +552,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     mutationFn: async (data) => {
       const errors = validate("expense", data, "create");
       if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
-      return await base44.entities.Expense.create(data as Insert<'expenses'>);
+      return await entities.Expense.create(data as Insert<'expenses'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["expense"], projectId);
@@ -565,7 +565,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const expenseUpdateMut = useMutation<Expense, Error, ExpenseUpdate>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      return await base44.entities.Expense.update(id, data as Update<'expenses'>);
+      return await entities.Expense.update(id, data as Update<'expenses'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["expense"], projectId);
@@ -577,7 +577,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const expenseDeleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
-      await base44.entities.Expense.delete(id);
+      await entities.Expense.delete(id);
       return id;
     },
     onSuccess: async () => {
@@ -598,7 +598,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
         (cc) => cc.cost_code_number === data.cost_code_number
       );
       if (existing) throw new Error(`Cost code ${data.cost_code_number} already exists in this project.`);
-      return await base44.entities.CostCode.create(data as Insert<'cost_codes'>);
+      return await entities.CostCode.create(data as Insert<'cost_codes'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["cost_code"], projectId);
@@ -611,7 +611,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const costCodeUpdateMut = useMutation<CostCode, Error, CostCodeUpdate>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      return await base44.entities.CostCode.update(id, data as Update<'cost_codes'>);
+      return await entities.CostCode.update(id, data as Update<'cost_codes'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["cost_code"], projectId);
@@ -623,7 +623,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const costCodeDeleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
-      await base44.entities.CostCode.delete(id);
+      await entities.CostCode.delete(id);
       return id;
     },
     onSuccess: async () => {
@@ -639,7 +639,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     mutationFn: async (data) => {
       const errors = validate("change_order", data, "create");
       if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
-      return await base44.entities.ChangeOrder.create(data as Insert<'change_orders'>);
+      return await entities.ChangeOrder.create(data as Insert<'change_orders'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["change_order", "project"], projectId);
@@ -652,7 +652,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const coUpdateMut = useMutation<ChangeOrder, Error, COUpdate>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      return await base44.entities.ChangeOrder.update(id, data as Update<'change_orders'>);
+      return await entities.ChangeOrder.update(id, data as Update<'change_orders'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["change_order", "project"], projectId);
@@ -664,7 +664,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   const coDeleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
-      await base44.entities.ChangeOrder.delete(id);
+      await entities.ChangeOrder.delete(id);
       return id;
     },
     onSuccess: async () => {

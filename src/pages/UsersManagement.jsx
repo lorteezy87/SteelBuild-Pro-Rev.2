@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ function UsersManagementContent() {
 
   const { data: users = [], isLoading, refetch } = useQuery({
     queryKey: ["users"],
-    queryFn: () => base44.entities.User.list("-created_at"),
+    queryFn: () => entities.User.list("-created_at"),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -67,7 +67,7 @@ function UsersManagementContent() {
   const userCount = useMemo(() => users.filter((u) => u.role !== "admin").length, [users]);
 
   const deleteUserMut = useMutation({
-    mutationFn: (userId) => base44.entities.User.delete(userId),
+    mutationFn: (userId) => entities.User.delete(userId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["users"] });
       setDeleteTarget(null);

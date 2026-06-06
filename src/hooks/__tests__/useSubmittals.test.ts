@@ -15,9 +15,19 @@ vi.mock("@/lib/drawingHub", () => ({
   lockSet: vi.fn(async () => ({ id: "set-1", is_locked: true })),
 }));
 
+const createRound = vi.fn(async (row: any) => ({ id: "round-1", ...row }));
+const updateSubmittal = vi.fn(async (id: string, patch: any) => ({ id, drawing_set_ids: ["set-a"], ...patch }));
+vi.mock("@/api/supabaseClient", () => ({
+  entities: {
+    SubmittalRound: { create: (...a: any[]) => createRound(a[0]) },
+    Submittal: { update: (...a: any[]) => updateSubmittal(a[0], a[1]) },
+  },
+}));
+
 import { lockSet } from "@/lib/drawingHub";
 import {
   lockLinkedSetsIfApproved,
+  addSubmittalRound,
   TERMINAL_APPROVED_STATUSES,
 } from "../useSubmittals";
 
@@ -166,5 +176,51 @@ describe("lockLinkedSetsIfApproved", () => {
     expect(mockLockSet).toHaveBeenCalledTimes(2);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+});
+
+describe("addSubmittalRound (single audited write path)", () => {
+  beforeEach(() => {
+    mockLockSet.mockClear();
+    createRound.mockClear();
+    updateSubmittal.mockClear();
+  });
+
+  it("inserts a round (event seq = total_rounds+1), patches the submittal, and locks on terminal approval", async () => {
+    await addSubmittalRound({
+      submittal: { id: "sub-1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1, round_number: 1 },
+      status: "Approved",
+      ball_in_court: "GC",
+      returned_date: "2026-06-01",
+    });
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ submittal_id: "sub-1", project_id: "p1", round_number: 2, status: "Approved", drawing_set_ids: ["set-a"] }),
+    );
+    expect(updateSubmittal).toHaveBeenCalledWith(
+      "sub-1",
+      expect.objectContaining({ status: "Approved", ball_in_court: "GC", total_rounds: 2, current_round_id: "round-1" }),
+    );
+    // Approved is terminal-approved → lock fires for the linked set.
+    expect(mockLockSet).toHaveBeenCalled();
+  });
+
+  it("does NOT lock for a non-terminal status (Submitted)", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s2", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0 },
+      status: "Submitted",
+      ball_in_court: "EOR",
+      submitted_date: "2026-06-01",
+    });
+    expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 1, status: "Submitted" }));
+    expect(mockLockSet).not.toHaveBeenCalled();
+  });
+
+  it("bumps the submittal revision round_number only when bumpRevision is set", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s3", project_id: "p1", round_number: 2, total_rounds: 3 },
+      status: "Revise and Resubmit",
+      bumpRevision: true,
+    });
+    expect(updateSubmittal).toHaveBeenCalledWith("s3", expect.objectContaining({ round_number: 3 }));
   });
 });

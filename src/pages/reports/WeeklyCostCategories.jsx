@@ -10,7 +10,7 @@
 
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import ReportShell from "./ReportShell";
 import { formatCurrencyFull, formatCurrency, exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
@@ -63,7 +63,7 @@ function lastNWeekKeys(n) {
 export default function WeeklyCostCategories() {
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses-all"],
-    queryFn: () => base44.entities.Expense.list(),
+    queryFn: () => entities.Expense.list(),
   });
 
   const weekKeys = useMemo(() => lastNWeekKeys(12), []);

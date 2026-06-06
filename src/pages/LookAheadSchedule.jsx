@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,9 @@ import DeleteDialog from "../components/shared/DeleteDialog";
 import { formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";
 import { CommandBar, KpiTile } from "@/components/design-system";
+import { AlertTriangle, ShieldAlert } from "lucide-react";
+import { deriveOperationalConstraints } from "@/services/constraintEngine";
+import { summarizeBlockingConstraints } from "@/services/scheduleGatekeeper";
 
 const PHASE_COLORS = {
   Detailing:   { bg: "rgba(99,102,241,0.12)",  color: "rgb(99,102,241)",  border: "rgba(99,102,241,0.3)"  },
@@ -33,19 +36,44 @@ const empty = {
   percent_complete: 0, constraints: "", status: "Not Started",
 };
 
-function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = false }) {
+function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = false, blockers = [] }) {
   const [form, setForm] = useState(empty);
-  React.useEffect(() => { setForm(item ? { ...empty, ...item } : empty); }, [item, open]);
+  const [acknowledged, setAcknowledged] = useState(false);
+  React.useEffect(() => { setForm(item ? { ...empty, ...item } : empty); setAcknowledged(false); }, [item, open]);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const save = () => {
     if (!form.activity || !form.project_id) return;
     const proj = projects.find(p => p.id === form.project_id);
     onSave({ ...form, project_name: proj?.name || "", percent_complete: Number(form.percent_complete) });
   };
+  const hasBlockers = blockers.length > 0;
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{item ? "Edit Look-Ahead Item" : "New Look-Ahead Item"}</DialogTitle></DialogHeader>
+        {hasBlockers && (
+          <div style={{
+            display: "flex", gap: 10, alignItems: "flex-start",
+            background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.4)",
+            borderRadius: 8, padding: "10px 12px", marginTop: 4,
+          }}>
+            <ShieldAlert size={16} style={{ color: "rgb(239,68,68)", flexShrink: 0, marginTop: 1 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "rgb(239,68,68)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                {blockers.length} critical RFI {blockers.length === 1 ? "constraint" : "constraints"} active on this project
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
+                Confirm this work does not depend on unresolved information before scheduling it. Blocking:{" "}
+                {blockers.slice(0, 3).map((b) => `RFI ${b.rfiNumber || b.sourceRef || "?"}`).join(", ")}
+                {blockers.length > 3 ? ` +${blockers.length - 3} more` : ""}.
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)" }}>
+                <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
+                I confirm this activity is not blocked by the constraints above.
+              </label>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-4 py-4">
           <div className="col-span-2">
             <Label>Activity *</Label>
@@ -90,7 +118,7 @@ function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = fals
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
-          <Button onClick={save} disabled={isSaving} className="bg-slate-900 hover:bg-slate-800">
+          <Button onClick={save} disabled={isSaving || (hasBlockers && !acknowledged)} className="bg-slate-900 hover:bg-slate-800">
             {isSaving ? (item ? "Updating..." : "Creating...") : (item ? "Update" : "Create")}
           </Button>
         </DialogFooter>
@@ -130,6 +158,73 @@ function MiniProgressBar({ value }) {
   );
 }
 
+function ConstraintRow({ blocker, wpLabelById, critical }) {
+  const accent = critical ? "rgb(239,68,68)" : "rgb(245,158,11)";
+  const wpLabel = blocker.workPackageId
+    ? (wpLabelById[blocker.workPackageId] || String(blocker.workPackageId).slice(0, 8))
+    : null;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+      padding: "6px 0", borderTop: "1px solid var(--divider)",
+    }}>
+      <span style={{
+        fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: accent,
+        border: `1px solid ${accent}`, borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap",
+      }}>
+        {critical ? "CRITICAL" : "HIGH"}
+      </span>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap" }}>
+        RFI {blocker.rfiNumber || (blocker.sourceRef ? blocker.sourceRef.replace(/^RFI[\s#-]*/i, "") : "?")}
+      </span>
+      <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", flex: 1, minWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {blocker.title}
+      </span>
+      {blocker.ballInCourt && (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+          BIC: {blocker.ballInCourt}
+        </span>
+      )}
+      {wpLabel && (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+          {wpLabel}
+        </span>
+      )}
+      <span style={{
+        fontFamily: "var(--font-mono)", fontSize: 9, whiteSpace: "nowrap",
+        color: blocker.overdue ? "rgb(239,68,68)" : "var(--text-muted)",
+        fontWeight: blocker.overdue ? 700 : 400,
+      }}>
+        {blocker.dueDate ? `Due ${blocker.dueDate}${blocker.overdue ? " · OVERDUE" : ""}` : "No due date"}
+      </span>
+    </div>
+  );
+}
+
+function FabricationShield({ shield, wpLabelById }) {
+  if (!shield || shield.state === "clear") return null;
+  const blocked = shield.state === "blocked";
+  const accent = blocked ? "rgb(239,68,68)" : "rgb(245,158,11)";
+  const tint = blocked ? "rgba(239,68,68,0.08)" : "rgba(245,158,11,0.08)";
+  return (
+    <div style={{ background: tint, border: `1px solid ${accent}`, borderRadius: 10, padding: "12px 16px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {blocked ? <ShieldAlert size={16} style={{ color: accent }} /> : <AlertTriangle size={16} style={{ color: accent }} />}
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Blocking Fabrication Shield
+        </span>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
+          {shield.blockers.length} critical · {shield.warnings.length} high — unresolved RFIs that gate fabrication/delivery/erection
+        </span>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        {shield.blockers.map((b) => <ConstraintRow key={b.constraintId || b.sourceRef} blocker={b} wpLabelById={wpLabelById} critical />)}
+        {shield.warnings.map((b) => <ConstraintRow key={b.constraintId || b.sourceRef} blocker={b} wpLabelById={wpLabelById} critical={false} />)}
+      </div>
+    </div>
+  );
+}
+
 export default function LookAheadSchedule() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
@@ -142,14 +237,44 @@ export default function LookAheadSchedule() {
   const { data: items = [], isLoading, refetch } = useQuery({
     queryKey: ["lookahead", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.LookAhead.filter({ project_id: activeProject.id }, "-created_at")
+      ? entities.LookAhead.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });
   const projects = [activeProject].filter(Boolean);
 
+  // Blocking Fabrication Shield — deterministically derive the unresolved
+  // High/Critical RFI constraints for this project and surface them so a
+  // planner sees what gates fabrication/delivery/erection before scheduling.
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["lookahead-rfis", activeProject?.id],
+    queryFn: () => activeProject?.id
+      ? entities.RFI.filter({ project_id: activeProject.id })
+      : [],
+    enabled: !!activeProject?.id,
+  });
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["lookahead-wps", activeProject?.id],
+    queryFn: () => activeProject?.id
+      ? entities.WorkPackage.filter({ project_id: activeProject.id })
+      : [],
+    enabled: !!activeProject?.id,
+  });
+  const rfisById = useMemo(
+    () => Object.fromEntries(rfis.map((r) => [String(r.id), r])),
+    [rfis],
+  );
+  const wpLabelById = useMemo(
+    () => Object.fromEntries(workPackages.map((w) => [String(w.id), w.wp_number || w.name || String(w.id).slice(0, 8)])),
+    [workPackages],
+  );
+  const shield = useMemo(
+    () => summarizeBlockingConstraints(deriveOperationalConstraints({ rfis }, {}), { rfisById }),
+    [rfis, rfisById],
+  );
+
   const createMut = useMutation({
-    mutationFn: d => base44.entities.LookAhead.create(d),
+    mutationFn: d => entities.LookAhead.create(d),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lookahead"] });
       setModalOpen(false);
@@ -161,7 +286,7 @@ export default function LookAheadSchedule() {
     },
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.LookAhead.update(id, data),
+    mutationFn: ({ id, data }) => entities.LookAhead.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lookahead"] });
       setModalOpen(false);
@@ -173,7 +298,7 @@ export default function LookAheadSchedule() {
     },
   });
   const deleteMut = useMutation({
-    mutationFn: id => base44.entities.LookAhead.delete(id),
+    mutationFn: id => entities.LookAhead.delete(id),
     onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["lookahead"] });
       if (editing?.id === deletedId) {
@@ -195,16 +320,28 @@ export default function LookAheadSchedule() {
 
   const fmtWindow = (d) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-  // Group items
-  const groupKeys = groupBy === "Phase" ? ["Detailing", "Fabrication", "Delivery", "Erection"]
-    : groupBy === "Project" ? [...new Set(items.map(i => i.project_name).filter(Boolean))]
-    : [...new Set(items.map(i => i.crew || "No Crew").filter(Boolean))];
+  // Group items — bucket once per (groupBy, items) instead of re-filtering the
+  // full list once per group key on every render (was O(groups·items) each pass
+  // and produced new key/array references that defeated row memoization).
+  const { groupKeys, itemsByGroup } = useMemo(() => {
+    const keyOf = (i) =>
+      groupBy === "Phase" ? i.phase
+        : groupBy === "Project" ? i.project_name
+        : (i.crew || "No Crew");
+    const byGroup = new Map();
+    for (const i of items) {
+      const k = keyOf(i);
+      if (!k) continue;
+      if (!byGroup.has(k)) byGroup.set(k, []);
+      byGroup.get(k).push(i);
+    }
+    const keys = groupBy === "Phase"
+      ? ["Detailing", "Fabrication", "Delivery", "Erection"]
+      : Array.from(byGroup.keys());
+    return { groupKeys: keys, itemsByGroup: byGroup };
+  }, [groupBy, items]);
 
-  const getGroupItems = (key) => {
-    if (groupBy === "Phase") return items.filter(i => i.phase === key);
-    if (groupBy === "Project") return items.filter(i => i.project_name === key);
-    return items.filter(i => (i.crew || "No Crew") === key);
-  };
+  const getGroupItems = (key) => itemsByGroup.get(key) || [];
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -294,6 +431,8 @@ export default function LookAheadSchedule() {
           <RefreshCw size={12} />
         </button>
       </CommandBar>
+
+      <FabricationShield shield={shield} wpLabelById={wpLabelById} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
         <KpiTile compact label="Activities"   value={stats.total}       color="var(--accent)" />
@@ -473,6 +612,7 @@ export default function LookAheadSchedule() {
         item={editing}
         projects={projects}
         isSaving={createMut.isPending || updateMut.isPending}
+        blockers={shield.blockers}
       />
       <DeleteDialog
         open={!!deleteTarget}

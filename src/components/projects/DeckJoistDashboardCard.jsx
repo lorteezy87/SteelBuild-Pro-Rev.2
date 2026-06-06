@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { entities } from "@/api/supabaseClient";
 import { formatDate } from '@/components/shared/formatters';
 import {
   getItemStyle,
@@ -15,7 +15,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
     if (!project?.id) return;
     const loadDeliveries = async () => {
       try {
-        const dels = await base44.entities.Delivery.filter({
+        const dels = await entities.Delivery.filter({
           project_id: project.id,
         });
         setDeliveries(dels || []);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Pin, GripVertical, Eye, EyeOff } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { entities } from "@/api/supabaseClient";
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -27,17 +27,25 @@ const Toggle = ({ checked, onChange }) => (
   </div>
 );
 
-// Available KPIs on the main dashboard
+// Available KPIs on the main dashboard. Ids + order match DASHBOARD_KPI_IDS in
+// useUserPrefs, and each maps to a real metric computed by the Dashboard header.
 const AVAILABLE_KPIS = [
   { id: 'open_rfis',        label: 'Open RFIs' },
   { id: 'pending_cos',      label: 'Pending Change Orders' },
   { id: 'contract_value',   label: 'Contract Value' },
-  { id: 'labor_burn',       label: 'Labor Burn' },
   { id: 'work_packages',    label: 'Work Packages' },
-  { id: 'critical_alerts',  label: 'Critical Alerts' },
   { id: 'deliveries',       label: 'Upcoming Deliveries' },
-  { id: 'tons_produced',    label: 'Tons Produced' },
+  { id: 'overdue_items',    label: 'Overdue Items' },
+  { id: 'open_submittals',  label: 'Open Submittals' },
+  { id: 'expenses',         label: 'Expenses' },
+  { id: 'rfis_blocking_fab', label: 'RFIs Blocking Fab' },
 ];
+const KPI_IDS = AVAILABLE_KPIS.map((k) => k.id);
+// Drop any stale/unknown ids (the KPI set was revised); fall back to all.
+const sanitizeKpis = (arr) => {
+  const valid = Array.isArray(arr) ? arr.filter((id) => KPI_IDS.includes(id)) : [];
+  return valid.length ? valid : KPI_IDS;
+};
 
 // Pinnable navigation modules
 const AVAILABLE_MODULES = [
@@ -64,7 +72,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
   // staleTime the rest of the app uses for the project list.
   const { data: projects = [] } = useQuery({
     queryKey: ['projects-for-settings'],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -73,8 +81,8 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
     default_project_id: preferences?.default_project_id || '',
     auto_refresh_secs:  preferences?.auto_refresh_secs ?? 0,
     pinned_modules:     preferences?.pinned_modules || ['Projects', 'RFIs', 'Drawings'],
-    visible_kpis:       preferences?.visible_kpis || AVAILABLE_KPIS.map(k => k.id),
-    kpi_order:          preferences?.kpi_order || AVAILABLE_KPIS.map(k => k.id),
+    visible_kpis:       sanitizeKpis(preferences?.visible_kpis),
+    kpi_order:          sanitizeKpis(preferences?.kpi_order),
     dashboard_density:  preferences?.dashboard_density || 'normal',
     show_welcome:       preferences?.show_welcome !== false,
   });
@@ -86,8 +94,8 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
       default_project_id: preferences.default_project_id || '',
       auto_refresh_secs:  preferences.auto_refresh_secs ?? 0,
       pinned_modules:     preferences.pinned_modules || ['Projects', 'RFIs', 'Drawings'],
-      visible_kpis:       preferences.visible_kpis || AVAILABLE_KPIS.map(k => k.id),
-      kpi_order:          preferences.kpi_order || AVAILABLE_KPIS.map(k => k.id),
+      visible_kpis:       sanitizeKpis(preferences.visible_kpis),
+      kpi_order:          sanitizeKpis(preferences.kpi_order),
       dashboard_density:  preferences.dashboard_density || 'normal',
       show_welcome:       preferences.show_welcome !== false,
     });
@@ -145,19 +153,14 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
         Personalize your landing page, pinned modules, and which KPIs appear first.
       </p>
 
-      {/* Wiring status banner — what actually takes effect right now.
-          The Default Project + Auto-Refresh prefs ARE consumed by the
-          app (ProjectContext + Dashboard react-query refetchInterval).
-          The other Dashboard prefs (Default Landing, Pinned Modules,
-          KPI visibility/order, Density, Welcome banner) are saved to
-          your profile but have no consumer wired yet — flagged below. */}
+      {/* Wiring status banner — all of these preferences now take effect. */}
       <div
         style={{
           marginBottom: 24,
           padding: '10px 12px',
           background: 'var(--bg-surface-low)',
           border: '1px solid var(--border-default)',
-          borderLeft: '3px solid var(--accent)',
+          borderLeft: '3px solid var(--success)',
           borderRadius: 6,
           fontFamily: 'var(--font-body)',
           fontSize: 11,
@@ -165,16 +168,16 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
           lineHeight: 1.5,
         }}
       >
-        <strong style={{ color: 'var(--text-primary)' }}>Wired up:</strong>{' '}
-        Default Project (auto-selects on app load) and Auto-Refresh interval
-        (used by RFIs / deliveries / activity feed queries).
-        Other dashboard layout preferences are saved to your profile but
-        not yet consumed.
+        <strong style={{ color: 'var(--text-primary)' }}>All active:</strong>{' '}
+        Default Landing redirects on first open, Default Project auto-selects,
+        Auto-Refresh drives live queries, Pinned Modules appear in the sidebar
+        favorites, and the KPI cards, density, and welcome banner all render on
+        your Dashboard.
       </div>
 
       {/* Default landing page */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Default Landing Page <NotYet /></label>
+        <label style={labelStyle}>Default Landing Page</label>
         <select
           value={prefs.default_landing}
           onChange={e => handleChange('default_landing', e.target.value)}
@@ -244,7 +247,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
 
       {/* Pinned modules */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Pinned Modules <NotYet /></label>
+        <label style={labelStyle}>Pinned Modules</label>
         <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', marginBottom: 10 }}>
           Pinned modules appear at the top of your sidebar for quick access.
         </div>
@@ -284,7 +287,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
 
       {/* KPI visibility + order */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>KPI Cards on Dashboard <NotYet /></label>
+        <label style={labelStyle}>KPI Cards on Dashboard</label>
         <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', marginBottom: 10 }}>
           Show, hide, and reorder the KPI cards on your main dashboard.
         </div>
@@ -358,7 +361,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
 
       {/* Dashboard density */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Dashboard Density <NotYet /></label>
+        <label style={labelStyle}>Dashboard Density</label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
             { id: 'compact',     label: 'Compact',     desc: 'More cards per row' },
@@ -396,7 +399,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
       }}>
         <div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
-            Show welcome banner <NotYet />
+            Show welcome banner
           </div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)' }}>
             Display the greeting + activity summary at the top of the dashboard.
@@ -411,34 +414,5 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * Inline pill that flags a pref the Settings UI saves but no consumer
- * reads yet. Mirrors the same component on DisplayTab.
- */
-function NotYet() {
-  return (
-    <span
-      title="Saved to your profile, but no consumer reads this preference yet. We'll wire it up in a future release."
-      style={{
-        display: 'inline-block',
-        marginLeft: 8,
-        padding: '1px 6px',
-        borderRadius: 3,
-        background: 'var(--bg-surface-high)',
-        color: 'var(--text-muted)',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 8,
-        fontWeight: 700,
-        letterSpacing: '0.10em',
-        textTransform: 'uppercase',
-        verticalAlign: 'middle',
-        border: '1px solid var(--border-default)',
-      }}
-    >
-      Not yet active
-    </span>
   );
 }

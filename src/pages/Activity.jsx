@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ActivityFeed from "../components/shared/ActivityFeed";
@@ -35,19 +35,19 @@ export default function ActivityPage() {
 
   const { data: activities = [], isLoading: activitiesLoading } = useQuery({
     queryKey: ["activities"],
-    queryFn: () => base44.entities.Activity.list("-timestamp"),
+    queryFn: () => entities.Activity.list("-timestamp"),
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
 
   // The `activities` table stores columns in snake_case (entity_type,
   // performed_by, project_id). Earlier this page was reading the
-  // Base44-style camelCase aliases (userName, entityType, projectId)
+  // legacy camelCase aliases (userName, entityType, projectId)
   // which never exist on Supabase rows — every filter silently
   // evaluated to true/empty and the feed looked broken. We now read
   // the real column names, keeping legacy fallbacks in case a future

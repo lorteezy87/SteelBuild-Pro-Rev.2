@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryKey } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -425,28 +425,28 @@ export default function LEMs() {
 
   const { data: dailyLogs = [], isLoading: logsLoading } = useQuery({
     queryKey: getQueryKey("daily_log", projectId),
-    queryFn: () => base44.entities.DailyLog.filter({ project_id: projectId }),
+    queryFn: () => entities.DailyLog.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: workPackages = [], isLoading: wpLoading } = useQuery({
     queryKey: getQueryKey("work_package", projectId),
-    queryFn: () => base44.entities.WorkPackage.filter({ project_id: projectId }),
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
   const { isLoading: expLoading } = useQuery({
     queryKey: getQueryKey("expense", projectId),
-    queryFn: () => base44.entities.Expense.filter({ project_id: projectId }),
+    queryFn: () => entities.Expense.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: deliveries = [], isLoading: delLoading } = useQuery({
     queryKey: getQueryKey("delivery", projectId),
-    queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
+    queryFn: () => entities.Delivery.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });

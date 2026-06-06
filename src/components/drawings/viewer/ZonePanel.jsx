@@ -23,7 +23,7 @@ import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, FilePlus, Sparkles } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import {
@@ -609,7 +609,7 @@ export default function ZonePanel({
                     formData.schedule_impact_days === "" ? null
                       : formData.schedule_impact_days !== undefined ? Number(formData.schedule_impact_days) : null,
                 };
-                const newRfi = await base44.entities.RFI.create(payload);
+                const newRfi = await entities.RFI.create(payload);
 
                 // Link it to the zone (manual source, related role).
                 // If this fails we surface a toast but don't roll back

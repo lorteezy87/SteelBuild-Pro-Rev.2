@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { formatLocalDate } from "@/utils/dates";
 
 /* ── More vibrant file type badges with high contrast ── */
 const FILE_TYPE_CONFIG = {
@@ -72,7 +73,7 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
   const fileSizeKb = doc.fileSizeKb ?? doc.file_size_kb;
   const fileSizeMB = fileSizeKb ? (fileSizeKb / 1024).toFixed(1) + " MB" : "\u2014";
   const rawDate = doc.uploadedDate ?? doc.uploaded_date;
-  const uploadDate = rawDate ? new Date(rawDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "\u2014";
+  const uploadDate = rawDate ? formatLocalDate(rawDate, "en-US", { month: "short", day: "numeric", year: "numeric" }) : "\u2014";
   const linkedCount = (doc.linkedWorkPackages?.length || 0) + (doc.linkedDeliveries?.length || 0) + (doc.linkedRFIs?.length || 0) + (doc.linkedSubmittals?.length || 0) + (doc.linkedDrawings?.length || 0) + (doc.linkedChangeOrders?.length || 0);
 
   return (

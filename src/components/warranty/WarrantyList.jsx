@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { formatLocalDate } from "@/utils/dates";
 
 const TYPE_COLORS = {
   Material: "var(--status-info)",
@@ -51,7 +52,7 @@ export default function WarrantyList({ warranties }) {
               </div>
 
               <div>
-                <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {new Date(warranty.start_date).toLocaleDateString()}</div>
+                <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {formatLocalDate(warranty.start_date)}</div>
                 <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>Expires: {expDate.toLocaleDateString()}</div>
                 <div style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "2px" }}>{warranty.vendor_name}</div>
               </div>

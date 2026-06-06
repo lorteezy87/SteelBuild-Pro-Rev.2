@@ -54,8 +54,26 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["drawings-all"],
       ["drawings-nav-count", pid], // Layout.jsx nav badge
       ["draw-detail", pid],        // ProjectDetailView.jsx
-      ["pcc-drawings", pid],       // ProjectControlCenter.jsx
       ["drawings-for-wp", pid],    // WorkPackageDetailModal.jsx (uses project_id)
+      ["drawing-register", pid],   // DrawingRegisterGrid (drawing_register_view)
+      ["drawing-reviews", pid],    // ReviewQueue (drawing_reviews)
+      ["drawing-impacts", pid],    // ImpactBoard (drawing_impacts)
+    ],
+  },
+
+  // Drawing SETS are read under TWO key spellings across the app — the hub +
+  // FabRelease + CommandCenter use ["drawing-sets", …] (hyphen) while Drawings,
+  // Submittals, and the RFI modal use ["drawing_sets", …] (underscore). A set
+  // mutation that invalidated only one spelling left the other view's cache
+  // stale (e.g. a deleted set lingering in the Detailing Control Center). This
+  // entry invalidates BOTH spellings (broad, project-agnostic prefixes) plus the
+  // register view, so any set mutation refreshes every set-reading screen.
+  drawingSet: {
+    primary:  (pid) => ["drawing-sets", pid],
+    families: (pid) => [
+      ["drawing-sets"],            // hub, FabRelease, CommandCenter (covers scoped + unscoped)
+      ["drawing_sets"],            // Drawings, Submittals, RFIFormModal, upload modal
+      ["drawing-register", pid],   // Doc Control register view (drawing_register_view)
     ],
   },
 
@@ -70,7 +88,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["all-deliveries-portfolio"],   // AIInsights.jsx, CostDashboard.jsx
       ["procurement", pid],           // Procurement.jsx (deliveries are procurement)
       ["procurement"],
-      ["pcc-deliveries", pid],        // ProjectControlCenter.jsx
       ["modal-deliveries", pid],      // ProjectDrilldownModal.jsx
       ["del-detail", pid],            // ProjectDetailView.jsx
       ["deliveries-for-wp", pid],     // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
@@ -111,7 +128,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["cos-all"],                  // Dashboard.jsx, ProductionNotes.jsx
       ["all-cos-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
       ["co-detail", pid],           // ProjectDetailView.jsx
-      ["pcc-cos", pid],             // ProjectControlCenter.jsx
       ["modal-cos", pid],           // ProjectDrilldownModal.jsx
       ["projects"],                 // CO approval modifies revised contract value
     ],
@@ -126,7 +142,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["rfis", "hub"],              // RFIHub.jsx
       ["rfis-nav-count", pid],      // Layout.jsx nav badge
       ["rfi-detail", pid],          // ProjectDetailView.jsx
-      ["pcc-rfis", pid],            // ProjectControlCenter.jsx
       ["pill-rfis-quick"],          // ProjectPillDropdown.jsx
       ["modal-rfis", pid],          // ProjectDrilldownModal.jsx
     ],
@@ -145,7 +160,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["schedule-tasks-wp", pid],   // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
       ["lookahead", pid],           // LookAheadSchedule.jsx
       ["lookahead-gantt", pid],     // GanttChart.jsx
-      ["pcc-schedule-tasks", pid],  // ProjectControlCenter.jsx
     ],
   },
 
@@ -161,7 +175,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["wps-cost", pid],            // CostDashboard.jsx
       ["wps-fab", pid],             // FabRelease.jsx
       ["wp-detail", pid],           // ProjectDetailView.jsx
-      ["pcc-wps", pid],             // ProjectControlCenter.jsx
       ["modal-wps", pid],           // ProjectDrilldownModal.jsx
     ],
   },
@@ -194,7 +207,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["action-items"],
       ["action-items-all"],          // Dashboard.jsx, Reports.jsx
       ["all-action-items-portfolio"], // AIInsights.jsx, CostDashboard.jsx
-      ["pcc-action-items", pid],     // ProjectControlCenter.jsx
     ],
   },
 
@@ -375,7 +387,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["submittals-all"],
       ["submittals-nav-count", pid],
       ["submittal-detail", pid],
-      ["pcc-submittals", pid],
     ],
   },
 

@@ -2,19 +2,18 @@
  * useAppSecurity.jsx
  * Central security hook for SteelBuild Pro.
  *
- * RBAC Phase B (079/080):
- *   - Per-project role is now server-authoritative via `get_my_project_role(uuid)`.
- *     When an `activeProject` is set, the DB role wins.
+ * RBAC (Phase C):
+ *   - Per-project role is server-authoritative via `get_my_project_role(uuid)`.
+ *     When an `activeProject` is set, the DB role is the source of truth.
  *   - Global admin override: `user_profiles.role === 'admin'` (read from AuthContext)
  *     always grants admin powers regardless of per-project role.
- *   - LocalStorage role (key: 'sbp_app_roles') remains as a fallback for screens
- *     that have no active project (settings, login, portfolio chrome).
+ *   - No active project / role still loading → default to the least-privilege
+ *     role ('viewer'). The browser is never trusted to assert a role: the old
+ *     attacker-editable `localStorage` role map ('sbp_app_roles') has been
+ *     removed as a permission source. RLS at the DB boundary remains the real
+ *     enforcement; these client checks only shape the UI.
  *   - 'owner' is treated as a synonym for 'admin' (level 3) — matches the SQL
- *     `user_has_project_role_at_least` helper. All 15 existing user_projects
- *     rows are 'owner' and continue to behave as admin.
- *
- * Roles stored in localStorage key: 'sbp_app_roles'
- * Format: { [email]: 'owner' | 'admin' | 'pm' | 'field' | 'viewer' }
+ *     `user_has_project_role_at_least` helper.
  */
 
 import { useMemo, useCallback, useContext } from 'react';
@@ -23,8 +22,8 @@ import { ProjectContext } from './ProjectContext';
 import { useProjectRole, roleAtLeast } from '@/hooks/useProjectRole';
 
 // ─── Seed admin emails here ───────────────────────────────────────
-// These bypass localStorage — cannot be demoted by other admins.
-// Note: the canonical global admin signal is `user_profiles.role === 'admin'`
+// Code-controlled break-glass list (not user-editable at runtime).
+// The canonical global admin signal is `user_profiles.role === 'admin'`
 // (AuthContext.user.role); this list is a static fallback only.
 const ADMIN_EMAILS = [
   // 'nick@yourcompany.com',
@@ -39,24 +38,6 @@ const ROLE_LEVELS = {
   admin:  3,
   owner:  3,
 };
-
-// ─── localStorage helpers ─────────────────────────────────────────
-function getRolesMap() {
-  try {
-    const raw = localStorage.getItem('sbp_app_roles');
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveRolesMap(map) {
-  try {
-    localStorage.setItem('sbp_app_roles', JSON.stringify(map));
-  } catch {
-    console.warn('[Security] Could not persist role map');
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────
 export function useAppSecurity() {
@@ -84,25 +65,27 @@ export function useAppSecurity() {
   const { role: dbProjectRole } = useProjectRole(activeProjectId);
 
   // ── Resolve role for current user ─────────────────────────────
-  // Priority: global system admin > per-project DB role > localStorage > default 'pm'
+  // Priority: global system admin > per-project DB role > least-privilege default.
+  // The client never asserts a role on its own; with no DB role resolved we
+  // fall back to 'viewer' so the UI stays locked down until the server says
+  // otherwise. RLS is the real boundary.
   const role = useMemo(() => {
     if (!user?.email) return 'viewer';
 
     // Global system admin (server-authoritative)
     if (authCtx?.user?.role === 'admin') return 'admin';
 
-    // Static seed list (rare; usually empty)
+    // Static seed list (code-controlled, not user-editable; usually empty)
     if (ADMIN_EMAILS.includes(user.email.toLowerCase())) return 'admin';
 
-    // Per-project role from the DB beats localStorage when available
+    // Per-project role from the DB
     if (dbProjectRole) return dbProjectRole;
 
-    // Fallback: legacy localStorage map (no active project, hook still loading, etc.)
-    const map = getRolesMap();
-    return map[user.email.toLowerCase()] || 'pm';
+    // No active project or role still loading → least privilege
+    return 'viewer';
   }, [user, authCtx?.user?.role, dbProjectRole]);
 
-  const roleLevel = ROLE_LEVELS[role] ?? 1;
+  const roleLevel = ROLE_LEVELS[role] ?? 0;
 
   // ── Permission check ──────────────────────────────────────────
   // Minimum role levels: delete/admin require admin, create/edit require field+
@@ -136,41 +119,6 @@ export function useAppSecurity() {
     return { ...data, project_id: activeProjectIdArg };
   }, []);
 
-  // ── Role management (admin only) ─────────────────────────────
-  // NOTE: this still mutates localStorage. Phase C will add a real
-  // per-project role-management admin UI backed by the user_projects table.
-  const setUserRole = useCallback((email, newRole) => {
-    if (!roleAtLeast(role, 'admin')) {
-      console.warn('[Security] setUserRole blocked — requires admin');
-      return false;
-    }
-    if (!Object.prototype.hasOwnProperty.call(ROLE_LEVELS, newRole)) {
-      console.warn('[Security] Invalid role:', newRole);
-      return false;
-    }
-    const map = getRolesMap();
-    map[email.toLowerCase()] = newRole;
-    saveRolesMap(map);
-    return true;
-  }, [role]);
-
-  const getUserRole = useCallback((email) => {
-    if (!email) return 'viewer';
-    if (ADMIN_EMAILS.includes(email.toLowerCase())) return 'admin';
-    const map = getRolesMap();
-    return map[email.toLowerCase()] || 'pm';
-  }, []);
-
-  const listRoles = useCallback(() => getRolesMap(), []);
-
-  const removeUserRole = useCallback((email) => {
-    if (!roleAtLeast(role, 'admin')) return false;
-    const map = getRolesMap();
-    delete map[email.toLowerCase()];
-    saveRolesMap(map);
-    return true;
-  }, [role]);
-
   // isAdmin combines the global override and per-project rank.
   // Global admin (user_profiles.role === 'admin') wins; otherwise we
   // require role >= admin on the active project (owner counts as admin).
@@ -190,9 +138,5 @@ export function useAppSecurity() {
     can,
     stamp,
     assertProjectId,
-    setUserRole,
-    getUserRole,
-    removeUserRole,
-    listRoles,
   };
 }

@@ -245,7 +245,7 @@ export default function ProductionNoteList({ notes = [], onEdit, onDelete }) {
                       borderRadius: 6,
                       border: "1px solid var(--border-default)",
                       objectFit: "contain",
-                      background: "#0E0E10",
+                      background: "var(--bg-surface-high)",
                     }}
                   />
                 </div>

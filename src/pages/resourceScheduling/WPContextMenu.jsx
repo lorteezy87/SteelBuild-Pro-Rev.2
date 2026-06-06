@@ -1,5 +1,5 @@
 import React from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { wpBudgetHoursForResource } from "@/lib/wpHoursForResource";
 import { hoursToWorkdays, addWorkdays } from "@/lib/workweek";
 
@@ -39,7 +39,7 @@ export default function WPContextMenu({
       patch.scheduled_start_date = iso(today);
       patch.scheduled_end_date   = iso(end);
     }
-    await base44.entities.WorkPackage.update(wp.id, patch);
+    await entities.WorkPackage.update(wp.id, patch);
     qc.invalidateQueries({ queryKey: ["work-packages"] });
     qc.invalidateQueries({ queryKey: ["wps-all"] });
     onClose();
@@ -50,7 +50,7 @@ export default function WPContextMenu({
     // Clearing crew + scheduling window sends the WP back to the
     // Unscheduled tray. Leave released_date alone (that's a separate
     // milestone — date released to shop — not the scheduling window).
-    await base44.entities.WorkPackage.update(wp.id, {
+    await entities.WorkPackage.update(wp.id, {
       crew: "",
       scheduled_start_date: null,
       scheduled_end_date: null,

@@ -1,5 +1,6 @@
-import { ClipboardList, FileStack, Gauge, Layers3, Workflow } from "lucide-react";
+import { ClipboardList, FileStack, Gauge, Layers3, ShieldCheck, Workflow } from "lucide-react";
 import { compareDrawingSetPackages } from "@/lib/drawingSetOrdering";
+import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import type { Drawing, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
@@ -24,6 +25,7 @@ export const TABS = [
   { key: "drawings", label: "Drawing Register", icon: FileStack },
   { key: "submittals", label: "Submittal Register", icon: ClipboardList },
   { key: "matrix", label: "Approval Matrix", icon: Workflow },
+  { key: "doccontrol", label: "Doc Control", icon: ShieldCheck },
 ];
 
 // ── Status colors for matrix ───────────────────────────────────────────────
@@ -102,6 +104,14 @@ export function dueInfo(input: any, closed = false): DueInfo {
     return { label: `${days}d left`, days, overdue: false, dueSoon: true, tone: warning, sort: days };
   }
   return { label: fmtDate(input), days, overdue: false, dueSoon: false, tone: textMuted, sort: days };
+}
+
+/** YYYY-MM-DD for an `<input type="date">`, read as a LOCAL calendar day so a
+ *  stored value round-trips without the UTC shift that `toISOString()` causes. */
+export function toDateInputValue(input: any): string {
+  const local = toLocalDay(input);
+  if (!local) return "";
+  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
 }
 
 export function getSubmittalDueDate(submittal: Submittal | null | undefined): string | null {
@@ -230,6 +240,26 @@ export function getStatusColor(status: string): string {
   return STATUS_COLORS[status] || textMuted;
 }
 
+// Colors for the coalesced OPERATIONAL state vocabulary (drafting + release
+// states; the submittal stages IFA..Released reuse the canonical STAGE_MAP).
+const OPERATIONAL_STATE_COLORS: Record<string, string> = {
+  "Not Started":          "#64748b", // slate
+  "In Detailing":         "#64748b", // slate
+  "Internal Review":      "#38bdf8", // sky
+  "Ready to Submit":      "#818cf8", // indigo
+  "Partially Released":   "#10b981", // emerald
+  "Released for Erection":"#14b8a6", // teal
+};
+
+/** Color for any operational state: drafting/release overrides, then the
+ *  canonical stage color (IFA..Released), then submittal status, then muted. */
+export function getOperationalStateColor(state: string): string {
+  if (OPERATIONAL_STATE_COLORS[state]) return OPERATIONAL_STATE_COLORS[state];
+  const stage = STAGE_MAP[state];
+  if (stage?.color) return stage.color;
+  return STATUS_COLORS[state] || textMuted;
+}
+
 export function getActionTone(item: any): string {
   if (item?.due?.overdue) return error;
   if (item?.needsAction) return review;
@@ -239,9 +269,13 @@ export function getActionTone(item: any): string {
 
 export function fmtDate(d: any): string {
   if (!d) return "—";
-  try {
-    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
-  } catch {
-    return "—";
-  }
+  // Parse through toLocalDay so a date-only string ("2026-06-10") is read as a
+  // LOCAL calendar day, not UTC midnight. Arizona is UTC-7 with no DST, so the
+  // naive `new Date("2026-06-10").toLocaleDateString()` renders one day early
+  // (the value lands at 17:00 the previous local day). toLocalDay already backs
+  // daysUntil/dueInfo — fmtDate must agree with it or the chip label and the
+  // printed date disagree by a day.
+  const local = toLocalDay(d);
+  if (!local) return "—";
+  return local.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
 }

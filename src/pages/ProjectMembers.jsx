@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandBar, KpiTile, Button as DSButton } from "@/components/design-system";
@@ -38,7 +38,7 @@ import {
  * is enough).
  *
  * Writes (role updates, removals, additions, and bulk edits) go through
- * the standard `base44.entities.UserProject` wrapper. RLS gates them at the DB layer:
+ * the standard `entities.UserProject` wrapper. RLS gates them at the DB layer:
  * only system admins or per-project admins can write to user_projects, so
  * even if a non-admin lands here the writes will fail with 42501. The DB
  * logs membership changes into member_activity.
@@ -75,7 +75,7 @@ function ProjectMembersContent() {
   // ── project picker ────────────────────────────────────────────────
   const { data: projects = [], isLoading: projectsLoading } = useQuery({
     queryKey: ["projects-for-member-admin"],
-    queryFn: () => base44.entities.Project.list("name"),
+    queryFn: () => entities.Project.list("name"),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -107,7 +107,7 @@ function ProjectMembersContent() {
     queryKey: ["project-members", selectedProjectId],
     enabled: !!selectedProjectId && canManageSelectedProject,
     queryFn: () =>
-      base44.entities.UserProject.filter(
+      entities.UserProject.filter(
         { project_id: selectedProjectId },
         "created_at",
       ),
@@ -126,7 +126,7 @@ function ProjectMembersContent() {
     queryKey: ["user-profiles-by-ids", userIds],
     enabled: canManageSelectedProject && userIds.length > 0,
     queryFn: async () => {
-      const profiles = await base44.entities.User.filter({ id: userIds });
+      const profiles = await entities.User.filter({ id: userIds });
       const byId = {};
       for (const p of profiles) byId[p.id] = p;
       return byId;
@@ -177,7 +177,7 @@ function ProjectMembersContent() {
   // ── mutations ─────────────────────────────────────────────────────
   const updateRoleMut = useMutation({
     mutationFn: ({ id, role }) =>
-      base44.entities.UserProject.update(id, { role }),
+      entities.UserProject.update(id, { role }),
     onSuccess: () => {
       invalidate();
       toast.success("Role updated");
@@ -188,7 +188,7 @@ function ProjectMembersContent() {
   });
 
   const removeMemberMut = useMutation({
-    mutationFn: (id) => base44.entities.UserProject.delete(id),
+    mutationFn: (id) => entities.UserProject.delete(id),
     onSuccess: () => {
       invalidate();
       setRemoveTarget(null);
@@ -204,7 +204,7 @@ function ProjectMembersContent() {
       const changedMembers = membersToUpdate.filter((member) => member.role !== role);
       await Promise.all(
         changedMembers.map((member) =>
-          base44.entities.UserProject.update(member.id, { role }),
+          entities.UserProject.update(member.id, { role }),
         ),
       );
       return changedMembers.length;
@@ -230,7 +230,7 @@ function ProjectMembersContent() {
       // authenticated reads on user_profiles, so a single .filter()
       // is enough. We deliberately do NOT auto-create a profile here;
       // the user must have signed up first.
-      const profiles = await base44.entities.User.filter({ email: trimmed }, undefined, 1);
+      const profiles = await entities.User.filter({ email: trimmed }, undefined, 1);
       if (profiles.length === 0) {
         throw new Error("User must sign up first.");
       }
@@ -242,7 +242,7 @@ function ProjectMembersContent() {
       if (existing) {
         throw new Error(`${trimmed} is already a member.`);
       }
-      return base44.entities.UserProject.create({
+      return entities.UserProject.create({
         user_id: profile.id,
         project_id: selectedProjectId,
         role: DEFAULT_ROLE,

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import DailyLogForm from "@/components/fieldops/DailyLogForm";
@@ -65,8 +65,8 @@ export default function DailyLogs() {
     queryKey: ["daily-logs", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.DailyLog.filter({ project_id: projectId })
-        : base44.entities.DailyLog.list("-date"),
+        ? entities.DailyLog.filter({ project_id: projectId })
+        : entities.DailyLog.list("-date"),
   });
 
   useRealtimeInvalidation("daily_logs", projectId, dailyLogQueryKeys);
@@ -78,7 +78,7 @@ export default function DailyLogs() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -133,7 +133,7 @@ export default function DailyLogs() {
   }, [filteredLogs]);
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.DailyLog.create(data),
+    mutationFn: (data) => entities.DailyLog.create(data),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, dailyLogQueryKeys, created);
       toast.success("Daily log created");
@@ -150,7 +150,7 @@ export default function DailyLogs() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.DailyLog.update(id, data),
+    mutationFn: ({ id, data }) => entities.DailyLog.update(id, data),
     onSuccess: async (updated) => {
       replaceRecordInCaches(qc, dailyLogQueryKeys, updated);
       toast.success("Daily log updated");
@@ -166,7 +166,7 @@ export default function DailyLogs() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.DailyLog.delete(id),
+    mutationFn: (id) => entities.DailyLog.delete(id),
     onSuccess: async (_, deletedId) => {
       removeRecordFromCaches(qc, dailyLogQueryKeys, deletedId);
       if (editing?.id === deletedId) {

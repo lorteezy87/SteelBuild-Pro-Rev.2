@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -19,7 +19,7 @@ export default function ProjectCloseoutForm({ projectId }) {
   });
 
   const mutation = useMutation({
-    mutationFn: (data) => base44.entities.ProjectCloseout.create(data),
+    mutationFn: (data) => entities.ProjectCloseout.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["closeouts"] });
       toast.success("Closeout initiated");

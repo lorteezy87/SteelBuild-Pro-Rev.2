@@ -32,6 +32,8 @@ export interface DrawingSet {
   set_name?: string;
   discipline?: string;
   is_deleted?: boolean;
+  /** Manual drafting/release sub-state (migration 20260526220000). */
+  detailing_state?: string | null;
   [key: string]: any;
 }
 
@@ -59,4 +61,12 @@ export interface TriageItem {
   _submittalId: string | null;
   _drawingSetId: string | null;
   _firstSheetId: string | null;
+  /** Effective operational state (coalesced drafting → submittal → release). */
+  detailingState?: string;
+  /** True when no submittal governs the package, so a drafting state applies. */
+  _canDraft?: boolean;
+  /** The raw manual drawing_sets.detailing_state value (null = Not Started). */
+  _detailingStateRaw?: string | null;
+  /** Per-package readiness read-model (computeDetailingReadiness output). */
+  _readiness?: any;
 }

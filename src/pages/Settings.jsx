@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback } from "react";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { auth } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
 import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -14,6 +14,7 @@ import ShortcutsTab from "@/components/settings/ShortcutsTab.jsx";
 import RolesTab from "@/components/settings/RolesTab.jsx";
 import SystemTab from "@/components/settings/SystemTab.jsx";
 import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
+import SetupAdminTab from "@/components/settings/SetupAdminTab.jsx";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -26,6 +27,13 @@ const TAB_GROUPS = [
       { id: 'dashboard',     label: 'Dashboard',     icon: '\u{1F4CA}', desc: 'Pinned modules, KPI order, default project' },
       { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts, digests, and quiet hours' },
       { id: 'shortcuts',     label: 'Shortcuts',     icon: '⌨',    desc: 'Keyboard reference card' },
+    ],
+  },
+  {
+    id: 'setup-help',
+    label: 'Setup & Help',
+    tabs: [
+      { id: 'setup', label: 'Setup & Admin', icon: '🧩', desc: 'Onboarding, data exchange, integrations, users, feature flags, help' },
     ],
   },
   {
@@ -67,7 +75,7 @@ export default function Settings() {
     queryKey: ['user-settings', user?.id],
     queryFn: async () => {
       if (!user?.id) return {};
-      const me = await base44.auth.me();
+      const me = await auth.me();
       return me || {};
     },
     enabled: !!user?.id,
@@ -78,7 +86,7 @@ export default function Settings() {
   }, [userSettings]);
 
   const updatePrefsMut = useMutation({
-    mutationFn: async (prefs) => base44.auth.updateMe(prefs),
+    mutationFn: async (prefs) => auth.updateMe(prefs),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['user-settings'] });
       toast.success('Settings saved');
@@ -244,6 +252,7 @@ export default function Settings() {
         {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'costcodes' && <CostCodesTab />}
         {activeTab === 'system' && <SystemTab user={user} />}
+        {activeTab === 'setup' && <SetupAdminTab isAdmin={isAdmin} />}
       </div>
     </div>
     </div>

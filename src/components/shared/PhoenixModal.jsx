@@ -2,14 +2,14 @@ import React, { useEffect, useId } from "react";
 import { X } from "lucide-react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 
-const modalSurface = "linear-gradient(180deg, rgb(11,16,24) 0%, rgb(7,10,16) 100%)";
-const modalPanel = "rgb(18,25,36)";
-const modalPanelMuted = "rgb(19,26,38)";
-const modalBorder = "rgba(135,154,180,0.22)";
-const modalBorderMuted = "rgba(135,154,180,0.14)";
-const modalText = "rgba(238,244,252,0.96)";
-const modalTextSecondary = "rgba(214,224,238,0.88)";
-const modalTextMuted = "rgba(177,191,211,0.78)";
+const modalSurface = "var(--bg-surface-secondary)";
+const modalPanel = "var(--bg-surface-high)";
+const modalPanelMuted = "var(--bg-surface-low)";
+const modalBorder = "var(--border-default)";
+const modalBorderMuted = "var(--divider)";
+const modalText = "var(--text-primary)";
+const modalTextSecondary = "var(--text-secondary)";
+const modalTextMuted = "var(--text-muted)";
 
 export const btnPrimary = {
   background: "linear-gradient(135deg, rgba(86,176,255,0.98) 0%, rgba(35,134,230,0.98) 100%)",
@@ -64,7 +64,6 @@ export const inputStyle = {
   minHeight: 38,
   outline: "none",
   boxSizing: "border-box",
-  colorScheme: "dark",
   boxShadow: "0 1px 0 rgba(255,255,255,0.03) inset",
 };
 
@@ -144,7 +143,7 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
             justifyContent: "space-between",
             padding: "20px 24px 16px",
             borderBottom: `1px solid ${modalBorderMuted}`,
-            background: "rgb(12,17,25)",
+            background: "var(--bg-surface-low)",
             flexShrink: 0,
           }}
         >
@@ -190,7 +189,7 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
               display: "flex",
               justifyContent: "flex-end",
               gap: 10,
-              background: "rgb(10,15,23)",
+              background: "var(--bg-surface-low)",
               flexShrink: 0,
             }}
           >

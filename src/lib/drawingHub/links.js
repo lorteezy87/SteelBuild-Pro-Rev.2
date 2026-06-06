@@ -7,7 +7,7 @@
  * because it's only called from there — keeps this module focused.
  */
 
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { LINKABLE_TYPES } from "./constants";
 import { assertSetUnlocked } from "./setLock";
@@ -125,16 +125,16 @@ export async function removeLink({ linkId, userId }) {
  * "orphaned link".
  */
 const TYPE_TO_ENTITY = {
-  rfi:          { table: "rfis",             accessor: base44.entities.RFI },
-  work_package: { table: "work_packages",    accessor: base44.entities.WorkPackage },
-  delivery:     { table: "deliveries",       accessor: base44.entities.Delivery },
-  photo:        { table: "documents",        accessor: base44.entities.Document },
-  inspection:   { table: "inspections",      accessor: base44.entities.Inspection },
-  daily_log:    { table: "daily_logs",       accessor: base44.entities.DailyLog },
-  document:     { table: "documents",        accessor: base44.entities.Document },
-  change_order: { table: "change_orders",    accessor: base44.entities.ChangeOrder },
-  submittal:    { table: "documents",        accessor: base44.entities.Document },
-  drawing:      { table: "drawings",         accessor: base44.entities.Drawing },
+  rfi:          { table: "rfis",             accessor: entities.RFI },
+  work_package: { table: "work_packages",    accessor: entities.WorkPackage },
+  delivery:     { table: "deliveries",       accessor: entities.Delivery },
+  photo:        { table: "documents",        accessor: entities.Document },
+  inspection:   { table: "inspections",      accessor: entities.Inspection },
+  daily_log:    { table: "daily_logs",       accessor: entities.DailyLog },
+  document:     { table: "documents",        accessor: entities.Document },
+  change_order: { table: "change_orders",    accessor: entities.ChangeOrder },
+  submittal:    { table: "documents",        accessor: entities.Document },
+  drawing:      { table: "drawings",         accessor: entities.Drawing },
   finding:      { table: "drawing_findings", accessor: null },
 };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { entities } from "@/api/supabaseClient";
 
 
 
@@ -10,7 +10,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
     if (!project?.id) return;
     const loadDeliveries = async () => {
       try {
-        const dels = await base44.entities.Delivery.filter({
+        const dels = await entities.Delivery.filter({
           project_id: project.id,
         });
         setDeliveries(dels || []);

@@ -9,12 +9,13 @@
 
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { certifiedPeriodDeltas } from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import { LineChartSVG } from "./charts";
 import { formatCurrencyFull, exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
+import { formatLocalDate } from "@/utils/dates";
 
 function monthKey(date) {
   const d = date instanceof Date ? date : new Date(date);
@@ -22,7 +23,7 @@ function monthKey(date) {
 }
 function monthLabel(key) {
   const [y, m] = key.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+  return formatLocalDate(y, m - 1, 1, "en-US", { month: "short", year: "2-digit" });
 }
 function lastNMonthKeys(n) {
   const out = [];
@@ -46,7 +47,7 @@ function nextNMonthKeys(n) {
 export default function RevenueForecast() {
   const { data: sov = [] } = useQuery({
     queryKey: ["sov-items"],
-    queryFn: () => base44.entities.SOVItem.list(),
+    queryFn: () => entities.SOVItem.list(),
   });
 
   const histKeys = useMemo(() => lastNMonthKeys(12), []);

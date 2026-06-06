@@ -3,7 +3,7 @@
  *
  * ONE hook that:
  *   1. Validates via validation.js (no silent skips)
- *   2. Calls the entity client (no direct base44 calls from pages)
+ *   2. Calls the entity client (no direct entity-client calls from pages)
  *   3. Invalidates ALL related caches via cacheRegistry
  *   4. Logs audit trail for status changes
  *   5. Fires side-effects only after primary write succeeds
@@ -20,14 +20,14 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { validate } from "@/services/validation";
 import { validateTransition, getWorkflowField } from "@/services/workflowEngine";
 import { invalidateEntities } from "@/services/cacheRegistry";
 import { batchProcess } from "@/utils/batchProcess";
 import { logActivity } from "@/services/auditLogger";
 
-// ─── Entity name → base44 entity mapping ────────────────────────────────
+// ─── Entity name → entity-client key mapping ────────────────────────────
 const ENTITY_MAP = {
   drawing:        "Drawing",
   delivery:       "Delivery",
@@ -44,7 +44,7 @@ const ENTITY_MAP = {
 
 export type EntityName = keyof typeof ENTITY_MAP;
 
-// Loose entity-client shape — base44Client is still untyped (Phase 3).
+// Loose entity-client shape — the entity surface is still loosely typed.
 type EntityClient = {
   create: (data: Record<string, unknown>) => Promise<Record<string, unknown>>;
   update: (id: string, data: Record<string, unknown>) => Promise<Record<string, unknown>>;
@@ -55,11 +55,11 @@ type EntityRecord = Record<string, unknown> & { id?: string };
 
 function getEntityClient(entityName: EntityName): EntityClient {
   const key = ENTITY_MAP[entityName];
-  const entities = (base44 as { entities: Record<string, EntityClient> }).entities;
-  if (!key || !entities[key]) {
+  const clients = entities as unknown as Record<string, EntityClient>;
+  if (!key || !clients[key]) {
     throw new Error(`[useCrudMutation] Unknown entity: "${entityName}". Check ENTITY_MAP.`);
   }
-  return entities[key];
+  return clients[key];
 }
 
 // ─── Hook ───────────────────────────────────────────────────────────────
@@ -117,8 +117,8 @@ export function useCrudMutation(entityName: EntityName, options: UseCrudMutation
 
   // Helper: invalidate this entity + any related entities
   const invalidateAll = async () => {
-    const entities = [entityName, ...alsoInvalidate];
-    await invalidateEntities(qc, entities, projectId);
+    const entityNames = [entityName, ...alsoInvalidate];
+    await invalidateEntities(qc, entityNames, projectId);
   };
 
   // ── CREATE ──────────────────────────────────────────────────────────

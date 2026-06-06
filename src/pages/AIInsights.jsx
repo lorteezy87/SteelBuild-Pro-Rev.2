@@ -20,8 +20,9 @@ import {
 } from "recharts";
 import { AlertTriangle, DollarSign, Layers3, Search, ShieldCheck, Truck } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { computeCostCodeTotals } from "@/services/costRollup";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities, auth, integrations } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatCurrencyShort, formatDate, isOverdue, statusIn } from "@/components/shared/formatters";
 import PortfolioBimViewer from "@/components/portfolio/PortfolioBimViewer";
@@ -123,8 +124,9 @@ function computeProjectModel(project, data) {
   const projectActions = actionItems.filter((a) => a.project_id === project.id);
   const projectTasks = scheduleTasks.filter((t) => t.project_id === project.id);
 
-  const budget = projectCodes.reduce((sum, c) => sum + n(c.budget_amount), 0);
-  const actual = projectCodes.reduce((sum, c) => sum + n(c.actual_cost), 0);
+  // budget + actual via the shared rollup (n() ≡ its coercion); committed keeps
+  // this page's deliberate max(committed, actual) variant.
+  const { budget, actual } = computeCostCodeTotals(projectCodes);
   const committed = projectCodes.reduce((sum, c) => sum + Math.max(n(c.committed_cost), n(c.actual_cost)), 0);
   const contract = n(project.original_contract_value);
   const approvedCo = projectCos.filter((c) => c.status === "Approved").reduce((sum, c) => sum + n(c.co_amount), 0);
@@ -210,15 +212,15 @@ export default function PortfolioOverview() {
   const [healthFilter, setHealthFilter] = useState("All");
   const [search, setSearch] = useState("");
 
-  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), staleTime: 5 * 60 * 1000 });
-  const { data: rfis = [] } = useQuery({ queryKey: ["portfolio-rfis"], queryFn: () => base44.entities.RFI.list(), staleTime: 30 * 1000 });
-  const { data: cos = [] } = useQuery({ queryKey: ["portfolio-cos"], queryFn: () => base44.entities.ChangeOrder.list(), staleTime: 60 * 1000 });
-  const { data: codes = [] } = useQuery({ queryKey: ["portfolio-codes"], queryFn: () => base44.entities.CostCode.list(), staleTime: 60 * 1000 });
-  const { data: wps = [] } = useQuery({ queryKey: ["portfolio-wps"], queryFn: () => base44.entities.WorkPackage.list(), staleTime: 30 * 1000 });
-  const { data: deliveries = [] } = useQuery({ queryKey: ["portfolio-deliveries"], queryFn: () => base44.entities.Delivery.list(), staleTime: 30 * 1000 });
-  const { data: actionItems = [] } = useQuery({ queryKey: ["portfolio-action-items"], queryFn: () => base44.entities.ActionItem.list(), staleTime: 30 * 1000 });
-  const { data: scheduleTasks = [] } = useQuery({ queryKey: ["portfolio-schedule-tasks"], queryFn: () => base44.entities.ScheduleTask.list("-start_date"), staleTime: 60 * 1000 });
-  const { data: documents = [] } = useQuery({ queryKey: ["portfolio-model-documents"], queryFn: () => base44.entities.Document.list("-uploaded_date"), staleTime: 60 * 1000 });
+  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => entities.Project.list(), staleTime: 5 * 60 * 1000 });
+  const { data: rfis = [] } = useQuery({ queryKey: ["portfolio-rfis"], queryFn: () => entities.RFI.list(), staleTime: 30 * 1000 });
+  const { data: cos = [] } = useQuery({ queryKey: ["portfolio-cos"], queryFn: () => entities.ChangeOrder.list(), staleTime: 60 * 1000 });
+  const { data: codes = [] } = useQuery({ queryKey: ["portfolio-codes"], queryFn: () => entities.CostCode.list(), staleTime: 60 * 1000 });
+  const { data: wps = [] } = useQuery({ queryKey: ["portfolio-wps"], queryFn: () => entities.WorkPackage.list(), staleTime: 30 * 1000 });
+  const { data: deliveries = [] } = useQuery({ queryKey: ["portfolio-deliveries"], queryFn: () => entities.Delivery.list(), staleTime: 30 * 1000 });
+  const { data: actionItems = [] } = useQuery({ queryKey: ["portfolio-action-items"], queryFn: () => entities.ActionItem.list(), staleTime: 30 * 1000 });
+  const { data: scheduleTasks = [] } = useQuery({ queryKey: ["portfolio-schedule-tasks"], queryFn: () => entities.ScheduleTask.list("-start_date"), staleTime: 60 * 1000 });
+  const { data: documents = [] } = useQuery({ queryKey: ["portfolio-model-documents"], queryFn: () => entities.Document.list("-uploaded_date"), staleTime: 60 * 1000 });
 
   useEffect(() => {
     if (selectedProjectId || !projectId || projects.length === 0) return;
@@ -341,10 +343,10 @@ export default function PortfolioOverview() {
 
     const toastId = toast.loading(`Uploading ${file.name}...`);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      const uploadedBy = await base44.auth.me?.().then((user) => user?.email).catch(() => "Unknown");
+      const { file_url } = await integrations.Core.UploadFile({ file });
+      const uploadedBy = await auth.me?.().then((user) => user?.email).catch(() => "Unknown");
       const now = new Date().toISOString();
-      const doc = await base44.entities.Document.create({
+      const doc = await entities.Document.create({
         project_id: selected.id,
         project_name: selected.name,
         display_name: file.name,

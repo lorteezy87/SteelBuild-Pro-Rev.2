@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import ScopeItemFormModal from "@/components/scope/ScopeItemFormModal";
@@ -34,18 +34,18 @@ export default function ScopeExclusions() {
     queryKey: ["scope-items", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.ScopeItem.filter({ project_id: projectId })
-        : base44.entities.ScopeItem.list(),
+        ? entities.ScopeItem.filter({ project_id: projectId })
+        : entities.ScopeItem.list(),
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ScopeItem.update(id, data),
+    mutationFn: ({ id, data }) => entities.ScopeItem.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item updated"); setShowForm(false); setEditing(null); },
     onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
   });
@@ -55,7 +55,7 @@ export default function ScopeExclusions() {
   // Completing a row also clears any in-progress flag so the UI stays tidy.
   const toggleCompleteMut = useMutation({
     mutationFn: ({ id, is_completed }) =>
-      base44.entities.ScopeItem.update(id, {
+      entities.ScopeItem.update(id, {
         is_completed,
         completed_at: is_completed ? new Date().toISOString() : null,
         ...(is_completed ? { in_progress: false, in_progress_at: null } : {}),
@@ -68,7 +68,7 @@ export default function ScopeExclusions() {
   // the UI level (the button is hidden), so we don't guard against it here.
   const toggleInProgressMut = useMutation({
     mutationFn: ({ id, in_progress }) =>
-      base44.entities.ScopeItem.update(id, {
+      entities.ScopeItem.update(id, {
         in_progress,
         in_progress_at: in_progress ? new Date().toISOString() : null,
       }),
@@ -77,7 +77,7 @@ export default function ScopeExclusions() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.ScopeItem.delete(id),
+    mutationFn: (id) => entities.ScopeItem.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item deleted"); setDeleteTarget(null); },
     onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
   });
@@ -102,7 +102,7 @@ export default function ScopeExclusions() {
     if (selectedIds.size === 0) return;
     setBulkActionBusy(true);
     try {
-      await Promise.all([...selectedIds].map(id => base44.entities.ScopeItem.update(id, patch)));
+      await Promise.all([...selectedIds].map(id => entities.ScopeItem.update(id, patch)));
       qc.invalidateQueries({ queryKey: ["scope-items"] });
       toast.success(`Updated ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
       clearSelection();
@@ -118,7 +118,7 @@ export default function ScopeExclusions() {
     if (!window.confirm(`Delete ${selectedIds.size} selected scope item${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`)) return;
     setBulkActionBusy(true);
     try {
-      await Promise.all([...selectedIds].map(id => base44.entities.ScopeItem.delete(id)));
+      await Promise.all([...selectedIds].map(id => entities.ScopeItem.delete(id)));
       qc.invalidateQueries({ queryKey: ["scope-items"] });
       toast.success(`Deleted ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
       clearSelection();

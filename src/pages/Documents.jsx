@@ -13,18 +13,17 @@
  *   ListView / EmptyState / TransmittalModal.
  */
 
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, Suspense, lazy } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44, resolveFileUrl } from "@/api/base44Client";
+import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DocumentCard from "@/components/dms/DocumentCard";
 import DocumentFilters from "@/components/dms/DocumentFilters";
 import DocumentLeftPanel from "@/components/dms/DocumentLeftPanel";
 import DocumentDetailPanel from "@/components/dms/DocumentDetailPanel";
-import UploadModal from "@/components/dms/UploadModal";
-import DocumentEditModal from "@/components/dms/DocumentEditModal";
 import FolderPicker, { collectFolderAndDescendants } from "@/components/dms/FolderPicker";
 import { batchProcess } from "@/utils/batchProcess";
 import EmptyStateAction from "@/components/shared/EmptyStateAction";
@@ -33,12 +32,21 @@ import { STATUS_TABS } from "./documents/constants";
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
 import FolderSection from "./documents/FolderSection";
 import FolderBar from "./documents/FolderBar";
-import BulkCreateFoldersModal from "./documents/BulkCreateFoldersModal";
 import Toolbar from "./documents/Toolbar";
 import BatchActionBar from "./documents/BatchActionBar";
 import ListView from "./documents/ListView";
 import EmptyState from "./documents/EmptyState";
-import TransmittalModal from "./documents/TransmittalModal";
+// Lazily loaded: generateTransmittal pulls in jspdf. Keeping the modal out of
+// the static graph means the Documents page does not download the PDF export
+// libs until the user actually generates a transmittal.
+const TransmittalModal = lazy(() => import("./documents/TransmittalModal"));
+
+// Upload / edit / bulk-folder modals only render when their dialog is open, so
+// keep them off the Documents route chunk. lazyWithRetry survives stale-chunk
+// 404s after a deploy (matches the app-wide route/modal split pattern).
+const UploadModal = lazyWithRetry(() => import("@/components/dms/UploadModal"));
+const DocumentEditModal = lazyWithRetry(() => import("@/components/dms/DocumentEditModal"));
+const BulkCreateFoldersModal = lazyWithRetry(() => import("./documents/BulkCreateFoldersModal"));
 
 const SORT_FNS = {
   "name-asc":   (a, b) => (a.displayName || "").localeCompare(b.displayName || ""),
@@ -88,7 +96,7 @@ export default function Documents() {
     queryKey: ["documents", activeProject?.id],
     queryFn: () =>
       activeProject?.id
-        ? base44.entities.Document.filter({ project_id: activeProject.id })
+        ? entities.Document.filter({ project_id: activeProject.id })
         : [],
     enabled: !!activeProject?.id,
   });
@@ -100,14 +108,14 @@ export default function Documents() {
     queryKey: ["document-folders", activeProject?.id],
     queryFn: () =>
       activeProject?.id
-        ? base44.entities.DocumentFolder.filter({ project_id: activeProject.id })
+        ? entities.DocumentFolder.filter({ project_id: activeProject.id })
         : [],
     enabled: !!activeProject?.id,
   });
 
   const createFolderMut = useMutation({
     mutationFn: ({ name, parentFolderId }) =>
-      base44.entities.DocumentFolder.create({
+      entities.DocumentFolder.create({
         project_id: activeProject.id,
         parent_folder_id: parentFolderId,
         name,
@@ -128,7 +136,7 @@ export default function Documents() {
   });
 
   const renameFolderMut = useMutation({
-    mutationFn: ({ id, name }) => base44.entities.DocumentFolder.update(id, { name }),
+    mutationFn: ({ id, name }) => entities.DocumentFolder.update(id, { name }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
       toast.success("Folder renamed");
@@ -151,7 +159,7 @@ export default function Documents() {
   // folder's parent OR null their folder_id; for now the simple path is
   // good enough.
   const deleteFolderMut = useMutation({
-    mutationFn: (id) => base44.entities.DocumentFolder.delete(id),
+    mutationFn: (id) => entities.DocumentFolder.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
       // Also invalidate documents so the list re-renders without the
@@ -171,7 +179,7 @@ export default function Documents() {
   const moveDocsMut = useMutation({
     mutationFn: async ({ docIds, destFolderId }) => {
       const { succeeded, failed } = await batchProcess(docIds, (id) =>
-        base44.entities.Document.update(id, { folder_id: destFolderId }),
+        entities.Document.update(id, { folder_id: destFolderId }),
       );
       return { succeeded, failed };
     },
@@ -197,7 +205,7 @@ export default function Documents() {
   const moveFoldersMut = useMutation({
     mutationFn: async ({ folderIds, destFolderId }) => {
       const { succeeded, failed } = await batchProcess(folderIds, (id) =>
-        base44.entities.DocumentFolder.update(id, { parent_folder_id: destFolderId }),
+        entities.DocumentFolder.update(id, { parent_folder_id: destFolderId }),
       );
       return { succeeded, failed };
     },
@@ -222,7 +230,7 @@ export default function Documents() {
   const bulkDeleteFoldersMut = useMutation({
     mutationFn: async (folderIds) => {
       const { succeeded, failed } = await batchProcess(folderIds, (id) =>
-        base44.entities.DocumentFolder.delete(id),
+        entities.DocumentFolder.delete(id),
       );
       return { succeeded, failed };
     },
@@ -255,7 +263,7 @@ export default function Documents() {
         ? (currentFolderId ?? null)
         : (stack[item.depth - 1] ?? currentFolderId ?? null);
       try {
-        const row = await base44.entities.DocumentFolder.create({
+        const row = await entities.DocumentFolder.create({
           project_id: activeProject.id,
           parent_folder_id: parentId,
           name: item.name,
@@ -330,7 +338,7 @@ export default function Documents() {
     mutationFn: async (newStatus) => {
       const ids = [...selectedIds];
       const { succeeded, failed } = await batchProcess(ids, (id) =>
-        base44.entities.Document.update(id, { status: newStatus })
+        entities.Document.update(id, { status: newStatus })
       );
       if (failed.length > 0 && succeeded.length === 0) {
         throw new Error(`All ${failed.length} updates failed.`);
@@ -353,7 +361,7 @@ export default function Documents() {
     mutationFn: async () => {
       const ids = [...selectedIds];
       const { succeeded, failed } = await batchProcess(ids, (id) =>
-        base44.entities.Document.delete(id)
+        entities.Document.delete(id)
       );
       if (failed.length > 0 && succeeded.length === 0) {
         throw new Error(`All ${failed.length} deletes failed.`);
@@ -398,7 +406,7 @@ export default function Documents() {
 
   const handleDeleteDoc = async (doc) => {
     try {
-      await base44.entities.Document.delete(doc.id);
+      await entities.Document.delete(doc.id);
       queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
       toast.success("Document deleted");
     } catch {
@@ -690,45 +698,58 @@ export default function Documents() {
         />
       )}
       {editingDoc && (
-        <DocumentEditModal
-          projectId={activeProject?.id}
-          doc={editingDoc}
-          onClose={() => setEditingDoc(null)}
-        />
+        <Suspense fallback={null}>
+          <DocumentEditModal
+            projectId={activeProject?.id}
+            doc={editingDoc}
+            onClose={() => setEditingDoc(null)}
+          />
+        </Suspense>
       )}
       {uploadOpen && (
-        <UploadModal
-          projectId={activeProject.id}
-          folderId={currentFolderId}
-          onClose={() => setUploadOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <UploadModal
+            projectId={activeProject.id}
+            folderId={currentFolderId}
+            onClose={() => setUploadOpen(false)}
+          />
+        </Suspense>
       )}
 
-      <TransmittalModal
-        open={transmittalOpen}
-        project={activeProject}
-        selectedDocs={allDocuments.filter((d) => selectedIds.has(d.id))}
-        form={transmittalForm}
-        onFormChange={(key, value) => setTransmittalForm((prev) => ({ ...prev, [key]: value }))}
-        onClose={() => setTransmittalOpen(false)}
-        onGenerated={() => {
-          setTransmittalOpen(false);
-          setTransmittalForm({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
-          setSelectedIds(new Set());
-        }}
-      />
+      {transmittalOpen && (
+        <Suspense fallback={null}>
+          <TransmittalModal
+            open={transmittalOpen}
+            project={activeProject}
+            selectedDocs={allDocuments.filter((d) => selectedIds.has(d.id))}
+            form={transmittalForm}
+            onFormChange={(key, value) => setTransmittalForm((prev) => ({ ...prev, [key]: value }))}
+            onClose={() => setTransmittalOpen(false)}
+            onGenerated={() => {
+              setTransmittalOpen(false);
+              setTransmittalForm({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
+              setSelectedIds(new Set());
+            }}
+          />
+        </Suspense>
+      )}
 
-      {/* Bulk-create folders dialog */}
-      <BulkCreateFoldersModal
-        open={bulkCreateOpen}
-        parentLabel={
-          currentFolderId
-            ? folders.find((f) => f.id === currentFolderId)?.name || "Current folder"
-            : "(Root)"
-        }
-        onClose={() => setBulkCreateOpen(false)}
-        onSubmit={handleBulkCreateFolders}
-      />
+      {/* Bulk-create folders dialog — mounted only while open so its lazy chunk
+          loads on demand. */}
+      {bulkCreateOpen && (
+        <Suspense fallback={null}>
+          <BulkCreateFoldersModal
+            open={bulkCreateOpen}
+            parentLabel={
+              currentFolderId
+                ? folders.find((f) => f.id === currentFolderId)?.name || "Current folder"
+                : "(Root)"
+            }
+            onClose={() => setBulkCreateOpen(false)}
+            onSubmit={handleBulkCreateFolders}
+          />
+        </Suspense>
+      )}
 
       {/* Folder picker — reused for both moving documents and folders.
           When moving folders, the picker disables the moved folders +

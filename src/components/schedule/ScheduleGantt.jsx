@@ -12,7 +12,7 @@ import {
   calcDuration,
 } from "./scheduleDateUtils";
 import { buildTreeOrder } from "./scheduleTree";
-import { parseDeps } from "./scheduleDependencies";
+import { parseDeps, formatPredecessorLabels } from "./scheduleDependencies";
 import {
   PHASES,
   normalizePhase,
@@ -825,7 +825,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     dragBodyStyleRef.current = null;
   };
 
-  const startTaskBarDrag = (event, task, visibleStart, visibleEnd) => {
+  const startTaskBarDrag = (event, task, visibleStart, visibleEnd, mode = "move") => {
     if (!onSave || saving || !isActionableScheduleTask(task)) return;
     if (event.button != null && event.button !== 0) return;
 
@@ -843,12 +843,13 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       cursor: document.body.style.cursor,
       userSelect: document.body.style.userSelect,
     };
-    document.body.style.cursor = "grabbing";
+    document.body.style.cursor = mode === "move" ? "grabbing" : "ew-resize";
     document.body.style.userSelect = "none";
 
     updateTaskDrag({
       taskId: task.id,
       taskName: sanitizeTaskName(task),
+      mode,
       startX: event.clientX,
       startY: event.clientY,
       x: event.clientX,
@@ -870,7 +871,12 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       if (!current) return;
       const dx = event.clientX - current.startX;
       const dy = event.clientY - current.startY;
-      const daysDelta = Math.round(dx / PX_PER_DAY);
+      let daysDelta = Math.round(dx / PX_PER_DAY);
+      // When resizing one edge, clamp so it can't cross the other edge — the
+      // bar keeps a non-negative duration (whole days between the stored ends).
+      const durDays = Math.round((current.storedEnd - current.storedStart) / 86400000);
+      if (current.mode === "resize-start") daysDelta = Math.min(daysDelta, durDays);
+      else if (current.mode === "resize-end") daysDelta = Math.max(daysDelta, -durDays);
       const hasMoved = current.hasMoved ||
         Math.abs(dx) >= TASK_DRAG_THRESHOLD_PX ||
         Math.abs(dy) >= TASK_DRAG_THRESHOLD_PX;
@@ -893,8 +899,13 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       updateTaskDrag(null);
       if (!current?.hasMoved || current.daysDelta === 0 || !onSave) return;
 
-      const nextStart = toDateOnly(addDaysUTC(current.storedStart, current.daysDelta));
-      const nextEnd = toDateOnly(addDaysUTC(current.storedEnd, current.daysDelta));
+      // move → shift both ends; resize-start → start only; resize-end → end only.
+      const nextStart = toDateOnly(addDaysUTC(
+        current.storedStart, current.mode === "resize-end" ? 0 : current.daysDelta
+      ));
+      const nextEnd = toDateOnly(addDaysUTC(
+        current.storedEnd, current.mode === "resize-start" ? 0 : current.daysDelta
+      ));
       if (!nextStart || !nextEnd) return;
 
       setSaving(true);
@@ -1026,6 +1037,57 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       toast.success(`Baseline set for ${tasksWithDates.length} tasks`);
     } catch (err) {
       toast.error("Failed to set baseline: " + (err?.message || "unknown error"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── "Update Scheduled Dates" ─────────────────────────────────────────
+  // The Gantt renders cascaded (effective) dates, but the DB — and the Task
+  // Drawer — hold the entered start_date/end_date, so a task pushed by a late
+  // predecessor looks one way on the bar and another in the drawer. This
+  // writes the computed dates back so the two agree. Only tasks the cascade
+  // actually shifted are touched; cycle members (whose effective dates fall
+  // back to stored) and tasks without a computed start/end are skipped, so we
+  // never invent a date on a TBD task.
+  const shiftedSyncTasks = useMemo(
+    () =>
+      allTasks.filter((t) => {
+        const eff = effectiveDates[t.id];
+        return eff?.shifted && !eff.cycle && effStart(t) && effEnd(t);
+      }),
+    [allTasks, effectiveDates]
+  );
+
+  const handleSyncScheduledDates = async () => {
+    if (!onSave || saving) return;
+    const n = shiftedSyncTasks.length;
+    if (n === 0) {
+      toast.info("Scheduled dates already match the Gantt — nothing to sync.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Update scheduled dates for ${n} task${n === 1 ? "" : "s"}?\n\n` +
+      "Dependency logic has pushed these tasks past their saved dates, so the Gantt " +
+      "shows later dates than what's stored. This writes the computed start/end back " +
+      "to each task so the saved schedule matches the Gantt. Baselines are not changed."
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    try {
+      const updates = shiftedSyncTasks.map((task) =>
+        onSave({
+          id: task.id,
+          start_date: toDateOnly(effStart(task)),
+          end_date: toDateOnly(effEnd(task)),
+        })
+      );
+      for (let i = 0; i < updates.length; i += 10) {
+        await Promise.all(updates.slice(i, i + 10));
+      }
+      toast.success(`Updated ${n} scheduled date${n === 1 ? "" : "s"} to match the Gantt`);
+    } catch (err) {
+      toast.error("Failed to update scheduled dates: " + (err?.message || "unknown error"));
     } finally {
       setSaving(false);
     }
@@ -1349,7 +1411,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               height: 28,
               borderRadius: 8,
               border: "1px solid var(--border-default)",
-              background: "rgba(3,8,18,0.72)",
+              background: "var(--bg-input)",
               color: "var(--text-primary)",
               padding: "0 10px",
               fontFamily: "var(--font-body)",
@@ -1471,6 +1533,25 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             Set Baseline
           </button>
         )}
+        {onSave && shiftedSyncTasks.length > 0 && (
+          <button
+            onClick={handleSyncScheduledDates}
+            disabled={saving}
+            title="Dependency logic has pushed these tasks past their saved dates. Click to write the computed start/end back so the saved schedule (and the Task Drawer) match the Gantt."
+            style={{
+              padding: "4px 10px", borderRadius: 4,
+              border: "1px solid var(--accent-border)",
+              background: "var(--accent-muted)",
+              color: "var(--accent)",
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800,
+              cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1,
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              whiteSpace: "nowrap",
+            }}
+          >
+            ⟳ Update Scheduled Dates ({shiftedSyncTasks.length})
+          </button>
+        )}
         <button onClick={scrollToToday} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--accent-border)", background: "transparent", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
           Today
         </button>
@@ -1503,7 +1584,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         gap: 10,
         padding: "8px 16px",
         borderBottom: "1px solid var(--divider)",
-        background: "linear-gradient(180deg, rgba(8,18,32,0.90), rgba(3,8,18,0.96))",
+        background: "var(--sched-toolbar-bg)",
         overflowX: "auto",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -1516,7 +1597,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 padding: "5px 9px",
                 borderRadius: 999,
                 border: quickFilter === filter.key ? "1px solid var(--accent)" : "1px solid var(--divider)",
-                background: quickFilter === filter.key ? "rgba(86,176,255,0.16)" : "rgba(255,255,255,0.035)",
+                background: quickFilter === filter.key ? "var(--accent-muted)" : "var(--bg-surface-low)",
                 color: quickFilter === filter.key ? "var(--accent)" : "var(--text-secondary)",
                 fontFamily: "var(--font-mono)",
                 fontSize: 8,
@@ -1545,9 +1626,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         ].map((card) => (
           <div key={card.label} style={{
             minWidth: 104,
-            border: "1px solid rgba(255,255,255,0.08)",
+            border: "1px solid var(--border-default)",
             borderRadius: 10,
-            background: "rgba(255,255,255,0.035)",
+            background: "var(--bg-surface-low)",
             padding: "6px 8px",
             boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)",
           }}>
@@ -1854,10 +1935,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             // Task row
             const { task, phase } = row;
             const deps = parseDeps(task.dependencies);
-            const depLabels = deps.map(dId => {
-              const dt = taskById.get(dId);
-              return dt?.wbs_code || (dt?.task_name?.slice(0, 6) + "…") || "—";
-            }).join(", ");
+            // Orphaned dependencies (predecessor task deleted) are skipped so
+            // the cell never renders the literal "undefined…".
+            const depLabels = formatPredecessorLabels(deps, (dId) => taskById.get(dId));
             const predecessorCount = deps.length;
             const successorCount = successorCountById[task.id] || 0;
             const logicGap = hasLogicGapTask(task, successorCountById);
@@ -2436,8 +2516,11 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 const taskEffE = effEnd(task);
                 const isDraggingTask = taskDrag?.taskId === task.id;
                 const dragDays = isDraggingTask ? taskDrag.daysDelta : 0;
-                const displayStart = dragDays ? shiftDateOnly(taskEffS, dragDays) : taskEffS;
-                const displayEnd = dragDays ? shiftDateOnly(taskEffE, dragDays) : taskEffE;
+                const dragMode = isDraggingTask ? (taskDrag.mode || "move") : "move";
+                const startDelta = dragMode === "resize-end" ? 0 : dragDays;
+                const endDelta = dragMode === "resize-start" ? 0 : dragDays;
+                const displayStart = startDelta ? shiftDateOnly(taskEffS, startDelta) : taskEffS;
+                const displayEnd = endDelta ? shiftDateOnly(taskEffE, endDelta) : taskEffE;
                 const barLeft = px(displayStart);
                 const barWidth = spanPx(displayStart, displayEnd);
                 const canDragTaskBar = Boolean(onSave && !saving && isActionableScheduleTask(task));
@@ -2496,6 +2579,45 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                             }}
                           />
                         )}
+                        {/* Edge resize handles — drag an edge to change the
+                            task's duration (left = start, right = finish). Sit
+                            above the move zone (zIndex 10) so an edge grab
+                            resizes while the bar body still moves. Hidden on
+                            milestones and bars too narrow to grab safely. */}
+                        {canDragTaskBar && !isMilestone && barWidth >= 24 && (
+                          <>
+                            <div
+                              title="Drag to change this task's start date (duration)"
+                              role="button"
+                              aria-label={`Resize start of ${sanitizeTaskName(task)}`}
+                              onPointerDown={(event) => startTaskBarDrag(event, task, taskEffS, taskEffE, "resize-start")}
+                              onClick={(event) => event.stopPropagation()}
+                              style={{
+                                position: "absolute", left: barLeft - 1, width: 9, height: 24,
+                                top: "50%", transform: "translateY(-50%)",
+                                cursor: "ew-resize", zIndex: 10, touchAction: "none",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              <div style={{ width: 2, height: 14, borderRadius: 2, background: "var(--accent)", opacity: (hovered || isDraggingTask) ? 0.85 : 0, transition: "opacity 0.1s" }} />
+                            </div>
+                            <div
+                              title="Drag to change this task's finish date (duration)"
+                              role="button"
+                              aria-label={`Resize finish of ${sanitizeTaskName(task)}`}
+                              onPointerDown={(event) => startTaskBarDrag(event, task, taskEffS, taskEffE, "resize-end")}
+                              onClick={(event) => event.stopPropagation()}
+                              style={{
+                                position: "absolute", left: barLeft + barWidth - 8, width: 9, height: 24,
+                                top: "50%", transform: "translateY(-50%)",
+                                cursor: "ew-resize", zIndex: 10, touchAction: "none",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              <div style={{ width: 2, height: 14, borderRadius: 2, background: "var(--accent)", opacity: (hovered || isDraggingTask) ? 0.85 : 0, transition: "opacity 0.1s" }} />
+                            </div>
+                          </>
+                        )}
                       </>
                     )}
                     {/* Detailing stage-gate milestones — color-coded
@@ -2550,7 +2672,15 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             {taskDrag.taskName}
           </div>
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.04em" }}>
-            {taskDrag.daysDelta > 0 ? "+" : ""}{taskDrag.daysDelta}d | {fmtDate(addDaysUTC(taskDrag.displayStart, taskDrag.daysDelta))} - {fmtDate(addDaysUTC(taskDrag.displayEnd, taskDrag.daysDelta))}
+            {(() => {
+              const m = taskDrag.mode || "move";
+              const s = addDaysUTC(taskDrag.displayStart, m === "resize-end" ? 0 : taskDrag.daysDelta);
+              const e = addDaysUTC(taskDrag.displayEnd, m === "resize-start" ? 0 : taskDrag.daysDelta);
+              const head = m === "move"
+                ? `${taskDrag.daysDelta > 0 ? "+" : ""}${taskDrag.daysDelta}d`
+                : `${Math.max(0, Math.round((e - s) / 86400000))}d dur`;
+              return `${head} | ${fmtDate(s)} - ${fmtDate(e)}`;
+            })()}
           </div>
         </div>
       )}

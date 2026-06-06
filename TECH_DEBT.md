@@ -8,11 +8,113 @@ exactly what's needed.
 
 ## Active items
 
-_No active items currently tracked._
+_From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is wide open — these are hardening, scale, and platform-maturity follow-ups._
+
+- **Dashboard / secret hand-offs (need owner access — step-by-step in
+  [`docs/enterprise-readiness-handoff-2026-05-26.md`](docs/enterprise-readiness-handoff-2026-05-26.md)):**
+  two items only the project owner can do — (1) enable Supabase leaked-password
+  protection (the one remaining `auth_leaked_password_protection` WARN; the older
+  "86 anonymous-access" findings are no longer reported by the advisor),
+  (2) optionally add a GitHub branch-protection rule requiring the "CI" status
+  check on `main` (note: only gates PR merges, not the current direct-push deploy
+  flow — see the doc). No E2E / a11y / bundle budgets yet. (Sentry source-map
+  upload is now DONE — confirmed live via release `b5272fd7` + artifact bundle;
+  see the doc §2.)
+
+- **Unused-index review (perf, low priority) — REVIEWED, drops queued:** the
+  `unused_index` advisor findings were reviewed against live `pg_stat_user_indexes`
+  + query patterns; full verdict in
+  [`docs/unused-index-review-2026-05-26.md`](docs/unused-index-review-2026-05-26.md).
+  Of 170 `idx_scan = 0` indexes, 125 are constraint- or FK-backing (keep — "unused"
+  is a low-volume artifact, not dead weight). 5 high-confidence drops (one redundant
+  single-col + 4 GIN array/jsonb indexes with no containment query) were **applied
+  live 2026-05-26** (migration `20260526180000_drop_unused_indexes.sql`; reversible).
+  The rest are low-value either way; revisit with a real traffic window. Do NOT
+  bulk-drop.
+
+- **Stale `.vercel/project.json`:** still names the deleted `steelbuild-pro` Vercel
+  project (production is `steelbuildpro-og` / steelbuild-pro.com). Harmless
+  (Vercel/CI use the GitHub integration, not this file) but misleading — refresh via
+  `vercel link`.
 
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- 2026-06-03 `vendor-xlsx` (~683 kB / ~179 kB gzip) bundle audit — **already
+  async-only; no code change needed.** Follow-up to the PR #55–#59 enterprise
+  perf-hardening line (PDF view/export chunk splits). Audited every `xlsx`
+  reference: the only real consumers are `src/pages/SOV.jsx`,
+  `src/pages/Onboarding.jsx`, `src/pages/DataExchange.jsx`, and
+  `src/lib/importPsrSpreadsheet.js` (used by `JobStatusReport` via
+  `PsrSpreadsheetImportModal`) — all four load the library with
+  `await import("xlsx")` inside explicit import handlers (`handleImportFile` /
+  `handleImportClick`), never at module top-level or on mount. The remaining
+  ~14 `xlsx` matches are file-extension strings / MIME types, not library
+  imports. Production build evidence: `vendor-xlsx-*.js` is referenced **only**
+  via `import("./vendor-xlsx-*.js")` (dynamic) in exactly the 4 consumer route
+  chunks; zero static `import … from "./vendor-xlsx-*.js"`; the entry
+  (`index-*.js`) and router (`AppRoutes-*.js`) chunks never reference it. So
+  xlsx is fetched on-demand only when a user invokes a spreadsheet
+  import/export action and stays out of every common route's initial load.
+  Per CLAUDE.md §1 (smallest complete change), no source edit was made.
+
+- 2026-05-26 deploy/default branch renamed `codex/base44-deploy-nick` → `main`
+  (GitHub-native rename: commits preserved, default branch + open PRs updated,
+  old name redirects during the grace period). The stale prototype `main`
+  (6 abandoned commits) was archived to `archive/old-main-prototype` then
+  deleted before the rename. The project owner switched the Vercel Production
+  Branch to `main` (the Branch Tracking panel now reads "pushed to the `main`
+  branch"). The living docs + CI (`ci.yml`, `CLAUDE.md`, `README`,
+  `ARCHITECTURE`, `AGENTS`) were updated to the new name.
+
+- 2026-05-26 RLS multiple_permissive_policies consolidation (143 -> 0): collapsed
+  overlapping permissive policies into one per (table, role, action), table-by-
+  table, verifying access byte-identical against pg_policies before/after.
+  Batch 1 (`20260526190000`): dropped the redundant FOR ALL `project_member_access`
+  on 32 standard project-owned tables (fully replicated by the four per-command
+  `project_*` policies), the generic `project_*` duplicates on `drawings` /
+  `drawing_sets` (domain `drawings_*` / `drawing_sets_*` retained, incl. the
+  lock-aware update + admin-only delete), and a duplicate FOR ALL on
+  `drawing_zone_activity`. Batch 2 (`20260526200000`): merged the two `projects`
+  SELECT policies into one, and split the admin FOR ALL on `default_cost_codes` /
+  `feature_flags` into write-only commands (public read already covered SELECT).
+  `user_projects` (`20260526210000`): merged the two SELECT policies AND, while
+  reviewing it, found + fixed a privilege-escalation hole — the re-introduced
+  `users_insert_own_membership` (self-insert with no project/role constraint, no
+  INSERT trigger) let any authenticated user grant themselves `owner` on any
+  project; dropped it (re-applying migration 082's intent; onboarding is handled
+  by the SECURITY DEFINER `create_project()`, member management is admin-only).
+
+- 2026-05-26 sharepoint-proxy org-browse gate deployed live: the
+  `userIsSystemAdmin` gate on the org-level browse actions
+  (`list_sites`/`list_drives`/`list_children`/`get_file_meta`) — committed in
+  `a8ef505c` but only on the Vercel frontend branch — was deployed to the live
+  edge function via the Supabase MCP (`sharepoint-proxy` v6, `verify_jwt` true).
+  Verified the live function body now contains the gate; behavior for
+  per-project actions (`sync_folder`) is unchanged.
+
+- 2026-05-26 per-project-role UI gating: `usePermissions().can()` now resolves
+  the effective role from the user's role in the ACTIVE project
+  (`useProjectRole`/`useProjectId`) instead of only the global account role, with
+  a global-admin override and a global-role fallback when no project is active.
+  Display-only — RLS + `workflowEngine.validateTransition` remain authoritative
+  (commit `89d8c302`).
+
+- 2026-05-26 feature + enterprise pass: scheduling ("Update Scheduled Dates"
+  sync button + drag-to-resize Gantt bars); SOV import hardening (XLSX + steel
+  cost-code auto-mapping + pre-import review modal; migration `20260526140000`
+  adds `cost_code`/`cost_code_name` to `sov_items`); CO workflow (convert
+  cost-impact RFIs → change orders + SOV-line link; migration `20260526150000`
+  adds `source_rfi_id`/`sov_line_item_id`/`sov_line_number` to `change_orders`);
+  DB scale pass (migration `20260526160000` = 43 covering indexes for unindexed
+  FKs + 4 duplicate-index drops; `20260526170000` = 4 `auth_rls_initplan` policy
+  wraps); Sentry error monitoring (`src/instrument.js`, masked replay); module
+  trim (removed Project Control Center, Portfolio Schedule, Drawing Analysis,
+  Meetings, Mitigations, 3D Model Viewer; relocated Onboarding/Data Exchange/
+  Integrations/User Management/Feature Flags/Tutorial into Settings); re-landed
+  the previously-unpushed financial-correctness fix (signed deductive-CO amount +
+  CSV "closed" → neutral status).
 
 - RBAC Phase C project-member management resolved: migration
   `20260516012000_resolve_project_members_phase_c.sql` adds the

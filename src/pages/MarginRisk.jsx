@@ -22,7 +22,7 @@ import {
   ShieldAlert,
   Timer,
 } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { OperationsPageShell } from "@/components/operations/OperationsPageShell";
@@ -260,13 +260,13 @@ export default function MarginRisk() {
           ? entity.filter({ project_id: projectId }, order).catch(() => [])
           : entity.filter({ project_id: projectId }).catch(() => []);
       const [rfis, submittals, workPackages, deliveries, inspections, scheduleTasks, changeOrders] = await Promise.all([
-        read(base44.entities.RFI, "-submitted_date"),
-        read(base44.entities.Submittal, "-submitted_date"),
-        read(base44.entities.WorkPackage),
-        read(base44.entities.Delivery, "-scheduled_date"),
-        read(base44.entities.Inspection, "-inspection_date"),
-        read(base44.entities.ScheduleTask, "start_date"),
-        read(base44.entities.ChangeOrder),
+        read(entities.RFI, "-submitted_date"),
+        read(entities.Submittal, "-submitted_date"),
+        read(entities.WorkPackage),
+        read(entities.Delivery, "-scheduled_date"),
+        read(entities.Inspection, "-inspection_date"),
+        read(entities.ScheduleTask, "start_date"),
+        read(entities.ChangeOrder),
       ]);
       return { rfis, submittals, workPackages, deliveries, inspections, scheduleTasks, changeOrders };
     },

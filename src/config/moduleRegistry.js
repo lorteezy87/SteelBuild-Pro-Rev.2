@@ -1,4 +1,4 @@
-﻿/**
+/**
  * moduleRegistry.js - Central navigation and module configuration
  *
  * Single source of truth for:
@@ -15,35 +15,33 @@
 // ── Tab definitions ──────────────────────────────────────────────────
 export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
-  { label: "PCC",         pages: ["ProjectControlCenter"] },
-  { label: "PROJECTS",    pages: ["Projects", "PortfolioGantt", "Onboarding", "DataExchange", "Integrations", "ExecutiveView"] },
+  { label: "PROJECTS",    pages: ["Projects", "ScopeExclusions", "Contacts", "ProjectMembers", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
-  { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingAnalysis", "DrawingViewer", "Documents"] },
-  { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "LookAheadSchedule"] },
+  { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingViewer", "Documents"] },
+  // Consolidation (Phase 1): RESOURCES folded into FABRICATION and QUALITY
+  // folded into FIELD — fewer logical groups, and every page stays reachable
+  // (these arrays drive route-reachability + tab mapping, not a visible tab bar).
+  // FieldPlan added here so it's no longer orphaned from the registry.
+  { label: "FABRICATION", pages: ["WorkPackages", "RiskHub", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling", "ResourceManagement"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
-  { label: "SCHEDULE",    pages: ["Schedule", "GanttChart", "ProjectCalendar"] },
-  { label: "FIELD",       pages: ["Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs"] },
-  { label: "COST",        pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
-  { label: "RESOURCES",   pages: ["ResourceScheduling", "ResourceManagement"] },
-  { label: "REPORTS",     pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity", "Mitigations"] },
-  { label: "QUALITY",     pages: ["Inspections", "Safety", "Punchlist", "QualityControl"] },
+  { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "GanttChart", "ProjectCalendar", "LookAheadSchedule"] },
+  { label: "FIELD",       pages: ["FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
+  { label: "COST",        pages: ["CostHub", "Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
+  { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "AIInsights", "JobStatusReport", "DecisionLog", "Reports", "AlertsCenter", "Activity"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
 
 export const TAB_DEFAULT_PAGE = {
   DASHBOARD:   "Dashboard",
-  PCC:         "ProjectControlCenter",
   PROJECTS:    "Projects",
   RFIs:        "RFIs",
   DRAWINGS:    "DrawingSubmittalHub",
   FABRICATION: "WorkPackages",
   DELIVERIES:  "Deliveries",
-  SCHEDULE:    "Schedule",
-  FIELD:       "Field",
-  COST:        "Financials",
-  RESOURCES:   "ResourceScheduling",
-  REPORTS:     "AIInsights",
-  QUALITY:     "Inspections",
+  SCHEDULE:    "ScheduleHub",
+  FIELD:       "FieldHub",
+  COST:        "CostHub",
+  REPORTS:     "PortfolioHub",
   CLOSEOUT:    "ProjectCloseout",
 };
 
@@ -51,25 +49,20 @@ export const TAB_DEFAULT_PAGE = {
 export const ALL_MODULES = [
   { icon: "\u25C8", name: "Dashboard",               group: "Overview",      page: "Dashboard" },
   { icon: "\u2318", name: "Command Center",          group: "Overview",      page: "CommandCenter" },
-  { icon: "\u2295", name: "Project Control Center",   group: "Overview",      page: "ProjectControlCenter" },
+  { icon: "\u2726", name: "Portfolio Overview",       group: "Overview",      page: "PortfolioHub" },
   { icon: "\u25C9", name: "Executive View",           group: "Overview",      page: "ExecutiveView" },
-  { icon: "\u25A4", name: "Projects",                 group: "Overview",      page: "Projects" },
-  { icon: "\u25A5", name: "Portfolio Schedule",       group: "Overview",      page: "PortfolioGantt" },
-  { icon: "\u25A3", name: "Onboarding",               group: "Setup",         page: "Onboarding" },
-  { icon: "\u21C5", name: "Data Exchange",            group: "Setup",         page: "DataExchange" },
-  { icon: "\u25CE", name: "Integrations",             group: "Setup",         page: "Integrations" },
-  { icon: "\u2261", name: "Scope & Exclusions",       group: "Setup",         page: "ScopeExclusions" },
-  { icon: "\u2630", name: "Contacts",                 group: "Setup",         page: "Contacts" },
+  { icon: "\u25A4", name: "Projects",                 group: "Projects",      page: "Projects" },
+  { icon: "\u2261", name: "Scope & Exclusions",       group: "Projects",      page: "ScopeExclusions" },
+  { icon: "\u2630", name: "Contacts",                 group: "Projects",      page: "Contacts" },
+  { icon: "\uD83D\uDC65", name: "Project Members",          group: "Projects",      page: "ProjectMembers" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
-  { icon: "\u25A6", name: "Drawings & Submittals",    group: "Detailing",     page: "DrawingSubmittalHub" },
-  { icon: "\u25C8", name: "Drawing Analysis (AI)",    group: "Detailing",     page: "DrawingAnalysis" },
-  { icon: "\u25B3", name: "3D Model Viewer",          group: "Detailing",     page: "ModelViewer" },
+  { icon: "\u25A6", name: "Detailing Control Center",    group: "Detailing",     page: "DrawingSubmittalHub" },
   { icon: "\u2691", name: "RFI Hub",                  group: "Comms",         page: "RFIs" },
   { icon: "\uD83D\uDCDD", name: "Production Notes",   group: "Comms",         page: "ProductionNotes" },
-  { icon: "\uD83D\uDC65", name: "Meetings",           group: "Comms",         page: "Meetings" },
   { icon: "\u2713", name: "Action Items",             group: "Comms",         page: "ActionItems" },
   { icon: "\u2709", name: "Email Inbox",              group: "Comms",         page: "EmailInbox" },
   { icon: "\u25A6", name: "Work Packages",            group: "Fab",           page: "WorkPackages" },
+  { icon: "\u26A0", name: "Risk",                 group: "Fabrication",   page: "RiskHub" },
   { icon: "\uD83D\uDEA7", name: "Constraints",        group: "Fab",           page: "Constraints" },
   { icon: "\uD83C\uDFED", name: "Fab Release",        group: "Fabrication",   page: "FabRelease" },
   { icon: "\u26A0", name: "Margin Risk",        group: "Fabrication",   page: "MarginRisk" },
@@ -78,21 +71,26 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDC41", name: "Look-Ahead",         group: "Fab",           page: "LookAheadSchedule" },
   { icon: "\u25A5", name: "Gantt Chart",              group: "Fab",           page: "GanttChart" },
   { icon: "📅", name: "Project Calendar",         group: "Field",         page: "ProjectCalendar" },
-  { icon: "\ud83c\udfd7", name: "Field Hub",                    group: "Field",         page: "Field" },
+  { icon: "\ud83c\udfd7", name: "Field Hub",                    group: "Field",         page: "FieldHub" },
+  { icon: "\ud83c\udfd7", name: "Field Overview",               group: "Field",         page: "Field" },
   { icon: "\u2699", name: "LEMs",                     group: "Field",         page: "LEMs" },
   { icon: "\uD83D\uDCCB", name: "Contract Management", group: "Cost",         page: "ContractManagement" },
   { icon: "\uD83D\uDCE6", name: "Deliveries",         group: "Logistics",     page: "Deliveries" },
-  { icon: "\u25A5", name: "Schedule",                 group: "Field",         page: "Schedule" },
+  { icon: "\u25A5", name: "Schedule",                 group: "Field",         page: "ScheduleHub" },
+  { icon: "\u25A5", name: "Schedule Board",           group: "Field",         page: "Schedule" },
   { icon: "\uD83D\uDCCB", name: "Daily Logs",         group: "Field",         page: "DailyLogs" },
   { icon: "\uD83D\uDCF7", name: "Photos",             group: "Field",         page: "Photos" },
-  { icon: "\u25CE", name: "Budget Control",           group: "Cost",          page: "Financials" },
+  { icon: "\u25CE", name: "Budget Control",           group: "Cost",          page: "CostHub" },
+  { icon: "\u25CE", name: "Budget Detail",            group: "Cost",          page: "Financials" },
   { icon: "\uD83D\uDCB0", name: "Cost Dashboard",     group: "Cost",          page: "CostDashboard" },
   { icon: "\uD83D\uDCCA", name: "SOV",                group: "Cost",          page: "SOV" },
   { icon: "$",  name: "Change Orders",               group: "Cost",          page: "ChangeOrders" },
-  { icon: "\uD83D\uDC65", name: "Resources",          group: "Resources",     page: "ResourceManagement" },
+  { icon: "\uD83D\uDC65", name: "Resources",          group: "Fabrication",   page: "ResourceHub" },
+  { icon: "\uD83D\uDC65", name: "Resource Register",  group: "Resources",     page: "ResourceManagement" },
   { icon: "\u25A8", name: "Crew Scheduling",          group: "Resources",     page: "ResourceScheduling" },
+  { icon: "\uD83D\uDCCB", name: "Reports",            group: "Reporting",     page: "ReportsHub" },
   { icon: "\uD83D\uDCCB", name: "Job Status Report",  group: "Reporting",     page: "JobStatusReport" },
-  { icon: "\u2728", name: "Portfolio Overview",       group: "Reporting",     page: "AIInsights" },
+  { icon: "\u2728", name: "Portfolio Analytics",      group: "Reporting",     page: "AIInsights" },
   { icon: "\uD83D\uDCCA", name: "Activity Log",       group: "Reporting",     page: "Activity" },
   { icon: "\uD83D\uDD0D", name: "Inspections",        group: "Quality",       page: "Inspections" },
   { icon: "\u26A0", name: "Safety",                   group: "Quality",       page: "Safety" },
@@ -103,7 +101,6 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDCDD", name: "Change Requests",    group: "Closeout",      page: "ChangeRequests" },
   { icon: "\uD83C\uDFE2", name: "Vendors",            group: "Setup",         page: "Vendors" },
   { icon: "\uD83D\uDCD0", name: "Calculator",                group: "Tools", page: "Calculator" }, // 🧮 calculator
-  { icon: "📘", name: "Tutorial / Help",           group: "Setup", page: "Tutorial" },
   { icon: "📐", name: "Ft/In Calculator",          group: "Tools", page: "FeetInchesCalculator" },
   { icon: "\u2696",       name: "Steel Weight Calculator",   group: "Tools", page: "SteelWeightCalculator" },
   { icon: "\uD83C\uDFD7", name: "Crane Pick Calculator",     group: "Tools", page: "CranePickCalculator" },
@@ -115,64 +112,57 @@ export const NAV_GROUPS = [
   {
     label: "OVERVIEW",
     items: [
-      { label: "Dashboard",       icon: "\u25C8", page: "Dashboard" },
-      { label: "Command Center", icon: "\u2318", page: "CommandCenter" },
-      { label: "Project Control Center", icon: "\u2295", page: "ProjectControlCenter" },
-      { label: "Executive View", icon: "\u25A4", page: "ExecutiveView" },
-      { label: "Portfolio Schedule", icon: "\u25A5", page: "PortfolioGantt" },
+      { label: "Dashboard",        icon: "\u25C8", page: "Dashboard" },
+      { label: "Command Center",  icon: "\u2318", page: "CommandCenter" },
+      { label: "Portfolio Overview", icon: "\u2726", page: "PortfolioHub" },
+      { label: "Alerts",          icon: "\uD83D\uDD14", page: "AlertsCenter", badgeKey: "unread" },
+      // Executive View is now a tab inside Portfolio Overview (PortfolioHub).
     ],
   },
   {
     label: "USER",
     items: [
       { label: "Settings",        icon: "\u2699", page: "Settings" },
-      { label: "Tutorial / Help", icon: "\ud83d\udcd8", page: "Tutorial" },
     ],
   },
   {
-    label: "JOB SETUP",
+    // Projects module \u2014 the project record plus everything that sets a job up:
+    // scope, contacts, and team membership. Consolidated here so all
+    // project-setup pages live as sub-items under one module.
+    label: "PROJECTS",
     items: [
       { label: "Projects",           icon: "\u229F", page: "Projects" },
-      { label: "Onboarding",         icon: "\u25A3", page: "Onboarding" },
-      { label: "Data Exchange",      icon: "\u21C5", page: "DataExchange" },
-      { label: "Integrations",       icon: "\u25CE", page: "Integrations" },
       { label: "Scope & Exclusions", icon: "\u2261", page: "ScopeExclusions" },
       { label: "Contacts",           icon: "\uD83D\uDC64", page: "Contacts" },
-      { label: "Alerts",             icon: "\uD83D\uDD14", page: "AlertsCenter", badgeKey: "unread" },
-      { label: "User Management",    icon: "\uD83D\uDC65", page: "UsersManagement" },
       { label: "Project Members",    icon: "\uD83D\uDC65", page: "ProjectMembers" },
-      { label: "Feature Flags",      icon: "\u2691",       page: "FeatureFlagsAdmin" },
     ],
   },
   {
     label: "DOCUMENTS & DRAWINGS",
     items: [
-      { label: "Drawings & Submittals", icon: "\u25A6", page: "DrawingSubmittalHub" },
-      { label: "Drawing Analysis (AI)", icon: "\u25C8", page: "DrawingAnalysis" },
+      { label: "Detailing Control Center", icon: "\u25A6", page: "DrawingSubmittalHub" },
       { label: "Document Repository",   icon: "\uD83D\uDCC1", page: "Documents" },
-      { label: "3D Model Viewer",       icon: "\u25B3", page: "ModelViewer" },
     ],
   },
   {
     label: "COMMUNICATIONS",
     items: [
       { label: "RFI Hub",          icon: "\u2691", page: "RFIs", badgeKey: "rfi" },
-      { label: "Meetings",         icon: "\uD83D\uDC65", page: "Meetings" },
       { label: "Action Items",     icon: "\u2611", page: "ActionItems" },
-      { label: "Email Inbox",      icon: "\u2709", page: "EmailInbox" },
       { label: "Production Notes", icon: "\uD83D\uDCDD", page: "ProductionNotes" },
+      // Email Inbox hidden from nav (deprioritized \u2014 CLAUDE.md \u00A72.5). Route
+      // kept in routes.js; restore this item to re-surface it.
     ],
   },
   {
     label: "FABRICATION",
     items: [
       { label: "Work Packages", icon: "\u25A6", page: "WorkPackages" },
-      { label: "Constraints",   icon: "\uD83D\uDEA7", page: "Constraints" },
+      { label: "Risk",          icon: "⚠", page: "RiskHub" },
       { label: "Fab Release",   icon: "\uD83C\uDFED", page: "FabRelease" },
-      { label: "Margin Risk",   icon: "\u26A0", page: "MarginRisk" },
       { label: "Budget Hours",  icon: "\u23F1", page: "BudgetHours" },
       { label: "Procurement",   icon: "\uD83D\uDCE6", page: "Procurement" },
-      { label: "Look-Ahead",    icon: "\uD83D\uDC41", page: "LookAheadSchedule" },
+      // Look-Ahead is now a tab inside the Schedule hub.
     ],
   },
   {
@@ -184,25 +174,25 @@ export const NAV_GROUPS = [
   {
     label: "FIELD",
     items: [
-      { label: "Field Hub",  icon: "\uD83C\uDFD7", page: "Field" },
+      { label: "Field Hub",  icon: "\uD83C\uDFD7", page: "FieldHub" },
       { label: "Daily Logs", icon: "\uD83D\uDCCB", page: "DailyLogs" },
       { label: "LEMs",       icon: "\u2699", page: "LEMs" },
       { label: "Photos",     icon: "\uD83D\uDCF7", page: "Photos" },
-      { label: "Punchlist",  icon: "\u2713", page: "Punchlist" },
+      // Inspections / Safety / Punchlist / Quality Control are now tabs inside
+      // the Field Hub.
     ],
   },
   {
     label: "SCHEDULING",
     items: [
-      { label: "Project Calendar", icon: "📅", page: "ProjectCalendar" },
-      { label: "Gantt Schedule",  icon: "\u25A5", page: "Schedule" },
-      { label: "Resource Board",  icon: "\uD83D\uDC65", page: "ResourceManagement" },
+      { label: "Schedule",   icon: "\u25A5", page: "ScheduleHub" },
+      { label: "Resources",  icon: "\uD83D\uDC65", page: "ResourceHub" },
     ],
   },
   {
     label: "COST CONTROL",
     items: [
-      { label: "Budget Control",      icon: "\u25CE", page: "Financials" },
+      { label: "Budget Control",      icon: "\u25CE", page: "CostHub" },
       { label: "Contract Management",  icon: "\uD83D\uDCCB", page: "ContractManagement" },
       { label: "Schedule of Values",   icon: "\uD83D\uDCCA", page: "SOV" },
       { label: "Change Orders",        icon: "$",  page: "ChangeOrders", badgeKey: "co" },
@@ -212,11 +202,9 @@ export const NAV_GROUPS = [
   {
     label: "REPORTING",
     items: [
-      { label: "Job Status Report",  icon: "\uD83D\uDCCB", page: "JobStatusReport" },
-      { label: "Decision Log",       icon: "\uD83D\uDCCB", page: "DecisionLog" },
-      { label: "Portfolio Overview",  icon: "\u2726", page: "AIInsights" },
-      { label: "Mitigations",        icon: "\u2696", page: "Mitigations" },
-      { label: "Activity Log",       icon: "\uD83D\uDCCA", page: "Activity" },
+      { label: "Reports", icon: "\uD83D\uDCCB", page: "ReportsHub" },
+      // Job Status / Decision Log / Activity Log are now tabs inside the Reports
+      // hub. Portfolio Overview lives under OVERVIEW (PortfolioHub).
     ],
   },
   {
@@ -232,7 +220,7 @@ export const NAV_GROUPS = [
 ];
 
 // Column assignment for the 3-column modules dropdown
-const COLUMN_1_GROUPS = ["OVERVIEW", "JOB SETUP", "DOCUMENTS & DRAWINGS", "COMMUNICATIONS"];
+const COLUMN_1_GROUPS = ["OVERVIEW", "PROJECTS", "DOCUMENTS & DRAWINGS", "COMMUNICATIONS"];
 const COLUMN_2_GROUPS = ["FABRICATION", "DELIVERIES", "FIELD", "SCHEDULING"];
 const COLUMN_3_GROUPS = ["COST CONTROL", "REPORTING", "TOOLS"];
 
@@ -250,33 +238,36 @@ export const SIDEBAR_GROUPS = [
     items: [
       { label: "Dashboard",          icon: "\u25C8", page: "Dashboard" },
       { label: "Command Center",    icon: "\u2318", page: "CommandCenter" },
-      { label: "Project Control Center", icon: "\u2295", page: "ProjectControlCenter" },
-      { label: "Portfolio Schedule",  icon: "\u25a5", page: "PortfolioGantt" },
-      { label: "Portfolio Overview",  icon: "\u2726", page: "AIInsights" },
+      { label: "Portfolio Overview",  icon: "\u2726", page: "PortfolioHub" },
+    ],
+  },
+  {
+    // Projects module \u2014 project record + job-setup pages as sub-items.
+    label: "PROJECTS",
+    collapsible: true,
+    items: [
+      { label: "Projects",           icon: "\u229F", page: "Projects" },
+      { label: "Scope & Exclusions", icon: "\u2261", page: "ScopeExclusions" },
+      { label: "Contacts",           icon: "\uD83D\uDC64", page: "Contacts" },
+      { label: "Project Members",    icon: "\uD83D\uDC65", page: "ProjectMembers" },
     ],
   },
   {
     label: "PROJECT MANAGEMENT",
     collapsible: true,
     items: [
-      { label: "Project Calendar", icon: "📅", page: "ProjectCalendar" },
-      { label: "Schedule",       icon: "\u25A5", page: "Schedule" },
+      { label: "Schedule",       icon: "\u25A5", page: "ScheduleHub" },
       { label: "Action Items",   icon: "\u2611", page: "ActionItems" },
-      { label: "Email Inbox",   icon: "\u2709", page: "EmailInbox" },
       { label: "RFIs",                icon: "\u2691", page: "RFIs" },
       { label: "Change Orders",  icon: "$",  page: "ChangeOrders" },
-      { label: "Mitigations",    icon: "\u2696", page: "Mitigations" },
-      { label: "Meetings",       icon: "\uD83D\uDC65", page: "Meetings" },
     ],
   },
   {
     label: "DESIGN & DRAWINGS",
     collapsible: true,
     items: [
-      { label: "Drawings & Submittals", icon: "\u25A6", page: "DrawingSubmittalHub" },
-      { label: "Drawing Analysis (AI)", icon: "\u25C8", page: "DrawingAnalysis" },
+      { label: "Detailing Control Center", icon: "\u25A6", page: "DrawingSubmittalHub" },
       { label: "Drawing Viewer",       icon: "\u25A6", page: "DrawingViewer" },
-      { label: "3D Model Viewer",      icon: "\u25B3", page: "ModelViewer" },
     ],
   },
   {
@@ -285,13 +276,10 @@ export const SIDEBAR_GROUPS = [
     items: [
       { label: "Work Packages",        icon: "\u25A6", page: "WorkPackages" },
       { label: "Fab Release",          icon: "🏭", page: "FabRelease" },
-      { label: "Margin Risk",          icon: "⚠", page: "MarginRisk" },
+      { label: "Risk",                 icon: "⚠", page: "RiskHub" },
       { label: "Budget Hours",         icon: "⏱",  page: "BudgetHours" },
-      { label: "Constraints",          icon: "🚧", page: "Constraints" },
       { label: "Procurement",          icon: "📦", page: "Procurement" },
-      { label: "Look-Ahead Schedule",  icon: "👁", page: "LookAheadSchedule" },
-      { label: "Crew Scheduling",      icon: "\u25A8", page: "ResourceScheduling" },
-      { label: "Resource Management",   icon: "\uD83D\uDC65", page: "ResourceManagement" },
+      { label: "Resources",            icon: "\uD83D\uDC65", page: "ResourceHub" },
       { label: "Deliveries",           icon: "\uD83D\uDCE6", page: "Deliveries" },
     ],
   },
@@ -309,38 +297,29 @@ export const SIDEBAR_GROUPS = [
     collapsible: true,
     items: [
       { label: "Documents",     icon: "\uD83D\uDCC1", page: "Documents" },
-      { label: "Reports",       icon: "\uD83D\uDCCB", page: "Reports" },
-      { label: "Activity Log",  icon: "\uD83D\uDCCA", page: "Activity" },
+      { label: "Reports",       icon: "\uD83D\uDCCB", page: "ReportsHub" },
+      // Activity Log is now a tab inside the Reports hub.
     ],
   },
   {
     label: "FIELD",
     collapsible: true,
     items: [
-      { label: "Field Hub",        icon: "\uD83C\uDFD7", page: "Field" },
+      { label: "Field Hub",        icon: "\uD83C\uDFD7", page: "FieldHub" },
       { label: "Daily Logs",       icon: "\uD83D\uDCCB", page: "DailyLogs" },
       { label: "Photos",           icon: "\uD83D\uDCF7", page: "Photos" },
-      { label: "Inspections",      icon: "\uD83D\uDD0D", page: "Inspections" },
-      { label: "Safety",           icon: "\u26A0", page: "Safety" },
-      { label: "Quality Control",  icon: "\uD83E\uDDEA", page: "QualityControl" },
-      { label: "Punchlist",        icon: "\u2713", page: "Punchlist" },
       { label: "LEMs",             icon: "\u2699", page: "LEMs" },
+      // Inspections / Safety / Punchlist / Quality Control are now tabs inside
+      // the Field Hub (Safety + QC were nav-hidden in Phase 1 but stay reachable
+      // there). Routes kept; restore items here to re-surface them standalone.
     ],
   },
   {
     label: "ADMINISTRATION",
     collapsible: true,
     items: [
-      { label: "Onboarding",       icon: "\u25A3", page: "Onboarding" },
-      { label: "Data Exchange",    icon: "\u21C5", page: "DataExchange" },
-      { label: "Integrations",     icon: "\u25CE", page: "Integrations" },
-      { label: "Contacts",         icon: "\uD83D\uDC64", page: "Contacts" },
       { label: "Vendors",          icon: "\uD83C\uDFE2", page: "Vendors" },
-      { label: "User Management",  icon: "\uD83D\uDC65", page: "UsersManagement" },
-      { label: "Project Members",  icon: "\uD83D\uDC65", page: "ProjectMembers" },
-      { label: "Feature Flags",    icon: "\u2691",       page: "FeatureFlagsAdmin" },
       { label: "Settings",         icon: "\u2699", page: "Settings" },
-      { label: "Tutorial / Help",  icon: "\uD83D\uDCD8", page: "Tutorial" },
     ],
   },
   {
@@ -370,6 +349,12 @@ export const PAGE_LABELS = (() => {
     FeatureFlagsAdmin: "Feature Flags",
     Expenses:        "Expenses",
     EmailInbox:      "Email Inbox",
+    // Moved out of the nav into Settings → Setup & Admin, but still routable, so
+    // keep their display labels for breadcrumbs / document title.
+    Onboarding:      "Onboarding",
+    DataExchange:    "Data Exchange",
+    Integrations:    "Integrations",
+    Tutorial:        "Tutorial / Help",
   });
   return labels;
 })();

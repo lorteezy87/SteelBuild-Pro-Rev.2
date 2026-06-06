@@ -1,5 +1,6 @@
 import React from "react";
 import { Check, X, Info, FileText, Plus, Filter, Paperclip, Clock } from "lucide-react";
+import { formatLocalDate } from "@/utils/dates";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -266,7 +267,7 @@ export default function ScopeItemList({
                       textTransform: "uppercase",
                     }}
                   >
-                    ✓ Completed {new Date(item.completed_at).toLocaleDateString()}
+                    ✓ Completed {formatLocalDate(item.completed_at)}
                   </div>
                 )}
                 {!isComplete && item.in_progress && (
@@ -285,7 +286,7 @@ export default function ScopeItemList({
                     In Progress
                     {item.in_progress_at && (
                       <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>
-                        · since {new Date(item.in_progress_at).toLocaleDateString()}
+                        · since {formatLocalDate(item.in_progress_at)}
                       </span>
                     )}
                   </div>

@@ -23,14 +23,14 @@
  *
  * Design rules (CLAUDE.md):
  *   - No purple, no pink — accent / status tokens only
- *   - Filter is_deleted on every list (inherited from base44 entity
+ *   - Filter is_deleted on every list (inherited from entity
  *     soft-delete contract; defensive in the in-page useMemo too)
- *   - TanStack Query + base44 entities + inline style objects
+ *   - TanStack Query + entity clients + inline style objects
  */
 
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -99,56 +99,56 @@ export default function Field() {
   const { data: logs = [], isLoading: logsLoading } = useQuery({
     queryKey: ["field-hub-daily-logs", projectId],
     queryFn: () => filterArgs
-      ? base44.entities.DailyLog.filter(filterArgs, "-date")
-      : base44.entities.DailyLog.list("-date"),
+      ? entities.DailyLog.filter(filterArgs, "-date")
+      : entities.DailyLog.list("-date"),
     staleTime: 30 * 1000,
   });
 
   const { data: photos = [], isLoading: photosLoading } = useQuery({
     queryKey: ["field-hub-photos", projectId],
     queryFn: () => filterArgs
-      ? base44.entities.Photo.filter(filterArgs, "-taken_date")
-      : base44.entities.Photo.list("-taken_date"),
+      ? entities.Photo.filter(filterArgs, "-taken_date")
+      : entities.Photo.list("-taken_date"),
     staleTime: 30 * 1000,
   });
 
   const { data: punchlist = [], isLoading: punchlistLoading } = useQuery({
     queryKey: ["field-hub-punchlist", projectId],
     queryFn: () => filterArgs
-      ? base44.entities.PunchlistItem.filter(filterArgs)
-      : base44.entities.PunchlistItem.list(),
+      ? entities.PunchlistItem.filter(filterArgs)
+      : entities.PunchlistItem.list(),
     staleTime: 30 * 1000,
   });
 
   const { data: inspections = [], isLoading: inspectionsLoading } = useQuery({
     queryKey: ["field-hub-inspections", projectId],
     queryFn: () => filterArgs
-      ? base44.entities.Inspection.filter(filterArgs, "-inspection_date")
-      : base44.entities.Inspection.list("-inspection_date"),
+      ? entities.Inspection.filter(filterArgs, "-inspection_date")
+      : entities.Inspection.list("-inspection_date"),
     staleTime: 30 * 1000,
   });
 
   const { data: safety = [], isLoading: safetyLoading } = useQuery({
     queryKey: ["field-hub-safety", projectId],
     queryFn: () => filterArgs
-      ? base44.entities.SafetyIncident.filter(filterArgs, "-incident_date")
-      : base44.entities.SafetyIncident.list("-incident_date"),
+      ? entities.SafetyIncident.filter(filterArgs, "-incident_date")
+      : entities.SafetyIncident.list("-incident_date"),
     staleTime: 30 * 1000,
   });
 
   const { data: qc = [], isLoading: qcLoading } = useQuery({
     queryKey: ["field-hub-qc", projectId],
     queryFn: () => filterArgs
-      ? base44.entities.QualityControlRecord.filter(filterArgs, "-test_date")
-      : base44.entities.QualityControlRecord.list("-test_date"),
+      ? entities.QualityControlRecord.filter(filterArgs, "-test_date")
+      : entities.QualityControlRecord.list("-test_date"),
     staleTime: 30 * 1000,
   });
 
   const { data: deliveries = [], isLoading: deliveriesLoading } = useQuery({
     queryKey: ["field-hub-deliveries", projectId],
     queryFn: () => filterArgs
-      ? base44.entities.Delivery.filter(filterArgs, "-scheduled_date")
-      : base44.entities.Delivery.list("-scheduled_date"),
+      ? entities.Delivery.filter(filterArgs, "-scheduled_date")
+      : entities.Delivery.list("-scheduled_date"),
     staleTime: 30 * 1000,
   });
 

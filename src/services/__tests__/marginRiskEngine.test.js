@@ -330,6 +330,42 @@ describe("margin risk engine", () => {
       expect(result.signals[3].items[0].severity).toBe("medium");
     });
 
+    it("flags on-hold deliveries at flat $2,000 even when well past required date", () => {
+      // An explicitly at-risk (delayed/hold) status is a flat exposure tier and
+      // must NOT be re-priced by the per-day acceleration charge (daysLate*$3,500),
+      // regardless of how late it is.
+      const result = calculateMarginRisk({
+        deliveries: [
+          {
+            id: "del-hold",
+            status: "On Hold",
+            required_date: daysAgo(30),
+          },
+        ],
+      });
+
+      expect(result.signals[3].totalExposure).toBe(2000);
+      expect(result.signals[3].items[0].severity).toBe("medium");
+    });
+
+    it("applies per-day acceleration cost only to late deliveries not flagged at-risk", () => {
+      const dateStr = daysAgo(3);
+      const late = daysLateFromDate(dateStr);
+      const result = calculateMarginRisk({
+        deliveries: [
+          {
+            id: "del-late",
+            status: "In Transit",
+            required_date: dateStr,
+          },
+        ],
+      });
+
+      // Not flagged delay/hold → per-day charge, not the flat $2,000 tier.
+      expect(result.signals[3].totalExposure).toBe(late * 3500);
+      expect(result.signals[3].items[0].severity).toBe("high");
+    });
+
     it("skips delivered / completed / cancelled deliveries", () => {
       const result = calculateMarginRisk({
         deliveries: [
@@ -508,7 +544,7 @@ describe("margin risk engine", () => {
       expect(result.signals[6].totalExposure).toBe(45000);
     });
 
-    it("handles negative CO amounts (credits)", () => {
+    it("excludes deductive (credit) CO amounts from margin-at-risk exposure", () => {
       const result = calculateMarginRisk({
         changeOrders: [
           {
@@ -522,7 +558,9 @@ describe("margin risk engine", () => {
         ],
       });
 
-      expect(result.signals[6].totalExposure).toBe(12000);
+      // A deductive CO reduces the contract — it is NOT positive margin-at-risk
+      // exposure. Previously Math.abs() inflated this -$12k credit to +$12k.
+      expect(result.signals[6].totalExposure).toBe(0);
     });
 
     it("assigns severity by dollar threshold", () => {

@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { entities, auth, integrations } from "@/api/supabaseClient";
 import { toast } from "sonner";
 
 export default function UploadModal({ projectId, folderId = null, onClose }) {
@@ -12,7 +12,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", projectId],
-    queryFn: () => projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.WorkPackage.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
   });
 
@@ -20,7 +20,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
     mutationFn: async (filesToUpload) => {
       const created = [];
       for (const file of filesToUpload) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const { file_url } = await integrations.Core.UploadFile({ file });
 
         const meta = metadata[file.name] || {};
         // Calculate due date from lead time if this is a submittal
@@ -29,7 +29,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
           ? new Date(today.getTime() + scheduleLink.reviewLeadTime * 86400000).toISOString().split("T")[0]
           : undefined;
 
-        const doc = await base44.entities.Document.create({
+        const doc = await entities.Document.create({
           project_id: projectId,
           // Drop the document into the folder the user is currently
           // browsing in the Documents page. NULL = project root.
@@ -47,7 +47,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
           revision_number: meta.revisionNumber || "0",
           revision_date: today.toISOString().split("T")[0],
           tags: meta.tags || [],
-          uploaded_by: (await base44.auth.me?.())?.email || "Unknown",
+          uploaded_by: (await auth.me?.())?.email || "Unknown",
           uploaded_date: today.toISOString(),
           // Schedule integration fields
           is_submittal: scheduleLink.isSubmittal,

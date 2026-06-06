@@ -15,7 +15,8 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
@@ -105,14 +106,14 @@ export default function Drawings({ embedded = false } = {}) {
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: drawings = [], isLoading } = useQuery({
     queryKey: ["drawings", projectId],
-    queryFn: () => projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.Drawing.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 30000,
   });
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () => projectId ? base44.entities.RFI.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.RFI.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60000,
   });
@@ -122,7 +123,7 @@ export default function Drawings({ embedded = false } = {}) {
   // need to refetch aggressively, so a long staleTime is fine.
   const { data: submittals = [] } = useQuery({
     queryKey: ["submittals", projectId],
-    queryFn: () => projectId ? base44.entities.Submittal.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.Submittal.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60000,
   });
@@ -131,7 +132,7 @@ export default function Drawings({ embedded = false } = {}) {
   // processed_count, etc.) and to keep set names in sync with the upload modal.
   const { data: drawingSetRecords = [] } = useQuery({
     queryKey: ["drawing_sets", projectId],
-    queryFn: () => projectId ? base44.entities.DrawingSet.filter({ project_id: projectId }) : [],
+    queryFn: () => projectId ? entities.DrawingSet.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 30000,
   });
@@ -275,11 +276,15 @@ export default function Drawings({ embedded = false } = {}) {
   // summary badge lies for up to staleTime (30s) after every action.
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["drawings", projectId] });
-    qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
+    // Sets are read under both "drawing_sets" and "drawing-sets" keys across the
+    // app (Drawings/Submittals vs the Detailing Control Center hub). Invalidate
+    // both spellings + the register view so a set delete/edit never lingers in
+    // another view's cache.
+    invalidateEntity(qc, "drawingSet", projectId);
   };
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.Drawing.create({ ...data, project_id: projectId, project_name: activeProject?.name }),
+    mutationFn: (data) => entities.Drawing.create({ ...data, project_id: projectId, project_name: activeProject?.name }),
     onSuccess: async (created) => {
       invalidate();
       toast.success("Sheet added");
@@ -303,7 +308,7 @@ export default function Drawings({ embedded = false } = {}) {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, ...data }) => base44.entities.Drawing.update(id, data),
+    mutationFn: ({ id, ...data }) => entities.Drawing.update(id, data),
     // Close the modal AND clear editing on success — leaving the modal
     // open while editing was cleared caused a second save click to route
     // into the create path with the edited row's id still in form state,
@@ -321,7 +326,7 @@ export default function Drawings({ embedded = false } = {}) {
   // is_deleted=false to restore it. The sonner toast exposes an "Undo"
   // action button that does exactly that.
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.Drawing.delete(id),
+    mutationFn: (id) => entities.Drawing.delete(id),
     onSuccess: (_data, id) => {
       invalidate();
       setSelected(new Set());
@@ -330,7 +335,7 @@ export default function Drawings({ embedded = false } = {}) {
           label: "Undo",
           onClick: async () => {
             try {
-              await base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null });
+              await entities.Drawing.update(id, { is_deleted: false, deleted_at: null });
               invalidate();
               toast.success("Sheet restored");
             } catch (err) {
@@ -351,16 +356,16 @@ export default function Drawings({ embedded = false } = {}) {
     mutationFn: async ({ setId, sheetIds }) => {
       // Set-only (parent row, no child sheets): soft-delete parent directly
       if (setId && sheetIds.length === 0) {
-        await base44.entities.DrawingSet.delete(setId);
+        await entities.DrawingSet.delete(setId);
         return { deleted: 0, parentOnly: true };
       }
       // Normal cascade: parent + children in one transaction
       if (setId) {
-        const result = await base44.entities.DrawingSet.deleteCascade(setId);
+        const result = await entities.DrawingSet.deleteCascade(setId);
         return { deleted: result.deletedChildCount ?? sheetIds.length };
       }
       // Legacy fallback: no parent row, just sweep the children.
-      const { succeeded } = await batchProcess(sheetIds, (id) => base44.entities.Drawing.delete(id));
+      const { succeeded } = await batchProcess(sheetIds, (id) => entities.Drawing.delete(id));
       return { deleted: succeeded.length };
     },
     onSuccess: ({ deleted, parentOnly }, { setId, sheetIds, setName }) => {
@@ -375,11 +380,11 @@ export default function Drawings({ embedded = false } = {}) {
           onClick: async () => {
             try {
               if (setId) {
-                await base44.entities.DrawingSet.update(setId, { is_deleted: false, deleted_at: null });
+                await entities.DrawingSet.update(setId, { is_deleted: false, deleted_at: null });
               }
               if (sheetIds.length > 0) {
                 await batchProcess(sheetIds, (id) =>
-                  base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
+                  entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
                 );
               }
               invalidate();
@@ -492,7 +497,7 @@ export default function Drawings({ embedded = false } = {}) {
           const v = validateStageTransition(current.stage, bulkStage);
           if (!v.ok) throw new Error(v.reason);
         }
-        return base44.entities.Drawing.update(id, { stage: bulkStage });
+        return entities.Drawing.update(id, { stage: bulkStage });
       },
     );
     invalidate();
@@ -513,7 +518,7 @@ export default function Drawings({ embedded = false } = {}) {
       description: "The selected sheets will be removed from the project. You can undo this from the toast that appears after deletion.",
       run: async () => {
         const ids = [...selected];
-        const { succeeded, failed } = await batchProcess(ids, (id) => base44.entities.Drawing.delete(id));
+        const { succeeded, failed } = await batchProcess(ids, (id) => entities.Drawing.delete(id));
         invalidate();
         if (failed.length > 0) {
           toast.warning(`${succeeded.length} deleted, ${failed.length} failed`);
@@ -526,7 +531,7 @@ export default function Drawings({ embedded = false } = {}) {
               onClick: async () => {
                 try {
                   await batchProcess(succeeded, (id) =>
-                    base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
+                    entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
                   );
                   invalidate();
                   toast.success(`Restored ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`);
@@ -548,7 +553,7 @@ export default function Drawings({ embedded = false } = {}) {
     const fieldCount = Object.keys(payload).length;
     const { succeeded, failed } = await batchProcess(
       ids,
-      (id) => base44.entities.Drawing.update(id, payload),
+      (id) => entities.Drawing.update(id, payload),
     );
     invalidate();
     if (failed.length > 0) {
@@ -572,7 +577,7 @@ export default function Drawings({ embedded = false } = {}) {
         approvalSet.sheets.map(s => s.drawing_set_id).find(Boolean);
       if (parentSetId) {
         try {
-          await base44.entities.DrawingSet.update(parentSetId, {
+          await entities.DrawingSet.update(parentSetId, {
             set_approval_status: status,
             set_approved_date:   effectiveDate,
             set_approved_by:     _approvedBy || null,
@@ -589,7 +594,7 @@ export default function Drawings({ embedded = false } = {}) {
       const sheetsToUpdate = applyToSheets ? approvalSet.sheets : [approvalSet.sheets[0]];
       const { succeeded, failed } = await batchProcess(
         sheetsToUpdate,
-        (s) => base44.entities.Drawing.update(s.id, {
+        (s) => entities.Drawing.update(s.id, {
           set_approval_status: status,
           set_approved_date: effectiveDate,
           ...(revision ? { revision_number: revision } : {}),
@@ -664,7 +669,7 @@ export default function Drawings({ embedded = false } = {}) {
     try {
       // Update the parent drawing_sets row when one exists.
       if (setId) {
-        await base44.entities.DrawingSet.update(setId, { set_name: newName });
+        await entities.DrawingSet.update(setId, { set_name: newName });
       }
       // Also update every child sheet's denormalized drawing_set_name so the
       // table grouping follows the rename even for legacy rows that don't
@@ -672,7 +677,7 @@ export default function Drawings({ embedded = false } = {}) {
       const sheetIds = (sheets || []).map(s => s.id);
       if (sheetIds.length > 0) {
         await batchProcess(sheetIds, (id) =>
-          base44.entities.Drawing.update(id, { drawing_set_name: newName })
+          entities.Drawing.update(id, { drawing_set_name: newName })
         );
       }
       invalidate();

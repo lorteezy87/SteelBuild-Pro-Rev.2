@@ -18,7 +18,7 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
@@ -76,6 +76,69 @@ export async function lockLinkedSetsIfApproved(
   }
 }
 
+/**
+ * The single AUDITED write path for a submittal workflow move. Atomically:
+ *   1. inserts a `submittal_rounds` row (the audit event),
+ *   2. patches the submittal (status / ball_in_court / current_round_id /
+ *      total_rounds, optional submitted/returned dates, optional revision bump
+ *      on a Revise-and-Resubmit), and
+ *   3. runs the terminal-approval auto-lock (§20 moat).
+ *
+ * Every status move (verb CTA, inline select, Kanban drag) should funnel
+ * through this so the round log can never drift from the current status — which
+ * is why the `submittal_rounds` table sat empty (moves bypassed it). Exported
+ * (not on the hook) so the Submittals page + hub, which own their own query
+ * stacks, can call it directly.
+ */
+export interface AddRoundInput {
+  submittal: {
+    id: string;
+    project_id: string;
+    drawing_set_ids?: string[] | null;
+    total_rounds?: number | null;
+    round_number?: number | null;
+  };
+  status: string;
+  ball_in_court?: string | null;
+  submitted_date?: string | null;
+  returned_date?: string | null;
+  notes?: string | null;
+  /** Bump the submittal's revision round_number (true on Revise & Resubmit). */
+  bumpRevision?: boolean;
+}
+
+export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal> {
+  const s = input.submittal;
+  const eventRound = (Number(s.total_rounds) || 0) + 1;
+
+  const round = await entities.SubmittalRound.create({
+    project_id: s.project_id,
+    submittal_id: s.id,
+    round_number: eventRound,
+    status: input.status,
+    ball_in_court: input.ball_in_court ?? null,
+    submitted_date: input.submitted_date ?? null,
+    returned_date: input.returned_date ?? null,
+    response_notes: input.notes ?? null,
+    drawing_set_ids: Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [],
+    metadata: {},
+  } as Insert<"submittal_rounds">);
+
+  const patch: Record<string, unknown> = {
+    status: input.status,
+    ball_in_court: input.ball_in_court ?? null,
+    current_round_id: round?.id,
+    total_rounds: eventRound,
+  };
+  if (input.submitted_date) patch.submitted_date = input.submitted_date;
+  if (input.returned_date) patch.returned_date = input.returned_date;
+  if (input.bumpRevision) patch.round_number = (Number(s.round_number) || 1) + 1;
+
+  const updated = await entities.Submittal.update(s.id, patch as Update<"submittals">);
+  await lockLinkedSetsIfApproved(updated);
+  return updated as Submittal;
+}
+
 type BulkResult = {
   succeeded: number;
   failed: Array<{ id: string; error: string }>;
@@ -131,7 +194,7 @@ export function useSubmittals(projectId: string | null | undefined) {
   } = useQuery<Submittal[]>({
     queryKey,
     queryFn: () =>
-      base44.entities.Submittal.filter(
+      entities.Submittal.filter(
         { project_id: projectId },
         "-submitted_date",
         2000
@@ -146,7 +209,7 @@ export function useSubmittals(projectId: string | null | undefined) {
   >({
     queryKey: roundsQueryKey,
     queryFn: () =>
-      base44.entities.SubmittalRound.filter(
+      entities.SubmittalRound.filter(
         { project_id: projectId },
         "-round_number",
         2000
@@ -245,7 +308,7 @@ export function useSubmittals(projectId: string | null | undefined) {
           errors.map((e: { message: string }) => e.message).join(" ")
         );
       }
-      return await base44.entities.Submittal.create(
+      return await entities.Submittal.create(
         normalized as Insert<"submittals">
       );
     },
@@ -263,7 +326,7 @@ export function useSubmittals(projectId: string | null | undefined) {
   const updateMut = useMutation<Submittal, Error, UpdateInput, { previous: Submittal[] | undefined }>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      const updated = await base44.entities.Submittal.update(
+      const updated = await entities.Submittal.update(
         id,
         data as Update<"submittals">
       );
@@ -296,7 +359,7 @@ export function useSubmittals(projectId: string | null | undefined) {
   const deleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
-      await base44.entities.Submittal.delete(id);
+      await entities.Submittal.delete(id);
       return id;
     },
     onSuccess: async () => {
@@ -319,12 +382,12 @@ export function useSubmittals(projectId: string | null | undefined) {
           errors.map((e: { message: string }) => e.message).join(" ")
         );
       }
-      const round = await base44.entities.SubmittalRound.create(
+      const round = await entities.SubmittalRound.create(
         normalized as Insert<"submittal_rounds">
       );
       // Update parent submittal's total_rounds & current_round_id
       if (round?.id && data.submittal_id) {
-        await base44.entities.Submittal.update(
+        await entities.Submittal.update(
           data.submittal_id as string,
           {
             current_round_id: round.id,
@@ -350,7 +413,7 @@ export function useSubmittals(projectId: string | null | undefined) {
   const updateRoundMut = useMutation<SubmittalRound, Error, UpdateRoundInput>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      return await base44.entities.SubmittalRound.update(
+      return await entities.SubmittalRound.update(
         id,
         data as Update<"submittal_rounds">
       );
@@ -383,7 +446,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       }
       for (const id of ids) {
         try {
-          const updated = await base44.entities.Submittal.update(
+          const updated = await entities.Submittal.update(
             id,
             patch as Update<"submittals">
           );
@@ -432,7 +495,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
         try {
-          await base44.entities.Submittal.delete(id);
+          await entities.Submittal.delete(id);
           results.succeeded++;
         } catch (err: unknown) {
           const msg =

@@ -50,10 +50,11 @@
  */
 
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { computeCostCodeTotals } from "@/services/costRollup";
 import {
   Activity, AlertTriangle, BarChart3, Building2, CalendarDays,
   CircleDot, DollarSign, Layers, ShieldAlert, Sparkles, TrendingUp,
@@ -341,33 +342,33 @@ export default function PortfolioOverview() {
   /* ── Data queries ── */
   const { data: rawProjects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
   const { data: rawRfis = [] } = useQuery({
     queryKey: ["rfis"],
-    queryFn: () => base44.entities.RFI.list(),
+    queryFn: () => entities.RFI.list(),
   });
   const { data: rawCOs = [] } = useQuery({
     queryKey: ["change-orders-global"],
-    queryFn: () => base44.entities.ChangeOrder.list(),
+    queryFn: () => entities.ChangeOrder.list(),
   });
   const { data: rawActions = [] } = useQuery({
     queryKey: ["action-items-all"],
-    queryFn: () => base44.entities.ActionItem.list(),
+    queryFn: () => entities.ActionItem.list(),
   });
   const { data: rawDeliveries = [] } = useQuery({
     queryKey: ["deliveries-all"],
-    queryFn: () => base44.entities.Delivery.list(),
+    queryFn: () => entities.Delivery.list(),
   });
   const { data: rawWPs = [] } = useQuery({
     queryKey: ["work-packages-global"],
-    queryFn: () => base44.entities.WorkPackage.list(),
+    queryFn: () => entities.WorkPackage.list(),
   });
   const { data: rawCostCodes = [] } = useQuery({
     queryKey: ["cost-codes-global"],
-    queryFn: () => base44.entities.CostCode.list(),
+    queryFn: () => entities.CostCode.list(),
   });
   // Expenses carry the real "actuals" — `cost_codes.actual_cost` is
   // populated on only ~2 of 150 rows in production, so the matrix
@@ -375,11 +376,11 @@ export default function PortfolioOverview() {
   // expenses (excluding Voided) per project to get the real number.
   const { data: rawExpenses = [] } = useQuery({
     queryKey: ["expenses-all"],
-    queryFn: () => base44.entities.Expense.list(),
+    queryFn: () => entities.Expense.list(),
   });
   const { data: rawRisks = [] } = useQuery({
     queryKey: ["risks-all"],
-    queryFn: () => base44.entities.Risk.list(),
+    queryFn: () => entities.Risk.list(),
   });
 
   /* ── Defensive soft-delete filters. Most of these collections come
@@ -465,7 +466,8 @@ export default function PortfolioOverview() {
   const projectRows = useMemo(() => {
     return projects.map((p) => {
       const pCodes = costCodes.filter((c) => c.project_id === p.id);
-      const ccBudget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
+      const pCodeTotals = computeCostCodeTotals(pCodes);
+      const ccBudget = pCodeTotals.budget;
       const baseContract = Number(p.original_contract_value) || 0;
       // Approved-CO delta lifts the working budget so a project that
       // gained $200K in approved COs reads as "in budget" against the
@@ -485,7 +487,7 @@ export default function PortfolioOverview() {
       // expenses table).
       const pExpenses = expenses.filter((e) => e.project_id === p.id && e.payment_status !== "Voided");
       const expenseActual = pExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-      const ccActual = pCodes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
+      const ccActual = pCodeTotals.actual;
       const actual = expenseActual > 0 ? expenseActual : ccActual;
       const variance = budget > 0 ? actual - budget : 0;
       const var_pct = budget > 0 ? (variance / budget) * 100 : 0;

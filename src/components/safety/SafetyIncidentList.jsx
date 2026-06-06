@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { StatusPill } from "@/components/design-system";
+import { formatLocalDate } from "@/utils/dates";
 
 const SEVERITY_COLORS = {
   Critical: "var(--status-error)",
@@ -77,7 +78,7 @@ export default function SafetyIncidentList({ incidents = [], onEdit, onDelete, o
                   <StatusPill label={incident.status} color={STATUS_COLORS[incident.status]} size="xs" />
                 )}
               </div>
-              <div style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "4px" }}>{new Date(incident.incident_date).toLocaleDateString()}</div>
+              <div style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "4px" }}>{formatLocalDate(incident.incident_date)}</div>
             </div>
 
             <div style={{ fontSize: "14px", color: "var(--text-muted)", transform: expanded === incident.id ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▼</div>
@@ -130,7 +131,7 @@ export default function SafetyIncidentList({ incidents = [], onEdit, onDelete, o
                 {incident.action_due_date && (
                   <div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: "7px", color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Due Date</div>
-                    <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>{new Date(incident.action_due_date).toLocaleDateString()}</div>
+                    <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>{formatLocalDate(incident.action_due_date)}</div>
                   </div>
                 )}
               </div>

@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { FileText, Flag, PenLine, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { batchProcess } from "@/utils/batchProcess";
-import { resolveFileUrl } from "@/api/base44Client";
+import { resolveFileUrl } from "@/api/supabaseClient";
 
 // Canonical 7-stage flow (corrected May 2026):
 //   Not Started → IFA → OFA → BFA → OFS → IFC → Released
@@ -330,13 +330,21 @@ export default function DrawingKanban({ drawings, onStageChange, onEdit, onAnnot
     setLocalDrawings(drawings);
   }, [drawings]);
 
-  // Build set groups, then bucket by set's effective stage
-  const allSets = groupIntoSets(localDrawings);
+  // Build set groups, then bucket by set's effective stage. Memoized on
+  // localDrawings: this component re-renders frequently (drag state, hover,
+  // expand) and groupIntoSets + the per-stage filter are O(stages·sets·sheets)
+  // — recomputing them every render (and handing every column a fresh array)
+  // was a needless re-render driver on the high-traffic Drawing Register board.
+  const allSets = useMemo(() => groupIntoSets(localDrawings), [localDrawings]);
 
-  const byStage = STAGES.reduce((acc, s) => {
-    acc[s] = allSets.filter(g => getSetStage(g.sheets) === s);
-    return acc;
-  }, {});
+  const byStage = useMemo(
+    () =>
+      STAGES.reduce((acc, s) => {
+        acc[s] = allSets.filter(g => getSetStage(g.sheets) === s);
+        return acc;
+      }, {}),
+    [allSets]
+  );
 
   const handleDragEnd = async (result) => {
     const { destination, source, draggableId } = result;

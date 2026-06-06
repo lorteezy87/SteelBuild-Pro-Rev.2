@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -10,6 +10,7 @@ import KPIStrip from "../components/shared/KPIStrip";
 import ProgressBar from "../components/shared/ProgressBar";
 import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent, formatDateShort } from "../components/shared/formatters";
+import { computeCostCodeTotals } from "@/services/costRollup";
 import { COST_CODES, CATEGORY_COLORS, CATEGORY_ORDER } from "../components/shared/costCodes";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -95,7 +96,7 @@ export default function CostDashboard() {
   const costCodeQueryKeys = [["cost-codes-dash", activeProject?.id]];
 
   const createCodeMut = useMutation({
-    mutationFn: (d) => base44.entities.CostCode.create({ ...d, project_id: d.project_id || activeProject?.id }),
+    mutationFn: (d) => entities.CostCode.create({ ...d, project_id: d.project_id || activeProject?.id }),
     onSuccess: (created) => {
       appendRecordToCaches(qc, costCodeQueryKeys, created);
       invalidateCrudQueries(qc, costCodeQueryKeys);
@@ -106,7 +107,7 @@ export default function CostDashboard() {
     onError: (e) => toastCrudError(e, "Failed to create cost code"),
   });
   const updateCodeMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.CostCode.update(id, data),
+    mutationFn: ({ id, data }) => entities.CostCode.update(id, data),
     onSuccess: (updated) => {
       replaceRecordInCaches(qc, costCodeQueryKeys, updated);
       invalidateCrudQueries(qc, costCodeQueryKeys);
@@ -117,7 +118,7 @@ export default function CostDashboard() {
     onError: (e) => toastCrudError(e, "Failed to update cost code"),
   });
   const deleteCodeMut = useMutation({
-    mutationFn: (id) => base44.entities.CostCode.delete(id),
+    mutationFn: (id) => entities.CostCode.delete(id),
     onSuccess: (_, deletedId) => {
       removeRecordFromCaches(qc, costCodeQueryKeys, deletedId);
       invalidateCrudQueries(qc, costCodeQueryKeys);
@@ -130,7 +131,7 @@ export default function CostDashboard() {
   const { data: codes = [], isLoading } = useQuery({
     queryKey: ["cost-codes-dash", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.CostCode.filter({ project_id: activeProject.id }, "cost_code_number")
+      ? entities.CostCode.filter({ project_id: activeProject.id }, "cost_code_number")
       : [],
     select: (rows) => [...rows].sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || "", undefined, { numeric: true })),
     enabled: !!activeProject?.id,
@@ -140,33 +141,33 @@ export default function CostDashboard() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: cos = [] } = useQuery({
     queryKey: ["change-orders-dash", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }, "-created_at")
+      ? entities.ChangeOrder.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });
 
   const { data: wps = [] } = useQuery({
     queryKey: ['wps-cost', activeProject?.id],
-    queryFn: () => activeProject?.id ? base44.entities.WorkPackage.filter({ project_id: activeProject.id }) : [],
+    queryFn: () => activeProject?.id ? entities.WorkPackage.filter({ project_id: activeProject.id }) : [],
     enabled: !!activeProject?.id,
   });
 
   const { data: sovs = [] } = useQuery({
     queryKey: ['sovs-cost', activeProject?.id],
-    queryFn: () => activeProject?.id ? base44.entities.SOVItem.filter({ project_id: activeProject.id }) : [],
+    queryFn: () => activeProject?.id ? entities.SOVItem.filter({ project_id: activeProject.id }) : [],
     enabled: !!activeProject?.id,
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ['deliveries-cost', activeProject?.id],
-    queryFn: () => activeProject?.id ? base44.entities.Delivery.filter({ project_id: activeProject.id }) : [],
+    queryFn: () => activeProject?.id ? entities.Delivery.filter({ project_id: activeProject.id }) : [],
     enabled: !!activeProject?.id,
   });
 
@@ -176,12 +177,16 @@ export default function CostDashboard() {
     ? (Number(project.original_contract_value) || 0) + cos.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0)
     : 0;
 
-  const totalBudget = codes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-  const totalActual = codes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
-  const totalCommitted = codes.reduce((s, c) => s + (Number(c.committed_cost) || 0), 0);
-  const totalForecast = codes.reduce((s, c) => s + (Number(c.forecast_to_complete) || 0), 0);
-  const totalVariance = totalActual - totalBudget;
-  const eac = totalActual + totalForecast;
+  // Cost-code column rollup — centralized in src/services/costRollup.ts so this
+  // page, ExecutiveView, and the report scorecards all sum identically.
+  const {
+    budget: totalBudget,
+    actual: totalActual,
+    committed: totalCommitted,
+    forecast: totalForecast,
+    variance: totalVariance,
+    eac,
+  } = computeCostCodeTotals(codes);
 
   const barChartData = useMemo(() => {
     return codes.map(c => {

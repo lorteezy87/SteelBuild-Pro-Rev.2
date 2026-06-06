@@ -66,10 +66,10 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
         maxWidth: 'calc(100vw - 32px)',
         maxHeight: 'calc(100vh - 32px)',
         overflowY: 'auto',
-        background: 'linear-gradient(180deg, rgba(10, 16, 27, 0.99), rgba(5, 8, 14, 1))',
-        border: '1px solid rgba(86, 176, 255, 0.42)',
+        background: 'var(--bg-surface-secondary)',
+        border: '1px solid var(--accent-border)',
         borderRadius: 16,
-        boxShadow: '0 28px 90px rgba(0,0,0,0.92), inset 0 1px 0 rgba(255,255,255,0.08)',
+        boxShadow: 'var(--shadow-lg)',
         zIndex: 999,
         padding: 24,
       }}>
@@ -131,13 +131,13 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
           onChange={(e) => onChange(e.target.value)}
           style={{
             width: '100%',
-            background: 'var(--bg-surface-low)',
+            background: 'var(--bg-input)',
             border: '1px solid var(--accent-border)',
             borderRadius: 6,
             padding: '6px 8px',
             fontFamily: 'var(--font-body)',
             fontSize: 11,
-            color: '#FFFFFF',
+            color: 'var(--text-primary)',
           }}
         >
           <option value="">—</option>
@@ -152,13 +152,13 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
           onChange={onChange}
           inputStyle={{
             width: '100%',
-            background: 'var(--bg-surface-low)',
+            background: 'var(--bg-input)',
             border: '1px solid var(--accent-border)',
             borderRadius: 6,
             padding: '6px 8px',
             fontFamily: 'var(--font-body)',
             fontSize: 11,
-            color: '#FFFFFF',
+            color: 'var(--text-primary)',
           }}
         />
       ) : (
@@ -168,13 +168,13 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
           onChange={(e) => onChange(e.target.value)}
           style={{
             width: '100%',
-            background: 'var(--bg-surface-low)',
+            background: 'var(--bg-input)',
             border: '1px solid var(--accent-border)',
             borderRadius: 6,
             padding: '6px 8px',
             fontFamily: 'var(--font-body)',
             fontSize: 11,
-            color: '#FFFFFF',
+            color: 'var(--text-primary)',
           }}
         />
       )}

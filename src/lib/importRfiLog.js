@@ -6,14 +6,14 @@
  * table of RFI #, date, To, subject, req date, ans date).
  *
  * Pattern mirrors importShippingTicket.js:
- *   uploadRfiLog(file)          — upload via base44.integrations.Core
+ *   uploadRfiLog(file)          — upload via integrations.Core
  *   extractRfiLog({...})        — download base64 + gpt-4o-mini tool_use
  *   resolveProjectForRfiLog(#)  — match job_number → projects row
  *   commitRfiLog({...})         — insert new rfis rows with dedup
  */
 
 import { supabase } from "@/lib/supabase";
-import { base44 } from "@/api/base44Client";
+import { integrations } from "@/api/supabaseClient";
 import { normalizeRfiNumber, rfiNumberDedupKey } from "@/lib/rfiImportUtils";
 
 const STORAGE_BUCKET  = "app-files";
@@ -102,7 +102,7 @@ export async function uploadRfiLog(file) {
   if (file.size > MAX_PDF_BYTES) {
     throw new Error(`PDF exceeds 32 MB (${(file.size / 1e6).toFixed(1)} MB).`);
   }
-  const { file_url, path } = await base44.integrations.Core.UploadFile({ file });
+  const { file_url, path } = await integrations.Core.UploadFile({ file });
   return { file_url, storage_path: path || "", file_name: file.name };
 }
 
