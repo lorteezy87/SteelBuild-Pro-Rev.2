@@ -134,8 +134,12 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
                 display_name: att.filename,
                 description: `Filed from email: ${message.subject || "(no subject)"}\nFrom: ${message.sender_name || message.sender_email}`,
                 file_name: att.filename,
+                // Bucket-prefixed storage path — resolveFileUrl signs it against
+                // the private email-attachments bucket on display. A bare
+                // /storage/v1/object/ URL would be fetched with no auth header
+                // and is blocked by the bucket's project-scoped RLS.
                 file_url: att.storage_path
-                  ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/email-attachments/${att.storage_path}`
+                  ? `email-attachments/${att.storage_path}`
                   : null,
                 file_type: knownTypes.includes(ext) ? ext : "other",
                 file_size_kb: att.size_bytes ? Math.round(att.size_bytes / 1024) : 0,
