@@ -999,11 +999,11 @@ const SIGNED_URL_EXPIRY_SECONDS = 60 * 60;
 
 /**
  * Get a short-lived signed URL for a stored file path.
- * Use this whenever displaying a file that was uploaded to the private bucket.
+ * Use this whenever displaying a file that was uploaded to a private bucket.
  */
-export const getSignedUrl = async (storagePath: string): Promise<string> => {
+export const getSignedUrl = async (storagePath: string, bucket: string = 'app-files'): Promise<string> => {
   const { data, error } = await supabase.storage
-    .from('app-files')
+    .from(bucket)
     .createSignedUrl(storagePath, SIGNED_URL_EXPIRY_SECONDS);
   if (error) throw error;
   return data.signedUrl;
@@ -1013,10 +1013,17 @@ export const getSignedUrl = async (storagePath: string): Promise<string> => {
  * Resolve a file_url to a usable URL.
  * If the value looks like a storage path (no protocol), generate a signed URL.
  * If it's already a full URL, return as-is.
+ *
+ * Bucket-prefixed paths ("email-attachments/<project_id>/<message_id>/<file>")
+ * sign against that bucket — email attachments live in their own private
+ * bucket with project-scoped RLS, so bare URLs would 400 for non-members.
  */
 export const resolveFileUrl = async (fileUrl: string | null | undefined): Promise<string | null> => {
   if (!fileUrl) return null;
   if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) return fileUrl;
+  if (fileUrl.startsWith('email-attachments/')) {
+    return getSignedUrl(fileUrl.slice('email-attachments/'.length), 'email-attachments');
+  }
   return getSignedUrl(fileUrl);
 };
 
