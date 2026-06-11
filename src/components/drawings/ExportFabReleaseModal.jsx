@@ -191,7 +191,10 @@ export default function ExportFabReleaseModal({
       if (kind === "claims") {
         try {
           const [rfisQ, cosQ, photosQ] = await Promise.allSettled([
-            supabase.from("rfis").select("id, rfi_number, subject, question, status, submitted_date, created_at, author, created_by").eq("project_id", project.id).eq("is_deleted", false),
+            // NOTE: rfis has NO `subject` column (use title) — selecting it made
+            // PostgREST reject the whole query, and allSettled swallowed the
+            // error, so claims packages silently shipped ZERO RFIs.
+            supabase.from("rfis").select("id, rfi_number, title, question, status, submitted_date, created_at, author, created_by").eq("project_id", project.id).eq("is_deleted", false),
             supabase.from("change_orders").select("id, co_number, title, description, status, issued_date, created_at, issued_by, created_by").eq("project_id", project.id).eq("is_deleted", false),
             supabase.from("photos").select("id, caption, file_name, taken_at, created_at, uploaded_by, linked_drawing_id").eq("project_id", project.id).eq("is_deleted", false),
           ]);
@@ -320,7 +323,7 @@ export default function ExportFabReleaseModal({
                 <div key={r.id} style={{ ...mono, fontSize: 11, color: "var(--text-primary)", display: "flex", gap: 8 }}>
                   <span style={{ color: "var(--status-error)", fontWeight: 700, flex: "0 0 auto" }}>{r.rfi_number || "RFI"}</span>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.subject || r.title || "—"}{r.status ? ` · ${r.status}` : ""}
+                    {r.title || "—"}{r.status ? ` · ${r.status}` : ""}
                   </span>
                 </div>
               ))}

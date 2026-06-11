@@ -15,6 +15,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { entities } from "@/api/supabaseClient";
+import { computeRevisedContractValue } from "@/services/costRollup";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -276,7 +277,7 @@ export default function ChangeOrders() {
   // every CO mutation below, so this picks up edits right away.
   const liveProject = projects.find((p) => p.id === projectId) || activeProject;
   const baseContract = Number(liveProject?.original_contract_value) || 0;
-  const revisedContract = baseContract + totalApproved;
+  const revisedContract = computeRevisedContractValue(liveProject, cos);
 
   /* -- Filtered list -- */
   const filtered = useMemo(() => {

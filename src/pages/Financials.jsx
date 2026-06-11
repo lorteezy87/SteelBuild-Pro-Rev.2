@@ -3,6 +3,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useFinancials } from "@/hooks/useFinancials";
+import { computeRevisedContractValue } from "@/services/costRollup";
 import { useCostCodes } from "@/hooks/useCostCodes";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -187,8 +188,9 @@ export default function Financials() {
       const family = getFamilyMeta(item.description);
       const totals = familyTotals[family.key] || { scheduled: 0, budget: 0, actual: 0, committed: 0, remaining: 0 };
       const share = totals.scheduled > 0 ? scheduledValue / totals.scheduled : 0;
-      const percentOfContract = safeNumber(selectedProject?.revised_contract_value || selectedProject?.original_contract_value) > 0
-        ? (scheduledValue / safeNumber(selectedProject?.revised_contract_value || selectedProject?.original_contract_value)) * 100
+      const revisedContract = computeRevisedContractValue(selectedProject, changeOrders);
+      const percentOfContract = revisedContract > 0
+        ? (scheduledValue / revisedContract) * 100
         : 0;
       const expenseActual = activeExpenses
         .filter((expense) => expense.sov_line_item_id === item.id)
@@ -206,7 +208,7 @@ export default function Financials() {
         allocated_remaining: totals.remaining * share,
       };
     });
-  }, [activeExpenses, costCodeRows, selectedProject, sovItems]);
+  }, [activeExpenses, changeOrders, costCodeRows, selectedProject, sovItems]);
 
   const filteredSovRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -232,7 +234,7 @@ export default function Financials() {
   }, [activeExpenses, costCodeMap, search]);
 
   const summary = useMemo(() => {
-    const contractValue = safeNumber(selectedProject?.revised_contract_value || selectedProject?.original_contract_value);
+    const contractValue = computeRevisedContractValue(selectedProject, changeOrders);
     const sovTotal = sovItems.reduce((sum, item) => sum + safeNumber(item.scheduled_value), 0);
     const revisedBudget = costCodeRows.reduce((sum, row) => sum + safeNumber(row.revised_budget), 0);
     const actual = costCodeRows.reduce((sum, row) => sum + safeNumber(row.actual_cost), 0);
@@ -257,7 +259,7 @@ export default function Financials() {
       budgetSpentPct,
       marginAtRisk,
     };
-  }, [approvedChangeOrders, costCodeRows, selectedProject, sovItems]);
+  }, [approvedChangeOrders, changeOrders, costCodeRows, selectedProject, sovItems]);
 
   const reviewFlags = useMemo(() => {
     const flags = [];

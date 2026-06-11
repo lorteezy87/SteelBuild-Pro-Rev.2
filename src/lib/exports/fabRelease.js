@@ -280,7 +280,7 @@ export function buildClaimsManifestCsv({ drawings = [], rfis = [], changeOrders 
       formatIsoDate(r.submitted_date || r.created_at || Date.now()),
       "rfi",
       r.id || "",
-      `${r.rfi_number || ""} ${r.subject || ""}`.trim(),
+      `${r.rfi_number || ""} ${r.title || ""}`.trim(),
       r.status || "",
       r.author || r.created_by || "",
       r.question || "",

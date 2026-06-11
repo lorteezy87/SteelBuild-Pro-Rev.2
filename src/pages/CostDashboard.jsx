@@ -10,7 +10,7 @@ import KPIStrip from "../components/shared/KPIStrip";
 import ProgressBar from "../components/shared/ProgressBar";
 import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent, formatDateShort } from "../components/shared/formatters";
-import { computeCostCodeTotals } from "@/services/costRollup";
+import { computeCostCodeTotals, computeRevisedContractValue } from "@/services/costRollup";
 import { COST_CODES, CATEGORY_COLORS, CATEGORY_ORDER } from "../components/shared/costCodes";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -173,9 +173,7 @@ export default function CostDashboard() {
 
   const project = projects.find(p => p.id === activeProject?.id);
   const contingency = Number(project?.contingency_amount) || 0;
-  const contractVal = project
-    ? (Number(project.original_contract_value) || 0) + cos.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0)
-    : 0;
+  const contractVal = project ? computeRevisedContractValue(project, cos) : 0;
 
   // Cost-code column rollup — centralized in src/services/costRollup.ts so this
   // page, ExecutiveView, and the report scorecards all sum identically.
