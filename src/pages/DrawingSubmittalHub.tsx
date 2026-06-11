@@ -73,9 +73,10 @@ const DocControlPanel = lazyWithRetry(() =>
 ) as unknown as ComponentType<AnyProps>;
 
 // A package is CLOSED when ANY terminal signal is satisfied — the latest
-// submittal's status is closed (Approved/Approved as Noted/Released for
-// Fabrication/Void), OR the drawing_set is legacy-locked (set_approval_status
-// = "approved"), OR the coalesced detailing_state is at a release-style
+// submittal's status is closed (Released for Fabrication / Void — NOT
+// Approved/Approved as Noted, which are still mid-flow at BFA/OFS/IFC), OR the
+// drawing_set is legacy-locked (set_approval_status = "approved"), OR the
+// coalesced detailing_state is at a release-style
 // terminal (Released / Partially Released / Released for Erection), OR every
 // sheet is individually released/approved. Used by the hit-list triage and
 // the "Released" KPI so both surface the same definition of done.

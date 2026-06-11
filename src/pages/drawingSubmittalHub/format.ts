@@ -41,9 +41,19 @@ export const STATUS_COLORS: Record<string, string> = {
   Void:                  "#6b7280",
 };
 
+// "Closed" here means CLOSED FOR DUE-DATE / TRIAGE PURPOSES — the workflow has
+// truly ended: Released for Fabrication (the terminal stage) or Void (dead).
+// It is deliberately NARROW: "Approved" / "Approved as Noted" are NOT closed,
+// because submittalStageMapping maps them to BFA/OFS/IFC — there is still
+// Out-For-Scrub → IFC → Release work (with its own due dates) ahead. Including
+// them here made a drawing set's due status flip to "Closed" the instant an
+// approved submittal was linked, hiding the real stage. Mirrors the canonical
+// set in components/submittals/SubmittalVisualBoard.jsx.
+//
+// NOT the same as useSubmittals' TERMINAL_APPROVED_STATUSES (which DOES include
+// Approved/AAN) — that set governs auto-LOCKING the linked drawing set from
+// edits, a separate concern from "closed" for due/triage. Don't merge the two.
 export const CLOSED_SUBMITTAL_STATUSES = new Set([
-  "Approved",
-  "Approved as Noted",
   "Released for Fabrication",
   "Void",
 ]);
