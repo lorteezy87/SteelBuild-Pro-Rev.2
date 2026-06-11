@@ -3,6 +3,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getQueryKey } from "@/services/cacheRegistry";
+import { computeRevisedContractValue } from "@/services/costRollup";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { formatDate, formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
@@ -368,8 +369,8 @@ function BillingSOVTab({ sovItems, expenses, onAddSOV, onEditSOV, onDeleteSOV })
     let scheduled = 0, billed = 0, retainage = 0;
     for (const item of items) {
       const sv = Number(item.scheduled_value) || 0;
-      const prog = Math.min(100, Math.max(0, Number(item.progress_pct) || 0)) / 100;
-      const ret = Math.min(100, Math.max(0, Number(item.retainage_pct) || 0)) / 100;
+      const prog = Math.min(100, Math.max(0, Number(item.current_percent_complete) || 0)) / 100;
+      const ret = Math.min(100, Math.max(0, Number(item.retainage_percent) || 0)) / 100;
       const billedAmt = sv * prog;
       const retainageAmt = billedAmt * ret;
       scheduled += sv;
@@ -417,8 +418,8 @@ function BillingSOVTab({ sovItems, expenses, onAddSOV, onEditSOV, onDeleteSOV })
               )}
               {items.map((item, i) => {
                 const sv = Number(item.scheduled_value) || 0;
-                const prog = Math.min(100, Math.max(0, Number(item.progress_pct) || 0));
-                const ret = Math.min(100, Math.max(0, Number(item.retainage_pct) || 0)) / 100;
+                const prog = Math.min(100, Math.max(0, Number(item.current_percent_complete) || 0));
+                const ret = Math.min(100, Math.max(0, Number(item.retainage_percent) || 0)) / 100;
                 const billedAmt = sv * (prog / 100);
                 const retainageAmt = billedAmt * ret;
                 const balance = sv - billedAmt;
@@ -509,7 +510,7 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
   const sovTotal = useMemo(() => (sovItems || []).reduce((sum, item) => sum + (Number(item.scheduled_value) || 0), 0), [sovItems]);
   const billedTotal = useMemo(() => (sovItems || []).reduce((sum, item) => {
     const sv = Number(item.scheduled_value) || 0;
-    const prog = Math.min(100, Math.max(0, Number(item.progress_pct) || 0)) / 100;
+    const prog = Math.min(100, Math.max(0, Number(item.current_percent_complete) || 0)) / 100;
     return sum + sv * prog;
   }, 0), [sovItems]);
 
@@ -795,7 +796,8 @@ export default function ContractManagement() {
   );
 
   const originalValue = Number(project?.original_contract_value) || 0;
-  const revisedValue = Number(project?.revised_contract_value) || (originalValue + approvedCOTotal);
+  // No revised_contract_value column exists — derive via the one shared definition.
+  const revisedValue = computeRevisedContractValue(project, changeOrders);
 
   const isLoading = projectLoading || cosLoading || sovLoading || expensesLoading;
 

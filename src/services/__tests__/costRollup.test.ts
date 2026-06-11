@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCostCodeTotals } from "../costRollup";
+import { computeCostCodeTotals, computeRevisedContractValue } from "../costRollup";
 
 describe("computeCostCodeTotals", () => {
   it("sums the cost-code columns and derives variance + eac", () => {
@@ -45,5 +45,48 @@ describe("computeCostCodeTotals", () => {
     const r = computeCostCodeTotals(codes);
     expect(r.budget).toBe(100);
     expect(r.actual).toBe(50);
+  });
+});
+
+describe("computeRevisedContractValue", () => {
+  it("adds only Approved change orders to the original contract", () => {
+    const project = { original_contract_value: 1_000_000 };
+    const changeOrders = [
+      { status: "Approved", co_amount: 50_000 },
+      { status: "Pending", co_amount: 25_000 },
+      { status: "Rejected", co_amount: 10_000 },
+      { status: "Draft", co_amount: 5_000 },
+    ];
+    expect(computeRevisedContractValue(project, changeOrders)).toBe(1_050_000);
+  });
+
+  it("trims status whitespace (matches ContractManagement's matching)", () => {
+    const project = { original_contract_value: 100 };
+    expect(computeRevisedContractValue(project, [{ status: " Approved ", co_amount: 50 }])).toBe(150);
+  });
+
+  it("coerces string amounts and ignores non-numeric values", () => {
+    const project = { original_contract_value: "1000.50" };
+    const changeOrders = [
+      { status: "Approved", co_amount: "99.50" },
+      { status: "Approved", co_amount: "abc" },
+      { status: "Approved", co_amount: null },
+    ];
+    expect(computeRevisedContractValue(project, changeOrders)).toBe(1100);
+  });
+
+  it("returns the original contract when there are no approved COs (or no COs at all)", () => {
+    const project = { original_contract_value: 750_000 };
+    expect(computeRevisedContractValue(project, [])).toBe(750_000);
+    expect(computeRevisedContractValue(project, null)).toBe(750_000);
+    expect(computeRevisedContractValue(project, undefined)).toBe(750_000);
+  });
+
+  it("returns 0 for a missing project and skips null CO entries", () => {
+    expect(computeRevisedContractValue(null, [{ status: "Approved", co_amount: 100 }])).toBe(100);
+    expect(computeRevisedContractValue(undefined, undefined)).toBe(0);
+    expect(
+      computeRevisedContractValue({ original_contract_value: 10 }, [null, { status: "Approved", co_amount: 5 }] as any),
+    ).toBe(15);
   });
 });

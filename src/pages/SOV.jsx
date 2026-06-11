@@ -468,9 +468,11 @@ export default function SOV() {
   }, [filtered, calc]);
 
   /* ── Requirement 10 — SOV mismatch detection ── */
+  // NOTE: compares against the ORIGINAL contract (no revised_contract_value
+  // column exists; this page doesn't fetch change orders, so approved-CO
+  // growth is not included here — the mismatch banner is a coarse check).
   const projectBudget = Number(
-    activeProject?.revised_contract_value
-    || activeProject?.original_contract_value
+    activeProject?.original_contract_value
     || activeProject?.contract_value
     || activeProject?.budget
     || 0,

@@ -20,6 +20,7 @@ import { entities } from "@/api/supabaseClient";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
+import { computeRevisedContractValue } from "@/services/costRollup";
 import { COST_CODES } from "@/components/shared/costCodes";
 import { calcEVM } from "@/utils/projectKpis";
 
@@ -29,11 +30,11 @@ export type SOVItem = RowWithAliases<'sov_items'>;
 export type ChangeOrder = RowWithAliases<'change_orders'>;
 export type WorkPackage = RowWithAliases<'work_packages'>;
 
-// Project is passed in by the caller, often from a join / view that exposes
-// derived fields like `revised_contract_value` not present on the raw row.
+// Project is passed in by the caller. NOTE: there is no revised_contract_value
+// column on projects — the current contract value is DERIVED as
+// original + Σ approved COs via computeRevisedContractValue (costRollup.ts).
 // Keep the shape permissive to match real-world call sites.
 export type ProjectLike = Partial<RowWithAliases<'projects'>> & {
-  revised_contract_value?: number | null;
   original_contract_value?: number | null;
   scope_complete_pct_override?: number | null;
 };
@@ -207,7 +208,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
 
   // ── Derived: project-level summary ──────────────────────────────────
   const summary = useMemo<FinancialSummary>(() => {
-    const contractValue = safeNumber(project?.revised_contract_value || project?.original_contract_value);
+    const contractValue = computeRevisedContractValue(project, changeOrders);
     const sovTotal = sovItems.reduce((s, item) => s + safeNumber(item.scheduled_value), 0);
     const revisedBudget = costCodeRows.reduce((s, r) => s + r.revised_budget, 0);
     const actual = costCodeRows.reduce((s, r) => s + r.actual_cost, 0);
@@ -306,7 +307,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     const rejectedTotal = rejected.reduce((s, co) => s + safeNumber(co.co_amount), 0);
 
     const originalContractValue = safeNumber(project?.original_contract_value);
-    const currentContractValue  = safeNumber(project?.revised_contract_value || project?.original_contract_value);
+    const currentContractValue  = computeRevisedContractValue(project, changeOrders);
 
     const contractGrowthPercent = originalContractValue > 0
       ? (approvedTotal / originalContractValue) * 100

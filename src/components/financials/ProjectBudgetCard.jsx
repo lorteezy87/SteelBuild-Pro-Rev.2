@@ -120,7 +120,9 @@ export default function ProjectBudgetCard({ project, summary }) {
             Contract Value
           </span>
           <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>
-            ${((Number(project.revised_contract_value) || 0) / 1000).toFixed(0)}K
+            {/* summary.contractValue = original + approved COs (useFinancials);
+                there is no revised_contract_value column, so reading it showed $0K. */}
+            ${((Number(summary.contractValue ?? project.original_contract_value) || 0) / 1000).toFixed(0)}K
           </span>
         </div>
 

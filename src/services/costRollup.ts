@@ -38,6 +38,40 @@ function num(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+export interface ProjectContractLike {
+  original_contract_value?: number | string | null;
+  [key: string]: unknown;
+}
+
+export interface ChangeOrderLike {
+  status?: string | null;
+  co_amount?: number | string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Revised contract value = original_contract_value + Σ approved change-order
+ * amounts. This is the ONE definition of "current contract value" — there is
+ * no revised_contract_value column on projects (reads of it always returned
+ * undefined and silently fell back to the original contract, so Budget
+ * Control / the CO-impact KPI understated the contract vs. ChangeOrders /
+ * ContractManagement / CostDashboard, which each re-implemented this sum
+ * inline). Status matching mirrors ContractManagement: trimmed, exact
+ * "Approved" (pending/rejected/draft COs do not move the contract).
+ */
+export function computeRevisedContractValue(
+  project: ProjectContractLike | null | undefined,
+  changeOrders: ChangeOrderLike[] | null | undefined,
+): number {
+  const original = num(project?.original_contract_value);
+  let approved = 0;
+  for (const co of changeOrders || []) {
+    if (!co) continue;
+    if (String(co.status ?? "").trim() === "Approved") approved += num(co.co_amount);
+  }
+  return original + approved;
+}
+
 /**
  * Sum the cost-code column rollups across a set of cost codes. Returns zeros
  * for an empty/missing list. Pure + side-effect free.
