@@ -3,6 +3,7 @@ import type { ComponentType, CSSProperties, ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  Boxes,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
@@ -22,6 +23,8 @@ import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
 import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { DRAFTING_STATES } from "@/lib/detailingPackageState";
+import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
+import type { ElementStatusSummary } from "@/services/modelElementStatus";
 import {
   BIC_CHOICES,
   STATUS_COLORS,
@@ -110,9 +113,13 @@ interface TriageBoardProps {
   onEscalate?: (item: any, kind: "rfi" | "pco") => void;
   /** Open the revision overlay compare for a sheet. Absent = hidden. */
   onCompareRevision?: (drawingId: string) => void;
+  /** 3D model element mapping rollup (Phase 0 of the BIM integration). */
+  modelMapping?: ElementStatusSummary | null;
+  /** Open the Tekla/SDS2 member CSV import. Absent = section hidden. */
+  onImportModelElements?: () => void;
 }
 
-export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving, onEscalate, onCompareRevision }: TriageBoardProps) {
+export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving, onEscalate, onCompareRevision, modelMapping, onImportModelElements }: TriageBoardProps) {
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
@@ -312,8 +319,83 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
       </div>
 
       <SequenceReadinessSection rows={sequenceReadiness} />
+      {onImportModelElements && (
+        <ModelMappingSection summary={modelMapping} onImport={onImportModelElements} />
+      )}
       <RevisionImpactSection rows={revisionImpact} onCompare={onCompareRevision} />
     </div>
+  );
+}
+
+// ── 3D Model Mapping (BIM integration Phase 0) ──────────────────────────────
+// Member-level piece-mark mapping coverage + status buckets. The same buckets
+// (and their GUID sets) will drive the viewer's "paint by numbers" coloring —
+// this section makes the mapping visible (and importable) before the viewer
+// lands, so model data quality is established first.
+
+const ELEMENT_BUCKET_ORDER = [
+  "rfi_blocked", "behind_schedule", "in_detailing", "in_review",
+  "fab_ready", "erection_ready", "unmapped",
+] as const;
+
+function ModelMappingSection({ summary, onImport }: { summary?: ElementStatusSummary | null; onImport: () => void }) {
+  const total = summary?.total ?? 0;
+  return (
+    <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <Boxes size={18} style={{ color: accent, marginTop: 2 }} />
+          <div>
+            <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>3D Model Mapping</h3>
+            <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
+              Steel members mapped to packages by piece mark — this drives the BIM viewer&apos;s status coloring.
+            </p>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {total > 0 && <span className="sbd-badge-info">{total} members</span>}
+          <button className="sbd-btn sbd-btn-ghost" onClick={onImport} style={{ fontSize: 12 }}>
+            Import member CSV
+          </button>
+        </div>
+      </div>
+
+      {total === 0 ? (
+        <EmptyState text="No model members yet — export a member/assembly report (CSV) from Tekla or SDS2 and import it to map the physical steel to packages, sequences, and RFIs." />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10, color: textPrimary, marginBottom: 4 }}>
+              <span style={{ color: textMuted }}>Mapped to packages</span>
+              <span className="sbd-num">{summary?.mappedPct ?? 0}%</span>
+            </div>
+            <div style={{ height: 7, borderRadius: 999, background: surface2, overflow: "hidden", border: `1px solid ${border}` }}>
+              <div style={{ height: "100%", width: `${summary?.mappedPct ?? 0}%`, background: accent, boxShadow: `0 0 10px ${accent}` }} />
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {ELEMENT_BUCKET_ORDER.map((bucket) => {
+              const count = summary?.counts?.[bucket] ?? 0;
+              if (!count) return null;
+              const meta = ELEMENT_STATUS_META[bucket];
+              return (
+                <span key={bucket} style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "4px 10px", borderRadius: 999,
+                  border: `1px solid color-mix(in srgb, ${meta.color} 45%, transparent)`,
+                  background: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
+                  fontFamily: mono, fontSize: 10, color: textPrimary,
+                }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: meta.color, flexShrink: 0 }} />
+                  {meta.label}
+                  <strong className="sbd-num" style={{ fontSize: 12 }}>{count}</strong>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

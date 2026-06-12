@@ -26,6 +26,7 @@ import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components
 import { computeFabReady } from "@/lib/submittalAnalytics";
 import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
 import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
+import { buildHeldPieceMarkSet, summarizeElementStatuses } from "@/services/modelElementStatus";
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -33,6 +34,7 @@ import { usePermissions } from "@/services/permissions";
 import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
+import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   ACTION_STATUSES,
   TABS,
@@ -87,6 +89,7 @@ const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
 const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const ErrorBoundary = ErrorBoundaryRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
+const ModelElementImportModal = ModelElementImportModalRaw as unknown as ComponentType<AnyProps>;
 
 export default function DrawingSubmittalHub() {
   const projectCtx = useProjectContext() as any;
@@ -98,6 +101,7 @@ export default function DrawingSubmittalHub() {
   const [escalateKind, setEscalateKind] = useState<EscalationKind>("rfi");
   // Revision overlay compare (Revision Impact rows)
   const [compareDrawingId, setCompareDrawingId] = useState<string | null>(null);
+  const [importModelOpen, setImportModelOpen] = useState(false);
   const qc = useQueryClient();
   const { can } = usePermissions();
   const projectId = activeProject?.id as string | undefined;
@@ -146,6 +150,13 @@ export default function DrawingSubmittalHub() {
   const { data: drawingRevisions = [] } = useQuery({
     queryKey: ["drawing-revisions", projectId],
     queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+  // 3D model members (BIM integration Phase 0 — piece-mark mapping).
+  const { data: modelElements = [] } = useQuery({
+    queryKey: ["model-elements", projectId],
+    queryFn: () => entities.ModelElement.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 60_000,
   });
@@ -200,6 +211,28 @@ export default function DrawingSubmittalHub() {
     }
     return m;
   }, [setPackages, wpById, openRfiIds, activeProject]);
+
+  // 3D model mapping rollup: element status buckets derived from the SAME
+  // per-package readiness models above, so the (future) viewer coloring can
+  // never disagree with the hub numbers. Elements resolve to a package via
+  // their drawing_set link, or via their sheet's package.
+  const modelMappingSummary = useMemo(() => {
+    const readinessBySetId = new Map<string, any>();
+    const sheetSetIdByDrawingId = new Map<string, string>();
+    for (const pkg of setPackages) {
+      const r: any = readinessByKey.get(pkg.key);
+      if (!r) continue;
+      const enriched = { ...r, atRisk: r.scheduleRisk?.atRisk };
+      const target = pkg.setId ? String(pkg.setId) : pkg.key;
+      readinessBySetId.set(target, enriched);
+      if (pkg.setId) readinessBySetId.set(pkg.key, enriched);
+      for (const s of (pkg.sheets as any[]) || []) {
+        if (s?.id) sheetSetIdByDrawingId.set(String(s.id), target);
+      }
+    }
+    const held = buildHeldPieceMarkSet(rfis as any[]);
+    return summarizeElementStatuses(modelElements as any[], readinessBySetId, sheetSetIdByDrawingId, held);
+  }, [modelElements, setPackages, readinessByKey, rfis]);
 
   // Revision Impact Tracker: change-revisions joined to their sheet's downstream
   // status (fabricated / delivered / in-field), worst impact first.
@@ -641,6 +674,8 @@ export default function DrawingSubmittalHub() {
                 isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
                 onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
                 onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
+                modelMapping={modelMappingSummary}
+                onImportModelElements={() => setImportModelOpen(true)}
               />
             )}
             {activeTab === "process" && (
@@ -696,6 +731,18 @@ export default function DrawingSubmittalHub() {
             drawing={compareDrawing}
           />
         </Suspense>
+      )}
+
+      {/* Tekla/SDS2 member CSV import (BIM integration Phase 0). */}
+      {importModelOpen && (
+        <ModelElementImportModal
+          open
+          projectId={projectId}
+          projectName={projectName}
+          drawings={drawings}
+          existingElements={modelElements}
+          onClose={() => setImportModelOpen(false)}
+        />
       )}
     </div>
   );
