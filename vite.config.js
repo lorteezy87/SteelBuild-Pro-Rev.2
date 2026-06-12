@@ -2,8 +2,6 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import wasm from 'vite-plugin-wasm'
-import topLevelAwait from 'vite-plugin-top-level-await'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -32,15 +30,6 @@ function vendorChunk(id) {
   if (n.includes('vite/preload-helper')) return 'vendor-vite-runtime'
 
   if (!n.includes('/node_modules/')) return undefined
-
-  // BIM / 3D
-  if (n.includes('/node_modules/web-ifc/')) return 'vendor-bim-ifc'
-  if (n.includes('/node_modules/@thatopen/')) return 'vendor-bim-thatopen'
-  if (n.includes('/node_modules/camera-controls/')) return 'vendor-three-controls'
-  if (n.includes('/node_modules/three/build/three.webgpu')) return 'vendor-three-webgpu'
-  if (n.includes('/node_modules/three/build/three.tsl')) return 'vendor-three-webgpu'
-  if (n.includes('/node_modules/three/examples/')) return 'vendor-three-examples'
-  if (n.includes('/node_modules/three/')) return 'vendor-three-core'
 
   // PDF viewing (pdfjs-dist) is loaded by DrawingViewer + thumbnail/extraction
   // flows; keep it isolated so the viewer never pays for export-only weight.
@@ -98,8 +87,6 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    wasm(),
-    topLevelAwait(),
     // Must be LAST so it sees the final emitted bundle + source maps. Gated on
     // the auth token; uploads are best-effort (errorHandler swallows failures)
     // so a misconfigured token/slug can never fail a production deploy.
@@ -121,15 +108,6 @@ export default defineConfig({
         })]
       : []),
   ],
-  optimizeDeps: {
-    // Exclude web-ifc from Vite's dependency pre-bundling to avoid
-    // circular-reference errors ("Cannot access 'Ct' before initialization")
-    exclude: ['web-ifc'],
-  },
-  worker: {
-    format: 'es',
-    plugins: () => [wasm(), topLevelAwait()],
-  },
   build: {
     // Emit hidden source maps (no sourceMappingURL comment, so they're not
     // referenced by the served bundle) only when we're going to upload them to

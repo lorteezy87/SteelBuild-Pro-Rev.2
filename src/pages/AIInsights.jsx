@@ -19,13 +19,11 @@ import {
   YAxis,
 } from "recharts";
 import { AlertTriangle, DollarSign, Layers3, Search, ShieldCheck, Truck } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { computeCostCodeTotals } from "@/services/costRollup";
-import { toast } from "sonner";
-import { entities, auth, integrations } from "@/api/supabaseClient";
+import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatCurrencyShort, formatDate, isOverdue, statusIn } from "@/components/shared/formatters";
-import PortfolioBimViewer from "@/components/portfolio/PortfolioBimViewer";
 import PlanningStudio from "@/components/reports/PlanningStudio";
 import { Button, CommandBar } from "@/components/design-system";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -91,18 +89,6 @@ function statusColor(label) {
   if (label === "At Risk") return RISK_COLORS.risk;
   if (label === "Watch") return RISK_COLORS.watch;
   return RISK_COLORS.healthy;
-}
-
-function fileExtension(name) {
-  return String(name || "").split(".").pop()?.toLowerCase() || "";
-}
-
-function isModelDocument(doc) {
-  if (!doc || doc.is_deleted) return false;
-  const ext = fileExtension(doc.file_name || doc.display_name || doc.file_url);
-  if (["ifc", "glb", "gltf"].includes(ext)) return true;
-  const descriptor = `${doc.category || ""} ${doc.document_type || ""} ${doc.file_type || ""} ${doc.mime_type || ""}`.toLowerCase();
-  return descriptor.includes("ifc model") || descriptor.includes("3d model") || descriptor.includes("model/gltf");
 }
 
 function computeProjectModel(project, data) {
@@ -207,7 +193,6 @@ function computeProjectModel(project, data) {
 export default function PortfolioOverview() {
   const navigate = useNavigate();
   const projectId = useProjectId();
-  const qc = useQueryClient();
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [healthFilter, setHealthFilter] = useState("All");
   const [search, setSearch] = useState("");
@@ -220,7 +205,6 @@ export default function PortfolioOverview() {
   const { data: deliveries = [] } = useQuery({ queryKey: ["portfolio-deliveries"], queryFn: () => entities.Delivery.list(), staleTime: 30 * 1000 });
   const { data: actionItems = [] } = useQuery({ queryKey: ["portfolio-action-items"], queryFn: () => entities.ActionItem.list(), staleTime: 30 * 1000 });
   const { data: scheduleTasks = [] } = useQuery({ queryKey: ["portfolio-schedule-tasks"], queryFn: () => entities.ScheduleTask.list("-start_date"), staleTime: 60 * 1000 });
-  const { data: documents = [] } = useQuery({ queryKey: ["portfolio-model-documents"], queryFn: () => entities.Document.list("-uploaded_date"), staleTime: 60 * 1000 });
 
   useEffect(() => {
     if (selectedProjectId || !projectId || projects.length === 0) return;
@@ -308,12 +292,6 @@ export default function PortfolioOverview() {
   }, [portfolio.sorted, healthFilter, search]);
 
   const selected = portfolio.selected;
-  const selectedModelDocument = useMemo(() => {
-    if (!selected) return null;
-    return documents
-      .filter((doc) => doc.project_id === selected.id && isModelDocument(doc))
-      .sort((a, b) => new Date(b.uploaded_date || b.created_at || 0) - new Date(a.uploaded_date || a.created_at || 0))[0] || null;
-  }, [documents, selected]);
 
   const selectProject = (id) => setSelectedProjectId(id);
   const openPlanningPage = (page) => {
@@ -324,55 +302,6 @@ export default function PortfolioOverview() {
   const openSelectedProject = () => {
     if (!selected) return;
     navigate(`${createPageUrl("Dashboard")}?project=${selected.id}`);
-  };
-  const openSelectedWorkPackages = () => {
-    if (!selected) return;
-    navigate(`${createPageUrl("WorkPackages")}?project=${selected.id}`);
-  };
-
-  const uploadModelForSelected = async (file) => {
-    if (!selected?.id) {
-      toast.error("Select a project before uploading a model");
-      return null;
-    }
-    const ext = fileExtension(file?.name);
-    if (!["glb", "gltf", "ifc"].includes(ext)) {
-      toast.error("Use a .glb, .gltf, or .ifc model file");
-      return null;
-    }
-
-    const toastId = toast.loading(`Uploading ${file.name}...`);
-    try {
-      const { file_url } = await integrations.Core.UploadFile({ file });
-      const uploadedBy = await auth.me?.().then((user) => user?.email).catch(() => "Unknown");
-      const now = new Date().toISOString();
-      const doc = await entities.Document.create({
-        project_id: selected.id,
-        project_name: selected.name,
-        display_name: file.name,
-        file_name: file.name,
-        file_url,
-        file_type: ext,
-        file_size_kb: Math.round(file.size / 1024),
-        mime_type: file.type || (ext === "glb" ? "model/gltf-binary" : ext === "gltf" ? "model/gltf+json" : "application/x-step"),
-        category: ext === "ifc" ? "IFC Model" : "3D Model",
-        document_type: "3D Model",
-        discipline: "Model",
-        status: "Current",
-        revision_number: "0",
-        revision_date: now.slice(0, 10),
-        uploaded_by: uploadedBy || "Unknown",
-        uploaded_date: now,
-        metadata: { portfolio_model: true },
-      });
-      await qc.invalidateQueries({ queryKey: ["portfolio-model-documents"] });
-      await qc.invalidateQueries({ queryKey: ["documents", selected.id] });
-      toast.success(`${file.name} linked to ${selected.name}`, { id: toastId });
-      return doc;
-    } catch (error) {
-      toast.error(`Model upload failed: ${error?.message || "Unknown error"}`, { id: toastId });
-      return null;
-    }
   };
 
   return (
@@ -496,17 +425,6 @@ export default function PortfolioOverview() {
           </div>
         </div>
       </section>
-
-      <PortfolioBimViewer
-        project={selected}
-        workPackages={selected?.projectWps || []}
-        deliveries={selected?.projectDeliveries || []}
-        rfis={selected?.projectRfis || []}
-        modelDocument={selectedModelDocument}
-        onUploadModel={uploadModelForSelected}
-        onOpenProject={openSelectedProject}
-        onOpenWorkPackages={openSelectedWorkPackages}
-      />
 
       <PlanningStudio
         portfolio={portfolio}

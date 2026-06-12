@@ -194,8 +194,6 @@ registerRoutePrefetcher("Schedule", () => import("@/pages/Schedule"));
 registerRoutePrefetcher("RFIs", () => import("@/pages/RFIs"));
 registerRoutePrefetcher("Drawings", () => import("@/pages/Drawings"));
 registerRoutePrefetcher("DrawingViewer", () => import("@/pages/DrawingViewer"));
-// Do not hover-prefetch the 3D model viewer: that route pulls the heavy
-// Three/@thatopen stack and should stay explicitly user-triggered.
 registerRoutePrefetcher("WorkPackages", () => import("@/pages/WorkPackages"));
 registerRoutePrefetcher("Financials", () => import("@/pages/Financials"));
 
