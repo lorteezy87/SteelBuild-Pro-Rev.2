@@ -97,6 +97,8 @@ export default function DrawingViewer() {
   // ── Markup (Tier 3 annotations) ─────────────────────────────────────
   const [activeTool, setActiveTool] = useState("select");
   const [activeColor, setActiveColor] = useState(MARKUP_COLORS[0].value);
+  // Stamp tool — which review stamp the next click places (STAMP_TYPES key).
+  const [activeStamp, setActiveStamp] = useState("APPROVED");
   // Resolution-status filter (3a). When true, the AnnotationLayer hides
   // any note item whose status is "addressed" or "rejected" — useful for
   // a reviewer who wants to see only what's still outstanding.
@@ -267,13 +269,6 @@ export default function DrawingViewer() {
     return () => { cancelled = true; };
   }, [pdfDoc, activeDrawing?.id, activeDrawing?.markup_scale, projectId, qc]);
 
-  // Markup hook is intentionally placed after activeDrawing so we can pass
-  // its initial array in — Tier 3 persists drawing markup in drawings.markup.
-  const markup = useMarkup({
-    drawingId: activeId,
-    initialMarkup: activeDrawing?.markup,
-  });
-
   // ── Drawing-hub zones (MVP Slice 0) ────────────────────────────────
   // Three modes for the overlay:
   //   "off"  — hidden (default; viewer behaves as it always has)
@@ -320,6 +315,15 @@ export default function DrawingViewer() {
     zoneStatusCounts,
     filteredZones,
   } = useZoneData({ projectId, activeId, activeDrawing, zoneMode, showDeps, zoneFilter });
+
+  // Markup hook — collaborative per-row redlining (drawing_markups table).
+  // Placed after useZoneData so each new mark records WHICH revision it was
+  // drawn on. Other reviewers' marks stream in via realtime invalidation.
+  const markup = useMarkup({
+    drawingId: activeId,
+    projectId,
+    drawingRevisionId: currentRevision?.id || null,
+  });
 
   // Handler: user clicked "+ Rev" — mint a new revision, carry
   // zones + links over, flip is_current, and force a refetch so
@@ -631,6 +635,8 @@ export default function DrawingViewer() {
                 onToolChange={setActiveTool}
                 activeColor={activeColor}
                 onColorChange={setActiveColor}
+                activeStamp={activeStamp}
+                onStampChange={setActiveStamp}
                 markupCount={markup.items.filter((m) => (m.pdf_page || 1) === currentPage).length}
                 onClearPage={() => {
                   markup.items
@@ -845,6 +851,7 @@ export default function DrawingViewer() {
                   items={markup.items}
                   activeTool={activeTool}
                   activeColor={activeColor}
+                  activeStamp={activeStamp}
                   markupScale={markupScale}
                   onAddItem={markup.addItem}
                   onRemoveItem={markup.removeItem}

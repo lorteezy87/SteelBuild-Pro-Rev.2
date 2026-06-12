@@ -78,6 +78,8 @@ export function useViewerKeyboardShortcuts({
         setActiveTool("pen");
       } else if (e.key === "b" || e.key === "B") {
         setActiveTool("rect");
+      } else if (e.key === "c" || e.key === "C") {
+        setActiveTool("cloud");
       } else if (e.key === "h" || e.key === "H") {
         // H = highlight. Lowercase only — uppercase H on some layouts
         // collides with browser "Open history" (not a thing by default
@@ -91,6 +93,8 @@ export function useViewerKeyboardShortcuts({
         setActiveTool("calibrate");
       } else if (e.key === "t" || e.key === "T") {
         setActiveTool("note");
+      } else if (e.key === "s" || e.key === "S") {
+        setActiveTool("stamp");
       } else if (e.key === "Escape") {
         // Esc snaps back to select so keyboard users can bail on a tool
         // without hunting for the toolbar.
