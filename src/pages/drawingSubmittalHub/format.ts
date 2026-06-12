@@ -1,7 +1,7 @@
 import { ClipboardList, FileStack, Gauge, Layers3, ShieldCheck, Workflow } from "lucide-react";
 import { compareDrawingSetPackages } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
-import { effectiveDetailingState } from "@/lib/detailingPackageState";
+import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
 import type { Drawing, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
@@ -158,27 +158,38 @@ export function isClosedDrawing(drawing: Drawing | null | undefined): boolean {
   return drawing?.stage === "Released" || drawing?.set_approval_status === "approved";
 }
 
-// A package is CLOSED when ANY terminal signal is satisfied — the latest
-// submittal's status is closed (Released for Fabrication / Void — NOT
-// Approved/Approved as Noted, which are still mid-flow at BFA/OFS/IFC), OR the
-// drawing_set carries the legacy set_approval_status = "approved", OR the
-// coalesced detailing_state is at a release-style terminal (Released /
-// Partially Released / Released for Erection), OR every sheet is individually
-// released/approved. Used by the hit-list triage and the "Released" KPI so both
-// surface the same definition of done.
+// A package is CLOSED when a terminal signal fires. ORDER MATTERS — the
+// submittal-derived + manual-release signals are authoritative; the DEPRECATED
+// legacy columns are a last resort consulted only when no submittal governs:
+//   1. the latest submittal's status is closed — Released for Fabrication / Void
+//      (NOT Approved/Approved as Noted, which map to BFA/OFS/IFC and stay active);
+//   2. the coalesced detailing_state is a release-style terminal (Released /
+//      Partially Released / Released for Erection) — this ALSO covers MANUAL
+//      releases via drawing_sets.detailing_state, so e.g. a manually-released
+//      anchor-bolt set stays closed even without a Released-for-Fab submittal;
+//   3. legacy/DEPRECATED signals (§20-21) — drawing_sets.set_approval_status and
+//      drawings.stage='Released' — but ONLY when NO submittal governs the
+//      package. Otherwise a stale 'approved' column would mask a real mid-flow
+//      submittal and wrongly show the set "Closed" (same bug class as the
+//      Approved/AAN fix); when a submittal governs, (1)/(2) already decided it.
+// Used by the hit-list triage and the "Released" KPI so both agree on "done".
 export function isClosedPackage(pkg: SetPackage | null | undefined): boolean {
   if (!pkg) return false;
   const sorted = (pkg.submittals || []).slice().sort((a, b) => (b.round_number || 1) - (a.round_number || 1));
   const latestSubmittal = sorted[0] || null;
   if (latestSubmittal && isClosedSubmittal(latestSubmittal)) return true;
-  if (pkg.parent?.set_approval_status === "approved") return true;
   const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
   if (
     detailingState === "Released" ||
     detailingState === "Partially Released" ||
     detailingState === "Released for Erection"
   ) return true;
-  if (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)) return true;
+  // Deprecated legacy columns — last resort, only when no submittal governs the
+  // package (a governing submittal's stage, decided above, always wins).
+  if (!hasGoverningSubmittal(pkg.submittals)) {
+    if (pkg.parent?.set_approval_status === "approved") return true;
+    if (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)) return true;
+  }
   return false;
 }
 
