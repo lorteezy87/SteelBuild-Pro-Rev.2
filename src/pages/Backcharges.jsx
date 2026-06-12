@@ -27,9 +27,10 @@ import { computeTmTicketTotal, rollupBackcharges } from "@/lib/backcharge/cost";
 import {
   buildBackchargeRegisterCsv,
   buildDefenseManifestCsv,
-  buildDefenseReadme,
   suggestDefenseFilename,
 } from "@/lib/backcharge/defensePackage";
+import { buildDefensePdf } from "@/lib/backcharge/defensePdf";
+import { entities } from "@/api/supabaseClient";
 import {
   BACKCHARGE_REASON_CODES,
   BACKCHARGE_REASON_LABELS,
@@ -55,7 +56,7 @@ const STATUS_TONE = {
 const EMPTY_FORM = {
   title: "", description: "", responsible_party: "", responsible_party_type: "subcontractor",
   reason_code: "rework", status: "draft", amount: "", incident_date: "", notice_date: "",
-  backcharge_number: "", notes: "",
+  backcharge_number: "", notes: "", linked_co_id: "", source_rfi_id: "",
 };
 
 function Field({ label, children }) {
@@ -67,7 +68,7 @@ function Field({ label, children }) {
   );
 }
 
-function BackchargeFormModal({ open, initial, onClose, onSubmit, busy }) {
+function BackchargeFormModal({ open, initial, onClose, onSubmit, busy, changeOrders = [], rfis = [] }) {
   const [form, setForm] = useState(initial || EMPTY_FORM);
   if (!open) return null;
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -98,6 +99,18 @@ function BackchargeFormModal({ open, initial, onClose, onSubmit, busy }) {
           <Field label="Backcharge #"><input style={input} value={form.backcharge_number} onChange={(e) => set("backcharge_number", e.target.value)} placeholder="BC-001" /></Field>
           <Field label="Incident date"><input style={input} type="date" value={form.incident_date || ""} onChange={(e) => set("incident_date", e.target.value)} /></Field>
           <Field label="Notice date (contractual)"><input style={input} type="date" value={form.notice_date || ""} onChange={(e) => set("notice_date", e.target.value)} /></Field>
+          <Field label="Linked change order">
+            <select style={input} value={form.linked_co_id || ""} onChange={(e) => set("linked_co_id", e.target.value)}>
+              <option value="">— none —</option>
+              {changeOrders.map((co) => <option key={co.id} value={co.id}>{co.co_number ? `${co.co_number} · ` : ""}{co.title || "(untitled)"}</option>)}
+            </select>
+          </Field>
+          <Field label="Source RFI">
+            <select style={input} value={form.source_rfi_id || ""} onChange={(e) => set("source_rfi_id", e.target.value)}>
+              <option value="">— none —</option>
+              {rfis.map((r) => <option key={r.id} value={r.id}>{r.rfi_number ? `${r.rfi_number} · ` : ""}{r.title || "(untitled)"}</option>)}
+            </select>
+          </Field>
         </div>
         <Field label="Description / basis"><textarea style={{ ...input, minHeight: 64, resize: "vertical" }} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="What happened, what it cost you, why they're responsible." /></Field>
         <Field label="Notes"><textarea style={{ ...input, minHeight: 40, resize: "vertical" }} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
@@ -111,6 +124,8 @@ function BackchargeFormModal({ open, initial, onClose, onSubmit, busy }) {
               amount: form.amount === "" ? 0 : Number(form.amount),
               incident_date: form.incident_date || null,
               notice_date: form.notice_date || null,
+              linked_co_id: form.linked_co_id || null,
+              source_rfi_id: form.source_rfi_id || null,
             })}
           >
             {busy ? "Saving…" : initial?.id ? "Save" : "Create"}
@@ -169,6 +184,17 @@ export default function Backcharges() {
   const rollup = useMemo(() => rollupBackcharges(backcharges), [backcharges]);
   const selected = backcharges.find((b) => b.id === selectedId) || null;
 
+  // Change orders + RFIs for the link pickers / resolved numbers in the package.
+  const { data: changeOrders = [] } = useQuery({ queryKey: ["change_orders", projectId], queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
+  const { data: rfis = [] } = useQuery({ queryKey: ["rfis", projectId], queryFn: () => entities.RFI.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
+  const coById = useMemo(() => new Map((changeOrders || []).map((c) => [c.id, c])), [changeOrders]);
+  const rfiById = useMemo(() => new Map((rfis || []).map((r) => [r.id, r])), [rfis]);
+  const withLinkNumbers = (bc) => (bc ? {
+    ...bc,
+    linked_co_number: bc.linked_co_id ? coById.get(bc.linked_co_id)?.co_number || null : null,
+    source_rfi_number: bc.source_rfi_id ? rfiById.get(bc.source_rfi_id)?.rfi_number || null : null,
+  } : bc);
+
   const { data: tickets = [] } = useQuery({ queryKey: ["backcharge-tickets", selectedId], queryFn: () => listTmTickets(selectedId), enabled: !!selectedId });
   const { data: events = [] } = useQuery({ queryKey: ["backcharge-events", selectedId], queryFn: () => listEvents(selectedId), enabled: !!selectedId });
 
@@ -203,13 +229,14 @@ export default function Backcharges() {
   const delTicketMut = useMutation({ mutationFn: (id) => softDeleteTmTicket(id), onSuccess: () => { refetchAll(); }, onError: (e) => toast.error(`Delete failed: ${e?.message}`) });
   const delMut = useMutation({ mutationFn: (id) => softDeleteBackcharge(id), onSuccess: () => { refetchAll(); setSelectedId(null); toast.success("Deleted"); }, onError: (e) => toast.error(`Delete failed: ${e?.message}`) });
 
-  const exportDefense = async (bc) => {
+  const exportDefense = async (bc0) => {
     try {
+      const bc = withLinkNumbers(bc0);
       const [tks, evs] = await Promise.all([listTmTickets(bc.id), listEvents(bc.id)]);
       const stem = suggestDefenseFilename(bc, activeProject);
+      buildDefensePdf({ backcharge: bc, tickets: tks, events: evs, project: activeProject }).save(`${stem}.pdf`);
       downloadTextFile(buildDefenseManifestCsv(bc, tks, evs), `${stem}_manifest.csv`, "text/csv;charset=utf-8");
-      downloadTextFile(buildDefenseReadme(bc, tks, evs, activeProject), `${stem}_README.md`, "text/markdown;charset=utf-8");
-      toast.success("Defense package exported");
+      toast.success("Defense package exported (PDF + CSV)");
     } catch (e) { toast.error(`Export failed: ${e?.message}`); }
   };
 
@@ -284,6 +311,13 @@ export default function Backcharges() {
                 <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
                   {selected.responsible_party || "—"} ({selected.responsible_party_type}) · {BACKCHARGE_REASON_LABELS[selected.reason_code] || selected.reason_code}
                 </div>
+                {(selected.linked_co_id || selected.source_rfi_id) && (
+                  <div style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 2 }}>
+                    {selected.linked_co_id && coById.get(selected.linked_co_id) ? `CO ${coById.get(selected.linked_co_id).co_number || "—"}` : ""}
+                    {selected.linked_co_id && selected.source_rfi_id ? " · " : ""}
+                    {selected.source_rfi_id && rfiById.get(selected.source_rfi_id) ? `RFI ${rfiById.get(selected.source_rfi_id).rfi_number || "—"}` : ""}
+                  </div>
+                )}
               </div>
               <button onClick={() => setSelectedId(null)} style={{ ...btn, padding: "4px 8px" }}>✕</button>
             </div>
@@ -341,6 +375,8 @@ export default function Backcharges() {
         key={editing?.id || "new"}
         open={formOpen}
         initial={editing}
+        changeOrders={changeOrders}
+        rfis={rfis}
         busy={createMut.isPending || updateMut.isPending}
         onClose={() => { setFormOpen(false); setEditing(null); }}
         onSubmit={(form) => {

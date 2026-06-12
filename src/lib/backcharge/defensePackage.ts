@@ -39,6 +39,8 @@ export function buildDefenseManifestCsv(
   lines.push(csvRow(["Status", label(BACKCHARGE_STATUS_LABELS, backcharge.status)]));
   lines.push(csvRow(["Responsible party", `${backcharge.responsible_party || ""} (${backcharge.responsible_party_type || ""})`]));
   lines.push(csvRow(["Reason", label(BACKCHARGE_REASON_LABELS, backcharge.reason_code)]));
+  if (backcharge.linked_co_number) lines.push(csvRow(["Linked change order", backcharge.linked_co_number]));
+  if (backcharge.source_rfi_number) lines.push(csvRow(["Source RFI", backcharge.source_rfi_number]));
   lines.push(csvRow(["Incident date", backcharge.incident_date || ""]));
   lines.push(csvRow(["Notice date", backcharge.notice_date || "(no notice on record)"]));
   lines.push(csvRow(["Header amount", backcharge.amount ?? 0]));
