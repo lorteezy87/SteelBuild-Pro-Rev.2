@@ -1,0 +1,131 @@
+/**
+ * Backcharge defense package — turns a backcharge + its T&M tickets + audit
+ * trail into the structured documents you hand to a sub/vendor (or counsel) to
+ * substantiate the charge: the header, the cost build-up, and a TIMESTAMPED
+ * event trail proving timely notice. Pure (string building only); the page
+ * triggers the downloads via downloadTextFile.
+ */
+import { computeTmTicketTotal, computeBackchargeAmount, sumTmTickets } from "./cost";
+import { BACKCHARGE_REASON_LABELS, BACKCHARGE_STATUS_LABELS } from "./types";
+import type { Backcharge, BackchargeEvent, TmTicket } from "./types";
+
+function csvCell(v: unknown): string {
+  const s = v == null ? "" : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function csvRow(cells: unknown[]): string {
+  return cells.map(csvCell).join(",");
+}
+
+const label = (
+  map: Record<string, string>,
+  key: string | null | undefined,
+  fallback = "",
+): string => (key ? map[key] || key : fallback);
+
+/** The structured manifest CSV: header block, T&M build-up, then the audit trail. */
+export function buildDefenseManifestCsv(
+  backcharge: Backcharge,
+  tickets: TmTicket[],
+  events: BackchargeEvent[],
+): string {
+  const live = (tickets || []).filter((t) => t && !t.is_deleted);
+  const lines: string[] = [];
+
+  lines.push("BACKCHARGE DEFENSE PACKAGE");
+  lines.push(csvRow(["Field", "Value"]));
+  lines.push(csvRow(["Backcharge #", backcharge.backcharge_number || backcharge.id]));
+  lines.push(csvRow(["Title", backcharge.title]));
+  lines.push(csvRow(["Status", label(BACKCHARGE_STATUS_LABELS, backcharge.status)]));
+  lines.push(csvRow(["Responsible party", `${backcharge.responsible_party || ""} (${backcharge.responsible_party_type || ""})`]));
+  lines.push(csvRow(["Reason", label(BACKCHARGE_REASON_LABELS, backcharge.reason_code)]));
+  lines.push(csvRow(["Incident date", backcharge.incident_date || ""]));
+  lines.push(csvRow(["Notice date", backcharge.notice_date || "(no notice on record)"]));
+  lines.push(csvRow(["Header amount", backcharge.amount ?? 0]));
+  lines.push(csvRow(["T&M total", sumTmTickets(live)]));
+  lines.push(csvRow(["Defensible amount", computeBackchargeAmount(backcharge, live)]));
+  lines.push(csvRow(["Description", backcharge.description || ""]));
+  lines.push("");
+
+  lines.push("T&M TICKETS (cost build-up)");
+  lines.push(csvRow(["Ticket #", "Date", "Description", "Labor hrs", "Labor rate", "Equipment", "Material", "Markup %", "Amount", "Signed by"]));
+  for (const t of live) {
+    lines.push(csvRow([
+      t.ticket_number || "", t.ticket_date || "", t.description || "",
+      t.labor_hours ?? 0, t.labor_rate ?? 0, t.equipment_cost ?? 0,
+      t.material_cost ?? 0, t.markup_percent ?? 0, computeTmTicketTotal(t), t.signed_by || "",
+    ]));
+  }
+  lines.push(csvRow(["", "", "", "", "", "", "", "TOTAL", sumTmTickets(live), ""]));
+  lines.push("");
+
+  lines.push("AUDIT TRAIL (timestamped — substantiates timely notice)");
+  lines.push(csvRow(["When", "Event", "From", "To", "Detail"]));
+  for (const e of events || []) {
+    lines.push(csvRow([e.created_at || "", e.event_type, e.from_status || "", e.to_status || "", e.detail || ""]));
+  }
+
+  return lines.join("\n");
+}
+
+/** A human-readable cover sheet for the package. */
+export function buildDefenseReadme(
+  backcharge: Backcharge,
+  tickets: TmTicket[],
+  events: BackchargeEvent[],
+  project?: { name?: string | null; project_number?: string | null } | null,
+): string {
+  const live = (tickets || []).filter((t) => t && !t.is_deleted);
+  const amount = computeBackchargeAmount(backcharge, live);
+  const proj = project?.name || project?.project_number || "";
+  const noticeLine = backcharge.notice_date
+    ? `Notice issued **${backcharge.notice_date}**${backcharge.incident_date ? ` for an incident on ${backcharge.incident_date}` : ""}.`
+    : "⚠ No notice date is on record — capture the notice date to strengthen this package.";
+  return [
+    `# Backcharge Defense Package`,
+    ``,
+    `**Project:** ${proj}`,
+    `**Backcharge #:** ${backcharge.backcharge_number || backcharge.id}`,
+    `**Title:** ${backcharge.title}`,
+    `**Against:** ${backcharge.responsible_party || "(unspecified)"} — ${backcharge.responsible_party_type || ""}`,
+    `**Reason:** ${label(BACKCHARGE_REASON_LABELS, backcharge.reason_code)}`,
+    `**Status:** ${label(BACKCHARGE_STATUS_LABELS, backcharge.status)}`,
+    `**Amount claimed:** $${amount.toLocaleString()}`,
+    ``,
+    noticeLine,
+    ``,
+    `## Basis`,
+    backcharge.description || "(no description provided)",
+    ``,
+    `## Cost build-up`,
+    `${live.length} T&M ticket${live.length === 1 ? "" : "s"} totaling $${sumTmTickets(live).toLocaleString()} (see manifest CSV).`,
+    ``,
+    `## Audit trail`,
+    `${(events || []).length} timestamped event${(events || []).length === 1 ? "" : "s"} recorded (see manifest CSV) — establishes the documentation timeline.`,
+    ``,
+    `_Generated by SteelBuild Pro. The manifest CSV carries the full structured detail._`,
+  ].join("\n");
+}
+
+/** A flat register CSV across many backcharges (project-level export). */
+export function buildBackchargeRegisterCsv(backcharges: Backcharge[]): string {
+  const live = (backcharges || []).filter((b) => b && !b.is_deleted);
+  const lines = [
+    csvRow(["Backcharge #", "Title", "Responsible party", "Type", "Reason", "Status", "Amount", "Incident date", "Notice date"]),
+  ];
+  for (const b of live) {
+    lines.push(csvRow([
+      b.backcharge_number || b.id, b.title, b.responsible_party || "",
+      b.responsible_party_type || "", label(BACKCHARGE_REASON_LABELS, b.reason_code),
+      label(BACKCHARGE_STATUS_LABELS, b.status), b.amount ?? 0, b.incident_date || "", b.notice_date || "",
+    ]));
+  }
+  return lines.join("\n");
+}
+
+/** Filename stem for a single-backcharge package download. */
+export function suggestDefenseFilename(backcharge: Backcharge, project?: { project_number?: string | null } | null): string {
+  const job = (project?.project_number || "").toString().replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const num = (backcharge.backcharge_number || backcharge.id || "backcharge").toString().replace(/[^A-Za-z0-9]+/g, "_");
+  return [job, "Backcharge", num, "Defense"].filter(Boolean).join("_");
+}
