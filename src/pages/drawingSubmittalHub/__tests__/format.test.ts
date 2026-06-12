@@ -121,8 +121,46 @@ describe("isClosedPackage (the layer the reported bug lives in)", () => {
     ).toBe(false);
   });
 
-  it("still closes on the legacy set_approval_status flag (deprecated residual, tracked separately)", () => {
+  it("closes on the legacy set_approval_status flag ONLY when no submittal governs", () => {
+    // No governing submittal → the deprecated column is the last-resort signal.
     expect(isClosedPackage(pkg({ parent: { set_approval_status: "approved" } }))).toBe(true);
+  });
+
+  it("does NOT let a stale set_approval_status='approved' mask a mid-flow submittal", () => {
+    // The deprecated-column residual: a legacy-approved set whose linked submittal
+    // is only Approved (→ BFA) must show ACTIVE, not "Closed".
+    expect(
+      isClosedPackage(
+        pkg({
+          parent: { set_approval_status: "approved" },
+          submittals: [{ status: "Approved", round_number: 1, ball_in_court: "EOR" }],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("does NOT let legacy sheet stages mask a mid-flow submittal", () => {
+    expect(
+      isClosedPackage(
+        pkg({
+          sheets: [{ stage: "Released" }],
+          submittals: [{ status: "Approved", round_number: 1, ball_in_court: "EOR" }],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a MANUALLY-released package (detailing_state) closed even with a mid-flow submittal", () => {
+    // Manual release stays authoritative via the detailing_state signal — must
+    // not regress when the deprecated columns are gated.
+    expect(
+      isClosedPackage(
+        pkg({
+          parent: { detailing_state: "Released for Erection" },
+          submittals: [{ status: "Approved", round_number: 1, ball_in_court: "EOR" }],
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("closes when every sheet is individually released", () => {
