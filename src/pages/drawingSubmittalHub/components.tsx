@@ -24,7 +24,7 @@ import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { DRAFTING_STATES } from "@/lib/detailingPackageState";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
-import type { ElementStatusSummary } from "@/services/modelElementStatus";
+import type { ElementStatusKey, ElementStatusSummary } from "@/services/modelElementStatus";
 import {
   BIC_CHOICES,
   STATUS_COLORS,
@@ -115,11 +115,13 @@ interface TriageBoardProps {
   onCompareRevision?: (drawingId: string) => void;
   /** 3D model element mapping rollup (Phase 0 of the BIM integration). */
   modelMapping?: ElementStatusSummary | null;
+  /** The raw model_elements rows (for the per-bucket member drill-down). */
+  modelElementRows?: any[];
   /** Open the Tekla/SDS2 member CSV import. Absent = section hidden. */
   onImportModelElements?: () => void;
 }
 
-export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving, onEscalate, onCompareRevision, modelMapping, onImportModelElements }: TriageBoardProps) {
+export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving, onEscalate, onCompareRevision, modelMapping, modelElementRows, onImportModelElements }: TriageBoardProps) {
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
@@ -320,7 +322,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
 
       <SequenceReadinessSection rows={sequenceReadiness} />
       {onImportModelElements && (
-        <ModelMappingSection summary={modelMapping} onImport={onImportModelElements} />
+        <ModelMappingSection summary={modelMapping} elements={modelElementRows} onImport={onImportModelElements} />
       )}
       <RevisionImpactSection rows={revisionImpact} onCompare={onCompareRevision} />
     </div>
@@ -338,8 +340,22 @@ const ELEMENT_BUCKET_ORDER = [
   "fab_ready", "erection_ready", "unmapped",
 ] as const;
 
-function ModelMappingSection({ summary, onImport }: { summary?: ElementStatusSummary | null; onImport: () => void }) {
+const DRILLDOWN_ROW_CAP = 100;
+
+function ModelMappingSection({ summary, elements, onImport }: { summary?: ElementStatusSummary | null; elements?: any[]; onImport: () => void }) {
   const total = summary?.total ?? 0;
+  const [openBucket, setOpenBucket] = useState<ElementStatusKey | null>(null);
+
+  // Members in the open bucket, resolved via the summary's id sets so the
+  // list always agrees with the chip counts (same engine, same truth).
+  const bucketMembers = useMemo(() => {
+    if (!openBucket || !summary) return [];
+    const ids = new Set(summary.idsByStatus?.[openBucket] || []);
+    return (elements || []).filter((el) => el?.id && ids.has(String(el.id)));
+  }, [openBucket, summary, elements]);
+
+  const openMeta = openBucket ? ELEMENT_STATUS_META[openBucket] : null;
+
   return (
     <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
@@ -378,26 +394,94 @@ function ModelMappingSection({ summary, onImport }: { summary?: ElementStatusSum
               const count = summary?.counts?.[bucket] ?? 0;
               if (!count) return null;
               const meta = ELEMENT_STATUS_META[bucket];
+              const active = openBucket === bucket;
               return (
-                <span key={bucket} style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "4px 10px", borderRadius: 999,
-                  border: `1px solid color-mix(in srgb, ${meta.color} 45%, transparent)`,
-                  background: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
-                  fontFamily: mono, fontSize: 10, color: textPrimary,
-                }}>
+                <button
+                  key={bucket}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setOpenBucket(active ? null : bucket)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "5px 10px", borderRadius: 999, cursor: "pointer",
+                    border: `1px solid color-mix(in srgb, ${meta.color} ${active ? 85 : 45}%, transparent)`,
+                    background: `color-mix(in srgb, ${meta.color} ${active ? 24 : 12}%, transparent)`,
+                    fontFamily: mono, fontSize: 10, color: textPrimary,
+                    outlineOffset: 2,
+                  }}
+                >
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: meta.color, flexShrink: 0 }} />
                   {meta.label}
                   <strong className="sbd-num" style={{ fontSize: 12 }}>{count}</strong>
-                </span>
+                </button>
               );
             })}
           </div>
+
+          {openBucket && openMeta && (
+            <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
+                padding: "8px 12px", borderBottom: `1px solid ${border}`, background: surface1,
+              }}>
+                <div style={{ fontFamily: mono, fontSize: 10, color: textMuted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  <span style={{ color: openMeta.color, fontWeight: 800 }}>{openMeta.label}</span>
+                  {" · "}{pluralize(bucketMembers.length, "member")}
+                  {bucketMembers.length > DRILLDOWN_ROW_CAP ? ` · showing first ${DRILLDOWN_ROW_CAP}` : ""}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpenBucket(null)}
+                  className="sbd-btn sbd-btn-ghost"
+                  style={{ fontSize: 11, padding: "2px 10px" }}
+                >
+                  Close
+                </button>
+              </div>
+              <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ position: "sticky", top: 0, background: surface1, zIndex: 1 }}>
+                      <th style={drillTh}>Mark</th>
+                      <th style={drillTh}>Assembly</th>
+                      <th style={drillTh}>Profile</th>
+                      <th style={{ ...drillTh, textAlign: "right" }}>Qty</th>
+                      <th style={drillTh}>Seq</th>
+                      <th style={drillTh}>Area</th>
+                      <th style={drillTh}>Drawing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bucketMembers.slice(0, DRILLDOWN_ROW_CAP).map((el) => (
+                      <tr key={el.id}>
+                        <td style={{ ...drillTd, fontWeight: 700, color: textPrimary }}>{el.piece_mark}</td>
+                        <td style={drillTd}>{el.assembly_mark || "—"}</td>
+                        <td style={{ ...drillTd, fontFamily: mono, fontSize: 11 }}>{el.profile || "—"}</td>
+                        <td style={{ ...drillTd, textAlign: "right" }} className="sbd-num">{el.quantity ?? 1}</td>
+                        <td style={drillTd}>{el.sequence_number || "—"}</td>
+                        <td style={drillTd}>{el.erection_area || "—"}</td>
+                        <td style={{ ...drillTd, color: el.drawing_id ? success : textMuted }}>
+                          {el.drawing_no || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>
   );
 }
+
+const drillTh: CSSProperties = {
+  textAlign: "left", padding: "7px 12px", fontFamily: "var(--font-mono)",
+  fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase",
+  color: textMuted, borderBottom: `1px solid ${border}`,
+};
+const drillTd: CSSProperties = { padding: "6px 12px", borderBottom: `1px solid ${border}`, color: "var(--text-secondary)" };
 
 // ── Sequence Readiness rollup ───────────────────────────────────────────────
 // The sequence-aware view: group packages by erection sequence and show how far
