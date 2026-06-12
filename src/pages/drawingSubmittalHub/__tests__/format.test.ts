@@ -167,6 +167,36 @@ describe("isClosedPackage (the layer the reported bug lives in)", () => {
     expect(isClosedPackage(pkg({ sheets: [{ stage: "Released" }, { stage: "Released" }] }))).toBe(true);
   });
 
+  it("does NOT let a Void submittal with a higher round_number mask an active governing round", () => {
+    // The governing submittal (Approved → OFS) is at a LOWER round_number than a
+    // Void one. Closure must follow the governing submittal (still active), not
+    // the highest-round Void — otherwise the package vanishes from the hit list
+    // while its stage chip shows OFS.
+    expect(
+      isClosedPackage(
+        pkg({
+          submittals: [
+            { status: "Approved", ball_in_court: "Detailer", round_number: 1, submitted_date: "2026-05-01" },
+            { status: "Void", round_number: 2 },
+          ],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("does NOT close a partially-released legacy package on a sheet-stage MAJORITY", () => {
+    // No governing submittal; a plurality of legacy stage='Released' sheets must
+    // NOT close a package that still has an open (IFA) sheet — the all-sheets
+    // gate, not dominantStage, decides legacy closure.
+    expect(isClosedPackage(pkg({ sheets: [{ stage: "Released" }, { stage: "Released" }, { stage: "IFA" }] }))).toBe(false);
+  });
+
+  it("closes a legacy package when EVERY sheet is released via set_approval_status", () => {
+    // Pins the gated all-sheets branch via the column dominantStage ignores
+    // (set_approval_status, no stage) — so deleting that branch fails a test.
+    expect(isClosedPackage(pkg({ sheets: [{ set_approval_status: "approved" }, { set_approval_status: "approved" }] }))).toBe(true);
+  });
+
   it("is open for an empty package, and false for null/undefined", () => {
     expect(isClosedPackage(pkg())).toBe(false);
     expect(isClosedPackage(null)).toBe(false);
