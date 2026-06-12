@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLOSED_SUBMITTAL_STATUSES,
   fmtDate,
+  isClosedPackage,
   isClosedSubmittal,
   toDateInputValue,
   toLocalDay,
@@ -83,5 +84,54 @@ describe("isClosedSubmittal (due/triage 'closed' definition)", () => {
   it("returns false for null/undefined", () => {
     expect(isClosedSubmittal(null)).toBe(false);
     expect(isClosedSubmittal(undefined)).toBe(false);
+  });
+});
+
+describe("isClosedPackage (the layer the reported bug lives in)", () => {
+  // Minimal SetPackage factory — isClosedPackage only reads submittals/parent/sheets.
+  const pkg = (over: any = {}) =>
+    ({ key: "k", setId: null, name: "Set", parent: null, sheets: [], submittals: [], ...over } as any);
+
+  it("does NOT close a package whose linked submittal is Approved / Approved as Noted", () => {
+    // The exact path the user hits: linking an approved submittal to a drawing
+    // set must keep the set OPEN at its real stage (BFA/OFS/IFC), not "Closed".
+    expect(isClosedPackage(pkg({ submittals: [{ status: "Approved", round_number: 1 }] }))).toBe(false);
+    expect(isClosedPackage(pkg({ submittals: [{ status: "Approved as Noted", round_number: 1 }] }))).toBe(false);
+  });
+
+  it("closes a package whose latest submittal is Released for Fabrication or Void", () => {
+    expect(isClosedPackage(pkg({ submittals: [{ status: "Released for Fabrication", round_number: 1 }] }))).toBe(true);
+    expect(isClosedPackage(pkg({ submittals: [{ status: "Void", round_number: 1 }] }))).toBe(true);
+  });
+
+  it("does not close an in-flight (Submitted) submittal package", () => {
+    expect(isClosedPackage(pkg({ submittals: [{ status: "Submitted", round_number: 1 }] }))).toBe(false);
+  });
+
+  it("uses the latest round — a resubmittal after a prior approval stays open", () => {
+    expect(
+      isClosedPackage(
+        pkg({
+          submittals: [
+            { status: "Approved", round_number: 1 },
+            { status: "Submitted", round_number: 2 },
+          ],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("still closes on the legacy set_approval_status flag (deprecated residual, tracked separately)", () => {
+    expect(isClosedPackage(pkg({ parent: { set_approval_status: "approved" } }))).toBe(true);
+  });
+
+  it("closes when every sheet is individually released", () => {
+    expect(isClosedPackage(pkg({ sheets: [{ stage: "Released" }, { stage: "Released" }] }))).toBe(true);
+  });
+
+  it("is open for an empty package, and false for null/undefined", () => {
+    expect(isClosedPackage(pkg())).toBe(false);
+    expect(isClosedPackage(null)).toBe(false);
+    expect(isClosedPackage(undefined)).toBe(false);
   });
 });

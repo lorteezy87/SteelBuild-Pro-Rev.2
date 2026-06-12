@@ -46,6 +46,7 @@ import {
   getSubmittalDueDate,
   info,
   isClosedDrawing,
+  isClosedPackage,
   isClosedSubmittal,
   itemUrgency,
   mono,
@@ -78,30 +79,6 @@ const DocControlPanel = lazyWithRetry(() =>
 const RevisionCompareModalLazy = lazyWithRetry(
   () => import("@/components/drawings/RevisionCompareModal"),
 ) as unknown as ComponentType<AnyProps>;
-
-// A package is CLOSED when ANY terminal signal is satisfied — the latest
-// submittal's status is closed (Released for Fabrication / Void — NOT
-// Approved/Approved as Noted, which are still mid-flow at BFA/OFS/IFC), OR the
-// drawing_set is legacy-locked (set_approval_status = "approved"), OR the
-// coalesced detailing_state is at a release-style
-// terminal (Released / Partially Released / Released for Erection), OR every
-// sheet is individually released/approved. Used by the hit-list triage and
-// the "Released" KPI so both surface the same definition of done.
-function isClosedPackage(pkg: any): boolean {
-  if (!pkg) return false;
-  const sorted = (pkg.submittals || []).slice().sort((a: any, b: any) => (b.round_number || 1) - (a.round_number || 1));
-  const latestSubmittal = sorted[0] || null;
-  if (latestSubmittal && isClosedSubmittal(latestSubmittal)) return true;
-  if (pkg.parent?.set_approval_status === "approved") return true;
-  const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
-  if (
-    detailingState === "Released" ||
-    detailingState === "Partially Released" ||
-    detailingState === "Released for Erection"
-  ) return true;
-  if (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)) return true;
-  return false;
-}
 
 // The design-system primitives + these shared screens are still .jsx; cast
 // at the boundary (removable once the shared layer is typed).

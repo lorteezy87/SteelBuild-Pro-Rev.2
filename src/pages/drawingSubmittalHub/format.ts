@@ -1,6 +1,7 @@
 import { ClipboardList, FileStack, Gauge, Layers3, ShieldCheck, Workflow } from "lucide-react";
 import { compareDrawingSetPackages } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
+import { effectiveDetailingState } from "@/lib/detailingPackageState";
 import type { Drawing, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
@@ -155,6 +156,30 @@ export function isClosedSubmittal(submittal: Submittal | null | undefined): bool
 
 export function isClosedDrawing(drawing: Drawing | null | undefined): boolean {
   return drawing?.stage === "Released" || drawing?.set_approval_status === "approved";
+}
+
+// A package is CLOSED when ANY terminal signal is satisfied — the latest
+// submittal's status is closed (Released for Fabrication / Void — NOT
+// Approved/Approved as Noted, which are still mid-flow at BFA/OFS/IFC), OR the
+// drawing_set carries the legacy set_approval_status = "approved", OR the
+// coalesced detailing_state is at a release-style terminal (Released /
+// Partially Released / Released for Erection), OR every sheet is individually
+// released/approved. Used by the hit-list triage and the "Released" KPI so both
+// surface the same definition of done.
+export function isClosedPackage(pkg: SetPackage | null | undefined): boolean {
+  if (!pkg) return false;
+  const sorted = (pkg.submittals || []).slice().sort((a, b) => (b.round_number || 1) - (a.round_number || 1));
+  const latestSubmittal = sorted[0] || null;
+  if (latestSubmittal && isClosedSubmittal(latestSubmittal)) return true;
+  if (pkg.parent?.set_approval_status === "approved") return true;
+  const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
+  if (
+    detailingState === "Released" ||
+    detailingState === "Partially Released" ||
+    detailingState === "Released for Erection"
+  ) return true;
+  if (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)) return true;
+  return false;
 }
 
 export function rollupDrawingStage(sheets: Drawing[]): string {
