@@ -3,6 +3,7 @@ import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { lockLinkedSetsIfApproved, addSubmittalRound } from "@/hooks/useSubmittals";
+import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { localToday } from "@/utils/dates";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import {
@@ -166,6 +167,9 @@ export default function Submittals() {
     qc.invalidateQueries({ queryKey: ["submittals", projectId] });
     qc.invalidateQueries({ queryKey: ["submittal-rounds", projectId] });
     qc.invalidateQueries({ queryKey: ["sheet-responses", projectId] });
+    // Status moves can auto-queue a detailing task (submittalSmartTriggers).
+    qc.invalidateQueries({ queryKey: ["action-items", projectId] });
+    qc.invalidateQueries({ queryKey: ["action-items"] });
   }, [qc, projectId]);
 
   const createMut = useMutation({
@@ -179,8 +183,14 @@ export default function Submittals() {
     // page's inline status edits + the verb CTA can't release a package to fab
     // without locking it. (Previously this page's update bypassed the lock.)
     mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
+      const prevStatus = rows.find((r: any) => r.id === id)?.status ?? null;
       const updated = await entities.Submittal.update(id, data);
       await lockLinkedSetsIfApproved(updated as any);
+      // Smart triggers: moves into Rejected / R&R / Approved-as-Noted queue a
+      // draft detailing task (deduped inside; never throws).
+      if (typeof data.status === "string") {
+        await runSubmittalStatusTriggers({ submittal: updated as any, prevStatus, nextStatus: data.status });
+      }
       return updated;
     },
     onSuccess: () => { invalidate(); toast.success("Updated"); },
@@ -524,6 +534,7 @@ export default function Submittals() {
             allRfis={allRfis}
             allTasks={allTasks}
             projectName={activeProject?.project_name || activeProject?.name || "Project"}
+            project={activeProject}
             onClose={() => setSelectedId(null)}
             onEdit={() => selected && setEditingId(selected.id)}
             onDelete={() => selected && setToDelete(selected.id)}
@@ -536,12 +547,22 @@ export default function Submittals() {
             onAdvance={(action) => {
               if (!selected || !action.nextStatus) return;
               const today = localToday();
+              // Stamp the submitted date on the FIRST outbound hop (or a
+              // fresh resubmit after R&R) — multi-party routing chains pass
+              // through OFA several times and must not re-stamp each hop.
+              const isResubmit = ["Revise and Resubmit", "Rejected"].includes(selected.status);
+              const stampSubmitted =
+                action.nextStage === "OFA" && (isResubmit || !selected.submitted_date);
               advanceMut.mutate({
                 submittal: selected as any,
                 status: action.nextStatus,
                 ball_in_court: action.nextBallInCourt,
-                submitted_date: action.nextStage === "OFA" ? today : undefined,
+                submitted_date: stampSubmitted ? today : undefined,
                 returned_date: action.nextStage === "BFA" ? today : undefined,
+                extraPatch:
+                  action.chainStepIndex != null
+                    ? { approval_chain_step: action.chainStepIndex }
+                    : undefined,
               });
             }}
             // Inline-edit hook — every editable cell in the detail

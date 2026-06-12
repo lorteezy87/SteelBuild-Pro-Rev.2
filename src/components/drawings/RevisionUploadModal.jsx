@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 import { extractSheetsFromPdf, validatePdfPage } from "@/lib/pdfSheetExtractor";
+import { ensureCurrentRevision, recordSheetSlipSheet } from "@/lib/drawingHub";
 
 const MAX_PDF_SIZE_MB = 32;
 
@@ -710,12 +711,33 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       existingDrawings = await entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
     } catch (e) { console.error("Failed to fetch drawings for apply:", e); }
 
+    // Per-sheet auditable history (drawing_revisions): every revised sheet
+    // gets its OLD file/page snapshotted as a superseded revision and the
+    // new one minted as current — this is what powers per-sheet history +
+    // the overlay compare. History failures never block the slip-sheet
+    // itself; they surface as a warning.
+    let historyFailed = 0;
+
     let updated = 0, added = 0, removed = 0, failed = 0;
     for (const match of matchedSheets) {
       try {
         const existing = existingDrawings.find(d => d.sheet_number === match.sheetNumber && !d.is_superseded);
         if (match.change === "removed") {
-          if (existing) { await entities.Drawing.update(existing.id, { is_superseded: true }); removed++; }
+          if (existing) {
+            await entities.Drawing.update(existing.id, { is_superseded: true });
+            removed++;
+            // Keep an archived revision row so the dropped sheet's last
+            // file/page stays reachable from history.
+            try {
+              const rev = await ensureCurrentRevision({ drawing: existing, userId: null });
+              if (rev?.id) {
+                await entities.DrawingRevision.update(rev.id, { archived_at: new Date().toISOString() });
+              }
+            } catch (histErr) {
+              historyFailed++;
+              console.warn(`[RevisionUploadModal] History archive failed for removed sheet "${match.sheetNumber}":`, histErr);
+            }
+          }
         } else if (match.change === "added") {
           const addedPage = validatePdfPage(match.newSheet?.pdfPage);
           if (addedPage === null) {
@@ -723,7 +745,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               `[RevisionUploadModal] Added sheet "${match.sheetNumber}" has invalid pdfPage=${JSON.stringify(match.newSheet?.pdfPage)} — defaulting to 1.`,
             );
           }
-          await entities.Drawing.create({
+          const createdSheet = await entities.Drawing.create({
             sheet_number: match.newSheet.sheetNumber,
             title: match.newSheet.sheetTitle,
             project_id: activeProject?.id,
@@ -740,6 +762,14 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             is_superseded: false,
           });
           added++;
+          // Mint the v1 history row for the brand-new sheet (carries the
+          // new file/page refs).
+          try {
+            if (createdSheet?.id) await ensureCurrentRevision({ drawing: createdSheet, userId: null });
+          } catch (histErr) {
+            historyFailed++;
+            console.warn(`[RevisionUploadModal] History mint failed for added sheet "${match.sheetNumber}":`, histErr);
+          }
         } else {
           if (existing) {
             // Per-sheet pdf_page MUST be re-derived from the new PDF —
@@ -752,6 +782,23 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               console.warn(
                 `[RevisionUploadModal] Updated sheet "${match.sheetNumber}" has invalid pdfPage=${JSON.stringify(match.newSheet?.pdfPage)} — defaulting to 1.`,
               );
+            }
+            // Snapshot the OLD file/page as a superseded revision and mint
+            // the new one BEFORE the drawings row is overwritten in place.
+            // Idempotent on the revision code; failure → warn, never block.
+            try {
+              await recordSheetSlipSheet({
+                drawing: existing,
+                newCode: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
+                newFileUrl,
+                newPdfPage: updatedPage ?? 1,
+                issuedAt: revMeta.issueDate || null,
+                notes: revMeta.notes || null,
+                userId: null,
+              });
+            } catch (histErr) {
+              historyFailed++;
+              console.warn(`[RevisionUploadModal] Slip-sheet history failed for "${match.sheetNumber}":`, histErr);
             }
             await entities.Drawing.update(existing.id, {
               revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
@@ -773,8 +820,11 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
 
       setApplyStats({ updated, added, removed });
       qc.invalidateQueries({ queryKey: ["drawings"] });
+      qc.invalidateQueries({ queryKey: ["drawing-revisions"] });
       if (failed > 0) {
         setFlowError(`${failed} sheet(s) failed to process. ${updated + added + removed} succeeded.`);
+      } else if (historyFailed > 0) {
+        setFlowError(`Sheets updated, but revision history could not be written for ${historyFailed} sheet(s) — compare/restore for those revisions may be unavailable.`);
       }
       setProcessingPct(100);
       await new Promise(r => setTimeout(r, 500));

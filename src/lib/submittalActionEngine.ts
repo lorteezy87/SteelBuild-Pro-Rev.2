@@ -16,11 +16,20 @@ import {
   stageToSubmittalStatus,
   isRRStatus,
 } from "@/lib/submittalStageMapping";
+import {
+  chainState,
+  firstExternalStepIndex,
+  ROUTING_STATUSES,
+} from "@/lib/approvalChains";
 
 export interface SubmittalLike {
   status?: string | null;
   ball_in_court?: string | null;
   approved_date?: string | null;
+  /** Custom routing chain (approvalChains.js) — jsonb array of { party }. */
+  approval_chain?: unknown;
+  /** 0-based index of the chain step currently holding the ball. */
+  approval_chain_step?: number | null;
 }
 
 export interface SubmittalAction {
@@ -38,6 +47,9 @@ export interface SubmittalAction {
   disabled: boolean;
   /** Current status is a done-terminal (Released for Fab / Void). */
   isTerminal: boolean;
+  /** When the move follows a custom approval chain, the chain step index to
+   * persist alongside the status/BIC patch. Absent for default-flow moves. */
+  chainStepIndex?: number;
 }
 
 // "Done" terminals — nothing to advance to. (Approved/AAN are terminal for the
@@ -65,6 +77,47 @@ export function nextSubmittalAction(submittal: SubmittalLike | null | undefined)
       disabled: true,
       isTerminal: true,
     };
+  }
+
+  // ── Custom approval chain (approvalChains.js) ─────────────────────────
+  // While the submittal is routing for approval and a chain with remaining
+  // steps exists, the next move hands the ball to the next party in the
+  // chain instead of the single default OFA hop. Decisions (Approved / AAN /
+  // R&R / Rejected) and the post-return flow (BFA → OFS → IFC → Released)
+  // stay on the default path below.
+  const chain = chainState(submittal);
+  if (chain.steps) {
+    if (ROUTING_STATUSES.has(status) && chain.stepIndex != null && !chain.atFinalStep) {
+      const nextParty = chain.steps[chain.stepIndex + 1].party;
+      const routedStage = submittalStatusToStage("Submitted", nextParty, null) || "OFA";
+      return {
+        label: `Route to ${nextParty} (${chain.stepIndex + 2}/${chain.steps.length})`,
+        nextStatus: "Submitted",
+        nextBallInCourt: nextParty,
+        nextStage: routedStage,
+        currentStage,
+        disabled: false,
+        isTerminal: false,
+        chainStepIndex: chain.stepIndex + 1,
+      };
+    }
+    // R&R / Rejected with a chain: the resubmit restarts at the first
+    // outbound (non-detailing) hop of the route.
+    if (isRRStatus(status)) {
+      const restartIndex = firstExternalStepIndex(chain.steps);
+      const restartParty = chain.steps[restartIndex].party;
+      const restartStage = submittalStatusToStage("Submitted", restartParty, null) || "OFA";
+      return {
+        label: `Resubmit & route to ${restartParty}`,
+        nextStatus: "Submitted",
+        nextBallInCourt: restartParty,
+        nextStage: restartStage,
+        currentStage,
+        disabled: false,
+        isTerminal: false,
+        chainStepIndex: restartIndex,
+      };
+    }
   }
 
   let nextStage: string;

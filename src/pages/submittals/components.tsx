@@ -11,11 +11,13 @@ import CommentThreadRaw from "@/components/collaboration/CommentThread";
 import RoundTimeline from "@/components/submittals/RoundTimeline";
 import { LinkedRFIs, LinkedTasks } from "@/components/submittals/LinkedEntities";
 import SubmittalReviewStrip from "@/components/submittals/SubmittalReviewStrip";
+import ApprovalChainPanelRaw from "@/components/submittals/ApprovalChainPanel";
 import { BIC_CHOICES, STATUSES, STATUS_CFG, TYPES } from "./format";
 import type { DrawingSet, DrawingSetsById, Submittal, SubmittalRoundRecord } from "./types";
 
 // CommentThread is still .jsx; cast at the boundary (removable once typed).
 const CommentThread = CommentThreadRaw as unknown as ComponentType<Record<string, any>>;
+const ApprovalChainPanel = ApprovalChainPanelRaw as unknown as ComponentType<Record<string, any>>;
 
 // ── Virtual list wrapper ───────────────────────────────────────────────
 
@@ -222,6 +224,8 @@ interface SubmittalDetailProps {
   allRfis?: any[];
   allTasks?: any[];
   projectName?: string;
+  /** Active project record — used for project-defined approval-route templates. */
+  project?: any;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -231,10 +235,10 @@ interface SubmittalDetailProps {
   onNewRound?: () => void;
   onReturnRound: (roundId: string) => void;
   /** Advance the submittal one step in the canonical flow (status + BIC together). */
-  onAdvance?: (action: { nextStatus: string | null; nextBallInCourt: string | null; label: string; nextStage: string | null }) => void;
+  onAdvance?: (action: { nextStatus: string | null; nextBallInCourt: string | null; label: string; nextStage: string | null; chainStepIndex?: number }) => void;
 }
 
-export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, onAdvance }: SubmittalDetailProps) {
+export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, onAdvance }: SubmittalDetailProps) {
   // Wrap onFieldChange so a no-op edit (typing the same value back)
   // doesn't fire a network update — small UX nicety, also stops
   // accidental "Updated" toasts when the user just tabs through.
@@ -370,6 +374,17 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
               </button>
             ))}
           </div>
+        </DetailSection>
+
+        {/* Approval routing — optional multi-party chain (Detailer → GC →
+            Architect → EOR). Drives WHO the verb CTA hands the ball to
+            next; status stays the workflow truth (§20). */}
+        <DetailSection title="Approval routing">
+          <ApprovalChainPanel
+            submittal={submittal}
+            project={project}
+            onFieldChange={onFieldChange}
+          />
         </DetailSection>
 
         {/* Round History — vertical timeline of all submittal rounds

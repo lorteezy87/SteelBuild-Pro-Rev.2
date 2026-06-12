@@ -6,8 +6,11 @@ import {
   CalendarClock,
   CalendarDays,
   CheckCircle2,
+  CircleDollarSign,
   ClipboardList,
   Clock3,
+  FileQuestion,
+  GitCompareArrows,
   Layers3,
   Link2,
   Search,
@@ -103,9 +106,13 @@ interface TriageBoardProps {
   sequenceReadiness: Array<{ sequence: string; packageCount: number; detailingPct: number; fabReadyCount: number; erectionReadyCount: number; atRiskCount: number }>;
   revisionImpact: Array<any>;
   isSaving: boolean;
+  /** Escalate a queue item into a draft RFI / potential CO. Absent = hidden. */
+  onEscalate?: (item: any, kind: "rfi" | "pco") => void;
+  /** Open the revision overlay compare for a sheet. Absent = hidden. */
+  onCompareRevision?: (drawingId: string) => void;
 }
 
-export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving }: TriageBoardProps) {
+export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving, onEscalate, onCompareRevision }: TriageBoardProps) {
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
@@ -224,15 +231,41 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                   disabled={isSaving}
                 />
               )}
-              <button
-                type="button"
-                onClick={() => onOpenTab(focusRoute)}
-                className="sbd-btn-primary"
-                style={{ marginTop: 18, display: "inline-flex", alignItems: "center", gap: 8 }}
-              >
-                Open Work
-                <ArrowRight size={14} />
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
+                <button
+                  type="button"
+                  onClick={() => onOpenTab(focusRoute)}
+                  className="sbd-btn-primary"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                >
+                  Open Work
+                  <ArrowRight size={14} />
+                </button>
+                {/* Contextual escalation — turn the blocker into a draft RFI
+                    or a potential CO without leaving the control board. */}
+                {onEscalate && (
+                  <>
+                    <button
+                      type="button"
+                      className="sbd-btn-ghost"
+                      onClick={() => onEscalate(focusItem, "rfi")}
+                      title="Draft an RFI from this item"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
+                    >
+                      <FileQuestion size={13} /> Draft RFI
+                    </button>
+                    <button
+                      type="button"
+                      className="sbd-btn-ghost"
+                      onClick={() => onEscalate(focusItem, "pco")}
+                      title="Draft a potential change order from this item"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
+                    >
+                      <CircleDollarSign size={13} /> Draft PCO
+                    </button>
+                  </>
+                )}
+              </div>
             </>
           ) : (
             <EmptyState text="No overdue, due-soon, action, or missing-date work is currently flagged." />
@@ -255,6 +288,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
           items={criticalItems}
           empty="No critical work is currently queued."
           onOpenTab={onOpenTab}
+          onEscalate={onEscalate}
         />
         <PipelinePanel topStatuses={topStatuses} openCount={triage.openItems.length} onOpenTab={onOpenTab} />
       </div>
@@ -266,6 +300,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
           items={triage.dueSoon.slice(0, 8)}
           empty="No drawing or submittal due dates in the next week."
           onOpenTab={onOpenTab}
+          onEscalate={onEscalate}
         />
         <TriageList
           title="Missing Due Dates"
@@ -277,7 +312,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
       </div>
 
       <SequenceReadinessSection rows={sequenceReadiness} />
-      <RevisionImpactSection rows={revisionImpact} />
+      <RevisionImpactSection rows={revisionImpact} onCompare={onCompareRevision} />
     </div>
   );
 }
@@ -361,7 +396,7 @@ function SeqMetric({ label, value, tone }: { label: string; value: ReactNode; to
 
 const REV_SEVERITY_TONE: Record<string, string> = { critical: error, high: warning, medium: info, low: textMuted };
 
-function RevisionImpactSection({ rows }: { rows: any[] }) {
+function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onCompare?: (drawingId: string) => void }) {
   const shown = (rows || []).slice(0, 8);
   return (
     <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
@@ -402,14 +437,27 @@ function RevisionImpactSection({ rows }: { rows: any[] }) {
                   {r.inField && <ReadyChip ok={false} label="In field" bad />}
                   {noneReached && <span style={{ color: textMuted, fontFamily: mono, fontSize: 10 }}>caught pre-fab</span>}
                 </div>
-                <span style={{
-                  fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
-                  color: tone, padding: "3px 9px", borderRadius: 999,
-                  background: `color-mix(in srgb, ${tone} 16%, transparent)`,
-                  border: `1px solid color-mix(in srgb, ${tone} 42%, transparent)`,
-                }}>
-                  {r.severity}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {onCompare && r.drawingId && (
+                    <button
+                      type="button"
+                      className="sbd-btn-ghost"
+                      onClick={() => onCompare(String(r.drawingId))}
+                      title="Overlay-compare this revision against the prior one"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, minHeight: 30, padding: "4px 9px", fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" }}
+                    >
+                      <GitCompareArrows size={12} /> Compare
+                    </button>
+                  )}
+                  <span style={{
+                    fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
+                    color: tone, padding: "3px 9px", borderRadius: 999,
+                    background: `color-mix(in srgb, ${tone} 16%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${tone} 42%, transparent)`,
+                  }}>
+                    {r.severity}
+                  </span>
+                </div>
               </div>
             );
           })}
@@ -886,9 +934,10 @@ interface TriageListProps {
   empty: string;
   onOpenTab: (key: string) => void;
   compact?: boolean;
+  onEscalate?: (item: any, kind: "rfi" | "pco") => void;
 }
 
-function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false }: TriageListProps) {
+function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false, onEscalate }: TriageListProps) {
   return (
     <section className="sbd-card" style={{ padding: compact ? 14 : 16, borderRadius: 14, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
@@ -903,7 +952,7 @@ function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false 
           <EmptyState text={empty} />
         ) : (
           items.map((item) => (
-            <TriageItemRow key={item.id} item={item} onOpen={() => onOpenTab(item.routeTab)} />
+            <TriageItemRow key={item.id} item={item} onOpen={() => onOpenTab(item.routeTab)} onEscalate={onEscalate} />
           ))
         )}
       </div>
@@ -911,15 +960,26 @@ function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false 
   );
 }
 
-function TriageItemRow({ item, onOpen }: { item: any; onOpen: () => void }) {
+function TriageItemRow({ item, onOpen, onEscalate }: { item: any; onOpen: () => void; onEscalate?: (item: any, kind: "rfi" | "pco") => void }) {
   const tone = getActionTone(item);
+  // div+role=button (not <button>) so the per-row escalation buttons can nest
+  // without invalid button-in-button markup. Enter/Space still activate.
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
       style={{
         display: "grid",
-        gridTemplateColumns: "minmax(0, 1.5fr) minmax(90px, 0.35fr) minmax(120px, 0.45fr) 28px",
+        gridTemplateColumns: onEscalate
+          ? "minmax(0, 1.5fr) minmax(90px, 0.35fr) minmax(120px, 0.45fr) auto 28px"
+          : "minmax(0, 1.5fr) minmax(90px, 0.35fr) minmax(120px, 0.45fr) 28px",
         gap: 12,
         alignItems: "center",
         width: "100%",
@@ -968,9 +1028,57 @@ function TriageItemRow({ item, onOpen }: { item: any; onOpen: () => void }) {
         <br />
         {item.owner} - {fmtDate(item.dueDate)}
       </div>
+      {onEscalate && (
+        <div
+          style={{ display: "flex", gap: 4 }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <EscalateIconButton
+            icon={FileQuestion}
+            label="RFI"
+            title={`Draft an RFI from "${item.title}"`}
+            onClick={() => onEscalate(item, "rfi")}
+          />
+          <EscalateIconButton
+            icon={CircleDollarSign}
+            label="PCO"
+            title={`Draft a potential change order from "${item.title}"`}
+            onClick={() => onEscalate(item, "pco")}
+          />
+        </div>
+      )}
       <div style={{ color: textMuted, display: "flex", justifyContent: "flex-end" }}>
         <ArrowRight size={15} />
       </div>
+    </div>
+  );
+}
+
+function EscalateIconButton({ icon: Icon, label, title, onClick }: { icon: IconType; label: string; title: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        minHeight: 30, padding: "4px 8px", borderRadius: 7, cursor: "pointer",
+        background: "transparent", border: `1px solid ${border}`,
+        color: textMuted, fontFamily: mono, fontSize: 9, fontWeight: 800,
+        letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "var(--accent)";
+        e.currentTarget.style.color = "var(--accent)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = border;
+        e.currentTarget.style.color = textMuted;
+      }}
+    >
+      <Icon size={11} />
+      {label}
     </button>
   );
 }

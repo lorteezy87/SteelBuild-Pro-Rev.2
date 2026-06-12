@@ -29,7 +29,10 @@ import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detai
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { usePermissions } from "@/services/permissions";
 import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
+import EscalateModal from "./drawingSubmittalHub/EscalateModal";
+import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
 import {
   ACTION_STATUSES,
   TABS,
@@ -71,6 +74,10 @@ const DocControlPanel = lazyWithRetry(() =>
     default: m.DocControlPanel,
   })),
 ) as unknown as ComponentType<AnyProps>;
+// Overlay compare carries pdfjs — keep it off the hub's route chunk.
+const RevisionCompareModalLazy = lazyWithRetry(
+  () => import("@/components/drawings/RevisionCompareModal"),
+) as unknown as ComponentType<AnyProps>;
 
 // A package is CLOSED when ANY terminal signal is satisfied — the latest
 // submittal's status is closed (Released for Fabrication / Void — NOT
@@ -109,7 +116,13 @@ export default function DrawingSubmittalHub() {
   const activeProject = projectCtx.activeProject as any;
   const [searchParams, setSearchParams] = useSearchParams();
   const [leadModalOpen, setLeadModalOpen] = useState(false);
+  // Contextual escalation (Critical Work Queue / Next Decision → draft RFI / PCO)
+  const [escalateItem, setEscalateItem] = useState<any | null>(null);
+  const [escalateKind, setEscalateKind] = useState<EscalationKind>("rfi");
+  // Revision overlay compare (Revision Impact rows)
+  const [compareDrawingId, setCompareDrawingId] = useState<string | null>(null);
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const projectId = activeProject?.id as string | undefined;
   const projectName = activeProject?.name || activeProject?.project_number || "";
 
@@ -220,6 +233,16 @@ export default function DrawingSubmittalHub() {
     }
     return computeRevisionImpact({ revisions: drawingRevisions as any[], drawingsById });
   }, [drawings, drawingRevisions]);
+
+  // Sheet selected for the revision overlay compare (Revision Impact rows).
+  const compareDrawing = useMemo(
+    () => ((drawings as any[]) || []).find((d: any) => String(d?.id) === String(compareDrawingId)) || null,
+    [drawings, compareDrawingId],
+  );
+
+  // Escalation is gated by create permission on either target entity; the
+  // modal itself disables whichever kind the user can't create.
+  const canEscalate = can("create", "rfi") || can("create", "change_order");
 
   // Sequence-aware readiness rollup (group packages by erection sequence).
   const sequenceReadiness = useMemo(() => {
@@ -639,6 +662,8 @@ export default function DrawingSubmittalHub() {
                 sequenceReadiness={sequenceReadiness}
                 revisionImpact={revisionImpact}
                 isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
+                onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
+                onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
               />
             )}
             {activeTab === "process" && (
@@ -672,6 +697,28 @@ export default function DrawingSubmittalHub() {
           onSave={(leads) => saveLeadsMut.mutate(leads)}
           onClose={() => setLeadModalOpen(false)}
         />
+      )}
+
+      {/* Contextual escalation: queue item → draft RFI / potential CO. */}
+      {escalateItem && (
+        <EscalateModal
+          item={escalateItem}
+          initialKind={escalateKind}
+          projectId={projectId}
+          projectName={projectName}
+          onClose={() => setEscalateItem(null)}
+        />
+      )}
+
+      {/* Revision overlay compare (old=red / new=blue). */}
+      {compareDrawing && (
+        <Suspense fallback={null}>
+          <RevisionCompareModalLazy
+            open
+            onClose={() => setCompareDrawingId(null)}
+            drawing={compareDrawing}
+          />
+        </Suspense>
       )}
     </div>
   );
