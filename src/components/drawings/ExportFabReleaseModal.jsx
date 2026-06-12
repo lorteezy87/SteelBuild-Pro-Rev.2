@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { resolveFileUrl } from "@/api/supabaseClient";
 import { computeFabReleaseGate, linkedRfiNumbers } from "@/lib/fabReleaseGate";
+import { recordFabRelease, FabReleaseBlockedError } from "@/lib/fabRelease/releaseStatus";
 import {
   isApprovedForFab,
   isClaimable,
@@ -96,10 +97,12 @@ export default function ExportFabReleaseModal({
   const gated = kind !== "claims";
   const [linkedRfis, setLinkedRfis] = useState([]);
   const [override, setOverride] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setOverride(false);
+    setOverrideReason("");
     if (!gated || !project?.id) {
       setLinkedRfis([]);
       return;
@@ -133,7 +136,10 @@ export default function ExportFabReleaseModal({
       : { blocked: false, blockingRfis: [], affectedSheets: [], blockingCount: 0 }),
     [gated, filteredDrawings, linkedRfis],
   );
-  const exportLocked = gate.blocked && !override;
+  // Override now requires a written reason (the server records it and refuses an
+  // empty-reason override). The button stays locked until the reason is filled.
+  const overrideReady = override && overrideReason.trim().length > 0;
+  const exportLocked = gate.blocked && !overrideReady;
 
   if (!open) return null;
 
@@ -154,6 +160,34 @@ export default function ExportFabReleaseModal({
     setBusy(true);
     try {
       const stem = suggestPackageName({ kind, project });
+
+      // ── Server-arbitrated fab-release gate (fab_release / turnover only) ──
+      // The exported files are a convenience artifact; the AUTHORITATIVE release
+      // is the server record in fab_release_log, whose trigger REFUSES a release
+      // while open RFIs reference the package's sheets unless a PM override
+      // reason is supplied (and it snapshots which RFIs were open). This is what
+      // makes the server the single arbiter — a bypassed client gate still can't
+      // record a release. We record it BEFORE generating the package.
+      if (gated) {
+        try {
+          await recordFabRelease(supabase, {
+            projectId: project.id,
+            packageKind: kind,
+            packageName: stem,
+            drawingIds: filteredDrawings.map((d) => d.id).filter(Boolean),
+            overrideReason: override ? overrideReason : null,
+          });
+        } catch (err) {
+          if (err instanceof FabReleaseBlockedError) {
+            const nums = err.blockingRfiNumbers.length ? ` (${err.blockingRfiNumbers.join(", ")})` : "";
+            toast.error(`Release blocked: open RFI${err.blockingRfiNumbers.length === 1 ? "" : "s"}${nums} reference this package. Resolve them or check the PM override and give a reason.`);
+          } else {
+            toast.error(`Could not record the release: ${err?.message || "Unknown error"}`);
+          }
+          setBusy(false);
+          return;
+        }
+      }
 
       // ── Resolve drawing file URLs (best-effort — non-fatal) ───────────
       const urlLines = [];
@@ -233,22 +267,8 @@ export default function ExportFabReleaseModal({
         );
       }
 
-      // Audit the override: if the user shipped despite the gate, record who,
-      // which package, and which RFIs were still open (server stamps the user).
-      if (override && gate.blocked && project?.id) {
-        try {
-          await supabase.from("fab_release_overrides").insert({
-            project_id: project.id,
-            package_kind: kind,
-            package_name: stem,
-            drawing_count: filteredDrawings.length,
-            blocking_rfi_numbers: gate.blockingRfis.map((r) => r.rfi_number).filter(Boolean),
-          });
-        } catch (err) {
-          console.warn("[ExportFabReleaseModal] override audit log failed:", err);
-        }
-      }
-
+      // (The release + any override are recorded server-side via recordFabRelease
+      // above — the old best-effort fab_release_overrides insert is superseded.)
       toast.success(`Package exported (${totalCount} item${totalCount === 1 ? "" : "s"})`);
       onClose?.();
     } catch (err) {
@@ -335,6 +355,21 @@ export default function ExportFabReleaseModal({
               <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} />
               <span><strong style={{ color: "var(--text-primary)" }}>PM override</strong> — release despite the open RFI{gate.blockingCount === 1 ? "" : "s"} (I accept the rework risk).</span>
             </label>
+            {override && (
+              <textarea
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                rows={2}
+                placeholder="Override reason (required) — why release despite the open RFIs?"
+                style={{
+                  ...mono, marginTop: 8, width: "100%", boxSizing: "border-box",
+                  fontSize: 11, padding: "8px 10px", borderRadius: 2,
+                  background: "var(--bg-input, var(--bg-surface-low))",
+                  border: `1px solid ${overrideReason.trim() ? "var(--border-default)" : "var(--status-error)"}`,
+                  color: "var(--text-primary)", outline: "none", resize: "vertical",
+                }}
+              />
+            )}
           </div>
         )}
 
