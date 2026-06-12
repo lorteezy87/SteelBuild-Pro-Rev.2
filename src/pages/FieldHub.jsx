@@ -16,6 +16,7 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
+const FieldTodayPage = lazyWithRetry(() => import("@/pages/FieldToday"));
 const FieldOverview = lazyWithRetry(() => import("@/pages/Field"));
 const InspectionsPage = lazyWithRetry(() => import("@/pages/Inspections"));
 const SafetyPage = lazyWithRetry(() => import("@/pages/Safety"));
@@ -23,6 +24,7 @@ const PunchlistPage = lazyWithRetry(() => import("@/pages/Punchlist"));
 const QualityControlPage = lazyWithRetry(() => import("@/pages/QualityControl"));
 
 const TABS = [
+  { key: "today", label: "Today", Component: FieldTodayPage },
   { key: "overview", label: "Overview", Component: FieldOverview },
   { key: "inspections", label: "Inspections", Component: InspectionsPage },
   { key: "punchlist", label: "Punchlist", Component: PunchlistPage },
@@ -33,7 +35,7 @@ const TABS = [
 export default function FieldHub() {
   const [params, setParams] = useSearchParams();
   const param = params.get("field_tab");
-  const activeKey = TABS.some((t) => t.key === param) ? param : "overview";
+  const activeKey = TABS.some((t) => t.key === param) ? param : "today";
   const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
   const setTab = (key) =>
     setParams(

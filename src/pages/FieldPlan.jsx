@@ -87,7 +87,7 @@ export default function FieldPlan() {
         const open = r.status !== "Closed" && r.status !== "Answered";
         return {
           type: "RFI",
-          label: `${r.rfi_number || "RFI"} · ${r.subject || ""}`.slice(0, 60),
+          label: `${r.rfi_number || "RFI"} · ${r.title || ""}`.slice(0, 60),
           severity: open ? "danger" : "ok",
           resolved: !open,
         };
