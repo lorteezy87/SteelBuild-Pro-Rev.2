@@ -26,7 +26,7 @@ export const PRIMARY_TABS = [
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "GanttChart", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
-  { label: "COST",        pages: ["CostHub", "Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
+  { label: "COST",        pages: ["CostHub", "Financials", "CostDashboard", "ChangeOrders", "Backcharges", "SOV", "ContractManagement"] },
   { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "AIInsights", "JobStatusReport", "DecisionLog", "Reports", "AlertsCenter", "Activity"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
@@ -85,6 +85,7 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDCB0", name: "Cost Dashboard",     group: "Cost",          page: "CostDashboard" },
   { icon: "\uD83D\uDCCA", name: "SOV",                group: "Cost",          page: "SOV" },
   { icon: "$",  name: "Change Orders",               group: "Cost",          page: "ChangeOrders" },
+  { icon: "⚖", name: "Backcharge Defense",      group: "Cost",          page: "Backcharges" },
   { icon: "\uD83D\uDC65", name: "Resources",          group: "Fabrication",   page: "ResourceHub" },
   { icon: "\uD83D\uDC65", name: "Resource Register",  group: "Resources",     page: "ResourceManagement" },
   { icon: "\u25A8", name: "Crew Scheduling",          group: "Resources",     page: "ResourceScheduling" },
@@ -196,6 +197,7 @@ export const NAV_GROUPS = [
       { label: "Contract Management",  icon: "\uD83D\uDCCB", page: "ContractManagement" },
       { label: "Schedule of Values",   icon: "\uD83D\uDCCA", page: "SOV" },
       { label: "Change Orders",        icon: "$",  page: "ChangeOrders", badgeKey: "co" },
+      { label: "Backcharge Defense",   icon: "\u2696", page: "Backcharges" },
       { label: "Expenses",             icon: "\uD83D\uDCB0", page: "Expenses" },
     ],
   },
@@ -260,6 +262,7 @@ export const SIDEBAR_GROUPS = [
       { label: "Action Items",   icon: "\u2611", page: "ActionItems" },
       { label: "RFIs",                icon: "\u2691", page: "RFIs" },
       { label: "Change Orders",  icon: "$",  page: "ChangeOrders" },
+      { label: "Backcharge Defense",  icon: "\u2696", page: "Backcharges" },
     ],
   },
   {
