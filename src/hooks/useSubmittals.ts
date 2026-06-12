@@ -24,6 +24,12 @@ import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { lockSet } from "@/lib/drawingHub";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
+import { supabase } from "@/lib/supabase";
+import {
+  FabReleaseBlockedError,
+  isFabReleaseBlocked,
+  parseBlockedRfiNumbers,
+} from "@/lib/fabRelease/releaseStatus";
 
 const runStatusTriggers = runSubmittalStatusTriggers as unknown as (args: {
   submittal: Partial<Submittal> | null | undefined;
@@ -117,11 +123,44 @@ export interface AddRoundInput {
   /** Extra fields to persist with the same patch (e.g. approval_chain_step
    * when the move follows a custom routing chain). */
   extraPatch?: Record<string, unknown> | null;
+  /** PM override reason to release past the fab-release gate when open RFIs
+   * reference the submittal's sheets. Only consulted on a move to
+   * 'Released for Fabrication'; persisted to submittals.fab_release_override_reason
+   * so the server trigger allows the transition (and audits why). */
+  fabReleaseOverrideReason?: string | null;
 }
 
 export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal> {
   const s = input.submittal;
   const eventRound = (Number(s.total_rounds) || 0) + 1;
+  const fabOverride = (input.fabReleaseOverrideReason || "").trim() || null;
+  const isFabRelease = input.status === "Released for Fabrication";
+
+  // Server-arbitrated fab-release gate (Option C): a submittal cannot reach
+  // 'Released for Fabrication' while open RFIs reference its sheets. Pre-check
+  // BEFORE logging the round so a blocked release never orphans a round row; the
+  // DB trigger is the authoritative backstop (mapped below if it fires on a race
+  // between this check and the write).
+  if (isFabRelease && !fabOverride) {
+    // `submittal_blocking_rfis` is a SECURITY DEFINER RPC not yet in the
+    // generated DB types — cast the call (the result is handled defensively).
+    const callRpc = supabase.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<{ data: Array<{ rfi_number?: string }> | null; error: { message?: string } | null }>;
+    const { data: blocking, error: gateErr } = await callRpc("submittal_blocking_rfis", {
+      p_submittal_id: s.id,
+    });
+    if (!gateErr && Array.isArray(blocking) && blocking.length > 0) {
+      const nums = (blocking as Array<{ rfi_number?: string }>)
+        .map((b) => b?.rfi_number)
+        .filter(Boolean) as string[];
+      throw new FabReleaseBlockedError(
+        `FAB_RELEASE_BLOCKED: ${nums.length} open RFI(s) reference sheets in this submittal's package (${nums.join(", ")}). Resolve them or release with an override reason.`,
+        nums,
+      );
+    }
+  }
 
   const round = await entities.SubmittalRound.create({
     project_id: s.project_id,
@@ -146,9 +185,27 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   if (input.submitted_date) patch.submitted_date = input.submitted_date;
   if (input.returned_date) patch.returned_date = input.returned_date;
   if (input.bumpRevision) patch.round_number = (Number(s.round_number) || 1) + 1;
+  if (isFabRelease) patch.fab_release_override_reason = fabOverride;
 
-  const updated = await entities.Submittal.update(s.id, patch as Update<"submittals">);
-  await lockLinkedSetsIfApproved(updated);
+  let updated: unknown;
+  try {
+    updated = await entities.Submittal.update(s.id, patch as Update<"submittals">);
+  } catch (err) {
+    // Backstop: the trigger blocked the transition (e.g. an RFI opened between
+    // the pre-check and this write). Undo the round we just logged so it can't
+    // orphan, and surface a typed block error.
+    if (isFabReleaseBlocked(err)) {
+      const msg = (err as { message?: string })?.message || "Fab release blocked by open RFIs";
+      try {
+        if (round?.id) await entities.SubmittalRound.delete(round.id as string);
+      } catch {
+        /* best-effort cleanup */
+      }
+      throw new FabReleaseBlockedError(msg, parseBlockedRfiNumbers(msg));
+    }
+    throw err;
+  }
+  await lockLinkedSetsIfApproved(updated as Partial<Submittal>);
   // Smart triggers: a move into Rejected / R&R / Approved-as-Noted queues a
   // draft detailing task (deduped, never throws — see submittalSmartTriggers).
   await runStatusTriggers({

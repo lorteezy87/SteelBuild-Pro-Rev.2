@@ -17,14 +17,20 @@ vi.mock("@/lib/drawingHub", () => ({
 
 const createRound = vi.fn(async (row: any) => ({ id: "round-1", ...row }));
 const updateSubmittal = vi.fn(async (id: string, patch: any) => ({ id, drawing_set_ids: ["set-a"], ...patch }));
+const deleteRound = vi.fn(async (_id: string) => ({}));
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
-    SubmittalRound: { create: (...a: any[]) => createRound(a[0]) },
+    SubmittalRound: { create: (...a: any[]) => createRound(a[0]), delete: (...a: any[]) => deleteRound(a[0]) },
     Submittal: { update: (...a: any[]) => updateSubmittal(a[0], a[1]) },
   },
 }));
+// The hook imports the raw client (for the fab-release pre-check RPC); mock it so
+// the test doesn't load @/lib/env (which throws without VITE_SUPABASE_* set).
+const rpcMock = vi.fn(async (..._a: any[]) => ({ data: [] as any[], error: null }));
+vi.mock("@/lib/supabase", () => ({ supabase: { rpc: (...a: any[]) => rpcMock(...a) } }));
 
 import { lockSet } from "@/lib/drawingHub";
+import { FabReleaseBlockedError } from "@/lib/fabRelease/releaseStatus";
 import {
   lockLinkedSetsIfApproved,
   addSubmittalRound,
@@ -222,5 +228,79 @@ describe("addSubmittalRound (single audited write path)", () => {
       bumpRevision: true,
     });
     expect(updateSubmittal).toHaveBeenCalledWith("s3", expect.objectContaining({ round_number: 3 }));
+  });
+});
+
+describe("addSubmittalRound — fab-release gate (Option C)", () => {
+  beforeEach(() => {
+    mockLockSet.mockClear();
+    createRound.mockClear();
+    updateSubmittal.mockClear();
+    deleteRound.mockClear();
+    rpcMock.mockReset();
+    rpcMock.mockResolvedValue({ data: [], error: null });
+  });
+
+  it("pre-blocks a 'Released for Fabrication' move when open RFIs exist (no override) — no round logged", async () => {
+    rpcMock.mockResolvedValueOnce({ data: [{ rfi_number: "RFI-001" }, { rfi_number: "RFI-002" }], error: null });
+    await expect(
+      addSubmittalRound({
+        submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1 },
+        status: "Released for Fabrication",
+      }),
+    ).rejects.toBeInstanceOf(FabReleaseBlockedError);
+    expect(rpcMock).toHaveBeenCalledWith("submittal_blocking_rfis", { p_submittal_id: "s1" });
+    expect(createRound).not.toHaveBeenCalled(); // round never logged → no orphan
+    expect(updateSubmittal).not.toHaveBeenCalled();
+  });
+
+  it("releases when an override reason is given — skips the pre-check, stamps fab_release_override_reason (trimmed)", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s2", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0 },
+      status: "Released for Fabrication",
+      fabReleaseOverrideReason: "  accept rework risk  ",
+    });
+    expect(rpcMock).not.toHaveBeenCalled(); // override → no pre-check
+    expect(createRound).toHaveBeenCalled();
+    expect(updateSubmittal).toHaveBeenCalledWith(
+      "s2",
+      expect.objectContaining({ fab_release_override_reason: "accept rework risk" }),
+    );
+  });
+
+  it("releases cleanly when no RFIs block — round logged, override reason null", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s3", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 2 },
+      status: "Released for Fabrication",
+    });
+    expect(rpcMock).toHaveBeenCalled();
+    expect(createRound).toHaveBeenCalled();
+    expect(updateSubmittal).toHaveBeenCalledWith(
+      "s3",
+      expect.objectContaining({ status: "Released for Fabrication", fab_release_override_reason: null }),
+    );
+  });
+
+  it("backstop: a server FAB_RELEASE_BLOCKED on the update undoes the logged round", async () => {
+    // Pre-check passes, but the trigger fires on the write (RFI opened in between).
+    updateSubmittal.mockRejectedValueOnce({ message: "FAB_RELEASE_BLOCKED: 1 open RFI(s) ... (RFI-009)." });
+    await expect(
+      addSubmittalRound({
+        submittal: { id: "s4", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0 },
+        status: "Released for Fabrication",
+      }),
+    ).rejects.toBeInstanceOf(FabReleaseBlockedError);
+    expect(createRound).toHaveBeenCalled(); // round was logged…
+    expect(deleteRound).toHaveBeenCalledWith("round-1"); // …then undone
+  });
+
+  it("does NOT pre-check non-release moves (e.g. Approved)", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s5", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0 },
+      status: "Approved",
+      ball_in_court: "EOR",
+    });
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(createRound).toHaveBeenCalled();
   });
 });
