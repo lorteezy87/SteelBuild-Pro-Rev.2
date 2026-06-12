@@ -19,7 +19,9 @@ import { daysUntil } from "@/lib/dateMath";
 import SubmittalBulkEditModal from "@/components/submittals/SubmittalBulkEditModal";
 import SubmittalBulkAddModal from "@/components/submittals/SubmittalBulkAddModal";
 import NewRoundModal from "@/components/submittals/NewRoundModal";
+import ReleaseGateOverrideModal from "@/components/submittals/ReleaseGateOverrideModal";
 import SheetResponseGrid from "@/components/submittals/SheetResponseGrid";
+import { FabReleaseBlockedError, isFabReleaseBlocked } from "@/lib/fabRelease/releaseStatus";
 import { batchProcess } from "@/utils/batchProcess";
 import { usePermissions } from "@/services/permissions";
 import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submittals/format";
@@ -71,6 +73,9 @@ export default function Submittals() {
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showNewRound, setShowNewRound] = useState(false);
+  // Pending "Release for Fabrication" move blocked by open RFIs — drives the
+  // override dialog (the server gate refused; PM can release with a reason).
+  const [releaseBlock, setReleaseBlock] = useState<{ input: any; rfis: string[] } | null>(null);
   const [showSheetResponse, setShowSheetResponse] = useState<any>(null); // round object or null
 
   const { data: rows = [], isLoading } = useQuery({
@@ -194,14 +199,27 @@ export default function Submittals() {
       return updated;
     },
     onSuccess: () => { invalidate(); toast.success("Updated"); },
-    onError: (err: any) => toast.error(`Update failed: ${err.message}`),
+    onError: (err: any) =>
+      toast.error(
+        isFabReleaseBlocked(err)
+          ? `Release blocked by open RFIs — use the "Release for Fabrication" action to override, or resolve the RFIs.`
+          : `Update failed: ${err.message}`,
+      ),
   });
   // Verb CTA → the single audited write path: logs a submittal_rounds row +
   // patches + auto-locks, atomically (activates the previously-empty round log).
   const advanceMut = useMutation({
     mutationFn: (input: Parameters<typeof addSubmittalRound>[0]) => addSubmittalRound(input),
-    onSuccess: () => { invalidate(); toast.success("Round logged"); },
-    onError: (err: any) => toast.error(`Advance failed: ${err.message}`),
+    onSuccess: () => { invalidate(); toast.success("Round logged"); setReleaseBlock(null); },
+    onError: (err: any, variables) => {
+      // A blocked "Release for Fabrication" opens the override dialog with the
+      // pending move so a PM can release with a reason (or cancel + resolve).
+      if (err instanceof FabReleaseBlockedError) {
+        setReleaseBlock({ input: variables, rfis: err.blockingRfiNumbers || [] });
+      } else {
+        toast.error(`Advance failed: ${err.message}`);
+      }
+    },
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => entities.Submittal.delete(id),
@@ -669,6 +687,18 @@ export default function Submittals() {
           onSubmit={(data) => createRoundMut.mutate(data)}
         />
       )}
+
+      {/* Fab-release gate override — a "Release for Fabrication" move blocked by
+          open RFIs reopens here so a PM can release with a recorded reason. */}
+      <ReleaseGateOverrideModal
+        open={!!releaseBlock}
+        blockingRfiNumbers={releaseBlock?.rfis || []}
+        busy={advanceMut.isPending}
+        onClose={() => setReleaseBlock(null)}
+        onConfirm={(reason: string) =>
+          releaseBlock && advanceMut.mutate({ ...releaseBlock.input, fabReleaseOverrideReason: reason })
+        }
+      />
 
       {/* Sheet response grid — per-sheet response entry when a round
           is returned by the reviewer. Opens when "Mark Returned" is
