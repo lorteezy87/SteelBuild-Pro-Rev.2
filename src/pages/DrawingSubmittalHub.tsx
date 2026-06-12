@@ -675,6 +675,7 @@ export default function DrawingSubmittalHub() {
                 onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
                 onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
                 modelMapping={modelMappingSummary}
+                modelElementRows={modelElements as any[]}
                 onImportModelElements={() => setImportModelOpen(true)}
               />
             )}
