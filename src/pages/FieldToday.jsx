@@ -86,6 +86,21 @@ export default function FieldToday() {
     [scheduleTasks, todayIso],
   );
 
+  // Group the already-sorted list by urgency so a long day (lots of overdue
+  // work) stays scannable — every item still shows; nothing is hidden.
+  const sections = useMemo(() => {
+    const order = ["overdue", "due-today", "active", "unscheduled", "upcoming"];
+    const byBucket = new Map();
+    for (const task of todaysWork) {
+      const bucket = taskUrgency(task, todayIso);
+      if (!byBucket.has(bucket)) byBucket.set(bucket, []);
+      byBucket.get(bucket).push(task);
+    }
+    return order
+      .filter((bucket) => byBucket.has(bucket))
+      .map((bucket) => ({ bucket, tasks: byBucket.get(bucket) }));
+  }, [todaysWork, todayIso]);
+
   // ── Task progress: optimistic write back to the schedule ──
   const progressMut = useMutation({
     mutationFn: ({ id, pct }) => {
@@ -195,7 +210,7 @@ export default function FieldToday() {
         eyebrow={activeProject?.name || "Field"}
         title="Field Today"
         count={todaysWork.length}
-        unit="open"
+        unit=" open"
         subtitle={fmtShortDate(todayIso)}
       />
 
@@ -282,16 +297,43 @@ export default function FieldToday() {
             <div>No open tasks scheduled for today. Nice work.</div>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {todaysWork.map((task) => (
-              <TaskCaptureCard
-                key={task.id}
-                task={task}
-                todayIso={todayIso}
-                saving={progressMut.isPending && progressMut.variables?.id === task.id}
-                onSetProgress={(pct) => setProgress(task, pct)}
-              />
-            ))}
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {sections.map((section) => {
+              const tone = URGENCY[section.bucket] || URGENCY.active;
+              return (
+                <div key={section.bucket} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "2px 2px",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      fontWeight: 800,
+                      letterSpacing: "0.10em",
+                      color: tone.color,
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{ width: 8, height: 8, borderRadius: 999, background: tone.color, flexShrink: 0 }}
+                    />
+                    {tone.label}
+                    <span style={{ color: "var(--text-muted)", fontWeight: 700 }}>· {section.tasks.length}</span>
+                  </div>
+                  {section.tasks.map((task) => (
+                    <TaskCaptureCard
+                      key={task.id}
+                      task={task}
+                      todayIso={todayIso}
+                      saving={progressMut.isPending && progressMut.variables?.id === task.id}
+                      onSetProgress={(pct) => setProgress(task, pct)}
+                    />
+                  ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
