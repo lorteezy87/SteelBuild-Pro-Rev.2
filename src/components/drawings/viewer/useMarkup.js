@@ -1,154 +1,245 @@
 /**
- * Load + persist drawing markup (redlines, shapes, arrows, notes).
+ * Load + persist drawing markup (redlines, shapes, clouds, stamps, notes).
  *
- * Ownership model: markup lives in `drawings.markup` JSONB (migration 045).
- * The hook keeps a local working copy (optimistic) and debounces writes
- * back to Supabase. Every markup entry is the full shape — we replace the
- * whole array each save. Drawings rarely have more than ~50 markup items,
- * so the JSONB write is cheap.
+ * Ownership model (v2): one ROW PER MARKUP ITEM in `drawing_markups`
+ * (migration 20260611140000) instead of the old drawings.markup JSONB blob.
+ * That makes concurrent redlining safe — two reviewers adding marks at the
+ * same time are independent INSERTs, not a whole-array last-writer-wins —
+ * and stamps every mark with its author + timestamp.
  *
- * Each entry shape:
+ * Realtime: the viewer subscribes to postgres_changes on drawing_markups,
+ * so marks added by another user appear within a second or two without a
+ * manual refresh.
+ *
+ * Column mapping (legacy columns reused — see migration header):
+ *   kind     <-> markup_type        pdf_page <-> page_number
+ *   text     <-> comment            geometry + extras <-> payload jsonb
+ *
+ * Item shape handed to AnnotationLayer (superset of the legacy shape):
  *   {
- *     id: string,           // newMarkupId()
- *     kind: "pen" | "rect" | "arrow" | "note",
- *     pdf_page: number,     // which page of the source PDF
- *     color: string,        // hex (default varies per tool)
- *     geom: {...}           // kind-specific; see AnnotationLayer render paths
- *     text?: string,        // notes only
- *     created_at: ISO string,
- *     created_by?: string,  // reserved for future
+ *     id, kind, pdf_page, color, geom, text?, status, stamp?,
+ *     created_at, author_id, author,          // display attribution
  *   }
  *
- * A markup entry is per-pdf_page. When rendering on a given page we
- * filter `items.filter(m => m.pdf_page === currentPage)`.
+ * Mutations are optimistic against the React Query cache; text edits are
+ * debounced per-item so the note editor doesn't fire an UPDATE per keystroke.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { assertSetUnlocked } from "@/lib/drawingHub";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
-const SAVE_DEBOUNCE_MS = 500;
+const UPDATE_DEBOUNCE_MS = 450;
 
-export function useMarkup({ drawingId, initialMarkup }) {
-  const [items, setItems] = useState(() => normalize(initialMarkup));
-  const [saving, setSaving] = useState(false);
+// Reserved keys live in real columns; everything else rides in payload.
+const RESERVED = new Set(["id", "kind", "pdf_page", "status", "text", "color", "created_at", "author_id", "author", "author_email"]);
+
+function rowToItem(row) {
+  const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
+  return {
+    ...payload,
+    id: row.id,
+    kind: row.markup_type,
+    pdf_page: row.page_number || 1,
+    status: row.status || "open",
+    text: row.comment ?? payload.text ?? "",
+    color: row.color || payload.color,
+    created_at: row.created_at,
+    author_id: row.author_id || null,
+    author: row.author_name || row.author_email || null,
+  };
+}
+
+function itemToPayload(item) {
+  const payload = {};
+  for (const [key, value] of Object.entries(item || {})) {
+    if (!RESERVED.has(key)) payload[key] = value;
+  }
+  return payload;
+}
+
+/** Resolve the signed-in user once per session for author attribution. */
+let cachedAuthor = null;
+async function resolveAuthor() {
+  if (cachedAuthor) return cachedAuthor;
+  try {
+    const { data } = await supabase.auth.getUser();
+    const user = data?.user;
+    cachedAuthor = {
+      id: user?.id || null,
+      email: user?.email || null,
+      name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || null,
+    };
+  } catch {
+    cachedAuthor = { id: null, email: null, name: null };
+  }
+  return cachedAuthor;
+}
+
+export function useMarkup({ drawingId, projectId, drawingRevisionId = null }) {
+  const qc = useQueryClient();
+  const [pendingOps, setPendingOps] = useState(0);
   const [saveError, setSaveError] = useState(null);
+  const queryKey = useMemo(() => ["drawing-markups", "viewer", drawingId], [drawingId]);
 
-  const saveTimerRef = useRef(null);
-  const latestRef = useRef(items);
-  const dirtyRef = useRef(false);
-  const drawingIdRef = useRef(drawingId);
+  const { data: items = [] } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("drawing_markups")
+        .select("*")
+        .eq("drawing_id", drawingId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data || []).map(rowToItem);
+    },
+    enabled: !!drawingId,
+    staleTime: 15_000,
+  });
 
-  // When the active drawing changes, reload from the fresh markup array.
-  // We also cancel any pending save to avoid writing stale data to the
-  // previously-active drawing.
+  // Concurrent visibility: another reviewer's add/edit/delete invalidates
+  // this drawing's markup cache (and the compare-modal family) live.
+  useRealtimeInvalidation("drawing_markups", projectId, [queryKey]);
+
   useEffect(() => {
-    setItems(normalize(initialMarkup));
-    latestRef.current = normalize(initialMarkup);
-    dirtyRef.current = false;
-    drawingIdRef.current = drawingId;
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
-    setSaving(false);
     setSaveError(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawingId]);
 
-  // Persist latestRef.current to Supabase for the drawing id that was
-  // active when the timer fired. If the user has since switched drawings
-  // (drawingIdRef diverged), we silently drop the write — the new
-  // drawing's hook instance will reload fresh data anyway.
-  const flush = useCallback(async () => {
-    saveTimerRef.current = null;
-    const targetId = drawingIdRef.current;
-    if (!targetId || !dirtyRef.current) return;
-    const payload = latestRef.current;
-    dirtyRef.current = false;
-
-    setSaving(true);
+  const trackOp = useCallback(async (op) => {
+    setPendingOps((n) => n + 1);
     setSaveError(null);
     try {
-      // Lock guard. If the parent set is locked, surface a recognisable
-      // error to the UI and stop attempting writes — re-marking dirty
-      // would just retry into another rejection.
-      await assertSetUnlocked(targetId);
-      const { error } = await supabase
-        .from("drawings")
-        .update({ markup: payload })
-        .eq("id", targetId);
-      if (error) throw error;
+      await op();
     } catch (err) {
-      setSaveError(err.message || "Save failed");
-      // For lock rejections, do NOT re-mark dirty — retrying just
-      // burns a write per debounce until the user gives up.
-      if (err?.code !== "DRAWING_SET_LOCKED") {
-        dirtyRef.current = true;
-      }
+      setSaveError(err?.message || "Save failed");
+      // Refetch server truth so the optimistic cache can't drift after a
+      // rejected write (lock, RLS, network).
+      qc.invalidateQueries({ queryKey });
+      throw err;
     } finally {
-      setSaving(false);
+      setPendingOps((n) => Math.max(0, n - 1));
     }
-  }, []);
+  }, [qc, queryKey]);
 
-  const scheduleSave = useCallback(() => {
-    dirtyRef.current = true;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(flush, SAVE_DEBOUNCE_MS);
-  }, [flush]);
+  const setCache = useCallback((updater) => {
+    qc.setQueryData(queryKey, (prev) => updater(Array.isArray(prev) ? prev : []));
+  }, [qc, queryKey]);
 
-  const mutate = useCallback((updater) => {
-    setItems((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      latestRef.current = next;
-      return next;
-    });
-    scheduleSave();
-  }, [scheduleSave]);
-
+  // ── add ────────────────────────────────────────────────────────────
   const addItem = useCallback((item) => {
-    // Default status to "open" so the resolution-status filter has a
-    // value to match against. Notes lean on this to render a status
-    // pill; other kinds carry the field as inert metadata.
-    const withDefaults = item && item.status === undefined
-      ? { ...item, status: "open" }
-      : item;
-    mutate((prev) => [...prev, withDefaults]);
-  }, [mutate]);
+    if (!drawingId || !projectId || !item) return;
+    const id = (typeof crypto !== "undefined" && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic = {
+      ...item,
+      id,
+      status: item.status || "open",
+      created_at: item.created_at || new Date().toISOString(),
+    };
+    setCache((prev) => [...prev, optimistic]);
+    trackOp(async () => {
+      await assertSetUnlocked(drawingId);
+      const author = await resolveAuthor();
+      const { error } = await supabase.from("drawing_markups").insert({
+        id,
+        project_id: projectId,
+        drawing_id: drawingId,
+        drawing_revision_id: drawingRevisionId || null,
+        markup_type: optimistic.kind,
+        page_number: optimistic.pdf_page || 1,
+        status: optimistic.status,
+        comment: optimistic.text || null,
+        color: optimistic.color || null,
+        payload: itemToPayload(optimistic),
+        author_id: author.id,
+        author_email: author.email,
+        author_name: author.name,
+      });
+      if (error) throw error;
+      // Stamp the author onto the optimistic item so attribution shows
+      // immediately (the realtime echo would do it eventually).
+      setCache((prev) => prev.map((m) => (
+        m.id === id ? { ...m, author_id: author.id, author: author.name || author.email } : m
+      )));
+    }).catch(() => {
+      setCache((prev) => prev.filter((m) => m.id !== id));
+    });
+  }, [drawingId, projectId, drawingRevisionId, setCache, trackOp]);
 
+  // ── remove ─────────────────────────────────────────────────────────
   const removeItem = useCallback((id) => {
-    mutate((prev) => prev.filter((m) => m.id !== id));
-  }, [mutate]);
+    if (!id) return;
+    let removed = null;
+    setCache((prev) => {
+      removed = prev.find((m) => m.id === id) || null;
+      return prev.filter((m) => m.id !== id);
+    });
+    trackOp(async () => {
+      await assertSetUnlocked(drawingId);
+      const { error } = await supabase.from("drawing_markups").delete().eq("id", id);
+      if (error) throw error;
+    }).catch(() => {
+      if (removed) setCache((prev) => [...prev, removed]);
+    });
+  }, [drawingId, setCache, trackOp]);
+
+  // ── update (debounced per item — note typing fires per keystroke) ──
+  const updateTimersRef = useRef(new Map()); // id -> { timer, patch }
+
+  const flushUpdate = useCallback((id) => {
+    const entry = updateTimersRef.current.get(id);
+    if (!entry) return;
+    updateTimersRef.current.delete(id);
+    const merged = (qc.getQueryData(queryKey) || []).find((m) => m.id === id);
+    if (!merged) return;
+    trackOp(async () => {
+      await assertSetUnlocked(drawingId);
+      const { error } = await supabase
+        .from("drawing_markups")
+        .update({
+          status: merged.status || "open",
+          comment: merged.text || null,
+          color: merged.color || null,
+          page_number: merged.pdf_page || 1,
+          payload: itemToPayload(merged),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (error) throw error;
+    }).catch(() => { /* cache already refetched by trackOp */ });
+  }, [drawingId, qc, queryKey, trackOp]);
 
   const updateItem = useCallback((id, patch) => {
-    mutate((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
-  }, [mutate]);
+    if (!id || !patch) return;
+    setCache((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+    const existing = updateTimersRef.current.get(id);
+    if (existing?.timer) clearTimeout(existing.timer);
+    const timer = setTimeout(() => flushUpdate(id), UPDATE_DEBOUNCE_MS);
+    updateTimersRef.current.set(id, { timer });
+  }, [setCache, flushUpdate]);
 
-  // Flush on unmount so in-flight edits survive tab close / nav away.
+  // Flush pending debounced updates on unmount / drawing switch so an
+  // in-progress note edit survives navigation.
   useEffect(() => {
+    const timers = updateTimersRef.current;
     return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-        if (dirtyRef.current) {
-          // fire-and-forget; we can't await in a cleanup.
-          flush();
-        }
+      for (const id of [...timers.keys()]) {
+        const entry = timers.get(id);
+        if (entry?.timer) clearTimeout(entry.timer);
+        flushUpdate(id);
       }
     };
-  }, [flush]);
+  }, [drawingId, flushUpdate]);
 
   return {
     items,
-    saving,
+    saving: pendingOps > 0,
     saveError,
     addItem,
     removeItem,
     updateItem,
   };
-}
-
-function normalize(value) {
-  if (!Array.isArray(value)) return [];
-  return value.filter((m) => m && typeof m === "object" && m.id && m.kind);
 }

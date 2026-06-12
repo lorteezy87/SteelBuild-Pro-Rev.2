@@ -58,6 +58,43 @@ export default function ExportMarkupPDFModal({
     }
     setBusy(true);
     try {
+      // Markup lives in drawing_markups rows (one per item) since the
+      // collaborative-redlining migration — drawings.markup is legacy/empty.
+      // Resolve each sheet's rows into the legacy item shape the pure PDF
+      // helpers expect, with the author attribution the rows now carry.
+      let sheetsWithMarkup = sheets;
+      try {
+        const ids = sheets.map((s) => s.id).filter(Boolean);
+        if (ids.length > 0) {
+          const { data: markupRows, error: markupError } = await supabase
+            .from("drawing_markups")
+            .select("id, drawing_id, markup_type, page_number, status, comment, color, payload, author_name, author_email, created_at")
+            .in("drawing_id", ids)
+            .order("created_at", { ascending: true });
+          if (markupError) throw markupError;
+          const byDrawing = new Map();
+          for (const row of markupRows || []) {
+            const item = {
+              ...(row.payload && typeof row.payload === "object" ? row.payload : {}),
+              id: row.id,
+              kind: row.markup_type,
+              pdf_page: row.page_number || 1,
+              status: row.status || "open",
+              text: row.comment ?? "",
+              color: row.color || undefined,
+              created_at: row.created_at,
+              created_by: row.author_name || row.author_email || null,
+            };
+            if (!byDrawing.has(row.drawing_id)) byDrawing.set(row.drawing_id, []);
+            byDrawing.get(row.drawing_id).push(item);
+          }
+          sheetsWithMarkup = sheets.map((s) => ({ ...s, markup: byDrawing.get(s.id) || [] }));
+        }
+      } catch (err) {
+        console.warn("[ExportMarkupPDFModal] markup rows fetch failed — exporting without markup:", err);
+        sheetsWithMarkup = sheets.map((s) => ({ ...s, markup: [] }));
+      }
+
       let signoffs = [];
       if (includeSignoffs) {
         try {
@@ -91,7 +128,7 @@ export default function ExportMarkupPDFModal({
           ? `Set Markups · ${activeDrawing?.drawing_set_name || ""}`.trim()
           : `Sheet Markups · ${activeDrawing?.sheet_number || ""}`.trim(),
         subtitle: project?.name || "",
-        sheets,
+        sheets: sheetsWithMarkup,
         openOnly,
         signoffs,
       });

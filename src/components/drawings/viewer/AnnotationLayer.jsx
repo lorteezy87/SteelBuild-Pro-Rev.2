@@ -12,8 +12,10 @@
  *   pen      — freehand stroke; mousedown starts, mousemove extends,
  *              mouseup commits (with point simplification)
  *   rect     — click-drag rectangle
+ *   cloud    — click-drag revision cloud (scalloped rectangle)
  *   arrow    — click-drag line with arrowhead at end
  *   note     — click once to drop a pin + open inline editor
+ *   stamp    — click once to place a review stamp (APPROVED / REJECTED / …)
  *
  * The layer doesn't own zoom or rotation — it just reads the current
  * viewport and re-projects. That keeps zoom / rotate behavior consistent
@@ -32,6 +34,52 @@ import {
 
 const ARROW_HEAD_SIZE = 10; // canvas pixels
 const NOTE_PIN_SIZE = 22;   // canvas pixels
+
+// Review stamps — sheet-anchored (PDF units) so they scale with zoom like a
+// real rubber stamp on the page. Keys persist in item.stamp.
+export const STAMP_TYPES = [
+  { key: "APPROVED",          label: "APPROVED",          color: "#16a34a" },
+  { key: "APPROVED_AS_NOTED", label: "APPROVED AS NOTED", color: "#84cc16" },
+  { key: "REVISE_RESUBMIT",   label: "REVISE & RESUBMIT", color: "#f59e0b" },
+  { key: "REJECTED",          label: "REJECTED",          color: "#dc2626" },
+  { key: "FOR_REVIEW",        label: "FOR REVIEW",        color: "#3b82f6" },
+];
+const STAMP_BY_KEY = Object.fromEntries(STAMP_TYPES.map((s) => [s.key, s]));
+const STAMP_W_PDF = 170; // PDF points (~2.4in wide)
+const STAMP_H_PDF = 44;
+
+/**
+ * Revision-cloud path: walk the rect perimeter clockwise with semicircular
+ * scallops bulging outward (sweep-flag 0 bulges away from the interior on
+ * every clockwise edge). Exported for tests + the PDF exporter.
+ */
+export function cloudPathFromRect(left, top, width, height, scallop = 9) {
+  const parts = [`M ${left.toFixed(2)} ${top.toFixed(2)}`];
+  const edge = (x0, y0, x1, y1) => {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    const n = Math.max(1, Math.round(len / (scallop * 2)));
+    const stepX = (x1 - x0) / n;
+    const stepY = (y1 - y0) / n;
+    const r = Math.hypot(stepX, stepY) / 2;
+    for (let i = 1; i <= n; i++) {
+      parts.push(`A ${r.toFixed(2)} ${r.toFixed(2)} 0 0 0 ${(x0 + stepX * i).toFixed(2)} ${(y0 + stepY * i).toFixed(2)}`);
+    }
+  };
+  edge(left, top, left + width, top);
+  edge(left + width, top, left + width, top + height);
+  edge(left + width, top + height, left, top + height);
+  edge(left, top + height, left, top);
+  parts.push("Z");
+  return parts.join(" ");
+}
+
+/** Tooltip text: who drew this mark and when. */
+function authorTitle(item) {
+  const who = item.author || "Unknown";
+  if (!item.created_at) return who;
+  const when = new Date(item.created_at);
+  return Number.isNaN(when.getTime()) ? who : `${who} · ${when.toLocaleString()}`;
+}
 
 // Markup status (3a — code-only, no migration). Cycles open → addressed
 // → rejected → clarification → open. Status colors mirror the comment
@@ -63,6 +111,7 @@ export default function AnnotationLayer({
   items,
   activeTool,
   activeColor,
+  activeStamp = "APPROVED", // STAMP_TYPES key used by the stamp tool
   markupScale,       // real_inches_per_pdf_inch; null = not calibrated
   onAddItem,
   onRemoveItem,
@@ -109,6 +158,8 @@ export default function AnnotationLayer({
       setDraft({ kind: "pen", points: [{ x, y }] });
     } else if (activeTool === "rect") {
       setDraft({ kind: "rect", x0: x, y0: y, x1: x, y1: y });
+    } else if (activeTool === "cloud") {
+      setDraft({ kind: "cloud", x0: x, y0: y, x1: x, y1: y });
     } else if (activeTool === "highlight") {
       setDraft({ kind: "highlight", x0: x, y0: y, x1: x, y1: y });
     } else if (activeTool === "arrow") {
@@ -159,9 +210,25 @@ export default function AnnotationLayer({
         created_at: new Date().toISOString(),
       });
       setEditingNoteId(id);
+    } else if (activeTool === "stamp") {
+      const stampSpec = STAMP_BY_KEY[activeStamp] || STAMP_TYPES[0];
+      onAddItem({
+        id: newMarkupId(),
+        kind: "stamp",
+        pdf_page: pdfPage,
+        color: stampSpec.color,
+        stamp: stampSpec.key,
+        geom: {
+          x: x - STAMP_W_PDF / 2,
+          y: y - STAMP_H_PDF / 2,
+          w: STAMP_W_PDF,
+          h: STAMP_H_PDF,
+        },
+        created_at: new Date().toISOString(),
+      });
     }
 
-    if (activeTool === "pen" || activeTool === "rect" || activeTool === "highlight" || activeTool === "arrow") {
+    if (activeTool === "pen" || activeTool === "rect" || activeTool === "cloud" || activeTool === "highlight" || activeTool === "arrow") {
       // Capture subsequent pointer events so we get mouseup even when the
       // pointer leaves the SVG bounds. Measure uses a different gesture
       // (click → move → click) so it doesn't need pointer capture.
@@ -177,7 +244,7 @@ export default function AnnotationLayer({
       if (prev.kind === "pen") {
         return { ...prev, points: [...prev.points, { x, y }] };
       }
-      if (prev.kind === "rect" || prev.kind === "highlight" || prev.kind === "arrow") {
+      if (prev.kind === "rect" || prev.kind === "cloud" || prev.kind === "highlight" || prev.kind === "arrow") {
         return { ...prev, x1: x, y1: y };
       }
       if ((prev.kind === "measure" || prev.kind === "calibrate") && prev.tracking) {
@@ -213,6 +280,21 @@ export default function AnnotationLayer({
         onAddItem({
           id: newMarkupId(),
           kind: "rect",
+          pdf_page: pdfPage,
+          color: activeColor,
+          geom: { x, y, w, h },
+          created_at: new Date().toISOString(),
+        });
+      }
+    } else if (draft.kind === "cloud") {
+      const x = Math.min(draft.x0, draft.x1);
+      const y = Math.min(draft.y0, draft.y1);
+      const w = Math.abs(draft.x1 - draft.x0);
+      const h = Math.abs(draft.y1 - draft.y0);
+      if (w > 4 && h > 4) {
+        onAddItem({
+          id: newMarkupId(),
+          kind: "cloud",
           pdf_page: pdfPage,
           color: activeColor,
           geom: { x, y, w, h },
@@ -392,6 +474,24 @@ function renderDraft(draft, viewport, color, scaleForLabel) {
       />
     );
   }
+  if (draft.kind === "cloud") {
+    const r = pdfRectToCanvas(viewport, {
+      x: Math.min(draft.x0, draft.x1),
+      y: Math.min(draft.y0, draft.y1),
+      w: Math.abs(draft.x1 - draft.x0),
+      h: Math.abs(draft.y1 - draft.y0),
+    });
+    return (
+      <path
+        d={cloudPathFromRect(r.left, r.top, r.width, r.height)}
+        stroke={color}
+        strokeWidth={2}
+        fill="none"
+        strokeDasharray="4 3"
+        opacity={0.9}
+      />
+    );
+  }
   if (draft.kind === "highlight") {
     const r = pdfRectToCanvas(viewport, {
       x: Math.min(draft.x0, draft.x1),
@@ -511,7 +611,9 @@ function MarkupItem({
         fill="none"
         style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
         onClick={handleClick}
-      />
+      >
+        <title>{authorTitle(item)}</title>
+      </polyline>
     );
   }
 
@@ -529,7 +631,68 @@ function MarkupItem({
         fillOpacity={0.12}
         style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
         onClick={handleClick}
-      />
+      >
+        <title>{authorTitle(item)}</title>
+      </rect>
+    );
+  }
+
+  if (item.kind === "cloud") {
+    const r = pdfRectToCanvas(viewport, item.geom);
+    return (
+      <path
+        d={cloudPathFromRect(r.left, r.top, r.width, r.height)}
+        stroke={color}
+        strokeWidth={selected ? 3 : 2.25}
+        strokeLinejoin="round"
+        fill={color}
+        fillOpacity={0.05}
+        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
+        onClick={handleClick}
+      >
+        <title>{authorTitle(item)}</title>
+      </path>
+    );
+  }
+
+  if (item.kind === "stamp") {
+    const r = pdfRectToCanvas(viewport, item.geom);
+    const spec = STAMP_BY_KEY[item.stamp] || null;
+    const stampColor = spec?.color || color;
+    const label = spec?.label || item.stamp || "STAMP";
+    const fontSize = Math.max(8, Math.min(r.height * 0.34, r.width / Math.max(6, label.length * 0.62)));
+    return (
+      <g
+        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
+        onClick={handleClick}
+      >
+        <title>{authorTitle(item)}</title>
+        <rect
+          x={r.left} y={r.top} width={r.width} height={r.height}
+          rx={r.height * 0.12}
+          fill="#ffffff" fillOpacity={0.82}
+          stroke={stampColor} strokeWidth={Math.max(1.5, r.height * 0.055)}
+        />
+        <rect
+          x={r.left + r.height * 0.09} y={r.top + r.height * 0.09}
+          width={Math.max(0, r.width - r.height * 0.18)} height={Math.max(0, r.height - r.height * 0.18)}
+          rx={r.height * 0.08}
+          fill="none"
+          stroke={stampColor} strokeWidth={Math.max(0.75, r.height * 0.025)}
+        />
+        <text
+          x={r.left + r.width / 2}
+          y={r.top + r.height / 2 + fontSize * 0.36}
+          textAnchor="middle"
+          fontFamily="var(--font-mono)"
+          fontSize={fontSize}
+          fontWeight={800}
+          letterSpacing="0.08em"
+          fill={stampColor}
+        >
+          {label}
+        </text>
+      </g>
     );
   }
 
@@ -547,7 +710,9 @@ function MarkupItem({
         fillOpacity={0.28}
         style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
         onClick={handleClick}
-      />
+      >
+        <title>{authorTitle(item)}</title>
+      </rect>
     );
   }
 
@@ -605,7 +770,9 @@ function MarkupItem({
         markerEnd="url(#sbp-arrowhead)"
         style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
         onClick={handleClick}
-      />
+      >
+        <title>{authorTitle(item)}</title>
+      </line>
     );
   }
 
@@ -699,7 +866,7 @@ function MarkupItem({
             x={cx + size / 2 + 4}
             y={cy - size / 2}
             width={220}
-            height={80}
+            height={92}
             pointerEvents="none"
           >
             <div
@@ -721,6 +888,14 @@ function MarkupItem({
               }}
             >
               {item.text}
+              {/* Attribution footer — who said it, when (collaborative
+                  redlining requirement: every comment tracked by user +
+                  timestamp). */}
+              {(item.author || item.created_at) && (
+                <div style={{ marginTop: 3, fontSize: 9, color: "rgba(0,0,0,0.55)", fontFamily: "var(--font-mono)" }}>
+                  {[item.author, item.created_at ? new Date(item.created_at).toLocaleDateString() : null].filter(Boolean).join(" · ")}
+                </div>
+              )}
             </div>
           </foreignObject>
         ) : null}
@@ -735,11 +910,13 @@ function cursorFor(tool) {
   switch (tool) {
     case "pen":       return "crosshair";
     case "rect":      return "crosshair";
+    case "cloud":     return "crosshair";
     case "highlight": return "crosshair";
     case "arrow":     return "crosshair";
     case "measure":   return "crosshair";
     case "calibrate": return "crosshair";
     case "note":      return "copy";
+    case "stamp":     return "copy";
     default:          return "default";
   }
 }
