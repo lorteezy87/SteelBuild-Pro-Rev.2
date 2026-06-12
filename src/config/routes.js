@@ -107,6 +107,7 @@ const ROUTE_DOMAINS = {
 
   // ── Field Operations ──
   field: {
+    FieldToday:      r(lazyWithRetry(() => import("@/pages/FieldToday")),      "Field Today",         { projectScoped: true }),
     FieldHub:        r(lazyWithRetry(() => import("@/pages/FieldHub")),        "Field",               { projectScoped: true }),
     Field:           r(lazyWithRetry(() => import("@/pages/Field")),           "Field",               { projectScoped: true }),
     DailyLogs:       r(lazyWithRetry(() => import("@/pages/DailyLogs")),       "Daily Logs",          { projectScoped: true }),
