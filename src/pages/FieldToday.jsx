@@ -38,6 +38,7 @@ import {
   CalendarClock,
   Users,
   CheckCircle2,
+  WifiOff,
 } from "lucide-react";
 import {
   PROGRESS_STEPS,
@@ -46,7 +47,10 @@ import {
   taskLabel,
   taskCrew,
   clampPercent,
+  progressPatch,
 } from "@/lib/field/fieldToday";
+import { useFieldOutbox } from "@/hooks/useFieldOutbox";
+import { makeProgressOp, isLikelyOfflineError, OP_SCHEDULE_PROGRESS } from "@/lib/field/offlineQueue";
 
 // ── Urgency presentation (logic-free; buckets come from the helper) ──
 const URGENCY = {
@@ -101,30 +105,47 @@ export default function FieldToday() {
       .map((bucket) => ({ bucket, tasks: byBucket.get(bucket) }));
   }, [todaysWork, todayIso]);
 
-  // ── Task progress: optimistic write back to the schedule ──
+  // ── Offline outbox: queue idempotent progress writes when there's no signal,
+  // replay them (in order) on reconnect. Only progress is queued — replaying a
+  // "set task X to N%" is safe to repeat; creates are not (see offlineQueue.js).
+  const outboxHandlers = useMemo(
+    () => ({
+      [OP_SCHEDULE_PROGRESS]: async ({ id, pct }) => {
+        await entities.ScheduleTask.update(id, progressPatch(pct));
+        queryClient.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+        queryClient.invalidateQueries({ queryKey: ["field-plan-tasks", projectId] });
+      },
+    }),
+    [queryClient, projectId],
+  );
+  const { pending: pendingSync, enqueue: enqueueOutbox, flush: flushOutbox } = useFieldOutbox(outboxHandlers);
+
+  // ── Task progress: optimistic write back to the schedule (offline-safe) ──
   const progressMut = useMutation({
-    mutationFn: ({ id, pct }) => {
-      const percent_complete = clampPercent(pct);
-      const status =
-        percent_complete >= 100 ? "Complete" : percent_complete > 0 ? "In Progress" : "Not Started";
-      return entities.ScheduleTask.update(id, { percent_complete, status });
-    },
+    mutationFn: ({ id, pct }) => entities.ScheduleTask.update(id, progressPatch(pct)),
     onMutate: async ({ id, pct }) => {
       await queryClient.cancelQueries({ queryKey: ["schedule-tasks", projectId] });
       const prev = queryClient.getQueryData(["schedule-tasks", projectId]);
-      const percent_complete = clampPercent(pct);
-      const status =
-        percent_complete >= 100 ? "Complete" : percent_complete > 0 ? "In Progress" : "Not Started";
+      const patch = progressPatch(pct);
       queryClient.setQueryData(["schedule-tasks", projectId], (old) =>
-        Array.isArray(old)
-          ? old.map((t) => (t.id === id ? { ...t, percent_complete, status } : t))
-          : old,
+        Array.isArray(old) ? old.map((t) => (t.id === id ? { ...t, ...patch } : t)) : old,
       );
       return { prev };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, vars, ctx) => {
+      // No signal? Keep the optimistic value and queue the write for replay —
+      // don't roll back (that would silently discard the foreman's tap).
+      if (isLikelyOfflineError(err)) {
+        enqueueOutbox(makeProgressOp(vars.id, vars.pct, Date.now()));
+        toast.message("Saved offline — will sync when you're back online");
+        return;
+      }
       if (ctx?.prev) queryClient.setQueryData(["schedule-tasks", projectId], ctx.prev);
       toast.error("Couldn't save progress — check signal and retry");
+    },
+    onSuccess: () => {
+      // A successful online write means we're connected — drain any backlog.
+      flushOutbox();
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
@@ -213,6 +234,50 @@ export default function FieldToday() {
         unit=" open"
         subtitle={fmtShortDate(todayIso)}
       />
+
+      {pendingSync > 0 && (
+        <div
+          role="status"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "1px solid color-mix(in srgb, var(--status-warning) 40%, var(--border-default))",
+            background: "color-mix(in srgb, var(--status-warning) 12%, var(--bg-surface-low))",
+            color: "var(--text-primary)",
+            fontSize: 12,
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <WifiOff size={15} style={{ color: "var(--status-warning)", flexShrink: 0 }} />
+            <span>
+              {pendingSync} update{pendingSync === 1 ? "" : "s"} saved offline — syncs when you reconnect
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => flushOutbox()}
+            style={{
+              flexShrink: 0,
+              minHeight: 32,
+              padding: "6px 12px",
+              borderRadius: 8,
+              border: "1px solid var(--status-warning)",
+              background: "transparent",
+              color: "var(--status-warning)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            Sync now
+          </button>
+        </div>
+      )}
 
       {/* Quick-capture rail — sticky thumb row on phones (styled in responsive.css) */}
       <div className="field-fast-capture-rail" role="group" aria-label="Quick capture">
