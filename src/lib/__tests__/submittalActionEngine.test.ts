@@ -110,3 +110,84 @@ describe("nextSubmittalAction", () => {
     expect(seen[seen.length - 1]).toBe("Released");
   });
 });
+
+// ── Custom approval chains (approvalChains.js) ─────────────────────────────
+
+describe("nextSubmittalAction with a custom approval chain", () => {
+  const CHAIN = [
+    { party: "Detailer" },
+    { party: "GC" },
+    { party: "Architect" },
+    { party: "EOR" },
+  ];
+
+  it("routes Draft at step 0 to the second party, bumping the step", () => {
+    const a = nextSubmittalAction({
+      status: "Draft", ball_in_court: "Detailer",
+      approval_chain: CHAIN, approval_chain_step: 0,
+    });
+    expect(a.label).toBe("Route to GC (2/4)");
+    expect(a.nextStatus).toBe("Submitted");
+    expect(a.nextBallInCourt).toBe("GC");
+    expect(a.nextStage).toBe("OFA");
+    expect(a.chainStepIndex).toBe(1);
+  });
+
+  it("routes a mid-chain Submitted hop to the next party", () => {
+    const a = nextSubmittalAction({
+      status: "Submitted", ball_in_court: "GC",
+      approval_chain: CHAIN, approval_chain_step: 1,
+    });
+    expect(a.label).toBe("Route to Architect (3/4)");
+    expect(a.nextBallInCourt).toBe("Architect");
+    expect(a.chainStepIndex).toBe(2);
+  });
+
+  it("falls back to the default flow at the final chain step (log return)", () => {
+    const a = nextSubmittalAction({
+      status: "Submitted", ball_in_court: "EOR",
+      approval_chain: CHAIN, approval_chain_step: 3,
+    });
+    expect(a.label).toBe("Log Return (BFA)");
+    expect(a.nextStage).toBe("BFA");
+    expect(a.chainStepIndex).toBeUndefined();
+  });
+
+  it("R&R with a chain restarts at the first outbound hop", () => {
+    const a = nextSubmittalAction({
+      status: "Revise and Resubmit", ball_in_court: "Detailer",
+      approval_chain: CHAIN, approval_chain_step: 3,
+    });
+    expect(a.label).toBe("Resubmit & route to GC");
+    expect(a.nextStatus).toBe("Submitted");
+    expect(a.nextBallInCourt).toBe("GC");
+    expect(a.chainStepIndex).toBe(1);
+  });
+
+  it("decision statuses ignore the chain (Approved as Noted → scrub)", () => {
+    const a = nextSubmittalAction({
+      status: "Approved as Noted", ball_in_court: "EOR",
+      approval_chain: CHAIN, approval_chain_step: 3,
+    });
+    expect(a.label).toBe("Send for Scrub (OFS)");
+    expect(a.chainStepIndex).toBeUndefined();
+  });
+
+  it("a chain without an active step uses the default flow", () => {
+    const a = nextSubmittalAction({
+      status: "Draft", ball_in_court: "Detailer",
+      approval_chain: CHAIN, approval_chain_step: null,
+    });
+    expect(a.label).toBe("Send for Approval (OFA)");
+    expect(a.chainStepIndex).toBeUndefined();
+  });
+
+  it("terminal statuses stay terminal even with a chain", () => {
+    const a = nextSubmittalAction({
+      status: "Released for Fabrication",
+      approval_chain: CHAIN, approval_chain_step: 1,
+    });
+    expect(a.disabled).toBe(true);
+    expect(a.isTerminal).toBe(true);
+  });
+});

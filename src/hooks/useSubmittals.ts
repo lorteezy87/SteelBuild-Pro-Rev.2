@@ -23,6 +23,13 @@ import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { lockSet } from "@/lib/drawingHub";
+import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
+
+const runStatusTriggers = runSubmittalStatusTriggers as unknown as (args: {
+  submittal: Partial<Submittal> | null | undefined;
+  prevStatus?: string | null;
+  nextStatus?: string | null;
+}) => Promise<unknown>;
 
 const lockDrawingSet = lockSet as unknown as (args: {
   setId: string;
@@ -97,6 +104,8 @@ export interface AddRoundInput {
     drawing_set_ids?: string[] | null;
     total_rounds?: number | null;
     round_number?: number | null;
+    /** Status BEFORE this move — lets the smart triggers detect the transition. */
+    status?: string | null;
   };
   status: string;
   ball_in_court?: string | null;
@@ -105,6 +114,9 @@ export interface AddRoundInput {
   notes?: string | null;
   /** Bump the submittal's revision round_number (true on Revise & Resubmit). */
   bumpRevision?: boolean;
+  /** Extra fields to persist with the same patch (e.g. approval_chain_step
+   * when the move follows a custom routing chain). */
+  extraPatch?: Record<string, unknown> | null;
 }
 
 export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal> {
@@ -129,6 +141,7 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
     ball_in_court: input.ball_in_court ?? null,
     current_round_id: round?.id,
     total_rounds: eventRound,
+    ...(input.extraPatch || {}),
   };
   if (input.submitted_date) patch.submitted_date = input.submitted_date;
   if (input.returned_date) patch.returned_date = input.returned_date;
@@ -136,6 +149,13 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
 
   const updated = await entities.Submittal.update(s.id, patch as Update<"submittals">);
   await lockLinkedSetsIfApproved(updated);
+  // Smart triggers: a move into Rejected / R&R / Approved-as-Noted queues a
+  // draft detailing task (deduped, never throws — see submittalSmartTriggers).
+  await runStatusTriggers({
+    submittal: (updated as Partial<Submittal>) || (s as Partial<Submittal>),
+    prevStatus: s.status ?? null,
+    nextStatus: input.status,
+  });
   return updated as Submittal;
 }
 
@@ -290,9 +310,11 @@ export function useSubmittals(projectId: string | null | undefined) {
 
   // ── Invalidation helper ──────────────────────────────────────────
   const invalidateAll = async () => {
+    // action_item included because status moves can auto-queue a detailing
+    // task (submittalSmartTriggers) — keep the Action Items views fresh.
     await invalidateEntities(
       qc,
-      ["submittal", "submittal_round", "submittal_activity", "drawing"],
+      ["submittal", "submittal_round", "submittal_activity", "drawing", "action_item"],
       projectId
     );
   };
@@ -326,11 +348,19 @@ export function useSubmittals(projectId: string | null | undefined) {
   const updateMut = useMutation<Submittal, Error, UpdateInput, { previous: Submittal[] | undefined }>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
+      const prevStatus = submittals.find((s) => s.id === id)?.status ?? null;
       const updated = await entities.Submittal.update(
         id,
         data as Update<"submittals">
       );
       await lockLinkedSetsIfApproved(updated);
+      if (typeof (data as { status?: unknown }).status === "string") {
+        await runStatusTriggers({
+          submittal: updated,
+          prevStatus,
+          nextStatus: (data as { status: string }).status,
+        });
+      }
       return updated;
     },
     onMutate: async (vars) => {

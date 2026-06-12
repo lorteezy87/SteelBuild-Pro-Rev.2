@@ -37,15 +37,20 @@ export async function ensureCurrentRevision({ drawing, userId }) {
 
   // None yet — mint a v1 revision. revision_code = "v1" is an internal
   // placeholder; once the user uploads a new rev they'll supersede it.
+  // file_url/pdf_page snapshot the sheet's CURRENT file so the revision
+  // stays openable/comparable after a later slip-sheet overwrites the
+  // drawings row in place.
   const payload = {
     project_id:     drawing.project_id,
     drawing_id:     drawing.id,
-    revision_code:  drawing.revision || "v1",
+    revision_code:  drawing.revision || drawing.revision_number || "v1",
     revision_name:  drawing.revision_name || null,
     sheet_number:   drawing.sheet_number || drawing.drawing_number || "—",
     sheet_title:    drawing.title || drawing.sheet_title || "Untitled",
     version_number: 1,
     is_current:     true,
+    file_url:       drawing.file_url || null,
+    pdf_page:       drawing.pdf_page ?? null,
     created_by:     userId || null,
   };
   const { data: created, error: insErr } = await supabase
@@ -188,6 +193,14 @@ export async function carryZonesForward({
  *
  * If includeLinks is false, the user ends up with empty-zone
  * clones and has to re-link; typical workflow is true.
+ *
+ * Optional file-snapshot fields (slip-sheeting, §21):
+ *   fileUrl / pdfPage — where the NEW revision's sheet lives. Defaults to
+ *     the drawing's current file refs (manual rev bumps reuse the file).
+ *   issuedAt / notes  — issue date + "what changed" for the new revision.
+ * The superseded revision additionally gets archived_at stamped and its
+ * file_url/pdf_page backfilled from the drawing row when missing, so the
+ * old PDF page stays reachable after the drawings row is overwritten.
  */
 export async function createNewRevisionAndCarryZones({
   drawing,
@@ -195,6 +208,10 @@ export async function createNewRevisionAndCarryZones({
   newName,
   userId,
   includeLinks = true,
+  fileUrl = undefined,
+  pdfPage = undefined,
+  issuedAt = null,
+  notes = null,
 }) {
   if (!drawing?.id || !drawing?.project_id) {
     throw new Error("createNewRevisionAndCarryZones: drawing required");
@@ -216,10 +233,19 @@ export async function createNewRevisionAndCarryZones({
   // Flip current off, then insert the new revision as current.
   // Done in two statements because the partial unique index
   // ux_drawing_revisions_one_current forbids two rows with is_current=true.
+  // The superseded row is archived and — when it predates file snapshots —
+  // backfilled with the drawing's CURRENT file refs (which are about to be
+  // overwritten by the slip-sheet).
   {
     const { error } = await supabase
       .from("drawing_revisions")
-      .update({ is_current: false, updated_by: userId || null })
+      .update({
+        is_current: false,
+        archived_at: new Date().toISOString(),
+        file_url: current.file_url || drawing.file_url || null,
+        pdf_page: current.pdf_page ?? drawing.pdf_page ?? null,
+        updated_by: userId || null,
+      })
       .eq("id", current.id);
     if (error) throw error;
   }
@@ -235,6 +261,10 @@ export async function createNewRevisionAndCarryZones({
       version_number:         (current.version_number || 1) + 1,
       is_current:             true,
       supersedes_revision_id: current.id,
+      file_url:               fileUrl !== undefined ? fileUrl : (drawing.file_url || null),
+      pdf_page:               pdfPage !== undefined ? pdfPage : (drawing.pdf_page ?? null),
+      issued_at:              issuedAt || null,
+      revision_notes:         notes || null,
       created_by:             userId || null,
     })
     .select()
@@ -242,7 +272,7 @@ export async function createNewRevisionAndCarryZones({
   if (insErr) {
     // Roll the current flag back so we don't leave the drawing
     // without a "current" pointer.
-    await supabase.from("drawing_revisions").update({ is_current: true }).eq("id", current.id);
+    await supabase.from("drawing_revisions").update({ is_current: true, archived_at: null }).eq("id", current.id);
     throw insErr;
   }
 
@@ -258,4 +288,52 @@ export async function createNewRevisionAndCarryZones({
     supersededId: current.id,
     ...carry,
   };
+}
+
+/**
+ * Slip-sheet bookkeeping for one sheet during a revision upload: snapshot
+ * the sheet's CURRENT state as the superseded revision and mint the new
+ * revision pointing at the new master PDF (+ page). Idempotent on the
+ * revision code — re-applying the same label skips instead of throwing,
+ * so a re-run of the upload wizard can't corrupt history.
+ *
+ * Returns { revision, supersededId, zonesCloned, linksCloned } on success
+ * or { skipped: true, reason } when the code already exists.
+ *
+ * Throws on other failures — the caller decides whether history failures
+ * should block the slip-sheet itself (the upload modal does not: the
+ * user-visible sheet update wins, failures surface as a warning).
+ */
+export async function recordSheetSlipSheet({
+  drawing,
+  newCode,
+  newFileUrl,
+  newPdfPage,
+  issuedAt = null,
+  notes = null,
+  userId = null,
+}) {
+  if (!drawing?.id || !drawing?.project_id) {
+    throw new Error("recordSheetSlipSheet: drawing required");
+  }
+  if (!newCode) throw new Error("recordSheetSlipSheet: newCode required");
+  const { data: clash } = await supabase
+    .from("drawing_revisions")
+    .select("id")
+    .eq("drawing_id", drawing.id)
+    .eq("revision_code", newCode)
+    .maybeSingle();
+  if (clash) return { skipped: true, reason: "duplicate-code", revisionId: clash.id };
+
+  return createNewRevisionAndCarryZones({
+    drawing,
+    newCode,
+    newName: null,
+    userId,
+    includeLinks: true,
+    fileUrl: newFileUrl || null,
+    pdfPage: newPdfPage ?? null,
+    issuedAt,
+    notes,
+  });
 }

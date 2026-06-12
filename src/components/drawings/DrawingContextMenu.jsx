@@ -18,6 +18,7 @@ export default function DrawingContextMenu({
   onEdit,
   onAdvance,
   onSetApproval,
+  onCompareRevisions,
   onDelete,
   onDismiss,
 }) {
@@ -27,6 +28,10 @@ export default function DrawingContextMenu({
     { label: "View PDF",       action: () => { onView(contextMenu.drawing); onDismiss(); } },
     { label: "Edit Sheet",     action: () => { onEdit(contextMenu.drawing); onDismiss(); } },
     { label: "Advance Stage →", action: () => onAdvance(contextMenu.drawing) },
+    ...(onCompareRevisions ? [{
+      label: "Compare Revisions ⧉",
+      action: () => { onCompareRevisions(contextMenu.drawing); onDismiss(); },
+    }] : []),
     ...(contextMenu.drawing.drawing_set_name?.trim() ? [{
       label: "Set Approval ✓",
       action: () => {

@@ -51,6 +51,7 @@ import TitleblockMarkerModal from "@/components/drawings/TitleblockMarkerModal";
 import BulkEditModal from "@/components/drawings/BulkEditModal";
 import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
 import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
+import RevisionCompareModal from "@/components/drawings/RevisionCompareModal";
 import ExportFabReleaseModal from "@/components/drawings/ExportFabReleaseModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 
@@ -95,6 +96,8 @@ export default function Drawings({ embedded = false } = {}) {
   const [markerSet, setMarkerSet] = useState(null);
   const [uploadSetOpen, setUploadSetOpen] = useState(false);
   const [revisionOpen, setRevisionOpen] = useState(false);
+  // Overlay compare — the sheet whose revisions are being diffed (or null).
+  const [compareDrawing, setCompareDrawing] = useState(null);
   // Sprint 4 — package export modal. `kind` is "fab_release" | "turnover" | "claims".
   const [exportPkgKind, setExportPkgKind] = useState(null);
   // F18: replace window.confirm() with a styled DeleteDialog. Shape:
@@ -957,6 +960,7 @@ export default function Drawings({ embedded = false } = {}) {
         onEdit={can("edit", "drawing") ? (d) => { setEditing(d); setShowModal(true); } : null}
         onAdvance={handleAdvanceStage}
         onSetApproval={openSetApproval}
+        onCompareRevisions={(d) => setCompareDrawing(d)}
         onDelete={can("delete", "drawing") ? handleDelete : null}
         onDismiss={() => setContextMenu(null)}
       />
@@ -1058,6 +1062,16 @@ export default function Drawings({ embedded = false } = {}) {
         activeProject={activeProject}
         drawingSets={drawingSetRecords}
       />
+
+      {/* Overlay compare — old revision red / new revision blue, from the
+          per-sheet slip-sheet history. Opened via the row context menu. */}
+      {compareDrawing && (
+        <RevisionCompareModal
+          open={!!compareDrawing}
+          onClose={() => setCompareDrawing(null)}
+          drawing={compareDrawing}
+        />
+      )}
 
       {/* Sprint 4 — package exports (fab release / turnover / claims). One
           shared modal switches behavior based on `kind`. */}
