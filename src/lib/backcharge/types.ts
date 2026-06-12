@@ -93,6 +93,9 @@ export interface Backcharge {
   created_by?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
+  // Display-only (resolved from change_orders / rfis at render; not persisted).
+  linked_co_number?: string | null;
+  source_rfi_number?: string | null;
 }
 
 export interface TmTicket {
