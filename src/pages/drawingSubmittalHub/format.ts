@@ -158,35 +158,46 @@ export function isClosedDrawing(drawing: Drawing | null | undefined): boolean {
   return drawing?.stage === "Released" || drawing?.set_approval_status === "approved";
 }
 
-// A package is CLOSED when a terminal signal fires. ORDER MATTERS — the
-// submittal-derived + manual-release signals are authoritative; the DEPRECATED
-// legacy columns are a last resort consulted only when no submittal governs:
-//   1. the latest submittal's status is closed — Released for Fabrication / Void
-//      (NOT Approved/Approved as Noted, which map to BFA/OFS/IFC and stay active);
-//   2. the coalesced detailing_state is a release-style terminal (Released /
-//      Partially Released / Released for Erection) — this ALSO covers MANUAL
-//      releases via drawing_sets.detailing_state, so e.g. a manually-released
-//      anchor-bolt set stays closed even without a Released-for-Fab submittal;
-//   3. legacy/DEPRECATED signals (§20-21) — drawing_sets.set_approval_status and
-//      drawings.stage='Released' — but ONLY when NO submittal governs the
-//      package. Otherwise a stale 'approved' column would mask a real mid-flow
-//      submittal and wrongly show the set "Closed" (same bug class as the
-//      Approved/AAN fix); when a submittal governs, (1)/(2) already decided it.
-// Used by the hit-list triage and the "Released" KPI so both agree on "done".
+// A package is CLOSED when a terminal signal fires. "Who governs" is decided
+// exactly as everywhere else (hasGoverningSubmittal / pickMostRecentSubmittal
+// over USABLE submittals, inside effectiveDetailingState), so the closed flag
+// ALWAYS agrees with the operational stage the hub shows for the same package:
+//   1. Manual release states (drawing_sets.detailing_state = Partially Released
+//      / Released for Erection) are explicit and always terminal — e.g. a
+//      manually-released anchor-bolt set stays closed without a RFF submittal.
+//   2. detailing_state "Released" closes the package ONLY when a submittal drove
+//      it (status Released for Fabrication). When it comes from the deprecated
+//      drawings.stage MAJORITY fallback (no governing submittal), defer to the
+//      stricter all-sheets gate in (4): a plurality of legacy 'Released' sheets
+//      must not close a package that still has open sheets.
+//   3. When NO submittal governs, a closed-status latest submittal closes the
+//      package — the dead/Void-only set case (Void is never "usable", so it
+//      never governs; an all-Void set has no stage and is treated as closed).
+//   4. Legacy/DEPRECATED columns (§20-21) — drawing_sets.set_approval_status and
+//      EVERY sheet released — but ONLY when no submittal governs. A governing
+//      submittal's stage (decided above) always wins, so a stale 'approved'
+//      column can't mask a real mid-flow submittal.
+// Critically NOT the same as the round_number-based "latest" used before: a Void
+// or Released-for-Fab submittal with a higher round_number must not mask a lower
+// round that still governs the package. Used by the hit-list triage and the
+// "Released" KPI so both agree on "done".
 export function isClosedPackage(pkg: SetPackage | null | undefined): boolean {
   if (!pkg) return false;
-  const sorted = (pkg.submittals || []).slice().sort((a, b) => (b.round_number || 1) - (a.round_number || 1));
-  const latestSubmittal = sorted[0] || null;
-  if (latestSubmittal && isClosedSubmittal(latestSubmittal)) return true;
+  const governs = hasGoverningSubmittal(pkg.submittals);
   const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
-  if (
-    detailingState === "Released" ||
-    detailingState === "Partially Released" ||
-    detailingState === "Released for Erection"
-  ) return true;
-  // Deprecated legacy columns — last resort, only when no submittal governs the
-  // package (a governing submittal's stage, decided above, always wins).
-  if (!hasGoverningSubmittal(pkg.submittals)) {
+
+  // (1) Explicit manual release states — always terminal.
+  if (detailingState === "Partially Released" || detailingState === "Released for Erection") return true;
+  // (2) "Released" is terminal only when a submittal drove it (RFF), not when it
+  //     came from the deprecated sheet-stage majority fallback.
+  if (detailingState === "Released" && governs) return true;
+
+  if (!governs) {
+    // (3) Dead/Void-only set: no usable submittal governs, but a terminal-status
+    //     submittal (Void) is present → closed.
+    const latest = (pkg.submittals || []).slice().sort((a, b) => (b.round_number || 0) - (a.round_number || 0))[0] || null;
+    if (latest && isClosedSubmittal(latest)) return true;
+    // (4) Deprecated legacy columns — strict: the SET flag, or EVERY sheet closed.
     if (pkg.parent?.set_approval_status === "approved") return true;
     if (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)) return true;
   }
