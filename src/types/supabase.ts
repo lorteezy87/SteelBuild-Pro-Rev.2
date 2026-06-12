@@ -269,260 +269,6 @@ export type Database = {
           },
         ]
       }
-      bluebeam_connections: {
-        Row: {
-          access_token: string
-          bluebeam_email: string | null
-          bluebeam_user_id: string | null
-          created_at: string
-          deleted_at: string | null
-          display_name: string | null
-          error_message: string | null
-          id: string
-          is_deleted: boolean
-          last_used_at: string | null
-          refresh_token: string | null
-          status: string
-          token_expires_at: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          access_token: string
-          bluebeam_email?: string | null
-          bluebeam_user_id?: string | null
-          created_at?: string
-          deleted_at?: string | null
-          display_name?: string | null
-          error_message?: string | null
-          id?: string
-          is_deleted?: boolean
-          last_used_at?: string | null
-          refresh_token?: string | null
-          status?: string
-          token_expires_at?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          access_token?: string
-          bluebeam_email?: string | null
-          bluebeam_user_id?: string | null
-          created_at?: string
-          deleted_at?: string | null
-          display_name?: string | null
-          error_message?: string | null
-          id?: string
-          is_deleted?: boolean
-          last_used_at?: string | null
-          refresh_token?: string | null
-          status?: string
-          token_expires_at?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      bluebeam_oauth_states: {
-        Row: {
-          code_verifier: string
-          created_at: string
-          expires_at: string
-          state: string
-          user_id: string
-        }
-        Insert: {
-          code_verifier: string
-          created_at?: string
-          expires_at?: string
-          state: string
-          user_id: string
-        }
-        Update: {
-          code_verifier?: string
-          created_at?: string
-          expires_at?: string
-          state?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      bluebeam_session_documents: {
-        Row: {
-          bluebeam_file_id: string | null
-          created_at: string
-          deleted_at: string | null
-          direction: string
-          error_message: string | null
-          file_name: string
-          file_size: number | null
-          id: string
-          is_deleted: boolean
-          metadata: Json | null
-          project_id: string
-          session_id: string
-          snapshot_url: string | null
-          source_document_id: string | null
-          source_drawing_id: string | null
-          sync_status: string
-          updated_at: string
-        }
-        Insert: {
-          bluebeam_file_id?: string | null
-          created_at?: string
-          deleted_at?: string | null
-          direction?: string
-          error_message?: string | null
-          file_name: string
-          file_size?: number | null
-          id?: string
-          is_deleted?: boolean
-          metadata?: Json | null
-          project_id: string
-          session_id: string
-          snapshot_url?: string | null
-          source_document_id?: string | null
-          source_drawing_id?: string | null
-          sync_status?: string
-          updated_at?: string
-        }
-        Update: {
-          bluebeam_file_id?: string | null
-          created_at?: string
-          deleted_at?: string | null
-          direction?: string
-          error_message?: string | null
-          file_name?: string
-          file_size?: number | null
-          id?: string
-          is_deleted?: boolean
-          metadata?: Json | null
-          project_id?: string
-          session_id?: string
-          snapshot_url?: string | null
-          source_document_id?: string | null
-          source_drawing_id?: string | null
-          sync_status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bluebeam_session_documents_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bluebeam_session_documents_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "bluebeam_sessions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bluebeam_session_documents_source_document_id_fkey"
-            columns: ["source_document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bluebeam_sessions: {
-        Row: {
-          bluebeam_url: string | null
-          created_at: string
-          created_by: string | null
-          deleted_at: string | null
-          drawing_set_id: string | null
-          ended_at: string | null
-          file_count: number
-          id: string
-          invitation_url: string | null
-          is_deleted: boolean
-          last_sync_at: string | null
-          metadata: Json | null
-          notification_sub_id: string | null
-          participant_count: number
-          project_id: string
-          session_id: string
-          session_name: string
-          session_status: string
-          session_type: string | null
-          submittal_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          bluebeam_url?: string | null
-          created_at?: string
-          created_by?: string | null
-          deleted_at?: string | null
-          drawing_set_id?: string | null
-          ended_at?: string | null
-          file_count?: number
-          id?: string
-          invitation_url?: string | null
-          is_deleted?: boolean
-          last_sync_at?: string | null
-          metadata?: Json | null
-          notification_sub_id?: string | null
-          participant_count?: number
-          project_id: string
-          session_id: string
-          session_name: string
-          session_status?: string
-          session_type?: string | null
-          submittal_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          bluebeam_url?: string | null
-          created_at?: string
-          created_by?: string | null
-          deleted_at?: string | null
-          drawing_set_id?: string | null
-          ended_at?: string | null
-          file_count?: number
-          id?: string
-          invitation_url?: string | null
-          is_deleted?: boolean
-          last_sync_at?: string | null
-          metadata?: Json | null
-          notification_sub_id?: string | null
-          participant_count?: number
-          project_id?: string
-          session_id?: string
-          session_name?: string
-          session_status?: string
-          session_type?: string | null
-          submittal_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bluebeam_sessions_drawing_set_id_fkey"
-            columns: ["drawing_set_id"]
-            isOneToOne: false
-            referencedRelation: "drawing_sets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bluebeam_sessions_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bluebeam_sessions_submittal_id_fkey"
-            columns: ["submittal_id"]
-            isOneToOne: false
-            referencedRelation: "submittals"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       budget_hour_items: {
         Row: {
           category: string
@@ -2048,54 +1794,83 @@ export type Database = {
       }
       drawing_markups: {
         Row: {
+          author_email: string | null
           author_id: string | null
+          author_name: string | null
+          color: string | null
           comment: string | null
           created_at: string
-          drawing_revision_id: string
+          drawing_id: string | null
+          drawing_revision_id: string | null
           height: number | null
           id: string
           markup_type: string
           page_number: number
           page_x: number | null
           page_y: number | null
+          payload: Json
           project_id: string
           status: string
           updated_at: string
           width: number | null
         }
         Insert: {
+          author_email?: string | null
           author_id?: string | null
+          author_name?: string | null
+          color?: string | null
           comment?: string | null
           created_at?: string
-          drawing_revision_id: string
+          drawing_id?: string | null
+          drawing_revision_id?: string | null
           height?: number | null
           id?: string
           markup_type: string
           page_number?: number
           page_x?: number | null
           page_y?: number | null
+          payload?: Json
           project_id: string
           status?: string
           updated_at?: string
           width?: number | null
         }
         Update: {
+          author_email?: string | null
           author_id?: string | null
+          author_name?: string | null
+          color?: string | null
           comment?: string | null
           created_at?: string
-          drawing_revision_id?: string
+          drawing_id?: string | null
+          drawing_revision_id?: string | null
           height?: number | null
           id?: string
           markup_type?: string
           page_number?: number
           page_x?: number | null
           page_y?: number | null
+          payload?: Json
           project_id?: string
           status?: string
           updated_at?: string
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "drawing_markups_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
+          {
+            foreignKeyName: "drawing_markups_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "drawing_markups_drawing_revision_id_fkey"
             columns: ["drawing_revision_id"]
@@ -2323,14 +2098,17 @@ export type Database = {
           created_by: string | null
           drawing_id: string
           file_id: string | null
+          file_url: string | null
           id: string
           is_current: boolean
           issued_at: string | null
+          pdf_page: number | null
           project_id: string
           received_at: string | null
           release_status: string
           revision_code: string
           revision_name: string | null
+          revision_notes: string | null
           sheet_number: string
           sheet_title: string
           supersedes_revision_id: string | null
@@ -2346,14 +2124,17 @@ export type Database = {
           created_by?: string | null
           drawing_id: string
           file_id?: string | null
+          file_url?: string | null
           id?: string
           is_current?: boolean
           issued_at?: string | null
+          pdf_page?: number | null
           project_id: string
           received_at?: string | null
           release_status?: string
           revision_code: string
           revision_name?: string | null
+          revision_notes?: string | null
           sheet_number: string
           sheet_title: string
           supersedes_revision_id?: string | null
@@ -2369,14 +2150,17 @@ export type Database = {
           created_by?: string | null
           drawing_id?: string
           file_id?: string | null
+          file_url?: string | null
           id?: string
           is_current?: boolean
           issued_at?: string | null
+          pdf_page?: number | null
           project_id?: string
           received_at?: string | null
           release_status?: string
           revision_code?: string
           revision_name?: string | null
+          revision_notes?: string | null
           sheet_number?: string
           sheet_title?: string
           supersedes_revision_id?: string | null
@@ -4139,6 +3923,109 @@ export type Database = {
           },
         ]
       }
+      fab_release_overrides: {
+        Row: {
+          blocking_rfi_numbers: string[]
+          created_at: string
+          drawing_count: number | null
+          id: string
+          overridden_by: string | null
+          package_kind: string | null
+          package_name: string | null
+          project_id: string
+          reason: string | null
+        }
+        Insert: {
+          blocking_rfi_numbers?: string[]
+          created_at?: string
+          drawing_count?: number | null
+          id?: string
+          overridden_by?: string | null
+          package_kind?: string | null
+          package_name?: string | null
+          project_id: string
+          reason?: string | null
+        }
+        Update: {
+          blocking_rfi_numbers?: string[]
+          created_at?: string
+          drawing_count?: number | null
+          id?: string
+          overridden_by?: string | null
+          package_kind?: string | null
+          package_name?: string | null
+          project_id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fab_release_overrides_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fab_releases: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_deleted: boolean | null
+          name: string
+          notes: string | null
+          piece_count: number | null
+          piece_marks: string | null
+          project_id: string | null
+          release_date: string | null
+          release_number: string
+          required_date: string | null
+          status: string
+          weight_tons: number | null
+          work_package_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          name: string
+          notes?: string | null
+          piece_count?: number | null
+          piece_marks?: string | null
+          project_id?: string | null
+          release_date?: string | null
+          release_number: string
+          required_date?: string | null
+          status?: string
+          weight_tons?: number | null
+          work_package_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          name?: string
+          notes?: string | null
+          piece_count?: number | null
+          piece_marks?: string | null
+          project_id?: string | null
+          release_date?: string | null
+          release_number?: string
+          required_date?: string | null
+          status?: string
+          weight_tons?: number | null
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fab_releases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_flags: {
         Row: {
           created_at: string
@@ -4754,6 +4641,124 @@ export type Database = {
           },
         ]
       }
+      model_elements: {
+        Row: {
+          assembly_mark: string | null
+          created_at: string
+          deleted_at: string | null
+          drawing_id: string | null
+          drawing_no: string | null
+          drawing_set_id: string | null
+          element_guid: string | null
+          erection_area: string | null
+          id: string
+          is_deleted: boolean
+          material_grade: string | null
+          metadata: Json
+          model_id: string | null
+          piece_mark: string
+          profile: string | null
+          project_id: string
+          quantity: number
+          sequence_number: string | null
+          source: string
+          updated_at: string
+          weight_kg: number | null
+          work_package_id: string | null
+        }
+        Insert: {
+          assembly_mark?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          drawing_id?: string | null
+          drawing_no?: string | null
+          drawing_set_id?: string | null
+          element_guid?: string | null
+          erection_area?: string | null
+          id?: string
+          is_deleted?: boolean
+          material_grade?: string | null
+          metadata?: Json
+          model_id?: string | null
+          piece_mark: string
+          profile?: string | null
+          project_id: string
+          quantity?: number
+          sequence_number?: string | null
+          source?: string
+          updated_at?: string
+          weight_kg?: number | null
+          work_package_id?: string | null
+        }
+        Update: {
+          assembly_mark?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          drawing_id?: string | null
+          drawing_no?: string | null
+          drawing_set_id?: string | null
+          element_guid?: string | null
+          erection_area?: string | null
+          id?: string
+          is_deleted?: boolean
+          material_grade?: string | null
+          metadata?: Json
+          model_id?: string | null
+          piece_mark?: string
+          profile?: string | null
+          project_id?: string
+          quantity?: number
+          sequence_number?: string | null
+          source?: string
+          updated_at?: string
+          weight_kg?: number | null
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_elements_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_register_view"
+            referencedColumns: ["drawing_id"]
+          },
+          {
+            foreignKeyName: "model_elements_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_elements_drawing_set_id_fkey"
+            columns: ["drawing_set_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_elements_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "model_registry"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_elements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_elements_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       model_registry: {
         Row: {
           cloud_model_id: string | null
@@ -5356,6 +5361,10 @@ export type Database = {
           metadata: Json | null
           name: string
           notes: string | null
+          on_hold: boolean
+          on_hold_at: string | null
+          on_hold_by: string | null
+          on_hold_reason: string | null
           original_contract_value: number | null
           phase: string
           project_manager: string | null
@@ -5397,6 +5406,10 @@ export type Database = {
           metadata?: Json | null
           name: string
           notes?: string | null
+          on_hold?: boolean
+          on_hold_at?: string | null
+          on_hold_by?: string | null
+          on_hold_reason?: string | null
           original_contract_value?: number | null
           phase?: string
           project_manager?: string | null
@@ -5438,6 +5451,10 @@ export type Database = {
           metadata?: Json | null
           name?: string
           notes?: string | null
+          on_hold?: boolean
+          on_hold_at?: string | null
+          on_hold_by?: string | null
+          on_hold_reason?: string | null
           original_contract_value?: number | null
           phase?: string
           project_manager?: string | null
@@ -6549,6 +6566,8 @@ export type Database = {
       }
       submittals: {
         Row: {
+          approval_chain: Json | null
+          approval_chain_step: number | null
           approved_date: string | null
           ball_in_court: string | null
           created_at: string | null
@@ -6558,6 +6577,8 @@ export type Database = {
           discipline: string | null
           distributed_to: string | null
           drawing_set_ids: string[] | null
+          external_id: string | null
+          external_source: string | null
           file_url: string | null
           id: string
           is_deleted: boolean | null
@@ -6585,6 +6606,8 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          approval_chain?: Json | null
+          approval_chain_step?: number | null
           approved_date?: string | null
           ball_in_court?: string | null
           created_at?: string | null
@@ -6594,6 +6617,8 @@ export type Database = {
           discipline?: string | null
           distributed_to?: string | null
           drawing_set_ids?: string[] | null
+          external_id?: string | null
+          external_source?: string | null
           file_url?: string | null
           id?: string
           is_deleted?: boolean | null
@@ -6621,6 +6646,8 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          approval_chain?: Json | null
+          approval_chain_step?: number | null
           approved_date?: string | null
           ball_in_court?: string | null
           created_at?: string | null
@@ -6630,6 +6657,8 @@ export type Database = {
           discipline?: string | null
           distributed_to?: string | null
           drawing_set_ids?: string[] | null
+          external_id?: string | null
+          external_source?: string | null
           file_url?: string | null
           id?: string
           is_deleted?: boolean | null
@@ -7181,6 +7210,16 @@ export type Database = {
       create_project: { Args: { project_data: Json }; Returns: Json }
       delete_drawing_set: { Args: { p_set_id: string }; Returns: number }
       escalate_rfi_sla: { Args: never; Returns: number }
+      fab_release_blocking_rfis: {
+        Args: { p_drawing_ids: string[] }
+        Returns: {
+          id: string
+          project_id: string
+          rfi_number: string
+          status: string
+          title: string
+        }[]
+      }
       get_my_project_role: { Args: { p_project_id: string }; Returns: string }
       get_next_sequence_number: {
         Args: { p_project_id: string; p_record_type: string }
@@ -7194,14 +7233,17 @@ export type Database = {
           created_by: string | null
           drawing_id: string
           file_id: string | null
+          file_url: string | null
           id: string
           is_current: boolean
           issued_at: string | null
+          pdf_page: number | null
           project_id: string
           received_at: string | null
           release_status: string
           revision_code: string
           revision_name: string | null
+          revision_notes: string | null
           sheet_number: string
           sheet_title: string
           supersedes_revision_id: string | null

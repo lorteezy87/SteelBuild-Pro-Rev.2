@@ -133,6 +133,14 @@ const REGISTRY: Record<string, EntityRegistration> = {
     ],
   },
 
+  model_element: {
+    primary:  (pid) => ["model-elements", pid],
+    families: (pid) => [
+      ["model-elements", pid],
+      ["model-elements"],
+    ],
+  },
+
   rfi: {
     primary:  (pid) => ["rfis", pid],
     families: (pid) => [
