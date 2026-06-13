@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseShippingList, parseShipDate, parseWeight } from "../importShippingList";
+import { parseShippingList, parseShipDate, parseWeight, classifyLoads } from "../importShippingList";
 
 // Build a 22-wide row with values at the given column indices (mirrors the real
 // FabSuite Master Shipping List layout, including the merged "Quantity" offset).
@@ -78,5 +78,23 @@ describe("parseShippingList", () => {
 
   it("rejects a non-shipping sheet (no Mark column)", () => {
     expect(parseShippingList([["Foo", "Bar"], [1, 2]]).ok).toBe(false);
+  });
+});
+
+describe("classifyLoads", () => {
+  it("skips loads already imported (matched by load# + ship date)", () => {
+    const { loads } = parseShippingList(ROWS);
+    const { rows, stats } = classifyLoads(loads, [
+      { id: "d1", load_number: "8", actual_date: "2025-10-06", is_deleted: false },
+    ]);
+    expect(stats).toEqual({ create: 2, exists: 1 });
+    expect(rows.find((l) => l.load_number === "8")).toMatchObject({ action: "exists", existing_id: "d1" });
+    expect(rows.find((l) => l.load_number === "1").action).toBe("create");
+  });
+
+  it("ignores soft-deleted deliveries", () => {
+    const { loads } = parseShippingList(ROWS);
+    const { stats } = classifyLoads(loads, [{ id: "d1", load_number: "8", actual_date: "2025-10-06", is_deleted: true }]);
+    expect(stats.exists).toBe(0);
   });
 });
