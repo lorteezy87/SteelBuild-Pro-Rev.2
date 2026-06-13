@@ -173,6 +173,31 @@ export function parseFabSuiteXml(xmlString) {
   };
 }
 
+/**
+ * Classify parsed pieces as create/update against existing model_elements.
+ * Matches by model GUID ONLY — the natural key of an instance-level row. We do
+ * NOT fall back to piece mark (as the CSV importer does): a new GUID with an
+ * existing mark is a different physical instance and must be a create, not an
+ * update that would overwrite the other instance. Pure; returns staged rows.
+ */
+export function stageModelElements(pieces, existingElements = []) {
+  const byGuid = new Map();
+  for (const el of existingElements) {
+    if (!el || el.is_deleted || !el.element_guid) continue;
+    byGuid.set(String(el.element_guid).toUpperCase(), el);
+  }
+  const rows = [];
+  let create = 0;
+  let update = 0;
+  for (const piece of pieces || []) {
+    const existing = piece.element_guid ? byGuid.get(String(piece.element_guid).toUpperCase()) : null;
+    const action = existing ? "update" : "create";
+    if (existing) update += 1; else create += 1;
+    rows.push({ ...piece, action, existing_id: existing ? existing.id : null });
+  }
+  return { rows, stats: { create, update } };
+}
+
 /** "FOR APPROVAL ONLY" → IFA, "FOR FABRICATION" → IFC, else null. */
 function inferStage(drawings) {
   for (const d of drawings) {

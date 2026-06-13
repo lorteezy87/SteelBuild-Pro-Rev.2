@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { parseFabSuiteXml } from "../importFabSuiteXml";
+import { parseFabSuiteXml, stageModelElements } from "../importFabSuiteXml";
 
 // Fixture mirrors the real TeklaPowerFab schema (default xmlns, AssemblyData →
 // Assembly → AssemblyPart, AssemblyDrawings, a duplicate drawing without a
@@ -76,9 +76,9 @@ const XML = `<?xml version="1.0" encoding="utf-8"?>
   </ContractData></ProjectData>
 </FabSuiteDataExchange>`;
 
-describe("parseFabSuiteXml", () => {
-  const result = parseFabSuiteXml(XML);
+const result = parseFabSuiteXml(XML);
 
+describe("parseFabSuiteXml", () => {
   it("reads project + source metadata and the package stage", () => {
     expect(result.ok).toBe(true);
     expect(result.project).toEqual({ number: "25421", name: "ACADEMY MS MESA" });
@@ -131,5 +131,25 @@ describe("parseFabSuiteXml", () => {
   it("rejects unparseable XML", () => {
     const r = parseFabSuiteXml("<a><b></a>");
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("stageModelElements", () => {
+  it("matches existing model_elements by GUID (update), new GUIDs are creates", () => {
+    const { rows, stats } = stageModelElements(result.pieces, [
+      { id: "m1", element_guid: "model-1", piece_mark: "502C2002", is_deleted: false },
+    ]);
+    expect(stats).toEqual({ create: 2, update: 1 }); // model-1 updates; model-1b + model-2 create
+    const updated = rows.find((r) => r.element_guid === "model-1");
+    expect(updated).toMatchObject({ action: "update", existing_id: "m1" });
+    const fresh = rows.find((r) => r.element_guid === "model-1b");
+    expect(fresh.action).toBe("create"); // same mark, different instance → NOT collapsed
+  });
+
+  it("ignores soft-deleted and guid-less existing rows", () => {
+    const { stats } = stageModelElements(result.pieces, [
+      { id: "m1", element_guid: "model-1", is_deleted: true },
+    ]);
+    expect(stats.update).toBe(0);
   });
 });
