@@ -93,13 +93,14 @@ describe("resolveProduction", () => {
 });
 
 describe("parseProductionCsv", () => {
-  it("stages create vs update against existing pieces and skips bad rows", () => {
+  it("stages create vs update, rolls up instances by mark, skips bad/empty rows", () => {
     const csv = [
       "Piece Mark,Status,Qty,Ship Date",
       "B-101,Welded,2,",
       "B-102,Shipped,1,6/10/2026",
       ",Cut,1,", // missing mark -> skipped
-      "B-101,Fit,1,", // duplicate in file -> skipped
+      "B-101,Fit,1,", // 2nd instance of B-101 -> quantity rolled up (not skipped)
+      "B-103,,5,", // no production signal -> skipped (untracked sub-part)
     ].join("\n");
 
     const result = parseProductionCsv(csv, {
@@ -107,17 +108,17 @@ describe("parseProductionCsv", () => {
     });
 
     expect(result.ok).toBe(true);
+    // B-101 create, B-102 update; missing-mark + empty-signal rows skipped.
     expect(result.stats).toMatchObject({ create: 1, update: 1, skipped: 2 });
 
     const b101 = result.rows.find((r) => r.piece_mark === "B-101");
-    expect(b101).toMatchObject({ action: "create", status: "Weld", quantity: 2 });
+    expect(b101).toMatchObject({ action: "create", status: "Weld", quantity: 3 }); // 2 + 1 rolled up
 
     const b102 = result.rows.find((r) => r.piece_mark === "B-102");
     expect(b102).toMatchObject({ action: "update", existing_id: "e1", status: "Shipped", ship_date: "2026-06-10" });
 
-    const reasons = result.skipped.map((s) => s.reason);
-    expect(reasons.some((r) => /Missing piece mark/.test(r))).toBe(true);
-    expect(reasons.some((r) => /Duplicate piece mark/.test(r))).toBe(true);
+    expect(result.rows.find((r) => r.piece_mark === "B-103")).toBeUndefined(); // empty -> not imported
+    expect(result.skipped.some((s) => /Missing piece mark/.test(s.reason))).toBe(true);
   });
 
   it("errors clearly when no piece-mark column is present", () => {
