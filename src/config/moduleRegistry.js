@@ -22,7 +22,7 @@ export const PRIMARY_TABS = [
   // folded into FIELD — fewer logical groups, and every page stays reachable
   // (these arrays drive route-reachability + tab mapping, not a visible tab bar).
   // FieldPlan added here so it's no longer orphaned from the registry.
-  { label: "FABRICATION", pages: ["WorkPackages", "RiskHub", "Constraints", "FabRelease", "MarginRisk", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling", "ResourceManagement"] },
+  { label: "FABRICATION", pages: ["WorkPackages", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "MarginRisk", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling", "ResourceManagement"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "GanttChart", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldToday", "FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
@@ -65,6 +65,7 @@ export const ALL_MODULES = [
   { icon: "\u26A0", name: "Risk",                 group: "Fabrication",   page: "RiskHub" },
   { icon: "\uD83D\uDEA7", name: "Constraints",        group: "Fab",           page: "Constraints" },
   { icon: "\uD83C\uDFED", name: "Fab Release",        group: "Fabrication",   page: "FabRelease" },
+  { icon: "\uD83D\uDEE0", name: "Production Status",   group: "Fabrication",   page: "ProductionStatus" },
   { icon: "\u26A0", name: "Margin Risk",        group: "Fabrication",   page: "MarginRisk" },
   { icon: "⏱", name: "Budget Hours",            group: "Fabrication",   page: "BudgetHours" },
   { icon: "\uD83D\uDCE6", name: "Procurement",        group: "Fabrication",   page: "Procurement" },
@@ -163,6 +164,7 @@ export const NAV_GROUPS = [
       { label: "Work Packages", icon: "\u25A6", page: "WorkPackages" },
       { label: "Risk",          icon: "⚠", page: "RiskHub" },
       { label: "Fab Release",   icon: "\uD83C\uDFED", page: "FabRelease" },
+      { label: "Production Status", icon: "\uD83D\uDEE0", page: "ProductionStatus" },
       { label: "Budget Hours",  icon: "\u23F1", page: "BudgetHours" },
       { label: "Procurement",   icon: "\uD83D\uDCE6", page: "Procurement" },
       // Look-Ahead is now a tab inside the Schedule hub.
@@ -284,6 +286,7 @@ export const SIDEBAR_GROUPS = [
     items: [
       { label: "Work Packages",        icon: "\u25A6", page: "WorkPackages" },
       { label: "Fab Release",          icon: "🏭", page: "FabRelease" },
+      { label: "Production Status",    icon: "🛠", page: "ProductionStatus" },
       { label: "Risk",                 icon: "⚠", page: "RiskHub" },
       { label: "Budget Hours",         icon: "⏱",  page: "BudgetHours" },
       { label: "Procurement",          icon: "📦", page: "Procurement" },
