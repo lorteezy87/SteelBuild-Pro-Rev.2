@@ -331,6 +331,7 @@ export const SIDEBAR_GROUPS = [
     collapsible: true,
     items: [
       { label: "Team",             icon: "\uD83D\uDC65", page: "OrgMembers" },
+      { label: "Billing",          icon: "\uD83D\uDCB3", page: "Billing" },
       { label: "Vendors",          icon: "\uD83C\uDFE2", page: "Vendors" },
       { label: "Settings",         icon: "\u2699", page: "Settings" },
     ],
