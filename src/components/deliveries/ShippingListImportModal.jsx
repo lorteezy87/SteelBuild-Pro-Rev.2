@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { parseShippingList, classifyLoads } from "@/lib/importShippingList";
+import { listPieceProduction, commitProductionRows } from "@/lib/production/repository";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -36,10 +37,16 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
   const [excluded, setExcluded] = useState(new Set());
   const [lastResult, setLastResult] = useState(null);
   const [err, setErr] = useState(null);
+  const [markShipped, setMarkShipped] = useState(true);
 
   const { data: existingDeliveries = [] } = useQuery({
     queryKey: ["deliveries", projectId, "shipping-import"],
     queryFn: () => entities.Delivery.filter({ project_id: projectId }, "-scheduled_date", 2000),
+    enabled: !!open && !!projectId,
+  });
+  const { data: existingProduction = [] } = useQuery({
+    queryKey: ["piece-production", projectId, "shipping-import"],
+    queryFn: () => listPieceProduction(projectId),
     enabled: !!open && !!projectId,
   });
 
@@ -153,9 +160,23 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
           else failed += 1;
         });
       }
-      setLastResult({ created, items, failed });
-      toast.success(`${created} load${created === 1 ? "" : "s"} imported (${items} pieces)` + (failed ? `, ${failed} failed` : ""));
-      onImported?.({ created, items, failed });
+      // Mark every shipped piece "Shipped" on Production Status (terminal stage).
+      let shipped = 0;
+      if (markShipped) {
+        try {
+          shipped = await markPiecesShipped(kept, existingProduction, projectId);
+        } catch (e) {
+          console.error("[ShippingListImportModal] mark-shipped failed:", e);
+        }
+      }
+
+      setLastResult({ created, items, failed, shipped });
+      toast.success(
+        `${created} load${created === 1 ? "" : "s"} imported (${items} pieces)`
+        + (shipped ? `, ${shipped} marked shipped` : "")
+        + (failed ? `, ${failed} failed` : ""),
+      );
+      onImported?.({ created, items, failed, shipped });
       setStep("done");
       setTimeout(() => { reset(); onClose(); }, 1800);
     } catch (e) {
@@ -283,6 +304,11 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
                 </div>
               </div>
 
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-secondary)", cursor: "pointer" }}>
+                <input type="checkbox" checked={markShipped} onChange={(e) => setMarkShipped(e.target.checked)} disabled={step === "committing"} />
+                Also mark these pieces <strong style={{ color: "var(--status-success)" }}>Shipped</strong> on Production Status
+              </label>
+
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                 <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}><FileText size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />{file?.name}</div>
                 <div style={{ display: "flex", gap: 10 }}>
@@ -299,7 +325,7 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
             <div style={{ textAlign: "center", padding: "40px 0" }}>
               <CheckCircle2 size={32} style={{ color: "var(--status-success)" }} />
               <div style={{ marginTop: 10, color: "var(--text-primary)", fontWeight: 700 }}>
-                {lastResult.created} load{lastResult.created === 1 ? "" : "s"} imported · {lastResult.items} pieces{lastResult.failed ? ` · ${lastResult.failed} failed` : ""}
+                {lastResult.created} load{lastResult.created === 1 ? "" : "s"} imported · {lastResult.items} pieces{lastResult.shipped ? ` · ${lastResult.shipped} marked shipped` : ""}{lastResult.failed ? ` · ${lastResult.failed} failed` : ""}
               </div>
             </div>
           )}
@@ -307,6 +333,53 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
       </div>
     </>
   );
+}
+
+/**
+ * Upsert every shipped piece into piece_production as "Shipped" (the terminal
+ * fab stage), keyed by mark, using the latest ship date when a mark rode more
+ * than one load. Reuses the production repository's create/update path.
+ */
+async function markPiecesShipped(keptLoads, existingProduction, projectId) {
+  const shipByMark = new Map();
+  for (const load of keptLoads) {
+    for (const p of load.pieces || []) {
+      const key = String(p.mark || "").trim().toUpperCase();
+      if (!key) continue;
+      const prev = shipByMark.get(key);
+      if (!prev || (load.ship_date && load.ship_date > prev.ship_date)) {
+        shipByMark.set(key, { mark: p.mark, ship_date: load.ship_date || null });
+      }
+    }
+  }
+  if (shipByMark.size === 0) return 0;
+
+  const byMark = new Map();
+  for (const pp of existingProduction || []) {
+    const key = String(pp.piece_mark || "").trim().toUpperCase();
+    if (key && !byMark.has(key)) byMark.set(key, pp);
+  }
+
+  const rows = [...shipByMark.values()].map(({ mark, ship_date }) => {
+    const existing = byMark.get(String(mark).trim().toUpperCase()) || null;
+    return {
+      action: existing ? "update" : "create",
+      existing_id: existing ? existing.id : null,
+      piece_mark: mark,
+      assembly_mark: null,
+      status: "Shipped",
+      percent_complete: 100,
+      ship_date: ship_date || null,
+      stage_data: null,
+      quantity: null,
+      weight: null,
+      sequence_number: null,
+      erection_area: null,
+      external_ref: null,
+    };
+  });
+  const { created, updated } = await commitProductionRows(projectId, rows);
+  return created + updated;
 }
 
 const th = { textAlign: "left", padding: "8px 10px", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", borderBottom: "1px solid var(--divider)" };
