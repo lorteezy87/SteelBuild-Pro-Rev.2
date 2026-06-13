@@ -30,6 +30,27 @@ const STORAGE_KEY = "sbp:field:outbox:v1";
 /** Op type for an idempotent schedule-task progress write. */
 export const OP_SCHEDULE_PROGRESS = "schedule-progress";
 
+/** Op type for a punchlist-item create (dedup'd by client_op_id on replay). */
+export const OP_PUNCH_CREATE = "punch-create";
+
+/**
+ * A client-generated idempotency key. The SAME key rides the online create
+ * attempt AND the queued offline retry, so a duplicate replay collides with the
+ * server's partial-unique index (and is then treated as already-applied). Uses
+ * crypto.randomUUID where available, with a non-crypto fallback that is still
+ * unique enough for outbox dedup.
+ */
+export function newClientOpId() {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* fall through */
+  }
+  return `op-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 function localStorageAdapter() {
   return {
     read: () => {
@@ -73,7 +94,9 @@ export function saveQueue(queue, storage = localStorageAdapter()) {
  */
 export function enqueueOp(queue, op) {
   const base = (Array.isArray(queue) ? queue : []).filter(
-    (existing) => !(op?.coalesceKey && existing?.coalesceKey === op.coalesceKey),
+    (existing) =>
+      !(op?.coalesceKey && existing?.coalesceKey === op.coalesceKey) &&
+      !(op?.id && existing?.id === op.id),
   );
   base.push(op);
   return base;
@@ -88,6 +111,33 @@ export function makeProgressOp(taskId, pct, now) {
     payload: { id: taskId, pct },
     createdAt: now,
   };
+}
+
+/**
+ * Build a punchlist-create op. The op id IS the client_op_id (which the payload
+ * also carries) so the queue itself can't hold the same create twice, and the
+ * server dedups a replay against its partial-unique index. No coalesceKey —
+ * distinct creates must never collapse into one.
+ */
+export function makePunchCreateOp(payload, clientOpId, now) {
+  return {
+    id: clientOpId,
+    type: OP_PUNCH_CREATE,
+    payload,
+    createdAt: now,
+  };
+}
+
+/**
+ * Did a create fail because the row already exists (its client_op_id hit the
+ * partial-unique index)? Then a PRIOR attempt actually succeeded — the replay
+ * is a no-op, not an error. Postgres unique_violation is SQLSTATE 23505.
+ */
+export function isUniqueViolation(error) {
+  if (!error) return false;
+  if (error.code === "23505") return true;
+  const message = String(error.message || error).toLowerCase();
+  return message.includes("duplicate key") || message.includes("unique constraint");
 }
 
 /**

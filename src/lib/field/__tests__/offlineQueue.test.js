@@ -4,9 +4,13 @@ import {
   saveQueue,
   enqueueOp,
   makeProgressOp,
+  makePunchCreateOp,
+  newClientOpId,
   flushQueue,
   isLikelyOfflineError,
+  isUniqueViolation,
   OP_SCHEDULE_PROGRESS,
+  OP_PUNCH_CREATE,
 } from "../offlineQueue";
 
 // In-memory storage adapter for deterministic persistence tests.
@@ -145,5 +149,60 @@ describe("isLikelyOfflineError", () => {
 
   it("is false for no error", () => {
     expect(isLikelyOfflineError(null)).toBe(false);
+  });
+});
+
+describe("makePunchCreateOp", () => {
+  it("uses the client_op_id as the op id and carries the payload", () => {
+    const record = { description: "Missing weld", project_id: "p1", client_op_id: "cid-1" };
+    const op = makePunchCreateOp(record, "cid-1", 500);
+    expect(op).toMatchObject({ id: "cid-1", type: OP_PUNCH_CREATE, payload: record, createdAt: 500 });
+    expect(op.coalesceKey).toBeUndefined(); // creates must never coalesce
+  });
+});
+
+describe("newClientOpId", () => {
+  it("returns a non-empty, unique string", () => {
+    const a = newClientOpId();
+    const b = newClientOpId();
+    expect(typeof a).toBe("string");
+    expect(a.length).toBeGreaterThan(0);
+    expect(a).not.toBe(b);
+  });
+});
+
+describe("enqueueOp id de-dup (creates)", () => {
+  it("never queues the same create (same id) twice", () => {
+    let q = [];
+    q = enqueueOp(q, makePunchCreateOp({ a: 1 }, "cid-1", 1));
+    q = enqueueOp(q, makePunchCreateOp({ a: 2 }, "cid-1", 2)); // same id -> replaces, not appends
+    expect(q).toHaveLength(1);
+  });
+
+  it("keeps distinct creates (different ids)", () => {
+    let q = [];
+    q = enqueueOp(q, makePunchCreateOp({ a: 1 }, "cid-1", 1));
+    q = enqueueOp(q, makePunchCreateOp({ a: 2 }, "cid-2", 2));
+    expect(q).toHaveLength(2);
+  });
+
+  it("lets progress and punch ops coexist in order", () => {
+    let q = [];
+    q = enqueueOp(q, makeProgressOp("t1", 50, 1));
+    q = enqueueOp(q, makePunchCreateOp({ a: 1 }, "cid-1", 2));
+    expect(q.map((o) => o.type)).toEqual([OP_SCHEDULE_PROGRESS, OP_PUNCH_CREATE]);
+  });
+});
+
+describe("isUniqueViolation", () => {
+  it("detects a Postgres unique violation (replayed create that already landed)", () => {
+    expect(isUniqueViolation({ code: "23505" })).toBe(true);
+    expect(isUniqueViolation({ message: 'duplicate key value violates unique constraint "uq_x"' })).toBe(true);
+  });
+
+  it("is false for other errors", () => {
+    expect(isUniqueViolation({ code: "23503" })).toBe(false); // FK violation
+    expect(isUniqueViolation({ message: "Failed to fetch" })).toBe(false);
+    expect(isUniqueViolation(null)).toBe(false);
   });
 });
