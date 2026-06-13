@@ -66,17 +66,17 @@ const HEADER_ALIASES = {
   status: ["status", "stage", "production status", "current status", "station", "operation", "last operation", "routing status"],
   percent_complete: ["percent", "percent complete", "% complete", "pct", "progress", "complete pct", "completion"],
   quantity: ["qty", "quantity", "pcs", "count", "no of pieces", "number"],
-  weight: ["weight", "weight kg", "weight (kg)", "weight lbs", "weight (lbs)", "total weight", "wt"],
-  sequence_number: ["sequence", "seq", "lot", "lot no", "phase", "sequence no"],
+  weight: ["weight", "weight kg", "weight (kg)", "weight lbs", "weight (lbs)", "total weight", "wt", "asm wt", "asm weight", "assembly weight"],
+  sequence_number: ["sequence", "seq", "lot", "lot no", "phase", "sequence no", "seq lot"],
   erection_area: ["area", "erection area", "zone", "building", "bldg"],
   external_ref: ["job", "job no", "job number", "work order", "wo", "ref", "reference", "epm id"],
   // station completion dates — folded into stage_data and used to resolve stage
-  cut_date: ["cut date", "cut", "nest date", "cnc date", "cut complete"],
-  fit_date: ["fit date", "fitup date", "fit-up date", "fit complete"],
-  weld_date: ["weld date", "welded date", "weld complete"],
+  cut_date: ["cut date", "cut", "cutting", "nest date", "cnc date", "cut complete"],
+  fit_date: ["fit date", "fitup date", "fit-up date", "fitting", "fit complete"],
+  weld_date: ["weld date", "welded date", "welding", "weld complete"],
   clean_date: ["clean date", "blast date", "clean complete"],
-  paint_date: ["paint date", "painted date", "galv date", "paint complete", "coat date"],
-  ship_date: ["ship date", "shipped date", "shipping date", "ship", "delivery date"],
+  paint_date: ["paint date", "painted date", "galv date", "coatings", "coating", "paint complete", "coat date"],
+  ship_date: ["ship date", "shipped date", "shipping date", "ship", "jobsite", "delivery date"],
 };
 
 const STATION_FIELDS = [
@@ -143,7 +143,7 @@ function normKey(value) {
 
 function numOrNull(value) {
   if (value === null || value === undefined || String(value).trim() === "") return null;
-  const n = Number(String(value).replace(/[%, ]+/g, ""));
+  const n = Number(String(value).replace(/[%,#\s]+/g, ""));
   return Number.isFinite(n) ? n : null;
 }
 
@@ -253,7 +253,7 @@ export function parseProductionCsv(rawCsv, options = {}) {
 
   const rows = [];
   const skipped = [];
-  const seenMarks = new Set();
+  const byMark = new Map(); // markKey -> the staged row (for instance roll-up)
   const stats = zeroStats();
 
   for (let i = 1; i < grid.length; i += 1) {
@@ -265,12 +265,15 @@ export function parseProductionCsv(rawCsv, options = {}) {
       continue;
     }
     const markKey = normKey(pieceMark);
-    if (seenMarks.has(markKey)) {
-      skipped.push({ line: i + 1, reason: `Duplicate piece mark in file: ${pieceMark}` });
-      stats.skipped += 1;
+    const already = byMark.get(markKey);
+    if (already) {
+      // Instance-level export (one row per piece instance) → roll the instance's
+      // quantity into the mark's row. piece_production is one row per mark; the
+      // first instance's resolved stage/dates represent the mark (instances of a
+      // mark share station dates in the EPM export).
+      already.quantity = (already.quantity || 0) + (numOrNull(get(raw, "quantity")) ?? 1);
       continue;
     }
-    seenMarks.add(markKey);
 
     const resolved = resolveProduction({
       status: get(raw, "status"),
@@ -283,11 +286,20 @@ export function parseProductionCsv(rawCsv, options = {}) {
       ship_date: get(raw, "ship_date"),
     });
 
+    // No production signal at all (no station date, no status, no percent) =
+    // an untracked sub-component (e.g. a "-WS" weld subassembly carried only as
+    // an empty row) — skip rather than import a noise "unmapped" piece.
+    const hasSignal = resolved.status !== null || resolved.stage_data !== null || resolved.percent_complete !== null;
+    if (!hasSignal) {
+      stats.skipped += 1;
+      continue;
+    }
+
     const existingRow = existingByMark.get(markKey) || null;
     const action = existingRow ? "update" : "create";
     stats[action] += 1;
 
-    rows.push({
+    const stagedRow = {
       action,
       existing_id: existingRow?.id || null,
       piece_mark: pieceMark,
@@ -296,12 +308,14 @@ export function parseProductionCsv(rawCsv, options = {}) {
       percent_complete: resolved.percent_complete,
       ship_date: resolved.ship_date,
       stage_data: resolved.stage_data,
-      quantity: numOrNull(get(raw, "quantity")),
+      quantity: numOrNull(get(raw, "quantity")) ?? 1,
       weight: numOrNull(get(raw, "weight")),
       sequence_number: get(raw, "sequence_number") || null,
       erection_area: get(raw, "erection_area") || null,
       external_ref: get(raw, "external_ref") || null,
-    });
+    };
+    rows.push(stagedRow);
+    byMark.set(markKey, stagedRow);
   }
 
   return { ok: true, rows, stats, skipped };
