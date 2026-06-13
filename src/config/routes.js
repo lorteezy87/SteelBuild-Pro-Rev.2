@@ -159,6 +159,7 @@ const ROUTE_DOMAINS = {
     DataExchange:     r(lazyWithRetry(() => import("@/pages/DataExchange")),     "Data Exchange",       { projectScoped: true }),
     Integrations:     r(lazyWithRetry(() => import("@/pages/Integrations")),     "Integrations"),
     Settings:         r(lazyWithRetry(() => import("@/pages/Settings")),         "Settings"),
+    OrgMembers:       r(lazyWithRetry(() => import("@/pages/OrgMembers")),       "Team"),
     UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management"),
     ProjectMembers:   r(lazyWithRetry(() => import("@/pages/ProjectMembers")),   "Project Members"),
     FeatureFlagsAdmin: r(lazyWithRetry(() => import("@/pages/FeatureFlagsAdmin")), "Feature Flags"),
