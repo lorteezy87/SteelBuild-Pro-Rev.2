@@ -12,13 +12,16 @@
  *   • Quick capture rail — Add Punch (inline modal), snap a Photo (camera),
  *     open today's Daily Log.
  *
- * Writes are ONLINE only — this slice deliberately does not queue offline
- * (that's the deferred, data-loss-risk piece). Every write reuses an existing,
+ * Offline-safe: progress %, punch creates, and photo captures made with no
+ * signal are held in an outbox (localStorage ops + IndexedDB photo blobs) and
+ * replayed on reconnect — idempotent updates and client_op_id-dedup'd creates,
+ * so a lost-response retry can never duplicate. Every write reuses an existing,
  * RLS-protected entity path; no new write surface is invented here. Pure
- * date/percent/selection logic lives in src/lib/field/fieldToday.js (tested).
+ * date/percent/selection logic lives in src/lib/field/fieldToday.js (tested);
+ * the outbox in src/lib/field/offlineQueue.js + photoSync.js (tested).
  */
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -53,12 +56,22 @@ import { useFieldOutbox } from "@/hooks/useFieldOutbox";
 import {
   makeProgressOp,
   makePunchCreateOp,
+  makePhotoCreateOp,
   newClientOpId,
   isLikelyOfflineError,
   isUniqueViolation,
   OP_SCHEDULE_PROGRESS,
   OP_PUNCH_CREATE,
+  OP_PHOTO_CREATE,
 } from "@/lib/field/offlineQueue";
+import { loadQueue } from "@/lib/field/offlineQueue";
+import { replayPhotoCreate } from "@/lib/field/photoSync";
+import {
+  putPendingPhoto,
+  getPendingPhoto,
+  deletePendingPhoto,
+  reconcilePendingPhotos,
+} from "@/lib/field/blobStore";
 
 // ── Urgency presentation (logic-free; buckets come from the helper) ──
 const URGENCY = {
@@ -135,6 +148,16 @@ export default function FieldToday() {
         queryClient.invalidateQueries({ queryKey: ["field-hub-punchlist", projectId] });
         queryClient.invalidateQueries({ queryKey: ["punchlist", projectId] });
       },
+      [OP_PHOTO_CREATE]: async (_payload, op) => {
+        await replayPhotoCreate(op, {
+          getBlob: getPendingPhoto,
+          uploadFile: integrations.Core.UploadFile,
+          createPhoto: entities.Photo.create,
+          deleteBlob: deletePendingPhoto,
+          isUniqueViolation,
+        });
+        queryClient.invalidateQueries({ queryKey: ["field-hub-photos", projectId] });
+      },
     }),
     [queryClient, projectId],
   );
@@ -204,7 +227,10 @@ export default function FieldToday() {
     },
   });
 
-  // ── Quick photo capture (camera → compress → upload → Photo row) ──
+  // ── Quick photo capture (camera → compress → upload → Photo row).
+  // Offline-safe: a shot taken with no signal is held (the blob in IndexedDB, a
+  // create op in the outbox) and replayed on reconnect, dedup'd by client_op_id
+  // so a lost-response retry can't mint a duplicate. ──
   const handlePhotoFiles = async (fileList) => {
     const files = Array.from(fileList || []);
     if (files.length === 0) return;
@@ -213,29 +239,57 @@ export default function FieldToday() {
       return;
     }
     setUploadingPhoto(true);
-    let ok = 0;
+    let added = 0;
+    let queued = 0;
     try {
       for (const raw of files) {
+        const clientOpId = newClientOpId();
+        const meta = {
+          project_id: projectId,
+          category: "Progress",
+          title: "Field photo",
+          location: "",
+          taken_date: todayIso,
+        };
+        let file;
         try {
-          const file = await compressImage(raw);
+          file = await compressImage(raw);
+        } catch {
+          file = raw; // compression failed — upload the original
+        }
+        try {
           const result = await integrations.Core.UploadFile({ file });
           await entities.Photo.create({
-            project_id: projectId,
-            category: "Progress",
-            title: "Field photo",
-            location: "",
-            taken_date: todayIso,
+            ...meta,
             file_url: result.file_url || result.path,
             file_name: file.name,
+            client_op_id: clientOpId,
           });
-          ok += 1;
+          added += 1;
         } catch (err) {
-          console.error("[FieldToday] photo upload failed:", err);
+          if (isLikelyOfflineError(err)) {
+            try {
+              await putPendingPhoto(clientOpId, file, { name: file.name, type: file.type });
+              enqueueOutbox(makePhotoCreateOp(clientOpId, { ...meta, file_name: file.name }, Date.now()));
+              queued += 1;
+            } catch (storeErr) {
+              // Couldn't persist the blob — do NOT claim it was saved offline.
+              console.error("[FieldToday] offline photo store failed:", storeErr);
+            }
+          } else {
+            console.error("[FieldToday] photo upload failed:", err);
+          }
         }
       }
-      if (ok > 0) {
+      if (added > 0) {
         queryClient.invalidateQueries({ queryKey: ["field-hub-photos", projectId] });
-        toast.success(`${ok} photo${ok === 1 ? "" : "s"} added`);
+      }
+      if (added > 0 && queued > 0) {
+        toast.message(`${added} photo${added === 1 ? "" : "s"} added · ${queued} saved offline`);
+      } else if (queued > 0) {
+        toast.message(`${queued} photo${queued === 1 ? "" : "s"} saved offline — will sync when you're back online`);
+      } else if (added > 0) {
+        toast.success(`${added} photo${added === 1 ? "" : "s"} added`);
       } else {
         toast.error("Photo upload failed");
       }
@@ -244,6 +298,11 @@ export default function FieldToday() {
       if (photoInputRef.current) photoInputRef.current.value = "";
     }
   };
+
+  // Reclaim orphaned pending-photo blobs (op already drained) once on mount.
+  useEffect(() => {
+    reconcilePendingPhotos(new Set(loadQueue().map((op) => op.id)));
+  }, []);
 
   // ── States ──
   if (!projectId) {
