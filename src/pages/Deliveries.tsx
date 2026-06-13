@@ -23,6 +23,7 @@ import {
 import { usePermissions } from "@/services/permissions";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
+import ShippingListImportModal from "@/components/deliveries/ShippingListImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { batchProcess } from "@/utils/batchProcess";
@@ -89,6 +90,7 @@ export default function Deliveries() {
   const [seqFilter, setSeqFilter] = useState<unknown>(null);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showListImport, setShowListImport] = useState(false);
   const [editing, setEditing] = useState<DeliveryRecord | null>(null);
   const [detail, setDetail] = useState<DeliveryRecord | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -405,6 +407,11 @@ export default function Deliveries() {
               </Button>
             )}
             {can("create", "delivery") && (
+              <Button variant="outline" icon="upload" onClick={() => setShowListImport(true)} title="Bulk-import a Tekla EPM Master Shipping List">
+                Import Shipping List
+              </Button>
+            )}
+            {can("create", "delivery") && (
               <Button
                 variant="primary"
                 icon="plus"
@@ -691,6 +698,16 @@ export default function Deliveries() {
         onCreated={() => invalidateDeliveries()}
         onClose={() => {
           setShowImport(false);
+          invalidateDeliveries();
+        }}
+      />
+      <ShippingListImportModal
+        open={showListImport}
+        projectId={projectId}
+        projectName={activeProject?.name}
+        onImported={() => invalidateDeliveries()}
+        onClose={() => {
+          setShowListImport(false);
           invalidateDeliveries();
         }}
       />

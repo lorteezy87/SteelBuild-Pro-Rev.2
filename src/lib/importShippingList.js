@@ -173,3 +173,28 @@ export function parseShippingList(rows) {
 function zeroStats() {
   return { loads: 0, pieces: 0 };
 }
+
+/**
+ * Classify parsed loads as create vs already-imported, matched on
+ * (load_number, ship date) against existing deliveries — so re-importing the
+ * master list doesn't duplicate loads. Pure; returns staged rows + stats.
+ */
+export function classifyLoads(loads, existingDeliveries = []) {
+  const seen = new Map();
+  for (const d of existingDeliveries) {
+    if (!d || d.is_deleted) continue;
+    const date = String(d.actual_date || d.scheduled_date || d.expected_ship_date || "").slice(0, 10);
+    const key = `${String(d.load_number || "").trim().toUpperCase()}|${date}`;
+    if (d.load_number) seen.set(key, d);
+  }
+  let create = 0;
+  let exists = 0;
+  const rows = (loads || []).map((l) => {
+    const key = `${String(l.load_number || "").trim().toUpperCase()}|${l.ship_date || ""}`;
+    const existing = seen.get(key) || null;
+    const action = existing ? "exists" : "create";
+    if (existing) exists += 1; else create += 1;
+    return { ...l, action, existing_id: existing ? existing.id : null };
+  });
+  return { rows, stats: { create, exists } };
+}
