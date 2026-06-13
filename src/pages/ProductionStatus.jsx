@@ -9,7 +9,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Factory, Upload } from "lucide-react";
+import { Factory, Upload, Boxes } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { CommandBar } from "@/components/design-system";
@@ -17,6 +17,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { listPieceProduction } from "@/lib/production/repository";
 import { PRODUCTION_STAGES } from "@/lib/importProductionStatus";
 import ProductionStatusImportModal from "@/components/production/ProductionStatusImportModal";
+import TeklaEpmImportModal from "@/components/production/TeklaEpmImportModal";
 
 const STAGE_COLOR = {
   "Not Started": "var(--text-muted)",
@@ -37,6 +38,7 @@ export default function ProductionStatus() {
   const { activeProject } = useProjectContext();
   const queryClient = useQueryClient();
   const [showImport, setShowImport] = useState(false);
+  const [showEpmImport, setShowEpmImport] = useState(false);
 
   const { data: pieces = [], isLoading } = useQuery({
     queryKey: ["piece-production", projectId],
@@ -85,6 +87,10 @@ export default function ProductionStatus() {
         unit=" pieces"
         subtitle="Per-piece fab status from Tekla EPM / FabSuite"
       >
+        <button className="sbd-btn sbd-btn-ghost" onClick={() => setShowEpmImport(true)}>
+          <Boxes size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
+          Import Tekla EPM File
+        </button>
         <button className="sbd-btn sbd-btn-primary" onClick={() => setShowImport(true)}>
           <Upload size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
           Import Production Status
@@ -190,6 +196,13 @@ export default function ProductionStatus() {
         existing={pieces}
         onClose={() => setShowImport(false)}
         onImported={() => queryClient.invalidateQueries({ queryKey: ["piece-production", projectId] })}
+      />
+
+      <TeklaEpmImportModal
+        open={showEpmImport}
+        projectId={projectId}
+        projectName={activeProject?.name}
+        onClose={() => setShowEpmImport(false)}
       />
     </div>
   );
