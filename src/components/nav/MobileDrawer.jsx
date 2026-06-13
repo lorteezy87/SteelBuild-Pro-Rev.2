@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
+import { BrandLogo } from "./BrandLogo";
 
 export default function MobileDrawer({ open, onClose, onNavigate, currentPageName }) {
   const ref = useRef(null);
@@ -64,7 +65,7 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
           justifyContent: "space-between",
           gap: 12,
         }}>
-          <img src="/logo.png" alt="SteelBuild Pro" style={{ height: 32, width: "auto", objectFit: "contain" }} />
+          <BrandLogo height={56} title="SteelBuild Pro" style={{ display: "block", maxWidth: "70%", width: "auto" }} />
           <button
             type="button"
             onClick={onClose}

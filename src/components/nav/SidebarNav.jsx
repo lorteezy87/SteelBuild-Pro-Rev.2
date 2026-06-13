@@ -47,6 +47,7 @@ import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/mod
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
+import { BrandLogo } from "./BrandLogo";
 
 // ── Page → lucide icon map ──────────────────────────────────────────
 //
@@ -283,10 +284,14 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
         transition: "width 200ms cubic-bezier(0.25, 0.85, 0.35, 1), min-width 200ms cubic-bezier(0.25, 0.85, 0.35, 1)",
       }}
     >
-      {/* ── Top control strip (expand/collapse + rail toggle) ─────────
-          Branding moved to the topbar (consistent across light + dark), so
-          the light sidebar no longer carries its own wordmark. Both themes
-          now open with this control strip. */}
+      {/* ── Brand logo (expanded mode) ───────────────────────────── */}
+      {!railMode && (
+        <div style={{ padding: "16px 14px 10px", display: "flex", justifyContent: "center" }}>
+          <BrandLogo height={94} style={{ width: "100%", height: "auto", maxWidth: 206 }} />
+        </div>
+      )}
+
+      {/* ── Top control strip (expand/collapse + rail toggle) ───────── */}
       {<div
         style={{
           padding: railMode ? "12px 8px 8px" : "12px 14px 8px",
