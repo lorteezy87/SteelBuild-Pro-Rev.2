@@ -50,6 +50,7 @@ import RenameSetModal from "@/components/drawings/RenameSetModal";
 import TitleblockMarkerModal from "@/components/drawings/TitleblockMarkerModal";
 import BulkEditModal from "@/components/drawings/BulkEditModal";
 import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
+import DrawingLogImportModal from "@/components/drawings/DrawingLogImportModal";
 import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
 import RevisionCompareModal from "@/components/drawings/RevisionCompareModal";
 import ExportFabReleaseModal from "@/components/drawings/ExportFabReleaseModal";
@@ -95,6 +96,7 @@ export default function Drawings({ embedded = false } = {}) {
   // PDF preview and persist the rectangles via DrawingSet.update().
   const [markerSet, setMarkerSet] = useState(null);
   const [uploadSetOpen, setUploadSetOpen] = useState(false);
+  const [logImportOpen, setLogImportOpen] = useState(false);
   const [revisionOpen, setRevisionOpen] = useState(false);
   // Overlay compare — the sheet whose revisions are being diffed (or null).
   const [compareDrawing, setCompareDrawing] = useState(null);
@@ -757,6 +759,11 @@ export default function Drawings({ embedded = false } = {}) {
         >
           NEW REVISION
         </Button>
+        {can("create", "drawing") && (
+          <Button variant="outline" icon="upload" onClick={() => setLogImportOpen(true)} title="Import a detailer Drawing Complete / Submittal Log (.xls)">
+            IMPORT LOG
+          </Button>
+        )}
         <Button variant="primary" icon="upload" onClick={() => setUploadSetOpen(true)}>
           UPLOAD SET
         </Button>
@@ -1051,6 +1058,17 @@ export default function Drawings({ embedded = false } = {}) {
         activeProject={activeProject}
         existingDrawings={drawings}
         existingSetNames={existingSetNames}
+      />
+
+      <DrawingLogImportModal
+        open={logImportOpen}
+        projectId={projectId}
+        projectName={activeProject?.name}
+        onClose={() => setLogImportOpen(false)}
+        onImported={() => {
+          invalidate();
+          qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
+        }}
       />
 
       {/* New Revision flow — marks prior sheets is_superseded=true and
