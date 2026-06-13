@@ -330,6 +330,7 @@ export const SIDEBAR_GROUPS = [
     label: "ADMINISTRATION",
     collapsible: true,
     items: [
+      { label: "Team",             icon: "\uD83D\uDC65", page: "OrgMembers" },
       { label: "Vendors",          icon: "\uD83C\uDFE2", page: "Vendors" },
       { label: "Settings",         icon: "\u2699", page: "Settings" },
     ],
