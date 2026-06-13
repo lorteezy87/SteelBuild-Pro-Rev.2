@@ -50,7 +50,15 @@ import {
   progressPatch,
 } from "@/lib/field/fieldToday";
 import { useFieldOutbox } from "@/hooks/useFieldOutbox";
-import { makeProgressOp, isLikelyOfflineError, OP_SCHEDULE_PROGRESS } from "@/lib/field/offlineQueue";
+import {
+  makeProgressOp,
+  makePunchCreateOp,
+  newClientOpId,
+  isLikelyOfflineError,
+  isUniqueViolation,
+  OP_SCHEDULE_PROGRESS,
+  OP_PUNCH_CREATE,
+} from "@/lib/field/offlineQueue";
 
 // ── Urgency presentation (logic-free; buckets come from the helper) ──
 const URGENCY = {
@@ -115,6 +123,18 @@ export default function FieldToday() {
         queryClient.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
         queryClient.invalidateQueries({ queryKey: ["field-plan-tasks", projectId] });
       },
+      [OP_PUNCH_CREATE]: async (record) => {
+        try {
+          await entities.PunchlistItem.create(record);
+        } catch (err) {
+          // A prior attempt already created this row (same client_op_id) — the
+          // replay is a no-op, not a failure. Any other error is real: rethrow
+          // so the op stays queued for the next reconnect.
+          if (!isUniqueViolation(err)) throw err;
+        }
+        queryClient.invalidateQueries({ queryKey: ["field-hub-punchlist", projectId] });
+        queryClient.invalidateQueries({ queryKey: ["punchlist", projectId] });
+      },
     }),
     [queryClient, projectId],
   );
@@ -160,6 +180,8 @@ export default function FieldToday() {
   };
 
   // ── Quick punch add (reuses the production PunchlistFormModal + create path) ──
+  // The client_op_id is minted in onSave and rides BOTH the online create and
+  // the offline retry, so a replay can't mint a duplicate (server dedups it).
   const punchMut = useMutation({
     mutationFn: (data) =>
       entities.PunchlistItem.create({ ...data, project_id: data.project_id || projectId }),
@@ -168,8 +190,18 @@ export default function FieldToday() {
       queryClient.invalidateQueries({ queryKey: ["punchlist", projectId] });
       toast.success("Punch item added");
       setShowPunch(false);
+      flushOutbox(); // online write succeeded → drain any backlog
     },
-    onError: () => toast.error("Couldn't add punch item"),
+    onError: (err, data) => {
+      if (isLikelyOfflineError(err)) {
+        const record = { ...data, project_id: data.project_id || projectId };
+        enqueueOutbox(makePunchCreateOp(record, record.client_op_id, Date.now()));
+        toast.message("Punch saved offline — will sync when you're back online");
+        setShowPunch(false);
+        return;
+      }
+      toast.error("Couldn't add punch item");
+    },
   });
 
   // ── Quick photo capture (camera → compress → upload → Photo row) ──
@@ -407,7 +439,7 @@ export default function FieldToday() {
         <PunchlistFormModal
           projectId={projectId}
           onClose={() => setShowPunch(false)}
-          onSave={(data) => punchMut.mutate(data)}
+          onSave={(data) => punchMut.mutate({ ...data, client_op_id: newClientOpId() })}
           isSaving={punchMut.isPending}
         />
       )}
