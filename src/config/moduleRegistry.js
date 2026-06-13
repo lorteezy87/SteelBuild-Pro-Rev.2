@@ -15,7 +15,7 @@
 // ── Tab definitions ──────────────────────────────────────────────────
 export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
-  { label: "PROJECTS",    pages: ["Projects", "ScopeExclusions", "Contacts", "ProjectMembers", "ExecutiveView"] },
+  { label: "PROJECTS",    pages: ["ProjectsHub", "Projects", "ScopeExclusions", "Contacts", "ProjectMembers", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "EmailInbox"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingViewer", "Documents"] },
   // Consolidation (Phase 1): RESOURCES folded into FABRICATION and QUALITY
@@ -116,121 +116,93 @@ export const NAV_GROUPS = [
   {
     label: "OVERVIEW",
     items: [
-      { label: "Dashboard",        icon: "\u25C8", page: "Dashboard" },
-      { label: "Command Center",  icon: "\u2318", page: "CommandCenter" },
-      { label: "Portfolio Overview", icon: "\u2726", page: "PortfolioHub" },
-      { label: "Alerts",          icon: "\uD83D\uDD14", page: "AlertsCenter", badgeKey: "unread" },
-      // Executive View is now a tab inside Portfolio Overview (PortfolioHub).
+      { label: "Dashboard",          icon: "◈", page: "Dashboard" },
+      { label: "Command Center",     icon: "⌘", page: "CommandCenter" },
+      { label: "Portfolio Overview", icon: "✦", page: "PortfolioHub" },
+      { label: "Alerts",             icon: "🔔", page: "AlertsCenter", badgeKey: "unread" },
     ],
   },
   {
-    label: "USER",
-    items: [
-      { label: "Settings",        icon: "\u2699", page: "Settings" },
-    ],
-  },
-  {
-    // Projects module \u2014 the project record plus everything that sets a job up:
-    // scope, contacts, and team membership. Consolidated here so all
-    // project-setup pages live as sub-items under one module.
     label: "PROJECTS",
     items: [
-      { label: "Projects",           icon: "\u229F", page: "Projects" },
-      { label: "Scope & Exclusions", icon: "\u2261", page: "ScopeExclusions" },
-      { label: "Contacts",           icon: "\uD83D\uDC64", page: "Contacts" },
-      { label: "Project Members",    icon: "\uD83D\uDC65", page: "ProjectMembers" },
+      { label: "Projects", icon: "⊟", page: "ProjectsHub" },
     ],
   },
   {
-    label: "DOCUMENTS & DRAWINGS",
+    label: "DETAILING",
     items: [
-      { label: "Detailing Control Center", icon: "\u25A6", page: "DrawingSubmittalHub" },
-      { label: "Document Repository",   icon: "\uD83D\uDCC1", page: "Documents" },
+      { label: "Detailing Control Center", icon: "▦", page: "DrawingSubmittalHub" },
+      { label: "Document Repository",      icon: "📁", page: "Documents" },
     ],
   },
   {
-    label: "COMMUNICATIONS",
+    label: "PROJECT MANAGEMENT",
     items: [
-      { label: "RFI Hub",          icon: "\u2691", page: "RFIs", badgeKey: "rfi" },
-      { label: "Action Items",     icon: "\u2611", page: "ActionItems" },
-      { label: "Production Notes", icon: "\uD83D\uDCDD", page: "ProductionNotes" },
-      // Email Inbox hidden from nav (deprioritized \u2014 CLAUDE.md \u00A72.5). Route
-      // kept in routes.js; restore this item to re-surface it.
+      { label: "Schedule",     icon: "▥", page: "ScheduleHub" },
+      { label: "RFIs",         icon: "⚑", page: "RFIs", badgeKey: "rfi" },
+      { label: "Action Items", icon: "☑", page: "ActionItems" },
+      { label: "Production Notes", icon: "📝", page: "ProductionNotes" },
     ],
   },
   {
-    label: "FABRICATION",
+    label: "PRODUCTION",
     items: [
-      { label: "Work Packages", icon: "\u25A6", page: "WorkPackages" },
-      { label: "Risk",          icon: "⚠", page: "RiskHub" },
-      { label: "Fab Release",   icon: "\uD83C\uDFED", page: "FabRelease" },
-      { label: "Production Status", icon: "\uD83D\uDEE0", page: "ProductionStatus" },
-      { label: "Budget Hours",  icon: "\u23F1", page: "BudgetHours" },
-      { label: "Procurement",   icon: "\uD83D\uDCE6", page: "Procurement" },
-      // Look-Ahead is now a tab inside the Schedule hub.
-    ],
-  },
-  {
-    label: "DELIVERIES",
-    items: [
-      { label: "Deliveries", icon: "\uD83D\uDE9B", page: "Deliveries" },
+      { label: "Work Packages",     icon: "▦", page: "WorkPackages" },
+      { label: "Fab Release",       icon: "🏭", page: "FabRelease" },
+      { label: "Production Status", icon: "🛠", page: "ProductionStatus" },
+      { label: "Procurement",       icon: "📦", page: "Procurement" },
+      { label: "Budget Hours",      icon: "⏱", page: "BudgetHours" },
+      { label: "Risk",              icon: "⚠", page: "RiskHub" },
+      { label: "Resources",         icon: "👥", page: "ResourceHub" },
+      { label: "Deliveries",        icon: "📦", page: "Deliveries" },
     ],
   },
   {
     label: "FIELD",
     items: [
-      { label: "Field Today", icon: "\uD83D\uDCF2", page: "FieldToday" },
-      { label: "Field Hub",  icon: "\uD83C\uDFD7", page: "FieldHub" },
-      { label: "Daily Logs", icon: "\uD83D\uDCCB", page: "DailyLogs" },
-      { label: "LEMs",       icon: "\u2699", page: "LEMs" },
-      { label: "Photos",     icon: "\uD83D\uDCF7", page: "Photos" },
-      // Inspections / Safety / Punchlist / Quality Control are now tabs inside
-      // the Field Hub.
+      { label: "Field Today", icon: "📲", page: "FieldToday" },
+      { label: "Field Hub",   icon: "🏗", page: "FieldHub" },
     ],
   },
   {
-    label: "SCHEDULING",
+    label: "COST",
     items: [
-      { label: "Schedule",   icon: "\u25A5", page: "ScheduleHub" },
-      { label: "Resources",  icon: "\uD83D\uDC65", page: "ResourceHub" },
+      { label: "Budget Control",     icon: "◎", page: "CostHub" },
+      { label: "Change Orders",      icon: "$", page: "ChangeOrders", badgeKey: "co" },
+      { label: "Schedule of Values", icon: "📊", page: "SOV" },
+      { label: "Pay Applications",   icon: "🧾", page: "PayApplications" },
+      { label: "Backcharge Defense", icon: "⚖", page: "Backcharges" },
+      { label: "Expenses",           icon: "💰", page: "Expenses" },
     ],
   },
   {
-    label: "COST CONTROL",
+    label: "DOCUMENTS & REPORTS",
     items: [
-      { label: "Budget Control",      icon: "\u25CE", page: "CostHub" },
-      { label: "Contract Management",  icon: "\uD83D\uDCCB", page: "ContractManagement" },
-      { label: "Schedule of Values",   icon: "\uD83D\uDCCA", page: "SOV" },
-      { label: "Pay Applications",     icon: "\uD83E\uDDFE", page: "PayApplications" },
-      { label: "Change Orders",        icon: "$",  page: "ChangeOrders", badgeKey: "co" },
-      { label: "Backcharge Defense",   icon: "\u2696", page: "Backcharges" },
-      { label: "Expenses",             icon: "\uD83D\uDCB0", page: "Expenses" },
+      { label: "Documents", icon: "📁", page: "Documents" },
+      { label: "Reports",   icon: "📋", page: "ReportsHub" },
     ],
   },
   {
-    label: "REPORTING",
+    label: "ADMINISTRATION",
     items: [
-      { label: "Reports", icon: "\uD83D\uDCCB", page: "ReportsHub" },
-      // Job Status / Decision Log / Activity Log are now tabs inside the Reports
-      // hub. Portfolio Overview lives under OVERVIEW (PortfolioHub).
+      { label: "Team",     icon: "👥", page: "OrgMembers" },
+      { label: "Billing",  icon: "💳", page: "Billing" },
+      { label: "Vendors",  icon: "🏢", page: "Vendors" },
+      { label: "Settings", icon: "⚙", page: "Settings" },
     ],
   },
   {
     label: "TOOLS",
     items: [
-      { label: "Calculator",                   icon: "🧮", page: "Calculator" },
-      { label: "Ft/In Calculator",             icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
-      { label: "Steel Weight Calculator",      icon: "\u2696",       page: "SteelWeightCalculator" },
-      { label: "Crane Pick Calculator",        icon: "\uD83C\uDFD7", page: "CranePickCalculator" },
-      { label: "Decimal / Fraction Converter", icon: "\u2194",       page: "DecimalFractionConverter" },
+      { label: "Calculators", icon: "🧮", page: "CalculatorsHub" },
     ],
   },
 ];
 
 // Column assignment for the 3-column modules dropdown
-const COLUMN_1_GROUPS = ["OVERVIEW", "PROJECTS", "DOCUMENTS & DRAWINGS", "COMMUNICATIONS"];
-const COLUMN_2_GROUPS = ["FABRICATION", "DELIVERIES", "FIELD", "SCHEDULING"];
-const COLUMN_3_GROUPS = ["COST CONTROL", "REPORTING", "TOOLS"];
+const COLUMN_1_GROUPS = ["OVERVIEW", "PROJECTS", "DETAILING", "PROJECT MANAGEMENT"];
+const COLUMN_2_GROUPS = ["PRODUCTION", "FIELD", "DOCUMENTS & REPORTS"];
+const COLUMN_3_GROUPS = ["COST", "ADMINISTRATION", "TOOLS"];
 
 export function getDropdownColumn(groupLabel) {
   if (COLUMN_1_GROUPS.includes(groupLabel)) return 0;
@@ -244,107 +216,95 @@ export const SIDEBAR_GROUPS = [
     label: "OVERVIEW",
     collapsible: false,
     items: [
-      { label: "Dashboard",          icon: "\u25C8", page: "Dashboard" },
-      { label: "Command Center",    icon: "\u2318", page: "CommandCenter" },
-      { label: "Portfolio Overview",  icon: "\u2726", page: "PortfolioHub" },
+      { label: "Dashboard",          icon: "◈", page: "Dashboard" },
+      { label: "Command Center",    icon: "⌘", page: "CommandCenter" },
+      { label: "Portfolio Overview",  icon: "✦", page: "PortfolioHub" },
     ],
   },
   {
-    // Projects module \u2014 project record + job-setup pages as sub-items.
+    // Projects hub: the project record + Scope / Contacts / Members as tabs.
     label: "PROJECTS",
     collapsible: true,
     items: [
-      { label: "Projects",           icon: "\u229F", page: "Projects" },
-      { label: "Scope & Exclusions", icon: "\u2261", page: "ScopeExclusions" },
-      { label: "Contacts",           icon: "\uD83D\uDC64", page: "Contacts" },
-      { label: "Project Members",    icon: "\uD83D\uDC65", page: "ProjectMembers" },
+      { label: "Projects",           icon: "⊟", page: "ProjectsHub" },
+    ],
+  },
+  {
+    // The moat. Drawings / Submittals / Doc Control / 3D model are tabs inside.
+    label: "DETAILING",
+    collapsible: true,
+    items: [
+      { label: "Detailing Control Center", icon: "▦", page: "DrawingSubmittalHub" },
     ],
   },
   {
     label: "PROJECT MANAGEMENT",
     collapsible: true,
     items: [
-      { label: "Schedule",       icon: "\u25A5", page: "ScheduleHub" },
-      { label: "Action Items",   icon: "\u2611", page: "ActionItems" },
-      { label: "RFIs",                icon: "\u2691", page: "RFIs" },
-      { label: "Change Orders",  icon: "$",  page: "ChangeOrders" },
-      { label: "Pay Applications",  icon: "\ud83e\uddfe", page: "PayApplications" },
-      { label: "Backcharge Defense",  icon: "\u2696", page: "Backcharges" },
-    ],
-  },
-  {
-    label: "DESIGN & DRAWINGS",
-    collapsible: true,
-    items: [
-      { label: "Detailing Control Center", icon: "\u25A6", page: "DrawingSubmittalHub" },
-      { label: "Drawing Viewer",       icon: "\u25A6", page: "DrawingViewer" },
+      { label: "Schedule",       icon: "▥", page: "ScheduleHub" },
+      { label: "RFIs",           icon: "⚑", page: "RFIs", badgeKey: "rfi" },
+      { label: "Action Items",   icon: "☑", page: "ActionItems" },
     ],
   },
   {
     label: "PRODUCTION",
     collapsible: true,
     items: [
-      { label: "Work Packages",        icon: "\u25A6", page: "WorkPackages" },
+      { label: "Work Packages",        icon: "▦", page: "WorkPackages" },
       { label: "Fab Release",          icon: "🏭", page: "FabRelease" },
       { label: "Production Status",    icon: "🛠", page: "ProductionStatus" },
-      { label: "Risk",                 icon: "⚠", page: "RiskHub" },
-      { label: "Budget Hours",         icon: "⏱",  page: "BudgetHours" },
       { label: "Procurement",          icon: "📦", page: "Procurement" },
-      { label: "Resources",            icon: "\uD83D\uDC65", page: "ResourceHub" },
-      { label: "Deliveries",           icon: "\uD83D\uDCE6", page: "Deliveries" },
-    ],
-  },
-  {
-    label: "FINANCIALS",
-    collapsible: true,
-    items: [
-      { label: "Budget Control",       icon: "\u25CE", page: "Financials" },
-      { label: "Schedule of Values",   icon: "\uD83D\uDCCA", page: "SOV" },
-      { label: "Expenses",             icon: "\uD83D\uDCB0", page: "Expenses" },
-    ],
-  },
-  {
-    label: "DOCUMENTS & REPORTS",
-    collapsible: true,
-    items: [
-      { label: "Documents",     icon: "\uD83D\uDCC1", page: "Documents" },
-      { label: "Reports",       icon: "\uD83D\uDCCB", page: "ReportsHub" },
-      // Activity Log is now a tab inside the Reports hub.
+      { label: "Budget Hours",         icon: "⏱",  page: "BudgetHours" },
+      { label: "Risk",                 icon: "⚠", page: "RiskHub" },
+      { label: "Resources",            icon: "👥", page: "ResourceHub" },
+      { label: "Deliveries",           icon: "📦", page: "Deliveries" },
     ],
   },
   {
     label: "FIELD",
     collapsible: true,
     items: [
-      { label: "Field Today",      icon: "\uD83D\uDCF2", page: "FieldToday" },
-      { label: "Field Hub",        icon: "\uD83C\uDFD7", page: "FieldHub" },
-      { label: "Daily Logs",       icon: "\uD83D\uDCCB", page: "DailyLogs" },
-      { label: "Photos",           icon: "\uD83D\uDCF7", page: "Photos" },
-      { label: "LEMs",             icon: "\u2699", page: "LEMs" },
-      // Inspections / Safety / Punchlist / Quality Control are now tabs inside
-      // the Field Hub (Safety + QC were nav-hidden in Phase 1 but stay reachable
-      // there). Routes kept; restore items here to re-surface them standalone.
+      { label: "Field Today",      icon: "📲", page: "FieldToday" },
+      { label: "Field Hub",        icon: "🏗", page: "FieldHub" },
+    ],
+  },
+  {
+    // One money home: Budget Control hubs Budget Detail + Cost Dashboard.
+    label: "COST",
+    collapsible: true,
+    items: [
+      { label: "Budget Control",       icon: "◎", page: "CostHub" },
+      { label: "Change Orders",        icon: "$",  page: "ChangeOrders", badgeKey: "co" },
+      { label: "Schedule of Values",   icon: "📊", page: "SOV" },
+      { label: "Pay Applications",     icon: "🧾", page: "PayApplications" },
+      { label: "Backcharge Defense",   icon: "⚖", page: "Backcharges" },
+      { label: "Expenses",             icon: "💰", page: "Expenses" },
+    ],
+  },
+  {
+    label: "DOCUMENTS & REPORTS",
+    collapsible: true,
+    items: [
+      { label: "Documents",     icon: "📁", page: "Documents" },
+      { label: "Reports",       icon: "📋", page: "ReportsHub" },
     ],
   },
   {
     label: "ADMINISTRATION",
     collapsible: true,
     items: [
-      { label: "Team",             icon: "\uD83D\uDC65", page: "OrgMembers" },
-      { label: "Billing",          icon: "\uD83D\uDCB3", page: "Billing" },
-      { label: "Vendors",          icon: "\uD83C\uDFE2", page: "Vendors" },
-      { label: "Settings",         icon: "\u2699", page: "Settings" },
+      { label: "Team",             icon: "👥", page: "OrgMembers" },
+      { label: "Billing",          icon: "💳", page: "Billing" },
+      { label: "Vendors",          icon: "🏢", page: "Vendors" },
+      { label: "Settings",         icon: "⚙", page: "Settings" },
     ],
   },
   {
+    // The five steel calculators, collapsed into one Tools hub (tabs).
     label: "TOOLS",
     collapsible: true,
     items: [
-      { label: "Calculator",                   icon: "🧮", page: "Calculator" },
-      { label: "Ft/In Calculator",             icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
-      { label: "Steel Weight Calculator",      icon: "\u2696",       page: "SteelWeightCalculator" },
-      { label: "Crane Pick Calculator",        icon: "\uD83C\uDFD7", page: "CranePickCalculator" },
-      { label: "Decimal / Fraction Converter", icon: "\u2194",       page: "DecimalFractionConverter" },
+      { label: "Calculators",                  icon: "🧮", page: "CalculatorsHub" },
     ],
   },
 ];
@@ -369,6 +329,9 @@ export const PAGE_LABELS = (() => {
     DataExchange:    "Data Exchange",
     Integrations:    "Integrations",
     Tutorial:        "Tutorial / Help",
+    // Consolidation hubs (leaner-nav 2026-06-13).
+    ProjectsHub:     "Projects",
+    CalculatorsHub:  "Calculators",
   });
   return labels;
 })();

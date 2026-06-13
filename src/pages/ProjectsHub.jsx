@@ -1,14 +1,12 @@
 /**
- * FieldHub — consolidates the field/quality surfaces under one nav entry
- * (module-consolidation Phase 2). The Field overview already rolls up
- * Inspections / Safety / Punchlist / Quality Control KPIs; this shell adds the
- * full registers as tabs alongside it so they stop occupying separate sidebar
- * slots (and Safety/QC, deprioritized in Phase 1, stay reachable here rather
- * than URL-only).
+ * ProjectsHub — consolidates the project record + its setup pages under one nav
+ * entry (leaner-nav consolidation, 2026-06-13). Projects (the list/record),
+ * Scope & Exclusions, Contacts, and Project Members were four separate sidebar
+ * slots; this puts them side-by-side as tabs.
  *
- * Thin tab shell (the DrawingSubmittalHub / ResourceHub pattern): each tab
- * lazy-loads the existing page unchanged; all remain independently routable.
- * `?field_tab=` drives the active tab.
+ * Thin tab shell (the ScheduleHub / FieldHub pattern): each tab lazy-loads the
+ * existing page unchanged; all stay independently routable. `?proj_tab=` drives
+ * the active tab.
  */
 import { Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -16,38 +14,28 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
-const FieldTodayPage = lazyWithRetry(() => import("@/pages/FieldToday"));
-const FieldOverview = lazyWithRetry(() => import("@/pages/Field"));
-const DailyLogsPage = lazyWithRetry(() => import("@/pages/DailyLogs"));
-const PhotosPage = lazyWithRetry(() => import("@/pages/Photos"));
-const LEMsPage = lazyWithRetry(() => import("@/pages/LEMs"));
-const InspectionsPage = lazyWithRetry(() => import("@/pages/Inspections"));
-const SafetyPage = lazyWithRetry(() => import("@/pages/Safety"));
-const PunchlistPage = lazyWithRetry(() => import("@/pages/Punchlist"));
-const QualityControlPage = lazyWithRetry(() => import("@/pages/QualityControl"));
+const ProjectsPage = lazyWithRetry(() => import("@/pages/Projects"));
+const ScopePage = lazyWithRetry(() => import("@/pages/ScopeExclusions"));
+const ContactsPage = lazyWithRetry(() => import("@/pages/Contacts"));
+const MembersPage = lazyWithRetry(() => import("@/pages/ProjectMembers"));
 
 const TABS = [
-  { key: "today", label: "Today", Component: FieldTodayPage },
-  { key: "overview", label: "Overview", Component: FieldOverview },
-  { key: "dailylogs", label: "Daily Logs", Component: DailyLogsPage },
-  { key: "photos", label: "Photos", Component: PhotosPage },
-  { key: "lems", label: "LEMs", Component: LEMsPage },
-  { key: "inspections", label: "Inspections", Component: InspectionsPage },
-  { key: "punchlist", label: "Punchlist", Component: PunchlistPage },
-  { key: "quality", label: "Quality Control", Component: QualityControlPage },
-  { key: "safety", label: "Safety", Component: SafetyPage },
+  { key: "projects", label: "Projects", Component: ProjectsPage },
+  { key: "scope", label: "Scope & Exclusions", Component: ScopePage },
+  { key: "contacts", label: "Contacts", Component: ContactsPage },
+  { key: "members", label: "Members", Component: MembersPage },
 ];
 
-export default function FieldHub() {
+export default function ProjectsHub() {
   const [params, setParams] = useSearchParams();
-  const param = params.get("field_tab");
-  const activeKey = TABS.some((t) => t.key === param) ? param : "today";
+  const param = params.get("proj_tab");
+  const activeKey = TABS.some((t) => t.key === param) ? param : "projects";
   const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
   const setTab = (key) =>
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        next.set("field_tab", key);
+        next.set("proj_tab", key);
         return next;
       },
       { replace: true },
@@ -57,7 +45,7 @@ export default function FieldHub() {
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div
         role="tablist"
-        aria-label="Field"
+        aria-label="Projects"
         style={{
           display: "flex",
           gap: 6,
@@ -99,7 +87,7 @@ export default function FieldHub() {
       </div>
 
       <div style={{ minHeight: 0, position: "relative" }}>
-        <ErrorBoundary label="Field">
+        <ErrorBoundary label="Projects">
           <Suspense fallback={<LoadingSkeleton variant="page" />}>
             <Active />
           </Suspense>
