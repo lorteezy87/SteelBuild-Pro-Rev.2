@@ -1,14 +1,12 @@
 /**
- * FieldHub — consolidates the field/quality surfaces under one nav entry
- * (module-consolidation Phase 2). The Field overview already rolls up
- * Inspections / Safety / Punchlist / Quality Control KPIs; this shell adds the
- * full registers as tabs alongside it so they stop occupying separate sidebar
- * slots (and Safety/QC, deprioritized in Phase 1, stay reachable here rather
- * than URL-only).
+ * CalculatorsHub — consolidates the five steel calculators under one Tools nav
+ * entry (leaner-nav consolidation, 2026-06-13). The regular, feet/inches, steel
+ * weight, crane pick, and decimal/fraction calculators were five separate
+ * sidebar slots; this puts them side-by-side as tabs.
  *
- * Thin tab shell (the DrawingSubmittalHub / ResourceHub pattern): each tab
- * lazy-loads the existing page unchanged; all remain independently routable.
- * `?field_tab=` drives the active tab.
+ * Thin tab shell (the ScheduleHub / FieldHub pattern): each tab lazy-loads the
+ * existing page unchanged; all stay independently routable. `?calc_tab=` drives
+ * the active tab.
  */
 import { Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -16,38 +14,30 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
-const FieldTodayPage = lazyWithRetry(() => import("@/pages/FieldToday"));
-const FieldOverview = lazyWithRetry(() => import("@/pages/Field"));
-const DailyLogsPage = lazyWithRetry(() => import("@/pages/DailyLogs"));
-const PhotosPage = lazyWithRetry(() => import("@/pages/Photos"));
-const LEMsPage = lazyWithRetry(() => import("@/pages/LEMs"));
-const InspectionsPage = lazyWithRetry(() => import("@/pages/Inspections"));
-const SafetyPage = lazyWithRetry(() => import("@/pages/Safety"));
-const PunchlistPage = lazyWithRetry(() => import("@/pages/Punchlist"));
-const QualityControlPage = lazyWithRetry(() => import("@/pages/QualityControl"));
+const RegularCalc = lazyWithRetry(() => import("@/pages/RegularCalculator"));
+const FeetInchesCalc = lazyWithRetry(() => import("@/pages/FeetInchesCalculator"));
+const SteelWeightCalc = lazyWithRetry(() => import("@/pages/SteelWeightCalculator"));
+const CranePickCalc = lazyWithRetry(() => import("@/pages/CranePickCalculator"));
+const DecimalFractionConv = lazyWithRetry(() => import("@/pages/DecimalFractionConverter"));
 
 const TABS = [
-  { key: "today", label: "Today", Component: FieldTodayPage },
-  { key: "overview", label: "Overview", Component: FieldOverview },
-  { key: "dailylogs", label: "Daily Logs", Component: DailyLogsPage },
-  { key: "photos", label: "Photos", Component: PhotosPage },
-  { key: "lems", label: "LEMs", Component: LEMsPage },
-  { key: "inspections", label: "Inspections", Component: InspectionsPage },
-  { key: "punchlist", label: "Punchlist", Component: PunchlistPage },
-  { key: "quality", label: "Quality Control", Component: QualityControlPage },
-  { key: "safety", label: "Safety", Component: SafetyPage },
+  { key: "calculator", label: "Calculator", Component: RegularCalc },
+  { key: "feetinches", label: "Ft / In", Component: FeetInchesCalc },
+  { key: "steelweight", label: "Steel Weight", Component: SteelWeightCalc },
+  { key: "cranepick", label: "Crane Pick", Component: CranePickCalc },
+  { key: "decimalfraction", label: "Decimal / Fraction", Component: DecimalFractionConv },
 ];
 
-export default function FieldHub() {
+export default function CalculatorsHub() {
   const [params, setParams] = useSearchParams();
-  const param = params.get("field_tab");
-  const activeKey = TABS.some((t) => t.key === param) ? param : "today";
+  const param = params.get("calc_tab");
+  const activeKey = TABS.some((t) => t.key === param) ? param : "calculator";
   const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
   const setTab = (key) =>
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        next.set("field_tab", key);
+        next.set("calc_tab", key);
         return next;
       },
       { replace: true },
@@ -57,7 +47,7 @@ export default function FieldHub() {
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div
         role="tablist"
-        aria-label="Field"
+        aria-label="Calculators"
         style={{
           display: "flex",
           gap: 6,
@@ -99,7 +89,7 @@ export default function FieldHub() {
       </div>
 
       <div style={{ minHeight: 0, position: "relative" }}>
-        <ErrorBoundary label="Field">
+        <ErrorBoundary label="Calculators">
           <Suspense fallback={<LoadingSkeleton variant="page" />}>
             <Active />
           </Suspense>

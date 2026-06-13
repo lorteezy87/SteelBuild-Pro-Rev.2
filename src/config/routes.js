@@ -58,6 +58,7 @@ const ROUTE_DOMAINS = {
     CommandCenter:          r(lazyWithRetry(() => import("@/pages/CommandCenter")),         "Command Center"),
     ExecutiveView:          r(lazyWithRetry(() => import("@/pages/ExecutiveView")),         "Executive View"),
     Projects:               r(lazyWithRetry(() => import("@/pages/Projects")),              "Projects"),
+    ProjectsHub:            r(lazyWithRetry(() => import("@/pages/ProjectsHub")),           "Projects"),
     Onboarding:             r(lazyWithRetry(() => import("@/pages/Onboarding")),            "Onboarding"),
     ProjectDetail:          r(lazyWithRetry(() => import("@/pages/ProjectDetail")),         "Project Detail"),
     PortfolioHub:           r(lazyWithRetry(() => import("@/pages/PortfolioHub")),          "Portfolio Overview"),
@@ -170,6 +171,7 @@ const ROUTE_DOMAINS = {
 
   // ── Tools ──
   tools: {
+    CalculatorsHub:             r(lazyWithRetry(() => import("@/pages/CalculatorsHub")),             "Calculators"),
     Calculator:                 r(lazyWithRetry(() => import("@/pages/RegularCalculator")),          "Calculator"),
     FeetInchesCalculator:       r(lazyWithRetry(() => import("@/pages/FeetInchesCalculator")),       "Feet & Inches Calculator"),
     SteelWeightCalculator:      r(lazyWithRetry(() => import("@/pages/SteelWeightCalculator")),      "Steel Weight Calculator"),
