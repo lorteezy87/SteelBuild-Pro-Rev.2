@@ -20,6 +20,7 @@ import { createPageUrl } from "@/utils";
 // Nav components (extracted from Layout)
 import BellDropdown from "./components/nav/BellDropdown";
 import HamburgerMenu from "./components/nav/HamburgerMenu";
+import { BrandLogo } from "./components/nav/BrandLogo";
 import ThemeToggleButton from "./components/nav/ThemeToggleButton";
 import HighContrastToggleButton from "./components/nav/HighContrastToggleButton";
 import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
@@ -188,7 +189,7 @@ export default function Layout({ children, currentPageName }) {
                 selector → current-page eyebrow. (Branding previously lived in the
                 light sidebar; it now sits in the topbar for both themes.) */}
             <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
-              <img src="/logo.png" alt="SteelBuild Pro" style={{ height: isMobile ? 30 : 26, width: "auto", objectFit: "contain" }} />
+              <BrandLogo height={isMobile ? 30 : 26} title="SteelBuild Pro" style={{ display: "block" }} />
             </div>
             {!isMobile && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
             {!isMobile && <ProjectPillDropdown align="left" />}
