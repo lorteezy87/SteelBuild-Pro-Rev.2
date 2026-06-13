@@ -5,12 +5,14 @@ import {
   enqueueOp,
   makeProgressOp,
   makePunchCreateOp,
+  makePhotoCreateOp,
   newClientOpId,
   flushQueue,
   isLikelyOfflineError,
   isUniqueViolation,
   OP_SCHEDULE_PROGRESS,
   OP_PUNCH_CREATE,
+  OP_PHOTO_CREATE,
 } from "../offlineQueue";
 
 // In-memory storage adapter for deterministic persistence tests.
@@ -158,6 +160,20 @@ describe("makePunchCreateOp", () => {
     const op = makePunchCreateOp(record, "cid-1", 500);
     expect(op).toMatchObject({ id: "cid-1", type: OP_PUNCH_CREATE, payload: record, createdAt: 500 });
     expect(op.coalesceKey).toBeUndefined(); // creates must never coalesce
+  });
+});
+
+describe("makePhotoCreateOp", () => {
+  it("keys the op + blob by the client_op_id and carries the create meta", () => {
+    const meta = { project_id: "p1", category: "Progress", file_name: "shot.jpg" };
+    const op = makePhotoCreateOp("cid-9", meta, 700);
+    expect(op).toMatchObject({
+      id: "cid-9",
+      type: OP_PHOTO_CREATE,
+      payload: { blobKey: "cid-9", meta },
+      createdAt: 700,
+    });
+    expect(op.coalesceKey).toBeUndefined();
   });
 });
 

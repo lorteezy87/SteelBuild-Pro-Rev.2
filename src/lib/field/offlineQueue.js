@@ -33,6 +33,9 @@ export const OP_SCHEDULE_PROGRESS = "schedule-progress";
 /** Op type for a punchlist-item create (dedup'd by client_op_id on replay). */
 export const OP_PUNCH_CREATE = "punch-create";
 
+/** Op type for a photo create — the blob lives in IndexedDB (see blobStore.js). */
+export const OP_PHOTO_CREATE = "photo-create";
+
 /**
  * A client-generated idempotency key. The SAME key rides the online create
  * attempt AND the queued offline retry, so a duplicate replay collides with the
@@ -124,6 +127,21 @@ export function makePunchCreateOp(payload, clientOpId, now) {
     id: clientOpId,
     type: OP_PUNCH_CREATE,
     payload,
+    createdAt: now,
+  };
+}
+
+/**
+ * Build a photo-create op. The op id IS the client_op_id, which is also the
+ * IndexedDB key for the pending blob (see blobStore.js) and the Photo row's
+ * dedup key. `meta` carries the Photo.create fields (everything except file_url,
+ * which is only known after the deferred upload). No coalesceKey.
+ */
+export function makePhotoCreateOp(clientOpId, meta, now) {
+  return {
+    id: clientOpId,
+    type: OP_PHOTO_CREATE,
+    payload: { blobKey: clientOpId, meta },
     createdAt: now,
   };
 }
