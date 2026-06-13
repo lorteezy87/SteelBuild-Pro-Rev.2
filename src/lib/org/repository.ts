@@ -22,6 +22,10 @@ export interface Organization {
   created_by: string | null;
   created_at: string;
   metadata: Record<string, unknown> | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  subscription_status?: string | null;
+  current_period_end?: string | null;
 }
 
 export interface OrgMembership {
