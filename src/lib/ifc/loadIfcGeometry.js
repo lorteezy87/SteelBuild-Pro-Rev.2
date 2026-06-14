@@ -24,8 +24,12 @@ import { getEngine } from "@/lib/ifc/ifcEngine";
  *   pickInfo: (expressID: number) => object, recolor: (fn) => void }>}
  */
 export async function loadIfcGeometry(buffer, opts = {}) {
-  const { api } = await getEngine();
+  const { api, WebIFC } = await getEngine();
   const defaultColor = opts.defaultColor || "#9aa4b2";
+  const TYPE_NAME = {
+    [WebIFC.IFCBEAM]: "beam", [WebIFC.IFCCOLUMN]: "column",
+    [WebIFC.IFCPLATE]: "plate", [WebIFC.IFCMEMBER]: "member",
+  };
 
   const modelID = api.OpenModel(new Uint8Array(buffer), {
     COORDINATE_TO_ORIGIN: true,
@@ -42,6 +46,8 @@ export async function loadIfcGeometry(buffer, opts = {}) {
     const expressID = flatMesh.expressID;
     let guid;
     try { guid = api.GetLine(modelID, expressID)?.GlobalId?.value; } catch { /* no guid */ }
+    let ifcType = "other";
+    try { ifcType = TYPE_NAME[api.GetLineType(modelID, expressID)] || "other"; } catch { /* keep other */ }
 
     const placed = flatMesh.geometries;
     for (let i = 0; i < placed.size(); i++) {
@@ -69,9 +75,9 @@ export async function loadIfcGeometry(buffer, opts = {}) {
       // status colors overlay on top when a piece has a status (see recolor).
       const c = pg.color || { x: 0.62, y: 0.66, z: 0.72, w: 1 };
       const ifcHex = `#${new THREE.Color(c.x, c.y, c.z).getHexString()}`;
-      const statusHex = guid ? opts.colorForGuid?.(guid) : null;
+      const chosen = opts.colorFor?.({ guid, ifcHex, ifcType }) || ifcHex;
       const mat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(statusHex || ifcHex),
+        color: new THREE.Color(chosen),
         metalness: 0.2,
         roughness: 0.72,
         transparent: c.w < 1,
@@ -82,17 +88,17 @@ export async function loadIfcGeometry(buffer, opts = {}) {
       mesh.applyMatrix4(m4);
       mesh.userData = { expressID, guid };
       group.add(mesh);
-      materials.push({ mat, guid, ifcHex });
+      materials.push({ mat, guid, ifcHex, ifcType });
 
       geom.delete();
     }
   });
 
-  // Re-color in place when status data changes (no reload): a piece shows its
-  // status color when it has one, otherwise falls back to its native IFC color.
-  const recolor = (colorForGuid) => {
-    for (const { mat, guid, ifcHex } of materials) {
-      mat.color.set((guid && colorForGuid?.(guid)) || ifcHex || defaultColor);
+  // Re-color in place when the color mode / status data changes (no reload).
+  // colorFor({ guid, ifcHex, ifcType }) → hex; falls back to the native IFC color.
+  const recolor = (colorFor) => {
+    for (const { mat, guid, ifcHex, ifcType } of materials) {
+      mat.color.set(colorFor?.({ guid, ifcHex, ifcType }) || ifcHex || defaultColor);
     }
   };
 
