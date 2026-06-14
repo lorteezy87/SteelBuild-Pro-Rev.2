@@ -9,9 +9,10 @@
  * Storage + roster → model_elements, so the model persists per project.
  */
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
+import { FAB_STATUS_META, FAB_STATUS_ORDER } from "@/lib/fabStatus";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { importIfcRoster } from "@/services/ifcRosterImport";
 import { integrations, resolveFileUrl } from "@/api/supabaseClient";
@@ -24,6 +25,7 @@ const mono = { fontFamily: "var(--font-mono)" };
 
 const COLOR_MODES = [
   { key: "model", label: "Model" },
+  { key: "fab", label: "Fab" },
   { key: "type", label: "Type" },
   { key: "sequence", label: "Sequence" },
   { key: "status", label: "Status" },
@@ -137,14 +139,25 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     return map;
   }, [modelElementRows]);
 
+  // GlobalId -> manual fab_status, from the imported roster.
+  const fabByGuid = useMemo(() => {
+    const map = new Map();
+    for (const r of modelElementRows || []) {
+      if (r?.element_guid && r.fab_status) map.set(r.element_guid, r.fab_status);
+    }
+    return map;
+  }, [modelElementRows]);
+  const hasRoster = (modelElementRows?.length || 0) > 0;
+
   // The mode-aware color function the viewer paints with. Returning null falls
   // back to the part's native IFC color (see loadIfcGeometry.recolor).
   const colorFor = useMemo(() => {
     if (colorMode === "type") return (info) => TYPE_PALETTE[info.ifcType] || TYPE_PALETTE.other;
     if (colorMode === "sequence") return (info) => (info.guid ? seqColor(seqByGuid.get(info.guid)) : null);
     if (colorMode === "status") return (info) => (info.guid ? statusByGuid.get(info.guid) : null);
+    if (colorMode === "fab") return (info) => (info.guid ? FAB_STATUS_META[fabByGuid.get(info.guid)]?.color : null);
     return () => null; // "model" → native colors
-  }, [colorMode, seqByGuid, statusByGuid]);
+  }, [colorMode, seqByGuid, statusByGuid, fabByGuid]);
 
   const pickFile = async (e) => {
     const file = e.target.files?.[0];
@@ -203,6 +216,27 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
       setRoster((r) => ({ ...r, step: "confirm" }));
     }
   };
+
+  // Manual fab-status assignment: set every part of an assembly (matched by
+  // piece_mark) to a stage, then recolor by it. Null clears the status.
+  const assignFab = useMutation({
+    mutationFn: async ({ pieceMark, status }) => {
+      const { error } = await supabase
+        .from("model_elements")
+        .update({ fab_status: status })
+        .eq("project_id", projectId)
+        .eq("piece_mark", pieceMark)
+        .eq("is_deleted", false);
+      if (error) throw error;
+      return { status };
+    },
+    onSuccess: ({ status }) => {
+      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
+      setColorMode("fab");
+      toast.success(status ? `Marked ${FAB_STATUS_META[status].label}` : "Fab status cleared");
+    },
+    onError: (e) => toast.error(e?.message || "Couldn't set fab status."),
+  });
 
   const legend = useMemo(() => {
     const counts = modelMapping?.counts || {};
@@ -339,6 +373,48 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
               <Row label="Name" value={picked.name} />
               <Row label="Sequence" value={picked.sequence} />
               <Row label="GUID" value={picked.guid} small />
+
+              {projectId && (picked.assemblyMark || picked.partMark) && (
+                <div style={{ marginTop: 8, borderTop: "1px solid var(--divider)", paddingTop: 9 }}>
+                  <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>Set fab status</div>
+                  {hasRoster ? (
+                    <>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 7 }}>
+                        {FAB_STATUS_ORDER.map((s) => {
+                          const current = fabByGuid.get(picked.guid) === s;
+                          return (
+                            <button
+                              key={s}
+                              type="button"
+                              disabled={assignFab.isPending}
+                              onClick={() => assignFab.mutate({ pieceMark: picked.assemblyMark || picked.partMark, status: current ? null : s })}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
+                                padding: "6px 9px", borderRadius: 7, cursor: assignFab.isPending ? "default" : "pointer",
+                                border: `1px solid ${current ? FAB_STATUS_META[s].color : "var(--border-default)"}`,
+                                background: current ? `color-mix(in srgb, ${FAB_STATUS_META[s].color} 18%, var(--bg-surface-high))` : "var(--bg-surface-low)",
+                                color: current ? "var(--text-primary)" : "var(--text-secondary)",
+                                fontSize: 12, fontWeight: current ? 700 : 500,
+                              }}
+                            >
+                              <span style={{ width: 11, height: 11, borderRadius: 2, background: FAB_STATUS_META[s].color, flexShrink: 0 }} />
+                              {FAB_STATUS_META[s].label}
+                              {current && <span style={{ marginLeft: "auto", ...mono, fontSize: 9, color: "var(--text-muted)" }}>✓ clear</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div style={{ ...mono, fontSize: 8.5, color: "var(--text-muted)", marginTop: 7, lineHeight: 1.4 }}>
+                        Applies to the whole assembly ({picked.assemblyMark || picked.partMark}).
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 7, lineHeight: 1.5 }}>
+                      Import the piece roster first, then you can assign fab status.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ color: "var(--text-muted)", fontSize: 12 }}>Click a member in the model.</div>
@@ -399,10 +475,18 @@ function Legend({ mode, statusLegend, sequences }) {
     );
   }
   if (mode === "status") {
-    if (!statusLegend.length) return <div style={hintStyle}>No fab-status yet — pieces light up once they're linked to detailing packages or given production status.</div>;
+    if (!statusLegend.length) return <div style={hintStyle}>No detailing status yet — pieces light up once they&apos;re linked to detailing packages. (For hand-set status, use the Fab mode.)</div>;
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {statusLegend.map((b) => <Swatch key={b.key} color={b.color} label={b.label} count={b.count} />)}
+      </div>
+    );
+  }
+  if (mode === "fab") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {FAB_STATUS_ORDER.map((s) => <Swatch key={s} color={FAB_STATUS_META[s].color} label={FAB_STATUS_META[s].label} />)}
+        <div style={hintStyle}>Click a piece, then set its status. Unassigned pieces keep their model color.</div>
       </div>
     );
   }
