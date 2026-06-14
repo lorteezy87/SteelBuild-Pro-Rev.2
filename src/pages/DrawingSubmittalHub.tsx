@@ -31,7 +31,9 @@ import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
-import { AlertTriangle, CalendarClock, Gauge, Link2 } from "lucide-react";
+import { AlertTriangle, Box, CalendarClock, Gauge, Link2 } from "lucide-react";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import Model3DTab from "@/components/viewer3d/Model3DTab";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
@@ -107,9 +109,16 @@ export default function DrawingSubmittalHub() {
   const projectId = activeProject?.id as string | undefined;
   const projectName = activeProject?.name || activeProject?.project_number || "";
 
+  // The 3D model viewer is flag-gated until verified against real models in prod.
+  const show3d = useFlag("viewer_3d");
+  const tabs = useMemo(
+    () => (show3d ? [...TABS, { key: "model3d", label: "3D Model", icon: Box }] : TABS),
+    [show3d],
+  );
+
   // Tab state from URL (persistent across navigation)
   const tabParam = searchParams.get("hub_tab") || "overview";
-  const activeTab = TABS.find((t) => t.key === tabParam) ? tabParam : "overview";
+  const activeTab = tabs.find((t) => t.key === tabParam) ? tabParam : "overview";
   const setActiveTab = (key: string) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -603,7 +612,7 @@ export default function DrawingSubmittalHub() {
         borderRadius: 14,
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
       }}>
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const isActive = tab.key === activeTab;
           const Icon = tab.icon;
           return (
@@ -698,6 +707,7 @@ export default function DrawingSubmittalHub() {
               />
             )}
             {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
+            {activeTab === "model3d" && <Model3DTab modelMapping={modelMappingSummary} />}
           </Suspense>
         </ErrorBoundary>
       </div>
