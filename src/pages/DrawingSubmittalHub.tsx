@@ -707,7 +707,7 @@ export default function DrawingSubmittalHub() {
               />
             )}
             {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
-            {activeTab === "model3d" && <Model3DTab modelMapping={modelMappingSummary} />}
+            {activeTab === "model3d" && <Model3DTab modelMapping={modelMappingSummary} projectId={projectId} />}
           </Suspense>
         </ErrorBoundary>
       </div>
