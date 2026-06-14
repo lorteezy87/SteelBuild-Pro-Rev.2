@@ -185,13 +185,15 @@ export default function Layout({ children, currentPageName }) {
           {/* LEFT: Brand + Hamburger */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
-            {/* Topbar is now identical in light + dark: logo → divider → project
-                selector → current-page eyebrow. (Branding previously lived in the
-                light sidebar; it now sits in the topbar for both themes.) */}
-            <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
-              <BrandLogo height={isMobile ? 30 : 26} title="SteelBuild Pro" style={{ display: "block" }} />
-            </div>
-            {!isMobile && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
+            {/* Brand lives in the sidebar on desktop (SidebarNav) and in the
+                drawer on mobile. The top bar only carries the logo on mobile —
+                where the sidebar is off-canvas — so desktop shows it once, not
+                twice. The leading divider went with it. */}
+            {isMobile && (
+              <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
+                <BrandLogo height={30} title="SteelBuild Pro" style={{ display: "block" }} />
+              </div>
+            )}
             {!isMobile && <ProjectPillDropdown align="left" />}
             {!isMobile && (
               <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
