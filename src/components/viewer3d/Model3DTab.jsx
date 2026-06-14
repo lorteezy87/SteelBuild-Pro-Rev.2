@@ -8,12 +8,14 @@
  * + coloring + picking end to end). Slice 2 swaps the file picker for upload →
  * Storage + roster → model_elements, so the model persists per project.
  */
-import { Suspense, lazy, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { importIfcRoster } from "@/services/ifcRosterImport";
+import { integrations, resolveFileUrl } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer"));
@@ -24,10 +26,54 @@ export default function Model3DTab({ modelMapping, projectId }) {
   const qc = useQueryClient();
   const [buffer, setBuffer] = useState(null);
   const [fileName, setFileName] = useState(null);
+  const [modelFile, setModelFile] = useState(null); // the picked File (for upload)
+  const [source, setSource] = useState(null);        // null | "picked" | "stored"
   const [picked, setPicked] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
   // Roster import: idle | extracting | confirm | importing | done
   const [roster, setRoster] = useState({ step: "idle" });
+
+  // Auto-load the project's stored model (slice 2b) so the tab opens without
+  // re-picking. A freshly-picked file takes precedence over the stored one.
+  const { data: storedModel } = useQuery({
+    queryKey: ["project-model", projectId],
+    enabled: !!projectId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("model_registry")
+        .select("id, file_name, file_url, coordinate_system")
+        .eq("project_id", projectId)
+        .eq("file_type", "IFC")
+        .eq("status", "active")
+        .eq("is_deleted", false)
+        .not("file_url", "is", null)
+        .order("upload_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data || null;
+    },
+  });
+
+  useEffect(() => {
+    if (!storedModel?.file_url || buffer || source === "picked") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = await resolveFileUrl(storedModel.file_url);
+        if (!url) return;
+        const res = await fetch(url);
+        const buf = await res.arrayBuffer();
+        if (cancelled) return;
+        setFileName(storedModel.file_name);
+        setBuffer(buf);
+        setSource("stored");
+      } catch (err) {
+        if (!cancelled) setLoadErr(err?.message || String(err));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [storedModel, buffer, source]);
 
   // GlobalId -> hex, from the hub's status read-model. Lights up as elements get
   // a status (i.e. once the roster + detailing links exist); unmatched stay neutral.
@@ -48,6 +94,8 @@ export default function Model3DTab({ modelMapping, projectId }) {
     setLoadErr(null); setPicked(null); setRoster({ step: "idle" });
     try {
       const buf = await file.arrayBuffer();
+      setModelFile(file);
+      setSource("picked");
       setFileName(file.name);
       setBuffer(buf);
     } catch (err) {
@@ -80,9 +128,17 @@ export default function Model3DTab({ modelMapping, projectId }) {
     if (roster.step !== "confirm") return;
     setRoster((r) => ({ ...r, step: "importing" }));
     try {
-      const { created } = await importIfcRoster({ projectId, fileName, schema: roster.schema, rows: roster.rows });
-      toast.success(`${created.toLocaleString()} pieces imported to the roster.`);
+      // Upload a freshly-picked file so the model persists + auto-loads next time.
+      let fileUrl;
+      if (modelFile) {
+        const up = await integrations.Core.UploadFile({ file: modelFile });
+        fileUrl = up.path;
+      }
+      const { created } = await importIfcRoster({ projectId, fileName, schema: roster.schema, fileUrl, rows: roster.rows });
+      toast.success(`${created.toLocaleString()} pieces imported${fileUrl ? " + model saved to the project" : ""}.`);
       qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
+      qc.invalidateQueries({ queryKey: ["project-model", projectId] });
+      setSource("stored");
       setRoster({ step: "done", created });
     } catch (err) {
       toast.error(err?.message || "Couldn't import the roster.");
@@ -98,20 +154,27 @@ export default function Model3DTab({ modelMapping, projectId }) {
   }, [modelMapping]);
 
   if (!buffer) {
+    const loadingStored = !!storedModel?.file_url && !loadErr;
     return (
       <div style={{ padding: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 16, minHeight: 360, justifyContent: "center" }}>
         <div style={{ ...mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--accent)" }}>
           3D Model
         </div>
-        <p style={{ margin: 0, maxWidth: 460, textAlign: "center", color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>
-          Load an IFC export from your detailer (Tekla → IFC). It renders in the
-          browser and colors each member by its fabrication status. Pieces stay
-          clickable for their mark, sequence, and links.
-        </p>
-        <label className="sbd-btn sbd-btn-primary" style={{ cursor: "pointer" }}>
-          Load IFC…
-          <input type="file" accept=".ifc" hidden onChange={pickFile} />
-        </label>
+        {loadingStored ? (
+          <div style={{ ...mono, fontSize: 12, color: "var(--text-muted)" }}>Loading saved model…</div>
+        ) : (
+          <>
+            <p style={{ margin: 0, maxWidth: 460, textAlign: "center", color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>
+              Load an IFC export from your detailer (Tekla → IFC). It renders in the
+              browser and colors each member by its fabrication status. Pieces stay
+              clickable for their mark, sequence, and links.
+            </p>
+            <label className="sbd-btn sbd-btn-primary" style={{ cursor: "pointer" }}>
+              Load IFC…
+              <input type="file" accept=".ifc" hidden onChange={pickFile} />
+            </label>
+          </>
+        )}
         {loadErr && <div role="alert" style={{ color: "var(--status-error)", fontSize: 12 }}>{loadErr}</div>}
       </div>
     );
@@ -136,15 +199,20 @@ export default function Model3DTab({ modelMapping, projectId }) {
 
           {projectId && (
             <div style={{ marginTop: 12 }}>
-              {roster.step === "idle" && (
+              {roster.step === "idle" && source === "picked" && (
                 <>
                   <button className="sbd-btn sbd-btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={startImport}>
                     Import piece roster
                   </button>
                   <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.5 }}>
-                    Saves every piece (with its IFC id) to this project so status colors can light up.
+                    Saves the model + every piece (with its IFC id) to this project so it auto-loads and status colors can light up.
                   </div>
                 </>
+              )}
+              {roster.step === "idle" && source === "stored" && (
+                <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  Saved to this project. Use Replace to import an updated model.
+                </div>
               )}
               {roster.step === "extracting" && (
                 <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
