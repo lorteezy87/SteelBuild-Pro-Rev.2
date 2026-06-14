@@ -28,7 +28,7 @@ const COLOR_MODES = [
   { key: "fab", label: "Fab" },
   { key: "type", label: "Type" },
   { key: "sequence", label: "Sequence" },
-  { key: "status", label: "Status" },
+  { key: "status", label: "Detailing" },
 ];
 const TYPE_PALETTE = { beam: "#3b82f6", column: "#f97316", plate: "#22c55e", member: "#a855f7", other: "#94a3b8" };
 const TYPE_LABELS = [["beam", "Beam"], ["column", "Column"], ["plate", "Plate"], ["member", "Member"]];
