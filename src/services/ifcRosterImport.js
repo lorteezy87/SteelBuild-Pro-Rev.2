@@ -19,10 +19,12 @@ const CHUNK = 500;
  * @param {string} args.projectId
  * @param {string} args.fileName
  * @param {string} [args.schema]      IFC schema (stored as coordinate_system label)
+ * @param {string} [args.fileUrl]     Storage path of the uploaded .ifc (so the
+ *                                     viewer can auto-load it next visit)
  * @param {Array}  args.rows          extractIfcRoster().rows
  * @returns {Promise<{ modelId: string, created: number }>}
  */
-export async function importIfcRoster({ projectId, fileName, schema, rows }) {
+export async function importIfcRoster({ projectId, fileName, schema, fileUrl, rows }) {
   if (!projectId) throw new Error("No active project.");
   if (!rows?.length) throw new Error("No pieces found in the model to import.");
   const now = new Date().toISOString();
@@ -50,6 +52,7 @@ export async function importIfcRoster({ projectId, fileName, schema, rows }) {
     .insert({
       project_id: projectId,
       file_name: fileName,
+      file_url: fileUrl || null,
       file_type: "IFC",
       source: "local",
       status: "active",
