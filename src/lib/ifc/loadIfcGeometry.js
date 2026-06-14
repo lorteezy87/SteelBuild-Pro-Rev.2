@@ -13,25 +13,7 @@
  * (extractIfcRoster.js) does the full property pass once, on upload.
  */
 import * as THREE from "three";
-
-let enginePromise = null;
-
-/** Lazily construct + init one web-ifc engine, wasm served from /wasm/. */
-async function getEngine() {
-  if (!enginePromise) {
-    enginePromise = (async () => {
-      const WebIFC = await import("web-ifc");
-      const api = new WebIFC.IfcAPI();
-      // The copyWebIfcWasm vite plugin guarantees /wasm/web-ifc.wasm matches this
-      // exact web-ifc version (single-threaded build — no SharedArrayBuffer /
-      // cross-origin-isolation requirement).
-      api.SetWasmPath("/wasm/");
-      await api.Init();
-      return { api, WebIFC };
-    })();
-  }
-  return enginePromise;
-}
+import { getEngine } from "@/lib/ifc/ifcEngine";
 
 /**
  * @param {ArrayBuffer} buffer  raw .ifc bytes

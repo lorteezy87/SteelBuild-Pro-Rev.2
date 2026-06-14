@@ -9,18 +9,25 @@
  * Storage + roster → model_elements, so the model persists per project.
  */
 import { Suspense, lazy, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
+import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
+import { importIfcRoster } from "@/services/ifcRosterImport";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer"));
 
 const mono = { fontFamily: "var(--font-mono)" };
 
-export default function Model3DTab({ modelMapping }) {
+export default function Model3DTab({ modelMapping, projectId }) {
+  const qc = useQueryClient();
   const [buffer, setBuffer] = useState(null);
   const [fileName, setFileName] = useState(null);
   const [picked, setPicked] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
+  // Roster import: idle | extracting | confirm | importing | done
+  const [roster, setRoster] = useState({ step: "idle" });
 
   // GlobalId -> hex, from the hub's status read-model. Lights up as elements get
   // a status (i.e. once the roster + detailing links exist); unmatched stay neutral.
@@ -38,13 +45,48 @@ export default function Model3DTab({ modelMapping }) {
   const pickFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setLoadErr(null); setPicked(null);
+    setLoadErr(null); setPicked(null); setRoster({ step: "idle" });
     try {
       const buf = await file.arrayBuffer();
       setFileName(file.name);
       setBuffer(buf);
     } catch (err) {
       setLoadErr(err?.message || String(err));
+    }
+  };
+
+  // Extract the piece roster from the loaded model → stage a count for
+  // confirmation (§30) before writing model_registry + model_elements.
+  const startImport = async () => {
+    if (!buffer || !projectId) return;
+    setRoster({ step: "extracting", done: 0, total: 0 });
+    try {
+      const result = await extractIfcRoster(buffer, (done, total) =>
+        setRoster({ step: "extracting", done, total }),
+      );
+      if (!result.rows.length) {
+        toast.error("No marked pieces found in the model.");
+        setRoster({ step: "idle" });
+        return;
+      }
+      setRoster({ step: "confirm", schema: result.schema, rows: result.rows, summary: result.summary });
+    } catch (err) {
+      toast.error(err?.message || "Couldn't read the model.");
+      setRoster({ step: "idle" });
+    }
+  };
+
+  const confirmImport = async () => {
+    if (roster.step !== "confirm") return;
+    setRoster((r) => ({ ...r, step: "importing" }));
+    try {
+      const { created } = await importIfcRoster({ projectId, fileName, schema: roster.schema, rows: roster.rows });
+      toast.success(`${created.toLocaleString()} pieces imported to the roster.`);
+      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
+      setRoster({ step: "done", created });
+    } catch (err) {
+      toast.error(err?.message || "Couldn't import the roster.");
+      setRoster((r) => ({ ...r, step: "confirm" }));
     }
   };
 
@@ -91,6 +133,43 @@ export default function Model3DTab({ modelMapping }) {
             Replace…
             <input type="file" accept=".ifc" hidden onChange={pickFile} />
           </label>
+
+          {projectId && (
+            <div style={{ marginTop: 12 }}>
+              {roster.step === "idle" && (
+                <>
+                  <button className="sbd-btn sbd-btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={startImport}>
+                    Import piece roster
+                  </button>
+                  <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.5 }}>
+                    Saves every piece (with its IFC id) to this project so status colors can light up.
+                  </div>
+                </>
+              )}
+              {roster.step === "extracting" && (
+                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
+                  Reading model… {roster.total ? `${roster.done.toLocaleString()} / ${roster.total.toLocaleString()}` : ""}
+                </div>
+              )}
+              {roster.step === "confirm" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    {roster.summary.parts.toLocaleString()} parts · {roster.summary.assemblies.toLocaleString()} assemblies
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="sbd-btn sbd-btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={confirmImport}>Import</button>
+                    <button className="sbd-btn sbd-btn-ghost" onClick={() => setRoster({ step: "idle" })}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {roster.step === "importing" && (
+                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>Importing…</div>
+              )}
+              {roster.step === "done" && (
+                <div style={{ ...mono, fontSize: 10, color: "var(--status-success)" }}>✓ {roster.created.toLocaleString()} pieces imported</div>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
