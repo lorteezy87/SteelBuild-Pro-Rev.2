@@ -64,23 +64,35 @@ export async function loadIfcGeometry(buffer, opts = {}) {
       bg.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
       bg.setIndex(new THREE.BufferAttribute(new Uint32Array(idx), 1));
 
-      const hex = (guid && opts.colorForGuid?.(guid)) || defaultColor;
-      const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(hex) });
+      // The IFC carries a per-member color (Tekla "ViewColors:On" — class/material
+      // colors). Use it as the base so the model is recognizable on its own;
+      // status colors overlay on top when a piece has a status (see recolor).
+      const c = pg.color || { x: 0.62, y: 0.66, z: 0.72, w: 1 };
+      const ifcHex = `#${new THREE.Color(c.x, c.y, c.z).getHexString()}`;
+      const statusHex = guid ? opts.colorForGuid?.(guid) : null;
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(statusHex || ifcHex),
+        metalness: 0.2,
+        roughness: 0.72,
+        transparent: c.w < 1,
+        opacity: c.w < 1 ? c.w : 1,
+      });
       const mesh = new THREE.Mesh(bg, mat);
       m4.fromArray(pg.flatTransformation);
       mesh.applyMatrix4(m4);
       mesh.userData = { expressID, guid };
       group.add(mesh);
-      materials.push({ mat, guid });
+      materials.push({ mat, guid, ifcHex });
 
       geom.delete();
     }
   });
 
-  // Re-color in place when status data changes (no reload).
+  // Re-color in place when status data changes (no reload): a piece shows its
+  // status color when it has one, otherwise falls back to its native IFC color.
   const recolor = (colorForGuid) => {
-    for (const { mat, guid } of materials) {
-      mat.color.set((guid && colorForGuid?.(guid)) || defaultColor);
+    for (const { mat, guid, ifcHex } of materials) {
+      mat.color.set((guid && colorForGuid?.(guid)) || ifcHex || defaultColor);
     }
   };
 
