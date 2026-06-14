@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { loadIfcGeometry } from "@/lib/ifc/loadIfcGeometry";
 
 const HIGHLIGHT = new THREE.Color("#f5d90a");
@@ -32,15 +33,22 @@ export default function IfcModelViewer({ buffer, colorForGuid, onPick, onLoaded 
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1e6);
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     mount.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-    const key = new THREE.DirectionalLight(0xffffff, 0.9);
-    key.position.set(1, 2, 1.5);
+    // Neutral studio environment → soft, even reflections on the steel material
+    // (PBR Standard material reads as flat gray without one). Generated, no asset.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+    // Sky/ground hemisphere for fill + a key directional for form + soft ambient.
+    const hemi = new THREE.HemisphereLight(0xdbe7ff, 0x2b2f36, 0.85);
+    scene.add(hemi);
+    const key = new THREE.DirectionalLight(0xffffff, 1.6);
+    key.position.set(1, 2.2, 1.4);
     scene.add(key);
-    const fill = new THREE.DirectionalLight(0xffffff, 0.4);
-    fill.position.set(-1, -0.5, -1);
-    scene.add(fill);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.25));
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -80,6 +88,12 @@ export default function IfcModelViewer({ buffer, colorForGuid, onPick, onLoaded 
         camera.near = r / 100; camera.far = r * 100; camera.updateProjectionMatrix();
         controls.update();
 
+        // Ground grid at the model's base for spatial reference.
+        const grid = new THREE.GridHelper(r * 4, 40, 0x3a4250, 0x1b2027);
+        grid.position.set(sphere.center.x, box.min.y, sphere.center.z);
+        scene.add(grid);
+        apiRef.current.grid = grid;
+
         setCount(model.count);
         onLoaded?.(model.count);
         setStatus("ready");
@@ -97,7 +111,11 @@ export default function IfcModelViewer({ buffer, colorForGuid, onPick, onLoaded 
       cancelAnimationFrame(apiRef.current?.raf || raf);
       ro.disconnect();
       controls.dispose();
+      apiRef.current?.grid?.geometry?.dispose();
+      apiRef.current?.grid?.material?.dispose();
       apiRef.current?.model?.dispose();
+      scene.environment?.dispose?.();
+      pmrem.dispose();
       renderer.dispose();
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
       apiRef.current = null;

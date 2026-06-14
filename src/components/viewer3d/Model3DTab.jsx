@@ -81,6 +81,7 @@ export default function Model3DTab({ modelMapping, projectId }) {
     const map = new Map();
     const byStatus = modelMapping?.guidsByStatus || {};
     for (const [status, guids] of Object.entries(byStatus)) {
+      if (status === "unmapped") continue; // keep the native IFC color for these
       const color = ELEMENT_STATUS_META[status]?.color;
       if (!color) continue;
       for (const guid of guids) map.set(guid, color);
@@ -269,8 +270,8 @@ export default function Model3DTab({ modelMapping, projectId }) {
             </div>
           ) : (
             <div style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>
-              No status data yet — members render neutral. Import the piece roster +
-              link to detailing packages to light up colors.
+              Showing the model's own colors. Pieces tint by fab status once they're
+              linked to detailing packages (or have production status).
             </div>
           )}
         </div>
