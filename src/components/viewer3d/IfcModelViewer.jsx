@@ -52,6 +52,12 @@ export default function IfcModelViewer({ buffer, colorForGuid, onPick, onLoaded 
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.dampingFactor = 0.1;        // settles fast — tighter, less floaty glide
+    controls.rotateSpeed = 0.6;          // calmer orbit when looking through members
+    controls.panSpeed = 0.8;
+    controls.zoomSpeed = 0.9;
+    controls.zoomToCursor = true;        // zoom toward the cursor, not scene center
+    controls.screenSpacePanning = true;  // pan in screen space (intuitive)
 
     const resize = () => {
       const w = mount.clientWidth || 1;
