@@ -22,7 +22,25 @@ const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer")
 
 const mono = { fontFamily: "var(--font-mono)" };
 
-export default function Model3DTab({ modelMapping, projectId }) {
+const COLOR_MODES = [
+  { key: "model", label: "Model" },
+  { key: "type", label: "Type" },
+  { key: "sequence", label: "Sequence" },
+  { key: "status", label: "Status" },
+];
+const TYPE_PALETTE = { beam: "#3b82f6", column: "#f97316", plate: "#22c55e", member: "#a855f7", other: "#94a3b8" };
+const TYPE_LABELS = [["beam", "Beam"], ["column", "Column"], ["plate", "Plate"], ["member", "Member"]];
+const SEQ_PALETTE = ["#3b82f6", "#f97316", "#22c55e", "#a855f7", "#eab308", "#ef4444", "#14b8a6", "#ec4899", "#8b5cf6", "#84cc16", "#06b6d4", "#f59e0b"];
+// Stable categorical color for a sequence/phase label.
+function seqColor(seq) {
+  if (seq == null || seq === "") return null;
+  const s = String(seq);
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return SEQ_PALETTE[h % SEQ_PALETTE.length];
+}
+
+export default function Model3DTab({ modelMapping, modelElementRows, projectId }) {
   const qc = useQueryClient();
   const [buffer, setBuffer] = useState(null);
   const [fileName, setFileName] = useState(null);
@@ -30,6 +48,7 @@ export default function Model3DTab({ modelMapping, projectId }) {
   const [source, setSource] = useState(null);        // null | "picked" | "stored"
   const [picked, setPicked] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
+  const [colorMode, setColorMode] = useState("model"); // model | type | sequence | status
   // Roster import: idle | extracting | confirm | importing | done
   const [roster, setRoster] = useState({ step: "idle" });
 
@@ -75,19 +94,38 @@ export default function Model3DTab({ modelMapping, projectId }) {
     return () => { cancelled = true; };
   }, [storedModel, buffer, source]);
 
-  // GlobalId -> hex, from the hub's status read-model. Lights up as elements get
-  // a status (i.e. once the roster + detailing links exist); unmatched stay neutral.
-  const colorForGuid = useMemo(() => {
+  // GlobalId -> fab-status color (excludes "unmapped" so those keep native color).
+  const statusByGuid = useMemo(() => {
     const map = new Map();
     const byStatus = modelMapping?.guidsByStatus || {};
     for (const [status, guids] of Object.entries(byStatus)) {
-      if (status === "unmapped") continue; // keep the native IFC color for these
+      if (status === "unmapped") continue;
       const color = ELEMENT_STATUS_META[status]?.color;
       if (!color) continue;
       for (const guid of guids) map.set(guid, color);
     }
-    return (guid) => map.get(guid);
+    return map;
   }, [modelMapping]);
+
+  // GlobalId -> erection sequence, from the imported roster (model_elements).
+  const seqByGuid = useMemo(() => {
+    const map = new Map();
+    for (const r of modelElementRows || []) {
+      if (r?.element_guid && r.sequence_number != null && r.sequence_number !== "") {
+        map.set(r.element_guid, String(r.sequence_number));
+      }
+    }
+    return map;
+  }, [modelElementRows]);
+
+  // The mode-aware color function the viewer paints with. Returning null falls
+  // back to the part's native IFC color (see loadIfcGeometry.recolor).
+  const colorFor = useMemo(() => {
+    if (colorMode === "type") return (info) => TYPE_PALETTE[info.ifcType] || TYPE_PALETTE.other;
+    if (colorMode === "sequence") return (info) => (info.guid ? seqColor(seqByGuid.get(info.guid)) : null);
+    if (colorMode === "status") return (info) => (info.guid ? statusByGuid.get(info.guid) : null);
+    return () => null; // "model" → native colors
+  }, [colorMode, seqByGuid, statusByGuid]);
 
   const pickFile = async (e) => {
     const file = e.target.files?.[0];
@@ -185,7 +223,7 @@ export default function Model3DTab({ modelMapping, projectId }) {
     <div style={{ display: "flex", height: "min(72vh, 720px)", minHeight: 420, border: "1px solid var(--border-default)", borderRadius: 10, overflow: "hidden" }}>
       <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <IfcModelViewer buffer={buffer} colorForGuid={colorForGuid} onPick={setPicked} />
+          <IfcModelViewer buffer={buffer} colorFor={colorFor} onPick={setPicked} />
         </Suspense>
       </div>
 
@@ -242,6 +280,32 @@ export default function Model3DTab({ modelMapping, projectId }) {
         </div>
 
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
+          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>Color by</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {COLOR_MODES.map((m) => {
+              const active = colorMode === m.key;
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setColorMode(m.key)}
+                  style={{
+                    padding: "5px 10px", borderRadius: 7, cursor: "pointer",
+                    border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
+                    background: active ? "color-mix(in srgb, var(--accent) 16%, var(--bg-surface-high))" : "var(--bg-surface-low)",
+                    color: active ? "var(--accent)" : "var(--text-muted)",
+                    fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                    letterSpacing: "0.05em", textTransform: "uppercase",
+                  }}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
           <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>Selected</div>
           {picked ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12 }}>
@@ -257,23 +321,12 @@ export default function Model3DTab({ modelMapping, projectId }) {
         </div>
 
         <div style={{ padding: "12px 14px" }}>
-          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>Status</div>
-          {legend.length ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {legend.map((b) => (
-                <div key={b.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                  <span style={{ width: 11, height: 11, borderRadius: 2, background: b.color, flexShrink: 0 }} />
-                  <span style={{ color: "var(--text-secondary)", flex: 1 }}>{b.label}</span>
-                  <span style={{ ...mono, color: "var(--text-muted)", fontSize: 11 }}>{b.count}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>
-              Showing the model's own colors. Pieces tint by fab status once they're
-              linked to detailing packages (or have production status).
-            </div>
-          )}
+          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>Legend</div>
+          <Legend
+            mode={colorMode}
+            statusLegend={legend}
+            sequences={[...new Set(seqByGuid.values())].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))}
+          />
         </div>
       </aside>
     </div>
@@ -289,4 +342,44 @@ function Row({ label, value, strong, small }) {
       </span>
     </div>
   );
+}
+
+const hintStyle = { color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 };
+
+function Swatch({ color, label, count }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+      <span style={{ width: 11, height: 11, borderRadius: 2, background: color, flexShrink: 0 }} />
+      <span style={{ color: "var(--text-secondary)", flex: 1 }}>{label}</span>
+      {count != null && <span style={{ ...mono, color: "var(--text-muted)", fontSize: 11 }}>{count}</span>}
+    </div>
+  );
+}
+
+function Legend({ mode, statusLegend, sequences }) {
+  if (mode === "type") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {TYPE_LABELS.map(([k, l]) => <Swatch key={k} color={TYPE_PALETTE[k]} label={l} />)}
+      </div>
+    );
+  }
+  if (mode === "sequence") {
+    if (!sequences.length) return <div style={hintStyle}>Import the piece roster to color by erection sequence.</div>;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {sequences.slice(0, 24).map((s) => <Swatch key={s} color={seqColor(s)} label={`Seq ${s}`} />)}
+        {sequences.length > 24 && <div style={hintStyle}>+{sequences.length - 24} more</div>}
+      </div>
+    );
+  }
+  if (mode === "status") {
+    if (!statusLegend.length) return <div style={hintStyle}>No fab-status yet — pieces light up once they're linked to detailing packages or given production status.</div>;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {statusLegend.map((b) => <Swatch key={b.key} color={b.color} label={b.label} count={b.count} />)}
+      </div>
+    );
+  }
+  return <div style={hintStyle}>Showing the model&apos;s own (Tekla) member colors.</div>;
 }

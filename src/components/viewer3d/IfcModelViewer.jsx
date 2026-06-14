@@ -14,7 +14,7 @@ import { loadIfcGeometry } from "@/lib/ifc/loadIfcGeometry";
 
 const HIGHLIGHT = new THREE.Color("#f5d90a");
 
-export default function IfcModelViewer({ buffer, colorForGuid, onPick, onLoaded }) {
+export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
   const mountRef = useRef(null);
   const apiRef = useRef(null); // { scene, camera, renderer, controls, model, raf, ro }
   const pickedRef = useRef(null); // { mesh, color }
@@ -79,7 +79,7 @@ export default function IfcModelViewer({ buffer, colorForGuid, onPick, onLoaded 
 
     apiRef.current = { scene, camera, renderer, controls, model: null, raf: 0, ro };
 
-    loadIfcGeometry(buffer, { colorForGuid })
+    loadIfcGeometry(buffer, { colorFor })
       .then((model) => {
         if (cancelled) { model.dispose(); return; }
         scene.add(model.group);
@@ -131,10 +131,10 @@ export default function IfcModelViewer({ buffer, colorForGuid, onPick, onLoaded 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buffer]);
 
-  // Recolor in place when status data changes — no reload.
+  // Recolor in place when the color mode / status data changes — no reload.
   useEffect(() => {
-    apiRef.current?.model?.recolor?.(colorForGuid);
-  }, [colorForGuid]);
+    apiRef.current?.model?.recolor?.(colorFor);
+  }, [colorFor]);
 
   // Click picking.
   useEffect(() => {
