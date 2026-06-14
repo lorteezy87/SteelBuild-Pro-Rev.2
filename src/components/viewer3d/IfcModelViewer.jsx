@@ -55,9 +55,9 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;        // settles fast — tighter, less floaty glide
-    controls.rotateSpeed = 0.6;          // calmer orbit when looking through members
+    controls.rotateSpeed = 0.55;         // calmer orbit when looking through members
     controls.panSpeed = 0.8;
-    controls.zoomSpeed = 1.5;            // brisk zoom; double-click flies the pivot in
+    controls.zoomSpeed = 1.0;            // steady zoom; double-click smoothly flies you in
     controls.zoomToCursor = true;        // zoom toward the cursor, not scene center
     controls.screenSpacePanning = true;  // pan in screen space (intuitive)
 
@@ -73,13 +73,29 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
     ro.observe(mount);
 
     let raf = 0;
+    let tween = null; // smooth camera move { fromPos, toPos, fromTgt, toTgt, start, dur }
+    const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
+    const flyTo = (toTgt, toPos, dur = 380) => {
+      tween = {
+        fromPos: camera.position.clone(), toPos: toPos.clone(),
+        fromTgt: controls.target.clone(), toTgt: toTgt.clone(),
+        start: performance.now(), dur,
+      };
+    };
     const tick = () => {
+      if (tween) {
+        const t = Math.min(1, (performance.now() - tween.start) / tween.dur);
+        const e = easeInOut(t);
+        camera.position.lerpVectors(tween.fromPos, tween.toPos, e);
+        controls.target.lerpVectors(tween.fromTgt, tween.toTgt, e);
+        if (t >= 1) tween = null;
+      }
       controls.update();
       renderer.render(scene, camera);
       raf = requestAnimationFrame(tick);
     };
 
-    apiRef.current = { scene, camera, renderer, controls, model: null, raf: 0, ro };
+    apiRef.current = { scene, camera, renderer, controls, model: null, raf: 0, ro, flyTo, focusDist: 1 };
 
     loadIfcGeometry(buffer, { colorFor })
       .then((model) => {
@@ -91,16 +107,17 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
         const box = new THREE.Box3().setFromObject(model.group);
         const sphere = box.getBoundingSphere(new THREE.Sphere());
         const r = sphere.radius || 1;
-        camera.near = r / 1000; camera.far = r * 100; camera.updateProjectionMatrix();
-        controls.minDistance = r * 0.002;  // lets you zoom right up to a single member
-        controls.maxDistance = r * 60;
-        const fitView = () => {
-          controls.target.copy(sphere.center);
-          camera.position.set(sphere.center.x + r * 1.6, sphere.center.y + r * 1.2, sphere.center.z + r * 1.6);
-          controls.update();
+        camera.near = r / 500; camera.far = r * 100; camera.updateProjectionMatrix();
+        controls.minDistance = r * 0.01;   // close enough to inspect a member
+        controls.maxDistance = r * 40;
+        apiRef.current.focusDist = r * 0.18; // double-click framing distance
+        const fitPos = new THREE.Vector3(sphere.center.x + r * 1.6, sphere.center.y + r * 1.2, sphere.center.z + r * 1.6);
+        const fitView = (animate) => {
+          if (animate) { apiRef.current.flyTo(sphere.center.clone(), fitPos.clone()); }
+          else { controls.target.copy(sphere.center); camera.position.copy(fitPos); controls.update(); }
         };
-        fitView();
-        apiRef.current.fitView = fitView;
+        fitView(false);                     // initial: instant
+        apiRef.current.fitView = () => fitView(true); // button: smooth
 
         // Ground grid at the model's base for spatial reference.
         const grid = new THREE.GridHelper(r * 4, 40, 0x3a4250, 0x1b2027);
@@ -189,9 +206,11 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
       const hits = raycaster.intersectObjects(model.group.children, false);
       if (!hits.length) return;
       const p = hits[0].point;
-      ctx2.controls.target.copy(p);
-      ctx2.camera.position.lerp(p, 0.5);
-      ctx2.controls.update();
+      // Smoothly fly to frame the clicked point + re-pivot there (the instant
+      // half-jump was the disorienting part). Keeps the current view direction.
+      const dir = ctx2.camera.position.clone().sub(ctx2.controls.target).normalize();
+      const toPos = p.clone().addScaledVector(dir, ctx2.focusDist || 1);
+      ctx2.flyTo(p.clone(), toPos);
     };
 
     const el = ctx.renderer.domElement;
