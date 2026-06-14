@@ -8,7 +8,7 @@
  * + coloring + picking end to end). Slice 2 swaps the file picker for upload →
  * Storage + roster → model_elements, so the model persists per project.
  */
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
@@ -40,6 +40,13 @@ function seqColor(seq) {
   return SEQ_PALETTE[h % SEQ_PALETTE.length];
 }
 
+const fsBtn = {
+  position: "absolute", top: 10, left: 10, padding: "6px 12px", borderRadius: 8,
+  border: "1px solid var(--border-default)", background: "rgba(13,17,23,0.72)",
+  color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
+  fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer", zIndex: 2,
+};
+
 export default function Model3DTab({ modelMapping, modelElementRows, projectId }) {
   const qc = useQueryClient();
   const [buffer, setBuffer] = useState(null);
@@ -51,6 +58,18 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
   const [colorMode, setColorMode] = useState("model"); // model | type | sequence | status
   // Roster import: idle | extracting | confirm | importing | done
   const [roster, setRoster] = useState({ step: "idle" });
+
+  const containerRef = useRef(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) containerRef.current?.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  };
 
   // Auto-load the project's stored model (slice 2b) so the tab opens without
   // re-picking. A freshly-picked file takes precedence over the stored one.
@@ -220,11 +239,17 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
   }
 
   return (
-    <div style={{ display: "flex", height: "min(72vh, 720px)", minHeight: 420, border: "1px solid var(--border-default)", borderRadius: 10, overflow: "hidden" }}>
+    <div
+      ref={containerRef}
+      style={{ display: "flex", height: isFullscreen ? "100vh" : "min(72vh, 720px)", minHeight: 420, border: isFullscreen ? "none" : "1px solid var(--border-default)", borderRadius: isFullscreen ? 0 : 10, overflow: "hidden", background: "var(--bg-base, #0d1117)" }}
+    >
       <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
           <IfcModelViewer buffer={buffer} colorFor={colorFor} onPick={setPicked} />
         </Suspense>
+        <button type="button" onClick={toggleFullscreen} title={isFullscreen ? "Exit full screen" : "Full screen"} style={fsBtn}>
+          {isFullscreen ? "Exit full screen" : "Full screen"}
+        </button>
       </div>
 
       <aside style={{ width: 270, flexShrink: 0, borderLeft: "1px solid var(--border-default)", background: "var(--bg-surface-low)", display: "flex", flexDirection: "column", overflowY: "auto" }}>

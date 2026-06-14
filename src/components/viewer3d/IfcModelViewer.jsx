@@ -31,7 +31,9 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#0d1117");
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1e6);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    // logarithmicDepthBuffer: large mm-scale models span a huge depth range; this
+    // keeps z-precision when zoomed right up to a member (no flicker/clipping).
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance", logarithmicDepthBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
@@ -55,7 +57,7 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
     controls.dampingFactor = 0.1;        // settles fast — tighter, less floaty glide
     controls.rotateSpeed = 0.6;          // calmer orbit when looking through members
     controls.panSpeed = 0.8;
-    controls.zoomSpeed = 0.9;
+    controls.zoomSpeed = 1.5;            // brisk zoom; double-click flies the pivot in
     controls.zoomToCursor = true;        // zoom toward the cursor, not scene center
     controls.screenSpacePanning = true;  // pan in screen space (intuitive)
 
@@ -85,14 +87,20 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
         scene.add(model.group);
         apiRef.current.model = model;
 
-        // Fit camera to the model bounds.
+        // Fit camera to the model bounds (reusable — also drives the Fit button).
         const box = new THREE.Box3().setFromObject(model.group);
         const sphere = box.getBoundingSphere(new THREE.Sphere());
         const r = sphere.radius || 1;
-        controls.target.copy(sphere.center);
-        camera.position.set(sphere.center.x + r * 1.6, sphere.center.y + r * 1.2, sphere.center.z + r * 1.6);
-        camera.near = r / 100; camera.far = r * 100; camera.updateProjectionMatrix();
-        controls.update();
+        camera.near = r / 1000; camera.far = r * 100; camera.updateProjectionMatrix();
+        controls.minDistance = r * 0.002;  // lets you zoom right up to a single member
+        controls.maxDistance = r * 60;
+        const fitView = () => {
+          controls.target.copy(sphere.center);
+          camera.position.set(sphere.center.x + r * 1.6, sphere.center.y + r * 1.2, sphere.center.z + r * 1.6);
+          controls.update();
+        };
+        fitView();
+        apiRef.current.fitView = fitView;
 
         // Ground grid at the model's base for spatial reference.
         const grid = new THREE.GridHelper(r * 4, 40, 0x3a4250, 0x1b2027);
@@ -167,9 +175,32 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
       model.pickInfo(expressID).then((info) => onPick?.(info));
     };
 
+    // Double-click flies the orbit pivot to the clicked point and steps the
+    // camera halfway in — so you can keep moving deeper instead of stalling at
+    // the model's center (the cause of "zoom slows then stops").
+    const onDblClick = (ev) => {
+      const ctx2 = apiRef.current;
+      const model = ctx2?.model;
+      if (!model) return;
+      const rect = ctx2.renderer.domElement.getBoundingClientRect();
+      ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(ndc, ctx2.camera);
+      const hits = raycaster.intersectObjects(model.group.children, false);
+      if (!hits.length) return;
+      const p = hits[0].point;
+      ctx2.controls.target.copy(p);
+      ctx2.camera.position.lerp(p, 0.5);
+      ctx2.controls.update();
+    };
+
     const el = ctx.renderer.domElement;
     el.addEventListener("click", onClick);
-    return () => el.removeEventListener("click", onClick);
+    el.addEventListener("dblclick", onDblClick);
+    return () => {
+      el.removeEventListener("click", onClick);
+      el.removeEventListener("dblclick", onDblClick);
+    };
   }, [status, onPick]);
 
   return (
@@ -190,9 +221,14 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
         </div>
       )}
       {status === "ready" && (
-        <div style={{ position: "absolute", left: 12, bottom: 10, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", pointerEvents: "none" }}>
-          {count.toLocaleString()} parts · drag to orbit · click a member
-        </div>
+        <>
+          <button type="button" onClick={() => apiRef.current?.fitView?.()} title="Fit whole model in view" style={fitBtn}>
+            Fit view
+          </button>
+          <div style={{ position: "absolute", left: 12, bottom: 10, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", pointerEvents: "none" }}>
+            {count.toLocaleString()} parts · drag to orbit · scroll to zoom · double-click to fly in
+          </div>
+        </>
       )}
     </div>
   );
@@ -201,4 +237,11 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
 const overlay = {
   position: "absolute", inset: 0, display: "flex", alignItems: "center",
   justifyContent: "center", background: "rgba(13,17,23,0.6)",
+};
+
+const fitBtn = {
+  position: "absolute", top: 10, right: 10, padding: "6px 12px", borderRadius: 8,
+  border: "1px solid var(--border-default)", background: "rgba(13,17,23,0.72)",
+  color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
+  fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer",
 };
