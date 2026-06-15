@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import { FAB_STATUS_META, FAB_STATUS_ORDER } from "@/lib/fabStatus";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
-import { importIfcRoster } from "@/services/ifcRosterImport";
+import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
 import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -47,6 +47,11 @@ const fsBtn = {
   border: "1px solid var(--border-default)", background: "rgba(13,17,23,0.72)",
   color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
   fontWeight: 700, letterSpacing: "0.05em", cursor: "pointer", zIndex: 2,
+};
+
+const linkBtn = {
+  background: "none", border: "none", color: "var(--accent)", cursor: "pointer",
+  textDecoration: "underline", font: "inherit", padding: 0,
 };
 
 export default function Model3DTab({ modelMapping, modelElementRows, projectId }) {
@@ -193,12 +198,26 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     try {
       const buf = await file.arrayBuffer();
       setModelFile(file);
-      setSource("picked");
+      setSource("picked");       // a local preview — not saved until the user clicks Save
       setFileName(file.name);
-      setBuffer(buf);            // render immediately…
-      persistModel(file, buf);   // …then save to the project in the background
+      setBuffer(buf);
     } catch (err) {
       setLoadErr(err?.message || String(err));
+    }
+  };
+
+  const [removeConfirm, setRemoveConfirm] = useState(false);
+  const removeModel = async () => {
+    if (!projectId) return;
+    try {
+      await removeProjectModel(projectId);
+      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
+      qc.invalidateQueries({ queryKey: ["project-model", projectId] });
+      setBuffer(null); setModelFile(null); setSource(null); setFileName(null);
+      setPicked(null); setRoster({ step: "idle" }); setRemoveConfirm(false);
+      toast.success("Model removed from this project.");
+    } catch (err) {
+      toast.error("Couldn't remove the model: " + (err?.message || String(err)));
     }
   };
 
@@ -276,35 +295,56 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
           <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>Model</div>
           <div style={{ fontSize: 12, color: "var(--text-primary)", marginTop: 2, wordBreak: "break-all" }}>{fileName}</div>
           <label style={{ ...mono, fontSize: 10, color: "var(--accent)", cursor: "pointer", display: "inline-block", marginTop: 6 }}>
-            Replace…
+            {source === "stored" ? "Replace with updated model…" : "Load a different model…"}
             <input type="file" accept=".ifc" hidden onChange={pickFile} />
           </label>
 
-          {projectId ? (
+          {!projectId ? (
+            <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.5 }}>
+              Open a project to save the model.
+            </div>
+          ) : (
             <div style={{ marginTop: 10 }}>
               {(roster.step === "extracting" || roster.step === "saving") && (
                 <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
                   Saving to project…{roster.step === "extracting" && roster.total ? ` reading pieces ${roster.done.toLocaleString()} / ${roster.total.toLocaleString()}` : ""}
                 </div>
               )}
-              {roster.step === "done" && (
-                <div style={{ ...mono, fontSize: 10, color: "var(--status-success)" }}>✓ Saved · auto-loads next time</div>
+
+              {/* Unsaved preview → explicit Save (no accidental auto-save). */}
+              {source === "picked" && roster.step === "idle" && (
+                <>
+                  <button className="sbd-btn sbd-btn-primary" style={{ width: "100%", justifyContent: "center" }}
+                    onClick={() => modelFile && buffer && persistModel(modelFile, buffer)}>
+                    Save model to this project
+                  </button>
+                  <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.5 }}>
+                    Previewing — not saved yet. Saving keeps it here (auto-loads next time) + imports the piece roster.
+                  </div>
+                </>
               )}
-              {roster.step === "idle" && source === "stored" && (
-                <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  Saved to this project. Use Replace for an updated model.
-                </div>
-              )}
-              {roster.step === "error" && (
+              {source === "picked" && roster.step === "error" && (
                 <div style={{ ...mono, fontSize: 10, color: "var(--status-error)", lineHeight: 1.5 }}>
                   Couldn&apos;t save: {roster.message}.{" "}
-                  <button type="button" onClick={() => modelFile && buffer && persistModel(modelFile, buffer)} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", textDecoration: "underline", font: "inherit", padding: 0 }}>Retry</button>
+                  <button type="button" onClick={() => modelFile && buffer && persistModel(modelFile, buffer)} style={linkBtn}>Retry</button>
                 </div>
               )}
-            </div>
-          ) : (
-            <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.5 }}>
-              Open a project to save the model.
+
+              {/* Saved model → status + Remove. */}
+              {source === "stored" && roster.step !== "extracting" && roster.step !== "saving" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ ...mono, fontSize: 10, color: "var(--status-success)" }}>✓ Saved to this project · auto-loads</div>
+                  {removeConfirm ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                      <span style={{ color: "var(--text-secondary)" }}>Remove model?</span>
+                      <button type="button" onClick={removeModel} style={{ ...linkBtn, color: "var(--status-error)" }}>Remove</button>
+                      <button type="button" onClick={() => setRemoveConfirm(false)} style={linkBtn}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setRemoveConfirm(true)} style={{ ...linkBtn, alignSelf: "flex-start" }}>Remove model</button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
