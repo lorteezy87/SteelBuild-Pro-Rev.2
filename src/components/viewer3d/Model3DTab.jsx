@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import { FAB_STATUS_META, FAB_STATUS_ORDER } from "@/lib/fabStatus";
+import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, colorFnFor } from "@/lib/ifc/viewerColoring";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
 import { integrations, resolveFileUrl } from "@/api/supabaseClient";
@@ -30,17 +31,7 @@ const COLOR_MODES = [
   { key: "sequence", label: "Sequence" },
   { key: "status", label: "Detailing" },
 ];
-const TYPE_PALETTE = { beam: "#3b82f6", column: "#f97316", plate: "#22c55e", member: "#a855f7", other: "#94a3b8" };
 const TYPE_LABELS = [["beam", "Beam"], ["column", "Column"], ["plate", "Plate"], ["member", "Member"]];
-const SEQ_PALETTE = ["#3b82f6", "#f97316", "#22c55e", "#a855f7", "#eab308", "#ef4444", "#14b8a6", "#ec4899", "#8b5cf6", "#84cc16", "#06b6d4", "#f59e0b"];
-// Stable categorical color for a sequence/phase label.
-function seqColor(seq) {
-  if (seq == null || seq === "") return null;
-  const s = String(seq);
-  let h = 0;
-  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return SEQ_PALETTE[h % SEQ_PALETTE.length];
-}
 
 const fsBtn = {
   position: "absolute", top: 10, left: 10, padding: "6px 12px", borderRadius: 8,
@@ -120,49 +111,17 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     return () => { cancelled = true; };
   }, [storedModel, buffer, source]);
 
-  // GlobalId -> fab-status color (excludes "unmapped" so those keep native color).
-  const statusByGuid = useMemo(() => {
-    const map = new Map();
-    const byStatus = modelMapping?.guidsByStatus || {};
-    for (const [status, guids] of Object.entries(byStatus)) {
-      if (status === "unmapped") continue;
-      const color = ELEMENT_STATUS_META[status]?.color;
-      if (!color) continue;
-      for (const guid of guids) map.set(guid, color);
-    }
-    return map;
-  }, [modelMapping]);
-
-  // GlobalId -> erection sequence, from the imported roster (model_elements).
-  const seqByGuid = useMemo(() => {
-    const map = new Map();
-    for (const r of modelElementRows || []) {
-      if (r?.element_guid && r.sequence_number != null && r.sequence_number !== "") {
-        map.set(r.element_guid, String(r.sequence_number));
-      }
-    }
-    return map;
-  }, [modelElementRows]);
-
-  // GlobalId -> manual fab_status, from the imported roster.
-  const fabByGuid = useMemo(() => {
-    const map = new Map();
-    for (const r of modelElementRows || []) {
-      if (r?.element_guid && r.fab_status) map.set(r.element_guid, r.fab_status);
-    }
-    return map;
-  }, [modelElementRows]);
+  // GlobalId → color maps from the page's data (logic + tests in viewerColoring).
+  const statusByGuid = useMemo(() => buildStatusByGuid(modelMapping), [modelMapping]);
+  const seqByGuid = useMemo(() => buildSeqByGuid(modelElementRows), [modelElementRows]);
+  const fabByGuid = useMemo(() => buildFabByGuid(modelElementRows), [modelElementRows]);
   const hasRoster = (modelElementRows?.length || 0) > 0;
 
-  // The mode-aware color function the viewer paints with. Returning null falls
-  // back to the part's native IFC color (see loadIfcGeometry.recolor).
-  const colorFor = useMemo(() => {
-    if (colorMode === "type") return (info) => TYPE_PALETTE[info.ifcType] || TYPE_PALETTE.other;
-    if (colorMode === "sequence") return (info) => (info.guid ? seqColor(seqByGuid.get(info.guid)) : null);
-    if (colorMode === "status") return (info) => (info.guid ? statusByGuid.get(info.guid) : null);
-    if (colorMode === "fab") return (info) => (info.guid ? FAB_STATUS_META[fabByGuid.get(info.guid)]?.color : null);
-    return () => null; // "model" → native colors
-  }, [colorMode, seqByGuid, statusByGuid, fabByGuid]);
+  // The mode-aware color function the viewer paints with (null → native IFC color).
+  const colorFor = useMemo(
+    () => colorFnFor(colorMode, { statusByGuid, seqByGuid, fabByGuid }),
+    [colorMode, statusByGuid, seqByGuid, fabByGuid],
+  );
 
   // Persist a freshly-picked model so it auto-loads next time: upload the .ifc to
   // Storage + write model_registry (file_url) + the piece roster (model_elements).
