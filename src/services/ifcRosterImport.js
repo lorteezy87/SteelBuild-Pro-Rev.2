@@ -26,7 +26,7 @@ const CHUNK = 500;
  */
 export async function importIfcRoster({ projectId, fileName, schema, fileUrl, rows }) {
   if (!projectId) throw new Error("No active project.");
-  if (!rows?.length) throw new Error("No pieces found in the model to import.");
+  const safeRows = rows || []; // a model with no marks still persists (file_url only)
   const now = new Date().toISOString();
 
   // 1. Replace any prior IFC model for this project.
@@ -59,7 +59,7 @@ export async function importIfcRoster({ projectId, fileName, schema, fileUrl, ro
       coordinate_system: schema || null,
       upload_date: now,
       revision_number: 1,
-      metadata: { parts: rows.length, imported_from: "ifc_roster" },
+      metadata: { parts: safeRows.length, imported_from: "ifc_roster" },
     })
     .select("id")
     .single();
@@ -68,7 +68,7 @@ export async function importIfcRoster({ projectId, fileName, schema, fileUrl, ro
 
   // 3. Bulk-insert the roster. Each row carries the IFC GlobalId (element_guid)
   //    + the assembly mark (piece_mark) — the geometry↔status join.
-  const records = rows.map((r) => ({
+  const records = safeRows.map((r) => ({
     project_id: projectId,
     model_id: modelId,
     source: "ifc",

@@ -159,6 +159,33 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     return () => null; // "model" → native colors
   }, [colorMode, seqByGuid, statusByGuid, fabByGuid]);
 
+  // Persist a freshly-picked model so it auto-loads next time: upload the .ifc to
+  // Storage + write model_registry (file_url) + the piece roster (model_elements).
+  // Runs automatically on load — no separate "import" step — and doesn't block the
+  // render (the viewer already has the local buffer).
+  const persistModel = async (file, buf) => {
+    if (!projectId) return; // render-only outside a project
+    setRoster({ step: "extracting", done: 0, total: 0 });
+    try {
+      const result = await extractIfcRoster(buf, (done, total) =>
+        setRoster({ step: "extracting", done, total }),
+      );
+      setRoster({ step: "saving" });
+      const up = await integrations.Core.UploadFile({ file });
+      const { created } = await importIfcRoster({
+        projectId, fileName: file.name, schema: result.schema, fileUrl: up.path, rows: result.rows,
+      });
+      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
+      qc.invalidateQueries({ queryKey: ["project-model", projectId] });
+      setSource("stored");
+      setRoster({ step: "done", created });
+      toast.success(`Model saved to this project${created ? ` · ${created.toLocaleString()} pieces` : ""}.`);
+    } catch (err) {
+      setRoster({ step: "error", message: err?.message || String(err) });
+      toast.error("Couldn't save the model: " + (err?.message || String(err)));
+    }
+  };
+
   const pickFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -168,52 +195,10 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
       setModelFile(file);
       setSource("picked");
       setFileName(file.name);
-      setBuffer(buf);
+      setBuffer(buf);            // render immediately…
+      persistModel(file, buf);   // …then save to the project in the background
     } catch (err) {
       setLoadErr(err?.message || String(err));
-    }
-  };
-
-  // Extract the piece roster from the loaded model → stage a count for
-  // confirmation (§30) before writing model_registry + model_elements.
-  const startImport = async () => {
-    if (!buffer || !projectId) return;
-    setRoster({ step: "extracting", done: 0, total: 0 });
-    try {
-      const result = await extractIfcRoster(buffer, (done, total) =>
-        setRoster({ step: "extracting", done, total }),
-      );
-      if (!result.rows.length) {
-        toast.error("No marked pieces found in the model.");
-        setRoster({ step: "idle" });
-        return;
-      }
-      setRoster({ step: "confirm", schema: result.schema, rows: result.rows, summary: result.summary });
-    } catch (err) {
-      toast.error(err?.message || "Couldn't read the model.");
-      setRoster({ step: "idle" });
-    }
-  };
-
-  const confirmImport = async () => {
-    if (roster.step !== "confirm") return;
-    setRoster((r) => ({ ...r, step: "importing" }));
-    try {
-      // Upload a freshly-picked file so the model persists + auto-loads next time.
-      let fileUrl;
-      if (modelFile) {
-        const up = await integrations.Core.UploadFile({ file: modelFile });
-        fileUrl = up.path;
-      }
-      const { created } = await importIfcRoster({ projectId, fileName, schema: roster.schema, fileUrl, rows: roster.rows });
-      toast.success(`${created.toLocaleString()} pieces imported${fileUrl ? " + model saved to the project" : ""}.`);
-      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
-      qc.invalidateQueries({ queryKey: ["project-model", projectId] });
-      setSource("stored");
-      setRoster({ step: "done", created });
-    } catch (err) {
-      toast.error(err?.message || "Couldn't import the roster.");
-      setRoster((r) => ({ ...r, step: "confirm" }));
     }
   };
 
@@ -295,45 +280,31 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
             <input type="file" accept=".ifc" hidden onChange={pickFile} />
           </label>
 
-          {projectId && (
-            <div style={{ marginTop: 12 }}>
-              {roster.step === "idle" && source === "picked" && (
-                <>
-                  <button className="sbd-btn sbd-btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={startImport}>
-                    Import piece roster
-                  </button>
-                  <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.5 }}>
-                    Saves the model + every piece (with its IFC id) to this project so it auto-loads and status colors can light up.
-                  </div>
-                </>
+          {projectId ? (
+            <div style={{ marginTop: 10 }}>
+              {(roster.step === "extracting" || roster.step === "saving") && (
+                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
+                  Saving to project…{roster.step === "extracting" && roster.total ? ` reading pieces ${roster.done.toLocaleString()} / ${roster.total.toLocaleString()}` : ""}
+                </div>
+              )}
+              {roster.step === "done" && (
+                <div style={{ ...mono, fontSize: 10, color: "var(--status-success)" }}>✓ Saved · auto-loads next time</div>
               )}
               {roster.step === "idle" && source === "stored" && (
                 <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  Saved to this project. Use Replace to import an updated model.
+                  Saved to this project. Use Replace for an updated model.
                 </div>
               )}
-              {roster.step === "extracting" && (
-                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
-                  Reading model… {roster.total ? `${roster.done.toLocaleString()} / ${roster.total.toLocaleString()}` : ""}
+              {roster.step === "error" && (
+                <div style={{ ...mono, fontSize: 10, color: "var(--status-error)", lineHeight: 1.5 }}>
+                  Couldn&apos;t save: {roster.message}.{" "}
+                  <button type="button" onClick={() => modelFile && buffer && persistModel(modelFile, buffer)} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", textDecoration: "underline", font: "inherit", padding: 0 }}>Retry</button>
                 </div>
               )}
-              {roster.step === "confirm" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                    {roster.summary.parts.toLocaleString()} parts · {roster.summary.assemblies.toLocaleString()} assemblies
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button className="sbd-btn sbd-btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={confirmImport}>Import</button>
-                    <button className="sbd-btn sbd-btn-ghost" onClick={() => setRoster({ step: "idle" })}>Cancel</button>
-                  </div>
-                </div>
-              )}
-              {roster.step === "importing" && (
-                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>Importing…</div>
-              )}
-              {roster.step === "done" && (
-                <div style={{ ...mono, fontSize: 10, color: "var(--status-success)" }}>✓ {roster.created.toLocaleString()} pieces imported</div>
-              )}
+            </div>
+          ) : (
+            <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.5 }}>
+              Open a project to save the model.
             </div>
           )}
         </div>
