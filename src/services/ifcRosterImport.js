@@ -89,3 +89,29 @@ export async function importIfcRoster({ projectId, fileName, schema, fileUrl, ro
 
   return { modelId, created };
 }
+
+/**
+ * Remove the project's active IFC model — soft-deletes the model_registry row(s)
+ * and the IFC-sourced model_elements, so the viewer returns to the upload state.
+ * CSV-sourced elements are left alone.
+ */
+export async function removeProjectModel(projectId) {
+  if (!projectId) throw new Error("No active project.");
+  const now = new Date().toISOString();
+
+  const { error: regErr } = await supabase
+    .from("model_registry")
+    .update({ is_deleted: true, deleted_at: now, status: "archived" })
+    .eq("project_id", projectId)
+    .eq("file_type", "IFC")
+    .eq("is_deleted", false);
+  if (regErr) throw regErr;
+
+  const { error: elErr } = await supabase
+    .from("model_elements")
+    .update({ is_deleted: true, deleted_at: now })
+    .eq("project_id", projectId)
+    .eq("source", "ifc")
+    .eq("is_deleted", false);
+  if (elErr) throw elErr;
+}
