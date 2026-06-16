@@ -48,6 +48,11 @@ export async function loadIfcGeometry(buffer, opts = {}) {
     try { guid = api.GetLine(modelID, expressID)?.GlobalId?.value; } catch { /* no guid */ }
     let ifcType = "other";
     try { ifcType = TYPE_NAME[api.GetLineType(modelID, expressID)] || "other"; } catch { /* keep other */ }
+    // Render only structural members (beam/column/plate/member). Skipping bolts,
+    // welds and misc fasteners (everything else) cuts the draw-call count ~5x on
+    // big models (e.g. 61k meshes -> ~12k) — far smoother, and they carry no fab
+    // status anyway. This also keeps the rendered set aligned with the roster.
+    if (ifcType === "other") return;
 
     const placed = flatMesh.geometries;
     for (let i = 0; i < placed.size(); i++) {
