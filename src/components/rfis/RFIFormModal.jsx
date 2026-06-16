@@ -97,7 +97,7 @@ const DuplicateWarning = ({ matches }) => {
   );
 };
 
-export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "" }) {
+export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "", prefill = null }) {
   const qc = useQueryClient();
   const trapRef = useFocusTrap(true);
   const pdfInputRef = useRef(null);
@@ -150,10 +150,15 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   // RFI (rfi === null) — used by the drawing-hub "Create RFI from
   // zone" flow so the user sees the sheet + zone context baked in
   // before they start typing. Still editable, just not blank.
+  // `prefill` (optional) seeds a brand-new RFI with values carried in from
+  // another screen — e.g. the "Create RFI from revision delta" flow. The user
+  // still reviews/edits before saving; project_id always wins last so the RFI
+  // lands on the right project regardless of what prefill carries.
   const seedEmpty = {
     ...empty,
-    project_id: projectId || empty.project_id,
     drawing_reference: initialDrawingReference || empty.drawing_reference,
+    ...(prefill || {}),
+    project_id: projectId || empty.project_id,
   };
   const [formData, setFormData] = useState(rfi ? seedFromRfi(rfi) : seedEmpty);
   const [pendingPdfFiles, setPendingPdfFiles] = useState([]);
@@ -161,9 +166,9 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   useEffect(() => {
     setFormData(rfi
       ? seedFromRfi(rfi)
-      : { ...empty, project_id: projectId || "", drawing_reference: initialDrawingReference || "" });
+      : { ...empty, drawing_reference: initialDrawingReference || "", ...(prefill || {}), project_id: projectId || "" });
     setPendingPdfFiles([]);
-  }, [rfi, projectId, initialDrawingReference]);
+  }, [rfi, projectId, initialDrawingReference, prefill]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

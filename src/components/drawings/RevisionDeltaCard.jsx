@@ -6,7 +6,7 @@
  * Read-only when `onToggleDismiss` is omitted.
  */
 import React from "react";
-import { Check, RotateCcw } from "lucide-react";
+import { Check, Link2, Plus, RotateCcw } from "lucide-react";
 
 const mono = "var(--font-mono)";
 
@@ -18,7 +18,7 @@ export const DELTA_LABEL = {
   sheet_removed: "Sheet −", other: "Other",
 };
 
-export default function RevisionDeltaCard({ delta: d, onToggleDismiss }) {
+export default function RevisionDeltaCard({ delta: d, onToggleDismiss, onCreateRfi }) {
   if (!d) return null;
   return (
     <div style={{
@@ -31,6 +31,16 @@ export default function RevisionDeltaCard({ delta: d, onToggleDismiss }) {
         <span style={{ fontFamily: mono, fontSize: 8.5, color: "var(--text-muted)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 4px" }}>{DELTA_LABEL[d.delta_type] || d.delta_type}</span>
         {d.sheet_number && <span style={{ fontFamily: mono, fontSize: 8.5, color: "var(--text-muted)" }}>{d.sheet_number}</span>}
         <span style={{ flex: 1 }} />
+        {d.linked_rfi_id ? (
+          <span title="An RFI has been raised from this change" style={{ display: "inline-flex", alignItems: "center", gap: 3, fontFamily: mono, fontSize: 8.5, fontWeight: 700, color: "#3FB950" }}>
+            <Link2 size={11} /> {d._linkedRfiNumber || "RFI"}
+          </span>
+        ) : onCreateRfi ? (
+          <button type="button" onClick={() => onCreateRfi(d)} title="Create an RFI from this change"
+            style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "transparent", border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 5px", cursor: "pointer", color: "var(--text-muted)", fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em" }}>
+            <Plus size={10} /> RFI
+          </button>
+        ) : null}
         {onToggleDismiss && (
           <button type="button" onClick={() => onToggleDismiss(d)} title={d.dismissed ? "Keep" : "Dismiss"}
             style={{ background: "transparent", border: "none", cursor: "pointer", color: d.dismissed ? "var(--text-muted)" : "var(--accent)", display: "inline-flex", padding: 2 }}>
