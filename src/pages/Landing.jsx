@@ -126,10 +126,15 @@ function FeatureIcon({ paths }) {
 
 /* ─── Component ───────────────────────────────────────────────── */
 
-export default function Landing({ onLogin, isSubmitting, loginError }) {
+export default function Landing({ onLogin, onSignUp, isSubmitting, loginError }) {
   const [showLogin, setShowLogin] = useState(false);
+  const [authMode, setAuthMode] = useState("signin"); // signin | signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [signupBusy, setSignupBusy] = useState(false);
+  const [signupError, setSignupError] = useState(null);
+  const [signupNotice, setSignupNotice] = useState(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -174,6 +179,11 @@ export default function Landing({ onLogin, isSubmitting, loginError }) {
     return () => window.removeEventListener("keydown", handler);
   }, [showLogin]);
 
+  // Reset the sign-up notice/error each time the auth modal opens/closes.
+  useEffect(() => {
+    if (showLogin) { setSignupNotice(null); setSignupError(null); }
+  }, [showLogin]);
+
   const scrollTo = (key) => {
     sectionRefs[key]?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     setMobileNav(false);
@@ -183,6 +193,25 @@ export default function Landing({ onLogin, isSubmitting, loginError }) {
     e.preventDefault();
     if (!email.trim() || !password) return;
     await onLogin?.({ email: email.trim(), password });
+  };
+
+  const handleSignUp = async (e) => {
+    e.preventDefault();
+    setSignupError(null);
+    if (!email.trim() || !password) return;
+    if (password.length < 8) { setSignupError("Use at least 8 characters for your password."); return; }
+    setSignupBusy(true);
+    const res = await onSignUp?.({ email: email.trim(), password, fullName: fullName.trim() || undefined });
+    setSignupBusy(false);
+    if (res?.success) {
+      // needsConfirmation: show the check-your-email notice. Otherwise the auth
+      // state change signs them in and this whole screen unmounts.
+      if (res.needsConfirmation) {
+        setSignupNotice(`We sent a confirmation link to ${email.trim()}. Click it to activate your account, then sign in.`);
+      }
+    } else if (res?.error) {
+      setSignupError(res.error.message);
+    }
   };
 
   const handleDemoSubmit = (e) => {
@@ -586,27 +615,59 @@ export default function Landing({ onLogin, isSubmitting, loginError }) {
         <div className="lp-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowLogin(false); }}>
           <div role="dialog" aria-modal="true" aria-label="Sign in" style={{ width: "100%", maxWidth: 420, padding: 32, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, boxShadow: "0 32px 80px rgba(20,22,26,0.35)", position: "relative" }}>
             <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: 4, lineHeight: 1 }}>✕</button>
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 500, color: C.gold, letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>STEELBUILD PRO</div>
-              <h2 style={{ fontFamily: F.disp, fontWeight: 500, fontSize: 28, letterSpacing: "-0.02em", color: C.ink, margin: "0 0 6px" }}>Sign in</h2>
-              <p style={{ fontSize: 13.5, color: C.muted, margin: 0 }}>Access your projects and data.</p>
-            </div>
-            <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <label style={monoLabel({ display: "block", marginBottom: 6 })}>Email</label>
-                <input className="lp-input" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            {signupNotice ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                <div>
+                  <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 500, color: C.gold, letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>STEELBUILD PRO</div>
+                  <h2 style={{ fontFamily: F.disp, fontWeight: 500, fontSize: 26, letterSpacing: "-0.02em", color: C.ink, margin: "0 0 8px" }}>Check your email</h2>
+                  <p style={{ fontSize: 13.5, color: C.muted, margin: 0, lineHeight: 1.5 }}>{signupNotice}</p>
+                </div>
+                <button type="button" onClick={() => { setSignupNotice(null); setAuthMode("signin"); setPassword(""); }} className="lp-btn lp-btn-primary" style={{ width: "100%", padding: 13 }}>
+                  Back to sign in
+                </button>
               </div>
-              <div>
-                <label style={monoLabel({ display: "block", marginBottom: 6 })}>Password</label>
-                <input className="lp-input" type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-              </div>
-              {loginError && (
-                <div style={{ padding: "10px 14px", background: "rgba(166,66,46,0.08)", border: `1px solid ${C.clay}`, borderRadius: 8, fontSize: 13, color: C.clay }}>{loginError}</div>
-              )}
-              <button type="submit" disabled={isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", padding: 13, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.6 : 1 }}>
-                {isSubmitting ? "Signing in…" : "Sign in"}
-              </button>
-            </form>
+            ) : (
+              <>
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 500, color: C.gold, letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>STEELBUILD PRO</div>
+                  <h2 style={{ fontFamily: F.disp, fontWeight: 500, fontSize: 28, letterSpacing: "-0.02em", color: C.ink, margin: "0 0 6px" }}>{authMode === "signup" ? "Create your account" : "Sign in"}</h2>
+                  <p style={{ fontSize: 13.5, color: C.muted, margin: 0 }}>{authMode === "signup" ? "Start a free workspace for your shop." : "Access your projects and data."}</p>
+                </div>
+                <form onSubmit={authMode === "signup" ? handleSignUp : handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {authMode === "signup" && (
+                    <div>
+                      <label style={monoLabel({ display: "block", marginBottom: 6 })}>Full name</label>
+                      <input className="lp-input" type="text" autoComplete="name" placeholder="Jane Smith" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                    </div>
+                  )}
+                  <div>
+                    <label style={monoLabel({ display: "block", marginBottom: 6 })}>Email</label>
+                    <input className="lp-input" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={monoLabel({ display: "block", marginBottom: 6 })}>Password</label>
+                    <input className="lp-input" type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder={authMode === "signup" ? "At least 8 characters" : "Password"} value={password} onChange={(e) => setPassword(e.target.value)} />
+                  </div>
+                  {(authMode === "signup" ? signupError : loginError) && (
+                    <div style={{ padding: "10px 14px", background: "rgba(166,66,46,0.08)", border: `1px solid ${C.clay}`, borderRadius: 8, fontSize: 13, color: C.clay }}>{authMode === "signup" ? signupError : loginError}</div>
+                  )}
+                  <button type="submit" disabled={authMode === "signup" ? signupBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", padding: 13, cursor: (authMode === "signup" ? signupBusy : isSubmitting) ? "not-allowed" : "pointer", opacity: (authMode === "signup" ? signupBusy : isSubmitting) ? 0.6 : 1 }}>
+                    {authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : (isSubmitting ? "Signing in…" : "Sign in")}
+                  </button>
+                </form>
+                <div style={{ marginTop: 18, textAlign: "center", fontSize: 13, color: C.muted }}>
+                  {authMode === "signup" ? (
+                    <>Already have an account?{" "}
+                      <button type="button" onClick={() => { setAuthMode("signin"); setSignupError(null); }} style={{ background: "none", border: "none", padding: 0, color: C.gold, fontWeight: 600, cursor: "pointer", font: "inherit" }}>Sign in</button>
+                    </>
+                  ) : (
+                    <>New to SteelBuild Pro?{" "}
+                      <button type="button" onClick={() => { setAuthMode("signup"); setSignupError(null); }} style={{ background: "none", border: "none", padding: 0, color: C.gold, fontWeight: 600, cursor: "pointer", font: "inherit" }}>Create an account</button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

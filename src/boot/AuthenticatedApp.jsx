@@ -47,7 +47,7 @@ function OrgGate() {
 }
 
 export default function AuthenticatedApp() {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, loginWithPassword } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, loginWithPassword, signUpWithPassword } = useAuth();
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return <AppLoader />;
@@ -58,6 +58,7 @@ export default function AuthenticatedApp() {
       <Suspense fallback={<AppLoader />}>
         <Landing
           onLogin={loginWithPassword}
+          onSignUp={signUpWithPassword}
           isSubmitting={isLoadingAuth}
           loginError={authError?.message !== "Authentication required" ? authError?.message : null}
         />
