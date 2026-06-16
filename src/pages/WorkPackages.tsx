@@ -428,6 +428,7 @@ export default function WorkPackages() {
           projects={projects}
           nextNumber={editingWP?.wp_number || ""}
           allDrawings={drawings}
+          defaultProjectId={effectiveProjectId || ""}
         />
       )}
 
