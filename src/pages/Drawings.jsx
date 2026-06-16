@@ -36,6 +36,7 @@ import {
 import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
 import { derivedSetStage, stageToSubmittalStatus } from "@/lib/submittalStageMapping";
 import { TERMINAL_APPROVED_STATUSES } from "@/hooks/useSubmittals";
+import { useFlag } from "@/hooks/useFeatureFlag";
 
 // ── Presentation components ─────────────────────────────────────────────────
 import DrawingsTable from "@/components/drawings/DrawingsTable";
@@ -54,6 +55,7 @@ import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
 import DrawingLogImportModal from "@/components/drawings/DrawingLogImportModal";
 import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
 import RevisionCompareModal from "@/components/drawings/RevisionCompareModal";
+import RevisionImpactReportModal from "@/components/drawings/RevisionImpactReportModal";
 import ExportFabReleaseModal from "@/components/drawings/ExportFabReleaseModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 
@@ -101,6 +103,8 @@ export default function Drawings({ embedded = false } = {}) {
   const [revisionOpen, setRevisionOpen] = useState(false);
   // Overlay compare — the sheet whose revisions are being diffed (or null).
   const [compareDrawing, setCompareDrawing] = useState(null);
+  const [reportSet, setReportSet] = useState(null);
+  const revisionAiEnabled = useFlag("revision_ai_diff");
   // Sprint 4 — package export modal. `kind` is "fab_release" | "turnover" | "claims".
   const [exportPkgKind, setExportPkgKind] = useState(null);
   // F18: replace window.confirm() with a styled DeleteDialog. Shape:
@@ -944,6 +948,7 @@ export default function Drawings({ embedded = false } = {}) {
             onDeleteSet={can("delete", "drawing") ? handleDeleteSet : null}
             onRenameSet={openRenameSet}
             onMarkTitleblock={openMarkTitleblock}
+            onPackageReport={revisionAiEnabled ? setReportSet : null}
             rfiMap={rfiMap}
             drawingSetMap={drawingSetMap}
             submittalsBySetId={submittalsBySetId}
@@ -1095,6 +1100,17 @@ export default function Drawings({ embedded = false } = {}) {
           open={!!compareDrawing}
           onClose={() => setCompareDrawing(null)}
           drawing={compareDrawing}
+        />
+      )}
+
+      {/* Package-level AI Revision Impact Report — launched from a set's
+          "Impact Report" action (flag-gated). */}
+      {reportSet && (
+        <RevisionImpactReportModal
+          open
+          onClose={() => setReportSet(null)}
+          set={reportSet}
+          projectId={projectId}
         />
       )}
 

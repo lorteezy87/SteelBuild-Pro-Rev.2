@@ -15,14 +15,14 @@
  */
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import * as pdfjsLib from "pdfjs-dist";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  AlertTriangle, ArrowLeftRight, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  AlertTriangle, ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   Columns2, Layers, MoveHorizontal, RotateCcw, RotateCw, Sparkles, X, ZoomIn, ZoomOut,
 } from "lucide-react";
-import { entities, resolveFileUrl } from "@/api/supabaseClient";
+import { entities } from "@/api/supabaseClient";
+import { rasterizePage, RASTER_TARGET_WIDTH, canvasToPngBase64 } from "@/lib/pdfRasterize";
+import RevisionDeltaCard from "@/components/drawings/RevisionDeltaCard";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 import { ensureCurrentRevision } from "@/lib/drawingHub";
@@ -33,58 +33,13 @@ import {
   sortDeltasBySeverity,
 } from "@/lib/revisionSnapshotDiff";
 
-// Idempotent — pdfSheetExtractor sets the same worker; whichever loads first wins.
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-
 const OLD_TINT = "#FF4D4D";   // removed content
 const NEW_TINT = "#2F81F7";   // added content
-const RASTER_TARGET_WIDTH = 1800; // px — detail vs. memory tradeoff
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3];
 
 const mono = "var(--font-mono)";
 
-// AI revision-diff display maps (severity colors + delta-type labels).
-const SEV_COLOR = { critical: "#F85149", high: "#F0883E", medium: "#D29922", low: "#3FB950", info: "#8B949E" };
-const DELTA_LABEL = {
-  grid_shift: "Grid shift", connection_change: "Connection", dimension_change: "Dimension",
-  detail_revised: "Detail", callout_added: "Callout +", callout_removed: "Callout −",
-  material_change: "Material", elevation_change: "Elevation", sheet_added: "Sheet +",
-  sheet_removed: "Sheet −", other: "Other",
-};
-
 // ── Raster helpers (pure canvas, no React) ──────────────────────────────
-
-async function rasterizePage({ fileUrl, page, bufferCache }) {
-  let buf = bufferCache.get(fileUrl);
-  if (!buf) {
-    const resolved = await resolveFileUrl(fileUrl);
-    if (!resolved) throw new Error("Could not resolve the revision file URL");
-    const res = await fetch(resolved);
-    if (!res.ok) throw new Error(`Failed to download PDF (${res.status})`);
-    buf = await res.arrayBuffer();
-    bufferCache.set(fileUrl, buf);
-  }
-  // pdfjs transfers (detaches) the buffer it is given — hand it a copy so
-  // the cache survives for the next selection that reuses this file.
-  const doc = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
-  try {
-    const pageNum = Math.min(Math.max(1, Number(page) || 1), doc.numPages);
-    const pdfPage = await doc.getPage(pageNum);
-    const base = pdfPage.getViewport({ scale: 1 });
-    const scale = RASTER_TARGET_WIDTH / base.width;
-    const viewport = pdfPage.getViewport({ scale });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil(viewport.width);
-    canvas.height = Math.ceil(viewport.height);
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await pdfPage.render({ canvasContext: ctx, viewport }).promise;
-    return canvas;
-  } finally {
-    doc.destroy();
-  }
-}
 
 /** Tint dark linework toward `color`, keep paper white ("lighten" keeps the
  * per-channel max: black ink → color, white stays white). */
@@ -198,28 +153,7 @@ function RevisionAiPanel({
             )}
 
             {deltas.map((d) => (
-              <div key={d.id} style={{
-                border: "1px solid var(--border-default)", borderRadius: 8, padding: "8px 10px",
-                background: "var(--bg-input, rgba(255,255,255,0.02))", opacity: d.dismissed ? 0.45 : 1,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: SEV_COLOR[d.severity] || SEV_COLOR.info, flexShrink: 0 }} />
-                  <span style={{ fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: SEV_COLOR[d.severity] || SEV_COLOR.info, textTransform: "uppercase" }}>{d.severity}</span>
-                  <span style={{ fontFamily: mono, fontSize: 8.5, color: "var(--text-muted)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 4px" }}>{DELTA_LABEL[d.delta_type] || d.delta_type}</span>
-                  {d.sheet_number && <span style={{ fontFamily: mono, fontSize: 8.5, color: "var(--text-muted)" }}>{d.sheet_number}</span>}
-                  <span style={{ flex: 1 }} />
-                  <button type="button" onClick={() => onToggleDismiss(d)} title={d.dismissed ? "Keep" : "Dismiss"}
-                    style={{ background: "transparent", border: "none", cursor: "pointer", color: d.dismissed ? "var(--text-muted)" : "var(--accent)", display: "inline-flex", padding: 2 }}>
-                    {d.dismissed ? <RotateCcw size={12} /> : <Check size={12} />}
-                  </button>
-                </div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", lineHeight: 1.5, textDecoration: d.dismissed ? "line-through" : "none" }}>{d.description}</div>
-                {d.recommended_action && (
-                  <div style={{ marginTop: 4, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    → {d.recommended_action}
-                  </div>
-                )}
-              </div>
+              <RevisionDeltaCard key={d.id} delta={d} onToggleDismiss={onToggleDismiss} />
             ))}
           </>
         )}
@@ -433,15 +367,6 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
     return null;
   }, [drawing]);
 
-  const canvasToB64 = (canvas) => {
-    if (!canvas) return null;
-    try {
-      const url = canvas.toDataURL("image/png");
-      const comma = url.indexOf(",");
-      return comma >= 0 ? url.slice(comma + 1) : null;
-    } catch { return null; }
-  };
-
   const resolveRevisionId = useCallback(async (cand) => {
     if (!cand) return null;
     if (cand.key !== "current") return cand.key; // already a drawing_revisions id
@@ -468,8 +393,8 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
         drawingId: drawing?.id,
         fromRevisionId,
         toRevisionId,
-        fromImageB64: canvasToB64(rastersRef.current.old),
-        toImageB64: canvasToB64(rastersRef.current.new),
+        fromImageB64: canvasToPngBase64(rastersRef.current.old),
+        toImageB64: canvasToPngBase64(rastersRef.current.new),
         fromLabel: oldSel?.label,
         toLabel: newSel?.label,
         sheetNumber: drawing?.sheet_number,
