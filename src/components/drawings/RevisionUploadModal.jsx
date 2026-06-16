@@ -413,7 +413,7 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
 }
 
 // ── Step D: Sheet Comparison ───────────────────────────────────────
-function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSheets, onBack, onConfirm }) {
+function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSheets, supersedeUnlisted, setSupersedeUnlisted, onBack, onConfirm }) {
   const counts = {
     same: matchedSheets.filter(m => m.change === "revised" && m.oldSheet?.sheetTitle === m.newSheet?.sheetTitle).length,
     revised: matchedSheets.filter(m => m.change === "revised").length,
@@ -438,17 +438,34 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
         <span style={{ color: "var(--text-muted)" }}>·</span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-success-bright)", letterSpacing: "0.06em" }}>{counts.added} added</span>
         <span style={{ color: "var(--text-muted)" }}>·</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error-bright)", letterSpacing: "0.06em" }}>{counts.removed} removed</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: supersedeUnlisted ? "var(--status-error-bright)" : "var(--text-muted)", letterSpacing: "0.06em" }}>{counts.removed} {supersedeUnlisted ? "removed" : "kept"}</span>
       </div>
 
-      {/* Removed warning */}
+      {/* Sheets in the set but NOT in this upload. Retiring them is OPT-IN: the
+          default treats the upload as a PARTIAL revision and leaves those sheets
+          current. Only a deliberate full re-issue supersedes them. */}
       {removedSheets.length > 0 && (
-        <div style={{ display: "flex", gap: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(255,61,61,0.07)", border: "1px solid rgba(255,61,61,0.20)", marginBottom: 12 }}>
-          <AlertTriangle style={{ width: 14, height: 14, color: "var(--status-error-bright)", flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
-            {removedSheets.length} sheet{removedSheets.length > 1 ? "s" : ""} from the previous revision
-            {" "}({removedSheets.map(m => m.sheetNumber).join(", ")}) will be marked superseded.
-          </div>
+        <div style={{ padding: "10px 12px", borderRadius: 8, marginBottom: 12,
+          background: supersedeUnlisted ? "rgba(255,61,61,0.07)" : "var(--hover-bg)",
+          border: `1px solid ${supersedeUnlisted ? "rgba(255,61,61,0.20)" : "var(--divider)"}` }}>
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+            <input type="checkbox" checked={supersedeUnlisted}
+              onChange={e => setSupersedeUnlisted(e.target.checked)}
+              style={{ marginTop: 2, accentColor: "var(--status-error-bright)" }} />
+            <div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
+                Full re-issue — retire the {removedSheets.length} sheet{removedSheets.length > 1 ? "s" : ""} not in this upload
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 4, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
+                {supersedeUnlisted && <AlertTriangle style={{ width: 13, height: 13, color: "var(--status-error-bright)", flexShrink: 0, marginTop: 1 }} />}
+                <span>
+                  {supersedeUnlisted
+                    ? <>Will be marked superseded and leave the current set: {removedSheets.map(m => m.sheetNumber).join(", ")}.</>
+                    : <>Partial revision (default) — these stay current and untouched: {removedSheets.map(m => m.sheetNumber).join(", ")}. Only tick this if the upload is the complete new set.</>}
+                </span>
+              </div>
+            </div>
+          </label>
         </div>
       )}
 
@@ -462,7 +479,10 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", letterSpacing: "0.12em" }}>NEW ({revMeta.revisionLabel})</div>
         </div>
         {matchedSheets.map((m, i) => {
+          const keptNotRemoved = m.change === "removed" && !supersedeUnlisted;
           const cs = CHANGE_STYLE[m.change] || CHANGE_STYLE.same;
+          const changeLabel = keptNotRemoved ? "KEPT" : cs.label;
+          const changeColor = keptNotRemoved ? "var(--text-muted)" : cs.color;
           return (
             <div key={m.sheetNumber} style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "5px 12px", borderBottom: "1px solid var(--divider)", background: cs.bg, gap: 8 }}>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: m.oldSheet ? "var(--text-muted)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -471,7 +491,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
               <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {m.oldSheet?.sheetTitle || "—"}
               </span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: cs.color, letterSpacing: "0.06em", fontWeight: 700 }}>{cs.label}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: changeColor, letterSpacing: "0.06em", fontWeight: 700 }}>{changeLabel}</span>
               <div>
                 {m.newSheet ? (
                   <input
@@ -482,7 +502,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
                     onBlur={e => e.target.style.borderColor = "transparent"}
                   />
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(255,61,61,0.40)" }}>— REMOVED</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{keptNotRemoved ? "— kept (not in upload)" : "— REMOVED"}</span>
                 )}
               </div>
             </div>
@@ -592,6 +612,9 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   });
   const [pdfFile, setPdfFile] = useState(null);
   const [matchedSheets, setMatchedSheets] = useState([]);
+  // Full re-issue (retire sheets not in this upload) is OPT-IN. Default OFF so a
+  // partial revision upload never silently supersedes the rest of the set.
+  const [supersedeUnlisted, setSupersedeUnlisted] = useState(false);
   const [processingMsg, setProcessingMsg] = useState("");
   const [processingPct, setProcessingPct] = useState(0);
   const [flowError, setFlowError] = useState("");
@@ -654,6 +677,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       // Store uploaded fileUrl on each new sheet match
       matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
       setMatchedSheets(matched);
+      setSupersedeUnlisted(false);
       setProcessingPct(100);
       await new Promise(r => setTimeout(r, 400));
       setStep("comparison");
@@ -723,6 +747,11 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       try {
         const existing = existingDrawings.find(d => d.sheet_number === match.sheetNumber && !d.is_superseded);
         if (match.change === "removed") {
+          // A sheet that isn't in this upload is only retired when the user
+          // explicitly opted into a full re-issue. The default (partial
+          // revision) leaves it current and untouched — a partial upload must
+          // never silently supersede the rest of the set.
+          if (!supersedeUnlisted) { continue; }
           if (existing) {
             await entities.Drawing.update(existing.id, { is_superseded: true });
             removed++;
@@ -841,7 +870,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     setStep(preSelectedSet ? "revMeta" : "selectSet");
     setSelectedSet(preSelectedSet || null);
     setRevMeta({ revisionLabel: "", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "", disposition: "superseded" });
-    setPdfFile(null); setMatchedSheets([]);
+    setPdfFile(null); setMatchedSheets([]); setSupersedeUnlisted(false);
     setFlowError("");
   };
 
@@ -893,7 +922,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           )}
           {step === "processing" && <StepProcessing message={processingMsg} progress={processingPct} />}
           {step === "comparison" && (
-            <StepSheetComparison selectedSet={selectedSet} revMeta={revMeta} matchedSheets={matchedSheets} setMatchedSheets={setMatchedSheets} onBack={() => setStep("dropPDF")} onConfirm={handleApply} />
+            <StepSheetComparison selectedSet={selectedSet} revMeta={revMeta} matchedSheets={matchedSheets} setMatchedSheets={setMatchedSheets} supersedeUnlisted={supersedeUnlisted} setSupersedeUnlisted={setSupersedeUnlisted} onBack={() => setStep("dropPDF")} onConfirm={handleApply} />
           )}
           {step === "success" && (
             <StepSuccess selectedSet={selectedSet} revMeta={revMeta} stats={applyStats} onClose={handleClose} />
