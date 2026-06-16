@@ -35,6 +35,7 @@ import {
 } from "@/components/drawings/drawingsUtils";
 import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
 import { derivedSetStage, stageToSubmittalStatus } from "@/lib/submittalStageMapping";
+import { TERMINAL_APPROVED_STATUSES } from "@/hooks/useSubmittals";
 
 // ── Presentation components ─────────────────────────────────────────────────
 import DrawingsTable from "@/components/drawings/DrawingsTable";
@@ -175,7 +176,13 @@ export default function Drawings({ embedded = false } = {}) {
   // references the set, so the table badge can show the live workflow
   // state — submittals are workflow source of truth post-Sprint 1.
   const submittalsBySetId = useMemo(() => {
-    const CLOSED = new Set(["Approved", "Approved as Noted", "Void"]);
+    // "Open" = work still in flight. Closed = the canonical terminal-approved
+    // statuses (Approved / Approved as Noted / Released for Fabrication — the
+    // same set that locks linked drawing sets, see useSubmittals) plus Void
+    // (cancelled). Earlier this list hard-coded only the first two + Void and
+    // omitted "Released for Fabrication", so a fully-released set still showed
+    // "1 open". Reuse the single source of truth so the two never drift again.
+    const CLOSED = new Set([...TERMINAL_APPROVED_STATUSES, "Void"]);
     const map = {};
     // submittals come pre-sorted by -submitted_date from useSubmittals,
     // so the FIRST encountered status for a set is the latest.
