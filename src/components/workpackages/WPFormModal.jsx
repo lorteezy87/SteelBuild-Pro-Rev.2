@@ -34,7 +34,7 @@ const calcStyle = (val, ref) => ({
   color: Number(val) > Number(ref) && Number(ref) > 0 ? "var(--status-error)" : "var(--text-muted)"
 });
 
-export default function WPFormModal({ open, onClose, onSave, wp, projects = [], nextNumber, allDrawings = [] }) {
+export default function WPFormModal({ open, onClose, onSave, wp, projects = [], nextNumber, allDrawings = [], defaultProjectId = "" }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [linkedDrawingIds, setLinkedDrawingIds] = useState([]);
@@ -55,12 +55,16 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
       const drawingIds = (wp.linked_drawing_ids || "").split(",").map(s => s.trim()).filter(Boolean);
       setLinkedDrawingIds(drawingIds);
     } else {
-      setForm({ ...empty, wp_number: nextNumber || "" });
+      // Pre-select the project you're working in so the Linked Drawings picker
+      // is unlocked immediately — its drawings are already loaded for this
+      // project, and without this the picker stays behind a "Select a project"
+      // gate even though you're inside one. project_name is filled on save.
+      setForm({ ...empty, wp_number: nextNumber || "", project_id: defaultProjectId || "" });
       setLinkedDrawingIds([]);
     }
     setErrors({});
     setDrawingSearch("");
-  }, [wp, open, nextNumber]);
+  }, [wp, open, nextNumber, defaultProjectId]);
 
   const validate = () => {
     const e = {};

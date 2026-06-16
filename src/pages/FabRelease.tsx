@@ -509,6 +509,7 @@ export default function FabRelease() {
           projects={projects}
           nextNumber={editingWP?.wp_number || ""}
           allDrawings={drawings}
+          defaultProjectId={projectId || ""}
         />
       )}
 
