@@ -68,7 +68,7 @@ function Field({ label, children }) {
   );
 }
 
-function BackchargeFormModal({ open, initial, onClose, onSubmit, busy, changeOrders = [], rfis = [] }) {
+export function BackchargeFormModal({ open, initial, onClose, onSubmit, busy, changeOrders = [], rfis = [] }) {
   const [form, setForm] = useState(initial || EMPTY_FORM);
   if (!open) return null;
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));

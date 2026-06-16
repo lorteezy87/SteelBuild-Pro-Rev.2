@@ -10,7 +10,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertTriangle, FileWarning, Layers, Sparkles } from "lucide-react";
+import { AlertTriangle, Check, DollarSign, FileWarning, Layers, Sparkles } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 import { rasterizePageToPngBase64 } from "@/lib/pdfRasterize";
@@ -25,6 +25,9 @@ import RevisionDeltaCard, { SEV_COLOR } from "@/components/drawings/RevisionDelt
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { toast } from "sonner";
 import { buildRfiPrefillFromDelta, createRfiAndLink } from "@/lib/rfiFromDelta";
+import { BackchargeFormModal } from "@/pages/Backcharges";
+import { buildBackchargePrefillFromSheet, createBackchargeFromDelta, sheetsWithRevisionBackcharge } from "@/lib/backchargeFromDelta";
+import { listBackcharges } from "@/lib/backcharge/repository";
 
 const mono = "var(--font-mono)";
 const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
@@ -39,6 +42,14 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
     enabled: open && !!projectId,
     staleTime: 60_000,
   });
+
+  const { data: projectBackcharges = [] } = useQuery({
+    queryKey: ["backcharges", projectId],
+    queryFn: () => (projectId ? listBackcharges(projectId) : []),
+    enabled: open && !!projectId,
+    staleTime: 60_000,
+  });
+  const loggedBcSheets = useMemo(() => sheetsWithRevisionBackcharge(projectBackcharges), [projectBackcharges]);
 
   const revisionsForSet = useMemo(() => {
     const ids = new Set(setSheets.map((s) => String(s.id)));
@@ -57,6 +68,9 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
   const [error, setError] = useState("");
   const runSeq = useRef(0);
   const [rfiDraft, setRfiDraft] = useState(null); // { deltaId, prefill } | null
+  const [bcDraft, setBcDraft] = useState(null); // { sheet, prefill } | null
+  const [bcSaving, setBcSaving] = useState(false);
+  const [sessionLoggedBc, setSessionLoggedBc] = useState(() => new Set());
 
   // Reset when the set changes or the modal reopens.
   useEffect(() => {
@@ -166,6 +180,24 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
     }
   };
 
+  const openBackcharge = (sheet) =>
+    setBcDraft({ sheet, prefill: buildBackchargePrefillFromSheet(sheet) });
+
+  const saveBackcharge = async (formData) => {
+    setBcSaving(true);
+    try {
+      await createBackchargeFromDelta({ projectId, formData, sheet: bcDraft?.sheet });
+      const sn = bcDraft?.sheet?.sheetNumber;
+      if (sn) setSessionLoggedBc((prev) => new Set(prev).add(String(sn)));
+      setBcDraft(null);
+      toast.success("Backcharge logged for rework exposure");
+    } catch (e) {
+      toast.error(e?.message?.includes("row-level security") ? "Only PM+ can create backcharges." : (e?.message || "Failed to log the backcharge."));
+    } finally {
+      setBcSaving(false);
+    }
+  };
+
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
 
   return (
@@ -238,7 +270,9 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
 
               {/* ── Per-sheet sections ──────────────────────────────── */}
               {results.map((r) => (
-                <SheetSection key={r.drawingId} result={r} onToggleDismiss={toggleDismiss} onCreateRfi={openRfiFromDelta} />
+                <SheetSection key={r.drawingId} result={r} onToggleDismiss={toggleDismiss} onCreateRfi={openRfiFromDelta}
+                  onLogBackcharge={openBackcharge}
+                  backcharged={loggedBcSheets.has(r.sheetNumber) || sessionLoggedBc.has(String(r.sheetNumber))} />
               ))}
             </>
           )}
@@ -251,6 +285,16 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
             prefill={rfiDraft.prefill}
             onClose={() => setRfiDraft(null)}
             onSave={saveRfiFromDelta}
+          />
+        )}
+
+        {bcDraft && (
+          <BackchargeFormModal
+            open
+            initial={bcDraft.prefill}
+            busy={bcSaving}
+            onClose={() => setBcDraft(null)}
+            onSubmit={saveBackcharge}
           />
         )}
       </DialogContent>
@@ -303,8 +347,10 @@ function SummaryStrip({ summary }) {
   );
 }
 
-function SheetSection({ result: r, onToggleDismiss, onCreateRfi }) {
+function SheetSection({ result: r, onToggleDismiss, onCreateRfi, onLogBackcharge, backcharged }) {
   const kept = (r.deltas || []).filter((d) => !d.dismissed);
+  const hasHot = kept.some((d) => d.severity === "critical" || d.severity === "high");
+  const reworkExposed = !!r.downstream && hasHot;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderBottom: "1px solid var(--border-default)", paddingBottom: 6 }}>
@@ -315,6 +361,16 @@ function SheetSection({ result: r, onToggleDismiss, onCreateRfi }) {
             <AlertTriangle size={11} /> {r.downstream}
           </span>
         )}
+        {reworkExposed && (backcharged ? (
+          <span title="A backcharge has been logged for this rework exposure" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: "#3FB950", textTransform: "uppercase" }}>
+            <Check size={11} /> BC logged
+          </span>
+        ) : (
+          <button type="button" onClick={() => onLogBackcharge?.(r)} title="Log a rework backcharge for this already-fabricated/delivered sheet"
+            style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid rgba(248,81,73,0.4)", borderRadius: 4, padding: "1px 6px", cursor: "pointer", color: "#F85149", fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em" }}>
+            <DollarSign size={11} /> Log backcharge
+          </button>
+        ))}
         {r.cached && <span style={{ fontFamily: mono, fontSize: 8, color: "var(--text-muted)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 4px" }}>CACHED</span>}
         <span style={{ flex: 1 }} />
         {!r.error && r.renderable && (
