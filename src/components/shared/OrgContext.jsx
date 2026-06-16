@@ -13,6 +13,7 @@ import React, { createContext, useContext, useMemo, useState, useEffect, useCall
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/AuthContext";
 import { listMyMemberships } from "@/lib/org/repository";
+import { setActiveOrgId } from "@/lib/activeOrg";
 
 const OrgContext = createContext(undefined);
 const LS_KEY = "sbp:current-org";
@@ -51,6 +52,11 @@ export function OrgProvider({ children }) {
 
   const currentOrg = orgs.find((o) => o.id === currentId) || orgs[0] || null;
   const currentRole = memberships.find((m) => m.organization.id === currentOrg?.id)?.role || null;
+
+  // Publish the active org id for non-React consumers — the file uploader
+  // (api/supabaseClient UploadFile) scopes storage paths by it. Reuses this
+  // known-good resolution instead of a separate (flaky) query in the uploader.
+  useEffect(() => { setActiveOrgId(currentOrg?.id ?? null); }, [currentOrg?.id]);
 
   const value = useMemo(
     () => ({
