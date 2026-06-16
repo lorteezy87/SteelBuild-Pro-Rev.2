@@ -286,8 +286,8 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
     >
       {/* ── Brand logo (expanded mode) ───────────────────────────── */}
       {!railMode && (
-        <div style={{ padding: "16px 14px 10px", display: "flex", justifyContent: "center" }}>
-          <BrandLogo height={94} style={{ width: "100%", height: "auto", maxWidth: 206 }} />
+        <div style={{ padding: "14px 16px 8px", display: "flex", justifyContent: "center" }}>
+          <BrandLogo height={64} style={{ width: "100%", height: "auto", maxWidth: 150 }} />
         </div>
       )}
 
@@ -772,7 +772,7 @@ function FavoriteLink({ item, active, onClick, onUnpin }) {
           alignItems: "center",
           gap: 10,
           background: active
-            ? "color-mix(in srgb, var(--accent) 10%, transparent)"
+            ? "color-mix(in srgb, var(--accent) 14%, transparent)"
             : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
           border: "none",
           borderRadius: 6,
@@ -792,7 +792,7 @@ function FavoriteLink({ item, active, onClick, onUnpin }) {
               width: 2,
               background: "var(--accent)",
               borderRadius: "0 2px 2px 0",
-              boxShadow: "0 0 6px var(--accent)",
+              boxShadow: "none",
             }}
           />
         )}
@@ -901,7 +901,7 @@ function FavoriteRailLink({ item, active, onClick }) {
               width: 2,
               background: "var(--accent)",
               borderRadius: "0 2px 2px 0",
-              boxShadow: "0 0 6px var(--accent)",
+              boxShadow: "none",
             }}
           />
         )}
@@ -990,7 +990,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
                 width: 2,
                 background: "var(--accent)",
                 borderRadius: "0 2px 2px 0",
-                boxShadow: "0 0 6px var(--accent)",
+                boxShadow: "none",
               }}
             />
           )}
@@ -1045,7 +1045,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
           alignItems: "center",
           gap: 10,
           background: active
-            ? "color-mix(in srgb, var(--accent) 10%, transparent)"
+            ? "color-mix(in srgb, var(--accent) 14%, transparent)"
             : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
           border: "none",
           borderRadius: 6,
@@ -1068,7 +1068,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
               width: 2,
               background: "var(--accent)",
               borderRadius: "0 2px 2px 0",
-              boxShadow: "0 0 6px var(--accent)",
+              boxShadow: "none",
             }}
           />
         )}
