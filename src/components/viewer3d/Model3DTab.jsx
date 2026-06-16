@@ -122,7 +122,16 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
   // GlobalId → color maps from the page's data (logic + tests in viewerColoring).
   const statusByGuid = useMemo(() => buildStatusByGuid(modelMapping), [modelMapping]);
   const seqByGuid = useMemo(() => buildSeqByGuid(modelElementRows), [modelElementRows]);
-  const fabByGuid = useMemo(() => buildFabByGuid(modelElementRows), [modelElementRows]);
+  // Optimistic fab colors: applied the instant you assign a status, so the model
+  // recolors immediately instead of waiting on a slow (12k-row) refetch. guid → status.
+  const [optimisticFab, setOptimisticFab] = useState(() => new Map());
+  const fabByGuid = useMemo(() => {
+    const map = buildFabByGuid(modelElementRows);
+    for (const [guid, status] of optimisticFab) {
+      if (status) map.set(guid, status); else map.delete(guid);
+    }
+    return map;
+  }, [modelElementRows, optimisticFab]);
   const hasRoster = (modelElementRows?.length || 0) > 0;
 
   // The mode-aware color function the viewer paints with (null → native IFC color).
@@ -199,11 +208,21 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
         .eq("piece_mark", pieceMark)
         .eq("is_deleted", false);
       if (error) throw error;
-      return { status };
+      return { status, pieceMark };
     },
-    onSuccess: ({ status }) => {
-      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
+    onSuccess: ({ status, pieceMark }) => {
+      // Recolor NOW — set every loaded part of this assembly (+ the clicked one)
+      // optimistically, so the color flips immediately without the refetch.
+      setOptimisticFab((prev) => {
+        const next = new Map(prev);
+        for (const r of modelElementRows || []) {
+          if (r?.element_guid && r.piece_mark === pieceMark) next.set(r.element_guid, status);
+        }
+        if (picked?.guid) next.set(picked.guid, status);
+        return next;
+      });
       setColorMode("fab");
+      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
       toast.success(status ? `Marked ${FAB_STATUS_META[status].label}` : "Fab status cleared");
     },
     onError: (e) => toast.error(e?.message || "Couldn't set fab status."),
