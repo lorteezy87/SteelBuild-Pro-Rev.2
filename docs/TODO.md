@@ -10,11 +10,12 @@
 multi-select bulk assign (`1b07a53d`), persist color mode + gzip upload (`b6ce5fd1`),
 assign-by-live-mark / guid-drift (`7381972d`), repaint fab colors on reload (`484e8853`).
 
-- [ ] **Fab status "still not saving"** — UNDER ACTIVE DIAGNOSIS (the recolor-race fix `484e8853` did not resolve it; re-instrumenting the data→color boundary).
+- [~] **Fab status "not saving"** — ROOT CAUSE = model_elements read capped at 1000 rows server-side; fixed by paginating the roster (`18f6294b`) + a canvas-overflow fix (side panel was unclickable). Awaiting user confirm (`[fab-debug]` `colored` should jump from 2 to the real count); then remove the temporary debug logging.
 - [ ] CSV-sourced rosters can't color — `element_guid` is NULL on CSV imports → guid-keyed coloring skips them. Fix = color by `piece_mark`. (M)
 - [ ] "Academy MS Mesa" IFC extracts 0 elements — investigate that export. (S)
 - [ ] Perf lever if still choppy at ~12k draw calls — merge meshes by color bucket / InstancedMesh. (L)
-- [ ] `scripts/check-ifc-type.mjs` (uncommitted) — commit as a dev probe or delete. (XS)
+- [x] `scripts/check-ifc-type.mjs` — committed as a kept web-ifc element-type dev probe.
+- [ ] Remove the temporary `[fab-debug]` console logging once fab colors are confirmed. (XS)
 - [ ] Deferred polish — sequence playback, spatial RFI pins, model↔sheet click-through, sectioning / hide-isolate. (L)
 
 ## Thread B — Multi-tenant SaaS / Monetization
@@ -25,7 +26,7 @@ self-serve signup + email verify (`25ac9c9a`), upload org-resolution hardening (
 
 - [ ] **Invites → Stripe billing** — the main gap to "sellable." BLOCKED: needs a Stripe account. (L)
 - [ ] E2E test harness — now feasible (self-signup exists → a test user can be created). (M)
-- [ ] Commit `vercel.json` preview-build skip — staged but uncommitted; build-overage cost control. (XS)
+- [x] Commit `vercel.json` preview-build skip — done (cost control: non-production deploys no longer build).
 - [ ] app-files cross-tenant READ residual — flat `uploads/<ts>` paths need a path restructure + ref backfill. (M)
 
 ## Thread C — Revision Intelligence — COMPLETE
