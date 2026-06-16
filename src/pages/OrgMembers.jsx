@@ -14,6 +14,9 @@ import { toast } from "sonner";
 import { Users, Mail, Link2, X, Shield } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useOrg } from "@/components/shared/OrgContext";
+import { useNavigate } from "react-router-dom";
+import { usePlan } from "@/hooks/usePlan";
+import { withinLimit } from "@/lib/billing/plans";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import {
@@ -43,6 +46,14 @@ export default function OrgMembers() {
   });
 
   const ownerCount = useMemo(() => members.filter((m) => m.role === "owner").length, [members]);
+
+  // Plan seat gating: count current members + still-pending invites against the
+  // plan's member limit so we don't create invites that can't be accepted (the
+  // server enforces at accept time). Enterprise/Business = unlimited (null).
+  const { plan } = usePlan();
+  const navigate = useNavigate();
+  const memberLimit = plan.limits.members;
+  const atMemberLimit = !withinLimit(memberLimit, members.length + invites.length);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["org-members", orgId] });
     qc.invalidateQueries({ queryKey: ["org-invites", orgId] });
@@ -59,6 +70,7 @@ export default function OrgMembers() {
     const addr = email.trim().toLowerCase();
     if (!addr || !orgId || busy) return;
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) { toast.error("Enter a valid email"); return; }
+    if (atMemberLimit) { toast.error(`Your ${plan.name} plan includes ${memberLimit} member${memberLimit === 1 ? "" : "s"}. Upgrade to add more.`); return; }
     setBusy(true);
     try {
       const inv = await createInvitation(orgId, addr, role, user.id);
@@ -107,13 +119,20 @@ export default function OrgMembers() {
               <option value="member">Member</option>
               <option value="admin">Admin</option>
             </select>
-            <button type="submit" className="sbd-btn sbd-btn-primary" disabled={busy || !email.trim()} style={{ minHeight: 40 }}>
+            <button type="submit" className="sbd-btn sbd-btn-primary" disabled={busy || !email.trim() || atMemberLimit} style={{ minHeight: 40 }}>
               {busy ? "Inviting…" : "Send invite"}
             </button>
           </form>
-          <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-            Creates a 14-day invite link (copied to your clipboard) — send it to them; they accept after signing in.
-          </div>
+          {atMemberLimit ? (
+            <div style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
+              {plan.name} plan limit reached ({memberLimit} member{memberLimit === 1 ? "" : "s"}).{" "}
+              <button type="button" onClick={() => navigate("/Billing")} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>Upgrade</button> to invite more.
+            </div>
+          ) : (
+            <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+              Creates a 14-day invite link (copied to your clipboard) — send it to them; they accept after signing in.
+            </div>
+          )}
         </div>
       )}
 

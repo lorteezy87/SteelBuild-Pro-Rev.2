@@ -11,6 +11,9 @@ import { CommandBar } from "@/components/design-system";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { Plus, PauseCircle } from "lucide-react";
 import { formatLocalDate } from "@/utils/dates";
+import { useNavigate } from "react-router-dom";
+import { usePlan } from "@/hooks/usePlan";
+import { withinLimit } from "@/lib/billing/plans";
 
 /* ─────────────────────────────────────────────
    Phase + Health configs
@@ -589,6 +592,14 @@ export default function Projects() {
   const kpiRfis          = useMemo(() => rfis.filter((r) => activeProjectIds.has(r.project_id)),         [rfis, activeProjectIds]);
   const kpiChangeOrders  = useMemo(() => changeOrders.filter((c) => activeProjectIds.has(c.project_id)), [changeOrders, activeProjectIds]);
 
+  // Plan gating: Free/Pro orgs cap active projects. The server (create_project) is
+  // authoritative; this disables the button proactively so we don't pop a create
+  // modal that would only fail on save. Enterprise/Business = unlimited (no cap).
+  const navigate = useNavigate();
+  const { plan } = usePlan();
+  const projectLimit = plan.limits.projects;
+  const atProjectLimit = !withinLimit(projectLimit, projects.length);
+
   /* ── Mutations ── */
   const createMut = useMutation({
     mutationFn: (d) => entities.Project.create(d),
@@ -701,10 +712,19 @@ export default function Projects() {
           </div>
 
           <button
-            onClick={() => { setEditing(null); setModalOpen(true); }}
+            onClick={() => {
+              if (atProjectLimit) {
+                toast.error(`Your ${plan.name} plan includes ${projectLimit} project${projectLimit === 1 ? "" : "s"}. Upgrade to add more.`);
+                navigate("/Billing");
+                return;
+              }
+              setEditing(null); setModalOpen(true);
+            }}
+            title={atProjectLimit ? `${plan.name} plan limit reached — upgrade for more projects` : "Create a new project"}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
             style={{
+              opacity: atProjectLimit ? 0.6 : 1,
               display: "flex",
               alignItems: "center",
               gap: 6,
