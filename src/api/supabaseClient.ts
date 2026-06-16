@@ -1029,6 +1029,29 @@ export const resolveFileUrl = async (fileUrl: string | null | undefined): Promis
   return getSignedUrl(fileUrl);
 };
 
+// app-files uploads are tenant-scoped by org so storage RLS can isolate them
+// (`<org_id>/uploads/...`). organizations / organization_members aren't in the
+// generated DB types yet, so resolve via an untyped query (same pattern as
+// src/lib/org/repository.ts). Cached per session; a falsy result is never cached
+// so a transient failure retries on the next upload.
+let _uploadOrgId: string | null = null;
+async function resolveUploadOrgId(): Promise<string | null> {
+  if (_uploadOrgId) return _uploadOrgId;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const uid = sessionData?.session?.user?.id;
+  if (!uid) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fromUntyped = supabase.from as unknown as (t: string) => any;
+  const { data } = await fromUntyped('organization_members')
+    .select('org_id')
+    .eq('user_id', uid)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  _uploadOrgId = (data?.org_id as string | undefined) ?? null;
+  return _uploadOrgId;
+}
+
 export type UploadFileArgs = { file: File };
 export type UploadFileResult = { file_url: string; file_name: string; path: string };
 
@@ -1081,7 +1104,11 @@ export const integrations = {
     UploadFile: async ({ file }: UploadFileArgs): Promise<UploadFileResult> => {
       if (!file) throw new Error('No file provided');
       const ext = (file.name.split('.').pop() || '').toLowerCase();
-      const path = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      // Tenant-scope the storage path by org so app-files RLS isolates tenants
+      // (`<org_id>/uploads/...`). Legacy flat paths stay readable to the founding org.
+      const orgId = await resolveUploadOrgId();
+      if (!orgId) throw new Error('Could not resolve your organization for this upload. Please reload and try again.');
+      const path = `${orgId}/uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
       // Browsers report application/octet-stream for many construction file types.
       // Map extensions → proper MIME types so Supabase storage accepts them.
