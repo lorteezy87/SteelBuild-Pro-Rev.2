@@ -20,6 +20,10 @@ export type LoginResult =
   | { success: true }
   | { success: false; error: AuthError };
 
+export type SignUpResult =
+  | { success: true; needsConfirmation: boolean }
+  | { success: false; error: AuthError };
+
 export type AuthContextValue = {
   user: AppUser | null;
   isAuthenticated: boolean;
@@ -29,6 +33,7 @@ export type AuthContextValue = {
   appPublicSettings: unknown;
   logout: () => Promise<void>;
   loginWithPassword: (creds: { email: string; password: string }) => Promise<LoginResult>;
+  signUpWithPassword: (creds: { email: string; password: string; fullName?: string }) => Promise<SignUpResult>;
   navigateToLogin: () => void;
   checkAppState: () => Promise<void>;
 };
@@ -154,6 +159,41 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const signUpWithPassword = async (
+    { email, password, fullName }: { email: string; password: string; fullName?: string },
+  ): Promise<SignUpResult> => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+          data: fullName ? { full_name: fullName } : undefined,
+        },
+      });
+      if (error) throw error;
+      // With email confirmation ON, signUp returns no session until the user clicks
+      // the emailed link — stay on Landing (do NOT clear authError, that's what keeps
+      // the sign-in screen mounted). With it OFF, a session is returned: sign them in.
+      if (!data.session) {
+        return { success: true, needsConfirmation: true };
+      }
+      setUser(await mapSupabaseUser(data.user));
+      setIsAuthenticated(true);
+      setAuthError(null);
+      return { success: true, needsConfirmation: false };
+    } catch (error: unknown) {
+      const err = error as { message?: string; status?: number } | undefined;
+      let message = err?.message || 'Sign-up failed';
+      if (error instanceof TypeError && /fetch/i.test(message)) {
+        message = 'Unable to reach the authentication server. Check your connection.';
+      } else if (/already registered|already exists|user already/i.test(message)) {
+        message = 'An account with that email already exists — try signing in.';
+      }
+      return { success: false, error: { type: 'auth_required', message } };
+    }
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -201,6 +241,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       appPublicSettings,
       logout,
       loginWithPassword,
+      signUpWithPassword,
       navigateToLogin,
       checkAppState,
     }}>
