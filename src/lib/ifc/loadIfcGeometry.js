@@ -76,10 +76,10 @@ export async function loadIfcGeometry(buffer, opts = {}) {
       const c = pg.color || { x: 0.62, y: 0.66, z: 0.72, w: 1 };
       const ifcHex = `#${new THREE.Color(c.x, c.y, c.z).getHexString()}`;
       const chosen = opts.colorFor?.({ guid, ifcHex, ifcType }) || ifcHex;
-      const mat = new THREE.MeshStandardMaterial({
+      // Lambert (not PBR Standard): ~2,600 draw calls a frame, so the cheap
+      // per-fragment shading keeps it smooth. No env map needed.
+      const mat = new THREE.MeshLambertMaterial({
         color: new THREE.Color(chosen),
-        metalness: 0.2,
-        roughness: 0.72,
         transparent: c.w < 1,
         opacity: c.w < 1 ? c.w : 1,
       });

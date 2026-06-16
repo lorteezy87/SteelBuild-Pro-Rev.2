@@ -45,6 +45,14 @@ const linkBtn = {
   textDecoration: "underline", font: "inherit", padding: 0,
 };
 
+const saveBanner = {
+  position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 3,
+  display: "flex", alignItems: "center", gap: 12, padding: "8px 10px 8px 16px",
+  borderRadius: 999, background: "color-mix(in srgb, var(--accent) 20%, rgba(13,17,23,0.92))",
+  border: "1px solid color-mix(in srgb, var(--accent) 55%, transparent)",
+  boxShadow: "0 6px 24px rgba(0,0,0,0.4)", whiteSpace: "nowrap",
+};
+
 export default function Model3DTab({ modelMapping, modelElementRows, projectId }) {
   const qc = useQueryClient();
   const [buffer, setBuffer] = useState(null);
@@ -247,6 +255,25 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
         <button type="button" onClick={toggleFullscreen} title={isFullscreen ? "Exit full screen" : "Full screen"} style={fsBtn}>
           {isFullscreen ? "Exit full screen" : "Full screen"}
         </button>
+
+        {/* Unmissable Save prompt while previewing an unsaved model. */}
+        {source === "picked" && projectId && (
+          <div style={saveBanner}>
+            {(roster.step === "extracting" || roster.step === "saving") ? (
+              <span style={{ ...mono, fontSize: 12, color: "var(--text-primary)" }}>
+                Saving to project…{roster.step === "extracting" && roster.total ? ` ${roster.done.toLocaleString()}/${roster.total.toLocaleString()}` : ""}
+              </span>
+            ) : (
+              <>
+                <span style={{ fontSize: 12.5, color: "var(--text-primary)" }}>Previewing — not saved yet</span>
+                <button className="sbd-btn sbd-btn-primary" style={{ padding: "6px 16px" }}
+                  onClick={() => modelFile && buffer && persistModel(modelFile, buffer)}>
+                  Save to this project
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <aside style={{ width: 270, flexShrink: 0, borderLeft: "1px solid var(--border-default)", background: "var(--bg-surface-low)", display: "flex", flexDirection: "column", overflowY: "auto" }}>

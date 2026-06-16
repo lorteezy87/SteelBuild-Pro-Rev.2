@@ -9,7 +9,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { loadIfcGeometry } from "@/lib/ifc/loadIfcGeometry";
 
 const HIGHLIGHT = new THREE.Color("#f5d90a");
@@ -31,31 +30,22 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#0d1117");
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1e6);
-    // logarithmicDepthBuffer: large mm-scale models span a huge depth range; this
-    // keeps z-precision when zoomed right up to a member (no flicker/clipping).
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance", logarithmicDepthBuffer: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // fewer pixels to shade → smoother
     mount.appendChild(renderer.domElement);
 
-    // Neutral studio environment → soft, even reflections on the steel material
-    // (PBR Standard material reads as flat gray without one). Generated, no asset.
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-
-    // Sky/ground hemisphere for fill + a key directional for form + soft ambient.
-    const hemi = new THREE.HemisphereLight(0xdbe7ff, 0x2b2f36, 0.85);
+    // Lighting tuned for the cheap Lambert material (no env map): sky/ground
+    // hemisphere fill + a key directional for form + soft ambient.
+    const hemi = new THREE.HemisphereLight(0xdbe7ff, 0x2b2f36, 1.0);
     scene.add(hemi);
-    const key = new THREE.DirectionalLight(0xffffff, 1.6);
+    const key = new THREE.DirectionalLight(0xffffff, 1.3);
     key.position.set(1, 2.2, 1.4);
     scene.add(key);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.1;        // settles fast — tighter, less floaty glide
-    controls.rotateSpeed = 0.55;         // calmer orbit when looking through members
+    controls.enableDamping = false;      // stop dead on release — no inertia drift
+    controls.rotateSpeed = 0.6;          // calmer orbit when looking through members
     controls.panSpeed = 0.8;
     controls.zoomSpeed = 1.0;            // steady zoom; double-click smoothly flies you in
     controls.zoomToCursor = true;        // zoom toward the cursor, not scene center
@@ -91,6 +81,15 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
         if (t >= 1) tween = null;
       }
       controls.update();
+      // Dynamic near/far around the current view → crisp z-precision at any zoom
+      // without the cost of a logarithmic depth buffer.
+      const rad = apiRef.current?.modelRadius;
+      if (rad) {
+        const dist = camera.position.distanceTo(controls.target);
+        camera.near = Math.max(dist * 0.02, rad / 5000);
+        camera.far = dist + rad * 5;
+        camera.updateProjectionMatrix();
+      }
       renderer.render(scene, camera);
       raf = requestAnimationFrame(tick);
     };
@@ -107,7 +106,7 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
         const box = new THREE.Box3().setFromObject(model.group);
         const sphere = box.getBoundingSphere(new THREE.Sphere());
         const r = sphere.radius || 1;
-        camera.near = r / 500; camera.far = r * 100; camera.updateProjectionMatrix();
+        apiRef.current.modelRadius = r;    // drives the dynamic near/far in tick
         controls.minDistance = r * 0.01;   // close enough to inspect a member
         controls.maxDistance = r * 40;
         apiRef.current.focusDist = r * 0.18; // double-click framing distance
@@ -145,8 +144,6 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
       apiRef.current?.grid?.geometry?.dispose();
       apiRef.current?.grid?.material?.dispose();
       apiRef.current?.model?.dispose();
-      scene.environment?.dispose?.();
-      pmrem.dispose();
       renderer.dispose();
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
       apiRef.current = null;
