@@ -151,6 +151,16 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     return m;
   }, [modelElementRows]);
 
+  // [fab-debug] temporary — locate where fab coloring breaks (remove after).
+  useEffect(() => {
+    const rows = modelElementRows || [];
+    const fabRows = rows.filter((r) => r?.fab_status);
+    console.log("[fab-debug] data", {
+      colorMode, rows: rows.length, fabRows: fabRows.length, fabByGuid: fabByGuid.size,
+      sampleRosterGuid: fabRows[0]?.element_guid, sampleRosterMark: fabRows[0]?.piece_mark,
+    });
+  }, [colorMode, modelElementRows, fabByGuid]);
+
   // The mode-aware color function the viewer paints with (null → native IFC color).
   const colorFor = useMemo(
     () => colorFnFor(colorMode, { statusByGuid, seqByGuid, fabByGuid }),
