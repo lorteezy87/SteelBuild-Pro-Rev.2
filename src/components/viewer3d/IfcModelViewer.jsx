@@ -154,9 +154,16 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
   }, [buffer]);
 
   // Recolor in place when the color mode / status data changes — no reload.
+  // `status` is in the deps on purpose: the model loads ASYNC, so a colorFor
+  // change that lands while the geometry is still parsing (e.g. the fab roster
+  // arriving from the DB during a big-model parse on reload) hits a null
+  // apiRef.current.model and no-ops. Without re-running when status flips to
+  // "ready", the model stays painted with the stale colorFor captured at load
+  // and the saved fab colors never appear — they only showed on a live assign
+  // (model already loaded). Re-running on "ready" repaints with the latest.
   useEffect(() => {
     apiRef.current?.model?.recolor?.(colorFor);
-  }, [colorFor]);
+  }, [colorFor, status]);
 
   // Click picking.
   useEffect(() => {
