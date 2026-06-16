@@ -54,7 +54,12 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
     const resize = () => {
       const w = mount.clientWidth || 1;
       const h = mount.clientHeight || 1;
-      renderer.setSize(w, h, false);
+      // updateStyle defaults true on purpose: with setPixelRatio(1.5) the draw
+      // buffer is 1.5x, and WITHOUT updating the canvas CSS the element displays
+      // at buffer size (1.5x its column) — overflowing onto the side panel so
+      // the fab controls can't be clicked. Letting three set the CSS keeps the
+      // canvas the container's size (sharp via pixelRatio, no overflow).
+      renderer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     };

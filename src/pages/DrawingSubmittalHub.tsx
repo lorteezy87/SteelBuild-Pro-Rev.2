@@ -27,6 +27,7 @@ import { computeFabReady } from "@/lib/submittalAnalytics";
 import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
 import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
 import { buildHeldPieceMarkSet, summarizeElementStatuses } from "@/services/modelElementStatus";
+import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -165,10 +166,12 @@ export default function DrawingSubmittalHub() {
   // 3D model members (BIM integration Phase 0 — piece-mark mapping).
   const { data: modelElements = [] } = useQuery({
     queryKey: ["model-elements", projectId],
-    // Big models run 3k–12k+ elements; the entity layer caps reads at 2000 by
-    // default, which left most pieces with no color/click data. Lift the cap so
-    // the whole roster loads (the viewer colors + click-info need every GUID).
-    queryFn: () => entities.ModelElement.filter({ project_id: projectId }, undefined, 50000),
+    // Big models run 3k–12k+ elements. A single Supabase request is capped at
+    // 1000 rows server-side (db-max-rows), so `.limit(50000)` silently returned
+    // only the first 1000 — leaving most pieces with no color/click data and
+    // fab colors that "didn't stick" (the assigned pieces weren't in the 1000).
+    // fetchAllModelElements pages with .range() so the WHOLE roster loads.
+    queryFn: () => fetchAllModelElements(projectId),
     enabled: !!projectId,
     staleTime: 60_000,
   });
