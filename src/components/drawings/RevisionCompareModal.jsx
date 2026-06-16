@@ -19,10 +19,19 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
-  Columns2, Layers, MoveHorizontal, RotateCcw, ZoomIn, ZoomOut,
+  AlertTriangle, ArrowLeftRight, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  Columns2, Layers, MoveHorizontal, RotateCcw, RotateCw, Sparkles, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import { useAppSecurity } from "@/components/shared/useAppSecurity";
+import { ensureCurrentRevision } from "@/lib/drawingHub";
+import { daysBetween, todayLocalISO } from "@/lib/dateMath";
+import {
+  generateRevisionDiff,
+  setDeltaDismissed,
+  sortDeltasBySeverity,
+} from "@/lib/revisionSnapshotDiff";
 
 // Idempotent — pdfSheetExtractor sets the same worker; whichever loads first wins.
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -33,6 +42,15 @@ const RASTER_TARGET_WIDTH = 1800; // px — detail vs. memory tradeoff
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3];
 
 const mono = "var(--font-mono)";
+
+// AI revision-diff display maps (severity colors + delta-type labels).
+const SEV_COLOR = { critical: "#F85149", high: "#F0883E", medium: "#D29922", low: "#3FB950", info: "#8B949E" };
+const DELTA_LABEL = {
+  grid_shift: "Grid shift", connection_change: "Connection", dimension_change: "Dimension",
+  detail_revised: "Detail", callout_added: "Callout +", callout_removed: "Callout −",
+  material_change: "Material", elevation_change: "Elevation", sheet_added: "Sheet +",
+  sheet_removed: "Sheet −", other: "Other",
+};
 
 // ── Raster helpers (pure canvas, no React) ──────────────────────────────
 
@@ -80,6 +98,134 @@ function tintCanvas(src, color) {
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, out.width, out.height);
   return out;
+}
+
+// ── AI Revision Impact panel (review-only) ──────────────────────────────
+
+function RevisionAiPanel({
+  status, summary, deltas, error, retryMsg, cached, downstream,
+  disabled, onGenerate, onRegenerate, onToggleDismiss, onClose,
+}) {
+  const kept = deltas.filter((d) => !d.dismissed).length;
+  return (
+    <div style={{
+      width: 360, flexShrink: 0, display: "flex", flexDirection: "column",
+      borderRadius: 10, border: "1px solid var(--border-default)",
+      background: "var(--bg-base, #0D1117)", overflow: "hidden",
+    }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
+        borderBottom: "1px solid var(--border-default)", flexShrink: 0,
+      }}>
+        <Sparkles size={14} style={{ color: "var(--accent)" }} />
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
+          Revision Impact
+        </span>
+        <span style={{ fontFamily: mono, fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 4px" }}>AI</span>
+        <span style={{ flex: 1 }} />
+        <button type="button" className="sbd-btn-ghost" style={{ minHeight: 26, padding: "2px 6px" }} onClick={onClose} title="Close panel"><X size={13} /></button>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        {downstream && (
+          <div style={{
+            display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px", borderRadius: 8,
+            background: "color-mix(in srgb, #F85149 14%, transparent)", border: "1px solid color-mix(in srgb, #F85149 40%, transparent)",
+          }}>
+            <AlertTriangle size={14} style={{ color: "#F85149", flexShrink: 0, marginTop: 1 }} />
+            <span style={{ fontFamily: "var(--font-body)", fontSize: 11.5, color: "var(--text-primary)", lineHeight: 1.5 }}>
+              This sheet is already <strong>{downstream}</strong> — any real change here may mean rework or a backcharge.
+            </span>
+          </div>
+        )}
+
+        {status === "idle" && (
+          <>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
+              Compare the two selected revisions with AI for a steel-aware list of what changed — member sizes,
+              connections, dimensions, grids, materials — each with a severity and a recommended action.
+            </p>
+            <button type="button" className="sbd-btn-primary" disabled={disabled} onClick={() => onGenerate(false)}
+              style={{ alignSelf: "flex-start", opacity: disabled ? 0.5 : 1, cursor: disabled ? "not-allowed" : "pointer" }}>
+              <Sparkles size={13} style={{ marginRight: 6 }} /> Generate diff
+            </button>
+            {disabled && (
+              <span style={{ fontFamily: mono, fontSize: 9, color: "var(--text-muted)" }}>
+                Select two revisions with captured files and let them finish rendering first.
+              </span>
+            )}
+          </>
+        )}
+
+        {status === "running" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center", padding: 16, color: "var(--text-muted)", fontFamily: mono, fontSize: 11, letterSpacing: "0.06em" }}>
+            <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid rgba(245,158,11,0.25)", borderTopColor: "var(--accent)", animation: "spin 0.7s linear infinite" }} />
+            ANALYZING REVISIONS…
+            {retryMsg && <span style={{ fontSize: 10, textAlign: "center", letterSpacing: 0 }}>{retryMsg}</span>}
+          </div>
+        )}
+
+        {status === "error" && (
+          <>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--status-error)", lineHeight: 1.5 }}>{error}</div>
+            <button type="button" className="sbd-btn-ghost" onClick={() => onGenerate(false)} style={{ alignSelf: "flex-start" }}>
+              <RotateCw size={13} style={{ marginRight: 6 }} /> Try again
+            </button>
+          </>
+        )}
+
+        {status === "done" && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", color: "var(--text-primary)" }}>
+                {kept} CHANGE{kept === 1 ? "" : "S"}
+              </span>
+              {cached && <span style={{ fontFamily: mono, fontSize: 8, color: "var(--text-muted)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 4px" }}>CACHED</span>}
+              <span style={{ flex: 1 }} />
+              <button type="button" className="sbd-btn-ghost" style={{ minHeight: 26, padding: "2px 8px", fontSize: 10 }} onClick={() => onRegenerate()} title="Re-run the AI diff">
+                <RotateCw size={11} style={{ marginRight: 4 }} /> Regenerate
+              </button>
+            </div>
+
+            {summary && (
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary, var(--text-muted))", lineHeight: 1.6, margin: 0 }}>{summary}</p>
+            )}
+
+            {deltas.length === 0 && (
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", padding: 8 }}>
+                No material changes detected between these two revisions.
+              </div>
+            )}
+
+            {deltas.map((d) => (
+              <div key={d.id} style={{
+                border: "1px solid var(--border-default)", borderRadius: 8, padding: "8px 10px",
+                background: "var(--bg-input, rgba(255,255,255,0.02))", opacity: d.dismissed ? 0.45 : 1,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: SEV_COLOR[d.severity] || SEV_COLOR.info, flexShrink: 0 }} />
+                  <span style={{ fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: SEV_COLOR[d.severity] || SEV_COLOR.info, textTransform: "uppercase" }}>{d.severity}</span>
+                  <span style={{ fontFamily: mono, fontSize: 8.5, color: "var(--text-muted)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 4px" }}>{DELTA_LABEL[d.delta_type] || d.delta_type}</span>
+                  {d.sheet_number && <span style={{ fontFamily: mono, fontSize: 8.5, color: "var(--text-muted)" }}>{d.sheet_number}</span>}
+                  <span style={{ flex: 1 }} />
+                  <button type="button" onClick={() => onToggleDismiss(d)} title={d.dismissed ? "Keep" : "Dismiss"}
+                    style={{ background: "transparent", border: "none", cursor: "pointer", color: d.dismissed ? "var(--text-muted)" : "var(--accent)", display: "inline-flex", padding: 2 }}>
+                    {d.dismissed ? <RotateCcw size={12} /> : <Check size={12} />}
+                  </button>
+                </div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", lineHeight: 1.5, textDecoration: d.dismissed ? "line-through" : "none" }}>{d.description}</div>
+                {d.recommended_action && (
+                  <div style={{ marginTop: 4, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    → {d.recommended_action}
+                  </div>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── Component ───────────────────────────────────────────────────────────
@@ -253,6 +399,107 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
   const sheetLabel = [drawing?.sheet_number, drawing?.title].filter(Boolean).join(" — ");
   const notEnough = !isLoading && candidates.length < 2;
 
+  // ── AI "what changed" (flag-gated, review-only) ─────────────────────────
+  const aiEnabled = useFlag("revision_ai_diff");
+  const { user } = useAppSecurity();
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiStatus, setAiStatus] = useState("idle"); // idle | running | done | error
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiDeltas, setAiDeltas] = useState([]);
+  const [aiError, setAiError] = useState("");
+  const [aiRetryMsg, setAiRetryMsg] = useState("");
+  const [aiCached, setAiCached] = useState(false);
+
+  // A new selection pair invalidates stale results (don't clobber a live run).
+  useEffect(() => {
+    if (aiStatus === "running") return;
+    setAiStatus("idle");
+    setAiDeltas([]);
+    setAiSummary(null);
+    setAiError("");
+    setAiRetryMsg("");
+    setAiCached(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oldKey, newKey]);
+
+  // Is THIS sheet already downstream? Same fields/semantics as
+  // detailingRevisionImpact — a change here means potential rework.
+  const downstream = useMemo(() => {
+    const reached = (d) => !!d && daysBetween(d, todayLocalISO()) >= 0;
+    if (!drawing) return null;
+    if (reached(drawing.ready_for_install_date)) return "in the field";
+    if (reached(drawing.final_delivery_date)) return "delivered";
+    if (reached(drawing.fabrication_finish_date)) return "fabricated";
+    return null;
+  }, [drawing]);
+
+  const canvasToB64 = (canvas) => {
+    if (!canvas) return null;
+    try {
+      const url = canvas.toDataURL("image/png");
+      const comma = url.indexOf(",");
+      return comma >= 0 ? url.slice(comma + 1) : null;
+    } catch { return null; }
+  };
+
+  const resolveRevisionId = useCallback(async (cand) => {
+    if (!cand) return null;
+    if (cand.key !== "current") return cand.key; // already a drawing_revisions id
+    const cur = revisionRows.find((r) => r.is_current);
+    if (cur?.id) return cur.id;
+    const minted = await ensureCurrentRevision({ drawing, userId: user?.id || null });
+    return minted?.id || null;
+  }, [revisionRows, drawing, user]);
+
+  const runAiDiff = async (force = false) => {
+    if (!oldSel || !newSel) return;
+    setAiStatus("running");
+    setAiError("");
+    setAiRetryMsg("");
+    try {
+      const [fromRevisionId, toRevisionId] = await Promise.all([
+        resolveRevisionId(oldSel),
+        resolveRevisionId(newSel),
+      ]);
+      if (!fromRevisionId || !toRevisionId) throw new Error("Couldn't resolve the two revisions for these selections.");
+      if (fromRevisionId === toRevisionId) throw new Error("Pick two different revisions to compare.");
+      const res = await generateRevisionDiff({
+        projectId: drawing?.project_id,
+        drawingId: drawing?.id,
+        fromRevisionId,
+        toRevisionId,
+        fromImageB64: canvasToB64(rastersRef.current.old),
+        toImageB64: canvasToB64(rastersRef.current.new),
+        fromLabel: oldSel?.label,
+        toLabel: newSel?.label,
+        sheetNumber: drawing?.sheet_number,
+        requestedBy: user?.email || null,
+        force,
+        onRetry: ({ attempt, maxAttempts, delay }) =>
+          setAiRetryMsg(`Rate-limited — retry ${attempt}/${maxAttempts - 1} in ${Math.round(delay / 1000)}s…`),
+      });
+      setAiSummary(res.comparison?.ai_summary || null);
+      setAiDeltas(sortDeltasBySeverity(res.deltas || []));
+      setAiCached(!!res.cached);
+      setAiStatus("done");
+    } catch (e) {
+      setAiError(e?.message || "The diff failed. Try again.");
+      setAiStatus("error");
+    }
+  };
+
+  const toggleDismiss = async (delta) => {
+    const next = !delta.dismissed;
+    setAiDeltas((list) => list.map((d) => (d.id === delta.id ? { ...d, dismissed: next } : d)));
+    try {
+      await setDeltaDismissed({ deltaId: delta.id, dismissed: next, userId: user?.id || null });
+    } catch {
+      setAiDeltas((list) => list.map((d) => (d.id === delta.id ? { ...d, dismissed: !next } : d)));
+    }
+  };
+
+  const aiBusyDisabled = rendering || isLoading || notEnough || !oldSel || !newSel;
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
@@ -383,6 +630,27 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
               <button type="button" className="sbd-btn-ghost" style={{ minHeight: 28, padding: "2px 7px" }} onClick={() => zoomBy(-1)} title="Zoom out"><ZoomOut size={13} /></button>
               <span className="sbd-num" style={{ fontFamily: mono, fontSize: 10, color: "var(--text-muted)", minWidth: 34, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
               <button type="button" className="sbd-btn-ghost" style={{ minHeight: 28, padding: "2px 7px" }} onClick={() => zoomBy(1)} title="Zoom in"><ZoomIn size={13} /></button>
+
+              {aiEnabled && (
+                <>
+                  <span style={{ width: 1, height: 22, background: "var(--border-default)", margin: "0 2px" }} />
+                  <button
+                    type="button"
+                    onClick={() => setAiOpen((v) => !v)}
+                    title="AI: what changed between these revisions?"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                      minHeight: 30, padding: "4px 10px", borderRadius: 7, cursor: "pointer",
+                      border: `1px solid ${aiOpen ? "var(--accent)" : "var(--border-default)"}`,
+                      background: aiOpen ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent",
+                      color: aiOpen ? "var(--accent)" : "var(--text-muted)",
+                      fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
+                    }}
+                  >
+                    <Sparkles size={12} /> AI Diff
+                  </button>
+                </>
+              )}
             </div>
 
             {/* ── Legend ───────────────────────────────────────────── */}
@@ -394,9 +662,10 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
               </div>
             )}
 
-            {/* ── Canvas area ──────────────────────────────────────── */}
+            {/* ── Canvas + AI rail ─────────────────────────────────── */}
+            <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 10 }}>
             <div style={{
-              flex: 1, minHeight: 0, overflow: "auto", borderRadius: 10,
+              flex: 1, minWidth: 0, overflow: "auto", borderRadius: 10,
               border: "1px solid var(--border-default)", background: "#3A3F46",
               position: "relative",
             }}>
@@ -441,6 +710,23 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                   />
                 </div>
               )}
+            </div>
+            {aiEnabled && aiOpen && (
+              <RevisionAiPanel
+                status={aiStatus}
+                summary={aiSummary}
+                deltas={aiDeltas}
+                error={aiError}
+                retryMsg={aiRetryMsg}
+                cached={aiCached}
+                downstream={downstream}
+                disabled={aiBusyDisabled}
+                onGenerate={runAiDiff}
+                onRegenerate={() => runAiDiff(true)}
+                onToggleDismiss={toggleDismiss}
+                onClose={() => setAiOpen(false)}
+              />
+            )}
             </div>
           </>
         )}
