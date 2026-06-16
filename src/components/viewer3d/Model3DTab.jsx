@@ -15,6 +15,7 @@ import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import { FAB_STATUS_META, FAB_STATUS_ORDER } from "@/lib/fabStatus";
 import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, colorFnFor } from "@/lib/ifc/viewerColoring";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
+import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
 import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
 import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
@@ -62,7 +63,14 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
   const [picked, setPicked] = useState(null);
   const [selectedGuids, setSelectedGuids] = useState([]);
   const [loadErr, setLoadErr] = useState(null);
-  const [colorMode, setColorMode] = useState("model"); // model | type | sequence | status
+  // Persisted so the view (e.g. "Fab") survives leaving + returning to the tab —
+  // otherwise it resets to native colors and looks like the statuses "erased".
+  const [colorMode, setColorMode] = useState(() => {
+    try { return localStorage.getItem("sbp:viewer-colormode") || "model"; } catch { return "model"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("sbp:viewer-colormode", colorMode); } catch { /* ignore */ }
+  }, [colorMode]);
   // Roster import: idle | extracting | confirm | importing | done
   const [roster, setRoster] = useState({ step: "idle" });
 
@@ -108,7 +116,10 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
         const url = await resolveFileUrl(storedModel.file_url);
         if (!url) return;
         const res = await fetch(url);
-        const buf = await res.arrayBuffer();
+        let buf = await res.arrayBuffer();
+        // Inflate gzipped models (newer uploads are stored `<name>.gz`); older
+        // uncompressed `.ifc` models load as-is.
+        if (storedModel.file_url.endsWith(".gz")) buf = await gunzipBuffer(buf);
         if (cancelled) return;
         setFileName(storedModel.file_name);
         setBuffer(buf);
@@ -158,7 +169,14 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
         setRoster({ step: "extracting", done, total }),
       );
       setRoster({ step: "saving" });
-      const up = await integrations.Core.UploadFile({ file });
+      // gzip the IFC before upload so large models (50 MB+) fit under the storage
+      // bucket limit and download faster. The stored object is `<name>.gz`; the
+      // auto-loader detects that suffix and inflates. Falls back to the raw file
+      // if the browser lacks CompressionStream.
+      let uploadFile = file;
+      const gz = await gzipBuffer(buf).catch(() => null);
+      if (gz) uploadFile = new File([gz], `${file.name}.gz`);
+      const up = await integrations.Core.UploadFile({ file: uploadFile });
       const { created } = await importIfcRoster({
         projectId, fileName: file.name, schema: result.schema, fileUrl: up.path, rows: result.rows,
       });
