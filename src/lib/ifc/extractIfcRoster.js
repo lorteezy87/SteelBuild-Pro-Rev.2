@@ -62,7 +62,12 @@ export async function extractIfcRoster(buffer, onProgress) {
         } catch { /* skip unreadable element */ }
 
         done += 1;
-        if (onProgress && done % 200 === 0) onProgress(done, total);
+        // Yield to the event loop periodically so a big model (10k+ parts) doesn't
+        // freeze the tab while extracting — the UI stays responsive + progress ticks.
+        if (done % 250 === 0) {
+          onProgress?.(done, total);
+          await new Promise((r) => setTimeout(r, 0));
+        }
 
         const pieceMark = marks.assembly || marks.part;
         if (!guid || !pieceMark) continue; // need both to be useful (GUID joins geometry)

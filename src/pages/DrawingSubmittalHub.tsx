@@ -165,7 +165,10 @@ export default function DrawingSubmittalHub() {
   // 3D model members (BIM integration Phase 0 — piece-mark mapping).
   const { data: modelElements = [] } = useQuery({
     queryKey: ["model-elements", projectId],
-    queryFn: () => entities.ModelElement.filter({ project_id: projectId }),
+    // Big models run 3k–12k+ elements; the entity layer caps reads at 2000 by
+    // default, which left most pieces with no color/click data. Lift the cap so
+    // the whole roster loads (the viewer colors + click-info need every GUID).
+    queryFn: () => entities.ModelElement.filter({ project_id: projectId }, undefined, 50000),
     enabled: !!projectId,
     staleTime: 60_000,
   });
