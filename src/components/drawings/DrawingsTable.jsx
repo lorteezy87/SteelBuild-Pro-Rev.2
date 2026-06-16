@@ -398,12 +398,27 @@ function GroupRow({
   // Overdue sets get a red-tinted gradient + a red left-border strip so the
   // row reads as "needs attention" at a glance, even before the user parses
   // the small "X OVERDUE — MAX Yd LATE" text.
-  const isGroupOverdue = a.overdueCount > 0 && !group.isUngrouped;
+  // A set is "good to go" (never late) when its workflow is actually done, by
+  // the real sources of truth: every linked submittal terminal-approved
+  // (open === 0), a legacy approved set_approval_status, or an explicit manual
+  // release state. Without this, a past due_date on an already-released set
+  // flagged the whole row red — the "good sets lighting up red" bug.
+  const submittalClosed = !!(submittalCounts && submittalCounts.total > 0 && submittalCounts.open === 0);
+  const setDone =
+    submittalClosed ||
+    a.aggregateStatus === "approved" ||
+    ["Partially Released", "Released for Erection"].includes(group.parent?.detailing_state);
+  // Late only when past due AND not done. Three-state row coloring makes
+  // late vs. done vs. in-progress obvious at a glance.
+  const overdueActive = a.overdueCount > 0 && !setDone;
+  const isGroupOverdue = overdueActive && !group.isUngrouped;
   const rowBg = isGroupOverdue
-    ? "linear-gradient(90deg, rgba(239,68,68,0.14), rgba(239,68,68,0.04) 65%, transparent)"
+    ? "linear-gradient(90deg, rgba(239,68,68,0.14), rgba(239,68,68,0.04) 65%, transparent)"   // red = late
     : group.isUngrouped
       ? "rgba(255,255,255,0.015)"
-      : "linear-gradient(90deg, rgba(200,155,32,0.08), rgba(200,155,32,0.02) 65%, transparent)";
+      : setDone
+        ? "linear-gradient(90deg, rgba(16,185,129,0.10), rgba(16,185,129,0.02) 65%, transparent)" // green = done
+        : "linear-gradient(90deg, rgba(200,155,32,0.08), rgba(200,155,32,0.02) 65%, transparent)"; // amber = in progress
 
   return (
     <tr
@@ -411,7 +426,7 @@ function GroupRow({
         background: rowBg,
         borderTop: "1px solid var(--border-default)",
         borderBottom: "1px solid var(--border-default)",
-        borderLeft: isGroupOverdue ? "4px solid var(--status-error)" : "4px solid transparent",
+        borderLeft: isGroupOverdue ? "4px solid var(--status-error)" : setDone ? "4px solid var(--status-success)" : "4px solid transparent",
         cursor: "default",
       }}
     >
@@ -579,7 +594,7 @@ function GroupRow({
                   </span>
                 </>
               )}
-              {a.overdueCount > 0 && (
+              {overdueActive && (
                 <>
                   <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
                   <span style={{ ...mono, fontSize: 9, color: "var(--status-error)", fontWeight: 800 }}>
@@ -643,7 +658,7 @@ function GroupRow({
       </td>
 
       {/* Due (earliest) */}
-      <td style={{ ...tdBase, ...mono, fontSize: 10, color: a.overdueCount > 0 ? "var(--status-error)" : "var(--text-muted)", whiteSpace: "nowrap", fontWeight: a.overdueCount > 0 ? 700 : 500 }}>
+      <td style={{ ...tdBase, ...mono, fontSize: 10, color: overdueActive ? "var(--status-error)" : "var(--text-muted)", whiteSpace: "nowrap", fontWeight: overdueActive ? 700 : 500 }}>
         {a.earliestDue || "—"}
       </td>
 

@@ -45,17 +45,22 @@ export function validateStageTransition(from, to) {
 }
 
 /**
- * Check whether a drawing is overdue (past due date and not yet released).
+ * Check whether a drawing is overdue: past its due date AND still active.
+ * A done/inactive sheet is never "late" — released, superseded (replaced by a
+ * newer revision), or part of an approved set.
  *
- * @deprecated reads drawings.stage. Workflow source of truth is the
- * submittals table; this helper drives drawings-page display badges only.
+ * @deprecated reads drawings.stage. Workflow source of truth is the submittals
+ * table; this drives drawings-page display badges only. The set-level rollup
+ * additionally suppresses overdue for submittal-closed (terminal-approved) sets.
  *
- * @param {{ due_date?: string, stage?: string }} drawing
+ * @param {{ due_date?: string, stage?: string, is_superseded?: boolean, set_approval_status?: string }} drawing
  * @returns {boolean}
  */
 export function isOverdue(drawing) {
   if (!drawing.due_date) return false;
   if (drawing.stage === "Released") return false;
+  if (drawing.is_superseded) return false;
+  if (drawing.set_approval_status === "approved") return false;
   return new Date(drawing.due_date) < new Date();
 }
 
