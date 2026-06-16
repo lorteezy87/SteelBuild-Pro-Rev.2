@@ -67,7 +67,7 @@ Frontend (`src/`):
 - `services/` — deterministic domain engines: `marginRiskEngine`, `autoLinkEngine`, `constraintEngine`, `scheduleCascade`, `workflowEngine`, `permissions`, `validation`, `auditLogger`, `cacheRegistry`, `emailSendService`.
 - `hooks/` — TanStack Query CRUD + state hooks (`useDrawings`, `useSubmittals`, `useFinancials`, `useDeliveries`, `useAlerts`, `useProjectRole`, `useFeatureFlag`, `useCrudMutation`, `useSaveMutation`, `useRealtimeInvalidation`, `useProjectId`, …).
 - `api/` — `supabaseClient.ts` (the Supabase data layer: exports the `entities`, `auth`, `integrations`, `functions` surfaces + `getSignedUrl`/`resolveFileUrl` storage helpers as named values — import them directly).
-- `lib/` — shared utilities + domain mapping: `AuthContext.tsx`, `submittalStageMapping.js`, `drawingSetOrdering.js`, `analyzeDrawing.js`, `compareRevisions.js`, `dataExchange.js`, `integrationCatalog.js`, `featureFlags.jsx`, `query-client.ts`, importers (`importAnalyzedDrawings.js`, `importRfiCsv.js`, `importPsrSpreadsheet.js`, …), and the `commandCenter/`, `integrations/`, `exports/`, `drawingHub/` subfolders.
+- `lib/` — shared utilities + domain mapping: `AuthContext.tsx`, `submittalStageMapping.js`, `drawingSetOrdering.js`, the Revision Intelligence stack (`revisionSnapshotDiff.js`, `revisionPackageReport.js`, `rfiFromDelta.js`, `pdfRasterize.js`, `detailingRevisionImpact.js`), `dataExchange.js`, `integrationCatalog.js`, `featureFlags.jsx`, `query-client.ts`, importers (`importAnalyzedDrawings.js`, `importRfiCsv.js`, `importPsrSpreadsheet.js`, …), and the `commandCenter/`, `integrations/`, `exports/`, `drawingHub/` subfolders.
 - `utils/` — pure helpers (`dates.js`, `fractionConversion.js`, `riggingCalculations.js`, `projectKpis.js`, `operationalGraph.js`, `compressImage.js`, …).
 - `styles/` — SteelBuild Dark token/CSS system. `data/` — static reference (`aiscShapes.js`). `dev/` — mock data. `types/supabase.ts` — generated DB types.
 
@@ -92,7 +92,7 @@ Status notes here are a snapshot (2026-05-25). Verify against the repo before re
 - RFIs.
 - Work Packages, with drawing/RFI linkage.
 - Basic schedule + field progress (see section 22).
-- AI drawing analysis + revision compare (`src/lib/analyzeDrawing.js`, `src/lib/compareRevisions.js`) — the key differentiator.
+- AI Revision Intelligence — the key differentiator (flag `revision_ai_diff`): per-sheet AI semantic diff (`src/lib/revisionSnapshotDiff.js` → llm-proxy `revision-compare` → `drawing_revision_deltas`), package-level Revision Impact Report (`src/components/drawings/RevisionImpactReportModal.jsx` + `src/lib/revisionPackageReport.js`), and one-click Create-RFI-from-delta (`src/lib/rfiFromDelta.js`). Deterministic visual overlay in `RevisionCompareModal.jsx`; downstream-impact severity in `src/lib/detailingRevisionImpact.js`. (The old `analyzeDrawing.js`/`compareRevisions.js` were cut in the 2026-05-26 scope reduction — they survive only in worktrees and were revived as the above.)
 
 Changes that strengthen, simplify, or speed up these flows take priority over breadth elsewhere.
 
@@ -935,6 +935,7 @@ Rules:
 - Keep packages in visible numerical order when the workflow requires it.
 - Avoid sheet-centric rollups when the user is managing set-level work.
 - Do not duplicate set-ordering logic. Reuse existing helpers when available.
+- Revision uploads are PARTIAL by default: a sheet in the set but not in the uploaded PDF is KEPT (left current), never auto-retired. Superseding unlisted sheets is opt-in via the "Full re-issue" checkbox in `RevisionUploadModal`. "Removed" sets `drawings.is_superseded=true` (recoverable — flip it back), NOT `is_deleted`. Never silently supersede sheets a revision upload didn't include.
 
 Before changing drawing set ordering or identity, inspect existing helpers such as:
 
