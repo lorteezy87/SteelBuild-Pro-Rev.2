@@ -12,7 +12,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
-import { FAB_STATUS_META, FAB_STATUS_ORDER } from "@/lib/fabStatus";
+import { FAB_STATUS_META, FAB_STATUS_ORDER, resolveFabMarks } from "@/lib/fabStatus";
 import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, colorFnFor } from "@/lib/ifc/viewerColoring";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
@@ -254,10 +254,17 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     onError: (e) => toast.error(e?.message || "Couldn't set fab status."),
   });
 
-  // Assign a status to every currently-selected piece (1 or many).
+  // Assign a status to every currently-selected piece (1 or many). Resolves the
+  // selection to piece marks using the clicked piece's LIVE mark first, so it
+  // works even when the rendered model's GUIDs don't match the saved roster.
   const setFab = (status) => {
-    const marks = [...new Set(selectedGuids.map((g) => guidToMark.get(g)).filter(Boolean))];
-    if (!marks.length) { toast.error("Select a piece first (model must be saved)."); return; }
+    const marks = resolveFabMarks({ picked, selectedGuids, guidToMark });
+    if (!marks.length) {
+      toast.error(selectedGuids.length
+        ? "This piece has no Assembly/Part mark to set a status on."
+        : "Select a piece first.");
+      return;
+    }
     assignFab.mutate({ pieceMarks: marks, status });
   };
 
