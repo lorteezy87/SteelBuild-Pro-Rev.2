@@ -383,7 +383,7 @@ function StageBar({ stageCounts, total }) {
 function GroupRow({
   group, expanded, onToggleExpand,
   groupSelected, groupIndeterminate, onToggleGroupSelect,
-  onSetApproval, onDeleteSet, onRenameSet, onMarkTitleblock, hideOnCompact,
+  onSetApproval, onDeleteSet, onRenameSet, onMarkTitleblock, onPackageReport, hideOnCompact,
   // { total, open } | undefined. When present (and total > 0), we
   // render a "N SUBMITTALS" chip in the group meta line so you can
   // see at a glance which sets have transmittal activity.
@@ -701,8 +701,16 @@ function GroupRow({
           UNGROUPED sheets don't belong to a drawing_sets row so there's
           nothing to rename/delete/template. */}
       <td style={tdBase}>
-        {!group.isUngrouped && (onRenameSet || onDeleteSet || onMarkTitleblock) && (
+        {!group.isUngrouped && (onRenameSet || onDeleteSet || onMarkTitleblock || onPackageReport) && (
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+            {onPackageReport && (
+              <ActionBtn
+                label="✦ Impact Report"
+                primary
+                title={`AI Revision Impact Report for set "${group.name}" — what changed across all revised sheets`}
+                onClick={() => onPackageReport(group)}
+              />
+            )}
             {onMarkTitleblock && (
               <ActionBtn
                 label={hasTemplate ? "✓ Titleblock" : "Mark Titleblock"}
@@ -1010,7 +1018,7 @@ const COMPACT_WIDTH_PX = 1200;
 export default function DrawingsTable({
   drawings, selected, onToggleSelect, onToggleAll,
   onEdit, onDelete, onAdvance, onView,
-  setContextMenu, onSetApproval, onDeleteSet, onRenameSet, onMarkTitleblock, rfiMap,
+  setContextMenu, onSetApproval, onDeleteSet, onRenameSet, onMarkTitleblock, onPackageReport, rfiMap,
   drawingSetMap = {},
   // submittalsBySetId: { [drawingSetId]: { total, open } } — used to
   // surface a "N SUBMITTALS" chip on each set's group header row.
@@ -1247,6 +1255,7 @@ export default function DrawingsTable({
                     onDeleteSet={onDeleteSet}
                     onRenameSet={onRenameSet}
                     onMarkTitleblock={onMarkTitleblock}
+                    onPackageReport={onPackageReport}
                     hideOnCompact={hideOnCompact}
                     submittalCounts={group.setId ? submittalsBySetId[group.setId] : undefined}
                   />
