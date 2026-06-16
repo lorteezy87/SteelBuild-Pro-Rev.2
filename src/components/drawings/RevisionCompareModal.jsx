@@ -23,6 +23,9 @@ import {
 import { entities } from "@/api/supabaseClient";
 import { rasterizePage, RASTER_TARGET_WIDTH, canvasToPngBase64 } from "@/lib/pdfRasterize";
 import RevisionDeltaCard from "@/components/drawings/RevisionDeltaCard";
+import RFIFormModal from "@/components/rfis/RFIFormModal";
+import { toast } from "sonner";
+import { buildRfiPrefillFromDelta, createRfiAndLink } from "@/lib/rfiFromDelta";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 import { ensureCurrentRevision } from "@/lib/drawingHub";
@@ -59,7 +62,7 @@ function tintCanvas(src, color) {
 
 function RevisionAiPanel({
   status, summary, deltas, error, retryMsg, cached, downstream,
-  disabled, onGenerate, onRegenerate, onToggleDismiss, onClose,
+  disabled, onGenerate, onRegenerate, onToggleDismiss, onCreateRfi, onClose,
 }) {
   const kept = deltas.filter((d) => !d.dismissed).length;
   return (
@@ -153,7 +156,7 @@ function RevisionAiPanel({
             )}
 
             {deltas.map((d) => (
-              <RevisionDeltaCard key={d.id} delta={d} onToggleDismiss={onToggleDismiss} />
+              <RevisionDeltaCard key={d.id} delta={d} onToggleDismiss={onToggleDismiss} onCreateRfi={onCreateRfi} />
             ))}
           </>
         )}
@@ -343,6 +346,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
   const [aiError, setAiError] = useState("");
   const [aiRetryMsg, setAiRetryMsg] = useState("");
   const [aiCached, setAiCached] = useState(false);
+  const [rfiDraft, setRfiDraft] = useState(null); // { deltaId, prefill } | null
 
   // A new selection pair invalidates stale results (don't clobber a live run).
   useEffect(() => {
@@ -420,6 +424,20 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
       await setDeltaDismissed({ deltaId: delta.id, dismissed: next, userId: user?.id || null });
     } catch {
       setAiDeltas((list) => list.map((d) => (d.id === delta.id ? { ...d, dismissed: !next } : d)));
+    }
+  };
+
+  const openRfiFromDelta = (delta) =>
+    setRfiDraft({ deltaId: delta.id, prefill: buildRfiPrefillFromDelta(delta, { sheetNumber: drawing?.sheet_number }) });
+
+  const saveRfiFromDelta = async (formData) => {
+    try {
+      const created = await createRfiAndLink({ projectId: drawing?.project_id, formData, deltaId: rfiDraft?.deltaId });
+      setAiDeltas((list) => list.map((d) => (d.id === rfiDraft?.deltaId ? { ...d, linked_rfi_id: created.id, _linkedRfiNumber: created.rfi_number } : d)));
+      setRfiDraft(null);
+      toast.success(`Created ${created.rfi_number || "RFI"} from this change`);
+    } catch (e) {
+      toast.error(e?.message || "Failed to create the RFI.");
     }
   };
 
@@ -649,11 +667,22 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                 onGenerate={runAiDiff}
                 onRegenerate={() => runAiDiff(true)}
                 onToggleDismiss={toggleDismiss}
+                onCreateRfi={openRfiFromDelta}
                 onClose={() => setAiOpen(false)}
               />
             )}
             </div>
           </>
+        )}
+
+        {rfiDraft && (
+          <RFIFormModal
+            projectId={drawing?.project_id}
+            rfi={null}
+            prefill={rfiDraft.prefill}
+            onClose={() => setRfiDraft(null)}
+            onSave={saveRfiFromDelta}
+          />
         )}
       </DialogContent>
     </Dialog>

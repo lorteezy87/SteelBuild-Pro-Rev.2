@@ -22,6 +22,9 @@ import {
 } from "@/lib/revisionSnapshotDiff";
 import { selectChangedSheets, summarizePackageReport } from "@/lib/revisionPackageReport";
 import RevisionDeltaCard, { SEV_COLOR } from "@/components/drawings/RevisionDeltaCard";
+import RFIFormModal from "@/components/rfis/RFIFormModal";
+import { toast } from "sonner";
+import { buildRfiPrefillFromDelta, createRfiAndLink } from "@/lib/rfiFromDelta";
 
 const mono = "var(--font-mono)";
 const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
@@ -53,6 +56,7 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
   const [results, setResults] = useState([]);
   const [error, setError] = useState("");
   const runSeq = useRef(0);
+  const [rfiDraft, setRfiDraft] = useState(null); // { deltaId, prefill } | null
 
   // Reset when the set changes or the modal reopens.
   useEffect(() => {
@@ -146,6 +150,22 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
     }
   };
 
+  const openRfiFromDelta = (delta) =>
+    setRfiDraft({ deltaId: delta.id, prefill: buildRfiPrefillFromDelta(delta, { sheetNumber: delta.sheet_number }) });
+
+  const saveRfiFromDelta = async (formData) => {
+    try {
+      const created = await createRfiAndLink({ projectId, formData, deltaId: rfiDraft?.deltaId });
+      setResults((rs) =>
+        rs.map((r) => ({ ...r, deltas: (r.deltas || []).map((d) => (d.id === rfiDraft?.deltaId ? { ...d, linked_rfi_id: created.id, _linkedRfiNumber: created.rfi_number } : d)) })),
+      );
+      setRfiDraft(null);
+      toast.success(`Created ${created.rfi_number || "RFI"} from this change`);
+    } catch (e) {
+      toast.error(e?.message || "Failed to create the RFI.");
+    }
+  };
+
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
 
   return (
@@ -218,11 +238,21 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
 
               {/* ── Per-sheet sections ──────────────────────────────── */}
               {results.map((r) => (
-                <SheetSection key={r.drawingId} result={r} onToggleDismiss={toggleDismiss} />
+                <SheetSection key={r.drawingId} result={r} onToggleDismiss={toggleDismiss} onCreateRfi={openRfiFromDelta} />
               ))}
             </>
           )}
         </div>
+
+        {rfiDraft && (
+          <RFIFormModal
+            projectId={projectId}
+            rfi={null}
+            prefill={rfiDraft.prefill}
+            onClose={() => setRfiDraft(null)}
+            onSave={saveRfiFromDelta}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -273,7 +303,7 @@ function SummaryStrip({ summary }) {
   );
 }
 
-function SheetSection({ result: r, onToggleDismiss }) {
+function SheetSection({ result: r, onToggleDismiss, onCreateRfi }) {
   const kept = (r.deltas || []).filter((d) => !d.dismissed);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -301,7 +331,7 @@ function SheetSection({ result: r, onToggleDismiss }) {
       ) : kept.length === 0 ? (
         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>No material changes detected.</div>
       ) : (
-        kept.map((d) => <RevisionDeltaCard key={d.id} delta={d} onToggleDismiss={onToggleDismiss} />)
+        kept.map((d) => <RevisionDeltaCard key={d.id} delta={d} onToggleDismiss={onToggleDismiss} onCreateRfi={onCreateRfi} />)
       )}
     </div>
   );
