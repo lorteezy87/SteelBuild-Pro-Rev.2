@@ -127,12 +127,13 @@ export default function WPGantt({ wps, updateMut }) {
   const today = startOfDay(new Date());
   const todayOffset = daysBetween(rangeStart, today) * pxPerDay;
 
-  // Scroll to today on mount / zoom change
+  // Scroll to today on first mount + whenever the user changes zoom — but NOT on
+  // data refetches (those would yank the user's horizontal scroll back to today).
+  const lastZoomRef = useRef(null);
   useEffect(() => {
-    if (scrollRef.current) {
-      const targetScroll = Math.max(0, todayOffset - 200);
-      scrollRef.current.scrollLeft = targetScroll;
-    }
+    if (lastZoomRef.current === zoomId) return;
+    lastZoomRef.current = zoomId;
+    if (scrollRef.current) scrollRef.current.scrollLeft = Math.max(0, todayOffset - 200);
   }, [zoomId, todayOffset]);
 
   // Sync left panel scroll with timeline scroll

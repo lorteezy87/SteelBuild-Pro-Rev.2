@@ -794,12 +794,18 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     setCollapsedDeliveries(true);
   };
 
-  // Auto-scroll to today on mount so every project starts centred on the current date
+  // Auto-scroll to today ONCE, after the timeline first has data — then never
+  // again, so the user's horizontal scrolling is never yanked back to the start
+  // on a re-render (data refetch, vertical scroll, zoom, hover, etc.). The
+  // Today / Start / End buttons re-center on demand.
+  const didAutoScrollRef = useRef(false);
   useEffect(() => {
+    if (didAutoScrollRef.current) return undefined;
     const timer = setTimeout(() => {
       if (rightBody.current && dateRange.weeks.length > 0) {
         const todayOffset = (today - dateRange.start) / 86400000 * (WEEK_PX / 7);
         rightBody.current.scrollLeft = Math.max(0, todayOffset - rightBody.current.clientWidth / 3);
+        didAutoScrollRef.current = true;
       }
     }, 80);
     return () => clearTimeout(timer);
