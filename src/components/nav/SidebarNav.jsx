@@ -43,7 +43,7 @@ import {
   // Favorites
   Star,
 } from "lucide-react";
-import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
+import { SIDEBAR_GROUPS, saveSidebarState } from "@/config/moduleRegistry";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
@@ -176,7 +176,13 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   const isLightTheme = theme === "light";
   // Settings → Dashboard → "Pinned Modules" merges into the sidebar favorites.
   const { pinned_modules } = useUserPrefs();
-  const [collapsed, setCollapsed] = useState(loadSidebarState);
+  const [collapsed, setCollapsed] = useState(() => {
+    // Default to accordion: every collapsible group collapsed; the group you're
+    // in auto-expands below. Far less to scan than 10 open groups.
+    const def = {};
+    SIDEBAR_GROUPS.forEach((g) => { if (g.collapsible) def[g.label] = true; });
+    return def;
+  });
   const [railModeState, setRailMode] = useState(loadRailState);
   const [recents, setRecents]     = useState(loadRecents);
   const [showRecents, setShowRecents] = useState(true);
@@ -190,6 +196,26 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
     setRecents((prev) => {
       const next = [currentPageName, ...prev.filter((p) => p !== currentPageName)].slice(0, MAX_RECENTS);
       saveRecents(next);
+      return next;
+    });
+  }, [currentPageName]);
+
+  // Accordion: when you land in a section, expand it and collapse the others —
+  // so you only ever scan one group's items, not all of them. Manual toggles
+  // persist until the next navigation.
+  useEffect(() => {
+    const activeGroup = SIDEBAR_GROUPS.find((g) => g.items.some((it) => it.page === currentPageName));
+    if (!activeGroup) return;
+    setCollapsed((prev) => {
+      const next = {};
+      let changed = false;
+      for (const g of SIDEBAR_GROUPS) {
+        if (!g.collapsible) continue;
+        next[g.label] = g.label !== activeGroup.label;
+        if (next[g.label] !== !!prev[g.label]) changed = true;
+      }
+      if (!changed) return prev;
+      saveSidebarState(next);
       return next;
     });
   }, [currentPageName]);
@@ -443,9 +469,9 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
 
         {SIDEBAR_GROUPS.map((group, groupIdx) => {
           const isCollapsed = group.collapsible && collapsed[group.label];
-          const hasFavs = favoriteItems.length > 0;
+          const isActiveGroup = group.items.some((it) => it.page === currentPageName);
           return (
-            <div key={group.label} style={{ marginTop: (groupIdx === 0 && !hasFavs) ? 0 : (groupIdx === 0 && hasFavs) ? 0 : (railMode ? 8 : 12) }}>
+            <div key={group.label} style={{ marginTop: groupIdx === 0 ? 0 : (railMode ? 6 : 8) }}>
               {railMode ? (
                 // Rail mode: minimalist divider between groups
                 groupIdx > 0 && (
@@ -459,13 +485,13 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
                   />
                 )
               ) : (
-                // Expanded mode: quiet group header with hover chevron
+                // Expanded mode: quiet group header; the section you're in is tinted.
                 <button
                   onClick={group.collapsible ? () => toggleGroup(group.label) : undefined}
                   disabled={!group.collapsible}
                   style={{
                     width: "100%",
-                    padding: "6px 14px 4px",
+                    padding: "7px 14px 3px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
@@ -474,16 +500,6 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
                     border: "none",
                     userSelect: "none",
                     textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (group.collapsible) {
-                      const label = e.currentTarget.querySelector("[data-label]");
-                      if (label) label.style.color = "var(--text-secondary)";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    const label = e.currentTarget.querySelector("[data-label]");
-                    if (label) label.style.color = "var(--text-muted)";
                   }}
                 >
                   <span
@@ -494,7 +510,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
                       fontSize: 9,
                       fontWeight: 700,
                       letterSpacing: "0.16em",
-                      color: "var(--text-muted)",
+                      color: isActiveGroup ? "var(--accent)" : "var(--text-muted)",
                       transition: "color 140ms",
                     }}
                   >
@@ -765,9 +781,9 @@ function FavoriteLink({ item, active, onClick, onUnpin }) {
         style={{
           position: "relative",
           width: "calc(100% - 12px)",
-          height: 32,
+          height: 28,
           margin: "1px 6px",
-          padding: "0 10px 0 30px",
+          padding: "0 8px 0 28px",
           display: "flex",
           alignItems: "center",
           gap: 10,
@@ -797,7 +813,7 @@ function FavoriteLink({ item, active, onClick, onUnpin }) {
           />
         )}
         <Icon
-          size={15}
+          size={14}
           strokeWidth={1.75}
           color={iconColor}
           style={{ flexShrink: 0, transition: "color 140ms" }}
@@ -805,7 +821,7 @@ function FavoriteLink({ item, active, onClick, onUnpin }) {
         <span
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 12.5,
+            fontSize: 12,
             fontWeight: active ? 600 : 500,
             color: textColor,
             flex: 1,
@@ -1038,9 +1054,9 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
         style={{
           position: "relative",
           width: "calc(100% - 12px)",
-          height: 32,
+          height: 28,
           margin: "1px 6px",
-          padding: "0 10px 0 30px",
+          padding: "0 8px 0 28px",
           display: "flex",
           alignItems: "center",
           gap: 10,
@@ -1073,7 +1089,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
           />
         )}
         <Icon
-          size={15}
+          size={14}
           strokeWidth={1.75}
           color={iconColor}
           style={{ flexShrink: 0, transition: "color 140ms" }}
@@ -1081,7 +1097,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
         <span
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 12.5,
+            fontSize: 12,
             fontWeight: active ? 600 : 500,
             color: textColor,
             flex: 1,
