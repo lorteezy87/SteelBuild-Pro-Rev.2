@@ -60,6 +60,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
   const [modelFile, setModelFile] = useState(null); // the picked File (for upload)
   const [source, setSource] = useState(null);        // null | "picked" | "stored"
   const [picked, setPicked] = useState(null);
+  const [selectedGuids, setSelectedGuids] = useState([]);
   const [loadErr, setLoadErr] = useState(null);
   const [colorMode, setColorMode] = useState("model"); // model | type | sequence | status
   // Roster import: idle | extracting | confirm | importing | done
@@ -133,6 +134,11 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     return map;
   }, [modelElementRows, optimisticFab]);
   const hasRoster = (modelElementRows?.length || 0) > 0;
+  const guidToMark = useMemo(() => {
+    const m = new Map();
+    for (const r of modelElementRows || []) if (r?.element_guid) m.set(r.element_guid, r.piece_mark);
+    return m;
+  }, [modelElementRows]);
 
   // The mode-aware color function the viewer paints with (null → native IFC color).
   const colorFor = useMemo(
@@ -200,33 +206,42 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
   // Manual fab-status assignment: set every part of an assembly (matched by
   // piece_mark) to a stage, then recolor by it. Null clears the status.
   const assignFab = useMutation({
-    mutationFn: async ({ pieceMark, status }) => {
+    mutationFn: async ({ pieceMarks, status }) => {
       const { error } = await supabase
         .from("model_elements")
         .update({ fab_status: status })
         .eq("project_id", projectId)
-        .eq("piece_mark", pieceMark)
+        .in("piece_mark", pieceMarks)
         .eq("is_deleted", false);
       if (error) throw error;
-      return { status, pieceMark };
+      return { status, pieceMarks };
     },
-    onSuccess: ({ status, pieceMark }) => {
-      // Recolor NOW — set every loaded part of this assembly (+ the clicked one)
-      // optimistically, so the color flips immediately without the refetch.
+    onSuccess: ({ status, pieceMarks }) => {
+      // Recolor NOW — set every loaded part of these assemblies (+ the selected
+      // ones) optimistically, so the colors flip immediately without the refetch.
+      const markSet = new Set(pieceMarks);
       setOptimisticFab((prev) => {
         const next = new Map(prev);
         for (const r of modelElementRows || []) {
-          if (r?.element_guid && r.piece_mark === pieceMark) next.set(r.element_guid, status);
+          if (r?.element_guid && markSet.has(r.piece_mark)) next.set(r.element_guid, status);
         }
-        if (picked?.guid) next.set(picked.guid, status);
+        for (const g of selectedGuids) next.set(g, status);
         return next;
       });
       setColorMode("fab");
       qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
-      toast.success(status ? `Marked ${FAB_STATUS_META[status].label}` : "Fab status cleared");
+      const n = pieceMarks.length;
+      toast.success(status ? `${n} piece${n === 1 ? "" : "s"} → ${FAB_STATUS_META[status].label}` : "Fab status cleared");
     },
     onError: (e) => toast.error(e?.message || "Couldn't set fab status."),
   });
+
+  // Assign a status to every currently-selected piece (1 or many).
+  const setFab = (status) => {
+    const marks = [...new Set(selectedGuids.map((g) => guidToMark.get(g)).filter(Boolean))];
+    if (!marks.length) { toast.error("Select a piece first (model must be saved)."); return; }
+    assignFab.mutate({ pieceMarks: marks, status });
+  };
 
   const legend = useMemo(() => {
     const counts = modelMapping?.counts || {};
@@ -269,7 +284,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     >
       <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <IfcModelViewer buffer={buffer} colorFor={colorFor} onPick={setPicked} />
+          <IfcModelViewer buffer={buffer} colorFor={colorFor} onPick={setPicked} onSelect={setSelectedGuids} />
         </Suspense>
         <button type="button" onClick={toggleFullscreen} title={isFullscreen ? "Exit full screen" : "Full screen"} style={fsBtn}>
           {isFullscreen ? "Exit full screen" : "Full screen"}
@@ -381,29 +396,42 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
         </div>
 
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>
-          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>Selected</div>
-          {picked ? (
+          <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>
+            Selected{selectedGuids.length > 1 ? ` · ${selectedGuids.length}` : ""}
+          </div>
+          {selectedGuids.length === 0 ? (
+            <div style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>
+              Click a member. Ctrl / Shift-click to add more.
+            </div>
+          ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12 }}>
-              <Row label="Assembly" value={picked.assemblyMark} strong />
-              <Row label="Part" value={picked.partMark} />
-              <Row label="Name" value={picked.name} />
-              <Row label="Sequence" value={picked.sequence} />
-              <Row label="GUID" value={picked.guid} small />
+              {selectedGuids.length > 1 ? (
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{selectedGuids.length} pieces selected</div>
+              ) : picked ? (
+                <>
+                  <Row label="Assembly" value={picked.assemblyMark} strong />
+                  <Row label="Part" value={picked.partMark} />
+                  <Row label="Name" value={picked.name} />
+                  <Row label="Sequence" value={picked.sequence} />
+                  <Row label="GUID" value={picked.guid} small />
+                </>
+              ) : null}
 
-              {projectId && (picked.assemblyMark || picked.partMark) && (
+              {projectId && (
                 <div style={{ marginTop: 8, borderTop: "1px solid var(--divider)", paddingTop: 9 }}>
                   <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>Set fab status</div>
                   {hasRoster ? (
                     <>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 7 }}>
                         {FAB_STATUS_ORDER.map((s) => {
-                          const current = fabByGuid.get(picked.guid) === s;
+                          const single = selectedGuids.length === 1 ? selectedGuids[0] : null;
+                          const current = single ? fabByGuid.get(single) === s : false;
                           return (
                             <button
                               key={s}
                               type="button"
                               disabled={assignFab.isPending}
-                              onClick={() => assignFab.mutate({ pieceMark: picked.assemblyMark || picked.partMark, status: current ? null : s })}
+                              onClick={() => setFab(current ? null : s)}
                               style={{
                                 display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
                                 padding: "6px 9px", borderRadius: 7, cursor: assignFab.isPending ? "default" : "pointer",
@@ -421,7 +449,9 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
                         })}
                       </div>
                       <div style={{ ...mono, fontSize: 8.5, color: "var(--text-muted)", marginTop: 7, lineHeight: 1.4 }}>
-                        Applies to the whole assembly ({picked.assemblyMark || picked.partMark}).
+                        {selectedGuids.length > 1
+                          ? `Applies to all ${selectedGuids.length} selected pieces.`
+                          : `Applies to the whole assembly (${picked?.assemblyMark || picked?.partMark || "—"}).`}
                       </div>
                     </>
                   ) : (
@@ -432,8 +462,6 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
                 </div>
               )}
             </div>
-          ) : (
-            <div style={{ color: "var(--text-muted)", fontSize: 12 }}>Click a member in the model.</div>
           )}
         </div>
 

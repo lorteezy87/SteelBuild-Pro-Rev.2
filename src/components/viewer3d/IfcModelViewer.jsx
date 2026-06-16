@@ -13,10 +13,10 @@ import { loadIfcGeometry } from "@/lib/ifc/loadIfcGeometry";
 
 const HIGHLIGHT = new THREE.Color("#f5d90a");
 
-export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
+export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onLoaded }) {
   const mountRef = useRef(null);
   const apiRef = useRef(null); // { scene, camera, renderer, controls, model, raf, ro }
-  const pickedRef = useRef(null); // { mesh, color }
+  const selectedRef = useRef(new Map()); // expressID -> mesh (multi-select highlight)
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [error, setError] = useState(null);
   const [count, setCount] = useState(0);
@@ -147,7 +147,7 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
       renderer.dispose();
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
       apiRef.current = null;
-      pickedRef.current = null;
+      selectedRef.current = new Map();
     };
   // colorForGuid handled by the recolor effect; reloading on it would be wasteful.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -176,17 +176,30 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
       raycaster.setFromCamera(ndc, ctx2.camera);
       const hits = raycaster.intersectObjects(model.group.children, false);
 
-      // restore previous highlight
-      if (pickedRef.current) {
-        pickedRef.current.mesh.material.emissive?.set("#000000");
-        pickedRef.current = null;
+      // Ctrl / Cmd / Shift add-to-selection; a plain click replaces it.
+      const additive = ev.ctrlKey || ev.metaKey || ev.shiftKey;
+      const sel = selectedRef.current;
+      const clearAll = () => { for (const m of sel.values()) m.material.emissive?.set("#000000"); sel.clear(); };
+
+      if (!hits.length) {
+        if (!additive) { clearAll(); onPick?.(null); onSelect?.([]); }
+        return;
       }
-      if (!hits.length) { onPick?.(null); return; }
       const mesh = hits[0].object;
-      mesh.material.emissive?.copy(HIGHLIGHT).multiplyScalar(0.45);
-      pickedRef.current = { mesh };
       const { expressID } = mesh.userData || {};
-      model.pickInfo(expressID).then((info) => onPick?.(info));
+
+      if (additive && sel.has(expressID)) {
+        mesh.material.emissive?.set("#000000");   // toggle off
+        sel.delete(expressID);
+      } else {
+        if (!additive) clearAll();
+        sel.set(expressID, mesh);
+        mesh.material.emissive?.copy(HIGHLIGHT).multiplyScalar(0.45);
+      }
+
+      onSelect?.([...sel.values()].map((m) => m.userData?.guid).filter(Boolean));
+      if (sel.has(expressID)) model.pickInfo(expressID).then((info) => onPick?.(info));
+      else onPick?.(null);
     };
 
     // Double-click flies the orbit pivot to the clicked point and steps the
@@ -242,7 +255,7 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onLoaded }) {
             Fit view
           </button>
           <div style={{ position: "absolute", left: 12, bottom: 10, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", pointerEvents: "none" }}>
-            {count.toLocaleString()} parts · drag to orbit · scroll to zoom · double-click to fly in
+            {count.toLocaleString()} parts · drag to orbit · click a member · ctrl/shift-click to multi-select · double-click to fly in
           </div>
         </>
       )}
