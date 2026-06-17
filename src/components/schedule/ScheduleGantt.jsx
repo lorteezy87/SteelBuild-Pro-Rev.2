@@ -38,6 +38,7 @@ import {
 import { GanttStatsBar, GanttQuickFilters, GanttMetricCards, GanttLegend } from "./ScheduleGanttToolbar";
 import { useColumnResize } from "./useColumnResize";
 import { useGanttLayout } from "./useGanttLayout";
+import { useTaskBarDrag } from "./useTaskBarDrag";
 
 const DELIVERY_STATUS_DOT = {
   "Scheduled":  GANTT_PHASE_HEX.Procurement,
@@ -51,7 +52,6 @@ const DELIVERY_STATUS_DOT = {
 const ROW_H   = 40;
 const SUM_H   = 36;
 const HEAD_H  = 40;
-const TASK_DRAG_THRESHOLD_PX = 4;
 
 // Valid drawing-stage values for a scheduled detailing task — matches the
 // drawings.stage CHECK constraint after migration 077 (corrected 7-stage
@@ -79,10 +79,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [showLegend, setShowLegend] = useState(true);
   const [bodyViewport, setBodyViewport] = useState({ scrollTop: 0, height: 720 });
-  const [taskDrag, setTaskDrag] = useState(null);
-  const taskDragRef = useRef(null);
   const suppressTaskClickRef = useRef(false);
-  const dragBodyStyleRef = useRef(null);
 
   useEffect(() => {
     if (!externalFocus?.filter) return;
@@ -446,6 +443,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     px, spanPx, todayPx, showToday, isCurrentWeek,
   } = useGanttLayout({ zoom, today, allTasks, deliveries, effStart, effEnd });
 
+  // Bar drag-to-reschedule (move / resize-start / resize-end) — useTaskBarDrag.
+  const { taskDrag, startTaskBarDrag } = useTaskBarDrag({ onSave, saving, setSaving, PX_PER_DAY, suppressTaskClickRef, setTooltip });
+
   // ── Weather-risk overlay ───────────────────────────────────────────
   // Only attach risks to field-sensitive phases (Installation, Delivery).
   // Indoor work doesn't get flagged — a rainy day in Phoenix isn't a
@@ -524,132 +524,6 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     }, 80);
     return () => clearTimeout(timer);
   }, [dateRange.start, dateRange.weeks.length, today, WEEK_PX]);
-
-  const updateTaskDrag = (nextOrUpdater) => {
-    setTaskDrag((prev) => {
-      const next = typeof nextOrUpdater === "function" ? nextOrUpdater(prev) : nextOrUpdater;
-      taskDragRef.current = next;
-      return next;
-    });
-  };
-
-  const restoreTaskDragBodyStyle = () => {
-    const prior = dragBodyStyleRef.current;
-    if (!prior) return;
-    document.body.style.cursor = prior.cursor;
-    document.body.style.userSelect = prior.userSelect;
-    dragBodyStyleRef.current = null;
-  };
-
-  const startTaskBarDrag = (event, task, visibleStart, visibleEnd, mode = "move") => {
-    if (!onSave || saving || !isActionableScheduleTask(task)) return;
-    if (event.button != null && event.button !== 0) return;
-
-    const storedStart = parseDateUTC(task.start_date);
-    const storedEnd = parseDateUTC(task.end_date);
-    const displayStart = parseDateUTC(visibleStart);
-    const displayEnd = parseDateUTC(visibleEnd);
-    if (!storedStart || !storedEnd || !displayStart || !displayEnd) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    suppressTaskClickRef.current = false;
-    setTooltip(null);
-    dragBodyStyleRef.current = {
-      cursor: document.body.style.cursor,
-      userSelect: document.body.style.userSelect,
-    };
-    document.body.style.cursor = mode === "move" ? "grabbing" : "ew-resize";
-    document.body.style.userSelect = "none";
-
-    updateTaskDrag({
-      taskId: task.id,
-      taskName: sanitizeTaskName(task),
-      mode,
-      startX: event.clientX,
-      startY: event.clientY,
-      x: event.clientX,
-      y: event.clientY,
-      storedStart,
-      storedEnd,
-      displayStart,
-      displayEnd,
-      daysDelta: 0,
-      hasMoved: false,
-    });
-  };
-
-  useEffect(() => {
-    if (!taskDrag?.taskId) return undefined;
-
-    const onMove = (event) => {
-      const current = taskDragRef.current;
-      if (!current) return;
-      const dx = event.clientX - current.startX;
-      const dy = event.clientY - current.startY;
-      let daysDelta = Math.round(dx / PX_PER_DAY);
-      // When resizing one edge, clamp so it can't cross the other edge — the
-      // bar keeps a non-negative duration (whole days between the stored ends).
-      const durDays = Math.round((current.storedEnd - current.storedStart) / 86400000);
-      if (current.mode === "resize-start") daysDelta = Math.min(daysDelta, durDays);
-      else if (current.mode === "resize-end") daysDelta = Math.max(daysDelta, -durDays);
-      const hasMoved = current.hasMoved ||
-        Math.abs(dx) >= TASK_DRAG_THRESHOLD_PX ||
-        Math.abs(dy) >= TASK_DRAG_THRESHOLD_PX;
-      updateTaskDrag((prev) => prev ? {
-        ...prev,
-        x: event.clientX,
-        y: event.clientY,
-        daysDelta,
-        hasMoved,
-      } : prev);
-      if (hasMoved) suppressTaskClickRef.current = true;
-    };
-
-    const onUp = async () => {
-      const current = taskDragRef.current;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      restoreTaskDragBodyStyle();
-      updateTaskDrag(null);
-      if (!current?.hasMoved || current.daysDelta === 0 || !onSave) return;
-
-      // move → shift both ends; resize-start → start only; resize-end → end only.
-      const nextStart = toDateOnly(addDaysUTC(
-        current.storedStart, current.mode === "resize-end" ? 0 : current.daysDelta
-      ));
-      const nextEnd = toDateOnly(addDaysUTC(
-        current.storedEnd, current.mode === "resize-start" ? 0 : current.daysDelta
-      ));
-      if (!nextStart || !nextEnd) return;
-
-      setSaving(true);
-      try {
-        await onSave({
-          id: current.taskId,
-          start_date: nextStart,
-          end_date: nextEnd,
-        });
-      } catch {
-        // The parent onSave path owns the visible failure toast.
-      } finally {
-        setSaving(false);
-      }
-    };
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      restoreTaskDragBodyStyle();
-    };
-    // Rebind only when a new row begins dragging or the current zoom changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskDrag?.taskId, PX_PER_DAY, onSave]);
 
   // Stats: one pass over the visible schedule model. This keeps filter/search
   // changes responsive on large imported schedules.
