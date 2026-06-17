@@ -1710,7 +1710,7 @@ export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }:
               <Th style={{ textAlign: "right" }}>RFIs (open/all)</Th>
               <Th>Fab Blocked?</Th>
               <Th style={{ textAlign: "right" }}>
-                <span title="Best-effort: pieces in the set's linked work package (matched by sequence). '—' when no mapping exists.">Pieces ≈</span>
+                <span title="Pieces tied to this set — exact when the roster links pieces to the set, otherwise estimated via the linked work-package sequence. '—' when neither resolves.">Pieces ≈</span>
               </Th>
               <Th style={{ textAlign: "right" }}>{""}</Th>
             </tr>
@@ -1764,7 +1764,7 @@ export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }:
         </table>
       </div>
       <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, lineHeight: 1.5 }}>
-        Downstream severity: <span style={{ color: "#F85149" }}>in field</span> &gt; <span style={{ color: "#F0883E" }}>delivered</span> &gt; <span style={{ color: "#D29922" }}>fabricated</span>. &quot;Pieces ≈&quot; is a best-effort count via the set&apos;s linked work-package sequence.
+        Downstream severity: <span style={{ color: "#F85149" }}>in field</span> &gt; <span style={{ color: "#F0883E" }}>delivered</span> &gt; <span style={{ color: "#D29922" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
       </div>
     </div>
   );
