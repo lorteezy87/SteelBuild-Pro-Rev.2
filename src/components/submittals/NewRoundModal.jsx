@@ -16,6 +16,10 @@ import { toast } from "sonner";
  *   open          — boolean controlling visibility
  *   submittal     — parent submittal record
  *   previousRound — most recent submittal_round (to carry forward drawing_set_ids)
+ *   carryItems    — open reviewer items from the prior round (OpenItem[] from
+ *                   submittalResubmittal.collectOpenItems) to show + address
+ *   carryFromRound— round number the carried items came from (for the heading)
+ *   seededNotes   — pre-filled response_notes (carry-forward checklist string)
  *   onClose       — void callback
  *   onSubmit      — callback(roundData) with the new round payload
  */
@@ -36,16 +40,26 @@ function todayISO() {
   return `${y}-${m}-${day}`;
 }
 
-export default function NewRoundModal({ open, submittal, previousRound, onClose, onSubmit }) {
+export default function NewRoundModal({
+  open,
+  submittal,
+  previousRound,
+  carryItems = [],
+  carryFromRound = null,
+  seededNotes = "",
+  onClose,
+  onSubmit,
+}) {
   const nextRoundNum = (previousRound?.round_number || submittal?.round_number || 0) + 1;
   const carriedSetIds = previousRound?.drawing_set_ids || submittal?.drawing_set_ids || [];
+  const openItems = Array.isArray(carryItems) ? carryItems : [];
 
   const [form, setForm] = useState({
     submitted_date: todayISO(),
     ball_in_court: "EOR",
     submitted_by: previousRound?.submitted_by || submittal?.submitted_by || "",
     reviewer: previousRound?.reviewer || submittal?.reviewer || "",
-    response_notes: "",
+    response_notes: seededNotes || "",
   });
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -107,6 +121,74 @@ export default function NewRoundModal({ open, submittal, previousRound, onClose,
             }}>
               {submittal.title}
             </span>
+          </div>
+        )}
+
+        {/* Carry-forward — open reviewer comments from the prior round that
+            this resubmittal must address. Read-only; the editable checklist
+            is seeded into Response Notes below so nothing gets dropped. */}
+        {openItems.length > 0 && (
+          <div style={{
+            marginBottom: 10,
+            padding: "8px 10px",
+            background: "rgba(249,115,22,0.10)",
+            border: "1px solid rgba(249,115,22,0.45)",
+            borderRadius: 6,
+          }}>
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 800,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#F97316",
+              marginBottom: 6,
+            }}>
+              {openItems.length} comment{openItems.length === 1 ? "" : "s"} to address
+              {carryFromRound ? ` · from Round ${carryFromRound}` : ""}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 132, overflowY: "auto" }}>
+              {openItems.map((it, idx) => (
+                <div key={`${it.drawing_id || it.sheet_number}-${idx}`} style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
+                  <span style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "var(--text-primary)",
+                    whiteSpace: "nowrap",
+                    minWidth: 56,
+                  }}>
+                    {it.sheet_number}
+                  </span>
+                  <span style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 8,
+                    fontWeight: 700,
+                    padding: "1px 5px",
+                    borderRadius: 3,
+                    color: "#F97316",
+                    background: "rgba(249,115,22,0.16)",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {it.response_status}
+                  </span>
+                  {it.reviewer_comment && (
+                    <span style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: 11,
+                      color: "var(--text-secondary)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                      title={it.reviewer_comment}
+                    >
+                      {it.reviewer_comment}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
