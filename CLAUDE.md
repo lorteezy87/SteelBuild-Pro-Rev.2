@@ -84,7 +84,9 @@ Other: `public/` (static assets, wasm, pdf/fragments workers), `scripts/` (perf 
 
 The product is being deliberately narrowed to its strongest workflow. When planning or building, bias toward the killer workflow below; treat everything else as deprioritized and gate new investment behind feature flags.
 
-Status notes here are a snapshot (2026-05-25). Verify against the repo before relying on them, and do not record a goal as "done" without evidence on the deploy branch (`main`). These are priorities and direction, not a claim of completion.
+**Commercial direction (2026-06):** SteelBuild Pro is now a monetizable **multi-tenant SaaS**. Companies sign up into their own `organizations` workspace, projects belong to an org (`projects.org_id`), and tenant isolation is enforced at the RLS layer — the org boundary lives inside `user_has_project_access` (so it cascades to ~70 project-scoped tables). Stripe subscription billing (tamper-proof `org.plan` anchor), server-side plan-limit enforcement, self-serve signup, a first-run onboarding wizard, and per-tenant data export are live. The moat below is unchanged; the commercial layer wraps it. Remaining go-to-market work: legal pages, the app-files legacy-path backfill, full-browser E2E (see TECH_DEBT).
+
+Status notes here are a snapshot (refreshed 2026-06-16). Verify against the repo before relying on them, and do not record a goal as "done" without evidence on the deploy branch (`main`). These are priorities and direction, not a claim of completion.
 
 ### Killer workflow (the moat — protect and deepen)
 
@@ -98,9 +100,10 @@ Changes that strengthen, simplify, or speed up these flows take priority over br
 
 ### Deprioritized (flag-gate; do not expand without an explicit ask)
 
-Full 3D IFC viewer, email inbox, Bluebeam deep integration, advanced financials (beyond basic SOV/cost visibility), safety/QC, and other non-core modules. Keep these behind feature flags (section 24); prefer hiding by default over deleting code.
+Email inbox, advanced financials (beyond basic SOV/cost visibility), safety/QC, and other non-core modules. Keep these behind feature flags (section 24); prefer hiding by default over deleting code.
 
-- Status: a scope-cut "moat gate" (`moduleGating` / `useModuleAccess`, branch `claude/scope-cut-moat-gate`) exists but is NOT merged to the deploy branch as of this snapshot. Verify before assuming modules are gated.
+- The 3D IFC viewer was **rebuilt** as a self-hosted `web-ifc` + `three` viewer (flag `viewer_3d`, lazy-loaded into the Detailing Control Center) and now *supports* the moat (per-piece fab-status coloring from `model_elements`) — deepen it carefully, don't treat it as dead weight. Bluebeam + SharePoint deep integrations were **removed** (client stack gone; the edge functions still need a live `functions delete`).
+- Status: a scope-cut "moat gate" (`moduleGating` / `useModuleAccess`) was explored but is NOT the live model — module access today is feature flags + nav. Verify before assuming modules are gated.
 
 ### Tech-debt roadmap (ongoing — treat as in-progress, not complete)
 
@@ -709,12 +712,17 @@ llm-proxy           external LLM gateway — ALL model calls route here
 schedule-assistant  schedule chat/tooling; routes model turns through llm-proxy
 email-ingest        inbound email -> staged project records (Power Automate path)
 email-send          outbound email compose/reply send pipeline
-sharepoint-proxy    SharePoint / OneDrive document access
-bluebeam-proxy      Bluebeam Max (Studio) OAuth + session/document API
+project-export      RLS-scoped, audited per-project data export (powers the workspace backup)
+stripe-billing      Stripe checkout + portal for subscription plans
+stripe-setup        Stripe product/price setup helper
+stripe-webhook      Stripe webhook -> updates organizations.plan (service role only)
+stripe-worker       async billing work
 _shared             shared helpers (CORS, etc.) imported by the functions above
+sharepoint-proxy    DEPRECATED — still deployed, no longer client-invoked
+bluebeam-proxy      DEPRECATED — still deployed, no longer client-invoked
 ```
 
-Integration functions (`sharepoint-proxy`, `bluebeam-proxy`) follow one pattern: OAuth/user tokens are stored server-side, the Edge Function proxies every external API call, and RLS enforces project membership on the mapped records. Do not move tokens or provider calls into the browser. The Bluebeam connection/session schema lives in `supabase/migrations/20260520001000_bluebeam_max_integration.sql` and the OAuth callback page is `src/pages/BluebeamCallback.jsx`; outbound email columns live in `20260520002000_email_send_columns.sql` with client logic in `src/services/emailSendService.js`.
+The deprecated integration functions (`sharepoint-proxy`, `bluebeam-proxy`) followed one pattern — OAuth/user tokens stored server-side, the Edge Function proxies every external API call, RLS enforces project membership — and are no longer client-invoked (slated for `functions delete`). The general rule still holds for any new integration: do not move tokens or provider calls into the browser. Outbound email columns live in `20260520002000_email_send_columns.sql` with client logic in `src/services/emailSendService.js`. **Billing:** `stripe-billing` holds the price ids in its env, the client passes only a plan key, and `organizations.plan` is changed only by the webhook (service role) — never weaken that boundary.
 
 Rules:
 
