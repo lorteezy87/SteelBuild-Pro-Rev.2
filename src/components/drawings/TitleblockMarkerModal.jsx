@@ -112,6 +112,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   const canvasRef = useRef(null);
   const overlayRef = useRef(null);
   const pdfDocRef = useRef(null);
+  const wrapRef = useRef(null); // the scroll container — measured to fit the page
   const [pdfReady, setPdfReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [pageNum, setPageNum] = useState(1);
@@ -119,6 +120,8 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   // The viewport size at the rendered scale — we need this to convert
   // mouse coords to normalised PDF coords on save.
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  // Bumped on resize to recompute the fit-to-page scale.
+  const [fitTick, setFitTick] = useState(0);
 
   // Marker state. Rects are stored in NORMALISED coords (0..1) regardless
   // of zoom, so changing the page or zoom doesn't invalidate them.
@@ -163,7 +166,11 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     return () => { cancelled = true; };
   }, [sourceUrl]);
 
-  // Render the current page whenever the page changes or the PDF loads.
+  // Render the current page whenever the page changes or the PDF loads, sized so
+  // the ENTIRE sheet is visible on open (fit-to-page / "contain") — no scrolling
+  // to find the titleblock. We rasterise at a higher internal resolution
+  // (× devicePixelRatio) but DISPLAY at the fit size, so the whole page fits the
+  // viewport yet stays sharp. `fitTick` re-fits on window resize.
   useEffect(() => {
     if (!pdfReady || !pdfDocRef.current || !canvasRef.current) return;
     let cancelled = false;
@@ -171,28 +178,46 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
       try {
         const page = await pdfDocRef.current.getPage(pageNum);
         if (cancelled) return;
-        // Fit-to-width inside the canvas wrap. We render at a moderate
-        // scale (1.5×) to keep the canvas crisp without exploding GPU
-        // memory on large architectural drawings.
-        const renderScale = 1.5;
-        const viewport = page.getViewport({ scale: renderScale });
+
+        const base = page.getViewport({ scale: 1 }); // native page size
+        // Available content area inside the canvas wrap (minus its 16px padding).
+        const wrap = wrapRef.current;
+        const pad = 32;
+        const availW = Math.max(200, (wrap?.clientWidth || 1000) - pad);
+        const availH = Math.max(200, (wrap?.clientHeight || 700) - pad);
+        // Fit the whole sheet; never upscale past native (1×) so a small PDF
+        // neither blows up nor pixelates.
+        const fitScale = Math.min(availW / base.width, availH / base.height, 1);
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        const display = page.getViewport({ scale: fitScale });
+        const render = page.getViewport({ scale: fitScale * dpr });
+
         const canvas = canvasRef.current;
         if (!canvas) return;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${viewport.height}px`;
+        canvas.width = Math.round(render.width);
+        canvas.height = Math.round(render.height);
+        canvas.style.width = `${Math.round(display.width)}px`;
+        canvas.style.height = `${Math.round(display.height)}px`;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await page.render({ canvasContext: ctx, viewport: render }).promise;
         if (cancelled) return;
-        setViewportSize({ width: viewport.width, height: viewport.height });
+        setViewportSize({ width: Math.round(display.width), height: Math.round(display.height) });
       } catch (err) {
         if (!cancelled) setLoadError(err?.message || "Failed to render page");
       }
     })();
     return () => { cancelled = true; };
-  }, [pageNum, pdfReady]);
+  }, [pageNum, pdfReady, fitTick]);
+
+  // Re-fit on window resize so the whole page stays visible (debounced).
+  useEffect(() => {
+    let t;
+    const onResize = () => { clearTimeout(t); t = setTimeout(() => setFitTick((n) => n + 1), 150); };
+    window.addEventListener("resize", onResize);
+    return () => { window.removeEventListener("resize", onResize); clearTimeout(t); };
+  }, []);
 
   // ── Mouse → normalised coord helpers ────────────────────────────────
   const mouseToNormalised = useCallback((e) => {
@@ -552,7 +577,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
         </div>
 
         {/* Canvas + overlay */}
-        <div style={canvasWrapStyle}>
+        <div ref={wrapRef} style={canvasWrapStyle}>
           {loadError && (
             <div style={{ color: "var(--status-error)", fontFamily: "var(--font-body)", fontSize: 13, padding: 24, textAlign: "center" }}>
               {loadError}
