@@ -4,6 +4,7 @@ import {
   computeDeliveriesStats, computeRfiTurnaround,
   computeDataIssues, computeFinancials, computeProductionData,
   computeProjectMap, computeProjectMetrics, enrichProjectMetrics, computeBudgetChartData,
+  computePortfolioKPIs, computePccData,
 } from "../portfolioDerive";
 
 describe("computeCoExposure", () => {
@@ -196,6 +197,58 @@ describe("enrichProjectMetrics", () => {
     expect(out[0]).toHaveProperty("healthScore");
     expect(out[0]).toHaveProperty("autoHealth");
     expect(out[0]).toHaveProperty("effectiveHealth");
+  });
+});
+
+describe("computePortfolioKPIs", () => {
+  it("rolls up value/budget/spend/counts and forecast", () => {
+    const k = computePortfolioKPIs(
+      [{ original_contract_value: 100000 }],
+      [{ status: "Open", due_date: null }],
+      [{ status: "Approved", co_amount: 5000 }, { status: "Submitted", co_amount: 2000 }],
+      [{ budget_amount: 50000 }],
+      [{ status: "In Progress" }],
+      [{ payment_status: "Paid", amount: 30000 }],
+      [],
+      [{ effectiveHealth: "At Risk", estimatedCostAtCompletion: 60000 }],
+    );
+    expect(k.portfolioValue).toBe(105000); // contract + approved CO
+    expect(k.totalBudget).toBe(50000);
+    expect(k.totalSpend).toBe(30000);
+    expect(k.openRFIs).toBe(1);
+    expect(k.pendingCOs).toBe(1);
+    expect(k.activeWPs).toBe(1);
+    expect(k.atRisk).toBe(1);
+    expect(k.pendingCOValue).toBe(2000);
+    expect(k.forecastAtCompletion).toBe(60000);
+    expect(k.forecastVariance).toBe(10000); // FAC - budget
+  });
+  it("handles empty input", () => {
+    const k = computePortfolioKPIs();
+    expect(k.portfolioValue).toBe(0);
+    expect(k.atRisk).toBe(0);
+    expect(k.staleRFIs30).toEqual([]);
+  });
+});
+
+describe("computePccData", () => {
+  const pastIso = (() => { const d = new Date(); d.setDate(d.getDate() - 10); return d.toISOString().slice(0, 10); })();
+  it("ranks priorities, lists waiting-on, builds the risk watch", () => {
+    const out = computePccData(
+      [{ rfi_number: "RFI-1", title: "Q", status: "Open", due_date: pastIso, project_id: "p1" }],
+      [],
+      [{ delivery_id: "D1", status: "In Transit", scheduled_date: pastIso, project_id: "p1" }],
+      [],
+      { p1: "Project One" },
+      [{ id: "p1", name: "Project One", effectiveHealth: "At Risk", healthScore: 40, healthReasons: ["Low margin"] }],
+    );
+    expect(out.priorities.some((x) => x.type === "RFI" && x.id === "RFI-1")).toBe(true);
+    expect(out.waitingOn.some((x) => x.type === "RFI")).toBe(true);  // open RFI
+    expect(out.waitingOn.some((x) => x.type === "DEL")).toBe(true);  // in-transit delivery
+    expect(out.riskWatch[0]).toMatchObject({ projectId: "p1", status: "At Risk", topReason: "Low margin" });
+  });
+  it("handles empty input", () => {
+    expect(computePccData()).toEqual({ priorities: [], waitingOn: [], riskWatch: [] });
   });
 });
 

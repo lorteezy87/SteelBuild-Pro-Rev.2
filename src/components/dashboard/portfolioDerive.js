@@ -5,7 +5,7 @@
 // takes one prop array and returns a plain summary — no React, no state. Bodies
 // are byte-identical to the originals (with defensive `|| []` guards added).
 import { summarizeProjectSchedule } from "./portfolioTimeline";
-import { statusIn, parseUTCDate, isOverdue } from "../shared/formatters";
+import { statusIn, parseUTCDate, isOverdue, daysOverdue } from "../shared/formatters";
 import { computeWeightedHealth, HEALTH_ORDER } from "./portfolioHealth";
 
 /**
@@ -151,6 +151,142 @@ export function computeFinancials(allCOs, portfolioKPIs) {
   return { approvedCOs: approvedCOs.length, pendingCOs: pendingCOs.length, rejectedCOs: rejectedCOs.length, approvedValue, pendingValue, rejectedValue, remaining, marginAtRisk, totalBudget, totalSpend };
 }
 
+/**
+ * Priority Command Center data: today's ranked priorities (overdue RFIs / late
+ * deliveries / overdue action items), the "waiting on" external-response list,
+ * and the risk watchlist. Pure over the prop arrays + projectMap + enrichedMetrics.
+ */
+export function computePccData(allRFIs, allActionItems, allDeliveries, allCOs, projectMap, enrichedMetrics) {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const pmap = projectMap || {};
+
+  // TODAY'S PRIORITIES — ranked by severity, deterministic
+  const priorities = [];
+
+  // Overdue RFIs — blocking scope
+  const overdueRFIs = (allRFIs || [])
+    .filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"]))
+    .sort((a, b) => new Date(a.due_date || 0) - new Date(b.due_date || 0));
+  overdueRFIs.forEach((r) => {
+    const days = Math.max(0, daysOverdue(r.due_date));
+    priorities.push({
+      rank: r.priority === "Critical" ? 0 : days >= 14 ? 1 : 2,
+      type: "RFI", id: r.rfi_number || "—",
+      title: r.title, project: r.project_name || pmap[r.project_id] || "",
+      owner: r.assigned_to || r.ball_in_court || "Unassigned",
+      days, severity: r.priority === "Critical" ? "critical" : days >= 7 ? "high" : "medium",
+      action: days >= 14 ? "Escalate immediately" : days >= 7 ? "Follow up today" : "Response needed",
+      nav: "RFIs",
+    });
+  });
+
+  // Late deliveries — blocking erection
+  const lateDeliveries = (allDeliveries || [])
+    .filter((d) => {
+      if (statusIn(d.status, ["Delivered"]) || !d.scheduled_date) return false;
+      const sched = parseUTCDate(d.scheduled_date);
+      return sched && sched < now;
+    })
+    .sort((a, b) => (parseUTCDate(a.scheduled_date) || 0) - (parseUTCDate(b.scheduled_date) || 0));
+  lateDeliveries.forEach((d) => {
+    const sched = parseUTCDate(d.scheduled_date);
+    const days = sched ? Math.max(0, Math.floor((now - sched) / 86400000)) : 0;
+    priorities.push({
+      rank: days >= 7 ? 1 : 3,
+      type: "DEL", id: d.delivery_id || "—",
+      title: d.description || d.vendor || "Delivery",
+      project: pmap[d.project_id] || "",
+      owner: d.vendor || "Vendor",
+      days, severity: days >= 7 ? "high" : "medium",
+      action: days >= 7 ? "Expedite — blocking production" : "Track status with vendor",
+      nav: "Deliveries",
+    });
+  });
+
+  // Overdue action items
+  const overdueAI = (allActionItems || [])
+    .filter((a) => {
+      if (statusIn(a.status, ["Complete", "Cancelled", "Closed", "Done"])) return false;
+      if (!a.due_date) return false;
+      const due = parseUTCDate(a.due_date);
+      return due && due < now;
+    })
+    .sort((a, b) => (parseUTCDate(a.due_date) || 0) - (parseUTCDate(b.due_date) || 0));
+  overdueAI.forEach((a) => {
+    const due = parseUTCDate(a.due_date);
+    const days = due ? Math.max(0, Math.floor((now - due) / 86400000)) : 0;
+    priorities.push({
+      rank: 4, type: "ACTION", id: "—",
+      title: a.title || "Action Item", project: a.project_name || pmap[a.project_id] || "",
+      owner: a.assigned_to || "Unassigned",
+      days, severity: days >= 7 ? "medium" : "low",
+      action: "Close out or reassign",
+      nav: "ActionItems",
+    });
+  });
+
+  priorities.sort((a, b) => a.rank - b.rank || b.days - a.days);
+
+  // WAITING ON — items pending external response.
+  // Use the same "open RFI" definition as the KPI tile (anything NOT
+  // Answered/Closed) so the two views can never disagree about counts.
+  const waitingOn = [];
+  (allRFIs || []).filter((r) => !statusIn(r.status, ["Answered", "Closed", "Draft"])).forEach((r) => {
+    const sub = parseUTCDate(r.submitted_date);
+    waitingOn.push({
+      type: "RFI", id: r.rfi_number || "—",
+      title: r.title, project: r.project_name || pmap[r.project_id] || "",
+      waitingFor: r.assigned_to || r.ball_in_court || "Architect/Engineer",
+      submitted: r.submitted_date,
+      days: sub ? Math.max(0, Math.floor((now - sub) / 86400000)) : 0,
+      nav: "RFIs",
+    });
+  });
+  // COs under review
+  (allCOs || []).filter((c) => statusIn(c.status, ["Submitted", "Under Review"])).forEach((c) => {
+    const sub = parseUTCDate(c.submitted_date);
+    waitingOn.push({
+      type: "CO", id: c.co_number || "—",
+      title: c.title, project: c.project_name || pmap[c.project_id] || "",
+      waitingFor: "Owner/GC",
+      submitted: c.submitted_date,
+      days: sub ? Math.max(0, Math.floor((now - sub) / 86400000)) : 0,
+      amount: Number(c.co_amount) || 0,
+      nav: "ChangeOrders",
+    });
+  });
+  // Deliveries in transit
+  (allDeliveries || []).filter((d) => statusIn(d.status, ["In Transit"])).forEach((d) => {
+    waitingOn.push({
+      type: "DEL", id: d.delivery_id || "—",
+      title: d.description || d.vendor || "Delivery",
+      project: pmap[d.project_id] || "",
+      waitingFor: d.vendor || "Vendor",
+      submitted: d.scheduled_date,
+      days: 0,
+      nav: "Deliveries",
+    });
+  });
+  waitingOn.sort((a, b) => b.days - a.days);
+
+  // RISK WATCHLIST — projects trending toward trouble
+  const riskWatch = (enrichedMetrics || [])
+    .filter((p) => p.effectiveHealth !== "On Track" || p.healthScore < 80)
+    .sort((a, b) => (a.healthScore || 0) - (b.healthScore || 0))
+    .slice(0, 5)
+    .map((p) => ({
+      project: p.name || p.project_number,
+      projectId: p.id,
+      score: p.healthScore,
+      status: p.effectiveHealth,
+      reasons: p.healthReasons || [],
+      topReason: p.healthReasons?.[0] || "Scoring below threshold",
+    }));
+
+  return { priorities, waitingOn, riskWatch };
+}
+
 /** project_id → display name. */
 export function computeProjectMap(projects) {
   const map = {};
@@ -224,6 +360,106 @@ export function computeProjectMetrics(projects, allRFIs, allCOs, allCodes, allWP
       };
     })
     .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3));
+}
+
+/**
+ * Portfolio-level KPI roll-up: contract value, budget/spend, RFI/CO/delivery
+ * counts, at-risk projects, cash-at-risk (pending CO + over-budget exposure),
+ * and forecast-at-completion / variance. Pure over the prop arrays +
+ * enrichedMetrics (for the health + forecast figures).
+ */
+export function computePortfolioKPIs(projects, allRFIs, allCOs, allCodes, allWPs, allExpenses, allDeliveries, enrichedMetrics) {
+  const portfolioValue =
+    (projects || []).reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0) +
+    (allCOs || []).filter((c) => statusIn(c.status, ["Approved"])).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+  const totalBudget = (allCodes || []).reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
+  const totalSpend = (allExpenses || []).filter((e) => statusIn(e.payment_status, ["Paid"])).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const overdueRFIs = (allRFIs || []).filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
+  const openRFIs = (allRFIs || []).filter((r) => !statusIn(r.status, ["Answered", "Closed"])).length;
+  const pendingCOs = (allCOs || []).filter((c) => statusIn(c.status, ["Submitted", "Under Review"])).length;
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const lateDeliveries = (allDeliveries || []).filter((d) => {
+    if (!d.scheduled_date || statusIn(d.status, ["Delivered"])) return false;
+    const sched = parseUTCDate(d.scheduled_date);
+    return sched && sched < todayStart;
+  }).length;
+  const atRisk = (enrichedMetrics || []).filter((p) => p.effectiveHealth === "At Risk" || p.effectiveHealth === "Watch").length;
+  const activeWPs = (allWPs || []).filter((w) => statusIn(w.status, ["In Progress"])).length;
+  // Stale RFIs: open RFIs whose age exceeds 30 days. We canonicalize on
+  // submitted_date (when the RFI was actually issued) and fall back to
+  // created_date / created_at only when missing. Parse via parseUTCDate so
+  // ISO date-only strings don't drift in negative-UTC timezones.
+  const thirtyDaysAgo = todayStart.getTime() - 30 * 86400000;
+  const staleRFIs30 = (allRFIs || []).filter((r) => {
+    if (statusIn(r.status, ["Answered", "Closed"])) return false;
+    const opened = r.submitted_date || r.created_date || r.created_at;
+    const d = parseUTCDate(opened);
+    if (!d) return false;
+    return d.getTime() < thirtyDaysAgo;
+  });
+
+  // Cash at risk — the combined dollar value of exposures the PM team
+  // should be actively managing right now. Two buckets:
+  //   1. Pending change-order value. COs in Submitted/Under Review/
+  //      Draft state are dollars that have been proposed but aren't
+  //      committed either way. They're "at risk" in the sense that a
+  //      rejection erodes margin we thought we had.
+  //   2. Over-budget exposure. For each cost_code where actual spend
+  //      exceeds the budget amount, we accumulate (actual - budget).
+  //      That's the delta we're bleeding past plan.
+  // Sum is the single number the exec asks: "how much cash is in
+  // limbo across our portfolio right now?"
+  const pendingCOValue = (allCOs || [])
+    .filter((c) => statusIn(c.status, ["Submitted", "Under Review", "Draft"]))
+    .reduce((s, c) => s + (Number(c.co_amount) || Number(c.cost_impact_amount) || 0), 0);
+
+  // Build a map of actual-spend-per-cost-code so we can compare to
+  // budgets. expenses.cost_code holds the cost-code NUMBER (text); the
+  // schema has no cost_code_id on expenses, so cost_code (number) is the
+  // only key we can build the spend map from.
+  const spendByCode = new Map();
+  for (const e of allExpenses || []) {
+    if (!statusIn(e.payment_status, ["Paid"])) continue;
+    const key = e.cost_code || null;
+    if (!key) continue;
+    spendByCode.set(key, (spendByCode.get(key) || 0) + (Number(e.amount) || 0));
+  }
+  let overBudgetExposure = 0;
+  for (const code of allCodes || []) {
+    const budget = Number(code.budget_amount) || 0;
+    if (budget <= 0) continue;
+    // NOTE: code.code is undefined on the cost_codes row shape (the column
+    // is cost_code_number) — this lookup currently always misses, so
+    // overBudgetExposure is effectively pinned at 0. Fix is out-of-scope
+    // for this dead-branch cleanup and tracked as a separate task.
+    const actual = spendByCode.get(code.code) || 0;
+    if (actual > budget) overBudgetExposure += (actual - budget);
+  }
+
+  const cashAtRisk = pendingCOValue + overBudgetExposure;
+
+  // Portfolio-level Forecast at Completion (FAC):
+  //   FAC = sum of per-project estimatedCostAtCompletion, where each
+  //         project's estimate = max(budget, actual + pending CO
+  //         exposure). Answers the exec question "if everything
+  //         pending lands the way we expect, what will these jobs
+  //         actually cost us?"
+  //
+  // Forecast Variance = FAC - Total Budget. Positive = we're
+  // forecasting more cost than we budgeted (margin fade); negative
+  // = we're forecasting below budget (margin gain).
+  const forecastAtCompletion = (enrichedMetrics || []).reduce(
+    (sum, p) => sum + (Number(p.estimatedCostAtCompletion) || 0),
+    0,
+  );
+  const forecastVariance = forecastAtCompletion - totalBudget;
+
+  return {
+    portfolioValue, totalBudget, totalSpend,
+    overdueRFIs, openRFIs, pendingCOs, lateDeliveries, atRisk, activeWPs, staleRFIs30,
+    cashAtRisk, pendingCOValue, overBudgetExposure,
+    forecastAtCompletion, forecastVariance,
+  };
 }
 
 /** Layer weighted-health scoring onto each project metric (auto vs manual health, worst wins). */
