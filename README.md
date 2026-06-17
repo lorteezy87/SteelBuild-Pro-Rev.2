@@ -51,6 +51,12 @@ Not Started → IFA → OFA → BFA → OFS → IFC → Released for Fab
                               └─ R&R loops back to IFA
 ```
 
+New users are walked through this flow by a data-driven **Getting Started**
+checklist on the project Dashboard that tracks the project's real progress
+(upload drawings → create a submittal → raise RFIs → release for fab) and
+deep-links to each step. It's separate from the data-setup onboarding
+(`OrgOnboarding` first-run org wizard; `Onboarding` project create/import/seed).
+
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md#domain-workflow) for the full glossary
 and the status×ball-in-court → stage mapping.
 
@@ -149,7 +155,7 @@ project the caller can access — fetched through the RLS-scoped, audit-logged
 
 ## Testing
 
-~1,430 Vitest tests: pure-helper suites (default `node` env) + jsdom integration
+~1,485 Vitest tests: pure-helper suites (default `node` env) + jsdom integration
 tests (`// @vitest-environment jsdom`) that drive real components/import flows
 with the Supabase client mocked. No full-browser E2E yet (see `TECH_DEBT.md`).
 (The count keeps climbing as large components are thinned — their extracted logic
