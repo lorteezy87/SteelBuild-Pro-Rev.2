@@ -10,7 +10,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertTriangle, Check, DollarSign, FileWarning, Layers, Sparkles } from "lucide-react";
+import { AlertTriangle, Check, DollarSign, Download, FileWarning, Layers, Sparkles } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 import { rasterizePageToPngBase64 } from "@/lib/pdfRasterize";
@@ -28,6 +28,7 @@ import { buildRfiPrefillFromDelta, createRfiAndLink } from "@/lib/rfiFromDelta";
 import { BackchargeFormModal } from "@/pages/Backcharges";
 import { buildBackchargePrefillFromSheet, createBackchargeFromDelta, sheetsWithRevisionBackcharge } from "@/lib/backchargeFromDelta";
 import { listBackcharges } from "@/lib/backcharge/repository";
+import { downloadRevisionImpactPdf } from "@/lib/exports/revisionImpactPDF";
 
 const mono = "var(--font-mono)";
 const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
@@ -200,6 +201,14 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
 
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
 
+  const exportPdf = () => {
+    try {
+      downloadRevisionImpactPdf({ set, results, summary });
+    } catch {
+      toast.error("Could not generate the PDF.");
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
@@ -265,7 +274,7 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
 
               {/* ── Summary (once anything has resolved) ────────────── */}
               {(status === "running" || status === "done") && results.length > 0 && (
-                <SummaryStrip summary={summary} />
+                <SummaryStrip summary={summary} onExport={status === "done" ? exportPdf : undefined} />
               )}
 
               {/* ── Per-sheet sections ──────────────────────────────── */}
@@ -322,7 +331,7 @@ function Kpi({ label, value, color }) {
   );
 }
 
-function SummaryStrip({ summary }) {
+function SummaryStrip({ summary, onExport }) {
   return (
     <div style={{
       display: "flex", gap: 18, flexWrap: "wrap", alignItems: "center", padding: "12px 14px",
@@ -343,6 +352,12 @@ function SummaryStrip({ summary }) {
           </span>
         ))}
       </div>
+      {onExport && (
+        <button type="button" onClick={onExport} className="sbd-btn" title="Download this report as a PDF"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, padding: "5px 10px" }}>
+          <Download size={13} /> Export PDF
+        </button>
+      )}
     </div>
   );
 }
