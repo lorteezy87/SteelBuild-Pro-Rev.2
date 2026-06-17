@@ -11,11 +11,11 @@ multi-select bulk assign (`1b07a53d`), persist color mode + gzip upload (`b6ce5f
 assign-by-live-mark / guid-drift (`7381972d`), repaint fab colors on reload (`484e8853`).
 
 - [~] **Fab status "not saving"** — ROOT CAUSE = model_elements read capped at 1000 rows server-side; fixed by paginating the roster (`18f6294b`) + a canvas-overflow fix (side panel was unclickable). Awaiting user confirm (`[fab-debug]` `colored` should jump from 2 to the real count); then remove the temporary debug logging.
-- [ ] CSV-sourced rosters can't color — `element_guid` is NULL on CSV imports → guid-keyed coloring skips them. Fix = color by `piece_mark`. (M)
+- [ ] CSV-sourced rosters can't color — `element_guid` is NULL on CSV imports → guid-keyed coloring skips them. Fix = color by `piece_mark`. **(L, not M** — `recolor()` only has each mesh's IFC GlobalId up front; assembly/part marks are read on-click via `getPropertySets` and are deliberately NOT parsed for all members on load, for perf. Coloring by mark needs an upfront mark pass, which fights that design.)
 - [ ] "Academy MS Mesa" IFC extracts 0 elements — investigate that export. (S)
 - [ ] Perf lever if still choppy at ~12k draw calls — merge meshes by color bucket / InstancedMesh. (L)
 - [x] `scripts/check-ifc-type.mjs` — committed as a kept web-ifc element-type dev probe.
-- [ ] Remove the temporary `[fab-debug]` console logging once fab colors are confirmed. (XS)
+- [x] Remove the temporary `[fab-debug]` console logging — removed (`a1b096a4`). Root cause was the structural 1000-row roster cap (fixed by pagination), so the diagnostics had served their purpose.
 - [ ] Deferred polish — sequence playback, spatial RFI pins, model↔sheet click-through, sectioning / hide-isolate. (L)
 
 ## Thread B — Multi-tenant SaaS / Monetization
@@ -35,7 +35,8 @@ self-serve signup + email verify (`25ac9c9a`), upload org-resolution hardening (
 → backcharge escalation (`d5e87b2b`); partial-revision data-loss fix + restore (`03731be4`); docs refresh (`9ed862e1`).
 
 - [ ] Field-verify on a real Rev 2 (code-verified, not field-verified; now safe — partial upload won't wipe the set).
-- [ ] Optional follow-ups — per-sheet rail "Log backcharge", auto-generate report on upload, PDF export. (M)
+- [x] PDF export — shipped (`f0cfde73`): shareable Revision Impact Report PDF (severity rollup + per-sheet deltas + downstream rework exposure) via `src/lib/exports/revisionImpactPDF.js`, button in the report's summary strip.
+- [ ] Optional follow-ups — per-sheet rail "Log backcharge", auto-generate report on upload. (S)
 
 ## Other (shipped last night)
 Submittal "Released for Fab" open-tally (`4d144c2c`), WP form project pre-select (`e19ddd23`),
