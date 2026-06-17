@@ -50,6 +50,7 @@ import {
   createNewRevisionAndCarryZones,
   unlockSet as unlockSetSvc,
 } from "@/lib/drawingHub";
+import { logActivity } from "@/services/auditLogger";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -578,9 +579,21 @@ export default function DrawingViewer() {
           projectName={activeProject?.name}
           activeDrawing={activeDrawing}
           drawingSet={activeDrawingSet}
-          onUnlock={async () => {
+          onUnlock={async (reason) => {
             try {
-              await unlockSetSvc({ setId: activeDrawingSet.id });
+              await unlockSetSvc({ setId: activeDrawingSet.id, reason });
+              // The lock columns are nulled on unlock, so the reason only
+              // survives in the audit trail — record the override here.
+              logActivity(
+                "drawing",
+                "updated",
+                { id: activeDrawingSet.id, project_id: activeProject?.id, name: activeDrawingSet.set_name },
+                {
+                  projectId: activeProject?.id,
+                  projectName: activeProject?.name,
+                  description: `Set "${activeDrawingSet.set_name || activeDrawingSet.id}" unlocked (admin override) — reason: ${String(reason || "").slice(0, 500)}`,
+                },
+              );
               await qc.invalidateQueries({ queryKey: ["drawing_set", activeDrawingSet.id] });
               toast.success("Set unlocked. Edits are now allowed.");
             } catch (err) {

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, FileText, Home, Layers, Lock, Unlock } from "lucide-react";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
@@ -12,6 +12,8 @@ export default function ViewerHeader({ projectName, activeDrawing, drawingSet, o
   const navigate = useNavigate();
   const { isAdmin } = useAppSecurity();
   const isLocked = !!drawingSet?.is_locked;
+  const [unlocking, setUnlocking] = useState(false);
+  const [reason, setReason] = useState("");
 
   const setId = activeDrawing?.drawing_set_id || drawingSet?.id || null;
   const setName = drawingSet?.set_name || activeDrawing?.drawing_set_name || "Unassigned set";
@@ -68,19 +70,47 @@ export default function ViewerHeader({ projectName, activeDrawing, drawingSet, o
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           {isLocked ? (
-            <span style={lockBadgeStyle} title={drawingSet?.locked_reason || "Set is locked from edits"}>
-              <Lock size={12} />
-              Locked
-              {isAdmin && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <span style={lockBadgeStyle} title={drawingSet?.locked_reason || "Set is locked from edits"}>
+                <Lock size={12} />
+                Locked{drawingSet?.locked_reason ? ` — ${truncate(drawingSet.locked_reason, 40)}` : ""}
+              </span>
+              {isAdmin && !unlocking && (
                 <button
                   type="button"
-                  onClick={() => onUnlock?.()}
-                  title="Admin: unlock this set"
+                  onClick={() => setUnlocking(true)}
+                  title="Admin override: unlock this set (a reason is required)"
                   style={unlockButtonStyle}
                 >
                   <Unlock size={11} />
                   Unlock
                 </button>
+              )}
+              {isAdmin && unlocking && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    autoFocus
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && reason.trim()) { onUnlock?.(reason.trim()); setUnlocking(false); setReason(""); }
+                      if (e.key === "Escape") { setUnlocking(false); setReason(""); }
+                    }}
+                    placeholder="Reason to unlock (required)…"
+                    style={unlockReasonInput}
+                  />
+                  <button
+                    type="button"
+                    disabled={!reason.trim()}
+                    onClick={() => { onUnlock?.(reason.trim()); setUnlocking(false); setReason(""); }}
+                    style={{ ...unlockButtonStyle, opacity: reason.trim() ? 1 : 0.5, cursor: reason.trim() ? "pointer" : "not-allowed" }}
+                  >
+                    Confirm
+                  </button>
+                  <button type="button" onClick={() => { setUnlocking(false); setReason(""); }} style={unlockCancelButton}>
+                    Cancel
+                  </button>
+                </span>
               )}
             </span>
           ) : (
@@ -369,6 +399,32 @@ const unlockButtonStyle = {
   background: "rgba(245, 158, 11, 0.18)",
   border: "1px solid rgba(245, 158, 11, 0.48)",
   color: "#f59e0b",
+  cursor: "pointer",
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: 0,
+  textTransform: "uppercase",
+};
+
+const unlockReasonInput = {
+  ...mono,
+  fontSize: 11,
+  padding: "4px 8px",
+  borderRadius: 5,
+  border: "1px solid var(--border-default)",
+  background: "var(--bg-input, #0d1117)",
+  color: "var(--text-primary)",
+  width: 200,
+  outline: "none",
+};
+
+const unlockCancelButton = {
+  ...mono,
+  padding: "3px 8px",
+  borderRadius: 5,
+  background: "transparent",
+  border: "1px solid var(--border-default)",
+  color: "var(--text-muted)",
   cursor: "pointer",
   fontSize: 9,
   fontWeight: 900,
