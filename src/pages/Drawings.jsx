@@ -736,6 +736,34 @@ export default function Drawings({ embedded = false } = {}) {
         : { padding: "24px 28px", minHeight: "100vh", background: "var(--bg-page)" }}
       onClick={() => { setContextMenu(null); }}
     >
+      {/* ── Secondary-view banner: this is the full editor; the Hub is the command center ── */}
+      {!embedded && (
+        <div
+          style={{
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+            padding: "8px 14px", marginBottom: 14, borderRadius: 8,
+            border: "1px solid var(--border-default)",
+            background: "var(--bg-surface-low, rgba(255,255,255,0.02))",
+          }}
+        >
+          <span style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", flexShrink: 0 }}>
+            Full Editor
+          </span>
+          <span style={{ fontSize: 12.5, color: "var(--text-secondary, var(--text-muted))", lineHeight: 1.5 }}>
+            The <strong style={{ color: "var(--text-primary)" }}>Detailing Control Center</strong> is your command center. This page is the detailed editor — filters, bulk actions, rename / delete, per-sheet.
+          </span>
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            className="sbd-btn sbd-btn-primary"
+            style={{ whiteSpace: "nowrap" }}
+            onClick={() => navigate("/DrawingSubmittalHub")}
+          >
+            ← Back to the Hub
+          </button>
+        </div>
+      )}
+
       {/* ── CommandBar ─────────────────────────────────────────────────────── */}
       <CommandBar
         eyebrow={`DESIGN & DOCUMENTS · ${(activeProject?.name || "").toUpperCase()}`}
