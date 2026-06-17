@@ -63,11 +63,10 @@ import {
   textPrimary,
   warning,
 } from "./drawingSubmittalHub/format";
-import { ApprovalMatrix, HeaderSignal, LeadTimesModal, TriageBoard } from "./drawingSubmittalHub/components";
+import { ApprovalMatrix, DrawingRegisterTable, HeaderSignal, LeadTimesModal, TriageBoard } from "./drawingSubmittalHub/components";
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
 // chunk 404s after a deploy trigger a reload instead of a hard crash.
-const DrawingsPage = lazyWithRetry(() => import("@/pages/Drawings"));
 const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
 // Heavy tab panels — each only renders on its own tab, so code-split them off
 // the hub's route chunk. They already mount conditionally inside the <Suspense>
@@ -702,7 +701,15 @@ export default function DrawingSubmittalHub() {
                 onOpenTab={setActiveTab}
               />
             )}
-            {activeTab === "drawings" && <DrawingsPage embedded />}
+            {activeTab === "drawings" && (
+              <DrawingRegisterTable
+                setPackages={setPackages}
+                projectId={projectId}
+                activeProject={activeProject}
+                drawingSets={drawingSets}
+                isLoading={isLoading}
+              />
+            )}
             {activeTab === "submittals" && <SubmittalsPage />}
             {activeTab === "matrix" && (
               <ApprovalMatrix

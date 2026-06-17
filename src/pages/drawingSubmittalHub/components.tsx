@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useState } from "react";
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import {
   AlertTriangle,
@@ -51,6 +51,7 @@ import {
   warning,
 } from "./format";
 import type { DueInfo, Submittal } from "./types";
+import { useFlag } from "@/hooks/useFeatureFlag";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -58,6 +59,10 @@ type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 const CycleTimeCard = CycleTimeCardRaw as unknown as ComponentType<AnyProps>;
 const AgingReportTable = AgingReportTableRaw as unknown as ComponentType<AnyProps>;
+// Lazy so the heavy revision/PDF modals only load when a row action fires —
+// they never weigh down the hub chunk on tab open.
+const RevisionUploadModal = lazy(() => import("@/components/drawings/RevisionUploadModal")) as unknown as ComponentType<AnyProps>;
+const RevisionImpactReportModal = lazy(() => import("@/components/drawings/RevisionImpactReportModal")) as unknown as ComponentType<AnyProps>;
 
 type IconType = ComponentType<{ size?: number | string; color?: string }>;
 
@@ -1300,6 +1305,139 @@ interface ApprovalMatrixProps {
   submittals: Submittal[];
   roundsBySubmittal: Record<string, any[]>;
   isLoading: boolean;
+}
+
+/**
+ * DrawingRegisterTable — the Drawing Register as a clean, flat, per-set table,
+ * mirroring the Approval/Submittal register look (same Th/Td/StatusChip/DueChip
+ * primitives) instead of the dense grouped DrawingsTable. One row per drawing
+ * set. Left border: red = late, green = done (good to go), neutral = in progress.
+ * Full sheet-level management still lives on the standalone Drawings page.
+ */
+export function DrawingRegisterTable({
+  setPackages, projectId, activeProject, drawingSets = [], isLoading,
+}: {
+  setPackages: any[]; projectId?: string; activeProject?: any; drawingSets?: any[]; isLoading?: boolean;
+}) {
+  const aiDiffEnabled = useFlag("revision_ai_diff");
+  const [search, setSearch] = useState("");
+  const [revisionSet, setRevisionSet] = useState<any>(null);
+  const [reportSet, setReportSet] = useState<any>(null);
+
+  const rowBtn: CSSProperties = {
+    fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.04em",
+    padding: "3px 8px", borderRadius: 6, cursor: "pointer",
+    background: "transparent", border: `1px solid ${border}`, color: textMuted,
+  };
+
+  const rows = useMemo(() => {
+    return (setPackages || [])
+      .map((pkg: any) => {
+        const sheets: any[] = pkg.sheets || [];
+        const submittals: any[] = pkg.submittals || [];
+        const latestSubmittal = submittals.slice().sort((a, b) => (b.round_number || 1) - (a.round_number || 1))[0] || null;
+        const closed = latestSubmittal ? isClosedSubmittal(latestSubmittal) : false;
+        const sheetCount = sheets.length || (pkg.parent?.sheet_count ?? 0);
+        const releasedCount = sheets.filter((d) => d.stage === "Released" || d.set_approval_status === "approved").length;
+        const done = closed || (sheetCount > 0 && releasedCount === sheetCount);
+        const due = dueInfo(getSubmittalDueDate(latestSubmittal), done);
+        const discipline = pkg.parent?.discipline || [...new Set(sheets.map((d) => d.discipline).filter(Boolean))][0] || "—";
+        const maxRev = sheets.reduce((m, d) => Math.max(m, Number(String(d.revision_number || "0").replace(/[^\d]/g, "")) || 0), 0);
+        const stageCounts: Record<string, number> = {};
+        for (const d of sheets) if (d.stage) stageCounts[d.stage] = (stageCounts[d.stage] || 0) + 1;
+        const dominantStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+        return {
+          pkg, due, sheetCount, releasedCount, discipline, maxRev, dominantStage,
+          status: latestSubmittal?.status || null, done, late: !!due.overdue && !done,
+          setNo: pkg.parent ? formatDrawingSetNumber(pkg.parent) : "TBD",
+        };
+      })
+      .filter((r) => {
+        if (!search) return true;
+        const q = search.toLowerCase();
+        return (r.pkg.name || "").toLowerCase().includes(q)
+          || String(r.setNo).toLowerCase().includes(q)
+          || (r.discipline || "").toLowerCase().includes(q)
+          || (r.status || "").toLowerCase().includes(q);
+      })
+      .sort((a, b) => compareDrawingSetPackages(a.pkg.parent || a.pkg, b.pkg.parent || b.pkg));
+  }, [setPackages, search]);
+
+  if (isLoading) return <LoadingSkeleton />;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ position: "relative", maxWidth: 440 }}>
+        <Search size={14} color={textMuted} style={{ position: "absolute", left: 10, top: 9 }} />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search drawing sets…"
+          style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 8, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }}
+        />
+      </div>
+
+      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <Th>Drawing Set Package</Th>
+              <Th>Set #</Th>
+              <Th>Discipline</Th>
+              <Th style={{ textAlign: "right" }}>Sheets</Th>
+              <Th>Status</Th>
+              <Th>Released</Th>
+              <Th>Due</Th>
+              <Th style={{ textAlign: "right" }}>Rev</Th>
+              <Th style={{ textAlign: "right" }}>{""}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <Td colSpan={9} style={{ textAlign: "center", color: textMuted, padding: 28 }}>
+                  No drawing sets {search ? "match your search" : "yet"}.
+                </Td>
+              </tr>
+            ) : rows.map((r) => (
+              <tr key={r.pkg.key} style={{
+                borderTop: `1px solid ${border}`,
+                borderLeft: r.late ? "3px solid var(--status-error)" : r.done ? "3px solid var(--status-success)" : "3px solid transparent",
+              }}>
+                <Td style={{ color: textPrimary, fontWeight: 600 }}>{r.pkg.name}</Td>
+                <Td style={{ color: textMuted }}>{r.setNo}</Td>
+                <Td style={{ color: textMuted }}>{r.discipline}</Td>
+                <Td style={{ textAlign: "right" }}>{r.sheetCount}</Td>
+                <Td>{r.status ? <StatusChip status={r.status} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}</Td>
+                <Td style={{ color: r.done ? success : textMuted }}>{r.releasedCount}/{r.sheetCount}</Td>
+                <Td><DueChip info={r.due} /></Td>
+                <Td style={{ textAlign: "right", color: textMuted }}>{r.maxRev || "—"}</Td>
+                <Td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  {r.pkg.parent && (
+                    <button type="button" title="Upload a new revision for this set" onClick={() => setRevisionSet(r.pkg.parent)} style={rowBtn}>New Rev</button>
+                  )}
+                  {aiDiffEnabled && (
+                    <button type="button" title="AI Revision Impact Report" onClick={() => setReportSet(r.pkg)} style={{ ...rowBtn, marginLeft: 6, color: accent, borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}>✦ Report</button>
+                  )}
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {revisionSet && (
+        <Suspense fallback={null}>
+          <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={() => setRevisionSet(null)} activeProject={activeProject} preSelectedSet={revisionSet} drawingSets={drawingSets} />
+        </Suspense>
+      )}
+      {reportSet && (
+        <Suspense fallback={null}>
+          <RevisionImpactReportModal open onClose={() => setReportSet(null)} set={reportSet} projectId={projectId} />
+        </Suspense>
+      )}
+    </div>
+  );
 }
 
 export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading }: ApprovalMatrixProps) {
