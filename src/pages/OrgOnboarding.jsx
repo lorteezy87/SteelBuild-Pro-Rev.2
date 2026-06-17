@@ -8,6 +8,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
 import { useOrg } from "@/components/shared/OrgContext";
@@ -35,6 +36,7 @@ function Shell({ children, email, onSignOut }) {
 export default function OrgOnboarding() {
   const { user, logout } = useAuth();
   const { setCurrentOrg, refetchOrgs } = useOrg();
+  const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
 
   const token = useMemo(() => {
@@ -49,10 +51,12 @@ export default function OrgOnboarding() {
 
   const [name, setName] = useState("");
 
-  const finishJoin = async (orgId) => {
+  // dest "/" = the app (joining an existing, populated workspace via invite);
+  // "/Onboarding" = the first-run wizard (a brand-new, empty workspace).
+  const finishJoin = async (orgId, dest = "/") => {
     if (orgId) setCurrentOrg(orgId);
     await refetchOrgs();
-    try { window.history.replaceState({}, "", "/"); } catch { /* ignore */ }
+    navigate(dest, { replace: true });
   };
 
   const submitCreate = async (e) => {
@@ -63,7 +67,9 @@ export default function OrgOnboarding() {
     try {
       const org = await createOrganization(trimmed);
       toast.success("Workspace created");
-      await finishJoin(org?.id);
+      // New workspaces start empty — drop into the first-run wizard (sample
+      // project / templates / starter-data import) instead of a blank dashboard.
+      await finishJoin(org?.id, "/Onboarding");
     } catch (err) {
       toast.error(err?.message || "Couldn't create the workspace — please try again.");
       setBusy(false);
