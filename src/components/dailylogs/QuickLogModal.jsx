@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
@@ -57,7 +58,7 @@ export default function QuickLogModal({ open, onClose, onSave, workPackages = []
 
   const handleSave = () => {
     if (!form.date || !activeProject?.id) {
-      alert("Date and project are required");
+      toast.error("Date and project are required");
       return;
     }
     const wpProgress = form.wp_id ? JSON.stringify([{

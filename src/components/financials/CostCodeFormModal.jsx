@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { COST_CODES, COST_CODES_GROUPED } from "../shared/costCodes";
@@ -66,7 +67,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
       setSelectedCode("");
     } catch (err) {
       console.error('Save failed:', err);
-      alert(`Failed to save: ${err.message}`);
+      toast.error(`Failed to save: ${err.message}`);
     }
   };
 
