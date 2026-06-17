@@ -12,6 +12,7 @@ import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 import { STAGE_ORDER as CANONICAL_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import { withDrawingSetNumberMetadata } from "@/lib/drawingSetOrdering";
+import { isPdfFile, normalizeRevisionNumber, withTimeout, newUploadBatchId } from "@/lib/drawingUploadUtils";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 // Canonical 7-stage flow (Not Started → IFA → OFA → BFA → OFS → IFC → Released)
@@ -20,40 +21,10 @@ const MAX_PDF_SIZE_MB = 32;
 const UPLOAD_TIMEOUT_MS  = 90_000;   // 90 s
 const EXTRACT_TIMEOUT_MS = 300_000;  // 5 min — includes rate-limit retry backoff time
 
-// Generate a random upload batch id (one per wizard session).
-// Each file in the batch carries this id so the UI can later group/aggregate.
-function newUploadBatchId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `batch_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function withTimeout(promise, ms, label = "Operation") {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s — please retry`)), ms)
-    ),
-  ]);
-}
-
-function isPdfFile(file) {
-  if (!file) return false;
-  const mime = String(file.type || "").toLowerCase();
-  const name = String(file.name || "").toLowerCase();
-  return mime === "application/pdf" || mime.includes("pdf") || name.endsWith(".pdf");
-}
-
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function normalizeRevisionNumber(value, fallback = "0") {
-  if (value == null || value === "") return fallback;
-  return String(value).trim() || fallback;
 }
 
 // ─── PDF → sheets extraction ──────────────────────────────────────────

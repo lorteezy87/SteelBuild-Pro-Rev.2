@@ -5,77 +5,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 import { extractSheetsFromPdf, validatePdfPage } from "@/lib/pdfSheetExtractor";
 import { ensureCurrentRevision, recordSheetSlipSheet } from "@/lib/drawingHub";
+import { isPdfFile, normalizeRevisionNumber, getRevisionSuggestions, matchSheets } from "@/lib/drawingUploadUtils";
 
 const MAX_PDF_SIZE_MB = 32;
-
-function isPdfFile(file) {
-  if (!file) return false;
-  const mime = String(file.type || "").toLowerCase();
-  const name = String(file.name || "").toLowerCase();
-  return mime === "application/pdf" || mime.includes("pdf") || name.endsWith(".pdf");
-}
 
 function formatBytes(bytes) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function normalizeRevisionNumber(value, fallback = "0") {
-  if (value == null || value === "") return fallback;
-  return String(value).trim() || fallback;
-}
-
-// Smart revision suggestions
-function getRevisionSuggestions(currentRev) {
-  const rev = (currentRev || "").trim().toUpperCase();
-  if (rev === "OFA" || rev === "FOR APPROVAL") return ["IFA", "IFB", "IFC"];
-  if (rev === "IFA") return ["IFB", "IFC"];
-  if (rev === "IFB") return ["IFC", "BID ADDENDUM 1"];
-  if (rev === "IFC") return ["IFC Rev 1", "IFC Rev 2", "ADDENDUM 1"];
-  if (rev.startsWith("IFC REV")) {
-    const num = parseInt(rev.replace("IFC REV", "").trim()) || 1;
-    return [`IFC Rev ${num + 1}`, `IFC Rev ${num + 1} — Addendum`, "FINAL IFC"];
-  }
-  if (rev === "BID SET") return ["IFC", "ADDENDUM 1", "ADDENDUM 2"];
-  // Numeric revisions: "1" → "2", "3" → "4"
-  if (/^\d+$/.test(rev)) {
-    const next = parseInt(rev) + 1;
-    return [String(next), `Rev ${next}`, `IFC Rev ${next}`];
-  }
-  // Letter revisions: "A" → "B", "C" → "D"
-  if (/^[A-Z]$/.test(rev)) {
-    const next = String.fromCharCode(rev.charCodeAt(0) + 1);
-    return [next, `Rev ${next}`, `IFC Rev ${next}`];
-  }
-  // "Rev X" numeric pattern: "Rev 1" → "Rev 2"
-  if (/^REV\s+(\d+)$/i.test(rev)) {
-    const num = parseInt(rev.match(/\d+/)[0]) + 1;
-    return [`Rev ${num}`, `Rev ${num} — Final`, `IFC Rev ${num}`];
-  }
-  // "Rev X" letter pattern: "Rev A" → "Rev B"
-  if (/^REV\s+([A-Z])$/i.test(rev)) {
-    const letter = rev.match(/[A-Z]$/i)[0].toUpperCase();
-    const next = String.fromCharCode(letter.charCodeAt(0) + 1);
-    return [`Rev ${next}`, `IFC`, `Final`];
-  }
-  return ["Rev 1", "Rev 2", "IFC", "Final"];
-}
-
-// Sheet matching
-function matchSheets(oldSheets, newSheets) {
-  const oldMap = new Map((oldSheets || []).map(s => [s.sheetNumber, s]));
-  const newMap = new Map((newSheets || []).map(s => [s.sheetNumber, s]));
-  const results = [];
-  for (const [num, newSheet] of newMap) {
-    const old = oldMap.get(num);
-    results.push({ sheetNumber: num, oldSheet: old || null, newSheet, change: old ? "revised" : "added" });
-  }
-  for (const [num, oldSheet] of oldMap) {
-    if (!newMap.has(num)) {
-      results.push({ sheetNumber: num, oldSheet, newSheet: null, change: "removed" });
-    }
-  }
-  return results.sort((a, b) => a.sheetNumber.localeCompare(b.sheetNumber));
 }
 
 const CHANGE_STYLE = {
