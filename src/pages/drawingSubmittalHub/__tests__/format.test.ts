@@ -403,7 +403,7 @@ describe("buildApprovalMatrixRows", () => {
   });
 
   it("handles empty input", () => {
-    expect(buildApprovalMatrixRows()).toEqual([]);
+    expect(buildApprovalMatrixRows([], [])).toEqual([]);
   });
 });
 
