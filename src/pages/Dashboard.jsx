@@ -54,6 +54,31 @@ const PortfolioView = lazyWithRetry(() => import("../components/dashboard/Portfo
  * lives at `src/components/dashboard/DrilldownView.jsx` for reference
  * but is no longer rendered.
  */
+/**
+ * Shown on the dashboard for a brand-new / empty workspace (0 projects) — a
+ * clear path into the first-run wizard rather than an empty portfolio.
+ */
+function FirstProjectWelcome({ onStart }) {
+  return (
+    <div style={{ display: "grid", placeItems: "center", minHeight: "62vh", padding: 24 }}>
+      <div style={{ maxWidth: 480, textAlign: "center" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--accent)", fontWeight: 800, marginBottom: 14 }}>
+          Welcome to SteelBuild Pro
+        </div>
+        <h1 style={{ fontFamily: "'Space Grotesk', var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 10px" }}>
+          Set up your first project
+        </h1>
+        <p style={{ color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6, margin: "0 0 24px" }}>
+          Create a project to start tracking drawings, submittals, RFIs, fabrication, and field progress. Start from a template or import a starter spreadsheet — it takes about a minute.
+        </p>
+        <button type="button" className="sbd-btn sbd-btn-primary" onClick={onStart} style={{ minHeight: 44, padding: "0 22px", fontSize: 14, justifyContent: "center" }}>
+          Set up your first project →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { activeProject, setActiveProject } = useProjectContext();
@@ -313,6 +338,13 @@ export default function Dashboard() {
   }
 
   if (!pid) {
+    // Brand-new / empty workspace → guide into the first-run wizard instead of an
+    // empty portfolio. (Creating a workspace already routes to the wizard; this
+    // catches a return visit before setup is finished.) Guard on a settled,
+    // non-loading empty result so an existing user mid-load is never shown this.
+    if (!projectsLoading && projects.length === 0) {
+      return <FirstProjectWelcome onStart={() => navigate("/Onboarding")} />;
+    }
     return (
       <div data-dashboard-density={prefs.dashboard_density} style={{ display: "flex", flexDirection: "column", gap: bodyGap }}>
         {showHeader && dashboardHeader}
