@@ -4,8 +4,6 @@ import { risksForTaskWindow } from "@/lib/weatherRisk";
 import { computeEffectiveDates } from "@/services/scheduleCascade";
 import { GANTT_PHASE_HEX, GANTT_STATUS_HEX, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
 import {
-  MIN_YEAR,
-  MAX_YEAR,
   parseDateUTC,
   toDateOnly,
   fmtDate,
@@ -39,6 +37,7 @@ import {
 } from "./scheduleGanttHelpers";
 import { GanttStatsBar, GanttQuickFilters, GanttMetricCards, GanttLegend } from "./ScheduleGanttToolbar";
 import { useColumnResize } from "./useColumnResize";
+import { useGanttLayout } from "./useGanttLayout";
 
 const DELIVERY_STATUS_DOT = {
   "Scheduled":  GANTT_PHASE_HEX.Procurement,
@@ -103,8 +102,6 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const rightHead = useRef(null);
   const rightBody = useRef(null);
   const containerRef = useRef(null);
-
-  const WEEK_PX = zoom === "month" ? 80 : zoom === "day" ? 420 : 240;
 
   // Normalize "today" to UTC midnight so all date math (overdue checks, today
   // line, scroll-to-today) compares apples to apples with task dates that are
@@ -443,6 +440,12 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const effStart = (task) => effectiveDates[task.id]?.start || task.start_date;
   const effEnd   = (task) => effectiveDates[task.id]?.end   || task.end_date;
 
+  // Date↔pixel projection: chart window, week/day scale, px/spanPx, today marker.
+  const {
+    WEEK_PX, dateRange, PX_PER_DAY, totalW,
+    px, spanPx, todayPx, showToday, isCurrentWeek,
+  } = useGanttLayout({ zoom, today, allTasks, deliveries, effStart, effEnd });
+
   // ── Weather-risk overlay ───────────────────────────────────────────
   // Only attach risks to field-sensitive phases (Installation, Delivery).
   // Indoor work doesn't get flagged — a rainy day in Phoenix isn't a
@@ -472,57 +475,6 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     if (!e) return false;
     return e < today;
   };
-
-  const dateRange = useMemo(() => {
-    if (allTasks.length === 0) {
-      // Even with no tasks, build a 4-week window around today
-      const s = new Date(today);
-      s.setDate(s.getDate() - s.getDay() - 7); // 1 week before
-      const e = new Date(today);
-      e.setDate(e.getDate() + (6 - e.getDay()) + 21); // 3 weeks after
-      const weeks = [];
-      for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 7)) weeks.push(new Date(d));
-      return { start: s, end: e, weeks };
-    }
-    const dates = allTasks.flatMap(t => [
-      parseDateUTC(effStart(t)),
-      parseDateUTC(effEnd(t)),
-    ]).filter(Boolean);
-    // Include delivery dates so the timeline stretches to cover them
-    deliveries.forEach(d => {
-      const sd = parseDateUTC(d.scheduled_date); if (sd) dates.push(sd);
-      const rd = parseDateUTC(d.required_date);  if (rd) dates.push(rd);
-      const ad = parseDateUTC(d.actual_date);    if (ad) dates.push(ad);
-    });
-    // Always include today in the range so the TODAY line is always visible
-    dates.push(today);
-    let start = new Date(Math.min(...dates));
-    let end   = new Date(Math.max(...dates));
-    // Belt-and-suspenders: parseDateUTC already clamps to [1900,2200], but if
-    // a rogue date somehow lands here and we ended up with NaN or a wild
-    // year, fall back to a today-centred window rather than generating a
-    // million weeks and freezing the browser.
-    const startYear = start.getUTCFullYear();
-    const endYear   = end.getUTCFullYear();
-    if (isNaN(start.getTime()) || isNaN(end.getTime()) ||
-        startYear < MIN_YEAR || endYear > MAX_YEAR) {
-      start = new Date(today); start.setDate(start.getDate() - start.getDay() - 7);
-      end   = new Date(today); end.setDate(end.getDate() + (6 - end.getDay()) + 21);
-    }
-    start.setDate(start.getDate() - start.getDay());
-    end.setDate(end.getDate() + (6 - end.getDay()) + 7);
-    const weeks = [];
-    // Hard cap at ~10 years of weeks (520). If someone's data actually
-    // legitimately spans more than that, the gantt is the wrong tool.
-    const MAX_WEEKS = 520;
-    let d = new Date(start);
-    while (d <= end && weeks.length < MAX_WEEKS) {
-      weeks.push(new Date(d));
-      d.setDate(d.getDate() + 7);
-    }
-    if (weeks.length >= MAX_WEEKS) end = new Date(weeks[weeks.length - 1]);
-    return { start, end, weeks };
-  }, [allTasks, deliveries, today]);
 
   const scrollToToday = () => {
     if (rightBody.current) {
@@ -572,10 +524,6 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     }, 80);
     return () => clearTimeout(timer);
   }, [dateRange.start, dateRange.weeks.length, today, WEEK_PX]);
-
-  const dayCount = Math.ceil((dateRange.end - dateRange.start) / 86400000);
-  const PX_PER_DAY = WEEK_PX / 7;
-  const totalW = Math.max(dayCount * PX_PER_DAY, dateRange.weeks.length * WEEK_PX);
 
   const updateTaskDrag = (nextOrUpdater) => {
     setTaskDrag((prev) => {
@@ -943,25 +891,6 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   }, [grouped, visibleTaskIds]);
 
   const visibleTaskCount = visibleTaskIds ? allTasks.filter((task) => visibleTaskIds.has(task.id)).length : totalTasks;
-
-  const px = (dateStr) => {
-    const d = parseDateUTC(dateStr);
-    if (!d) return 0;
-    return Math.max(0, (d - dateRange.start) / 86400000 * PX_PER_DAY);
-  };
-  const spanPx = (start, end) => {
-    const s = parseDateUTC(start);
-    const e = parseDateUTC(end);
-    if (!s || !e) return 0;
-    return Math.max(4, (e - s) / 86400000 * PX_PER_DAY);
-  };
-
-  const todayPx = (today - dateRange.start) / 86400000 * PX_PER_DAY;
-  const showToday = todayPx >= 0 && todayPx <= totalW;
-
-  const nowWeekStart = new Date(today);
-  nowWeekStart.setDate(today.getDate() - today.getDay());
-  const isCurrentWeek = (w) => w.toDateString() === nowWeekStart.toDateString();
 
   const togglePhase = (key) => setCollapsed(c => ({ ...c, [key]: !c[key] }));
 
