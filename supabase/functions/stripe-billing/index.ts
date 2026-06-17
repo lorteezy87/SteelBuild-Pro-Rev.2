@@ -2,12 +2,13 @@
 // subscription model (multi-tenant SaaS).
 //
 // Deploy with verify_jwt = false: the webhook is called by Stripe (no JWT), and
-// the checkout/portal actions verify the caller's JWT themselves. The function
-// owns the Stripe secret. Price ids + the webhook signing secret are read from
-// the service-role-only public.billing_config table (provisioned via the Stripe
-// API — see scripts/provision), falling back to env (STRIPE_PRICE_PRO /
-// STRIPE_PRICE_BUSINESS / STRIPE_WEBHOOK_SECRET) for backward compatibility.
-// The client only ever passes a plan KEY — never a price id.
+// the checkout/portal actions verify the caller's JWT themselves. Price ids + the
+// webhook signing secret are read from the service-role-only public.billing_config
+// table (provisioned via the Stripe API), falling back to env (STRIPE_PRICE_PRO /
+// STRIPE_PRICE_BUSINESS / STRIPE_WEBHOOK_SECRET). The client only passes a plan KEY.
+//
+// The Stripe client is built per-invocation (reads STRIPE_SECRET_KEY fresh), so a
+// secret rotation (e.g. test -> live) takes effect without also redeploying.
 //
 // Required edge-function secrets:
 //   STRIPE_SECRET_KEY   (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY injected)
@@ -21,23 +22,26 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const STRIPE_SECRET = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-
-const stripe = new Stripe(STRIPE_SECRET, { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
 // service-role client: bypasses RLS + the billing-tamper trigger (auth.role()='service_role').
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+// Built per-invocation so a STRIPE_SECRET_KEY rotation (test -> live) is picked up
+// without a redeploy.
+function stripeClient(): Stripe {
+  return new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
+}
 
 const json = (obj: unknown, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 interface BillingConfig { pricePro: string; priceBusiness: string; webhookSecret: string; }
 
-// Config (price ids + webhook secret) lives in the service-role-only
-// billing_config table so it can be provisioned via the Stripe API without
-// writing env secrets at runtime. Env is the fallback.
+// Config (price ids + webhook secret) lives in the service-role-only billing_config
+// table so it can be provisioned via the Stripe API without writing env secrets at
+// runtime. Env is the fallback.
 async function loadConfig(): Promise<BillingConfig> {
   let row: Record<string, string> | null = null;
   try {
@@ -63,7 +67,7 @@ function priceToPlan(priceId: string | undefined, cfg: BillingConfig): string | 
 }
 
 // deno-lint-ignore no-explicit-any
-async function handleEvent(event: any, cfg: BillingConfig) {
+async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
   if (event.type === "checkout.session.completed") {
     const s = event.data.object;
     const orgId = s.metadata?.org_id || s.client_reference_id;
@@ -98,6 +102,7 @@ async function handleEvent(event: any, cfg: BillingConfig) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const url = new URL(req.url);
+  const stripe = stripeClient();
 
   // ── Stripe webhook (signature-verified; no JWT) ──
   if (url.pathname.endsWith("/webhook")) {
@@ -117,7 +122,7 @@ Deno.serve(async (req) => {
       console.error("billing_events insert error", dupErr);
     }
     try {
-      await handleEvent(event, cfg);
+      await handleEvent(stripe, event, cfg);
     } catch (e) {
       console.error("webhook handler error", e);
       return new Response("handler error", { status: 500 }); // let Stripe retry
