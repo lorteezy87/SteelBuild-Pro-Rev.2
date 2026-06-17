@@ -191,6 +191,21 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
       const result = await extractIfcRoster(buf, (done, total) =>
         setRoster({ step: "extracting", done, total }),
       );
+      // Guard the silent zero: if the IFC has no IfcBeam/Column/Plate/Member, both
+      // the geometry render and the roster come back empty (the viewer also skips
+      // non-structural types). That happens when the model is a reference/proxy
+      // export (members as IfcBuildingElementProxy). Saving it persists an empty,
+      // uncolorable model with a success toast — confusing. Stop and tell the user
+      // the real cause instead, and let them load a corrected export.
+      if (!result.rows.length) {
+        setRoster({ step: "idle" });
+        toast.warning(
+          "No structural members found — this IFC has no beams, columns, plates, or members " +
+          "(it looks like a reference/proxy export). Re-export from your detailer with structural " +
+          "members, then load it again.",
+        );
+        return;
+      }
       setRoster({ step: "saving" });
       // gzip the IFC before upload so large models (50 MB+) fit under the storage
       // bucket limit and download faster. The stored object is `<name>.gz`; the
