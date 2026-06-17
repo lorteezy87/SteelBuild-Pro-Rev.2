@@ -13,7 +13,7 @@ import { loadIfcGeometry } from "@/lib/ifc/loadIfcGeometry";
 
 const HIGHLIGHT = new THREE.Color("#f5d90a");
 
-export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onLoaded }) {
+export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onLoaded, onColorStats }) {
   const mountRef = useRef(null);
   const apiRef = useRef(null); // { scene, camera, renderer, controls, model, raf, ro }
   const selectedRef = useRef(new Map()); // expressID -> mesh (multi-select highlight)
@@ -167,7 +167,9 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
   // and the saved fab colors never appear — they only showed on a live assign
   // (model already loaded). Re-running on "ready" repaints with the latest.
   useEffect(() => {
-    apiRef.current?.model?.recolor?.(colorFor);
+    const stats = apiRef.current?.model?.recolor?.(colorFor);
+    if (stats) onColorStats?.(stats);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorFor, status]);
 
   // Click picking.
