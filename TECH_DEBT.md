@@ -17,6 +17,14 @@ platform-maturity follow-ups._
 
 - **Legal pages** — the self-serve signup needs ToS / privacy / a basic DPA to
   link to. The wording needs a lawyer; the pages can be scaffolded.
+- **Stripe go-live** — the billing **code path is complete + correct** but has
+  never run end-to-end (1 internal `enterprise` org, 0 `billing_events`). Owner
+  steps (create prices, set the 4 `stripe-billing` secrets, wire the webhook, run
+  a test-mode checkout) are in [`docs/stripe-go-live.md`](docs/stripe-go-live.md).
+  ⚠️ **Decision pending:** the live project also has the unused **Supabase Stripe
+  Sync Engine** trio (`stripe-setup`/`stripe-worker`/`stripe-webhook`, not in repo)
+  + a 29-table `stripe` schema, parallel to the app's `stripe-billing`. Remove the
+  trio (and decide on the schema) before launch — being handled by another agent.
 - **Storage backfill (app-files cross-project read residual)** — verified
   2026-06-17: **775** legacy flat `app-files/uploads/<ts>-<rand>` objects predate
   org-prefixing. The set is **frozen** — the uploader cut over cleanly (last flat
@@ -54,6 +62,17 @@ platform-maturity follow-ups._
 - **TypeScript conversion** — ~86% of `src` is still JS/JSX (141 TS vs 864 JS).
   `src/services/` is fully typed; convert incrementally, shared-infra-first.
   `strict:false` today.
+- **Large-component decomposition (in progress)** — the biggest components are
+  being thinned by extracting their pure logic into named, unit-tested modules
+  (behavior-preserving, validated against the full suite at each slice). Done so
+  far: `ScheduleGantt.jsx` 2,812 → 2,280 (helpers module + `useColumnResize` /
+  `useGanttLayout` / `useTaskBarDrag` hooks + presentational toolbar/legend);
+  `PortfolioView.jsx` roll-ups → `portfolioDerive.js`; the two drawing-upload
+  modals → shared `lib/drawingUploadUtils.js`; the hub's Approval Matrix builders
+  → `drawingSubmittalHub/format.ts`. The thinned containers are still large and
+  still JS/JSX — converting them to `.tsx` is the follow-up.
+- **alert() — DONE.** No `window.alert()` left in `src` (the last 4 validation/
+  save sites use sonner `toast.error`).
 - **Full-browser E2E** — jsdom integration tests gate CI; no signed-in Playwright
   flow yet (needs a seeded test user / self-signup against a non-prod project).
 - **A11y audit + mobile/iPad polish** on core workflows; **large-project

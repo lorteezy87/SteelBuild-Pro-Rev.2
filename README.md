@@ -149,9 +149,11 @@ project the caller can access — fetched through the RLS-scoped, audit-logged
 
 ## Testing
 
-~1,250 Vitest tests: pure-helper suites (default `node` env) + jsdom integration
+~1,430 Vitest tests: pure-helper suites (default `node` env) + jsdom integration
 tests (`// @vitest-environment jsdom`) that drive real components/import flows
 with the Supabase client mocked. No full-browser E2E yet (see `TECH_DEBT.md`).
+(The count keeps climbing as large components are thinned — their extracted logic
+lands in tested helper modules; see `TECH_DEBT.md` → large-component decomposition.)
 
 ## CI/CD
 

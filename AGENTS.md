@@ -24,5 +24,8 @@ SteelBuild Pro is a Vite + React 18 + Supabase project-management app for struct
 ## Testing Guidelines
 Vitest defaults to the `node` environment for fast pure-helper tests; component tests opt into jsdom with a `// @vitest-environment jsdom` pragma. Mock the Supabase client — no test should hit the network. Prefer targeted tests for status mapping, permissions, and schedule/cost calculations.
 
+## Refactoring large files
+When thinning a big component, extract its pure logic **byte-identical** into a sibling `*Helpers`/`*Derive` module (or `format.ts`) with unit tests — the `useMemo` wrappers stay, deps unchanged. Self-contained interaction subsystems become custom hooks; pure data-display JSX becomes small presentational components. One concern per slice; run the full suite + build after each; commit per slice. Examples: `components/schedule/scheduleGanttHelpers.js` + `use{ColumnResize,GanttLayout,TaskBarDrag}`, `components/dashboard/portfolioDerive.js`, `lib/drawingUploadUtils.js`. See `CLAUDE.md` §2.5 and `ARCHITECTURE.md` decision log.
+
 ## Commit & Pull Request Guidelines
 Use Conventional Commit prefixes seen in history: `feat:`, `fix:`, `docs:`, `refactor:`, `ui:`, `security:`. CI (`.github/workflows/ci.yml`) runs lint + both typechecks + Vitest + production build on every push/PR. Feature work lands on `claude/*` branches; deploys go through merge into `main`, which Vercel auto-publishes.

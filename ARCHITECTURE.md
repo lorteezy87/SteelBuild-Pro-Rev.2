@@ -602,7 +602,8 @@ src/
   components/
     drawings/       Drawings page UI + modals + viewer subcomponents
     submittals/     Submittals page UI + bulk modals + round timeline
-    schedule/       Schedule page UI + Gantt + helpers
+    schedule/       Schedule page UI + Gantt (decomposed into scheduleGanttHelpers
+                    + useColumnResize/useGanttLayout/useTaskBarDrag hooks + toolbar)
     workpackages/   Work packages UI
     dashboard/      Portfolio + drilldown views
     commandcenter/  CommandCenter (action feed, today/week, drawer)
@@ -631,6 +632,22 @@ public/             Static assets including web-ifc wasm (public/wasm/) + pdf wo
 ---
 
 ## Decision log (recent material decisions)
+
+### 2026-06 — Large-component decomposition (behavior-preserving)
+
+The biggest components are being thinned by extracting their pure logic into
+named, unit-tested modules rather than rewriting them. The rule: move logic out
+**byte-identical**, keep each slice to one concern, and run the full suite +
+build after every slice. Pure helpers and per-prop `useMemo` derivations go to a
+sibling `*Helpers` / `*Derive` module (or `format.ts`); self-contained
+interaction subsystems become custom hooks; pure data-display JSX becomes small
+presentational components; the irreducible render loop stays in the container.
+Applied so far: `ScheduleGantt.jsx` (2,812 → 2,280 — helpers module +
+`useColumnResize`/`useGanttLayout`/`useTaskBarDrag` + toolbar/legend),
+`PortfolioView.jsx` (roll-ups → `portfolioDerive.js`), both drawing-upload modals
+(shared `lib/drawingUploadUtils.js`), and the hub's Approval Matrix builders
+(→ `drawingSubmittalHub/format.ts`). The thinned containers are still JS/JSX —
+`.tsx` conversion is the follow-up (see TECH_DEBT).
 
 ### 2026-06 — Multi-tenant SaaS (monetization)
 
@@ -727,7 +744,9 @@ See [`TECH_DEBT.md`](./TECH_DEBT.md) for the running list and
 Major remaining buckets:
 
 - **TypeScript expansion** — still ~86% JS; convert incrementally (services/ is
-  fully typed; shared-infra-first ordering).
+  fully typed; shared-infra-first ordering). The biggest components now have their
+  pure logic extracted into tested helper modules + hooks (see the decomposition
+  decision-log entry); thinning the containers to `.tsx` is the next step.
 - **Legal** — ToS / privacy / DPA pages to back the self-serve signup.
 - **Storage backfill** — migrate the ~770 legacy flat `uploads/...` objects to
   org-prefixed paths (grandfathered for now).
