@@ -9,7 +9,25 @@ import { supabase } from "@/lib/supabase";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function invokeBilling(action: string, payload: Record<string, unknown>): Promise<any> {
   const { data, error } = await supabase.functions.invoke("stripe-billing", { body: { action, ...payload } });
-  if (error) throw new Error(error.message || "Billing request failed");
+  if (error) {
+    // supabase-js wraps any non-2xx response in a FunctionsHttpError whose
+    // .message is the generic "Edge Function returned a non-2xx status code".
+    // stripe-billing returns the real reason ("Plan X isn't available", "You
+    // don't have permission…", "No billing account yet — start a subscription
+    // first") as a non-2xx { error } body, readable only via error.context (the
+    // Response). Recover it so the Billing UI shows the actual cause.
+    const ctx = (error as { context?: { json?: () => Promise<unknown> } }).context;
+    let detail: string | null = null;
+    if (ctx?.json) {
+      try {
+        const body = await ctx.json();
+        if (body && typeof body === "object" && (body as { error?: unknown }).error) {
+          detail = String((body as { error: unknown }).error);
+        }
+      } catch { /* body wasn't JSON — fall back to the generic message */ }
+    }
+    throw new Error(detail || error.message || "Billing request failed");
+  }
   if (data?.error) throw new Error(data.error);
   return data;
 }
