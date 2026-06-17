@@ -43,12 +43,19 @@ export async function lockSet({ setId, reason = null, userId = null } = {}) {
 }
 
 /**
- * Clear the lock. The audit columns (locked_at / locked_by / locked_reason)
- * are nulled out so a future lock pass starts fresh. Returns the updated
- * row.
+ * Clear the lock — an ADMIN OVERRIDE. A `reason` is REQUIRED: unlocking a
+ * released-for-fab set is consequential, so the override must be justified.
+ * The lock columns (locked_at / locked_by / locked_reason) are nulled so a
+ * future lock pass starts fresh — which means the reason only survives in the
+ * caller's audit trail (see DrawingViewer.onUnlock → logActivity). Returns the
+ * updated row. Throws if setId or reason is missing.
  */
-export async function unlockSet({ setId } = {}) {
+export async function unlockSet({ setId, reason = null } = {}) {
   if (!setId) throw new Error("unlockSet: setId required");
+  const cleanReason = reason ? String(reason).trim() : "";
+  if (!cleanReason) {
+    throw new Error("unlockSet: reason required — unlocking is an admin override and must record why.");
+  }
   const { data, error } = await supabase
     .from("drawing_sets")
     .update({

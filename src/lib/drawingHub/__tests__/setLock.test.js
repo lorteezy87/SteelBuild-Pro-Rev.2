@@ -148,7 +148,7 @@ describe("lockSet / unlockSet", () => {
   });
 
   it("unlockSet clears all the lock columns", async () => {
-    await unlockSet({ setId: "s2" });
+    await unlockSet({ setId: "s2", reason: "Scope change approved by PM" });
     expect(pendingPayload.is_locked).toBe(false);
     expect(pendingPayload.locked_at).toBeNull();
     expect(pendingPayload.locked_by).toBeNull();
@@ -156,7 +156,12 @@ describe("lockSet / unlockSet", () => {
   });
 
   it("unlockSet rejects missing setId", async () => {
-    await expect(unlockSet({ setId: undefined })).rejects.toThrow(/setId required/);
+    await expect(unlockSet({ setId: undefined, reason: "x" })).rejects.toThrow(/setId required/);
+  });
+
+  it("unlockSet rejects a missing/blank reason (admin override must be justified)", async () => {
+    await expect(unlockSet({ setId: "s2" })).rejects.toThrow(/reason required/);
+    await expect(unlockSet({ setId: "s2", reason: "   " })).rejects.toThrow(/reason required/);
   });
 
   it("lockSet truncates very long reasons", async () => {
