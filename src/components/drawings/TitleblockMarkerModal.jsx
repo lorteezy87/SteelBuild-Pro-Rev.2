@@ -64,6 +64,11 @@ const toolbarStyle = {
 
 const canvasWrapStyle = {
   flex: 1,
+  // A flex child needs min-height/width:0 to actually shrink to the available
+  // space (instead of growing to its content) — without it the page can't be
+  // measured or scrolled correctly.
+  minHeight: 0,
+  minWidth: 0,
   overflow: "auto",
   background: "rgba(0,0,0,0.4)",
   position: "relative",
@@ -120,8 +125,9 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   // The viewport size at the rendered scale — we need this to convert
   // mouse coords to normalised PDF coords on save.
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
-  // Bumped on resize to recompute the fit-to-page scale.
-  const [fitTick, setFitTick] = useState(0);
+  // Measured content area of the scroll container (via ResizeObserver), used to
+  // fit the whole page to view on open + refit on resize.
+  const [wrapSize, setWrapSize] = useState({ width: 0, height: 0 });
 
   // Marker state. Rects are stored in NORMALISED coords (0..1) regardless
   // of zoom, so changing the page or zoom doesn't invalidate them.
@@ -180,11 +186,10 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
         if (cancelled) return;
 
         const base = page.getViewport({ scale: 1 }); // native page size
-        // Available content area inside the canvas wrap (minus its 16px padding).
-        const wrap = wrapRef.current;
-        const pad = 32;
-        const availW = Math.max(200, (wrap?.clientWidth || 1000) - pad);
-        const availH = Math.max(200, (wrap?.clientHeight || 700) - pad);
+        // Available content area of the scroll container. ResizeObserver gives the
+        // content-box directly (padding already excluded); fall back until first measure.
+        const availW = Math.max(200, wrapSize.width || 1000);
+        const availH = Math.max(200, wrapSize.height || 700);
         // Fit the whole sheet; never upscale past native (1×) so a small PDF
         // neither blows up nor pixelates.
         const fitScale = Math.min(availW / base.width, availH / base.height, 1);
@@ -209,14 +214,26 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [pageNum, pdfReady, fitTick]);
+  }, [pageNum, pdfReady, wrapSize]);
 
-  // Re-fit on window resize so the whole page stays visible (debounced).
+  // Measure the scroll container so the page can be fit-to-view. A ResizeObserver
+  // gives the true content size on first layout AND on any resize — no scroll-
+  // timing guesswork, so the whole sheet stays visible.
   useEffect(() => {
-    let t;
-    const onResize = () => { clearTimeout(t); t = setTimeout(() => setFitTick((n) => n + 1), 150); };
-    window.addEventListener("resize", onResize);
-    return () => { window.removeEventListener("resize", onResize); clearTimeout(t); };
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver((entries) => {
+      const cr = entries[0]?.contentRect;
+      if (cr && cr.width && cr.height) {
+        setWrapSize((prev) =>
+          prev.width === Math.round(cr.width) && prev.height === Math.round(cr.height)
+            ? prev
+            : { width: Math.round(cr.width), height: Math.round(cr.height) },
+        );
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   // ── Mouse → normalised coord helpers ────────────────────────────────
