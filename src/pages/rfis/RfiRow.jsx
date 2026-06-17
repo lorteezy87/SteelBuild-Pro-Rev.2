@@ -22,15 +22,23 @@ function dueSummary(rfi) {
 }
 
 function impactSummary(rfi) {
+  const m = rfi.metadata || {};
   const cost = rfi.cost_impact && rfi.cost_impact_amount
     ? `$${Number(rfi.cost_impact_amount).toLocaleString()}`
     : null;
   const schedule = rfi.schedule_impact && rfi.schedule_impact_days
     ? `${rfi.schedule_impact_days}d schedule`
     : null;
-  const primary = cost || schedule || "None";
-  const secondary = cost && schedule ? schedule : rfi.cost_impact || rfi.schedule_impact ? "Potential impact" : "No known impact";
-  return { primary, secondary, live: Boolean(cost || schedule || rfi.cost_impact || rfi.schedule_impact) };
+  const flags = [];
+  if (m.change_order_likely) flags.push("CO likely");
+  if (m.drawing_revision_required) flags.push("rev req'd");
+  if (m.fab_impact) flags.push("fab");
+  if (m.erection_impact) flags.push("erection");
+  const primary = cost || schedule || (flags[0] || "None");
+  const secondary = flags.length
+    ? flags.join(" · ")
+    : cost && schedule ? schedule : rfi.cost_impact || rfi.schedule_impact ? "Potential impact" : "No known impact";
+  return { primary, secondary, live: Boolean(cost || schedule || flags.length || rfi.cost_impact || rfi.schedule_impact) };
 }
 
 export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
