@@ -37,7 +37,7 @@ import {
   taskSearchHaystack, pluralize, isStalledTask, isSummaryScheduleTask,
   isActionableScheduleTask, taskOwner, isUnassignedTask, hasLogicGapTask, isLookaheadTask,
 } from "./scheduleGanttHelpers";
-import { GanttStatsBar, GanttQuickFilters, GanttMetricCards } from "./ScheduleGanttToolbar";
+import { GanttStatsBar, GanttQuickFilters, GanttMetricCards, GanttLegend } from "./ScheduleGanttToolbar";
 import { useColumnResize } from "./useColumnResize";
 
 const DELIVERY_STATUS_DOT = {
@@ -1376,31 +1376,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         </button>
       </div>
 
-      {showLegend && (
-        <div data-gantt-export-exclude style={{
-          flexShrink: 0,
-          display: "flex",
-          gap: 10,
-          padding: "7px 16px",
-          borderBottom: "1px solid var(--divider)",
-          background: "rgba(255,255,255,0.025)",
-          color: "var(--text-secondary)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 8,
-          letterSpacing: "0.05em",
-          textTransform: "uppercase",
-          overflowX: "auto",
-        }}>
-          <span><strong style={{ color: "var(--accent)" }}>Double-click</strong> edit row</span>
-          <span><strong style={{ color: "var(--accent)" }}>Alt+Up/Down</strong> reorder</span>
-          <span><strong style={{ color: "var(--accent)" }}>Tab / Shift+Tab</strong> indent</span>
-          <span><strong style={{ color: "var(--status-warning)" }}>Variance</strong> effective dates differ from stored dates</span>
-          <span><strong style={{ color: "var(--status-info)" }}>Linked</strong> predecessor or successor exists</span>
-          {baselineTaskCount > 0 && (
-            <span><strong style={{ color: "#94A3B8" }}>Ghost bar</strong> baseline (original plan) position</span>
-          )}
-        </div>
-      )}
+      {showLegend && <GanttLegend baselineTaskCount={baselineTaskCount} />}
 
       <div style={{ display: "flex", flexShrink: 0, height: HEAD_H, borderBottom: "1px solid var(--divider)" }}>
         {/* Left header — each column cell wraps its label in a relative
