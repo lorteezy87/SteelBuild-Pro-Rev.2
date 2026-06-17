@@ -58,6 +58,13 @@ platform-maturity follow-ups._
   flow yet (needs a seeded test user / self-signup against a non-prod project).
 - **A11y audit + mobile/iPad polish** on core workflows; **large-project
   performance** (virtualization, server-side filtering, narrow invalidation).
+- **Dependency vulnerabilities** — `npm audit fix` (2026-06-17) cleared 7 of 9
+  (dompurify←jspdf, react-router/-dom→6.30.4 open-redirect, ws, form-data,
+  js-yaml — all semver-compatible, lockfile-only). The remaining **2 high** are
+  `esbuild` pulled by `vite`; the only fix is `vite@8` — a breaking major upgrade.
+  Deferred: esbuild is a build-time/dev dependency (the GHSA needs a malicious
+  `NPM_CONFIG_REGISTRY`; it doesn't run in production), so the vite-8 migration is
+  a separate, tested effort rather than an `npm audit fix --force`.
 
 ### From the 2026-05-26 enterprise-readiness audit (still open)
 
