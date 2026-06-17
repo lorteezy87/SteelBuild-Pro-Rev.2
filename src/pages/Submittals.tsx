@@ -27,6 +27,7 @@ import {
   pickCarryForwardResponses,
   formatCarryForwardNotes,
 } from "@/lib/submittalResubmittal";
+import { forecastPortfolio } from "@/lib/submittalForecast";
 import { batchProcess } from "@/utils/batchProcess";
 import { usePermissions } from "@/services/permissions";
 import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submittals/format";
@@ -421,6 +422,16 @@ export default function Submittals() {
     return { total, pending, approved, rejected, overdue };
   }, [rows]);
 
+  // Review-return forecast across all submittals — learns the shop's cycle
+  // time from history (rounds + completed submittals) and projects each pending
+  // review's return + late risk. Stats reused by the detail panel's forecast.
+  const today = localToday();
+  const reviewForecast = useMemo(
+    () => forecastPortfolio({ submittals: rows, rounds: allRounds, today }),
+    [rows, allRounds, today],
+  );
+  const reviewsAtRisk = reviewForecast.summary.atRisk + reviewForecast.summary.late;
+
   const selected = selectedId ? rows.find((r) => r.id === selectedId) : null;
   const editing = editingId ? rows.find((r) => r.id === editingId) : null;
 
@@ -490,6 +501,7 @@ export default function Submittals() {
           active={filterStatus === "__rejected"}
           onClick={() => setFilterStatus("__rejected")} />
         <KpiTile compact label="Overdue" value={stats.overdue} color="var(--status-error)" />
+        <KpiTile compact label="At risk" value={reviewsAtRisk} color="var(--status-warning)" sub="forecast" />
       </div>
 
       <PhoenixPanel style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -564,6 +576,8 @@ export default function Submittals() {
                 : []
             }
             drawings={allDrawings}
+            cycleStats={reviewForecast.stats}
+            today={today}
             allRfis={allRfis}
             allTasks={allTasks}
             projectName={activeProject?.project_name || activeProject?.name || "Project"}

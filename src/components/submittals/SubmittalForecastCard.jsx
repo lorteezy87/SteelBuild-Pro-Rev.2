@@ -1,0 +1,114 @@
+import React from "react";
+import { formatDate } from "../shared/formatters";
+
+/**
+ * SubmittalForecastCard — review-return forecast for a pending submittal.
+ *
+ * Reads a SubmittalForecast (submittalForecast.forecastSubmittal): expected +
+ * worst-case return, risk, and what the estimate is based on. Renders nothing
+ * for submittals that aren't forecastable (not under review / no sent date).
+ *
+ * Props:
+ *   forecast — SubmittalForecast object
+ */
+
+const RISK_CFG = {
+  low:    { color: "#10B981", bg: "rgba(16,185,129,0.10)", border: "rgba(16,185,129,0.45)" },
+  medium: { color: "#F59E0B", bg: "rgba(245,158,11,0.10)", border: "rgba(245,158,11,0.45)" },
+  high:   { color: "#DC2626", bg: "rgba(220,38,38,0.10)", border: "rgba(220,38,38,0.45)" },
+};
+
+function Metric({ label, value, accent }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <span style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 8,
+        fontWeight: 700,
+        letterSpacing: "0.10em",
+        textTransform: "uppercase",
+        color: "var(--text-muted)",
+      }}>
+        {label}
+      </span>
+      <span style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 12,
+        fontWeight: 700,
+        color: accent || "var(--text-primary)",
+      }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+export default function SubmittalForecastCard({ forecast }) {
+  if (!forecast || !forecast.forecastable) return null;
+  const cfg = RISK_CFG[forecast.risk] || RISK_CFG.low;
+  const daysOut = typeof forecast.daysOut === "number" ? forecast.daysOut : null;
+
+  return (
+    <div style={{
+      border: `1px solid ${cfg.border}`,
+      background: cfg.bg,
+      borderRadius: 8,
+      padding: "12px 14px",
+    }}>
+      {/* Risk header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+        <span style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          fontWeight: 800,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          color: cfg.color,
+        }}>
+          {forecast.label}
+        </span>
+        {daysOut != null && (
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            fontWeight: 700,
+            color: "var(--text-muted)",
+          }}>
+            {daysOut < 0 ? "sent in future" : `${daysOut}d out for review`}
+          </span>
+        )}
+      </div>
+
+      {/* Forecast metrics */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        <Metric label="Expected back" value={formatDate(forecast.expectedReturn) || "—"} accent={cfg.color} />
+        <Metric label="Worst case" value={formatDate(forecast.worstCaseReturn) || "—"} />
+        <Metric label="Required" value={forecast.required ? formatDate(forecast.required) : "—"} />
+      </div>
+
+      {/* Basis + fab-impact note */}
+      <div style={{
+        marginTop: 10,
+        fontFamily: "var(--font-mono)",
+        fontSize: 8.5,
+        color: "var(--text-muted)",
+        letterSpacing: "0.03em",
+        lineHeight: 1.5,
+      }}>
+        Est. cycle {forecast.cycleP50}d (p75 {forecast.cycleP75}d) · based on {forecast.basis}
+      </div>
+      {forecast.fabImpact && (
+        <div style={{
+          marginTop: 6,
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          fontWeight: 700,
+          color: cfg.color,
+          letterSpacing: "0.03em",
+        }}>
+          ⚠ A late return threatens the linked fabrication package(s).
+        </div>
+      )}
+    </div>
+  );
+}
