@@ -69,3 +69,64 @@ describe("computeFabReleaseGate", () => {
     expect(findBlockingRfis({ drawings: [sheet("S1", "RFI-001"), sheet("S2", "RFI-001")], rfis: [rfi("RFI-001", "Open")] })).toHaveLength(1);
   });
 });
+
+describe("computeFabReleaseGate — readiness checks beyond RFIs", () => {
+  it("blocks on a rejected / revise-and-resubmit sheet (no RFIs involved)", () => {
+    const g = computeFabReleaseGate({ drawings: [{ id: "S1", stage: "Revise and Resubmit" }] });
+    expect(g.blocked).toBe(true);
+    expect(g.reasons.map((r) => r.kind)).toContain("rejected_sheets");
+    expect(g.reasons.find((r) => r.kind === "rejected_sheets").sheets.map((s) => s.id)).toEqual(["S1"]);
+    expect(g.blockingCount).toBe(0); // legacy RFI fields stay clean
+  });
+
+  it("blocks on a superseded sheet (revision conflict)", () => {
+    const g = computeFabReleaseGate({ drawings: [{ id: "S1", stage: "Released", is_superseded: true }] });
+    expect(g.reasons.map((r) => r.kind)).toContain("revision_conflict");
+  });
+
+  it("reports a sheet that is both rejected AND superseded once (under rejected)", () => {
+    const g = computeFabReleaseGate({ drawings: [{ id: "S1", stage: "Rejected", is_superseded: true }] });
+    const kinds = g.reasons.map((r) => r.kind);
+    expect(kinds).toContain("rejected_sheets");
+    expect(kinds).not.toContain("revision_conflict");
+  });
+
+  it("does NOT block an approved, non-superseded, RFI-free package", () => {
+    const g = computeFabReleaseGate({
+      drawings: [{ id: "S1", stage: "Released" }, { id: "S2", set_approval_status: "approved" }],
+    });
+    expect(g.blocked).toBe(false);
+    expect(g.reasons).toEqual([]);
+  });
+
+  it("requireSignoffs blocks approved sheets without a fab sign-off; ignores in-progress sheets", () => {
+    const drawings = [
+      { id: "A", stage: "Released" }, // approved, no sign-off → blocks
+      { id: "B", stage: "Released" }, // approved, has sign-off → ok
+      { id: "C", stage: "IFA" }, // in progress → sign-off not required
+    ];
+    const signoffs = [{ drawing_id: "B", stamp_type: "approved_for_fabrication" }];
+    const g = computeFabReleaseGate({ drawings, signoffs, requireSignoffs: true });
+    const missing = g.reasons.find((r) => r.kind === "missing_signoffs");
+    expect(missing).toBeTruthy();
+    expect(missing.sheets.map((s) => s.id)).toEqual(["A"]);
+  });
+
+  it("requireSignoffs=false never adds a sign-off reason", () => {
+    const g = computeFabReleaseGate({ drawings: [{ id: "A", stage: "Released" }], requireSignoffs: false });
+    expect(g.reasons.map((r) => r.kind)).not.toContain("missing_signoffs");
+  });
+
+  it("surfaces multiple blocking reasons together", () => {
+    const g = computeFabReleaseGate({
+      drawings: [
+        { id: "S1", stage: "Released", linked_rfi_ids: "RFI-001" },
+        { id: "S2", stage: "Rejected" },
+        { id: "S3", stage: "Released", is_superseded: true },
+      ],
+      rfis: [{ id: "r1", rfi_number: "RFI-001", status: "Open" }],
+    });
+    expect(g.blocked).toBe(true);
+    expect(g.reasons.map((r) => r.kind).sort()).toEqual(["open_rfis", "rejected_sheets", "revision_conflict"]);
+  });
+});
