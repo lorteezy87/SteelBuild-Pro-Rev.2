@@ -10,7 +10,10 @@ import { formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSet
 import CommentThreadRaw from "@/components/collaboration/CommentThread";
 import RoundTimeline from "@/components/submittals/RoundTimeline";
 import ResponseMatrix from "@/components/submittals/ResponseMatrix";
+import SubmittalForecastCard from "@/components/submittals/SubmittalForecastCard";
 import { buildResponseMatrix } from "@/lib/submittalResubmittal";
+import { forecastSubmittal } from "@/lib/submittalForecast";
+import type { CycleStats } from "@/lib/submittalForecast";
 import { LinkedRFIs, LinkedTasks } from "@/components/submittals/LinkedEntities";
 import SubmittalReviewStrip from "@/components/submittals/SubmittalReviewStrip";
 import ApprovalChainPanelRaw from "@/components/submittals/ApprovalChainPanel";
@@ -240,17 +243,31 @@ interface SubmittalDetailProps {
   sheetResponses?: any[];
   /** Project drawings — resolve a blank sheet number / title in the matrix. */
   drawings?: any[];
+  /** Project-wide review-cycle stats (for the return forecast). */
+  cycleStats?: CycleStats | null;
+  /** Today as 'YYYY-MM-DD' (injected — never new Date() in render). */
+  today?: string;
   /** Advance the submittal one step in the canonical flow (status + BIC together). */
   onAdvance?: (action: { nextStatus: string | null; nextBallInCourt: string | null; label: string; nextStage: string | null; chainStepIndex?: number }) => void;
 }
 
-export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], onAdvance }: SubmittalDetailProps) {
+export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance }: SubmittalDetailProps) {
   // Round-over-round per-sheet disposition matrix (computed before any early
   // return to keep hook order stable). Empty-safe — renders nothing when the
   // submittal has no recorded reviewer responses.
   const responseMatrix = useMemo(
     () => buildResponseMatrix({ rounds, responses: sheetResponses, drawings }),
     [rounds, sheetResponses, drawings],
+  );
+  // Review-return forecast for a pending submittal (also before any early
+  // return). Empty-safe — `forecastable:false` when not under review, no sent
+  // date, or no stats yet, in which case the section renders nothing.
+  const forecast = useMemo(
+    () =>
+      cycleStats && today
+        ? forecastSubmittal({ submittal: submittal as any, rounds, stats: cycleStats, today })
+        : { forecastable: false },
+    [submittal, rounds, cycleStats, today],
   );
   // Wrap onFieldChange so a no-op edit (typing the same value back)
   // doesn't fire a network update — small UX nicety, also stops
@@ -342,6 +359,15 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
           rounds={rounds}
           projectName={projectName}
         />
+
+        {/* Review forecast — for a submittal currently out for review, project
+            the expected return from the shop's historical cycle time and flag
+            late risk / fab impact. Hidden for non-pending submittals. */}
+        {forecast.forecastable && (
+          <DetailSection title="Review forecast">
+            <SubmittalForecastCard forecast={forecast} />
+          </DetailSection>
+        )}
 
         {/* Status pills — click to transition */}
         <DetailSection title="Status workflow">
