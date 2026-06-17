@@ -128,6 +128,8 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   // Measured content area of the scroll container (via ResizeObserver), used to
   // fit the whole page to view on open + refit on resize.
   const [wrapSize, setWrapSize] = useState({ width: 0, height: 0 });
+  // Zoom relative to fit-to-page: 1 = the whole sheet; >1 zooms in to mark precisely.
+  const [zoom, setZoom] = useState(1);
 
   // Marker state. Rects are stored in NORMALISED coords (0..1) regardless
   // of zoom, so changing the page or zoom doesn't invalidate them.
@@ -193,10 +195,11 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
         // Fit the whole sheet; never upscale past native (1×) so a small PDF
         // neither blows up nor pixelates.
         const fitScale = Math.min(availW / base.width, availH / base.height, 1);
+        const scale = fitScale * zoom; // zoom 1 = fit the whole page
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-        const display = page.getViewport({ scale: fitScale });
-        const render = page.getViewport({ scale: fitScale * dpr });
+        const display = page.getViewport({ scale });
+        const render = page.getViewport({ scale: scale * dpr });
 
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -214,7 +217,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [pageNum, pdfReady, wrapSize]);
+  }, [pageNum, pdfReady, wrapSize, zoom]);
 
   // Measure the scroll container so the page can be fit-to-view. A ResizeObserver
   // gives the true content size on first layout AND on any resize — no scroll-
@@ -581,6 +584,33 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
               style={{ ...btn("secondary"), padding: "6px 10px" }}
               aria-label="Next page"
             >›</button>
+          </div>
+
+          <div style={{ width: 1, height: 22, background: "var(--border-default)", margin: "0 4px" }} />
+
+          {/* Zoom (1× = fit the whole page) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              onClick={() => setZoom((z) => Math.max(0.2, +(z / 1.25).toFixed(3)))}
+              disabled={!pdfReady}
+              style={{ ...btn("secondary"), padding: "6px 11px" }}
+              aria-label="Zoom out"
+            >−</button>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", minWidth: 52, textAlign: "center" }}>
+              {zoom === 1 ? "Fit" : `${Math.round(zoom * 100)}%`}
+            </span>
+            <button
+              onClick={() => setZoom((z) => Math.min(8, +(z * 1.25).toFixed(3)))}
+              disabled={!pdfReady}
+              style={{ ...btn("secondary"), padding: "6px 11px" }}
+              aria-label="Zoom in"
+            >+</button>
+            <button
+              onClick={() => setZoom(1)}
+              disabled={!pdfReady || zoom === 1}
+              style={{ ...btn("secondary"), padding: "6px 10px" }}
+              title="Fit the whole sheet in view"
+            >Fit</button>
           </div>
 
           <div style={{ flex: 1 }} />
