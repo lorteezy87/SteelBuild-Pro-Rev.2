@@ -63,7 +63,7 @@ import {
   textPrimary,
   warning,
 } from "./drawingSubmittalHub/format";
-import { ApprovalMatrix, DrawingRegisterTable, FleetHealthStrip, HeaderSignal, LeadTimesModal, TriageBoard } from "./drawingSubmittalHub/components";
+import { ApprovalMatrix, DrawingRegisterTable, FleetHealthStrip, HeaderSignal, LeadTimesModal, RevisionImpactBoard, TriageBoard } from "./drawingSubmittalHub/components";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
@@ -269,6 +269,48 @@ export default function DrawingSubmittalHub() {
     }
     return computeRevisionImpact({ revisions: drawingRevisions as any[], drawingsById });
   }, [drawings, drawingRevisions]);
+
+  // Slice 4 — enrich each change-revision with its set's work package, linked
+  // RFIs, fab-blocked state, and a best-effort affected-piece count, for the
+  // Revision Impact board. "Affected pieces" maps the set's linked-WP sequence to
+  // model_elements.sequence_number — null (shown as "—") when no mapping exists.
+  const revisionImpactRows = useMemo(() => {
+    const drawingsById = new Map<string, any>();
+    for (const d of (drawings as any[]) || []) if (d?.id) drawingsById.set(String(d.id), d);
+    const setById = new Map<string, any>();
+    for (const s of (drawingSets as any[]) || []) if (s?.id) setById.set(String(s.id), s);
+    const normRfi = (x: any) => String(x ?? "").replace(/[-\s]/g, "").toLowerCase();
+    const rfiByNum = new Map<string, any>();
+    for (const r of (rfis as any[]) || []) if (r && !r.is_deleted) rfiByNum.set(normRfi(r.rfi_number), r);
+    const elemBySeq = new Map<string, number>();
+    for (const e of (modelElements as any[]) || []) {
+      const seq = e?.sequence_number != null ? String(e.sequence_number) : "";
+      if (seq) elemBySeq.set(seq, (elemBySeq.get(seq) || 0) + 1);
+    }
+    const wpSeqOf = (wp: any) => {
+      const v = wp?.sequence_number ?? wp?.erection_sequence ?? wp?.sequence ?? wp?.area_sequence ?? null;
+      return v != null && v !== "" ? String(v) : null;
+    };
+    return ((revisionImpact as any[]) || []).map((imp: any) => {
+      const dwg = drawingsById.get(String(imp.drawingId)) || null;
+      const set = dwg?.drawing_set_id ? setById.get(String(dwg.drawing_set_id)) : null;
+      const wpIds: string[] = (set?.linked_work_package_ids as string[]) || [];
+      const wps = wpIds.map((id) => wpById.get(String(id))).filter(Boolean);
+      const wpNames = wps.map((w: any) => w.wp_number || w.name || w.title).filter(Boolean);
+      const nums = [...new Set(String(dwg?.linked_rfi_ids || "").split(/[,\s]+/).map(normRfi).filter(Boolean))];
+      const linkedRfis = nums.map((n) => rfiByNum.get(n)).filter(Boolean);
+      const openRfis = linkedRfis.filter((r: any) => r && !CLOSED_RFI.has(r.status));
+      const fabBlocked = openRfis.some((r: any) => r.fab_hold === true);
+      let affectedPieces: number | null = null;
+      for (const w of wps) {
+        const seq = wpSeqOf(w);
+        if (seq && elemBySeq.has(seq)) affectedPieces = (affectedPieces || 0) + (elemBySeq.get(seq) || 0);
+      }
+      return { ...imp, setName: imp.drawingSetName || set?.set_name || "—", wpNames, rfiCount: linkedRfis.length, openRfiCount: openRfis.length, fabBlocked, affectedPieces };
+    });
+    // CLOSED_RFI is a stable in-component set (same pattern as openRfiIds above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revisionImpact, drawings, drawingSets, wpById, rfis, modelElements]);
 
   // Sheet selected for the revision overlay compare (Revision Impact rows).
   const compareDrawing = useMemo(
@@ -736,6 +778,13 @@ export default function DrawingSubmittalHub() {
                 drawingSets={drawingSets}
                 submittals={submittals}
                 roundsBySubmittal={roundsBySubmittal}
+                isLoading={isLoading}
+              />
+            )}
+            {activeTab === "revimpact" && (
+              <RevisionImpactBoard
+                rows={revisionImpactRows}
+                onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
                 isLoading={isLoading}
               />
             )}
