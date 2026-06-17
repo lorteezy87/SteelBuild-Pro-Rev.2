@@ -63,7 +63,8 @@ import {
   textPrimary,
   warning,
 } from "./drawingSubmittalHub/format";
-import { ApprovalMatrix, DrawingRegisterTable, HeaderSignal, LeadTimesModal, TriageBoard } from "./drawingSubmittalHub/components";
+import { ApprovalMatrix, DrawingRegisterTable, FleetHealthStrip, HeaderSignal, LeadTimesModal, TriageBoard } from "./drawingSubmittalHub/components";
+import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
 // chunk 404s after a deploy trigger a reload instead of a hard crash.
@@ -179,6 +180,17 @@ export default function DrawingSubmittalHub() {
     () => buildSetPackages(drawings, drawingSets, submittals),
     [drawings, drawingSets, submittals]
   );
+
+  // Per-set Drawing Health Score (slice 2) — deterministic; feeds the Register
+  // Health column + the Control Board fleet rollup.
+  const healthByKey = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const pkg of setPackages) {
+      m.set(pkg.key, calculateDrawingHealthScore(pkg, { rfis: rfis as any[], revisions: drawingRevisions as any[] }));
+    }
+    return m;
+  }, [setPackages, rfis, drawingRevisions]);
+  const fleetHealth = useMemo(() => summarizeFleetHealth([...healthByKey.values()]), [healthByKey]);
 
   // Lookup maps for readiness: WP by id, and the set of OPEN rfi ids.
   const wpById = useMemo(() => {
@@ -673,6 +685,8 @@ export default function DrawingSubmittalHub() {
         <ErrorBoundary>
           <Suspense fallback={<LoadingSkeleton />}>
             {activeTab === "overview" && (
+              <>
+              <FleetHealthStrip fleet={fleetHealth} onOpenRegister={() => setActiveTab("drawings")} />
               <TriageBoard
                 triage={triage}
                 kpis={kpis}
@@ -692,6 +706,7 @@ export default function DrawingSubmittalHub() {
                 modelElementRows={modelElements as any[]}
                 onImportModelElements={() => setImportModelOpen(true)}
               />
+              </>
             )}
             {activeTab === "process" && (
               <SubmittalVisualBoard
@@ -708,6 +723,7 @@ export default function DrawingSubmittalHub() {
                 activeProject={activeProject}
                 drawingSets={drawingSets}
                 isLoading={isLoading}
+                healthByKey={healthByKey}
               />
             )}
             {activeTab === "submittals" && <SubmittalsPage />}
