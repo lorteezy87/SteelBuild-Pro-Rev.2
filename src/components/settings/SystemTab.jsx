@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
+import { entities } from '@/api/supabaseClient';
+import { useOrg } from '@/components/shared/OrgContext';
+import { exportWorkspace, downloadWorkspaceExport } from '@/lib/workspaceExport';
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -19,23 +22,40 @@ const ActionBtn = ({ onClick, disabled, color, children }) => (
 );
 
 export default function SystemTab({ user }) {
+  const { currentOrg } = useOrg();
   const [isExporting, setIsExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState('');
 
+  // Real workspace backup: pull every project the caller can access and export
+  // each through the RLS-scoped, audited `project-export` Edge Function, then
+  // bundle them into one downloadable JSON. (Replaces a placeholder that
+  // downloaded only a list of table names — no actual data.)
   const handleExportData = async () => {
     setIsExporting(true);
+    setExportMsg('Gathering projects…');
     try {
-      const timestamp = new Date().toISOString().split('T')[0];
-      const data = { exportDate: new Date().toISOString(), appVersion: '1.0.0', dataTypes: ['projects', 'work_packages', 'rfis', 'drawings', 'deliveries', 'expenses'] };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `steelbuild-export-${timestamp}.json`; a.click();
-      URL.revokeObjectURL(url);
-      toast.success('Data export started');
+      const projects = await entities.Project.list();
+      if (!projects?.length) {
+        toast.error('No projects to export yet.');
+        return;
+      }
+      const bundle = await exportWorkspace(projects, {
+        workspaceName: currentOrg?.name,
+        onProgress: (done, total, name) =>
+          setExportMsg(name ? `Exporting ${Math.min(done + 1, total)} of ${total}: ${name}…` : 'Packaging backup…'),
+      });
+      downloadWorkspaceExport(bundle);
+      const skipped = bundle.failures.length;
+      toast.success(
+        `Exported ${bundle.project_count} project${bundle.project_count === 1 ? '' : 's'} · ` +
+        `${bundle.total_rows.toLocaleString()} rows` +
+        (skipped ? ` · ${skipped} skipped` : ''),
+      );
     } catch (err) {
-      toast.error('Export failed');
+      toast.error('Export failed: ' + (err?.message || String(err)));
     } finally {
       setIsExporting(false);
+      setExportMsg('');
     }
   };
 
@@ -74,10 +94,13 @@ export default function SystemTab({ user }) {
         <label style={labelStyle}>Data Management</label>
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Export Your Data</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>Download a JSON export of your projects, work packages, RFIs, and other records.</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>Download a complete JSON backup of every project in your workspace — drawings, submittals, RFIs, change orders, schedule, costs, and more. Each export is recorded in your activity log.</div>
           <ActionBtn onClick={handleExportData} disabled={isExporting} color="info">
-            {isExporting ? 'Exporting...' : '📥 Export Data'}
+            {isExporting ? 'Exporting…' : '📥 Export Data'}
           </ActionBtn>
+          {isExporting && exportMsg && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>{exportMsg}</div>
+          )}
         </div>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Clear Cache</div>
