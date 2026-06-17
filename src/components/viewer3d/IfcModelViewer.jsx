@@ -261,7 +261,16 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
           </div>
         </div>
       )}
-      {status === "ready" && (
+      {status === "ready" && count === 0 && (
+        <div style={overlay}>
+          <div role="alert" style={{ maxWidth: 440, textAlign: "center", color: "var(--text-primary)", fontSize: 13, lineHeight: 1.6 }}>
+            No structural members to show — this IFC has no beams, columns, plates,
+            or members (it looks like a reference/proxy export). Re-export from your
+            detailer with structural members, then load it again.
+          </div>
+        </div>
+      )}
+      {status === "ready" && count > 0 && (
         <>
           <button type="button" onClick={() => apiRef.current?.fitView?.()} title="Fit whole model in view" style={fitBtn}>
             Fit view
