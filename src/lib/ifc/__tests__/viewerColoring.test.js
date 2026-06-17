@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  buildFabByGuid, buildSeqByGuid, buildStatusByGuid, colorFnFor, seqColor, TYPE_PALETTE,
+  buildFabByGuid, buildSeqByGuid, buildStatusByGuid,
+  buildMarkByGuid, buildFabByMark, buildSeqByMark, buildStatusByMark,
+  colorFnFor, seqColor, TYPE_PALETTE,
 } from "@/lib/ifc/viewerColoring";
 import { FAB_STATUS_META } from "@/lib/fabStatus";
 
@@ -61,5 +63,70 @@ describe("other color modes", () => {
 
   it("model: always native (null)", () => {
     expect(colorFnFor("model", {})({ guid: "g-a1-p1", ifcType: "beam" })).toBeNull();
+  });
+});
+
+describe("mark-keyed fallback (CSV rosters / multi-part assemblies)", () => {
+  // The model renders parts by GUID. Here the roster mixes IFC rows (with GUIDs)
+  // and CSV-sourced data keyed only by piece mark. markByGuid bridges a rendered
+  // part's GUID -> its normalized mark so the mark-keyed maps can color it.
+  const ifcRows = [
+    { element_guid: "g-a1-p1", piece_mark: "a1" }, // note lowercase → normalizes to A1
+    { element_guid: "g-a1-p2", piece_mark: "A1" },
+    { element_guid: "g-b2-p1", piece_mark: "B2" },
+  ];
+
+  it("buildMarkByGuid normalizes the mark and only maps GUID-bearing rows", () => {
+    const m = buildMarkByGuid([...ifcRows, { element_guid: null, piece_mark: "C3" }]);
+    expect(m.get("g-a1-p1")).toBe("A1");
+    expect(m.get("g-b2-p1")).toBe("B2");
+    expect(m.size).toBe(3); // the guid-less row is not a bridge entry
+  });
+
+  it("fab: colors every part of an assembly from a single mark-keyed status", () => {
+    // CSV/production data set fab_status on the assembly mark, no per-GUID rows.
+    const fabByMark = buildFabByMark([{ piece_mark: "A1", fab_status: "shipped" }]);
+    const markByGuid = buildMarkByGuid(ifcRows);
+    const fn = colorFnFor("fab", { fabByGuid: buildFabByGuid([]), markByGuid, fabByMark });
+    // Both parts of A1 color, even though neither GUID is in any fab-by-GUID map.
+    expect(fn({ guid: "g-a1-p1" })).toBe(FAB_STATUS_META.shipped.color);
+    expect(fn({ guid: "g-a1-p2" })).toBe(FAB_STATUS_META.shipped.color);
+    expect(fn({ guid: "g-b2-p1" })).toBeNull(); // B2 has no status → native
+  });
+
+  it("fab: GUID-keyed status wins over the mark fallback", () => {
+    const fabByGuid = buildFabByGuid([{ element_guid: "g-a1-p1", piece_mark: "A1", fab_status: "fabricated" }]);
+    const fabByMark = buildFabByMark([{ piece_mark: "A1", fab_status: "shipped" }]);
+    const fn = colorFnFor("fab", { fabByGuid, markByGuid: buildMarkByGuid(ifcRows), fabByMark });
+    expect(fn({ guid: "g-a1-p1" })).toBe(FAB_STATUS_META.fabricated.color); // GUID wins
+    expect(fn({ guid: "g-a1-p2" })).toBe(FAB_STATUS_META.shipped.color);    // falls back to mark
+  });
+
+  it("sequence: a mark-keyed sequence colors all parts sharing the mark", () => {
+    const seqByMark = buildSeqByMark([{ piece_mark: "B2", sequence_number: "5" }]);
+    const fn = colorFnFor("sequence", { seqByGuid: buildSeqByGuid([]), markByGuid: buildMarkByGuid(ifcRows), seqByMark });
+    expect(fn({ guid: "g-b2-p1" })).toBe(seqColor("5"));
+    expect(fn({ guid: "g-a1-p1" })).toBeNull(); // A1 has no sequence
+  });
+
+  it("status: falls back to a mark-keyed bucket color (excludes unmapped)", () => {
+    const statusByMark = buildStatusByMark({ marksByStatus: { unmapped: ["B2"], fab_ready: ["A1"] } });
+    const fn = colorFnFor("status", { statusByGuid: buildStatusByGuid({ guidsByStatus: {} }), markByGuid: buildMarkByGuid(ifcRows), statusByMark });
+    expect(fn({ guid: "g-a1-p1" })).toBeTruthy(); // A1 → fab_ready color
+    expect(fn({ guid: "g-b2-p1" })).toBeNull();   // B2 → unmapped → native
+  });
+
+  it("no mark maps supplied → identical to the original GUID-only behavior", () => {
+    const fabByGuid = buildFabByGuid([{ element_guid: "g-a1-p1", piece_mark: "A1", fab_status: "shipped" }]);
+    const fn = colorFnFor("fab", { fabByGuid }); // no markByGuid/fabByMark
+    expect(fn({ guid: "g-a1-p1" })).toBe(FAB_STATUS_META.shipped.color);
+    expect(fn({ guid: "g-a1-p2" })).toBeNull(); // unknown GUID, no fallback → native
+  });
+
+  it("a part whose GUID has no mark bridge stays native (no crash)", () => {
+    const fabByMark = buildFabByMark([{ piece_mark: "A1", fab_status: "shipped" }]);
+    const fn = colorFnFor("fab", { markByGuid: new Map(), fabByMark });
+    expect(fn({ guid: "ghost" })).toBeNull();
+    expect(fn({})).toBeNull(); // no guid at all
   });
 });

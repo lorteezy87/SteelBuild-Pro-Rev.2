@@ -135,6 +135,14 @@ export interface ElementStatusSummary {
   counts: Record<ElementStatusKey, number>;
   /** IFC GUIDs per bucket — the viewer color-mapping input. */
   guidsByStatus: Record<ElementStatusKey, string[]>;
+  /**
+   * Normalized piece marks per bucket — the mark-keyed coloring fallback for
+   * geometry whose GUID isn't on a roster row (CSV imports leave element_guid
+   * NULL, and a CSV update touches only one part of a multi-part assembly). The
+   * viewer resolves a part's GUID -> mark and falls back to this when the GUID
+   * itself isn't in guidsByStatus.
+   */
+  marksByStatus: Record<ElementStatusKey, string[]>;
   /** Element ids per bucket (for list drill-downs). */
   idsByStatus: Record<ElementStatusKey, string[]>;
   /** % of elements that resolved to a package (mapping coverage). */
@@ -159,6 +167,7 @@ export function summarizeElementStatuses(
 ): ElementStatusSummary {
   const counts = Object.fromEntries(BUCKETS.map((b) => [b, 0])) as Record<ElementStatusKey, number>;
   const guidsByStatus = Object.fromEntries(BUCKETS.map((b) => [b, []])) as Record<ElementStatusKey, string[]>;
+  const marksByStatus = Object.fromEntries(BUCKETS.map((b) => [b, []])) as Record<ElementStatusKey, string[]>;
   const idsByStatus = Object.fromEntries(BUCKETS.map((b) => [b, []])) as Record<ElementStatusKey, string[]>;
 
   let total = 0;
@@ -168,6 +177,8 @@ export function summarizeElementStatuses(
     const status = resolveElementStatus(el, readinessBySetId, sheetSetIdByDrawingId, heldPieceMarks);
     counts[status] += 1;
     if (el.element_guid) guidsByStatus[status].push(String(el.element_guid));
+    const mark = normalizePieceMark(el.piece_mark);
+    if (mark) marksByStatus[status].push(mark);
     if (el.id) idsByStatus[status].push(String(el.id));
   }
 
@@ -176,6 +187,7 @@ export function summarizeElementStatuses(
     total,
     counts,
     guidsByStatus,
+    marksByStatus,
     idsByStatus,
     mappedPct: total > 0 ? Math.round((mapped / total) * 100) : 0,
   };
