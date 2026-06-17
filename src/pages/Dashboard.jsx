@@ -10,6 +10,7 @@ import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import ProjectDashboard from "./dashboard/ProjectDashboard";
 import DashboardHeader from "./dashboard/DashboardHeader";
+import GettingStartedChecklist from "@/components/dashboard/GettingStartedChecklist";
 
 // KPI presentation specs — value is filled per-scope below. Ids match
 // DASHBOARD_KPI_IDS so Settings (visible_kpis / kpi_order) drive this strip.
@@ -370,6 +371,7 @@ export default function Dashboard() {
   return (
     <div data-dashboard-density={prefs.dashboard_density} style={{ display: "flex", flexDirection: "column", gap: bodyGap }}>
       {showHeader && dashboardHeader}
+      <GettingStartedChecklist projectId={pid} />
       <ErrorBoundary label="Project Dashboard">
         <ProjectDashboard
         project={activeProject}
