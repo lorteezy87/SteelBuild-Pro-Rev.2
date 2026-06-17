@@ -32,17 +32,20 @@ For the running list of known issues, see [`TECH_DEBT.md`](./TECH_DEBT.md).
                                │
                                ▼
                   ┌────────────────────────┐
-                  │  Anthropic Claude API  │
-                  │  (LLM via edge fn)     │
+                  │  LLM provider (OpenAI) │
+                  │  Stripe (billing)      │
+                  │  — via Edge Functions  │
                   └────────────────────────┘
 
-         Hosting: Vercel auto-deploys from main
+         Hosting: Vercel auto-deploys from main → steelbuild-pro.com
 ```
 
 There is no separate backend service. The app is a SPA that talks
 directly to Supabase with the publishable anon key, with security
 enforced by Postgres Row-Level Security and Edge Functions for
-operations that need server-side compute (LLM calls, scheduled jobs).
+operations that need server-side compute (LLM calls, billing,
+data export, scheduled jobs). It is **multi-tenant**: each company is an
+`organizations` row (a "workspace"), and every project belongs to one org.
 
 ---
 
@@ -120,6 +123,53 @@ owner  = 3   ←─ same as admin (legacy synonym)
 
 ---
 
+## Multi-tenancy & billing
+
+SteelBuild Pro is a multi-tenant SaaS. A company signs up, creates a
+**workspace** (`organizations`), and works inside it; the workspace is the
+billing + invite + grouping unit.
+
+### Tenancy model
+
+| Table | Purpose |
+|---|---|
+| `organizations` | The workspace. `plan` is the billing/entitlement anchor; `stripe_*` columns track the subscription. |
+| `organization_members` | (user, org) membership + role (`owner`/`admin`/`member`). |
+| `organization_invitations` | Tokenized email invites (14-day expiry); accepted via `accept_invitation()`. |
+| `projects.org_id` | Every project belongs to exactly one org (NOT NULL). |
+
+Front-end: `OrgProvider` / `useOrg()` resolve the active workspace (fail-open so
+a transient fetch error never strands a member), `OrgOnboarding` is the
+create-workspace / accept-invite gate above the app, and `OrgMembers`
+(`/OrgMembers`) manages the team + invites. A brand-new workspace is routed into
+the first-run **Onboarding** wizard.
+
+### Data isolation (the org boundary)
+
+`user_projects` remains authoritative for *which* member sees *which* project's
+data and at what role — but the **org boundary is enforced underneath it**.
+`user_has_project_access(project_id)` (the chokepoint for ~70 project-scoped RLS
+policies) now requires the caller to be a member of the project's org;
+`create_project()` rejects a client-supplied `org_id` the caller isn't a member
+of; `vendors` and `user_profiles` reads are org-scoped; and Storage uploads are
+written under an `<org_id>/uploads/...` path that storage RLS gates by org
+membership (legacy flat `uploads/...` files are grandfathered to the founding
+org via `founding_org_id()`). Net: one tenant can never read another's rows or
+files. See migrations `20260615000000`–`20260616000000`.
+
+### Billing
+
+Stripe subscription plans (Free / Pro / Business; `src/lib/billing/plans.ts`,
+`usePlan()`). `organizations.plan` is the only definition of entitlement and is
+**tamper-proof** — a `BEFORE UPDATE` trigger blocks the client from changing the
+billing columns; only the Stripe webhook (service role) can. Plan **limits**
+(projects, members) are enforced server-side in `create_project()` and
+`accept_invitation()` via `plan_project_limit()` / `plan_member_limit()`. The
+`/Billing` page calls the `stripe-billing` Edge Function for Checkout + Portal;
+price ids live in the function's env, so the client only ever passes a plan key.
+
+---
+
 ## Domain workflow
 
 The detailing/submittal workflow is the heart of the app. Stages
@@ -187,6 +237,14 @@ submittal terminal status (workflow-side).
 | `submittal_sheet_responses` | Per-sheet response within a round |
 | `comments` | Polymorphic — used by RFIs, submittals, drawings |
 | `feature_flags` | Lightweight flag system w/ per-email overrides |
+| `organizations` / `organization_members` / `organization_invitations` | Multi-tenant workspace, membership, invites (see above) |
+
+Beyond the moat, the schema spans the broader steel workflow: `rfis`,
+`change_orders`, `work_packages`, `schedule_tasks`, cost (`sov_items` /
+`cost_codes` / `expenses`), `deliveries`, QA (`inspections` /
+`quality_control_records`), field (`punchlist_items` / `daily_logs` / `photos`),
+`pay_applications` (AIA G702/G703), `backcharges` / `tm_tickets`, and production
++ 3D (`piece_production`, `model_registry`, `model_elements`).
 
 ### Soft deletes
 
@@ -244,23 +302,41 @@ with `<AdminRoute>` (checks `user_profiles.role === 'admin'`).
 
 ### Migrations
 
-`supabase/migrations/NNN_name.sql`. Numbered sequentially. Apply via
-the Supabase dashboard SQL editor or the Supabase MCP. After a
-migration that adds columns, the code calls
-`NOTIFY pgrst, 'reload schema'` so PostgREST picks up the change.
+`supabase/migrations/` — mixed legacy `NNN_name.sql` and timestamped
+`YYYYMMDDhhmmss_name.sql` (**170 as of this writing**; inspect the directory for
+the latest, don't assume a number). Apply live via the Supabase MCP
+(`apply_migration`) and commit the same SQL so repo history matches the
+database. A migration that changes the exposed schema ends with
+`NOTIFY pgrst, 'reload schema'`.
 
 ### Edge Functions
 
-`supabase/functions/`:
-- `llm-proxy` — server-side Anthropic Claude calls. The browser never
-  sees the API key.
-- `schedule-assistant` — schedule-related LLM tasks
+`supabase/functions/` (deploy via Supabase MCP `deploy_edge_function` or
+`supabase functions deploy`):
+
+- `llm-proxy` — the LLM gateway. Holds the only provider API key; all model
+  calls route here. Does its own JWT verification (deploy `--no-verify-jwt`).
+- `schedule-assistant` — schedule chat/tooling; routes model turns through `llm-proxy`.
+- `email-ingest` — inbound email → staged project records (Power Automate path).
+- `email-send` — outbound email compose/reply pipeline.
+- `project-export` — RLS-scoped, audited per-project data export (powers the
+  workspace backup; see Data export).
+- `stripe-billing` / `stripe-setup` / `stripe-webhook` / `stripe-worker` —
+  subscription checkout, portal, and webhook handling.
+- `_shared/` — CORS + helpers.
+- `sharepoint-proxy`, `bluebeam-proxy` — **deprecated** integrations; still
+  deployed but no longer client-invoked (slated for `functions delete`).
 
 ### Storage
 
-Supabase Storage `uploads/` bucket holds drawing PDFs, photos, IFC
-files, etc. URL lifecycle is signed-URL based (short-lived); the app
-re-resolves on use. Client-side cap: 32 MB per upload.
+The `app-files` Supabase Storage bucket holds drawing PDFs, photos, IFC models
+(gzipped), etc.; `email-attachments` is a separate project-scoped bucket. URL
+lifecycle is signed-URL based (short-lived); the app re-resolves on use via
+`resolveFileUrl` / `getSignedUrl`. Bucket file-size limit is 50 MB (large IFC
+models are gzipped on upload to fit + speed downloads). **Tenant-isolated**: new
+uploads are written under `<org_id>/uploads/...` and storage RLS gates reads by
+org membership; legacy flat `uploads/...` objects are grandfathered to the
+founding org. UPDATE/DELETE are owner-scoped.
 
 ---
 
@@ -270,9 +346,7 @@ re-resolves on use. Client-side cap: 32 MB per upload.
 
 `reconcile_stuck_extractions()` Postgres function flips drawings stuck
 in `ai_extraction_status='Extracting'` for >5 min back to `'Failed'`.
-Currently NOT scheduled (pg_cron extension is available on Supabase
-but not installed on this project) — see TECH_DEBT.md for the wiring
-options (install pg_cron OR run from a scheduled edge function).
+Scheduled every 5 minutes via `pg_cron` (migration `20260516003546`).
 
 ### Trigger functions
 
@@ -314,6 +388,13 @@ work unchanged.
 The Phase 1 routing intentionally **mirrors current production
 defaults**. We did not silently switch any caller to a new provider;
 Phase 2 will use telemetry to make informed switches.
+
+> **Since Phase 1:** the default provider is OpenAI (`gpt-4o` / `gpt-4o-mini`);
+> the AI **Revision Intelligence** line replaced the old `analyzeDrawing.js` /
+> `compareRevisions.js` with `src/lib/revisionSnapshotDiff.js` (per-sheet diff,
+> useCase `revision-compare`) feeding `drawing_revision_deltas`, a package-level
+> Revision Impact Report, and one-click Create-RFI-from-delta. The gateway
+> pattern is unchanged — only the routing rows + callers evolved.
 
 **Telemetry.** Every call writes one row to `public.llm_telemetry`
 (success or failure):
@@ -395,8 +476,8 @@ The migration that creates `llm_telemetry` is `081_llm_telemetry.sql`.
 branches and every PR:
 
 1. ESLint (errors block, warnings allowed)
-2. TypeScript (currently non-blocking — types stale, see TECH_DEBT.md)
-3. Vitest (488+ tests)
+2. TypeScript — both `typecheck` (TS) and `typecheck:js` (JS/JSX), blocking
+3. Vitest (~1,250 tests)
 4. Production Vite build
 
 Concurrency group cancels redundant runs on rapid iteration.
@@ -419,9 +500,10 @@ agent-driven development.
 
 ### Unit / integration
 
-Vitest. 490+ tests across pure helpers (`drawingHub`, `submittalStageMapping`,
-`projectMetrics`, `submittalAnalytics`, `pdfSheetExtractor`, etc.) and
-some hook-level tests via mocked supabase calls.
+Vitest. ~1,250 tests across pure helpers (`drawingHub`, `submittalStageMapping`,
+`costRollup`, `projectKpis`, `payapp`, `backcharge`, `pdfSheetExtractor`, etc.),
+hook-level tests, and jsdom integration tests that drive real components +
+import flows with the Supabase client mocked.
 
 ```
 npm test               # one-shot run
@@ -495,16 +577,17 @@ DrawingViewer and ModelViewer, then add interaction tests
   30s on list views)
 - ThumbnailFilmstrip caches pdfjs documents by storage path so
   multi-sheet PDFs parse once, not once per sheet
-- IFC tile streaming via @thatopen/components keeps memory bounded for
-  large models
-- Refetch-on-window-focus disabled for ModelViewer's workPackages
-  query (was thrashing the color-update effect)
+- The self-hosted IFC viewer (web-ifc + three) is lazy-loaded so the
+  ~3.6 MB wasm + three never touch the main bundle; it renders structural
+  members only (~5× fewer draw calls on big models)
+- Large IFC models are gzipped on upload (e.g. 52 MB → ~7 MB)
+- Sentry error + performance monitoring with masked session replay
 
 ### What's not done
 
 - No Lighthouse CI / performance budgets in the build
 - No bundle-size budgets
-- No Sentry or PostHog instrumentation
+- Large-project virtualization / server-side filtering still partial
 - No code splitting beyond per-route lazy chunks
 
 Track all of these in TECH_DEBT.md.
@@ -542,12 +625,38 @@ supabase/
   migrations/       NNN_name.sql, applied in order
   functions/        Edge function source
 
-public/             Static assets including thatopen/fragments-worker.mjs
+public/             Static assets including web-ifc wasm (public/wasm/) + pdf workers
 ```
 
 ---
 
 ## Decision log (recent material decisions)
+
+### 2026-06 — Multi-tenant SaaS (monetization)
+
+The product was turned into a sellable multi-tenant SaaS. We added an
+org/workspace tenancy layer (`organizations` + members + invites), Stripe
+subscription billing with a tamper-proof `org.plan` anchor + server-side limit
+enforcement, self-serve signup + a first-run onboarding wizard, per-tenant data
+export, and — critically — wired the **org boundary into the RLS layer** so
+tenants are isolated at the database, not just behind feature gates.
+`user_projects` stays authoritative for project-level role; org membership is the
+gate beneath it. See the Multi-tenancy & billing section.
+
+### 2026-06 — Self-hosted IFC viewer (dropped @thatopen)
+
+The `@thatopen/components` IFC/BIM stack was removed (it bloated the bundle by
+~7 MB across chunks). The Detailing Control Center's 3D tab now uses a
+self-hosted `web-ifc` (wasm) + `three.js` viewer, lazy-loaded behind the
+`viewer_3d` flag, with the wasm version-pinned + copied to `public/wasm/` by a
+Vite plugin. Fab status is colored per piece from `model_elements`.
+
+### 2026-06 — AI Revision Intelligence (the differentiator)
+
+Per-sheet AI semantic diff of drawing revisions (`revisionSnapshotDiff.js` →
+`llm-proxy` `revision-compare` → `drawing_revision_deltas`), a package-level
+Revision Impact Report, and one-click Create-RFI-from-delta. Behind the
+`revision_ai_diff` flag.
 
 ### 2026-05 — Submittals as workflow source of truth (Sprint 2)
 
@@ -600,10 +709,13 @@ Stayed on Supabase Auth. The user explicitly chose this over a
 hosted auth provider. SSO/SAML is achievable via Supabase's auth
 providers when needed; not yet wired.
 
-### 2026-04 — No offline support
+### 2026-04 — No offline support (later partially reversed)
 
-Considered for field users. Rejected per user direction. Responsive
-web on mobile/tablet is the mobile strategy.
+Originally rejected; responsive web was the mobile strategy. **Update
+(2026-06):** Field Today gained an offline outbox for field *capture* —
+idempotent progress writes plus dedup-safe punch/photo creates (localStorage +
+IndexedDB, `client_op_id` keys) — so flaky-connection field work isn't lost. A
+full PWA / service-worker cold-start cache is still out of scope.
 
 ---
 
@@ -614,10 +726,12 @@ See [`TECH_DEBT.md`](./TECH_DEBT.md) for the running list and
 
 Major remaining buckets:
 
-- RBAC Phase C — per-project member-management admin UI
-- Sentry / PostHog instrumentation
-- TypeScript expansion across pages
-- A11y audit pass
-- RTL component tests
-- Mobile responsive (Sprint 5)
-- Email notifications (Sprint 3, blocked on email-provider pick)
+- **TypeScript expansion** — still ~86% JS; convert incrementally (services/ is
+  fully typed; shared-infra-first ordering).
+- **Legal** — ToS / privacy / DPA pages to back the self-serve signup.
+- **Storage backfill** — migrate the ~770 legacy flat `uploads/...` objects to
+  org-prefixed paths (grandfathered for now).
+- **Full-browser E2E** — jsdom integration tests exist; no signed-in Playwright
+  flow yet (no self-signup test user).
+- A11y audit pass; mobile/iPad polish on core workflows.
+- Large-project performance (virtualization, server-side filtering).

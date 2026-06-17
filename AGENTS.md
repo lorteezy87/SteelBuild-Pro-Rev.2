@@ -7,8 +7,8 @@ SteelBuild Pro is a Vite + React 18 + Supabase project-management app for struct
 - `src/components/` — feature-scoped UI grouped by domain (`drawings/`, `submittals/`, `financials/`, `gantt/`, `schedule/`, …), plus `ui/` (radix/shadcn primitives), `design-system/`, and `shared/`.
 - `src/services/` — deterministic domain engines: `marginRiskEngine`, `autoLinkEngine`, `constraintEngine`, `scheduleCascade`, `workflowEngine`, `permissions`, `validation`, `auditLogger`, `cacheRegistry`.
 - `src/hooks/` — TanStack Query CRUD hooks; `src/api/` — Supabase client + storage; `src/lib/` — shared utilities and domain mapping (`submittalStageMapping.js`, `drawingSetOrdering.js`).
-- `supabase/migrations/` — ordered SQL (mixed `NNN_name.sql` and `YYYYMMDD…` timestamps; inspect the dir, don't assume the latest). `supabase/functions/` — edge functions (`llm-proxy`, `schedule-assistant`, `email-ingest`, `sharepoint-proxy`).
-- Import via the `@/*` alias (→ `src/`). RBAC is enforced at the DB layer via RLS, not UI gates.
+- `supabase/migrations/` — ordered SQL (mixed `NNN_name.sql` and `YYYYMMDD…` timestamps, ~170; inspect the dir, don't assume the latest). `supabase/functions/` — edge functions (`llm-proxy`, `schedule-assistant`, `email-ingest`, `email-send`, `project-export`, `stripe-billing`, …; `sharepoint-proxy`/`bluebeam-proxy` are deprecated).
+- Import via the `@/*` alias (→ `src/`). **Multi-tenant:** each company is an `organizations` workspace and projects belong to an org. RBAC **and** the org boundary are enforced at the DB layer via RLS, not UI gates (`user_has_project_access` is org-aware; `useOrg()` exposes the active workspace).
 
 ## Build, Test, and Development Commands
 - `npm run dev` — Vite dev server. `npm run build` — production build to `dist/`. `npm run preview` — serve the build.

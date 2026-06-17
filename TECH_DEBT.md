@@ -8,7 +8,40 @@ exactly what's needed.
 
 ## Active items
 
-_From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is wide open — these are hardening, scale, and platform-maturity follow-ups._
+_Updated 2026-06-16. RLS is enabled everywhere and the **org boundary is wired
+into the access layer** (no cross-tenant reads), billing + plan enforcement are
+live, and data export works. These are go-to-market, typing, and
+platform-maturity follow-ups._
+
+### Monetization / go-to-market
+
+- **Legal pages** — the self-serve signup needs ToS / privacy / a basic DPA to
+  link to. The wording needs a lawyer; the pages can be scaffolded.
+- **Storage backfill** — ~770 legacy flat `app-files/uploads/...` objects predate
+  org-prefixing. They're grandfathered to the founding org (safe while
+  single-tenant) but should migrate to `<org_id>/uploads/...` (Storage `move()`
+  per file + `file_url` backfill) before heavy multi-tenant use.
+- **Org → project access model** — `user_has_project_access` now gates by org
+  membership while `user_projects` still drives project *role*. Decide whether
+  org members auto-see all org projects or stay per-project before onboarding
+  teams (today a new member sees a project only once added to `user_projects`).
+- **Deprecated edge functions** — `sharepoint-proxy` / `bluebeam-proxy` are still
+  deployed but unused by the client; `supabase functions delete` them.
+- **Stale generated types** — `src/types/supabase.ts` lacks the org/billing
+  tables (and `vendors.org_id`, `*.client_op_id`). Untyped JS access works;
+  regenerate via the Supabase MCP on the next pass.
+
+### Platform maturity (longer-running)
+
+- **TypeScript conversion** — ~86% of `src` is still JS/JSX (141 TS vs 864 JS).
+  `src/services/` is fully typed; convert incrementally, shared-infra-first.
+  `strict:false` today.
+- **Full-browser E2E** — jsdom integration tests gate CI; no signed-in Playwright
+  flow yet (needs a seeded test user / self-signup against a non-prod project).
+- **A11y audit + mobile/iPad polish** on core workflows; **large-project
+  performance** (virtualization, server-side filtering, narrow invalidation).
+
+### From the 2026-05-26 enterprise-readiness audit (still open)
 
 - **Dashboard / secret hand-offs (need owner access — step-by-step in
   [`docs/enterprise-readiness-handoff-2026-05-26.md`](docs/enterprise-readiness-handoff-2026-05-26.md)):**
@@ -40,6 +73,42 @@ _From the 2026-05-26 enterprise-readiness audit. All RLS is enabled; no table is
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- 2026-06-16 **Money-path test net + contract-value fix:** pinned the two
+  untested financial modules (`budgetCalculations`, `utils/projectKpis`) and
+  fixed a real divergence — `calcContractValue` matched approved COs with an
+  exact `=== "Approved"` while canonical `computeRevisedContractValue` trims the
+  status, so a whitespace-status CO showed a different contract value on the
+  Projects KPI vs Financials. `calcContractValue` now delegates to the single
+  source of truth.
+
+- 2026-06-16 **Per-tenant data export:** the Settings "Export Data" button was a
+  stub (downloaded only a list of table names). Now a real per-tenant JSON backup
+  of every accessible project via the RLS-scoped, audited `project-export` Edge
+  Function (deployed) + client bundling (`src/lib/workspaceExport.ts`).
+
+- 2026-06-16 **Multi-tenant data isolation (Tier-0):** wired the org boundary
+  into RLS — `user_has_project_access` now requires org membership (the chokepoint
+  for ~70 tables), `create_project` rejects a foreign `org_id` (closed a
+  privilege-escalation hole), `projects.org_id` set NOT NULL, and `vendors` /
+  `user_profiles` / `app-files` storage are org-scoped (migrations
+  `20260615000000`–`20260616000000`). Verified 0 cross-tenant reads; advisors 0-error.
+
+- 2026-06-16 **Plan-limit enforcement + self-serve signup + onboarding:** plan
+  limits (Free/Pro/Business) enforced server-side in `create_project` /
+  `accept_invitation`; signup wired into the landing page; a brand-new workspace
+  is routed into the first-run Onboarding wizard (+ a 0-project dashboard welcome).
+
+- 2026-06-13 **Multi-tenant SaaS layer + Stripe billing:** `organizations` /
+  `organization_members` / `organization_invitations`, `OrgProvider` + onboarding
+  + OrgMembers, and Stripe subscription billing with a tamper-proof `org.plan`
+  anchor (`stripe-billing` Edge Function).
+
+- 2026-06 **Self-hosted 3D IFC viewer + AI Revision Intelligence:** replaced the
+  removed `@thatopen` stack with a lazy-loaded `web-ifc` + `three` viewer
+  (`viewer_3d` flag) with per-piece fab status from `model_elements`; shipped the
+  AI revision-diff line (`revisionSnapshotDiff` → `drawing_revision_deltas`,
+  Revision Impact Report, Create-RFI-from-delta; `revision_ai_diff` flag).
 
 - 2026-06-03 `vendor-xlsx` (~683 kB / ~179 kB gzip) bundle audit — **already
   async-only; no code change needed.** Follow-up to the PR #55–#59 enterprise
