@@ -10,10 +10,10 @@
  *
  * Sections:
  *   Nav → Hero → Pain Points → Stats → Features → Workflow →
- *   Differentiator → Demo CTA → Title block → Footer
+ *   Differentiator → Pricing → Demo CTA → Title block → Footer
  *
- * Receives `onLogin`, `isSubmitting`, and `loginError` from AuthenticatedApp
- * so the sign-in modal works without leaving the page.
+ * Receives `onLogin`, `onSignUp`, `isSubmitting`, and `loginError` from
+ * AuthenticatedApp so the sign-in / sign-up modal works without leaving the page.
  *
  * The page always renders in the executive light design regardless of the
  * app's theme default; the root element paints an opaque ivory background to
@@ -21,6 +21,7 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
+import { PLANS } from "@/lib/billing/plans";
 
 /* ─── Palette + fonts ─────────────────────────────────────────── */
 
@@ -43,6 +44,7 @@ const NAV_LINKS = [
   { label: "Platform", target: "features" },
   { label: "Workflow", target: "workflow" },
   { label: "Why steel", target: "why" },
+  { label: "Pricing", target: "pricing" },
   { label: "Contact", target: "demo" },
 ];
 
@@ -145,6 +147,7 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
     features: useRef(null),
     workflow: useRef(null),
     why: useRef(null),
+    pricing: useRef(null),
     demo: useRef(null),
   };
 
@@ -186,6 +189,17 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
 
   const scrollTo = (key) => {
     sectionRefs[key]?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setMobileNav(false);
+  };
+
+  // Open the auth modal in a specific mode ("signin" | "signup"). The "Start
+  // free" CTAs jump straight to sign-up so self-serve signup isn't hidden behind
+  // the Sign in button.
+  const openAuth = (mode) => {
+    setAuthMode(mode);
+    setSignupError(null);
+    setSignupNotice(null);
+    setShowLogin(true);
     setMobileNav(false);
   };
 
@@ -310,8 +324,8 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
             {NAV_LINKS.map(({ label, target }) => (
               <button key={target} className="lp-navlink" onClick={() => scrollTo(target)}>{label}</button>
             ))}
-            <button className="lp-navlink" style={{ color: C.ink }} onClick={() => setShowLogin(true)}>Sign in</button>
-            <button className="lp-btn lp-btn-primary" onClick={() => scrollTo("demo")}>Request a demo</button>
+            <button className="lp-navlink" style={{ color: C.ink }} onClick={() => openAuth("signin")}>Sign in</button>
+            <button className="lp-btn lp-btn-primary" onClick={() => openAuth("signup")}>Start free</button>
           </div>
           <button className="lp-mobile-toggle" aria-label={mobileNav ? "Close menu" : "Open menu"} onClick={() => setMobileNav(!mobileNav)}>{mobileNav ? "✕" : "☰"}</button>
         </div>
@@ -322,8 +336,8 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
               <button key={target} className="lp-navlink" style={{ textAlign: "left", fontSize: 15 }} onClick={() => scrollTo(target)}>{label}</button>
             ))}
             <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
-              <button className="lp-btn lp-btn-ghost" style={{ flex: 1 }} onClick={() => { setShowLogin(true); setMobileNav(false); }}>Sign in</button>
-              <button className="lp-btn lp-btn-primary" style={{ flex: 1 }} onClick={() => scrollTo("demo")}>Request a demo</button>
+              <button className="lp-btn lp-btn-ghost" style={{ flex: 1 }} onClick={() => openAuth("signin")}>Sign in</button>
+              <button className="lp-btn lp-btn-primary" style={{ flex: 1 }} onClick={() => openAuth("signup")}>Start free</button>
             </div>
           </div>
         )}
@@ -349,8 +363,8 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
               No more chasing mill certs through email, tracking bolt-up on paper, or losing RFIs in spreadsheet tabs.
             </p>
             <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", marginBottom: 40 }}>
-              <button className="lp-btn lp-btn-primary" style={{ padding: "14px 28px" }} onClick={() => scrollTo("demo")}>See it on your project</button>
-              <button className="lp-btn lp-btn-ghost" style={{ padding: "14px 26px" }} onClick={() => scrollTo("workflow")}>Watch a 2-min tour</button>
+              <button className="lp-btn lp-btn-primary" style={{ padding: "14px 28px" }} onClick={() => openAuth("signup")}>Start free</button>
+              <button className="lp-btn lp-btn-ghost" style={{ padding: "14px 26px" }} onClick={() => scrollTo("demo")}>Request a demo</button>
             </div>
             <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted }}>
               <span>AISC certified</span><span style={{ color: C.line }}>/</span>
@@ -502,6 +516,40 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
         </div>
       </section>
 
+      {/* ══ PRICING ══ */}
+      <section ref={sectionRefs.pricing} className="lp-sec lp-onwhite" style={{ borderTop: `1px solid ${C.line}` }}>
+        <div className="lp-wrap">
+          <div style={{ textAlign: "center", maxWidth: 660, margin: "0 auto 56px" }}>
+            <span className="lp-eyebrow" style={{ marginBottom: 18 }}>Pricing</span>
+            <h2 style={{ fontFamily: F.disp, fontWeight: 500, fontSize: "clamp(27px, 3.3vw, 42px)", lineHeight: 1.12, letterSpacing: "-0.02em", color: C.ink, margin: "16px 0 0" }}>Start free. Scale when you ship.</h2>
+            <p style={{ fontSize: 18, color: C.muted, lineHeight: 1.6, marginTop: 16 }}>Create a workspace free in minutes — no credit card. Upgrade to Pro or Business anytime from Billing.</p>
+          </div>
+          <div className="lp-c3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24, alignItems: "start" }}>
+            {PLANS.map((p) => {
+              const featured = !!p.highlight;
+              return (
+                <div key={p.key} className="lp-card" style={{ padding: 30, position: "relative", borderColor: featured ? C.gold : C.line, borderWidth: featured ? 2 : 1, boxShadow: featured ? "0 1px 2px rgba(20,22,26,0.04), 0 18px 40px -24px rgba(20,22,26,0.22)" : "none" }}>
+                  {featured && <span style={{ position: "absolute", top: -11, left: 30, fontFamily: F.mono, fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "#fff", background: C.gold, padding: "4px 10px", borderRadius: 5 }}>Most popular</span>}
+                  <div style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: C.gold }}>{p.name}</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, margin: "14px 0 4px" }}>
+                    <span style={{ fontFamily: F.disp, fontWeight: 500, fontSize: 40, color: C.ink, letterSpacing: "-0.02em", lineHeight: 1 }}>{p.priceMonthly === 0 ? "Free" : `$${p.priceMonthly}`}</span>
+                    {p.priceMonthly > 0 && <span style={{ fontSize: 14, color: C.muted }}>/user · mo</span>}
+                  </div>
+                  <p style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.55, margin: "0 0 6px", minHeight: 40 }}>{p.blurb}</p>
+                  <div className="lp-goldbar" style={{ margin: "0 0 16px" }} />
+                  <div style={{ marginBottom: 22 }}>
+                    {p.features.map((feat) => (
+                      <div key={feat} className="lp-cap"><span style={{ fontSize: 13.5, color: C.ink2, lineHeight: 1.5 }}>{feat}</span></div>
+                    ))}
+                  </div>
+                  <button className={`lp-btn ${featured ? "lp-btn-primary" : "lp-btn-ghost"}`} style={{ width: "100%", padding: 13 }} onClick={() => openAuth("signup")}>Start free</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* ══ DEMO CTA ══ */}
       <section ref={sectionRefs.demo} className="lp-sec lp-onwhite">
         <div className="lp-wrap lp-demo" style={{ display: "grid", gridTemplateColumns: "0.95fr 1.05fr", gap: 56, alignItems: "center" }}>
@@ -582,7 +630,7 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
           </div>
           <div style={{ display: "flex", gap: 64, flexWrap: "wrap" }}>
             {[
-              { head: "Platform", links: [["Modules", "features"], ["Workflow", "workflow"], ["Integrations", "features"]] },
+              { head: "Platform", links: [["Modules", "features"], ["Workflow", "workflow"], ["Pricing", "pricing"]] },
               { head: "Company", links: [["About", "why"], ["Contact", "demo"], ["Request a demo", "demo"]] },
             ].map((col) => (
               <div key={col.head}>
