@@ -1,7 +1,7 @@
 # Hub Command Center — Design Spec
 
 - **Date:** 2026-06-16
-- **Status:** Design approved; pending spec review → implementation plan
+- **Status:** ✅ Implemented — all 4 slices shipped 2026-06-17 (hub-as-main `26bfa58f` · health score `58b95239` · lock rules `4c34cd1e` · revision board `17dcddaf`)
 - **Owner workflow:** Drawings + Submittals (the moat — CLAUDE.md §20–21)
 
 ## Goal
