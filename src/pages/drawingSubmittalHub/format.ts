@@ -1,5 +1,5 @@
 import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldCheck, Workflow } from "lucide-react";
-import { compareDrawingSetPackages } from "@/lib/drawingSetOrdering";
+import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
 import type { Drawing, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
@@ -336,4 +336,73 @@ export function fmtDate(d: any): string {
   const local = toLocalDay(d);
   if (!local) return "—";
   return local.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
+}
+
+// ── Approval Matrix ───────────────────────────────────────────────────────
+
+/**
+ * Build the Approval Matrix rows: each ACTIVE drawing set joined to the
+ * submittals that reference it (via drawing_set_ids), with the latest round and
+ * its due info, optionally filtered by `search`, sorted into package order.
+ * Pure given the search string (extracted from ApprovalMatrix so it's testable).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], search = ""): any[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activeSubmittals = (submittals || []).filter((s: any) => !s.is_deleted);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const setSubmittalMap: Record<string, any[]> = {};
+  for (const sub of activeSubmittals) {
+    const setIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
+    for (const sid of setIds) {
+      if (!setSubmittalMap[sid]) setSubmittalMap[sid] = [];
+      setSubmittalMap[sid].push(sub);
+    }
+  }
+  return (drawingSets || [])
+    .filter((s: any) => !s.is_deleted)
+    .map((set: any) => {
+      const linked = setSubmittalMap[set.id] || [];
+      const latestSubmittal = linked.slice().sort(
+        (a: any, b: any) => (b.round_number || 1) - (a.round_number || 1),
+      )[0] || null;
+      const due = dueInfo(getSubmittalDueDate(latestSubmittal), latestSubmittal ? isClosedSubmittal(latestSubmittal) : false);
+      return { ...set, submittals: linked, latestSubmittal, due };
+    })
+    .filter((set: any) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (
+        formatDrawingSetNumber(set).toLowerCase().includes(q) ||
+        (set.set_name || "").toLowerCase().includes(q) ||
+        (set.discipline || "").toLowerCase().includes(q) ||
+        set.submittals.some((s: any) => (s.submittal_number || "").toLowerCase().includes(q))
+      );
+    })
+    .sort((a: any, b: any) => compareDrawingSetPackages(a, b));
+}
+
+export interface ApprovalMatrixSummary {
+  noSubmittal: number; pending: number; approved: number; rejected: number;
+  overdue: number; dueSoon: number; total: number;
+}
+
+/**
+ * Summary counts for the Approval Matrix. Status buckets: approved (Approved /
+ * Approved as Noted / Released for Fabrication), rejected (Rejected / Revise and
+ * Resubmit), else pending; plus no-submittal and overdue/due-soon tallies.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function summarizeApprovalMatrix(matrixRows: any[]): ApprovalMatrixSummary {
+  let noSubmittal = 0, pending = 0, approved = 0, rejected = 0, overdue = 0, dueSoon = 0;
+  for (const row of matrixRows || []) {
+    if (!row.latestSubmittal) { noSubmittal++; continue; }
+    const st = row.latestSubmittal.status;
+    if (st === "Approved" || st === "Approved as Noted" || st === "Released for Fabrication") approved++;
+    else if (st === "Rejected" || st === "Revise and Resubmit") rejected++;
+    else pending++;
+    if (row.due.overdue) overdue++;
+    if (row.due.dueSoon) dueSoon++;
+  }
+  return { noSubmittal, pending, approved, rejected, overdue, dueSoon, total: (matrixRows || []).length };
 }

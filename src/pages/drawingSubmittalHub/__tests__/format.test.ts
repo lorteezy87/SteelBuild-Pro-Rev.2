@@ -13,6 +13,8 @@ import {
   textMuted,
   toDateInputValue,
   toLocalDay,
+  buildApprovalMatrixRows,
+  summarizeApprovalMatrix,
 } from "../format";
 
 // These guard the Arizona (MST, UTC-7, no DST) date-display bug: a date-only
@@ -368,5 +370,65 @@ describe("itemUrgency (triage ordering)", () => {
     const earlier = item({ due: { overdue: true, dueSoon: false, sort: -5 }, title: "B" });
     const later = item({ due: { overdue: true, dueSoon: false, sort: -1 }, title: "A" });
     expect([later, earlier].sort(itemUrgency).map((i) => i.title)).toEqual(["B", "A"]);
+  });
+});
+
+describe("buildApprovalMatrixRows", () => {
+  const sets = [
+    { id: "s1", set_name: "Main Steel", discipline: "Structural", is_deleted: false },
+    { id: "s2", set_name: "Anchor Bolts", discipline: "Structural", is_deleted: false },
+    { id: "s3", set_name: "Old", is_deleted: true }, // deleted → excluded
+  ];
+  const subs = [
+    { id: "a", drawing_set_ids: ["s1"], round_number: 1, status: "Submitted", submittal_number: "001" },
+    { id: "b", drawing_set_ids: ["s1"], round_number: 2, status: "Approved", submittal_number: "002" },
+    { id: "c", drawing_set_ids: ["s2"], is_deleted: true, round_number: 1, status: "Approved" }, // deleted sub
+  ];
+
+  it("joins active sets to their active submittals and picks the latest round", () => {
+    const rows = buildApprovalMatrixRows(sets, subs);
+    expect(rows).toHaveLength(2); // s3 deleted → excluded
+    const s1 = rows.find((r) => r.id === "s1");
+    expect(s1.submittals).toHaveLength(2);
+    expect(s1.latestSubmittal.id).toBe("b"); // round 2 wins
+    const s2 = rows.find((r) => r.id === "s2");
+    expect(s2.submittals).toHaveLength(0); // its only submittal is deleted
+    expect(s2.latestSubmittal).toBeNull();
+  });
+
+  it("filters by search across set name, discipline, and submittal number", () => {
+    expect(buildApprovalMatrixRows(sets, subs, "anchor").map((r) => r.id)).toEqual(["s2"]);
+    expect(buildApprovalMatrixRows(sets, subs, "002").map((r) => r.id)).toEqual(["s1"]); // by submittal #
+    expect(buildApprovalMatrixRows(sets, subs, "zzz")).toEqual([]);
+  });
+
+  it("handles empty input", () => {
+    expect(buildApprovalMatrixRows()).toEqual([]);
+  });
+});
+
+describe("summarizeApprovalMatrix", () => {
+  const row = (status: string | null, over = false, soon = false) => ({
+    latestSubmittal: status ? { status } : null,
+    due: { overdue: over, dueSoon: soon },
+  });
+  it("buckets approved / rejected / pending / no-submittal and tallies due flags", () => {
+    const s = summarizeApprovalMatrix([
+      row("Approved"),
+      row("Released for Fabrication"),
+      row("Revise and Resubmit", true), // rejected + overdue
+      row("Submitted", false, true), // pending + dueSoon
+      row(null), // no submittal
+    ]);
+    expect(s.approved).toBe(2);
+    expect(s.rejected).toBe(1);
+    expect(s.pending).toBe(1);
+    expect(s.noSubmittal).toBe(1);
+    expect(s.overdue).toBe(1);
+    expect(s.dueSoon).toBe(1);
+    expect(s.total).toBe(5);
+  });
+  it("handles empty input", () => {
+    expect(summarizeApprovalMatrix([])).toMatchObject({ total: 0, approved: 0 });
   });
 });
