@@ -29,6 +29,7 @@ self-serve signup + email verify (`25ac9c9a`), upload org-resolution hardening (
 - [x] Commit `vercel.json` preview-build skip — done (cost control: non-production deploys no longer build).
 - [x] app-files cross-tenant READ residual — **CLOSED** (`2258e902`, live-verified 2026-06-16). Grandfathered the ~774 legacy flat `uploads/` files to the founding org (S&H) + org-prefixed new uploads (`<org_id>/uploads/...`); `auth_read` now scopes path → org membership. No object churn / ref backfill needed.
 - [x] Function `search_path` hardening — pinned `search_path=''` on 5 advisor-flagged public fns (backcharge/payapp/piece_production touch triggers + plan-limit lookups); migration `20260616010000`, applied live 2026-06-16.
+- [x] Definer-function anon lockdown — revoked anon `EXECUTE` on 8 internal `SECURITY DEFINER` fns (advisor 0028): 2 triggers locked from all client roles, 4 RLS helpers + `create_organization`/`accept_invitation` kept `authenticated`-only, `get_invitation` left anon (invite preview). Migration `20260616020000`, applied live + privilege-verified 2026-06-16.
 
 ## Thread C — Revision Intelligence — COMPLETE
 
