@@ -52,6 +52,9 @@ import {
 } from "./format";
 import type { DueInfo, Submittal } from "./types";
 import { useFlag } from "@/hooks/useFeatureFlag";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAppSecurity } from "@/components/shared/useAppSecurity";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -63,6 +66,8 @@ const AgingReportTable = AgingReportTableRaw as unknown as ComponentType<AnyProp
 // they never weigh down the hub chunk on tab open.
 const RevisionUploadModal = lazy(() => import("@/components/drawings/RevisionUploadModal")) as unknown as ComponentType<AnyProps>;
 const RevisionImpactReportModal = lazy(() => import("@/components/drawings/RevisionImpactReportModal")) as unknown as ComponentType<AnyProps>;
+const DrawingSetUploadModal = lazy(() => import("@/components/drawings/DrawingSetUploadModal")) as unknown as ComponentType<AnyProps>;
+const DrawingLogImportModal = lazy(() => import("@/components/drawings/DrawingLogImportModal")) as unknown as ComponentType<AnyProps>;
 
 type IconType = ComponentType<{ size?: number | string; color?: string }>;
 
@@ -1320,9 +1325,23 @@ export function DrawingRegisterTable({
   setPackages: any[]; projectId?: string; activeProject?: any; drawingSets?: any[]; isLoading?: boolean;
 }) {
   const aiDiffEnabled = useFlag("revision_ai_diff");
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { can } = useAppSecurity() as any;
+  const canEdit = !can || can("edit", "drawing");
   const [search, setSearch] = useState("");
   const [revisionSet, setRevisionSet] = useState<any>(null);
   const [reportSet, setReportSet] = useState<any>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [logImportOpen, setLogImportOpen] = useState(false);
+
+  const allSheets = useMemo(() => (setPackages || []).flatMap((p: any) => p.sheets || []), [setPackages]);
+  const existingSetNames = useMemo(() => [...new Set((setPackages || []).map((p: any) => p.name).filter(Boolean))], [setPackages]);
+  const refetchDrawings = () => {
+    qc.invalidateQueries({ queryKey: ["drawings"] });
+    qc.invalidateQueries({ queryKey: ["drawing-sets", projectId] });
+    qc.invalidateQueries({ queryKey: ["drawing-revisions", projectId] });
+  };
 
   const rowBtn: CSSProperties = {
     fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.04em",
@@ -1367,14 +1386,24 @@ export function DrawingRegisterTable({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ position: "relative", maxWidth: 440 }}>
-        <Search size={14} color={textMuted} style={{ position: "absolute", left: 10, top: 9 }} />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search drawing sets…"
-          style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 8, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }}
-        />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: "0 1 440px", minWidth: 200 }}>
+          <Search size={14} color={textMuted} style={{ position: "absolute", left: 10, top: 9 }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search drawing sets…"
+            style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 8, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }}
+          />
+        </div>
+        <div style={{ flex: 1 }} />
+        {canEdit && (
+          <button type="button" className="sbd-btn sbd-btn-primary" onClick={() => setUploadOpen(true)}>+ Upload Drawings</button>
+        )}
+        {canEdit && (
+          <button type="button" className="sbd-btn" onClick={() => setLogImportOpen(true)}>Import Log</button>
+        )}
+        <button type="button" className="sbd-btn" title="Full Drawings editor — filters, bulk actions, rename / delete, per-sheet" onClick={() => navigate("/Drawings")}>Open full editor ↗</button>
       </div>
 
       <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
@@ -1434,6 +1463,16 @@ export function DrawingRegisterTable({
       {reportSet && (
         <Suspense fallback={null}>
           <RevisionImpactReportModal open onClose={() => setReportSet(null)} set={reportSet} projectId={projectId} />
+        </Suspense>
+      )}
+      {uploadOpen && (
+        <Suspense fallback={null}>
+          <DrawingSetUploadModal open onClose={() => setUploadOpen(false)} onComplete={refetchDrawings} activeProject={activeProject} existingDrawings={allSheets} existingSetNames={existingSetNames} />
+        </Suspense>
+      )}
+      {logImportOpen && (
+        <Suspense fallback={null}>
+          <DrawingLogImportModal open projectId={projectId} projectName={activeProject?.name} onClose={() => setLogImportOpen(false)} onImported={refetchDrawings} />
         </Suspense>
       )}
     </div>
