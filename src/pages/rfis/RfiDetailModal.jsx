@@ -2,6 +2,7 @@ import React from "react";
 import { Modal, Button, StatusPill, BicPill, PhaseChevron, Icon } from "@/components/design-system";
 import { daysOpen, isOverdue } from "./utils";
 import RfiCopilotPanel from "@/components/rfis/RfiCopilotPanel";
+import { recommendedDownstreamActions } from "@/lib/rfiDownstream";
 
 const STAGE_INDEX = { Open: 0, "Under Review": 1, "Incomplete Response": 2, Answered: 3, Closed: 4 };
 
@@ -31,12 +32,13 @@ function impactValue(rfi) {
   return parts.join(" / ") || "No known impact";
 }
 
-export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO }) {
+export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge, onCreateCO, onDownstreamAction }) {
   if (!rfi) return null;
 
   const age = daysOpen(rfi);
   const overdue = isOverdue(rfi);
   const activeIdx = STAGE_INDEX[rfi.status] ?? 0;
+  const downstream = onDownstreamAction ? recommendedDownstreamActions(rfi) : [];
   const priorityColor =
     rfi.priority === "Critical" ? "#FF6B35" :
     rfi.priority === "High" ? "var(--status-warning)" :
@@ -113,6 +115,44 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
               Answered by {rfi.answered_by} on {rfi.date_answered ? formatDate(rfi.date_answered) : "No date"}
             </div>
           )}
+        </section>
+      )}
+
+      {downstream.length > 0 && (
+        <section className="rfi-detail-section">
+          <SectionLabel>Apply the answer downstream</SectionLabel>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {downstream.map((action) => (
+              <button
+                key={action.key}
+                type="button"
+                onClick={() => onDownstreamAction(action.key)}
+                title={action.hint}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  gap: 2,
+                  padding: "8px 12px",
+                  minWidth: 152,
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  background: action.primary ? "rgba(154,123,30,0.12)" : "var(--bg-input)",
+                  border: `1px solid ${action.primary ? "var(--accent)" : "var(--border)"}`,
+                  color: "var(--text-primary)",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, fontSize: 13 }}>
+                  {action.icon && (
+                    <Icon name={action.icon} size={13} color={action.primary ? "var(--accent)" : "var(--text-muted)"} />
+                  )}
+                  {action.label}
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{action.hint}</span>
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
