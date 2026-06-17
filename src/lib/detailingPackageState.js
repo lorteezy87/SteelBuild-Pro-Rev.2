@@ -22,7 +22,7 @@
  */
 
 import { STAGE_ORDER } from "@/components/drawings/drawingsConfig";
-import { derivedSetStage, submittalStatusToStage } from "@/lib/submittalStageMapping";
+import { derivedSetStage, submittalStatusToStage, isRRStatus, pickMostRecentSubmittal } from "@/lib/submittalStageMapping";
 
 /** Manual upstream (pre-submittal) drafting states. */
 export const DRAFTING_STATES = ["In Detailing", "Internal Review", "Ready to Submit"];
@@ -112,6 +112,30 @@ export function isPackageSuperseded(sheetsForSet) {
     (s) => s && !s.is_deleted,
   );
   return sheets.length > 0 && sheets.every((s) => s.is_superseded === true);
+}
+
+/**
+ * Orthogonal "R&R" signal: true when the package's GOVERNING submittal (the
+ * most-recent active one — the same submittal `derivedSetStage` maps) carries a
+ * Revise-and-Resubmit / Rejected outcome.
+ *
+ * R&R deliberately rolls up to the IFA stage for counting (see
+ * submittalStatusToStage), so without this flag an R&R loop-back is
+ * indistinguishable from a fresh IFA on the board. Surfaced as a separate badge
+ * alongside the effective state (like isPackageSuperseded), never folded into
+ * it. Returns false once the governing submittal advances past R&R (e.g. it's
+ * resubmitted, approved, or released).
+ *
+ * @param {Array} submittalsForSet
+ * @returns {boolean}
+ */
+export function isPackageRR(submittalsForSet) {
+  const usable = (Array.isArray(submittalsForSet) ? submittalsForSet : []).filter(
+    (s) => s && !s.is_deleted &&
+      submittalStatusToStage(s.status, s.ball_in_court, s.approved_date) !== null,
+  );
+  const governing = pickMostRecentSubmittal(usable);
+  return !!governing && isRRStatus(governing.status);
 }
 
 /**
