@@ -2,7 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "ignoreCommand": "[ \"$VERCEL_ENV\" != \"production\" ]",
+  "ignoreCommand": "if [ \"$VERCEL_ENV\" = \"preview\" ]; then exit 0; else exit 1; fi",
   "headers": [
     {
       "source": "/wasm/(.*)\\.wasm",
