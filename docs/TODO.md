@@ -22,8 +22,10 @@ assign-by-live-mark / guid-drift (`7381972d`), repaint fab colors on reload (`48
 
 **Recently shipped:** org-boundary isolation (`c83c7ab7`), app-files tenant isolation (`2258e902`),
 landing redesign (`93a503a9`), billing plan-limit enforcement (`fea77911`),
-self-serve signup + email verify (`25ac9c9a`), upload org-resolution hardening (`cc534b30`/`366616fc`).
+self-serve signup + email verify (`25ac9c9a`), upload org-resolution hardening (`cc534b30`/`366616fc`),
+logo refresh across splash/favicon/social + sign-in modal (`c90d836b`).
 
+- [ ] **Brand: apple-touch-icon is 3:2, not square.** The regenerated `public/steelbuild-pro-logo.png` is 320×213; iOS "Add to Home Screen" may letterbox/crop it. Add a square variant (180×180 + 512×512) and an explicit `apple-touch-icon` link. Desktop favicon, loading splash, and og:image are verified correct. (XS)
 - [ ] **Invites → Stripe billing** — the main gap to "sellable." BLOCKED: needs a Stripe account. (L)
 - [~] E2E test harness — **in-process suite deepened** (vitest/jsdom; +DrawingRegisterTable integration — rows / submittal-aware status / toolbar perm-gating / search; full suite 1333 green). **Real-browser Playwright still pending**: needs a provisioned verified test account (email+password as a secret) + a target URL (prod / preview / local). Not installed yet. (M)
 - [x] Commit `vercel.json` preview-build skip — done (cost control: non-production deploys no longer build).
@@ -48,6 +50,17 @@ self-serve signup + email verify (`25ac9c9a`), upload org-resolution hardening (
 - [ ] **"Done" = field-verified, not build-green** (now codified in CLAUDE.md §32). Recurring failure mode: features ship "validated + deployed" on unit-tests + build alone, then don't work in-product — the fab bug is the proof (declared fixed, diagnostics removed, still broken). Backfill field-verification on this session's unverified surface: the Revision Summary trigger, the health-score column on a live project, the Revision Impact board's WP/RFI/fab-blocked joins, the lock reason-gated unlock. (M)
 - [ ] **CI gate / branch protection on `main`** — `main` auto-deploys to steelbuild-pro.com on every push, and a parallel session already shipped a red `tsc` to prod (`format.test.ts`, fixed in `d7e37e9a`). Require typecheck + lint + tests green before a deploy can land. (M)
 - [ ] **Coordinate the concurrent agents** — multiple sessions write `main` at once on overlapping files. Observed this session: a duplicate Hub lock slice (`4c34cd1e`), `DrawingRegisterTable` reshaped underneath in-flight edits, `MEMORY.md` rewritten mid-session, and a broken-`main` window. Serialize or scope agents by area; no single agent — or single report — sees the merged whole. (M)
+
+## Thread E — RFI Workflow
+
+**Recently shipped:** preflight override-with-reason (`e3ea2f61`), structural dedup (`a40dd96e`),
+impact fields → metadata (`1e643aa5`), operational "apply downstream" panel (`cb8d12d8`).
+
+- [~] **"Apply downstream" panel — 3 of 5 actions are navigation-only (verified).** Only `ChangeOrders.jsx` reads `?fromRfi=` (finds the RFI + prefills the CO form, so **Create CO works fully**). `Drawings`/`WorkPackages`/`Constraints` have **no** `fromRfi` consumer, so "Update linked drawing" / "Open work package" / "Log constraint" just land on the page with a dangling, unread param (harmless — no error, but no focus/prefill). Fix: either make those 3 pages honor `fromRfi` (focus the linked drawing/WP, prefill a CONSTRAINT action item) OR relabel the buttons "Open …" so they don't over-promise. (M)
+- [ ] **"Notify field" alert reach unverified.** `notify_field` creates an `alerts` row (`alert_type:"RFI_Field_Action"`, mirrors the overdue-alert shape). `BellDropdown` buckets alert types tolerantly so it should register as a count, but it's NOT verified that it (a) surfaces to **field-role** users under `alerts` RLS or (b) labels sensibly — and the create was never run against the live DB. Decide whether "notify field" should do more than post a project alert. (S)
+- [ ] **Live UI test of the downstream panel.** The pure helper (`rfiDownstream.ts`) is unit-tested (7) + build green, but the rendered panel was never clicked in a browser (Icon names resolve, buttons fire, mobile layout). Exercise it on a real answered RFI. (XS)
+- [ ] **Dedup threshold/weights untuned on real data.** Threshold `0.4` + structural weights in `rfiDedup.ts` are heuristic; the unit tests prove the mechanism, not precision/recall on real RFI history. Tune against actual dup / non-dup pairs. (S)
+- [ ] **Preflight "impact assessed" soft check is stale.** `buildRfiPreflight`'s impact check still only looks at `cost_impact`/`schedule_impact`, not the slice-3 flags (fab/erection/drawing-rev/CO-likely). Broaden so qualitative impact also satisfies it. (XS)
 
 ## Other (shipped last night)
 Submittal "Released for Fab" open-tally (`4d144c2c`), WP form project pre-select (`e19ddd23`),
