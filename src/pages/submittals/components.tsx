@@ -396,27 +396,43 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
             submittalId={submittal.id}
             onReturnRound={onReturnRound}
           />
-          {onNewRound && (
-            <button
-              onClick={onNewRound}
-              style={{
-                marginTop: 8,
-                padding: "6px 14px",
-                borderRadius: 4,
-                background: "var(--accent)",
-                color: "#fff",
-                border: "none",
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                cursor: "pointer",
-                textTransform: "uppercase",
-              }}
-            >
-              + New Round
-            </button>
-          )}
+          {onNewRound && (() => {
+            // After an R&R / Rejected return the next round IS the resubmittal,
+            // so make that the obvious next action and label it as such — it
+            // opens the round prefilled with the reviewer's open comments (§20).
+            const isResubmit = ["Revise and Resubmit", "Rejected"].includes(submittal.status);
+            const lastRoundNum = rounds.length
+              ? (rounds[rounds.length - 1].round_number || rounds.length)
+              : (submittal.round_number || 0);
+            const nextRoundNum = (lastRoundNum || 0) + 1;
+            return (
+              <div style={{ marginTop: 8 }}>
+                <button
+                  onClick={onNewRound}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 4,
+                    background: isResubmit ? "#F97316" : "var(--accent)",
+                    color: "#fff",
+                    border: "none",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {isResubmit ? `↻ Start Resubmittal — Round ${nextRoundNum}` : "+ New Round"}
+                </button>
+                {isResubmit && (
+                  <div style={{ marginTop: 4, fontFamily: "var(--font-mono)", fontSize: 8.5, color: "var(--text-muted)", letterSpacing: "0.04em" }}>
+                    Carries the reviewer's open comments forward.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </DetailSection>
 
         {/* Meta grid — every cell is inline-editable. Click the value

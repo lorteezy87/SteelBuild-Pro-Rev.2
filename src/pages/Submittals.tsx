@@ -22,6 +22,11 @@ import NewRoundModal from "@/components/submittals/NewRoundModal";
 import ReleaseGateOverrideModal from "@/components/submittals/ReleaseGateOverrideModal";
 import SheetResponseGrid from "@/components/submittals/SheetResponseGrid";
 import { FabReleaseBlockedError, isFabReleaseBlocked } from "@/lib/fabRelease/releaseStatus";
+import {
+  collectOpenItems,
+  pickCarryForwardResponses,
+  formatCarryForwardNotes,
+} from "@/lib/submittalResubmittal";
 import { batchProcess } from "@/utils/batchProcess";
 import { usePermissions } from "@/services/permissions";
 import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submittals/format";
@@ -674,19 +679,31 @@ export default function Submittals() {
       {/* New Round modal — creates a new submittal round for the
           selected submittal. Carries forward drawing sets and
           increments the round number automatically. */}
-      {showNewRound && selected && (
-        <NewRoundModal
-          open={showNewRound}
-          submittal={selected}
-          previousRound={
-            (roundsBySubmittal[selected.id] || []).length > 0
-              ? (roundsBySubmittal[selected.id] || []).at(-1)
-              : null
-          }
-          onClose={() => setShowNewRound(false)}
-          onSubmit={(data) => createRoundMut.mutate(data)}
-        />
-      )}
+      {showNewRound && selected && (() => {
+        // Carry the prior round's unresolved reviewer dispositions forward so
+        // the resubmittal starts from exactly what must be addressed (§20) —
+        // the open items seed an editable checklist into the round's notes and
+        // render as a read-only "comments to address" panel. Derived from
+        // submittal_sheet_responses (already round-scoped): no migration.
+        const submittalRounds = roundsBySubmittal[selected.id] || [];
+        const previousRound = submittalRounds.length > 0 ? submittalRounds.at(-1) : null;
+        const carry = pickCarryForwardResponses(submittalRounds, allSheetResponses);
+        const carryItems = collectOpenItems(carry.responses);
+        const carryFromRound = carry.round?.round_number ?? null;
+        const seededNotes = formatCarryForwardNotes(carryFromRound, carryItems);
+        return (
+          <NewRoundModal
+            open={showNewRound}
+            submittal={selected}
+            previousRound={previousRound}
+            carryItems={carryItems}
+            carryFromRound={carryFromRound}
+            seededNotes={seededNotes}
+            onClose={() => setShowNewRound(false)}
+            onSubmit={(data) => createRoundMut.mutate(data)}
+          />
+        );
+      })()}
 
       {/* Fab-release gate override — a "Release for Fabrication" move blocked by
           open RFIs reopens here so a PM can release with a recorded reason. */}
