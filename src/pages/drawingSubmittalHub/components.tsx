@@ -1660,6 +1660,116 @@ export function FleetHealthStrip({ fleet, onOpenRegister }: { fleet: any; onOpen
   );
 }
 
+// ── Revision Impact Board (slice 4 of the Hub Command Center) ──────────────
+const REV_DOWNSTREAM: Record<string, { label: string; color: string }> = {
+  critical: { label: "In field", color: "#F85149" },
+  high: { label: "Delivered", color: "#F0883E" },
+  medium: { label: "Fabricated", color: "#D29922" },
+  low: { label: "Not downstream", color: textMuted },
+};
+
+/**
+ * "What changed / what's affected" board — one row per change-revision, joined
+ * (in the hub) to its set's work package, linked RFIs, fab-blocked state, and a
+ * best-effort affected-piece count. Rows arrive pre-enriched; this is presentational.
+ */
+export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }: { rows?: any[]; onCompareRevision?: (drawingId: string) => void; isLoading?: boolean }) {
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    if (!search) return rows;
+    const q = search.toLowerCase();
+    return rows.filter((r) =>
+      (r.sheetNumber || "").toLowerCase().includes(q) ||
+      (r.setName || "").toLowerCase().includes(q) ||
+      (r.wpNames || []).join(" ").toLowerCase().includes(q));
+  }, [rows, search]);
+
+  if (isLoading) return <LoadingSkeleton />;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <GitCompareArrows size={15} color={accent} />
+        <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: textPrimary, textTransform: "uppercase" }}>Revision Impact</span>
+        <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{rows.length} changed sheet{rows.length === 1 ? "" : "s"}</span>
+        <div style={{ flex: 1 }} />
+        <div style={{ position: "relative", flex: "0 1 320px", minWidth: 180 }}>
+          <Search size={14} color={textMuted} style={{ position: "absolute", left: 10, top: 9 }} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search sheet / set / WP…" style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 8, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }} />
+        </div>
+      </div>
+
+      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <Th>Changed Sheet</Th>
+              <Th>Rev</Th>
+              <Th>Downstream</Th>
+              <Th>Linked Work Package</Th>
+              <Th style={{ textAlign: "right" }}>RFIs (open/all)</Th>
+              <Th>Fab Blocked?</Th>
+              <Th style={{ textAlign: "right" }}>
+                <span title="Best-effort: pieces in the set's linked work package (matched by sequence). '—' when no mapping exists.">Pieces ≈</span>
+              </Th>
+              <Th style={{ textAlign: "right" }}>{""}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><Td colSpan={8} style={{ textAlign: "center", color: textMuted, padding: 28 }}>
+                No changed sheets {search ? "match your search" : "yet — the board lights up when a new revision is uploaded for an existing sheet"}.
+              </Td></tr>
+            ) : filtered.map((r) => {
+              const dm = REV_DOWNSTREAM[r.severity] || REV_DOWNSTREAM.low;
+              return (
+                <tr key={r.revisionId || `${r.drawingId}-${r.revisionCode}`} style={{
+                  borderTop: `1px solid ${border}`,
+                  borderLeft: r.severity === "critical" ? "3px solid #F85149" : r.severity === "high" ? "3px solid #F0883E" : "3px solid transparent",
+                }}>
+                  <Td style={{ color: textPrimary, fontWeight: 600 }}>
+                    {r.sheetNumber || "Sheet"}
+                    <span style={{ display: "block", fontFamily: mono, fontSize: 9.5, color: textMuted, fontWeight: 400 }}>{r.setName}</span>
+                  </Td>
+                  <Td style={{ color: textMuted }}>{r.revisionCode}</Td>
+                  <Td>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 10, fontWeight: 700, color: dm.color }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: dm.color, flexShrink: 0 }} />{dm.label}
+                    </span>
+                  </Td>
+                  <Td style={{ color: r.wpNames?.length ? textPrimary : textMuted }}>{r.wpNames?.length ? r.wpNames.join(", ") : "—"}</Td>
+                  <Td style={{ textAlign: "right" }}>
+                    {r.rfiCount ? (
+                      <span style={{ fontFamily: mono, fontSize: 11, color: r.openRfiCount ? "#F0883E" : textMuted }}>{r.openRfiCount}<span style={{ color: textMuted }}> / {r.rfiCount}</span></span>
+                    ) : <span style={{ color: textMuted }}>—</span>}
+                  </Td>
+                  <Td>
+                    {r.fabBlocked
+                      ? <span style={{ fontFamily: mono, fontSize: 9.5, fontWeight: 800, color: "#F85149", background: "rgba(248,81,73,0.12)", border: "1px solid rgba(248,81,73,0.4)", borderRadius: 4, padding: "1px 6px", textTransform: "uppercase" }}>Yes</span>
+                      : <span style={{ fontFamily: mono, fontSize: 9.5, color: textMuted }}>No</span>}
+                  </Td>
+                  <Td style={{ textAlign: "right", color: r.affectedPieces != null ? textPrimary : textMuted }}>{r.affectedPieces != null ? r.affectedPieces : "—"}</Td>
+                  <Td style={{ textAlign: "right" }}>
+                    {onCompareRevision && r.drawingId && (
+                      <button type="button" title="Open the revision overlay compare" onClick={() => onCompareRevision(r.drawingId)}
+                        style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer", background: "transparent", border: `1px solid ${border}`, color: accent }}>
+                        Compare
+                      </button>
+                    )}
+                  </Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, lineHeight: 1.5 }}>
+        Downstream severity: <span style={{ color: "#F85149" }}>in field</span> &gt; <span style={{ color: "#F0883E" }}>delivered</span> &gt; <span style={{ color: "#D29922" }}>fabricated</span>. &quot;Pieces ≈&quot; is a best-effort count via the set&apos;s linked work-package sequence.
+      </div>
+    </div>
+  );
+}
+
 export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading }: ApprovalMatrixProps) {
   const [search, setSearch] = useState("");
 
