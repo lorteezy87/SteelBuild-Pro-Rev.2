@@ -67,6 +67,14 @@ const KIND_CONFIG = {
   },
 };
 
+// Leading glyph per gate-reason kind for the "not ready for fab" panel.
+const GATE_REASON_ICON = {
+  open_rfis: "❓",
+  rejected_sheets: "⊘",
+  revision_conflict: "⟳",
+  missing_signoffs: "✍",
+};
+
 export default function ExportFabReleaseModal({
   open,
   onClose,
@@ -88,6 +96,19 @@ export default function ExportFabReleaseModal({
 
   const groups = useMemo(() => groupBySet(filteredDrawings), [filteredDrawings]);
 
+  // The "Ready for Fab?" gate evaluates the full sheet membership of the sets
+  // being released (not just the approved subset that ships), so it can see
+  // rejected / superseded / RFI'd sheets sitting in those sets. Keyed by set id
+  // (or name as a fallback). Required sign-offs are opt-in per project.
+  const requireSignoffs = !!project?.metadata?.require_fab_signoffs;
+  const packageDrawings = useMemo(() => {
+    if (kind === "claims") return filteredDrawings;
+    const setKey = (d) => d?.drawing_set_id || d?.drawing_set_name || null;
+    const releasedSets = new Set(filteredDrawings.map(setKey).filter(Boolean));
+    if (releasedSets.size === 0) return filteredDrawings;
+    return (drawings || []).filter((d) => d && !d.is_deleted && releasedSets.has(setKey(d)));
+  }, [drawings, filteredDrawings, kind]);
+
   // ── Fab Release gate ─────────────────────────────────────────────────
   // Don't let a package ship to the shop while an open RFI references one of
   // its sheets. Fetch the RFIs linked from the matched drawings and compute a
@@ -96,6 +117,7 @@ export default function ExportFabReleaseModal({
   // by design, so they're never gated.)
   const gated = kind !== "claims";
   const [linkedRfis, setLinkedRfis] = useState([]);
+  const [gateSignoffs, setGateSignoffs] = useState([]);
   const [override, setOverride] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
 
@@ -103,38 +125,50 @@ export default function ExportFabReleaseModal({
     if (!open) return;
     setOverride(false);
     setOverrideReason("");
-    if (!gated || !project?.id) {
-      setLinkedRfis([]);
-      return;
-    }
-    // linked_rfi_ids is a CSV of RFI *numbers*, so we can't query by id — fetch
-    // the project's (non-deleted) RFIs and let the gate match by number.
-    const hasLinks = filteredDrawings.some((d) => linkedRfiNumbers(d).length > 0);
-    if (!hasLinks) {
-      setLinkedRfis([]);
-      return;
-    }
+    setLinkedRfis([]);
+    setGateSignoffs([]);
+    if (!gated || !project?.id) return;
     let cancelled = false;
     (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("rfis")
-          .select("id, rfi_number, title, status, is_deleted, ball_in_court")
-          .eq("project_id", project.id)
-          .eq("is_deleted", false);
-        if (!cancelled && !error) setLinkedRfis(data || []);
-      } catch (err) {
-        console.warn("[ExportFabReleaseModal] RFI fetch for fab gate failed:", err);
+      // RFIs — linked_rfi_ids is a CSV of RFI *numbers*, so we can't query by id;
+      // fetch the project's (non-deleted) RFIs and let the gate match by number.
+      if (packageDrawings.some((d) => linkedRfiNumbers(d).length > 0)) {
+        try {
+          const { data, error } = await supabase
+            .from("rfis")
+            .select("id, rfi_number, title, status, is_deleted, ball_in_court")
+            .eq("project_id", project.id)
+            .eq("is_deleted", false);
+          if (!cancelled && !error) setLinkedRfis(data || []);
+        } catch (err) {
+          console.warn("[ExportFabReleaseModal] RFI fetch for fab gate failed:", err);
+        }
+      }
+      // Sign-offs — only when the project requires them for release.
+      if (requireSignoffs) {
+        try {
+          const ids = packageDrawings.map((d) => d.id).filter(Boolean);
+          if (ids.length) {
+            const { data, error } = await supabase
+              .from("drawing_signoffs")
+              .select("drawing_id, stamp_type, status, is_voided")
+              .in("drawing_id", ids)
+              .eq("is_voided", false);
+            if (!cancelled && !error) setGateSignoffs(data || []);
+          }
+        } catch (err) {
+          console.warn("[ExportFabReleaseModal] sign-off fetch for fab gate failed:", err);
+        }
       }
     })();
     return () => { cancelled = true; };
-  }, [open, gated, project?.id, filteredDrawings]);
+  }, [open, gated, project?.id, packageDrawings, requireSignoffs]);
 
   const gate = useMemo(
     () => (gated
-      ? computeFabReleaseGate({ drawings: filteredDrawings, rfis: linkedRfis })
-      : { blocked: false, blockingRfis: [], affectedSheets: [], blockingCount: 0 }),
-    [gated, filteredDrawings, linkedRfis],
+      ? computeFabReleaseGate({ drawings: packageDrawings, rfis: linkedRfis, signoffs: gateSignoffs, requireSignoffs })
+      : { blocked: false, reasons: [], blockingRfis: [], affectedSheets: [], blockingCount: 0 }),
+    [gated, packageDrawings, linkedRfis, gateSignoffs, requireSignoffs],
   );
   // Override now requires a written reason (the server records it and refuses an
   // empty-reason override). The button stays locked until the reason is filled.
@@ -153,7 +187,7 @@ export default function ExportFabReleaseModal({
       return;
     }
     if (exportLocked) {
-      toast.error(`${gate.blockingCount} open RFI${gate.blockingCount === 1 ? "" : "s"} block this release — resolve them or check the PM override.`);
+      toast.error(`This package isn't ready for fab (${gate.reasons.length} issue${gate.reasons.length === 1 ? "" : "s"}) — resolve them or check the PM override.`);
       return;
     }
 
@@ -333,34 +367,42 @@ export default function ExportFabReleaseModal({
             borderRadius: 2, padding: "12px 14px", marginBottom: 14,
           }}>
             <div style={{ ...mono, fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", color: "var(--status-error)", textTransform: "uppercase", marginBottom: 8 }}>
-              ⚠ Fab release blocked — {gate.blockingCount} open RFI{gate.blockingCount === 1 ? "" : "s"}
+              ⚠ Not ready for fab — {gate.reasons.length} issue{gate.reasons.length === 1 ? "" : "s"}
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 8 }}>
-              Open RFIs reference {gate.affectedSheets.length} sheet{gate.affectedSheets.length === 1 ? "" : "s"} in this package. Releasing now risks fabricating to a detail that may change.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
-              {gate.blockingRfis.slice(0, 6).map((r) => (
-                <div key={r.id} style={{ ...mono, fontSize: 11, color: "var(--text-primary)", display: "flex", gap: 8 }}>
-                  <span style={{ color: "var(--status-error)", fontWeight: 700, flex: "0 0 auto" }}>{r.rfi_number || "RFI"}</span>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.title || "—"}{r.status ? ` · ${r.status}` : ""}
-                  </span>
-                </div>
-              ))}
-              {gate.blockingRfis.length > 6 && (
-                <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>+ {gate.blockingRfis.length - 6} more…</div>
-              )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
+              {gate.reasons.map((reason) => {
+                const items = reason.rfis || reason.sheets || [];
+                return (
+                  <div key={reason.kind}>
+                    <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-primary)", marginBottom: 3 }}>
+                      {GATE_REASON_ICON[reason.kind] || "•"} {reason.title}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 16 }}>
+                      {items.slice(0, 4).map((item, i) => (
+                        <div key={item.id || i} style={{ ...mono, fontSize: 10.5, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {reason.kind === "open_rfis"
+                            ? `${item.rfi_number || "RFI"} — ${item.title || "—"}${item.status ? ` · ${item.status}` : ""}`
+                            : `${item.sheet_number || item.id}${item.title ? ` — ${item.title}` : ""}`}
+                        </div>
+                      ))}
+                      {items.length > 4 && (
+                        <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>+ {items.length - 4} more…</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 11, color: "var(--text-secondary)" }}>
               <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} />
-              <span><strong style={{ color: "var(--text-primary)" }}>PM override</strong> — release despite the open RFI{gate.blockingCount === 1 ? "" : "s"} (I accept the rework risk).</span>
+              <span><strong style={{ color: "var(--text-primary)" }}>PM override</strong> — release despite these issues (I accept the risk; this is recorded).</span>
             </label>
             {override && (
               <textarea
                 value={overrideReason}
                 onChange={(e) => setOverrideReason(e.target.value)}
                 rows={2}
-                placeholder="Override reason (required) — why release despite the open RFIs?"
+                placeholder="Override reason (required) — why release despite these issues?"
                 style={{
                   ...mono, marginTop: 8, width: "100%", boxSizing: "border-box",
                   fontSize: 11, padding: "8px 10px", borderRadius: 2,
@@ -394,7 +436,7 @@ export default function ExportFabReleaseModal({
           <button
             onClick={handleExport}
             disabled={busy || (kind !== "claims" && filteredDrawings.length === 0) || exportLocked}
-            title={exportLocked ? "Resolve the open RFIs or check the PM override to release" : undefined}
+            title={exportLocked ? "Resolve the blocking issues or check the PM override to release" : undefined}
             style={{
               ...btnBase,
               background: exportLocked ? "var(--bg-page)" : "rgba(200,155,32,0.2)",
@@ -404,7 +446,7 @@ export default function ExportFabReleaseModal({
               cursor: exportLocked ? "not-allowed" : "pointer",
             }}
           >
-            {busy ? "Exporting…" : exportLocked ? "Blocked by open RFIs" : "Export Package"}
+            {busy ? "Exporting…" : exportLocked ? "Not ready for fab" : "Export Package"}
           </button>
         </div>
       </div>
