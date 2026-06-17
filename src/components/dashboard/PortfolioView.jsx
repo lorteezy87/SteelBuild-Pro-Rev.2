@@ -10,9 +10,12 @@ import { computeWeightedHealth, HealthPill, HEALTH_ORDER, healthColor } from "./
 import { formatLocalDate } from "@/utils/dates";
 import {
   PHASE_DOT,
-  summarizeProjectSchedule,
   MiniProjectTimeline,
 } from "./portfolioTimeline";
+import {
+  computeCoExposure, summarizeSchedulesByProject, computeTotalTons,
+  computeFabricatedTonnage, computeDeliveriesStats, computeRfiTurnaround,
+} from "./portfolioDerive";
 import { Button } from "@/components/design-system";
 import { MiniSparkline, Card, HeaderBar, KPIBlock } from "./portfolioPrimitives";
 import DeliveryRail from "./DeliveryRail";
@@ -55,49 +58,11 @@ export default function PortfolioView({
   // Void COs are excluded entirely — they're dead. `cost_impact_amount`
   // is the legacy pre-migration field; we still honour it so older
   // rows don't disappear.
-  const coExposure = useMemo(() => {
-    const byBucket = {
-      approved: { amount: 0, items: [] },
-      pending:  { amount: 0, items: [] },
-      unpriced: { amount: 0, items: [] },
-      disputed: { amount: 0, items: [] },
-    };
-    for (const co of allCOs || []) {
-      const amt = Number(co.co_amount ?? co.cost_impact_amount ?? 0);
-      const status = String(co.status || "").trim();
-      if (status === "Void") continue;
-
-      let bucket = null;
-      if (status === "Approved") bucket = "approved";
-      else if (["Draft", "Submitted", "Under Review"].includes(status)) {
-        bucket = amt > 0 ? "pending" : "unpriced";
-      } else if (status === "Rejected" && amt > 0) {
-        bucket = "disputed";
-      }
-      if (!bucket) continue;
-
-      byBucket[bucket].amount += amt;
-      byBucket[bucket].items.push(co);
-    }
-    const totalExposure = byBucket.pending.amount + byBucket.disputed.amount;
-    return { ...byBucket, totalExposure };
-  }, [allCOs]);
+  const coExposure = useMemo(() => computeCoExposure(allCOs), [allCOs]);
 
   // Per-project schedule summary → keyed by project_id so each row can
   // look its own up in O(1). Recomputed when schedule_tasks change.
-  const projectScheduleSummaries = useMemo(() => {
-    const byProject = {};
-    for (const t of allScheduleTasks || []) {
-      if (!t.project_id) continue;
-      if (!byProject[t.project_id]) byProject[t.project_id] = [];
-      byProject[t.project_id].push(t);
-    }
-    const out = {};
-    for (const [pid, tasks] of Object.entries(byProject)) {
-      out[pid] = summarizeProjectSchedule(tasks);
-    }
-    return out;
-  }, [allScheduleTasks]);
+  const projectScheduleSummaries = useMemo(() => summarizeSchedulesByProject(allScheduleTasks), [allScheduleTasks]);
   const navigate = useNavigate();
   const { setActiveProject } = useProjectContext();
   const [sortMode, setSortMode] = useState("health");
@@ -541,58 +506,10 @@ export default function PortfolioView({
     return { priorities, waitingOn, riskWatch };
   }, [allRFIs, allActionItems, allDeliveries, allCOs, projectMap, enrichedMetrics]);
 
-  const totalTons = useMemo(() => allWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0), [allWPs]);
-  const fabricatedTonnage = useMemo(() => {
-    const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
-    return allWPs
-      .filter((w) => (PHASE_RANK[w.phase] ?? -1) >= 1 && ["In Progress", "Complete"].includes(w.status))
-      .reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  }, [allWPs]);
-  const deliveriesStats = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const isLate = (d) => {
-      if (!d.scheduled_date || statusIn(d.status, ["Delivered"])) return false;
-      const sched = parseUTCDate(d.scheduled_date);
-      return sched && sched < today;
-    };
-    const scheduled = allDeliveries.filter((d) => statusIn(d.status, ["Scheduled"])).length;
-    const inTransit = allDeliveries.filter((d) => statusIn(d.status, ["In Transit"])).length;
-    const lateAll = allDeliveries.filter(isLate);
-    const late = lateAll.length;
-    const lateList = lateAll
-      .sort((a, b) => (parseUTCDate(a.scheduled_date) || 0) - (parseUTCDate(b.scheduled_date) || 0))
-      .slice(0, 3)
-      .map((d) => {
-        const sched = parseUTCDate(d.scheduled_date);
-        return {
-          ...d,
-          daysLate: sched ? Math.max(0, Math.floor((today - sched) / 86400000)) : 0,
-        };
-      });
-    // Next upcoming delivery
-    const upcoming = allDeliveries
-      .filter((d) => {
-        if (statusIn(d.status, ["Delivered"]) || !d.scheduled_date) return false;
-        const sched = parseUTCDate(d.scheduled_date);
-        return sched && sched >= today;
-      })
-      .sort((a, b) => (parseUTCDate(a.scheduled_date) || 0) - (parseUTCDate(b.scheduled_date) || 0));
-    const nextDelivery = upcoming[0] || null;
-    return { scheduled, inTransit, late, lateList, nextDelivery };
-  }, [allDeliveries]);
-
-  // ── RFI turnaround metric ──────────────────────────────────────────────────
-  const rfiTurnaround = useMemo(() => {
-    const closed = allRFIs.filter((r) => statusIn(r.status, ["Answered", "Closed"]) && r.submitted_date && r.responded_date);
-    if (closed.length === 0) return null;
-    const totalDays = closed.reduce((s, r) => {
-      const submitted = parseUTCDate(r.submitted_date);
-      const responded = parseUTCDate(r.responded_date);
-      if (!submitted || !responded) return s;
-      return s + Math.max(0, Math.floor((responded - submitted) / 86400000));
-    }, 0);
-    return (totalDays / closed.length).toFixed(1);
-  }, [allRFIs]);
+  const totalTons = useMemo(() => computeTotalTons(allWPs), [allWPs]);
+  const fabricatedTonnage = useMemo(() => computeFabricatedTonnage(allWPs), [allWPs]);
+  const deliveriesStats = useMemo(() => computeDeliveriesStats(allDeliveries), [allDeliveries]);
+  const rfiTurnaround = useMemo(() => computeRfiTurnaround(allRFIs), [allRFIs]);
 
   // ── Data completeness scoring ──────────────────────────────────────────────
   const dataIssues = useMemo(() => {
