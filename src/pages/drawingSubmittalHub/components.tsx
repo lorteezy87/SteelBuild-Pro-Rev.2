@@ -31,6 +31,8 @@ import {
   STATUS_COLORS,
   accent,
   border,
+  buildApprovalMatrixRows,
+  summarizeApprovalMatrix,
   dueInfo,
   error,
   fmtDate,
@@ -1773,65 +1775,12 @@ export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }:
 export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading }: ApprovalMatrixProps) {
   const [search, setSearch] = useState("");
 
-  // Build matrix: for each drawing set, find all submittals that reference it
-  const matrixRows = useMemo(() => {
-    const activeSubmittals = submittals.filter((s) => !s.is_deleted);
-    const setSubmittalMap: Record<string, any[]> = {};
-
-    for (const sub of activeSubmittals) {
-      const setIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
-      for (const sid of setIds) {
-        if (!setSubmittalMap[sid]) setSubmittalMap[sid] = [];
-        setSubmittalMap[sid].push(sub);
-      }
-    }
-
-    const activeSets = drawingSets
-      .filter((s) => !s.is_deleted)
-      .map((set) => {
-        const linked = setSubmittalMap[set.id] || [];
-        const latestSubmittal = linked.slice().sort(
-          (a, b) => (b.round_number || 1) - (a.round_number || 1)
-        )[0] || null;
-        const due = dueInfo(getSubmittalDueDate(latestSubmittal), latestSubmittal ? isClosedSubmittal(latestSubmittal) : false);
-        return {
-          ...set,
-          submittals: linked,
-          latestSubmittal,
-          due,
-        };
-      })
-      .filter((set) => {
-        if (!search) return true;
-        const q = search.toLowerCase();
-        return (
-          formatDrawingSetNumber(set).toLowerCase().includes(q) ||
-          (set.set_name || "").toLowerCase().includes(q) ||
-          (set.discipline || "").toLowerCase().includes(q) ||
-          set.submittals.some((s) => (s.submittal_number || "").toLowerCase().includes(q))
-        );
-      })
-      .sort((a, b) => {
-        return compareDrawingSetPackages(a, b);
-      });
-
-    return activeSets;
-  }, [drawingSets, submittals, search]);
-
-  // Summary counts
-  const summary = useMemo(() => {
-    let noSubmittal = 0, pending = 0, approved = 0, rejected = 0, overdue = 0, dueSoon = 0;
-    for (const row of matrixRows) {
-      if (!row.latestSubmittal) { noSubmittal++; continue; }
-      const st = row.latestSubmittal.status;
-      if (st === "Approved" || st === "Approved as Noted" || st === "Released for Fabrication") approved++;
-      else if (st === "Rejected" || st === "Revise and Resubmit") rejected++;
-      else pending++;
-      if (row.due.overdue) overdue++;
-      if (row.due.dueSoon) dueSoon++;
-    }
-    return { noSubmittal, pending, approved, rejected, overdue, dueSoon, total: matrixRows.length };
-  }, [matrixRows]);
+  // Build matrix + summary (pure logic in format.ts; testable).
+  const matrixRows = useMemo(
+    () => buildApprovalMatrixRows(drawingSets, submittals, search),
+    [drawingSets, submittals, search],
+  );
+  const summary = useMemo(() => summarizeApprovalMatrix(matrixRows), [matrixRows]);
 
   if (isLoading) return <LoadingSkeleton />;
 
