@@ -22,6 +22,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import PhotoStripUploader from "@/components/shared/PhotoStripUploader";
@@ -367,7 +368,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.project_id) {
-      alert("Select a project before saving a daily log.");
+      toast.error("Select a project before saving a daily log.");
       return;
     }
     onSave({

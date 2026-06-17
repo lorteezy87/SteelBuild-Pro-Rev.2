@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -170,7 +171,7 @@ export default function DailyLogFormModal({
 
   const handleSave = () => {
     if (!form.date || !form.project_id) {
-      alert("Please fill in Date and Project");
+      toast.error("Please fill in Date and Project");
       return;
     }
     const payload = {
