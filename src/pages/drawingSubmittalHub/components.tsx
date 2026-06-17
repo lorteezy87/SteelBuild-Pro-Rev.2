@@ -14,6 +14,7 @@ import {
   GitCompareArrows,
   Layers3,
   Link2,
+  Lock,
   Search,
   ShieldCheck,
   User,
@@ -224,6 +225,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                   {focusItem.group} - {focusItem.status}
                 </span>
                 {focusItem.detailingState && <OperationalStateChip state={focusItem.detailingState} />}
+                {focusItem.isRR && <RRChip />}
               </div>
               {/* ── Inline Quick-Action Controls ──────────────────────── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
@@ -851,6 +853,35 @@ function OperationalStateChip({ state }: { state: string }) {
   );
 }
 
+// R&R loop-back badge, shown next to the stage chip when the governing submittal
+// is Revise-and-Resubmit / Rejected. The stage rolls up to IFA for counts, so
+// this keeps an R&R rejection from reading as a fresh IFA on the board (and
+// matches the register's literal "Revise and Resubmit").
+function RRChip() {
+  const color = "#f59e0b"; // matches "Revise and Resubmit" in format.ts
+  return (
+    <span
+      title="Revise & Resubmit — the review sent this package back; the cycle restarts at IFA"
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontFamily: mono,
+        fontSize: 9,
+        fontWeight: 800,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        color,
+        background: `color-mix(in srgb, ${color} 16%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      R&amp;R
+    </span>
+  );
+}
+
 interface InlineDetailingControlProps {
   current: string | null | undefined;
   onAdvance: (next: string) => void;
@@ -1199,6 +1230,7 @@ function TriageItemRow({ item, onOpen, onEscalate }: { item: any; onOpen: () => 
           {item.detailingState
             ? <OperationalStateChip state={item.detailingState} />
             : <span style={{ color: textMuted, fontSize: 12, whiteSpace: "nowrap" }}>- {item.status}</span>}
+          {item.isRR && <RRChip />}
         </div>
       </div>
       <div>
@@ -1377,6 +1409,8 @@ export function DrawingRegisterTable({
           pkg, due, sheetCount, releasedCount, discipline, maxRev, dominantStage,
           status: latestSubmittal?.status || null, done, late: !!due.overdue && !done,
           health: healthByKey?.get(pkg.key) || null,
+          locked: !!pkg.parent?.is_locked,
+          lockedReason: pkg.parent?.locked_reason || null,
           setNo: pkg.parent ? formatDrawingSetNumber(pkg.parent) : "TBD",
         };
       })
@@ -1458,7 +1492,14 @@ export function DrawingRegisterTable({
                 borderTop: `1px solid ${border}`,
                 borderLeft: r.late ? "3px solid var(--status-error)" : r.done ? "3px solid var(--status-success)" : "3px solid transparent",
               }}>
-                <Td style={{ color: textPrimary, fontWeight: 600 }}>{r.pkg.name}</Td>
+                <Td style={{ color: textPrimary, fontWeight: 600 }}>
+                  {r.pkg.name}
+                  {r.locked && (
+                    <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "#f59e0b", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.4)", textTransform: "uppercase", letterSpacing: "0.04em", verticalAlign: "middle" }}>
+                      <Lock size={9} /> Locked
+                    </span>
+                  )}
+                </Td>
                 <Td style={{ color: textMuted }}>{r.setNo}</Td>
                 <Td style={{ color: textMuted }}>{r.discipline}</Td>
                 <Td style={{ textAlign: "right" }}>{r.sheetCount}</Td>
@@ -1469,7 +1510,13 @@ export function DrawingRegisterTable({
                 <Td style={{ textAlign: "right", color: textMuted }}>{r.maxRev || "—"}</Td>
                 <Td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   {r.pkg.parent && (
-                    <button type="button" title="Upload a new revision for this set" onClick={() => setRevisionSet(r.pkg.parent)} style={rowBtn}>New Rev</button>
+                    <button
+                      type="button"
+                      disabled={r.locked}
+                      title={r.locked ? `Locked — ${r.lockedReason || "an admin must unlock before a new revision"}` : "Upload a new revision for this set"}
+                      onClick={() => { if (!r.locked) setRevisionSet(r.pkg.parent); }}
+                      style={{ ...rowBtn, opacity: r.locked ? 0.45 : 1, cursor: r.locked ? "not-allowed" : "pointer" }}
+                    >New Rev</button>
                   )}
                   {aiDiffEnabled && (
                     <button type="button" title="AI Revision Impact Report" onClick={() => setReportSet(r.pkg)} style={{ ...rowBtn, marginLeft: 6, color: accent, borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}>✦ Report</button>

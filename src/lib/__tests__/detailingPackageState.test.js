@@ -8,6 +8,7 @@ import {
   hasGoverningSubmittal,
   effectiveDetailingState,
   isPackageSuperseded,
+  isPackageRR,
   compareDetailingStates,
 } from "@/lib/detailingPackageState";
 
@@ -86,6 +87,32 @@ describe("isPackageSuperseded", () => {
     expect(isPackageSuperseded([{ is_superseded: true }, { is_superseded: false }])).toBe(false);
     expect(isPackageSuperseded([])).toBe(false);
     expect(isPackageSuperseded([{ is_superseded: true, is_deleted: true }])).toBe(false);
+  });
+});
+
+describe("isPackageRR", () => {
+  const RR = { status: "Revise and Resubmit", submitted_date: "2026-06-13", round_number: 2 };
+  const RELEASED = { status: "Released for Fabrication", submitted_date: "2026-06-20", round_number: 3 };
+
+  it("true when the governing (most-recent active) submittal is R&R or Rejected", () => {
+    expect(isPackageRR([RR])).toBe(true);
+    expect(isPackageRR([{ status: "Rejected", submitted_date: "2026-06-13" }])).toBe(true);
+  });
+
+  it("false once a newer round advances past R&R (the released round governs)", () => {
+    expect(isPackageRR([RR, RELEASED])).toBe(false);
+  });
+
+  it("ignores deleted submittals — a deleted Released round doesn't suppress an active R&R", () => {
+    // The real "Main Steel - Bldg. 1" case: round-1 Released soft-deleted, round-2 R&R active.
+    expect(isPackageRR([RR, { ...RELEASED, is_deleted: true }])).toBe(true);
+  });
+
+  it("false for empty / non-R&R / void-only / null", () => {
+    expect(isPackageRR([])).toBe(false);
+    expect(isPackageRR([SUB_OFA])).toBe(false);
+    expect(isPackageRR([SUB_VOID])).toBe(false);
+    expect(isPackageRR(null)).toBe(false);
   });
 });
 

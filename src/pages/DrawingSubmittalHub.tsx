@@ -24,7 +24,7 @@ import ErrorBoundaryRaw from "@/components/shared/ErrorBoundary";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components/design-system";
 import { computeFabReady } from "@/lib/submittalAnalytics";
-import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
+import { effectiveDetailingState, hasGoverningSubmittal, isPackageRR } from "@/lib/detailingPackageState";
 import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
 import { buildHeldPieceMarkSet, summarizeElementStatuses } from "@/services/modelElementStatus";
 import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
@@ -332,6 +332,9 @@ export default function DrawingSubmittalHub() {
       // alongside `status` (additive) so the existing pipeline/row display is
       // unchanged; surfaced as its own chip + drives the drafting control.
       const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
+      // R&R loops back to the IFA stage for counts; surface it as its own flag so
+      // the board doesn't read an R&R rejection as a fresh IFA (matches register).
+      const isRR = isPackageRR(pkg.submittals);
       // CLOSED is satisfied by ANY terminal signal — not only a closed
       // submittal status. Previous logic prioritised `latestSubmittal` and
       // ignored the set-level lock + the coalesced detailing state, so a
@@ -371,6 +374,7 @@ export default function DrawingSubmittalHub() {
         needsAction,
         routeTab: "drawings",
         detailingState,
+        isRR,
         _canDraft: canDraft,
         _detailingStateRaw: pkg.parent?.detailing_state ?? null,
         _readiness: readinessByKey.get(pkg.key) || null,
