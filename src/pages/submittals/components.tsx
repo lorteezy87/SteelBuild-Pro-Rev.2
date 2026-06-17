@@ -9,6 +9,8 @@ import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 import CommentThreadRaw from "@/components/collaboration/CommentThread";
 import RoundTimeline from "@/components/submittals/RoundTimeline";
+import ResponseMatrix from "@/components/submittals/ResponseMatrix";
+import { buildResponseMatrix } from "@/lib/submittalResubmittal";
 import { LinkedRFIs, LinkedTasks } from "@/components/submittals/LinkedEntities";
 import SubmittalReviewStrip from "@/components/submittals/SubmittalReviewStrip";
 import ApprovalChainPanelRaw from "@/components/submittals/ApprovalChainPanel";
@@ -234,11 +236,22 @@ interface SubmittalDetailProps {
   onFieldChange: (patch: Record<string, any>) => void;
   onNewRound?: () => void;
   onReturnRound: (roundId: string) => void;
+  /** Per-sheet reviewer responses for this submittal's rounds (response matrix). */
+  sheetResponses?: any[];
+  /** Project drawings — resolve a blank sheet number / title in the matrix. */
+  drawings?: any[];
   /** Advance the submittal one step in the canonical flow (status + BIC together). */
   onAdvance?: (action: { nextStatus: string | null; nextBallInCourt: string | null; label: string; nextStage: string | null; chainStepIndex?: number }) => void;
 }
 
-export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, onAdvance }: SubmittalDetailProps) {
+export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], onAdvance }: SubmittalDetailProps) {
+  // Round-over-round per-sheet disposition matrix (computed before any early
+  // return to keep hook order stable). Empty-safe — renders nothing when the
+  // submittal has no recorded reviewer responses.
+  const responseMatrix = useMemo(
+    () => buildResponseMatrix({ rounds, responses: sheetResponses, drawings }),
+    [rounds, sheetResponses, drawings],
+  );
   // Wrap onFieldChange so a no-op edit (typing the same value back)
   // doesn't fire a network update — small UX nicety, also stops
   // accidental "Updated" toasts when the user just tabs through.
@@ -434,6 +447,15 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
             );
           })()}
         </DetailSection>
+
+        {/* Response Matrix — each sheet's reviewer disposition across rounds
+            (R1 R&R → R2 No Exception …). Only shows once a round has recorded
+            per-sheet responses. */}
+        {responseMatrix.rows.length > 0 && (
+          <DetailSection title={`Response matrix (${responseMatrix.rows.length} sheet${responseMatrix.rows.length === 1 ? "" : "s"})`}>
+            <ResponseMatrix columns={responseMatrix.columns} rows={responseMatrix.rows} />
+          </DetailSection>
+        )}
 
         {/* Meta grid — every cell is inline-editable. Click the value
             (or the dash for an empty field) to turn it into an

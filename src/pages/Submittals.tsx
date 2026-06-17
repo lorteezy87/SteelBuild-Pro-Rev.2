@@ -554,6 +554,16 @@ export default function Submittals() {
             allSubmittals={rows}
             drawingSets={drawingSets}
             rounds={selected ? (roundsBySubmittal[selected.id] || []) : []}
+            sheetResponses={
+              selected
+                ? allSheetResponses.filter((r: any) =>
+                    (roundsBySubmittal[selected.id] || []).some(
+                      (rd: any) => rd.id === r.submittal_round_id,
+                    ),
+                  )
+                : []
+            }
+            drawings={allDrawings}
             allRfis={allRfis}
             allTasks={allTasks}
             projectName={activeProject?.project_name || activeProject?.name || "Project"}

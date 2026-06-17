@@ -4,6 +4,7 @@ import {
   collectOpenItems,
   pickCarryForwardResponses,
   formatCarryForwardNotes,
+  buildResponseMatrix,
 } from "@/lib/submittalResubmittal";
 
 describe("submittalResubmittal — collectOpenItems", () => {
@@ -99,5 +100,61 @@ describe("submittalResubmittal — formatCarryForwardNotes", () => {
   it("returns empty string when there is nothing to carry forward", () => {
     expect(formatCarryForwardNotes(3, [])).toBe("");
     expect(formatCarryForwardNotes(3, null)).toBe("");
+  });
+});
+
+describe("submittalResubmittal — buildResponseMatrix", () => {
+  const rounds = [
+    { id: "r1", round_number: 1 },
+    { id: "r2", round_number: 2 },
+    { id: "r3", round_number: 3 }, // bare event round — no responses, no column
+  ];
+  const responses = [
+    { submittal_round_id: "r1", drawing_id: "dA", sheet_number: "S1.1", response_status: "Revise and Resubmit", reviewer_comment: "fix" },
+    { submittal_round_id: "r1", drawing_id: "dB", sheet_number: "S2.1", response_status: "Rejected", reviewer_comment: "no" },
+    { submittal_round_id: "r2", drawing_id: "dA", sheet_number: "S1.1", response_status: "No Exception", reviewer_comment: "" },
+    // dB not re-reviewed in r2 → sparse cell
+  ];
+
+  it("builds columns only from rounds that have responses, ascending", () => {
+    const m = buildResponseMatrix({ rounds, responses });
+    expect(m.columns.map((c) => c.id)).toEqual(["r1", "r2"]);
+    expect(m.columns.map((c) => c.round_number)).toEqual([1, 2]);
+  });
+
+  it("pivots responses into sheet rows with sparse per-round cells", () => {
+    const m = buildResponseMatrix({ rounds, responses });
+    const s1 = m.rows.find((r) => r.sheet_number === "S1.1");
+    const s2 = m.rows.find((r) => r.sheet_number === "S2.1");
+    expect(s1?.cells.r1.response_status).toBe("Revise and Resubmit");
+    expect(s1?.cells.r2.response_status).toBe("No Exception");
+    expect(s2?.cells.r1.response_status).toBe("Rejected");
+    expect(s2?.cells.r2).toBeUndefined(); // not re-reviewed in round 2
+  });
+
+  it("sorts sheet rows naturally by sheet number", () => {
+    const m = buildResponseMatrix({
+      rounds: [{ id: "r1", round_number: 1 }],
+      responses: [
+        { submittal_round_id: "r1", sheet_number: "S10", response_status: "Rejected" },
+        { submittal_round_id: "r1", sheet_number: "S2", response_status: "Rejected" },
+      ],
+    });
+    expect(m.rows.map((r) => r.sheet_number)).toEqual(["S2", "S10"]);
+  });
+
+  it("fills a blank sheet number / title from the linked drawing", () => {
+    const m = buildResponseMatrix({
+      rounds: [{ id: "r1", round_number: 1 }],
+      responses: [{ submittal_round_id: "r1", drawing_id: "dA", response_status: "Rejected" }],
+      drawings: [{ id: "dA", sheet_number: "E1.0", title: "Embeds" }],
+    });
+    expect(m.rows[0].sheet_number).toBe("E1.0");
+    expect(m.rows[0].title).toBe("Embeds");
+  });
+
+  it("is safe on empty input", () => {
+    expect(buildResponseMatrix({})).toEqual({ columns: [], rows: [] });
+    expect(buildResponseMatrix({ rounds: null, responses: null })).toEqual({ columns: [], rows: [] });
   });
 });
