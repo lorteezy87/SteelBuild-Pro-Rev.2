@@ -61,10 +61,45 @@ describe("exportWorkspace", () => {
     expect(progress.length).toBeGreaterThan(0);
   });
 
-  it("surfaces an edge-function error payload (e.g. 403) as a failure", async () => {
-    invokeMock.mockResolvedValueOnce({ data: { error: "No access to this project" }, error: null });
+  it("recovers the real reason from a non-2xx FunctionsHttpError (e.g. 403)", async () => {
+    // supabase-js delivers a non-2xx response as { data: null, error } where
+    // error.message is generic and the real body is in error.context (Response).
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: "Edge Function returned a non-2xx status code",
+        context: { json: async () => ({ error: "No access to this project" }) },
+      },
+    });
     const bundle = await exportWorkspace([{ id: "p9", name: "Nine" }]);
     expect(bundle.project_count).toBe(0);
     expect(bundle.failures[0].error).toBe("No access to this project");
+  });
+
+  it("falls back to the generic message when the error body can't be parsed", async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: "Edge Function returned a non-2xx status code",
+        context: { json: async () => { throw new Error("not json"); } },
+      },
+    });
+    const bundle = await exportWorkspace([{ id: "p1", name: "One" }]);
+    expect(bundle.failures[0].error).toBe("Edge Function returned a non-2xx status code");
+  });
+
+  it("times out a hung project and continues exporting the rest", async () => {
+    invokeMock
+      .mockImplementationOnce(() => new Promise(() => {})) // never resolves
+      .mockResolvedValueOnce({ data: { export_version: 1, total_rows: 3, tables: {} }, error: null });
+    const bundle = await exportWorkspace(
+      [{ id: "slow", name: "Slow" }, { id: "fast", name: "Fast" }],
+      { perProjectTimeoutMs: 10 },
+    );
+    expect(bundle.project_count).toBe(1);
+    expect(bundle.total_rows).toBe(3);
+    expect(bundle.failures).toHaveLength(1);
+    expect(bundle.failures[0].project_id).toBe("slow");
+    expect(bundle.failures[0].error).toMatch(/timed out/i);
   });
 });

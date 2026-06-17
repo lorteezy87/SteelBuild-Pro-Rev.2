@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import { entities } from '@/api/supabaseClient';
+import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/components/shared/OrgContext';
 import { exportWorkspace, downloadWorkspaceExport } from '@/lib/workspaceExport';
 
@@ -26,15 +26,30 @@ export default function SystemTab({ user }) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState('');
 
-  // Real workspace backup: pull every project the caller can access and export
+  // Real workspace backup: pull every project in the active org and export
   // each through the RLS-scoped, audited `project-export` Edge Function, then
   // bundle them into one downloadable JSON. (Replaces a placeholder that
   // downloaded only a list of table names — no actual data.)
+  //
+  // We query the raw client (not entities.Project.list()) on purpose: list()
+  // silently drops on-hold/paused projects and isn't org-scoped, so a backup
+  // labeled "every project in <org>" would omit paused projects and, for a
+  // multi-org user, mix in projects from their other orgs. Scoping by
+  // currentOrg.id and including on-hold rows makes the backup match its label.
   const handleExportData = async () => {
     setIsExporting(true);
     setExportMsg('Gathering projects…');
     try {
-      const projects = await entities.Project.list();
+      let query = supabase
+        .from('projects')
+        .select('id, name')
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+      // currentOrg should always be set; if a transient null slips through, RLS
+      // still limits the result to projects the user can access.
+      if (currentOrg?.id) query = query.eq('org_id', currentOrg.id);
+      const { data: projects, error } = await query;
+      if (error) throw error;
       if (!projects?.length) {
         toast.error('No projects to export yet.');
         return;
