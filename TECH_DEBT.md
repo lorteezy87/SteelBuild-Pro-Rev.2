@@ -21,10 +21,20 @@ platform-maturity follow-ups._
   never run end-to-end (1 internal `enterprise` org, 0 `billing_events`). Owner
   steps (create prices, set the 4 `stripe-billing` secrets, wire the webhook, run
   a test-mode checkout) are in [`docs/stripe-go-live.md`](docs/stripe-go-live.md).
-  ⚠️ **Decision pending:** the live project also has the unused **Supabase Stripe
-  Sync Engine** trio (`stripe-setup`/`stripe-worker`/`stripe-webhook`, not in repo)
-  + a 29-table `stripe` schema, parallel to the app's `stripe-billing`. Remove the
-  trio (and decide on the schema) before launch — being handled by another agent.
+  ✅ **Update (verified 2026-06-17):** the orphan **Supabase Stripe Sync Engine**
+  functions (`stripe-setup`/`stripe-worker`/`stripe-webhook`/`stripe-diagnostics`)
+  are **gone** — only 8 edge functions are deployed now (`llm-proxy`,
+  `schedule-assistant`, `email-ingest`, `email-send`, `stripe-billing`,
+  `project-export`, `sharepoint-proxy`, `bluebeam-proxy`). The 29-table `stripe`
+  schema decision remains. ✅ **`org.plan` anchor path confirmed (code-verified
+  2026-06-17):** there is no separate `stripe-webhook` function — the webhook is a
+  `/webhook` route INSIDE the deployed `stripe-billing` function (CLAUDE.md §16 is
+  stale on this). It signature-verifies against `billing_config.stripe_webhook_secret`,
+  is idempotent via `billing_events`, and writes `organizations.plan` /
+  `subscription_status` via the service-role client on `checkout.session.completed`
+  + `customer.subscription.updated/deleted`. Still unverified: the **live
+  Stripe-dashboard endpoint wiring + an end-to-end test** (0 `billing_events`; 1
+  internal `enterprise` org) — same gap as the "Stripe go-live" item above.
 - **Storage backfill (app-files cross-project read residual)** — verified
   2026-06-17: **775** legacy flat `app-files/uploads/<ts>-<rand>` objects predate
   org-prefixing. The set is **frozen** — the uploader cut over cleanly (last flat
@@ -59,9 +69,11 @@ platform-maturity follow-ups._
 
 ### Platform maturity (longer-running)
 
-- **TypeScript conversion** — ~86% of `src` is still JS/JSX (141 TS vs 864 JS).
-  `src/services/` is fully typed; convert incrementally, shared-infra-first.
-  `strict:false` today.
+- **TypeScript conversion** — ~85% of `src` is still JS/JSX (155 TS/TSX vs 878
+  JS/JSX, verified 2026-06-17). `src/services/` is fully typed; convert
+  incrementally, shared-infra-first. `strict:false` today. Burn-down metric:
+  ~87 `as any` boundary casts (the JS→TS tax — type the shared infra first to
+  shed them).
 - **Large-component decomposition (in progress)** — the biggest components are
   being thinned by extracting their pure logic into named, unit-tested modules
   (behavior-preserving, validated against the full suite at each slice). Done so
@@ -77,13 +89,43 @@ platform-maturity follow-ups._
   flow yet (needs a seeded test user / self-signup against a non-prod project).
 - **A11y audit + mobile/iPad polish** on core workflows; **large-project
   performance** (virtualization, server-side filtering, narrow invalidation).
-- **Dependency vulnerabilities** — `npm audit fix` (2026-06-17) cleared 7 of 9
-  (dompurify←jspdf, react-router/-dom→6.30.4 open-redirect, ws, form-data,
-  js-yaml — all semver-compatible, lockfile-only). The remaining **2 high** are
-  `esbuild` pulled by `vite`; the only fix is `vite@8` — a breaking major upgrade.
-  Deferred: esbuild is a build-time/dev dependency (the GHSA needs a malicious
-  `NPM_CONFIG_REGISTRY`; it doesn't run in production), so the vite-8 migration is
-  a separate, tested effort rather than an `npm audit fix --force`.
+- **Dependency vulnerabilities — CLEARED (`npm audit` = 0 advisories, verified
+  2026-06-17).** The 2 remaining `esbuild`-via-`vite` highs were patched within the
+  vite-6 line (`esbuild@0.25.12`), so **`vite@8` is no longer required** to clear
+  the audit. Separately, several direct deps are a major version behind (react
+  18→19, vite 6→8, tailwind 3→4, typescript 5→6, eslint 9→10, react-router-dom 6→7,
+  the Stripe SDKs 3→6 / 5→9, pdfjs-dist 4→6, recharts 2→3, zod 3→4, date-fns 3→4);
+  none are security-driven now — treat each as a discrete, tested upgrade, not
+  `npm audit fix --force`. `web-ifc`/`three` are current.
+
+### Database / migrations
+
+- **Migration history doesn't bootstrap from zero (no clean DB rebuild).**
+  Diagnosed 2026-06-17: prod's `supabase_migrations.schema_migrations` (185 rows)
+  STARTS at `003_user_projects_and_rls` — migrations 001 (`initial_schema`:
+  `projects`, `user_profiles` + base tables) and 002 were applied out-of-band and
+  never recorded, so `003`'s first statement references `public.projects` which no
+  tracked migration creates → any from-zero replay dies on the first statement.
+  Confirmed empirically: a fresh Supabase dev branch applied **0** migrations
+  (`MIGRATIONS_FAILED`), as do `main` and all prior branches. **Consequence:**
+  preview branches, `supabase db reset`, and CI-from-migrations are all broken; DDL
+  can only be validated read-only against prod. **Fix:** squash to a baseline
+  (`supabase db dump --schema-only` → `00000000000000_baseline.sql`, mark existing
+  as applied) so branches/CI/reset work again.
+
+- **CI is advisory on the deploy path.** `ci.yml` gates
+  lint→typecheck→typecheck:js→test→build on push to `main`/`claude/**` + PRs, but
+  there is no branch-protection required-check, so a **red run on `main` does not
+  stop the direct-push Vercel deploy**. Enable branch protection (owner) or move to
+  a PR-gated deploy flow.
+
+- **Code hygiene (low priority):** `formatCurrency` is redefined in 4 places
+  (`hooks/useFinancials.ts`, `pages/reports/utils.js`,
+  `components/dashboard/ProjectPulse.jsx`, plus the canonical
+  `components/shared/formatters.jsx`) + 5 inline `Intl` currency formatters —
+  consolidate onto `formatters.jsx`. `src/dev/mockData.js` (1,603 lines) ships
+  inside `src/` (move under an excluded dev path). `package.json` has no `engines`
+  pin (Node enforced only in CI) — add `"engines": { "node": ">=20" }`.
 
 ### From the 2026-05-26 enterprise-readiness audit (still open)
 
@@ -109,14 +151,32 @@ platform-maturity follow-ups._
   The rest are low-value either way; revisit with a real traffic window. Do NOT
   bulk-drop.
 
-- **Stale `.vercel/project.json`:** still names the deleted `steelbuild-pro` Vercel
-  project (production is `steelbuildpro-og` / steelbuild-pro.com). Harmless
-  (Vercel/CI use the GitHub integration, not this file) but misleading — refresh via
-  `vercel link`.
+- **`.vercel/project.json` — RESOLVED / not-an-issue (verified 2026-06-17):** it
+  correctly names `steelbuildpro-og` (the live production project), not the deleted
+  `steelbuild-pro`. No action needed.
 
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- 2026-06-17 **DB perf/security hardening (tech-debt Phase 1):** applied live via
+  MCP, advisor-confirmed. `20260617000000` — 9 `auth_rls_initplan` policy wraps
+  (`(select auth.uid())`), dropped duplicate index `idx_drawing_markups_project_id`,
+  pinned `search_path` on 3 `stripe.*` functions (guarded with `to_regprocedure` so
+  it's replay-safe). `20260617000100` — 14 covering indexes for unindexed FKs
+  (backcharges, pay_applications, organizations, drawing-revision tables, vendors,
+  fab_releases). Perf advisor: 9 init-plan + 1 dup + 14 unindexed-FK → 0 (the lone
+  remaining FK is the excluded `stripe._managed_webhooks` wrapper table);
+  `unused_index` rose 164→177 (the new FK indexes — benign, 0-scan until queried).
+
+- 2026-06-17 **`publish_drawing_revision` privilege fix (Phase 2, `20260617000200`):**
+  the SECURITY DEFINER RPC that promotes/supersedes a drawing revision was gated only
+  by `user_has_project_access` (any member, incl read-only `viewer`), while the UI
+  Release control is "PM+ only" (display-only). Tightened the server to require
+  `>= pm`, closing the display-only-vs-enforced gap. The rest of the definer surface
+  was reviewed body-by-body and is correctly gated (`delete_drawing_set`=admin,
+  `accept_invitation`=token+email-match+plan, `create_project`=org-membership+plan;
+  the `set_for_*_is_locked` functions are read-only RLS helpers, not mutators).
 
 - 2026-06-16 **Money-path test net + contract-value fix:** pinned the two
   untested financial modules (`budgetCalculations`, `utils/projectKpis`) and
