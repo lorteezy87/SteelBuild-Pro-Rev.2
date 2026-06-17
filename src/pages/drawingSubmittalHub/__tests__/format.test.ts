@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   CLOSED_SUBMITTAL_STATUSES,
+  buildSetPackages,
+  dueInfo,
   fmtDate,
+  getOperationalStateColor,
+  getStatusColor,
   isClosedPackage,
   isClosedSubmittal,
+  itemUrgency,
+  rollupDrawingStage,
+  textMuted,
   toDateInputValue,
   toLocalDay,
 } from "../format";
@@ -201,5 +208,165 @@ describe("isClosedPackage (the layer the reported bug lives in)", () => {
     expect(isClosedPackage(pkg())).toBe(false);
     expect(isClosedPackage(null)).toBe(false);
     expect(isClosedPackage(undefined)).toBe(false);
+  });
+});
+
+// A date-only string for today + offset days, written as the LOCAL calendar day
+// so it round-trips through toLocalDay/daysUntil without the Arizona UTC shift.
+// dueInfo reads `new Date()` internally, so expected values are derived the same
+// way (relative to "now") rather than hard-coded — see the engine test-pattern note.
+function isoDay(offset: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+describe("dueInfo (the Due-Status chip the matrix renders)", () => {
+  it("flags a past date as overdue with a 'Nd late' label", () => {
+    const info = dueInfo(isoDay(-3));
+    expect(info.overdue).toBe(true);
+    expect(info.dueSoon).toBe(false);
+    expect(info.days).toBe(-3);
+    expect(info.label).toBe("3d late");
+  });
+
+  it("labels the current day 'Due today' (due soon, not overdue)", () => {
+    const info = dueInfo(isoDay(0));
+    expect(info.days).toBe(0);
+    expect(info.overdue).toBe(false);
+    expect(info.dueSoon).toBe(true);
+    expect(info.label).toBe("Due today");
+  });
+
+  it("treats a date within 7 days as due soon ('Nd left')", () => {
+    const info = dueInfo(isoDay(5));
+    expect(info.dueSoon).toBe(true);
+    expect(info.overdue).toBe(false);
+    expect(info.label).toBe("5d left");
+  });
+
+  it("a date more than 7 days out is neither overdue nor due soon", () => {
+    const info = dueInfo(isoDay(20));
+    expect(info.overdue).toBe(false);
+    expect(info.dueSoon).toBe(false);
+    expect(info.days).toBe(20);
+  });
+
+  it("returns 'No date' when there is no due date", () => {
+    const info = dueInfo(null);
+    expect(info.label).toBe("No date");
+    expect(info.days).toBe(null);
+    expect(info.overdue).toBe(false);
+  });
+
+  it("returns 'Closed' when the closed flag is set, ignoring an overdue date", () => {
+    const info = dueInfo(isoDay(-99), true);
+    expect(info.label).toBe("Closed");
+    expect(info.overdue).toBe(false);
+    expect(info.dueSoon).toBe(false);
+  });
+});
+
+describe("rollupDrawingStage", () => {
+  it("returns 'No sheets' for an empty set", () => {
+    expect(rollupDrawingStage([])).toBe("No sheets");
+  });
+
+  it("rolls up to 'Released' only when EVERY sheet is released", () => {
+    expect(rollupDrawingStage([{ stage: "Released" }, { stage: "Released" }] as any)).toBe("Released");
+  });
+
+  it("surfaces 'Needs Action' when any sheet is rejected / R&R / returned", () => {
+    expect(rollupDrawingStage([{ stage: "IFA" }, { stage: "Rejected" }] as any)).toBe("Needs Action");
+  });
+
+  it("rolls up to 'In Review' when a sheet is mid-approval (IFA…IFC)", () => {
+    expect(rollupDrawingStage([{ stage: "IFA" }, { stage: "OFA" }] as any)).toBe("In Review");
+  });
+});
+
+describe("status + operational-state color resolvers", () => {
+  it("getStatusColor maps a known status and falls back to muted", () => {
+    expect(getStatusColor("Approved")).toBe("#10b981");
+    expect(getStatusColor("Released for Fabrication")).toBe("#0ea5e9");
+    expect(getStatusColor("totally-unknown-status")).toBe(textMuted);
+  });
+
+  it("getOperationalStateColor maps a drafting/release state and falls back to muted", () => {
+    expect(getOperationalStateColor("Not Started")).toBe("#64748b");
+    expect(getOperationalStateColor("Partially Released")).toBe("#10b981");
+    expect(getOperationalStateColor("totally-unknown-state")).toBe(textMuted);
+  });
+});
+
+describe("buildSetPackages (the set↔submittal join behind every matrix row)", () => {
+  const sets = [
+    { id: "s1", set_name: "Main Steel" },
+    { id: "s2", set_name: "Anchor Bolts" },
+  ];
+  const drawings = [
+    { id: "d1", drawing_set_id: "s1" },
+    { id: "d2", drawing_set_id: "s1" },
+    { id: "d3", drawing_set_id: "s2" },
+    { id: "d4", drawing_set_id: "s1", is_superseded: true }, // skipped
+    { id: "d5", drawing_set_id: "s2", is_deleted: true },    // skipped
+  ];
+  const submittals = [
+    { id: "sub1", drawing_set_ids: ["s1"] },           // linked by id
+    { id: "sub2", drawing_set_name: "Anchor Bolts" },  // linked by name fallback
+    { id: "sub3", drawing_set_ids: ["s1"], is_deleted: true }, // excluded
+  ];
+
+  it("groups live sheets under their parent set, skipping deleted + superseded", () => {
+    const pkgs = buildSetPackages(drawings as any, sets as any, submittals as any);
+    const s1 = pkgs.find((p) => p.setId === "s1")!;
+    const s2 = pkgs.find((p) => p.setId === "s2")!;
+    expect(s1.sheets.map((d) => d.id)).toEqual(["d1", "d2"]);
+    expect(s2.sheets.map((d) => d.id)).toEqual(["d3"]);
+  });
+
+  it("links a submittal by drawing_set_ids and by drawing_set_name fallback", () => {
+    const pkgs = buildSetPackages(drawings as any, sets as any, submittals as any);
+    expect(pkgs.find((p) => p.setId === "s1")!.submittals.map((s) => s.id)).toEqual(["sub1"]);
+    expect(pkgs.find((p) => p.setId === "s2")!.submittals.map((s) => s.id)).toEqual(["sub2"]);
+  });
+
+  it("excludes a soft-deleted submittal from every package", () => {
+    const pkgs = buildSetPackages(drawings as any, sets as any, submittals as any);
+    expect(pkgs.flatMap((p) => p.submittals.map((s) => s.id))).not.toContain("sub3");
+  });
+
+  it("yields a package for every named set (even empty), and nothing for empty input", () => {
+    expect(buildSetPackages([], sets as any, [])).toHaveLength(2);
+    expect(buildSetPackages([], [], [])).toHaveLength(0);
+  });
+});
+
+describe("itemUrgency (triage ordering)", () => {
+  const item = (over: any): any => ({
+    due: { overdue: false, dueSoon: false, sort: 0 },
+    needsAction: false,
+    dueDate: "2026-01-01",
+    title: "x",
+    ...over,
+  });
+
+  it("orders overdue → due-soon → needs-action → undated → normal", () => {
+    const overdue = item({ due: { overdue: true, dueSoon: false, sort: -2 } });
+    const soon = item({ due: { overdue: false, dueSoon: true, sort: 1 } });
+    const action = item({ needsAction: true });
+    const undated = item({ dueDate: null });
+    const normal = item({});
+    const sorted = [normal, undated, action, soon, overdue].sort(itemUrgency);
+    const bucket = (i: any) =>
+      i.due.overdue ? "overdue" : i.due.dueSoon ? "soon" : i.needsAction ? "action" : !i.dueDate ? "undated" : "normal";
+    expect(sorted.map(bucket)).toEqual(["overdue", "soon", "action", "undated", "normal"]);
+  });
+
+  it("breaks ties on the same rank by due.sort (earlier first)", () => {
+    const earlier = item({ due: { overdue: true, dueSoon: false, sort: -5 }, title: "B" });
+    const later = item({ due: { overdue: true, dueSoon: false, sort: -1 }, title: "A" });
+    expect([later, earlier].sort(itemUrgency).map((i) => i.title)).toEqual(["B", "A"]);
   });
 });
