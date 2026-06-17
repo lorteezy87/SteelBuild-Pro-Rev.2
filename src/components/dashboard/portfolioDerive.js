@@ -5,7 +5,8 @@
 // takes one prop array and returns a plain summary — no React, no state. Bodies
 // are byte-identical to the originals (with defensive `|| []` guards added).
 import { summarizeProjectSchedule } from "./portfolioTimeline";
-import { statusIn, parseUTCDate } from "../shared/formatters";
+import { statusIn, parseUTCDate, isOverdue } from "../shared/formatters";
+import { computeWeightedHealth, HEALTH_ORDER } from "./portfolioHealth";
 
 /**
  * Split every change order into trust buckets: approved (committed), pending
@@ -148,6 +149,125 @@ export function computeFinancials(allCOs, portfolioKPIs) {
   const remaining = totalBudget - totalSpend;
   const marginAtRisk = pendingValue + (totalSpend > totalBudget ? totalSpend - totalBudget : 0);
   return { approvedCOs: approvedCOs.length, pendingCOs: pendingCOs.length, rejectedCOs: rejectedCOs.length, approvedValue, pendingValue, rejectedValue, remaining, marginAtRisk, totalBudget, totalSpend };
+}
+
+/** project_id → display name. */
+export function computeProjectMap(projects) {
+  const map = {};
+  for (const p of projects || []) map[p.id] = p.name || p.project_name || "";
+  return map;
+}
+
+/**
+ * Per-project metric roll-up: budget/actual, RFI/CO/delivery/WP counts, tonnage,
+ * and projected margin. Sorted worst-health-first. Pure over the project + all
+ * cross-entity prop arrays.
+ */
+export function computeProjectMetrics(projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return (projects || [])
+    .map((p) => {
+      const pRFIs = (allRFIs || []).filter((r) => r.project_id === p.id);
+      const pCOs = (allCOs || []).filter((c) => c.project_id === p.id);
+      const pCodes = (allCodes || []).filter((c) => c.project_id === p.id);
+      const pWPs = (allWPs || []).filter((w) => w.project_id === p.id);
+      const pDeliveries = (allDeliveries || []).filter((d) => d.project_id === p.id);
+      const pExpenses = (allExpenses || []).filter((e) => e.project_id === p.id && !statusIn(e.payment_status, ["Voided", "Void"]));
+      const budget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
+      const hasBudgetData = pCodes.length > 0;
+      const paidExpenses = pExpenses.filter((e) => statusIn(e.payment_status, ["Paid"]));
+      const actual = paidExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      // hasActualData must mirror the slice that produces `actual` — otherwise
+      // a project with only Submitted/Approved (unpaid) expenses shows as
+      // "has data" while actual stays $0, faking a green Variance cell.
+      const hasActualData = paidExpenses.length > 0;
+      const openRFIs = pRFIs.filter((r) => !statusIn(r.status, ["Answered", "Closed"])).length;
+      const overdueRFIs = pRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
+      const avgProgress = pWPs.length > 0 ? Math.round(pWPs.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / pWPs.length) : 0;
+      const pendingCOs = pCOs.filter((c) => statusIn(c.status, ["Submitted", "Under Review"]));
+      const pendingCOValue = pendingCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+      const lateDeliveries = pDeliveries.filter((d) => {
+        if (!d.scheduled_date || statusIn(d.status, ["Delivered"])) return false;
+        const sched = parseUTCDate(d.scheduled_date);
+        return sched && sched < today;
+      }).length;
+      const tonnage = Math.round(pWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0));
+      const stalledWPs = pWPs.filter((w) => statusIn(w.status, ["On Hold"])).length;
+
+      // Projected Margin = Contract Value - Estimated Cost at Completion.
+      // Estimated cost takes the worst case of (budget) vs (actual + pending CO exposure)
+      // so the figure tells us "what the project will actually return if pending COs hit".
+      const contractValue = Number(p.original_contract_value) || 0;
+      const estimatedCostAtCompletion = Math.max(budget, actual + pendingCOValue);
+      const projectedMargin = contractValue > 0 ? contractValue - estimatedCostAtCompletion : null;
+      const projectedMarginPct = contractValue > 0 ? (projectedMargin / contractValue) * 100 : null;
+
+      return {
+        ...p,
+        budget,
+        actual,
+        hasBudgetData,
+        hasActualData,
+        openRFIs,
+        overdueRFIs,
+        avgProgress,
+        pendingCOs,
+        pendingCOValue,
+        lateDeliveries,
+        tonnage,
+        stalledWPs,
+        contractValue,
+        estimatedCostAtCompletion,
+        projectedMargin,
+        projectedMarginPct,
+      };
+    })
+    .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3));
+}
+
+/** Layer weighted-health scoring onto each project metric (auto vs manual health, worst wins). */
+export function enrichProjectMetrics(projectMetrics) {
+  return (projectMetrics || []).map((p) => {
+    const weighted = computeWeightedHealth(p);
+    const manual = p.health_status || "On Track";
+    const SEVERITY = { "At Risk": 0, "Watch": 1, "On Track": 2 };
+    const autoSev = SEVERITY[weighted.label] ?? 2;
+    const manualSev = SEVERITY[manual] ?? 2;
+    const effectiveHealth = autoSev <= manualSev ? weighted.label : manual;
+    return {
+      ...p,
+      healthScore: weighted.score,
+      healthFactors: weighted.factors,
+      healthReasons: weighted.reasons,
+      autoHealth: weighted.label,
+      effectiveHealth,
+    };
+  });
+}
+
+/** Budget-vs-actual chart rows for the top 8 projects, with not-started / accounting-delayed flags. */
+export function computeBudgetChartData(projectMetrics) {
+  return (projectMetrics || []).slice(0, 8).map((p) => {
+    const progress = Number(p.avgProgress) || 0;
+    const hasActual = p.actual > 0;
+    // Distinguishes "haven't started" (0% progress, $0 actual) from
+    // "delayed accounting" (>0% progress, $0 actual) so the chart isn't
+    // misleading when several rows show $0 spend.
+    const accountingDelayed = !hasActual && progress > 5;
+    const notStarted = !hasActual && progress <= 5;
+    const shortName = p.project_number || (p.name || "").slice(0, 10);
+    return {
+      name: `${shortName} · ${progress}%`,
+      rawName: shortName,
+      Budget: p.budget,
+      Actual: p.actual,
+      progress,
+      overBudget: p.actual > p.budget,
+      accountingDelayed,
+      notStarted,
+    };
+  });
 }
 
 /** Per-project production readiness: fab tonnage %, WP status counts, constraints, erection-ready flag. */

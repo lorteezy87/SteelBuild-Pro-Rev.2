@@ -3,6 +3,7 @@ import {
   computeCoExposure, computeTotalTons, computeFabricatedTonnage,
   computeDeliveriesStats, computeRfiTurnaround,
   computeDataIssues, computeFinancials, computeProductionData,
+  computeProjectMap, computeProjectMetrics, enrichProjectMetrics, computeBudgetChartData,
 } from "../portfolioDerive";
 
 describe("computeCoExposure", () => {
@@ -154,5 +155,61 @@ describe("computeProductionData", () => {
     expect(out[0].onHoldCount).toBe(1);
     expect(out[0].erectionReady).toBe(false);
     expect(out[0].constraints).toEqual(["1 WP on hold", "2 overdue RFIs blocking scope", "1 late delivery — material gap"]);
+  });
+});
+
+describe("computeProjectMap", () => {
+  it("maps id → name (falls back to project_name)", () => {
+    expect(computeProjectMap([{ id: "a", name: "Alpha" }, { id: "b", project_name: "Beta" }])).toEqual({ a: "Alpha", b: "Beta" });
+    expect(computeProjectMap()).toEqual({});
+  });
+});
+
+describe("computeProjectMetrics", () => {
+  it("rolls up budget/actual/RFIs/CO/margin per project", () => {
+    const m = computeProjectMetrics(
+      [{ id: "p1", name: "P1", original_contract_value: 100000, health_status: "On Track" }],
+      [{ project_id: "p1", status: "Open" }, { project_id: "p1", status: "Answered" }], // 1 open
+      [{ project_id: "p1", status: "Submitted", co_amount: 5000 }],                     // pending CO
+      [{ project_id: "p1", budget_amount: 60000 }],
+      [{ project_id: "p1", percent_complete: 50, tonnage: 10, status: "In Progress" }],
+      [],
+      [{ project_id: "p1", payment_status: "Paid", amount: 20000 }],
+    )[0];
+    expect(m.budget).toBe(60000);
+    expect(m.actual).toBe(20000);
+    expect(m.openRFIs).toBe(1);
+    expect(m.pendingCOValue).toBe(5000);
+    expect(m.tonnage).toBe(10);
+    // estimatedCost = max(60000, 20000+5000) = 60000 → margin = 100000 - 60000
+    expect(m.estimatedCostAtCompletion).toBe(60000);
+    expect(m.projectedMargin).toBe(40000);
+  });
+  it("handles empty input", () => {
+    expect(computeProjectMetrics()).toEqual([]);
+  });
+});
+
+describe("enrichProjectMetrics", () => {
+  it("adds weighted-health fields", () => {
+    const out = enrichProjectMetrics([{ id: "p1", name: "P1", health_status: "On Track" }]);
+    expect(out[0]).toHaveProperty("healthScore");
+    expect(out[0]).toHaveProperty("autoHealth");
+    expect(out[0]).toHaveProperty("effectiveHealth");
+  });
+});
+
+describe("computeBudgetChartData", () => {
+  it("flags not-started / accounting-delayed / over-budget and caps at 8 rows", () => {
+    const rows = computeBudgetChartData([
+      { project_number: "A", name: "Alpha", avgProgress: 0, actual: 0, budget: 100 },
+      { project_number: "B", name: "Beta", avgProgress: 40, actual: 0, budget: 100 },
+      { project_number: "C", name: "Gamma", avgProgress: 50, actual: 150, budget: 100 },
+    ]);
+    expect(rows[0].notStarted).toBe(true);
+    expect(rows[1].accountingDelayed).toBe(true);
+    expect(rows[2].overBudget).toBe(true);
+    const many = Array.from({ length: 12 }, (_, i) => ({ project_number: `P${i}`, avgProgress: 0, actual: 0, budget: 0 }));
+    expect(computeBudgetChartData(many)).toHaveLength(8);
   });
 });

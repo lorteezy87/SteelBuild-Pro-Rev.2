@@ -6,7 +6,7 @@ import { formatCurrency, isOverdue, daysOverdue, parseUTCDate, statusIn } from "
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProgressBar from "../shared/ProgressBar";
-import { computeWeightedHealth, HealthPill, HEALTH_ORDER, healthColor } from "./portfolioHealth";
+import { HealthPill, healthColor } from "./portfolioHealth";
 import { formatLocalDate } from "@/utils/dates";
 import {
   PHASE_DOT,
@@ -16,6 +16,7 @@ import {
   computeCoExposure, summarizeSchedulesByProject, computeTotalTons,
   computeFabricatedTonnage, computeDeliveriesStats, computeRfiTurnaround,
   computeDataIssues, computeFinancials, computeProductionData,
+  computeProjectMap, computeProjectMetrics, enrichProjectMetrics, computeBudgetChartData,
 } from "./portfolioDerive";
 import { Button } from "@/components/design-system";
 import { MiniSparkline, Card, HeaderBar, KPIBlock } from "./portfolioPrimitives";
@@ -95,11 +96,7 @@ export default function PortfolioView({
     } catch { /* noop */ }
   }, []);
 
-  const projectMap = useMemo(() => {
-    const map = {};
-    for (const p of projects || []) map[p.id] = p.name || p.project_name || "";
-    return map;
-  }, [projects]);
+  const projectMap = useMemo(() => computeProjectMap(projects), [projects]);
   const today = useMemo(() => {
     const d = new Date();
     return d
@@ -112,89 +109,12 @@ export default function PortfolioView({
       .toUpperCase();
   }, []);
 
-  const projectMetrics = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return projects
-      .map((p) => {
-        const pRFIs = allRFIs.filter((r) => r.project_id === p.id);
-        const pCOs = allCOs.filter((c) => c.project_id === p.id);
-        const pCodes = allCodes.filter((c) => c.project_id === p.id);
-        const pWPs = allWPs.filter((w) => w.project_id === p.id);
-        const pDeliveries = allDeliveries.filter((d) => d.project_id === p.id);
-        const pExpenses = allExpenses.filter((e) => e.project_id === p.id && !statusIn(e.payment_status, ["Voided", "Void"]));
-        const budget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-        const hasBudgetData = pCodes.length > 0;
-        const paidExpenses = pExpenses.filter((e) => statusIn(e.payment_status, ["Paid"]));
-        const actual = paidExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-        // hasActualData must mirror the slice that produces `actual` — otherwise
-        // a project with only Submitted/Approved (unpaid) expenses shows as
-        // "has data" while actual stays $0, faking a green Variance cell.
-        const hasActualData = paidExpenses.length > 0;
-        const openRFIs = pRFIs.filter((r) => !statusIn(r.status, ["Answered", "Closed"])).length;
-        const overdueRFIs = pRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
-        const avgProgress = pWPs.length > 0 ? Math.round(pWPs.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / pWPs.length) : 0;
-        const pendingCOs = pCOs.filter((c) => statusIn(c.status, ["Submitted", "Under Review"]));
-        const pendingCOValue = pendingCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-        const lateDeliveries = pDeliveries.filter((d) => {
-          if (!d.scheduled_date || statusIn(d.status, ["Delivered"])) return false;
-          const sched = parseUTCDate(d.scheduled_date);
-          return sched && sched < today;
-        }).length;
-        const tonnage = Math.round(pWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0));
-        const stalledWPs = pWPs.filter((w) => statusIn(w.status, ["On Hold"])).length;
-
-        // Projected Margin = Contract Value - Estimated Cost at Completion.
-        // Estimated cost takes the worst case of (budget) vs (actual + pending CO exposure)
-        // so the figure tells us "what the project will actually return if pending COs hit".
-        const contractValue = Number(p.original_contract_value) || 0;
-        const estimatedCostAtCompletion = Math.max(budget, actual + pendingCOValue);
-        const projectedMargin = contractValue > 0 ? contractValue - estimatedCostAtCompletion : null;
-        const projectedMarginPct = contractValue > 0 ? (projectedMargin / contractValue) * 100 : null;
-
-        return {
-          ...p,
-          budget,
-          actual,
-          hasBudgetData,
-          hasActualData,
-          openRFIs,
-          overdueRFIs,
-          avgProgress,
-          pendingCOs,
-          pendingCOValue,
-          lateDeliveries,
-          tonnage,
-          stalledWPs,
-          contractValue,
-          estimatedCostAtCompletion,
-          projectedMargin,
-          projectedMarginPct,
-        };
-      })
-      .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3));
-  }, [projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses]);
-
-  // Enrich metrics with weighted health scoring + reason strings
-  const enrichedMetrics = useMemo(() =>
-    projectMetrics.map((p) => {
-      const weighted = computeWeightedHealth(p);
-      const manual = p.health_status || "On Track";
-      const SEVERITY = { "At Risk": 0, "Watch": 1, "On Track": 2 };
-      const autoSev = SEVERITY[weighted.label] ?? 2;
-      const manualSev = SEVERITY[manual] ?? 2;
-      const effectiveHealth = autoSev <= manualSev ? weighted.label : manual;
-      return {
-        ...p,
-        healthScore: weighted.score,
-        healthFactors: weighted.factors,
-        healthReasons: weighted.reasons,
-        autoHealth: weighted.label,
-        effectiveHealth,
-      };
-    }),
-    [projectMetrics]
+  const projectMetrics = useMemo(
+    () => computeProjectMetrics(projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses),
+    [projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses],
   );
+
+  const enrichedMetrics = useMemo(() => enrichProjectMetrics(projectMetrics), [projectMetrics]);
 
   const displayMetrics = useMemo(() => {
     let list = [...enrichedMetrics];
@@ -351,30 +271,7 @@ export default function PortfolioView({
     return days.map((d) => sparkHistory[d]?.[field] ?? 0);
   };
 
-  const budgetChartData = useMemo(
-    () =>
-      projectMetrics.slice(0, 8).map((p) => {
-        const progress = Number(p.avgProgress) || 0;
-        const hasActual = p.actual > 0;
-        // Distinguishes "haven't started" (0% progress, $0 actual) from
-        // "delayed accounting" (>0% progress, $0 actual) so the chart isn't
-        // misleading when several rows show $0 spend.
-        const accountingDelayed = !hasActual && progress > 5;
-        const notStarted = !hasActual && progress <= 5;
-        const shortName = p.project_number || (p.name || "").slice(0, 10);
-        return {
-          name: `${shortName} · ${progress}%`,
-          rawName: shortName,
-          Budget: p.budget,
-          Actual: p.actual,
-          progress,
-          overBudget: p.actual > p.budget,
-          accountingDelayed,
-          notStarted,
-        };
-      }),
-    [projectMetrics]
-  );
+  const budgetChartData = useMemo(() => computeBudgetChartData(projectMetrics), [projectMetrics]);
 
   // ── PCC: Priority Command Center data ──────────────────────────────────────
   const pccData = useMemo(() => {
