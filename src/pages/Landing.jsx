@@ -663,10 +663,15 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
         <div className="lp-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowLogin(false); }}>
           <div role="dialog" aria-modal="true" aria-label="Sign in" style={{ width: "100%", maxWidth: 420, padding: 32, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, boxShadow: "0 32px 80px rgba(20,22,26,0.35)", position: "relative" }}>
             <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: 4, lineHeight: 1 }}>✕</button>
+            <img
+              src="/steelbuild-pro-logo.jpg"
+              alt="SteelBuild Pro"
+              width={176}
+              style={{ display: "block", width: 176, height: "auto", borderRadius: 10, margin: "0 auto 22px", boxShadow: "0 10px 28px rgba(20,22,26,0.28)" }}
+            />
             {signupNotice ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                 <div>
-                  <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 500, color: C.gold, letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>STEELBUILD PRO</div>
                   <h2 style={{ fontFamily: F.disp, fontWeight: 500, fontSize: 26, letterSpacing: "-0.02em", color: C.ink, margin: "0 0 8px" }}>Check your email</h2>
                   <p style={{ fontSize: 13.5, color: C.muted, margin: 0, lineHeight: 1.5 }}>{signupNotice}</p>
                 </div>
@@ -677,7 +682,6 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
             ) : (
               <>
                 <div style={{ marginBottom: 24 }}>
-                  <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 500, color: C.gold, letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>STEELBUILD PRO</div>
                   <h2 style={{ fontFamily: F.disp, fontWeight: 500, fontSize: 28, letterSpacing: "-0.02em", color: C.ink, margin: "0 0 6px" }}>{authMode === "signup" ? "Create your account" : "Sign in"}</h2>
                   <p style={{ fontSize: 13.5, color: C.muted, margin: 0 }}>{authMode === "signup" ? "Start a free workspace for your shop." : "Access your projects and data."}</p>
                 </div>
