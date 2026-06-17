@@ -7,7 +7,7 @@
  * function the viewer paints with. Returning null = use the part's native IFC
  * color (see loadIfcGeometry.recolor).
  */
-import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
+import { ELEMENT_STATUS_META, normalizePieceMark } from "@/services/modelElementStatus";
 import { FAB_STATUS_META } from "@/lib/fabStatus";
 
 export const TYPE_PALETTE = { beam: "#3b82f6", column: "#f97316", plate: "#22c55e", member: "#a855f7", other: "#94a3b8" };
@@ -55,14 +55,96 @@ export function buildFabByGuid(rows) {
   return map;
 }
 
+// ── Mark-keyed fallbacks ────────────────────────────────────────────────
+// The rendered meshes are keyed by IFC GlobalId, but only IFC-sourced roster
+// rows carry a GUID. CSV-imported rows leave element_guid NULL, and a CSV update
+// touches only one part of a multi-part assembly — so guid-keyed coloring skips
+// the rest. These build mark-keyed maps and a GUID→mark bridge so the viewer can
+// fall back to the part's piece mark when its GUID isn't directly colorable.
+
+/** GlobalId → normalized piece mark, from roster rows that carry a GUID. The
+ *  bridge that lets mark-keyed data color geometry the viewer only knows by GUID. */
+export function buildMarkByGuid(rows) {
+  const map = new Map();
+  for (const r of rows || []) {
+    if (r?.element_guid && r.piece_mark) map.set(r.element_guid, normalizePieceMark(r.piece_mark));
+  }
+  return map;
+}
+
+/** Normalized piece mark → erection sequence label (any row, GUID or not). */
+export function buildSeqByMark(rows) {
+  const map = new Map();
+  for (const r of rows || []) {
+    const mark = normalizePieceMark(r?.piece_mark);
+    if (mark && r.sequence_number != null && r.sequence_number !== "" && !map.has(mark)) {
+      map.set(mark, String(r.sequence_number));
+    }
+  }
+  return map;
+}
+
+/** Normalized piece mark → manual fab_status (any row, GUID or not). */
+export function buildFabByMark(rows) {
+  const map = new Map();
+  for (const r of rows || []) {
+    const mark = normalizePieceMark(r?.piece_mark);
+    if (mark && r.fab_status && !map.has(mark)) map.set(mark, r.fab_status);
+  }
+  return map;
+}
+
+/** Normalized piece mark → detailing-status color, excluding "unmapped". When an
+ *  assembly's parts resolve to different statuses, the highest-precedence bucket
+ *  wins (marksByStatus is precedence-ordered; first set wins). */
+export function buildStatusByMark(modelMapping) {
+  const map = new Map();
+  const byStatus = modelMapping?.marksByStatus || {};
+  for (const [status, marks] of Object.entries(byStatus)) {
+    if (status === "unmapped") continue;
+    const color = ELEMENT_STATUS_META[status]?.color;
+    if (!color) continue;
+    for (const mark of marks) {
+      const mk = normalizePieceMark(mark);
+      if (mk && !map.has(mk)) map.set(mk, color);
+    }
+  }
+  return map;
+}
+
 /**
  * The color function the viewer paints with for a given mode. Returns a hex
  * string or null; null tells the viewer to use the part's native IFC color.
+ *
+ * GUID-keyed maps are primary (unchanged). When a part's GUID isn't in the
+ * relevant map, we resolve its piece mark via markByGuid and consult the
+ * mark-keyed fallback — so CSV rosters and the un-updated parts of an assembly
+ * color too. Omitting the mark maps reproduces the original GUID-only behavior.
  */
-export function colorFnFor(colorMode, { statusByGuid, seqByGuid, fabByGuid } = {}) {
+export function colorFnFor(
+  colorMode,
+  { statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark } = {},
+) {
   if (colorMode === "type") return (info) => TYPE_PALETTE[info.ifcType] || TYPE_PALETTE.other;
-  if (colorMode === "sequence") return (info) => (info.guid ? seqColor(seqByGuid?.get(info.guid)) : null);
-  if (colorMode === "status") return (info) => (info.guid ? (statusByGuid?.get(info.guid) ?? null) : null);
-  if (colorMode === "fab") return (info) => (info.guid ? (FAB_STATUS_META[fabByGuid?.get(info.guid)]?.color ?? null) : null);
+  const markOf = (info) => (info.guid ? markByGuid?.get(info.guid) : undefined);
+  if (colorMode === "sequence") {
+    return (info) => {
+      if (!info.guid) return null;
+      return seqColor(seqByGuid?.get(info.guid) ?? seqByMark?.get(markOf(info)));
+    };
+  }
+  if (colorMode === "status") {
+    return (info) => {
+      if (!info.guid) return null;
+      return statusByGuid?.get(info.guid) ?? statusByMark?.get(markOf(info)) ?? null;
+    };
+  }
+  if (colorMode === "fab") {
+    return (info) => {
+      if (!info.guid) return null;
+      const fab = fabByGuid?.get(info.guid) ?? fabByMark?.get(markOf(info));
+      return FAB_STATUS_META[fab]?.color ?? null;
+    };
+  }
   return () => null; // "model" → native colors
 }

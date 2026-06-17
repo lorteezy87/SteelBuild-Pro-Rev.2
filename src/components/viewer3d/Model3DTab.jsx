@@ -13,7 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import { FAB_STATUS_META, FAB_STATUS_ORDER, resolveFabMarks } from "@/lib/fabStatus";
-import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, colorFnFor } from "@/lib/ifc/viewerColoring";
+import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, buildMarkByGuid, buildStatusByMark, buildSeqByMark, buildFabByMark, colorFnFor } from "@/lib/ifc/viewerColoring";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
 import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
@@ -151,10 +151,33 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     return m;
   }, [modelElementRows]);
 
+  // Mark-keyed fallback maps: color a part by its piece mark when its GUID isn't
+  // directly on a roster row (CSV imports leave element_guid NULL; a CSV update
+  // touches only one part of a multi-part assembly). markByGuid bridges the
+  // rendered part's GUID → its normalized mark. (guidToMark above stays RAW —
+  // it feeds the DB `.in("piece_mark", …)` query, which needs the real marks.)
+  const markByGuid = useMemo(() => buildMarkByGuid(modelElementRows), [modelElementRows]);
+  const seqByMark = useMemo(() => buildSeqByMark(modelElementRows), [modelElementRows]);
+  const statusByMark = useMemo(() => buildStatusByMark(modelMapping), [modelMapping]);
+  const fabByMark = useMemo(() => {
+    const map = buildFabByMark(modelElementRows);
+    // Mirror optimistic assignments onto the mark map so a fresh fab assignment
+    // colors the whole assembly immediately, not just the parts that had a row.
+    for (const [guid, status] of optimisticFab) {
+      const mark = markByGuid.get(guid);
+      if (!mark) continue;
+      if (status) map.set(mark, status); else map.delete(mark);
+    }
+    return map;
+  }, [modelElementRows, optimisticFab, markByGuid]);
+
   // The mode-aware color function the viewer paints with (null → native IFC color).
   const colorFor = useMemo(
-    () => colorFnFor(colorMode, { statusByGuid, seqByGuid, fabByGuid }),
-    [colorMode, statusByGuid, seqByGuid, fabByGuid],
+    () => colorFnFor(colorMode, {
+      statusByGuid, seqByGuid, fabByGuid,
+      markByGuid, statusByMark, seqByMark, fabByMark,
+    }),
+    [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark],
   );
 
   // Persist a freshly-picked model so it auto-loads next time: upload the .ifc to

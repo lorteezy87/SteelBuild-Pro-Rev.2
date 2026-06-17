@@ -111,6 +111,11 @@ describe("summarizeElementStatuses", () => {
     expect(s.counts.unmapped).toBe(1);
     expect(s.guidsByStatus.fab_ready).toEqual(["g1"]);
     expect(s.guidsByStatus.unmapped).toEqual([]); // e3 has no guid
+    // marksByStatus is the guid-less coloring fallback: every element contributes
+    // its normalized mark, including e3 (which has no GUID).
+    expect(s.marksByStatus.fab_ready).toEqual(["1B1"]);
+    expect(s.marksByStatus.in_review).toEqual(["2B2"]);
+    expect(s.marksByStatus.unmapped).toEqual(["3B3"]); // e3 colors by mark even without a guid
     expect(s.idsByStatus.unmapped).toEqual(["e3"]);
     expect(s.mappedPct).toBe(67); // 2 of 3 mapped
   });
