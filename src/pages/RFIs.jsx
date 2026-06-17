@@ -320,6 +320,26 @@ export default function RFIs() {
     return () => clearTimeout(t);
   }, [rfis, projectMap]);
 
+  /* ── Notify field of an answered RFI (slice 4 downstream action) ── */
+  const notifyFieldMut = useMutation({
+    mutationFn: (r) =>
+      entities.Alert.create({
+        alert_type: "RFI_Field_Action",
+        severity: r.priority === "Critical" ? "Critical" : r.priority === "High" ? "High" : "Medium",
+        title: `${r.rfi_number || "RFI"} answered — field action`,
+        description: `"${(r.title || "RFI").slice(0, 60)}" · Answer: ${(r.answer || "see RFI").slice(0, 90)}`,
+        project_id: r.project_id,
+        project_name: projectMap[r.project_id] || "",
+        related_record_id: r.id,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["alerts"] });
+      qc.invalidateQueries({ queryKey: ["alerts-nav"] });
+      toast.success("Field notified — alert posted");
+    },
+    onError: (e) => toast.error(`Couldn't notify field: ${e?.message || "unknown error"}`),
+  });
+
   /* ── Selection helpers ── */
   const toggleSelect = (id) =>
     setSelectedIds((prev) => {
@@ -592,6 +612,21 @@ export default function RFIs() {
         onNudge={() => setNudgeRFI(selectedRFI)}
         onCreateCO={() => {
           if (selectedRFI) navigate(`/ChangeOrders?fromRfi=${selectedRFI.id}`);
+        }}
+        onDownstreamAction={(key) => {
+          if (!selectedRFI) return;
+          const r = selectedRFI;
+          if (key === "notify_field") {
+            notifyFieldMut.mutate(r);
+            return;
+          }
+          const dest = {
+            create_co: `/ChangeOrders?fromRfi=${r.id}`,
+            update_drawing: `/Drawings?fromRfi=${r.id}`,
+            open_wp: `/WorkPackages?fromRfi=${r.id}`,
+            add_constraint: `/Constraints?fromRfi=${r.id}`,
+          }[key];
+          if (dest) navigate(dest);
         }}
       />
 
