@@ -1236,9 +1236,20 @@ A task is done only when:
 - Relevant files were inspected.
 - The solution matches existing architecture and conventions.
 - Relevant validation was run where possible.
+- For any user-facing or moat-workflow change: the behavior was **field-verified** — exercised in the running product (the actual control clicked / the real flow run end to end), not merely unit-tested and built.
 - Risks and assumptions are stated.
 - The output is reviewable.
 - No unrelated user or agent work was overwritten.
 - No unapproved production-impacting action was taken.
 
 Never say "done" unless verification passed or limitations are clearly stated.
+
+### Done means field-verified, not build-green
+
+Passing `tsc` / `lint` / `vitest` / `vite build` proves the code compiles and the pure logic is correct. It does **not** prove the feature works in the product. The failures that actually hurt — stale data, wrong wiring, RLS rejections, async timing, an event that never fires — only appear at runtime. The fab-status bug is the cautionary tale: it was declared fixed on a build-green basis, its diagnostics were removed, and it was still broken in production.
+
+Therefore:
+
+- For UI, workflow, or data-write changes, "done" requires running the **actual flow in the app**. When you genuinely cannot reach the authenticated app (no login, can't safely mutate live data), do not call it "done" — label it explicitly **"code-verified, NOT field-verified"** and leave a field-verify TODO.
+- In any report, "validated"/"tested" must name **which bar** was met: unit/build (logic compiles) vs field (works in product). Never let "validated + deployed" imply "works."
+- A clean build is necessary, not sufficient. Treat the unit/build pass as the *start* of verification for anything a user touches, not the end.
