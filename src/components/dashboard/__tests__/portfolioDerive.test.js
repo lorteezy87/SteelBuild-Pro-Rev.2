@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeCoExposure, computeTotalTons, computeFabricatedTonnage,
   computeDeliveriesStats, computeRfiTurnaround,
+  computeDataIssues, computeFinancials, computeProductionData,
 } from "../portfolioDerive";
 
 describe("computeCoExposure", () => {
@@ -82,5 +83,76 @@ describe("computeRfiTurnaround", () => {
   it("returns null when there are no closed RFIs", () => {
     expect(computeRfiTurnaround([{ status: "Open" }])).toBeNull();
     expect(computeRfiTurnaround()).toBeNull();
+  });
+});
+
+describe("computeDataIssues", () => {
+  it("flags per-project gaps and portfolio-wide RFI/CO gaps", () => {
+    const issues = computeDataIssues(
+      [
+        { id: "p1", name: "A", hasBudgetData: false, original_contract_value: 100, phase: "Detailing" }, // budget gap
+        { id: "p2", name: "B", hasBudgetData: true, original_contract_value: 0, phase: null },           // contract + phase gaps
+      ],
+      [{ status: "Open", due_date: null }],                  // RFI missing due date
+      [{ status: "Submitted", co_amount: 0 }],               // CO missing value
+    );
+    expect(issues.some((i) => i.issue === "No budget / cost codes set up" && i.projectId === "p1")).toBe(true);
+    expect(issues.some((i) => i.issue === "Missing contract value" && i.projectId === "p2")).toBe(true);
+    expect(issues.some((i) => i.issue === "No phase assigned" && i.projectId === "p2")).toBe(true);
+    expect(issues.some((i) => i.issue === "RFIs missing due dates")).toBe(true);
+    expect(issues.some((i) => i.issue === "COs missing dollar values")).toBe(true);
+  });
+  it("clean data yields no issues; handles empty input", () => {
+    expect(computeDataIssues([{ id: "p", name: "P", hasBudgetData: true, original_contract_value: 1, phase: "Detailing" }], [], [])).toEqual([]);
+    expect(computeDataIssues()).toEqual([]);
+  });
+});
+
+describe("computeFinancials", () => {
+  it("buckets the CO pipeline and computes remaining + margin at risk", () => {
+    const f = computeFinancials(
+      [
+        { status: "Approved", co_amount: 1000 },
+        { status: "Submitted", co_amount: 400 },
+        { status: "Under Review", co_amount: 100 },
+        { status: "Rejected", co_amount: 50 },
+      ],
+      { totalBudget: 10000, totalSpend: 6000 },
+    );
+    expect(f.approvedCOs).toBe(1);
+    expect(f.pendingCOs).toBe(2);
+    expect(f.pendingValue).toBe(500);
+    expect(f.remaining).toBe(4000);
+    expect(f.marginAtRisk).toBe(500); // pending 500, no overspend
+  });
+  it("adds overspend to margin at risk", () => {
+    const f = computeFinancials([{ status: "Submitted", co_amount: 200 }], { totalBudget: 1000, totalSpend: 1300 });
+    expect(f.marginAtRisk).toBe(500); // 200 pending + 300 overspend
+  });
+});
+
+describe("computeProductionData", () => {
+  it("computes fab % and erection-ready, and lists constraints", () => {
+    const out = computeProductionData(
+      [{ id: "p1", name: "A", overdueRFIs: 0, lateDeliveries: 0 }],
+      [
+        { project_id: "p1", phase: "Fabrication", status: "Complete", tonnage: 60 },
+        { project_id: "p1", phase: "Detailing", status: "In Progress", tonnage: 40 }, // pre-fab → not fab tonnage
+      ],
+    );
+    expect(out[0].totalTon).toBe(100);
+    expect(out[0].fabTon).toBe(60);
+    expect(out[0].fabPct).toBe(60);
+    expect(out[0].erectionReady).toBe(true);
+    expect(out[0].constraints).toEqual([]);
+  });
+  it("surfaces on-hold / overdue-RFI / late-delivery constraints and blocks erection-ready", () => {
+    const out = computeProductionData(
+      [{ id: "p1", name: "A", overdueRFIs: 2, lateDeliveries: 1 }],
+      [{ project_id: "p1", phase: "Fabrication", status: "On Hold", tonnage: 10 }],
+    );
+    expect(out[0].onHoldCount).toBe(1);
+    expect(out[0].erectionReady).toBe(false);
+    expect(out[0].constraints).toEqual(["1 WP on hold", "2 overdue RFIs blocking scope", "1 late delivery — material gap"]);
   });
 });

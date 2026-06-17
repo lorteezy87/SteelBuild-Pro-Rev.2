@@ -116,3 +116,61 @@ export function computeRfiTurnaround(allRFIs) {
   }, 0);
   return (totalDays / closed.length).toFixed(1);
 }
+
+/** Data-completeness exceptions: per-project gaps (budget/contract/phase) + portfolio-wide RFI/CO gaps. */
+export function computeDataIssues(enrichedMetrics, allRFIs, allCOs) {
+  const issues = [];
+  (enrichedMetrics || []).forEach((p) => {
+    if (!p.hasBudgetData) issues.push({ project: p.name || p.project_number, projectId: p.id, issue: "No budget / cost codes set up", severity: "high", fix: "Set up cost codes" });
+    if (!p.original_contract_value) issues.push({ project: p.name || p.project_number, projectId: p.id, issue: "Missing contract value", severity: "high", fix: "Enter contract value" });
+    if (!p.phase) issues.push({ project: p.name || p.project_number, projectId: p.id, issue: "No phase assigned", severity: "medium", fix: "Set project phase" });
+  });
+  // RFIs without due dates
+  const rfisNoDue = (allRFIs || []).filter((r) => !r.due_date && !statusIn(r.status, ["Answered", "Closed"]));
+  if (rfisNoDue.length > 0) issues.push({ project: `${rfisNoDue.length} RFIs`, projectId: null, issue: "RFIs missing due dates", severity: "high", fix: "Add due dates" });
+  // COs without values
+  const cosNoVal = (allCOs || []).filter((c) => !c.co_amount && !statusIn(c.status, ["Rejected", "Void"]));
+  if (cosNoVal.length > 0) issues.push({ project: `${cosNoVal.length} COs`, projectId: null, issue: "COs missing dollar values", severity: "medium", fix: "Add CO amounts" });
+  return issues;
+}
+
+/** Change-order pipeline + margin-at-risk, given the CO list and the portfolio KPI roll-up. */
+export function computeFinancials(allCOs, portfolioKPIs) {
+  const cos = allCOs || [];
+  const approvedCOs = cos.filter((c) => statusIn(c.status, ["Approved"]));
+  const pendingCOs = cos.filter((c) => statusIn(c.status, ["Submitted", "Under Review"]));
+  const rejectedCOs = cos.filter((c) => statusIn(c.status, ["Rejected"]));
+  const approvedValue = approvedCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+  const pendingValue = pendingCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+  const rejectedValue = rejectedCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+  const totalBudget = portfolioKPIs.totalBudget;
+  const totalSpend = portfolioKPIs.totalSpend;
+  const remaining = totalBudget - totalSpend;
+  const marginAtRisk = pendingValue + (totalSpend > totalBudget ? totalSpend - totalBudget : 0);
+  return { approvedCOs: approvedCOs.length, pendingCOs: pendingCOs.length, rejectedCOs: rejectedCOs.length, approvedValue, pendingValue, rejectedValue, remaining, marginAtRisk, totalBudget, totalSpend };
+}
+
+/** Per-project production readiness: fab tonnage %, WP status counts, constraints, erection-ready flag. */
+export function computeProductionData(enrichedMetrics, allWPs) {
+  const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
+  const wps = allWPs || [];
+  return (enrichedMetrics || []).map((p) => {
+    const pWPs = wps.filter((w) => w.project_id === p.id);
+    const inFab = pWPs.filter((w) => statusIn(w.status, ["In Progress"]));
+    const complete = pWPs.filter((w) => statusIn(w.status, ["Complete"]));
+    const onHold = pWPs.filter((w) => statusIn(w.status, ["On Hold"]));
+    const totalTon = pWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+    // Cumulative fab tonnage: WPs at Fabrication or later AND actively worked
+    const fabTon = pWPs
+      .filter((w) => (PHASE_RANK[w.phase] ?? -1) >= 1 && ["In Progress", "Complete"].includes(w.status))
+      .reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+    const fabPct = totalTon > 0 ? Math.round((fabTon / totalTon) * 100) : 0;
+    // Constraints: WPs on hold, missing drawings, late deliveries
+    const constraints = [];
+    if (onHold.length > 0) constraints.push(`${onHold.length} WP${onHold.length > 1 ? "s" : ""} on hold`);
+    if (p.overdueRFIs > 0) constraints.push(`${p.overdueRFIs} overdue RFI${p.overdueRFIs > 1 ? "s" : ""} blocking scope`);
+    if (p.lateDeliveries > 0) constraints.push(`${p.lateDeliveries} late delivery — material gap`);
+    const erectionReady = p.lateDeliveries === 0 && onHold.length === 0 && p.overdueRFIs === 0;
+    return { ...p, inFabCount: inFab.length, completeCount: complete.length, onHoldCount: onHold.length, totalTon, fabTon, fabPct, constraints, erectionReady, wpTotal: pWPs.length };
+  });
+}
