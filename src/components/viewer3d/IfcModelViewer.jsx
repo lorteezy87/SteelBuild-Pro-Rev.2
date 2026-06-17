@@ -167,8 +167,7 @@ export default function IfcModelViewer({ buffer, colorFor, onPick, onSelect, onL
   // and the saved fab colors never appear — they only showed on a live assign
   // (model already loaded). Re-running on "ready" repaints with the latest.
   useEffect(() => {
-    const r = apiRef.current?.model?.recolor?.(colorFor);
-    if (r) console.log("[fab-debug] recolor", { status, colored: r.colored, total: r.total, sampleRenderedGuid: r.sampleGuid });
+    apiRef.current?.model?.recolor?.(colorFor);
   }, [colorFor, status]);
 
   // Click picking.
