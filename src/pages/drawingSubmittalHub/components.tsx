@@ -1359,10 +1359,13 @@ interface ApprovalMatrixProps {
  * Full sheet-level management still lives on the standalone Drawings page.
  */
 export function DrawingRegisterTable({
-  setPackages, projectId, activeProject, drawingSets = [], isLoading, healthByKey,
+  setPackages, projectId, activeProject, drawingSets = [], isLoading, healthByKey, summariesBySet, onRevisionUploaded, onOpenSummary,
 }: {
   setPackages: any[]; projectId?: string; activeProject?: any; drawingSets?: any[]; isLoading?: boolean;
   healthByKey?: Map<string, any>;
+  summariesBySet?: Map<string, any>;
+  onRevisionUploaded?: (pkgKey: string) => void;
+  onOpenSummary?: (summary: any) => void;
 }) {
   const aiDiffEnabled = useFlag("revision_ai_diff");
   const navigate = useNavigate();
@@ -1413,6 +1416,7 @@ export function DrawingRegisterTable({
           health: healthByKey?.get(pkg.key) || null,
           locked: !!pkg.parent?.is_locked,
           lockedReason: pkg.parent?.locked_reason || null,
+          revSummary: pkg.setId ? (summariesBySet?.get(String(pkg.setId)) || null) : null,
           setNo: pkg.parent ? formatDrawingSetNumber(pkg.parent) : "TBD",
         };
       })
@@ -1432,7 +1436,7 @@ export function DrawingRegisterTable({
         }
         return compareDrawingSetPackages(a.pkg.parent || a.pkg, b.pkg.parent || b.pkg);
       });
-  }, [setPackages, search, healthByKey, sortByHealth]);
+  }, [setPackages, search, healthByKey, sortByHealth, summariesBySet]);
 
   if (isLoading) return <LoadingSkeleton />;
 
@@ -1501,6 +1505,12 @@ export function DrawingRegisterTable({
                       <Lock size={9} /> Locked
                     </span>
                   )}
+                  {r.revSummary && (
+                    <button type="button" title="View the revision summary" onClick={(e) => { e.stopPropagation(); onOpenSummary?.(r.revSummary.summary); }}
+                      style={{ marginLeft: 8, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", padding: "1px 6px", borderRadius: 4, cursor: "pointer", verticalAlign: "middle", background: "color-mix(in srgb, var(--accent) 14%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)", color: accent }}>
+                      revised · {r.revSummary.sheets_changed}
+                    </button>
+                  )}
                 </Td>
                 <Td style={{ color: textMuted }}>{r.setNo}</Td>
                 <Td style={{ color: textMuted }}>{r.discipline}</Td>
@@ -1516,7 +1526,7 @@ export function DrawingRegisterTable({
                       type="button"
                       disabled={r.locked}
                       title={r.locked ? `Locked — ${r.lockedReason || "an admin must unlock before a new revision"}` : "Upload a new revision for this set"}
-                      onClick={() => { if (!r.locked) setRevisionSet(r.pkg.parent); }}
+                      onClick={() => { if (!r.locked) setRevisionSet(r.pkg); }}
                       style={{ ...rowBtn, opacity: r.locked ? 0.45 : 1, cursor: r.locked ? "not-allowed" : "pointer" }}
                     >New Rev</button>
                   )}
@@ -1534,7 +1544,7 @@ export function DrawingRegisterTable({
 
       {revisionSet && (
         <Suspense fallback={null}>
-          <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={() => setRevisionSet(null)} activeProject={activeProject} preSelectedSet={revisionSet} drawingSets={drawingSets} />
+          <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={() => { onRevisionUploaded?.(revisionSet?.key); setRevisionSet(null); }} activeProject={activeProject} preSelectedSet={revisionSet?.parent || revisionSet} drawingSets={drawingSets} />
         </Suspense>
       )}
       {reportSet && (

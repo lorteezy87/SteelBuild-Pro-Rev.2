@@ -66,6 +66,10 @@ import {
 import { ApprovalMatrix, DrawingRegisterTable, FleetHealthStrip, HeaderSignal, LeadTimesModal, RevisionImpactBoard, TriageBoard } from "./drawingSubmittalHub/components";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
+import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
+import { buildRevisionSummary } from "@/lib/revisionSummary";
+import { saveRevisionSummary, getLatestSummariesByProject } from "@/lib/revisionSummaryRepo";
+const RevisionDeepDiveModal = lazyWithRetry(() => import("@/components/drawings/RevisionImpactReportModal"));
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
 // chunk 404s after a deploy trigger a reload instead of a hard crash.
@@ -106,6 +110,8 @@ export default function DrawingSubmittalHub() {
   // Revision overlay compare (Revision Impact rows)
   const [compareDrawingId, setCompareDrawingId] = useState<string | null>(null);
   const [importModelOpen, setImportModelOpen] = useState(false);
+  const [summaryCard, setSummaryCard] = useState<any | null>(null);
+  const [deepDiveSet, setDeepDiveSet] = useState<any | null>(null);
   const qc = useQueryClient();
   const { can } = usePermissions();
   const projectId = activeProject?.id as string | undefined;
@@ -164,6 +170,13 @@ export default function DrawingSubmittalHub() {
     enabled: !!projectId,
     staleTime: 60_000,
   });
+  // Latest persisted Revision Summary per set → the "revised · N" badge + re-open.
+  const { data: summariesBySet = new Map() } = useQuery({
+    queryKey: ["revision-summaries", projectId],
+    queryFn: () => getLatestSummariesByProject(projectId as string),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
   // 3D model members (BIM integration Phase 0 — piece-mark mapping).
   const { data: modelElements = [] } = useQuery({
     queryKey: ["model-elements", projectId],
@@ -192,6 +205,45 @@ export default function DrawingSubmittalHub() {
     return m;
   }, [setPackages, rfis, drawingRevisions]);
   const fleetHealth = useMemo(() => summarizeFleetHealth([...healthByKey.values()]), [healthByKey]);
+
+  // Revision Summary (slice 3): on upload, build the instant digest from fresh
+  // revisions + the current package (downstream dates are stable on a revision
+  // upload), persist a snapshot, and show the card. AI deep-dive stays on demand.
+  const aiDiff = useFlag("revision_ai_diff");
+  const handleRevisionUploaded = async (pkgKey: string) => {
+    if (!projectId) return;
+    try {
+      await qc.invalidateQueries({ queryKey: ["drawing-revisions", projectId] });
+      const freshRevisions = await qc.fetchQuery({
+        queryKey: ["drawing-revisions", projectId],
+        queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pkg = setPackages.find((p: any) => p.key === pkgKey);
+      if (!pkg) return;
+      const summary = buildRevisionSummary({
+        set: pkg,
+        revisions: freshRevisions as any[],
+        rfis: rfis as any[],
+        drawingSets: drawingSets as any[],
+        workPackages: workPackages as any[],
+        modelElements: modelElements as any[],
+      });
+      saveRevisionSummary({ projectId, drawingSetId: pkg.setId, summary, generatedBy: null })
+        .then(() => qc.invalidateQueries({ queryKey: ["revision-summaries", projectId] }))
+        .catch(() => {});
+      setSummaryCard(summary);
+    } catch {
+      /* the summary is best-effort — never block the upload flow */
+    }
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const openDeepDive = (summary: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pkg = setPackages.find((p: any) => String(p.setId) === String(summary?.setId));
+    setSummaryCard(null);
+    if (pkg) setDeepDiveSet(pkg);
+  };
 
   // Lookup maps for readiness: WP by id, and the set of OPEN rfi ids.
   const wpById = useMemo(() => {
@@ -743,6 +795,9 @@ export default function DrawingSubmittalHub() {
                 drawingSets={drawingSets}
                 isLoading={isLoading}
                 healthByKey={healthByKey}
+                summariesBySet={summariesBySet}
+                onRevisionUploaded={handleRevisionUploaded}
+                onOpenSummary={setSummaryCard}
               />
             )}
             {activeTab === "submittals" && <SubmittalsPage />}
@@ -811,6 +866,20 @@ export default function DrawingSubmittalHub() {
           existingElements={modelElements}
           onClose={() => setImportModelOpen(false)}
         />
+      )}
+
+      {/* Revision Summary digest (slice 3) — instant on upload, re-openable from the badge. */}
+      {summaryCard && (
+        <RevisionSummaryCard
+          summary={summaryCard}
+          onClose={() => setSummaryCard(null)}
+          onRunDeepDive={aiDiff ? openDeepDive : undefined}
+        />
+      )}
+      {deepDiveSet && (
+        <Suspense fallback={null}>
+          <RevisionDeepDiveModal open onClose={() => setDeepDiveSet(null)} set={deepDiveSet} projectId={projectId} />
+        </Suspense>
       )}
     </div>
   );
