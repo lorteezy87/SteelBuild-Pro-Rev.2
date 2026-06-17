@@ -102,10 +102,18 @@ export async function loadIfcGeometry(buffer, opts = {}) {
   // Re-color in place when the color mode / status data changes (no reload).
   // colorFor({ guid, ifcHex, ifcType }) → hex; falls back to the native IFC color.
   const recolor = (colorFor) => {
+    // Returns coverage stats so the host can report how many rendered members
+    // actually resolved to a color (diagnostic for roster↔geometry mismatches).
+    let colored = 0;
+    let sampleColored = null;
+    let sampleUncolored = null;
     for (const { mat, guid, ifcHex, ifcType } of materials) {
       const c = colorFor?.({ guid, ifcHex, ifcType });
       mat.color.set(c || ifcHex || defaultColor);
+      if (c) { colored += 1; if (!sampleColored) sampleColored = guid; }
+      else if (!sampleUncolored) sampleUncolored = guid;
     }
+    return { colored, total: materials.length, sampleColored, sampleUncolored };
   };
 
   // On-click detail: read the part's marks/sequence from the "Part Properties"
