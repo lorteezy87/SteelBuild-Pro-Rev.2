@@ -3,11 +3,14 @@
 //
 // Deploy with verify_jwt = false: the webhook is called by Stripe (no JWT), and
 // the checkout/portal actions verify the caller's JWT themselves. The function
-// owns the Stripe secret + price ids; the client only passes a plan KEY.
+// owns the Stripe secret. Price ids + the webhook signing secret are read from
+// the service-role-only public.billing_config table (provisioned via the Stripe
+// API — see scripts/provision), falling back to env (STRIPE_PRICE_PRO /
+// STRIPE_PRICE_BUSINESS / STRIPE_WEBHOOK_SECRET) for backward compatibility.
+// The client only ever passes a plan KEY — never a price id.
 //
 // Required edge-function secrets:
-//   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PRO, STRIPE_PRICE_BUSINESS
-//   (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY are injected)
+//   STRIPE_SECRET_KEY   (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY injected)
 
 import Stripe from "https://esm.sh/stripe@17?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -19,11 +22,6 @@ const cors = {
 };
 
 const STRIPE_SECRET = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
-const WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET") ?? "";
-const PRICE: Record<string, string> = {
-  pro: Deno.env.get("STRIPE_PRICE_PRO") ?? "",
-  business: Deno.env.get("STRIPE_PRICE_BUSINESS") ?? "",
-};
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -35,21 +33,43 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 const json = (obj: unknown, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-function priceToPlan(priceId: string | undefined): string | null {
+interface BillingConfig { pricePro: string; priceBusiness: string; webhookSecret: string; }
+
+// Config (price ids + webhook secret) lives in the service-role-only
+// billing_config table so it can be provisioned via the Stripe API without
+// writing env secrets at runtime. Env is the fallback.
+async function loadConfig(): Promise<BillingConfig> {
+  let row: Record<string, string> | null = null;
+  try {
+    const { data } = await admin
+      .from("billing_config")
+      .select("stripe_price_pro, stripe_price_business, stripe_webhook_secret")
+      .eq("scope", "default")
+      .maybeSingle();
+    row = data as Record<string, string> | null;
+  } catch (_e) { /* fall back to env */ }
+  return {
+    pricePro: row?.stripe_price_pro || Deno.env.get("STRIPE_PRICE_PRO") || "",
+    priceBusiness: row?.stripe_price_business || Deno.env.get("STRIPE_PRICE_BUSINESS") || "",
+    webhookSecret: row?.stripe_webhook_secret || Deno.env.get("STRIPE_WEBHOOK_SECRET") || "",
+  };
+}
+
+function priceToPlan(priceId: string | undefined, cfg: BillingConfig): string | null {
   if (!priceId) return null;
-  if (priceId === PRICE.pro) return "pro";
-  if (priceId === PRICE.business) return "business";
+  if (priceId === cfg.pricePro) return "pro";
+  if (priceId === cfg.priceBusiness) return "business";
   return null;
 }
 
 // deno-lint-ignore no-explicit-any
-async function handleEvent(event: any) {
+async function handleEvent(event: any, cfg: BillingConfig) {
   if (event.type === "checkout.session.completed") {
     const s = event.data.object;
     const orgId = s.metadata?.org_id || s.client_reference_id;
     if (!orgId) return;
     const sub = s.subscription ? await stripe.subscriptions.retrieve(s.subscription) : null;
-    const plan = s.metadata?.plan || priceToPlan(sub?.items?.data?.[0]?.price?.id) || "pro";
+    const plan = s.metadata?.plan || priceToPlan(sub?.items?.data?.[0]?.price?.id, cfg) || "pro";
     await admin.from("organizations").update({
       plan,
       subscription_status: sub?.status ?? "active",
@@ -67,7 +87,7 @@ async function handleEvent(event: any) {
     if (!orgId) return;
     const deleted = event.type === "customer.subscription.deleted";
     await admin.from("organizations").update({
-      plan: deleted ? "free" : (priceToPlan(sub.items?.data?.[0]?.price?.id) ?? sub.metadata?.plan ?? undefined),
+      plan: deleted ? "free" : (priceToPlan(sub.items?.data?.[0]?.price?.id, cfg) ?? sub.metadata?.plan ?? undefined),
       subscription_status: deleted ? "canceled" : sub.status,
       stripe_subscription_id: sub.id,
       current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
@@ -83,9 +103,10 @@ Deno.serve(async (req) => {
   if (url.pathname.endsWith("/webhook")) {
     const sig = req.headers.get("stripe-signature");
     const raw = await req.text();
+    const cfg = await loadConfig();
     let event;
     try {
-      event = await stripe.webhooks.constructEventAsync(raw, sig ?? "", WEBHOOK_SECRET);
+      event = await stripe.webhooks.constructEventAsync(raw, sig ?? "", cfg.webhookSecret);
     } catch (e) {
       return new Response(`Webhook signature verification failed: ${(e as Error).message}`, { status: 400 });
     }
@@ -96,7 +117,7 @@ Deno.serve(async (req) => {
       console.error("billing_events insert error", dupErr);
     }
     try {
-      await handleEvent(event);
+      await handleEvent(event, cfg);
     } catch (e) {
       console.error("webhook handler error", e);
       return new Response("handler error", { status: 500 }); // let Stripe retry
@@ -125,6 +146,8 @@ Deno.serve(async (req) => {
   const origin = req.headers.get("origin") ?? "https://steelbuild-pro.com";
 
   if (action === "checkout") {
+    const cfg = await loadConfig();
+    const PRICE: Record<string, string> = { pro: cfg.pricePro, business: cfg.priceBusiness };
     const priceId = plan ? PRICE[plan] : "";
     if (!priceId) return json({ error: `Plan "${plan}" isn't available for checkout yet` }, 400);
 
