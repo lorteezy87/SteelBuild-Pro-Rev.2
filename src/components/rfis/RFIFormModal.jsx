@@ -31,7 +31,7 @@ const Field = ({ label, span = 1, children }) => (
   </div>
 );
 
-// Deterministic RFI preflight scorecard (flag-gated). Renders the checks
+// Deterministic RFI preflight scorecard (always on). Renders the checks
 // from buildRfiPreflight() with a score; required failures read as blockers.
 const PreflightScorecard = ({ result }) => {
   if (!result) return null;
@@ -67,7 +67,7 @@ const PreflightScorecard = ({ result }) => {
   );
 };
 
-// Non-blocking duplicate-RFI warning (flag-gated). Surfaces likely prior RFIs
+// Non-blocking duplicate-RFI warning (always on). Surfaces likely prior RFIs
 // so the author links instead of re-asking (the RFI 007/008 pain).
 const DuplicateWarning = ({ matches }) => {
   if (!matches || matches.length === 0) return null;
@@ -162,12 +162,18 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   };
   const [formData, setFormData] = useState(rfi ? seedFromRfi(rfi) : seedEmpty);
   const [pendingPdfFiles, setPendingPdfFiles] = useState([]);
+  // Preflight override — when required checks fail, the author can still submit
+  // by acknowledging and giving a reason (logged to metadata.preflight_override).
+  const [overrideAck, setOverrideAck] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
 
   useEffect(() => {
     setFormData(rfi
       ? seedFromRfi(rfi)
       : { ...empty, drawing_reference: initialDrawingReference || "", ...(prefill || {}), project_id: projectId || "" });
     setPendingPdfFiles([]);
+    setOverrideAck(false);
+    setOverrideReason("");
   }, [rfi, projectId, initialDrawingReference, prefill]);
 
   const { data: projects = [] } = useQuery({
@@ -322,10 +328,11 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     window.open(resolvedUrl, "_blank", "noopener,noreferrer");
   };
 
-  const buildPayload = () => {
+  const buildPayload = (pf, overrideReasonText = null) => {
     // rfi_type / proposed_solution are local-only fields — fold them into the
     // existing metadata JSON and strip the top-level keys so we never send a
-    // non-column (no schema dependency).
+    // non-column (no schema dependency). The preflight score + any override
+    // reason are recorded the same way — queryable, no migration.
     const { rfi_type, proposed_solution, fab_hold, piece_marks, ...rest } = formData;
     return {
       ...rest,
@@ -335,6 +342,10 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
         proposed_solution,
         fab_hold: !!fab_hold,
         piece_marks: (piece_marks || "").trim(),
+        preflight_score: pf ? pf.score : (formData.metadata?.preflight_score ?? null),
+        preflight_override: overrideReasonText
+          ? { reason: overrideReasonText, score: pf?.score ?? null, blockers: (pf?.blockers || []).map((b) => b.key), at: new Date().toISOString() }
+          : (formData.metadata?.preflight_override ?? null),
       },
     };
   };
@@ -343,14 +354,21 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     e.preventDefault();
     if (!formData.title?.trim()) return toast.error("Title is required");
 
-    // Preflight gate — block submission on required failures so
-    // under-specified RFIs don't ship. Soft checks never block.
+    // Preflight gate — required-check failures block submission so
+    // under-specified RFIs don't ship. The author can still submit by
+    // acknowledging the override and giving a reason (logged). Soft checks
+    // never block.
     const pf = buildRfiPreflight(formData);
     if (!pf.passed) {
-      return toast.error(`Preflight: resolve ${pf.blockers.map((b) => b.label).join("; ")}`);
+      if (!overrideAck) {
+        return toast.error(`Preflight: resolve ${pf.blockers.map((b) => b.label).join("; ")} — or check "Submit anyway" and give a reason`);
+      }
+      if (!overrideReason.trim()) {
+        return toast.error("Enter a reason to override the preflight and submit");
+      }
     }
 
-    const payload = buildPayload();
+    const payload = buildPayload(pf, !pf.passed ? overrideReason.trim() : null);
 
     // If parent supplied onSave, delegate to it (parent handles persistence + cache)
     if (typeof onSave === "function") {
@@ -539,6 +557,24 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             </Field>
             {duplicateMatches.length > 0 && <DuplicateWarning matches={duplicateMatches} />}
             <PreflightScorecard result={preflight} />
+            {!preflight.passed && (
+              <div style={{ gridColumn: "span 3", border: "1px solid var(--status-error)", borderRadius: 6, padding: 12, background: "var(--danger-muted)" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: overrideAck ? 8 : 0 }}>
+                  <input type="checkbox" checked={overrideAck} onChange={(e) => setOverrideAck(e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer", flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 700 }}>
+                    Submit anyway — override {preflight.blockers.length} unresolved required item{preflight.blockers.length === 1 ? "" : "s"}
+                  </span>
+                </label>
+                {overrideAck && (
+                  <textarea
+                    style={{ ...iStyle, minHeight: 48, resize: "vertical" }}
+                    value={overrideReason}
+                    onChange={(e) => setOverrideReason(e.target.value)}
+                    placeholder="Reason for overriding preflight (required, logged with the RFI)"
+                  />
+                )}
+              </div>
+            )}
 
             {/* Section 3 — Routing */}
             <SectionLabel>Routing</SectionLabel>
