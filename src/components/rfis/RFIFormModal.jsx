@@ -133,6 +133,12 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     //   piece_marks  → affected piece marks (comma/space separated)
     fab_hold: false,
     piece_marks: "",
+    // Qualitative impact flags (metadata-held like the fields above) — beyond the
+    // cost/schedule columns; shown on the RFI and used as answer-time triggers.
+    fab_impact: false,
+    erection_impact: false,
+    drawing_revision_required: false,
+    change_order_likely: false,
   };
 
   // Seed the workflow-backbone fields from metadata when editing an existing
@@ -144,6 +150,10 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     proposed_solution: r?.metadata?.proposed_solution || "",
     fab_hold: !!r?.metadata?.fab_hold,
     piece_marks: r?.metadata?.piece_marks || "",
+    fab_impact: !!r?.metadata?.fab_impact,
+    erection_impact: !!r?.metadata?.erection_impact,
+    drawing_revision_required: !!r?.metadata?.drawing_revision_required,
+    change_order_likely: !!r?.metadata?.change_order_likely,
   });
 
   // Pre-fill drawing_reference when the modal is opened for a NEW
@@ -333,7 +343,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     // existing metadata JSON and strip the top-level keys so we never send a
     // non-column (no schema dependency). The preflight score + any override
     // reason are recorded the same way — queryable, no migration.
-    const { rfi_type, proposed_solution, fab_hold, piece_marks, ...rest } = formData;
+    const { rfi_type, proposed_solution, fab_hold, piece_marks, fab_impact, erection_impact, drawing_revision_required, change_order_likely, ...rest } = formData;
     return {
       ...rest,
       metadata: {
@@ -342,6 +352,10 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
         proposed_solution,
         fab_hold: !!fab_hold,
         piece_marks: (piece_marks || "").trim(),
+        fab_impact: !!fab_impact,
+        erection_impact: !!erection_impact,
+        drawing_revision_required: !!drawing_revision_required,
+        change_order_likely: !!change_order_likely,
         preflight_score: pf ? pf.score : (formData.metadata?.preflight_score ?? null),
         preflight_override: overrideReasonText
           ? { reason: overrideReasonText, score: pf?.score ?? null, blockers: (pf?.blockers || []).map((b) => b.key), at: new Date().toISOString() }
@@ -656,6 +670,19 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                     onChange={(e) => set("schedule_impact_days", e.target.value)}
                   />
                 )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                {[
+                  ["drawing_revision_required", "Drawing revision required"],
+                  ["change_order_likely", "Change order likely"],
+                  ["fab_impact", "Fabrication impact"],
+                  ["erection_impact", "Erection impact"],
+                ].map(([key, lbl]) => (
+                  <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
+                    <input type="checkbox" checked={!!formData[key]} onChange={(e) => set(key, e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer" }} />
+                    {lbl}
+                  </label>
+                ))}
               </div>
             </div>
 

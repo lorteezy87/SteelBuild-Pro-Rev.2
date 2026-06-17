@@ -53,7 +53,7 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Close</Button>
-          {onCreateCO && rfi.cost_impact && (
+          {onCreateCO && (rfi.cost_impact || rfi.metadata?.change_order_likely) && (
             <Button variant="secondary" onClick={onCreateCO}>Create CO</Button>
           )}
           {onNudge && <Button variant="secondary" icon="bell" onClick={onNudge}>Nudge BIC</Button>}
@@ -146,6 +146,22 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
             {rfi.metadata?.piece_marks && (
               <div className="rfi-reference-chip">Pieces / {rfi.metadata.piece_marks}</div>
             )}
+          </div>
+        </section>
+      )}
+
+      {(rfi.metadata?.drawing_revision_required || rfi.metadata?.change_order_likely || rfi.metadata?.fab_impact || rfi.metadata?.erection_impact) && (
+        <section className="rfi-detail-section">
+          <SectionLabel>Impact</SectionLabel>
+          <div className="rfi-reference-row">
+            {rfi.metadata?.drawing_revision_required && (
+              <div className="rfi-reference-chip" style={{ color: "var(--status-warning)", borderColor: "var(--status-warning)", fontWeight: 700 }}>✎ Drawing revision required</div>
+            )}
+            {rfi.metadata?.change_order_likely && (
+              <div className="rfi-reference-chip" style={{ color: "var(--status-review)", borderColor: "var(--status-review)", fontWeight: 700 }}>$ Change order likely</div>
+            )}
+            {rfi.metadata?.fab_impact && <div className="rfi-reference-chip">Fabrication impact</div>}
+            {rfi.metadata?.erection_impact && <div className="rfi-reference-chip">Erection impact</div>}
           </div>
         </section>
       )}
