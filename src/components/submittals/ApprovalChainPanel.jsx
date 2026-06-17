@@ -5,13 +5,14 @@
  * addSubmittalRound, and submittals.status stays the workflow truth (§20).
  */
 import React, { useMemo, useState } from "react";
-import { Check, GitBranch, X } from "lucide-react";
+import { Check, GitBranch, Settings, X } from "lucide-react";
 import {
   chainState,
   getChainTemplates,
   buildApplyChainPatch,
   buildClearChainPatch,
 } from "@/lib/approvalChains";
+import ApprovalChainTemplatesModal from "@/components/submittals/ApprovalChainTemplatesModal";
 
 const mono = "var(--font-mono)";
 
@@ -42,6 +43,7 @@ function StepChip({ step, state }) {
 export default function ApprovalChainPanel({ submittal, project, onFieldChange, disabled = false }) {
   const templates = useMemo(() => getChainTemplates(project), [project]);
   const [templateKey, setTemplateKey] = useState(templates[0]?.key || "");
+  const [manageOpen, setManageOpen] = useState(false);
   const chain = chainState(submittal);
 
   if (!submittal) return null;
@@ -130,10 +132,22 @@ export default function ApprovalChainPanel({ submittal, project, onFieldChange, 
           <GitBranch size={11} /> Apply route
         </button>
       </div>
-      <div style={{ fontFamily: mono, fontSize: 9, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.5 }}>
-        Routes the ball through each party automatically — the action button
-        becomes "Route to next" until the final reviewer returns a decision.
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginTop: 6 }}>
+        <span style={{ fontFamily: mono, fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>
+          Routes the ball through each party automatically — the action button
+          becomes "Route to next" until the final reviewer returns a decision.
+        </span>
+        <button
+          type="button"
+          onClick={() => setManageOpen(true)}
+          disabled={disabled}
+          title="Create or edit per-project approval-chain templates"
+          style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "var(--accent)", cursor: disabled ? "default" : "pointer", fontFamily: mono, fontSize: 9, fontWeight: 700, whiteSpace: "nowrap", padding: 0 }}
+        >
+          <Settings size={10} /> Manage
+        </button>
       </div>
+      <ApprovalChainTemplatesModal open={manageOpen} onClose={() => setManageOpen(false)} />
     </div>
   );
 }
