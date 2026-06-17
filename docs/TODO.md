@@ -27,7 +27,8 @@ self-serve signup + email verify (`25ac9c9a`), upload org-resolution hardening (
 - [ ] **Invites → Stripe billing** — the main gap to "sellable." BLOCKED: needs a Stripe account. (L)
 - [ ] E2E test harness — now feasible (self-signup exists → a test user can be created). (M)
 - [x] Commit `vercel.json` preview-build skip — done (cost control: non-production deploys no longer build).
-- [ ] app-files cross-tenant READ residual — flat `uploads/<ts>` paths need a path restructure + ref backfill. (M)
+- [x] app-files cross-tenant READ residual — **CLOSED** (`2258e902`, live-verified 2026-06-16). Grandfathered the ~774 legacy flat `uploads/` files to the founding org (S&H) + org-prefixed new uploads (`<org_id>/uploads/...`); `auth_read` now scopes path → org membership. No object churn / ref backfill needed.
+- [x] Function `search_path` hardening — pinned `search_path=''` on 5 advisor-flagged public fns (backcharge/payapp/piece_production touch triggers + plan-limit lookups); migration `20260616010000`, applied live 2026-06-16.
 
 ## Thread C — Revision Intelligence — COMPLETE
 
