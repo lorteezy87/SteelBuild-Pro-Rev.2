@@ -585,7 +585,39 @@ export default function Submittals() {
             onClose={() => setSelectedId(null)}
             onEdit={() => selected && setEditingId(selected.id)}
             onDelete={() => selected && setToDelete(selected.id)}
-            onStatusChange={(status) => selected && updateMut.mutate({ id: selected.id, status })}
+            onStatusChange={(status) => {
+              if (!selected || status === selected.status) return;
+              const today = localToday();
+              // A reviewer VERDICT (or release) is a review-round event — log it
+              // through the audited round path so the round history + cycle data
+              // fill from the status-flip workflow the team actually uses, not
+              // just the verb CTA (the round log sat empty because inline status
+              // changes bypassed it). §20: submittals.status stays the source of
+              // truth; this only stops the round log from drifting empty.
+              const isVerdict = [
+                "Approved", "Approved as Noted", "Revise and Resubmit",
+                "Rejected", "Released for Fabrication",
+              ].includes(status);
+              if (isVerdict) {
+                advanceMut.mutate({
+                  submittal: selected as any,
+                  status,
+                  ball_in_court: selected.ball_in_court ?? null,
+                  submitted_date: selected.submitted_date ?? undefined,
+                  returned_date: today,
+                });
+              } else if (status === "Submitted" || status === "Under Review") {
+                // Sent out for review — stamp the cycle's submitted date if
+                // missing so the eventual verdict-round has a start for cycle time.
+                updateMut.mutate({
+                  id: selected.id,
+                  status,
+                  ...(selected.submitted_date ? {} : { submitted_date: today }),
+                });
+              } else {
+                updateMut.mutate({ id: selected.id, status });
+              }
+            }}
             onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
             // Verb CTA — advance via the audited write path: logs a round +
             // patches + auto-locks atomically. Stamps the submitted date when
