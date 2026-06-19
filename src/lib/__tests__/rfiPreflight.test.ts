@@ -59,6 +59,18 @@ describe("buildRfiPreflight", () => {
     expect(r.checks.find((c) => c.key === "proposed")?.required).toBe(false);
   });
 
+  it("counts qualitative impact flags (fab/erection/rev/CO), not just cost/schedule", () => {
+    // A fabrication-impact flag with no cost/schedule still satisfies the (soft) impact check.
+    const fab = buildRfiPreflight({ ...validRFI, cost_impact: false, fab_impact: true });
+    expect(fab.checks.find((c) => c.key === "impact")?.pass).toBe(true);
+    // A metadata flag (saved-RFI shape) counts too.
+    const co = buildRfiPreflight({ ...validRFI, cost_impact: false, metadata: { change_order_likely: true } });
+    expect(co.checks.find((c) => c.key === "impact")?.pass).toBe(true);
+    // No impact of any kind → the check fails (still soft).
+    const none = buildRfiPreflight({ ...validRFI, cost_impact: false });
+    expect(none.checks.find((c) => c.key === "impact")?.pass).toBe(false);
+  });
+
   it("exposes the canonical RFI type list", () => {
     expect(RFI_TYPES).toContain("Field Condition");
     expect(RFI_TYPES.length).toBeGreaterThanOrEqual(6);
