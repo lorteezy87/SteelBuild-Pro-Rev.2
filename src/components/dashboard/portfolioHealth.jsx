@@ -111,3 +111,35 @@ export function healthColor(status) {
     default: return "var(--text-muted)";
   }
 }
+
+/* ── PSR-snapshot provenance for portfolio health ──────────────────────────
+ * A project's health_status is set from PSR-spreadsheet snapshot imports
+ * (projects.metadata.psr), which drift from the live rfis/submittals tables —
+ * e.g. a snapshot keeps a project "At Risk / 13 open RFIs" weeks after they're
+ * all closed. This pure helper reports whether a project's health came from
+ * such a snapshot and how old it is, so the UI can flag a stale verdict instead
+ * of presenting it as current. `now` is injectable for deterministic tests. */
+export const PSR_STALE_DAYS = 14;
+
+export function psrHealthProvenance(project, now = new Date()) {
+  const psr = project?.metadata?.psr;
+  // The import nests the verdict under `latest` (an older shape stored it at the
+  // psr root — tolerate both); the import timestamp lives at the psr root.
+  const snapshotHealth = psr?.latest?.proposed_health_status ?? psr?.proposed_health_status ?? null;
+  const importedAt = psr?.last_imported_at ?? psr?.latest?.imported_at ?? null;
+  if (!psr || !snapshotHealth || !importedAt) {
+    return { fromSnapshot: false, snapshotHealth: null, importedAt: null, ageDays: null, stale: false, driftRisk: false };
+  }
+  const ts = new Date(importedAt).getTime();
+  if (Number.isNaN(ts)) {
+    return { fromSnapshot: true, snapshotHealth, importedAt: null, ageDays: null, stale: false, driftRisk: false };
+  }
+  const ageDays = Math.max(0, Math.floor((now.getTime() - ts) / 86400000));
+  const stale = ageDays > PSR_STALE_DAYS;
+  // driftRisk = the displayed health IS this stale snapshot — the project's
+  // current health_status still equals the snapshot's verdict (it hasn't been
+  // refreshed against live RFIs/submittals). This is the actionable case to flag;
+  // a project whose health_status has since diverged from the snapshot isn't.
+  const driftRisk = stale && project?.health_status != null && project.health_status === snapshotHealth;
+  return { fromSnapshot: true, snapshotHealth, importedAt, ageDays, stale, driftRisk };
+}

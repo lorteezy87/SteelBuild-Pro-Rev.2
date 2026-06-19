@@ -6,7 +6,7 @@ import { formatCurrency, parseUTCDate, statusIn } from "../shared/formatters";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProgressBar from "../shared/ProgressBar";
-import { HealthPill, healthColor } from "./portfolioHealth";
+import { HealthPill, healthColor, psrHealthProvenance } from "./portfolioHealth";
 import { formatLocalDate } from "@/utils/dates";
 import {
   PHASE_DOT,
@@ -877,6 +877,21 @@ export default function PortfolioView({
                             {p.healthReasons[0]}
                           </div>
                         )}
+                        {/* Stale-PSR-snapshot flag: this health verdict came from a
+                            PSR spreadsheet import that's now old and may not match
+                            live RFIs/submittals (e.g. "At Risk" off a closed-out job). */}
+                        {(() => {
+                          const prov = psrHealthProvenance(p);
+                          if (!prov.driftRisk) return null;
+                          return (
+                            <div
+                              title={`Health is from a PSR snapshot imported ${formatLocalDate(prov.importedAt)} — ${prov.ageDays} days ago. It may not reflect current RFIs / submittals; open the project to confirm.`}
+                              style={{ marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.06em", color: "var(--status-warning)", border: "1px solid color-mix(in srgb, var(--status-warning) 45%, transparent)", background: "color-mix(in srgb, var(--status-warning) 12%, transparent)", padding: "1px 6px", borderRadius: 999, whiteSpace: "nowrap" }}
+                            >
+                              ⚠ PSR · {prov.ageDays}d old
+                            </div>
+                          );
+                        })()}
                       </td>
                       {/* Budget — click drills into Expenses scoped to project.
                           The Expenses page is the closest surface to budget +
