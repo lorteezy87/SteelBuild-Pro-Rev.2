@@ -29,7 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-06-19 | submittal-workflow | Submittals · E2E harness · agent coordination | `src/pages/Submittals*`, `e2e/**`, `playwright.config.*`, `AGENT_CLAIMS.md`, `CLAUDE.md`, `AGENTS.md` | Round-logging fix (shipped), Playwright smoke harness, this board |
+| _(none active)_ | | | | |
 
 ## Recently released
 
