@@ -151,6 +151,9 @@ export default defineConfig({
       'dist/**',
       '.claude/**',
       'steelbuild-pro/**',
+      // Playwright E2E specs (e2e/**) run under `npm run test:e2e`, not Vitest —
+      // they import @playwright/test, which would throw under the Vitest runner.
+      'e2e/**',
     ],
     // Default environment is `node` — keeps the 488 pure-helper tests
     // fast (no jsdom overhead). Component tests opt into jsdom via a
