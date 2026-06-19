@@ -1,0 +1,4 @@
+# Playwright artifacts + the seeded auth state (never commit a real session)
+.auth/
+test-results/
+playwright-report/

@@ -12,6 +12,7 @@ export default [
       "dist/**",
       "steelbuild-pro/**",
       "node_modules/**",
+      "e2e/**",
     ],
   },
   {
