@@ -231,7 +231,13 @@ export default function DrawingSubmittalHub() {
       });
       saveRevisionSummary({ projectId, drawingSetId: pkg.setId, summary, generatedBy: null })
         .then(() => qc.invalidateQueries({ queryKey: ["revision-summaries", projectId] }))
-        .catch(() => {});
+        .catch((err) => {
+          // The card already shows (best-effort), but persistence failed — surface it
+          // so a missing "revised · N" set badge isn't a silent mystery (e.g. an RLS
+          // reject below the ≥field insert floor, or a transient DB error).
+          console.warn("[revision-summary] persist failed:", err);
+          toast.warning("Revision summary shown, but couldn't be saved — the set badge may not persist.");
+        });
       setSummaryCard(summary);
     } catch {
       /* the summary is best-effort — never block the upload flow */
