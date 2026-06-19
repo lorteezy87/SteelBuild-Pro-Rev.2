@@ -180,29 +180,6 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark],
   );
 
-  // [fab-diag] one-shot coverage report: how many rendered members resolved to a
-  // color, + whether a sample rendered GUID is even in the roster maps. Pinpoints a
-  // roster↔geometry mismatch vs an empty/proxy render. Remove once fab coloring is confirmed.
-  const onColorStats = (stats) => {
-    try {
-      const u = stats.sampleUncolored;
-      console.log("[fab-diag]", {
-        colorMode,
-        rendered: stats.total,
-        colored: stats.colored,
-        rosterRows: modelElementRows?.length ?? 0,
-        fabByGuid: fabByGuid.size,
-        markByGuid: markByGuid.size,
-        fabByMark: fabByMark.size,
-        sampleColoredGuid: stats.sampleColored,
-        sampleUncoloredGuid: u,
-        uncoloredInFabByGuid: u ? fabByGuid.has(u) : null,
-        uncoloredInMarkByGuid: u ? markByGuid.has(u) : null,
-        aRosterFabGuid: [...fabByGuid.keys()][0] ?? null,
-      });
-    } catch { /* ignore */ }
-  };
-
   // Persist a freshly-picked model so it auto-loads next time: upload the .ifc to
   // Storage + write model_registry (file_url) + the piece roster (model_elements).
   // Runs automatically on load — no separate "import" step — and doesn't block the
@@ -370,7 +347,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
     >
       <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <IfcModelViewer buffer={buffer} colorFor={colorFor} onPick={setPicked} onSelect={setSelectedGuids} onColorStats={onColorStats} />
+          <IfcModelViewer buffer={buffer} colorFor={colorFor} onPick={setPicked} onSelect={setSelectedGuids} />
         </Suspense>
         <button type="button" onClick={toggleFullscreen} title={isFullscreen ? "Exit full screen" : "Full screen"} style={fsBtn}>
           {isFullscreen ? "Exit full screen" : "Full screen"}
