@@ -198,6 +198,31 @@ describe("enrichProjectMetrics", () => {
     expect(out[0]).toHaveProperty("autoHealth");
     expect(out[0]).toHaveProperty("effectiveHealth");
   });
+
+  it("a STALE PSR snapshot does not drag effectiveHealth down — live auto-health wins (ASM Garage)", () => {
+    // Clean live metrics → auto-health "On Track"; the manual column "At Risk" is a
+    // long-stale PSR snapshot still matching the column (driftRisk) → demoted.
+    const [p] = enrichProjectMetrics([{
+      id: "asm", name: "ASM Garage", health_status: "At Risk",
+      overdueRFIs: 0, openRFIs: 0, lateDeliveries: 0, stalledWPs: 0, pendingCOs: [],
+      metadata: { psr: { last_imported_at: "2020-01-01T00:00:00Z", latest: { proposed_health_status: "At Risk" } } },
+    }]);
+    expect(p.autoHealth).toBe("On Track");
+    expect(p.psrProvenance.driftRisk).toBe(true);
+    expect(p.effectiveHealth).toBe("On Track"); // NOT "At Risk" — stale snapshot demoted
+  });
+
+  it("keeps the conservative worst-of when the manual health is NOT a stale snapshot", () => {
+    // Same clean live metrics + manual "At Risk" but no PSR snapshot → driftRisk
+    // false → worst-of("On Track" auto, "At Risk" manual) = "At Risk".
+    const [p] = enrichProjectMetrics([{
+      id: "x", name: "Manual At Risk", health_status: "At Risk",
+      overdueRFIs: 0, openRFIs: 0, lateDeliveries: 0, stalledWPs: 0, pendingCOs: [],
+    }]);
+    expect(p.autoHealth).toBe("On Track");
+    expect(p.psrProvenance.driftRisk).toBe(false);
+    expect(p.effectiveHealth).toBe("At Risk");
+  });
 });
 
 describe("computePortfolioKPIs", () => {
