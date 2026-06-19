@@ -29,7 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-06-19 | wp-set-assignment | Fab Release / WP drawing assignment | `src/components/workpackages/WPFormModal.jsx` (+ its test) | Make WP drawing assignment set-based (§21), not per-sheet |
+| _(none active)_ | | | | |
 
 ## Recently released
 
