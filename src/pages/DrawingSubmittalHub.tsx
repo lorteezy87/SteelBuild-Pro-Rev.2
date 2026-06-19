@@ -178,7 +178,7 @@ export default function DrawingSubmittalHub() {
     staleTime: 60_000,
   });
   // 3D model members (BIM integration Phase 0 — piece-mark mapping).
-  const { data: modelElements = [] } = useQuery({
+  const { data: modelElements = [], isLoading: modelElementsLoading } = useQuery({
     queryKey: ["model-elements", projectId],
     // Big models run 3k–12k+ elements. A single Supabase request is capped at
     // 1000 rows server-side (db-max-rows), so `.limit(50000)` silently returned
@@ -824,7 +824,7 @@ export default function DrawingSubmittalHub() {
             )}
             {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
             {activeTab === "model3d" && (
-              <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} />
+              <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} />
             )}
           </Suspense>
         </ErrorBoundary>

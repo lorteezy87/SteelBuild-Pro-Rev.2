@@ -54,7 +54,15 @@ const saveBanner = {
   boxShadow: "0 6px 24px rgba(0,0,0,0.4)", whiteSpace: "nowrap",
 };
 
-export default function Model3DTab({ modelMapping, modelElementRows, projectId }) {
+const loadingChip = {
+  position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 3,
+  display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: 999,
+  background: "rgba(13,17,23,0.82)", border: "1px solid var(--border-default)",
+  color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11,
+  fontWeight: 600, letterSpacing: "0.04em", whiteSpace: "nowrap", boxShadow: "0 6px 24px rgba(0,0,0,0.4)",
+};
+
+export default function Model3DTab({ modelMapping, modelElementRows, projectId, rosterLoading }) {
   const qc = useQueryClient();
   const [buffer, setBuffer] = useState(null);
   const [fileName, setFileName] = useState(null);
@@ -352,6 +360,13 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId }
         <button type="button" onClick={toggleFullscreen} title={isFullscreen ? "Exit full screen" : "Full screen"} style={fsBtn}>
           {isFullscreen ? "Exit full screen" : "Full screen"}
         </button>
+
+        {/* The roster (model_elements) loads alongside the geometry; until it
+            lands, a color mode that depends on it can't fully paint — say so
+            instead of letting it read as "broken". */}
+        {buffer && rosterLoading && (colorMode === "fab" || colorMode === "sequence" || colorMode === "status") && (
+          <div style={loadingChip}>Loading {colorMode === "fab" ? "fab" : colorMode === "sequence" ? "sequence" : "status"} colors…</div>
+        )}
 
         {/* Unmissable Save prompt while previewing an unsaved model. */}
         {source === "picked" && projectId && (
