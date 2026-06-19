@@ -295,6 +295,10 @@ If unrelated dirty files exist, prefer one of these:
 
 Only stash when you understand what will be stashed.
 
+### Concurrent Agent Coordination
+
+Multiple agent sessions write `main` at the same time. Before editing code, `git pull`, then read `AGENT_CLAIMS.md` (repo root) and add a claim row for your area (date · session · area · files/globs · intent), committing just that file. Skip or tightly scope work that overlaps an open claim; delete your row when the session ends. A merge conflict on `AGENT_CLAIMS.md` is the intended early signal that another agent is active — keep both rows. This is a convention, not a lock, and does not replace the git-safety rules above.
+
 ---
 
 ## 8. Branch And Deployment Rules

@@ -29,3 +29,6 @@ When thinning a big component, extract its pure logic **byte-identical** into a 
 
 ## Commit & Pull Request Guidelines
 Use Conventional Commit prefixes seen in history: `feat:`, `fix:`, `docs:`, `refactor:`, `ui:`, `security:`. CI (`.github/workflows/ci.yml`) runs lint + both typechecks + Vitest + production build on every push/PR. Feature work lands on `claude/*` branches; deploys go through merge into `main`, which Vercel auto-publishes.
+
+## Concurrent agents
+Multiple agent sessions write `main` simultaneously. Before editing, `git pull` and claim your area in `AGENT_CLAIMS.md` (repo root) — one row (date · session · area · files · intent), committed on its own — then release it when done. Skip or tightly scope work that overlaps an open claim. A conflict on that file is the intended signal that another agent is active (keep both rows). It is a convention, not a lock; the git-safety rules in `CLAUDE.md` §7 still apply.
