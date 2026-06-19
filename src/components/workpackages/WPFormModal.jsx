@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { formatBudgetPercent } from "../shared/formatters";
 import { getDraftDrawingsWarning } from "../shared/workflowValidation";
+import { sortDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
 
@@ -38,8 +39,8 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [linkedDrawingIds, setLinkedDrawingIds] = useState([]);
-  const [drawingSearch, setDrawingSearch] = useState("");
-  const [showDrawingDropdown, setShowDrawingDropdown] = useState(false);
+  const [setSearch, setSetSearch] = useState("");
+  const [showSetDropdown, setShowSetDropdown] = useState(false);
 
   const activeProjectId = form.project_id || (wp && wp.project_id);
   const { data: projectRfis = [] } = useQuery({
@@ -63,7 +64,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
       setLinkedDrawingIds([]);
     }
     setErrors({});
-    setDrawingSearch("");
+    setSetSearch("");
   }, [wp, open, nextNumber, defaultProjectId]);
 
   const validate = () => {
@@ -98,34 +99,93 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     onSave(data);
   };
 
-  const addDrawing = (drawingId) => {
-    if (!linkedDrawingIds.includes(drawingId)) {
-      setLinkedDrawingIds([...linkedDrawingIds, drawingId]);
-    }
-    setDrawingSearch("");
-    setShowDrawingDropdown(false);
+  // Add EVERY sheet in a drawing set (§21: the set/package is the tracked unit
+  // of fab assignment, not the individual sheet). We still persist the union of
+  // sheet ids in linked_drawing_ids so downstream readiness checks are unchanged.
+  const addSet = (opt) => {
+    const ids = opt.drawings.map((d) => d.id).filter(Boolean);
+    setLinkedDrawingIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return [...next];
+    });
+    setSetSearch("");
+    setShowSetDropdown(false);
   };
 
-  const removeDrawing = (drawingId) => {
-    setLinkedDrawingIds(linkedDrawingIds.filter(id => id !== drawingId));
+  // Remove every linked sheet that belongs to this set.
+  const removeSet = (group) => {
+    const remove = new Set(group.ids);
+    setLinkedDrawingIds((prev) => prev.filter((id) => !remove.has(id)));
   };
 
   const projectDrawings = allDrawings.filter(d => !form.project_id || d.project_id === form.project_id);
-
-  const filteredDrawings = projectDrawings.filter(d =>
-    d.id &&
-    !linkedDrawingIds.includes(d.id) &&
-    (
-      !drawingSearch ||
-      d.sheet_number?.toLowerCase().includes(drawingSearch.toLowerCase()) ||
-      d.title?.toLowerCase().includes(drawingSearch.toLowerCase())
-    )
-  );
 
   // "Approved" = drawings past the BFA gate. In the corrected 7-stage flow
   // (migration 077): OFS, IFC, Released. "Approved" string kept for any
   // legacy submittal-shape data flowing through here.
   const APPROVED_STAGES = ["Released", "IFC", "Issued for Construction", "OFS", "Approved", "Approved as Noted"];
+
+  // Group the project's drawings into SETS — the assignable unit. Set identity
+  // is the (required) drawing_set_name; ungrouped sheets fall under "Unassigned"
+  // and sort last. Reuses the canonical set-ordering helper (§21).
+  const drawingSetOptions = useMemo(() => {
+    const map = new Map();
+    for (const d of projectDrawings) {
+      if (!d?.id) continue;
+      const name = (d.drawing_set_name || "").trim();
+      const key = name.toLowerCase() || "__unassigned__";
+      let opt = map.get(key);
+      if (!opt) {
+        opt = { key, set_name: name || "Unassigned", isUngrouped: !name, drawings: [] };
+        map.set(key, opt);
+      }
+      opt.drawings.push(d);
+    }
+    return sortDrawingSetPackages([...map.values()]);
+  }, [projectDrawings]);
+
+  const linkedIdSet = useMemo(() => new Set(linkedDrawingIds), [linkedDrawingIds]);
+
+  // Sets with at least one un-linked sheet — what the picker offers, filtered by
+  // the search box. Carries linked/approved counts for the row display.
+  const filteredSetOptions = drawingSetOptions
+    .map((opt) => {
+      let linkedCount = 0;
+      let approvedCount = 0;
+      for (const d of opt.drawings) {
+        if (linkedIdSet.has(d.id)) linkedCount += 1;
+        if (APPROVED_STAGES.includes(d.stage || d.status)) approvedCount += 1;
+      }
+      return { ...opt, linkedCount, approvedCount, total: opt.drawings.length };
+    })
+    .filter(
+      (opt) =>
+        opt.linkedCount < opt.total &&
+        (!setSearch || opt.set_name.toLowerCase().includes(setSearch.toLowerCase())),
+    );
+
+  // Linked sheets grouped back into their sets — drives the chips + remove-by-set.
+  const linkedSetGroups = useMemo(() => {
+    const map = new Map();
+    for (const id of linkedDrawingIds) {
+      const d = allDrawings.find((dw) => dw.id === id);
+      const name = (d?.drawing_set_name || "").trim();
+      const key = name.toLowerCase() || "__unassigned__";
+      let g = map.get(key);
+      if (!g) {
+        g = { key, set_name: name || "Unassigned", isUngrouped: !name, ids: [], total: 0 };
+        map.set(key, g);
+      }
+      g.ids.push(id);
+    }
+    for (const opt of drawingSetOptions) {
+      const g = map.get(opt.key);
+      if (g) g.total = opt.drawings.length;
+    }
+    return sortDrawingSetPackages([...map.values()]);
+  }, [linkedDrawingIds, allDrawings, drawingSetOptions]);
+
   const draftWarning = getDraftDrawingsWarning(linkedDrawingIds.join(","), allDrawings);
   const hasProjectSelected = !!form.project_id;
   const projectDrawingCount = projectDrawings.length;
@@ -212,7 +272,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
 
         {form.phase === "Fabrication" && linkedDrawingIds.length === 0 && (
           <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderLeft: "3px solid var(--status-error)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-error)", letterSpacing: "0.08em" }}>
-            ⊘ NO DRAWINGS LINKED — Cannot advance to Fabrication without at least one linked drawing. Link drawings below first.
+            ⊘ NO DRAWING SETS LINKED — Cannot advance to Fabrication without at least one linked drawing set. Link a set below first.
           </div>
         )}
         {form.phase === "Fabrication" && linkedDrawingIds.length > 0 && !hasApprovedLinkedDrawings && (
@@ -302,10 +362,10 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input style={calcStyle(totalActual, totalBudget)} value={formatBudgetPercent(totalBurn)} disabled readOnly />
         </FormField>
 
-        {/* ── Section 5: Linked Drawings ── */}
-        <SectionDivider label="Linked Drawings" />
+        {/* ── Section 5: Linked Drawing Sets ── */}
+        <SectionDivider label="Linked Drawing Sets" />
 
-        <FormField label="Search & Add Drawings" span2>
+        <FormField label="Search & Add Drawing Sets" span2>
           {/* No drawings warning */}
           {(!hasProjectSelected) && (
             <div style={{ marginBottom: 8, padding: "8px 10px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 6px 6px 0" }}>
@@ -314,7 +374,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           )}
           {hasProjectSelected && projectDrawingCount === 0 && (
             <div style={{ marginBottom: 8, padding: "8px 10px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 6px 6px 0" }}>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--status-warning)", letterSpacing: "0.10em" }}>No drawings found for this project.</div>
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--status-warning)", letterSpacing: "0.10em" }}>No drawing sets found for this project.</div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", marginTop: 3 }}>
                 Upload drawings in the Drawing Log first.
               </div>
@@ -322,9 +382,9 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           )}
           {hasProjectSelected && projectDrawingCount > 0 && linkedDrawingIds.length === 0 && (
             <div style={{ marginBottom: 8, padding: "8px 10px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 6px 6px 0" }}>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--status-warning)", letterSpacing: "0.10em" }}>⚠ NO DRAWINGS LINKED</div>
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--status-warning)", letterSpacing: "0.10em" }}>⚠ NO DRAWING SETS LINKED</div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", marginTop: 3 }}>
-                This WP cannot advance to Fabrication until drawings are linked. You can save without drawings now.
+                This WP cannot advance to Fabrication until a drawing set is linked. You can save without one now.
               </div>
             </div>
           )}
@@ -332,41 +392,52 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <div style={{ position: "relative" }}>
             <input
               type="text"
-              placeholder="Search by sheet number or title..."
-              value={drawingSearch}
-              onChange={e => setDrawingSearch(e.target.value)}
-              onFocus={() => setShowDrawingDropdown(true)}
-              onBlur={() => setTimeout(() => setShowDrawingDropdown(false), 200)}
+              placeholder="Search drawing sets by name..."
+              value={setSearch}
+              onChange={e => setSetSearch(e.target.value)}
+              onFocus={() => setShowSetDropdown(true)}
+              onBlur={() => setTimeout(() => setShowSetDropdown(false), 200)}
               style={inputStyle}
             />
-            {showDrawingDropdown && filteredDrawings.length > 0 && (
-               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderTop: "none", borderRadius: "0 0 8px 8px", maxHeight: 200, overflowY: "auto", zIndex: 10, boxShadow: "var(--shadow-lg)" }}>
-                 {filteredDrawings.map(d => (
-                   <div
-                     key={d.id}
-                     onMouseDown={() => addDrawing(d.id)}
-                     style={{ padding: "8px 10px", borderBottom: "1px solid var(--divider)", cursor: "pointer", fontSize: 11, color: "var(--text-secondary)", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                     onMouseEnter={e => e.currentTarget.style.background = "rgb(18,25,38)"}
-                     onMouseLeave={e => e.currentTarget.style.background = "rgb(12,17,25)"}
-                   >
-                     <span>[{d.sheet_number}] {d.title}</span>
-                     <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--text-muted)" }}>{d.stage}</span>
-                   </div>
-                 ))}
+            {showSetDropdown && filteredSetOptions.length > 0 && (
+               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderTop: "none", borderRadius: "0 0 8px 8px", maxHeight: 220, overflowY: "auto", zIndex: 10, boxShadow: "var(--shadow-lg)" }}>
+                 {filteredSetOptions.map(opt => {
+                   const num = formatDrawingSetNumber(opt);
+                   const remaining = opt.total - opt.linkedCount;
+                   return (
+                     <div
+                       key={opt.key}
+                       onMouseDown={() => addSet(opt)}
+                       style={{ padding: "8px 10px", borderBottom: "1px solid var(--divider)", cursor: "pointer", fontSize: 11, color: "var(--text-secondary)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
+                       onMouseEnter={e => e.currentTarget.style.background = "rgb(18,25,38)"}
+                       onMouseLeave={e => e.currentTarget.style.background = "rgb(12,17,25)"}
+                     >
+                       <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                         {num !== "TBD" ? <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)", marginRight: 6 }}>{num}</span> : null}
+                         {opt.set_name}
+                       </span>
+                       <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                         {opt.linkedCount > 0 ? `+${remaining} of ${opt.total}` : `${opt.total} sheet${opt.total === 1 ? "" : "s"}`} · {opt.approvedCount}/{opt.total} appr
+                       </span>
+                     </div>
+                   );
+                 })}
                </div>
              )}
           </div>
 
-          {/* Drawing chips */}
-          {linkedDrawingIds.length > 0 && (
+          {/* Linked drawing-set chips — remove drops the whole set's sheets */}
+          {linkedSetGroups.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-              {linkedDrawingIds.map(id => {
-                const dwg = allDrawings.find(d => d.id === id);
+              {linkedSetGroups.map(g => {
+                const partial = g.total > 0 && g.ids.length < g.total;
                 return (
-                  <div key={id} style={{ background: "var(--info-muted)", border: "1px solid var(--info-border)", borderRadius: 6, padding: "4px 8px", display: "flex", alignItems: "center", gap: 6, fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: "var(--status-info)" }}>
-                    <span>[{dwg?.sheet_number || id}] {dwg?.title || ""}</span>
-                    {dwg?.stage && <span style={{ fontSize: 8, color: "var(--text-muted)", borderLeft: "1px solid var(--divider)", paddingLeft: 5 }}>{dwg.stage}</span>}
-                    <button onClick={() => removeDrawing(id)} style={{ background: "none", border: "none", color: "var(--status-info)", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
+                  <div key={g.key} style={{ background: "var(--info-muted)", border: "1px solid var(--info-border)", borderRadius: 6, padding: "4px 8px", display: "flex", alignItems: "center", gap: 6, fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: "var(--status-info)" }}>
+                    <span>{g.set_name}</span>
+                    <span style={{ fontSize: 8, color: partial ? "var(--status-warning)" : "var(--text-muted)", borderLeft: "1px solid var(--divider)", paddingLeft: 5 }}>
+                      {partial ? `${g.ids.length} of ${g.total} sheets` : `${g.ids.length} sheet${g.ids.length === 1 ? "" : "s"}`}
+                    </span>
+                    <button onClick={() => removeSet(g)} style={{ background: "none", border: "none", color: "var(--status-info)", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
                   </div>
                 );
               })}
