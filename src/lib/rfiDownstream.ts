@@ -78,7 +78,7 @@ export function recommendedDownstreamActions(
   if (rfi.work_package_id) {
     actions.push({
       key: "open_wp",
-      label: "Open work package",
+      label: "Open work packages",
       hint: m.fab_hold ? "Was on fab hold" : "Linked work package",
     });
   }
@@ -95,7 +95,7 @@ export function recommendedDownstreamActions(
   // Constraint — capture any residual blocker the answer introduced.
   actions.push({
     key: "add_constraint",
-    label: "Log constraint",
+    label: "Open constraints",
     hint: "Track a remaining blocker",
   });
 

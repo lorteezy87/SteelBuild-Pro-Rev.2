@@ -620,11 +620,17 @@ export default function RFIs() {
             notifyFieldMut.mutate(r);
             return;
           }
+          // Create CO + the drawing jump land WITH context (ChangeOrders reads
+          // ?fromRfi to prefill the CO form; Drawings filters by ?sheet). WP +
+          // Constraints don't consume a param yet, so navigate to the module
+          // honestly rather than tack on a dangling, unread ?fromRfi.
           const dest = {
             create_co: `/ChangeOrders?fromRfi=${r.id}`,
-            update_drawing: `/Drawings?fromRfi=${r.id}`,
-            open_wp: `/WorkPackages?fromRfi=${r.id}`,
-            add_constraint: `/Constraints?fromRfi=${r.id}`,
+            update_drawing: r.drawing_reference
+              ? `/Drawings?sheet=${encodeURIComponent(r.drawing_reference)}`
+              : "/Drawings",
+            open_wp: "/WorkPackages",
+            add_constraint: "/Constraints",
           }[key];
           if (dest) navigate(dest);
         }}
