@@ -47,6 +47,16 @@ export default function SubmittalForecastCard({ forecast }) {
   if (!forecast || !forecast.forecastable) return null;
   const cfg = RISK_CFG[forecast.risk] || RISK_CFG.low;
   const daysOut = typeof forecast.daysOut === "number" ? forecast.daysOut : null;
+  // When the estimate rests on too little history (lowConfidence), mark the dates
+  // approximate + mute the accent — a confident-looking ETA off 1–2 reviews is
+  // worse than an honest "rough estimate".
+  const approx = !!forecast.lowConfidence;
+  const showDate = (d) => {
+    const s = formatDate(d);
+    if (!s) return "—";
+    return approx ? `~${s}` : s;
+  };
+  const dateAccent = approx ? "var(--text-secondary)" : cfg.color;
 
   return (
     <div style={{
@@ -81,22 +91,38 @@ export default function SubmittalForecastCard({ forecast }) {
 
       {/* Forecast metrics */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-        <Metric label="Expected back" value={formatDate(forecast.expectedReturn) || "—"} accent={cfg.color} />
-        <Metric label="Worst case" value={formatDate(forecast.worstCaseReturn) || "—"} />
+        <Metric label="Expected back" value={showDate(forecast.expectedReturn)} accent={dateAccent} />
+        <Metric label="Worst case" value={showDate(forecast.worstCaseReturn)} />
         <Metric label="Required" value={forecast.required ? formatDate(forecast.required) : "—"} />
       </div>
 
-      {/* Basis + fab-impact note */}
-      <div style={{
-        marginTop: 10,
-        fontFamily: "var(--font-mono)",
-        fontSize: 8.5,
-        color: "var(--text-muted)",
-        letterSpacing: "0.03em",
-        lineHeight: 1.5,
-      }}>
-        Est. cycle {forecast.cycleP50}d (p75 {forecast.cycleP75}d) · based on {forecast.basis}
-      </div>
+      {/* Basis + confidence note — honest about thin history instead of
+          presenting a 1–2-sample guess as an authoritative ETA. */}
+      {approx ? (
+        <div style={{
+          marginTop: 10,
+          fontFamily: "var(--font-mono)",
+          fontSize: 8.5,
+          color: "var(--status-warning)",
+          letterSpacing: "0.03em",
+          lineHeight: 1.5,
+        }}>
+          {forecast.basisCount > 0
+            ? `⚠ Rough estimate — only ${forecast.basisCount} past review${forecast.basisCount === 1 ? "" : "s"} of history. Treat these dates as approximate.`
+            : `⚠ No review history yet — these dates use a default ${forecast.cycleP50}-day cycle and are a rough placeholder.`}
+        </div>
+      ) : (
+        <div style={{
+          marginTop: 10,
+          fontFamily: "var(--font-mono)",
+          fontSize: 8.5,
+          color: "var(--text-muted)",
+          letterSpacing: "0.03em",
+          lineHeight: 1.5,
+        }}>
+          Est. cycle {forecast.cycleP50}d (p75 {forecast.cycleP75}d) · based on {forecast.basis}
+        </div>
+      )}
       {forecast.fabImpact && (
         <div style={{
           marginTop: 6,

@@ -148,6 +148,34 @@ describe("submittalForecast — forecastSubmittal", () => {
     expect(f.basis).toContain("default");
     expect(f.risk).toBe("high");
     expect(f.fabImpact).toBe(true);
+    expect(f.basisCount).toBe(0);
+    expect(f.lowConfidence).toBe(true); // no history → rough placeholder, not an authoritative ETA
+  });
+
+  it("lowConfidence is FALSE once the bucket has enough history (≥ MIN_BUCKET_SAMPLES)", () => {
+    const f = forecastSubmittal({
+      submittal: { id: "s", status: "Submitted", submitted_date: "2026-03-01", discipline: "Structural" },
+      stats, // 6 structural samples
+      today: "2026-03-05",
+    });
+    expect(f.basisCount).toBe(6);
+    expect(f.lowConfidence).toBe(false);
+  });
+
+  it("lowConfidence is TRUE on a thin overall bucket (1–2 samples, no matching reviewer/discipline)", () => {
+    const thin = computeCycleStats({
+      submittals: [
+        { id: "a", submitted_date: "2026-01-01", returned_date: "2026-01-09" },
+        { id: "b", submitted_date: "2026-01-01", returned_date: "2026-01-13" },
+      ],
+    });
+    const f = forecastSubmittal({
+      submittal: { id: "s", status: "Submitted", submitted_date: "2026-03-01", discipline: "Electrical" },
+      stats: thin,
+      today: "2026-03-05",
+    });
+    expect(f.basisCount).toBe(2); // falls back to the 2-sample overall bucket
+    expect(f.lowConfidence).toBe(true);
   });
 });
 
