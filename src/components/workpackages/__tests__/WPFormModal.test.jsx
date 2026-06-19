@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
@@ -41,5 +41,36 @@ describe("WPFormModal — new WP drawing assignment", () => {
     const projectSelect = container.querySelector("select");
     expect(projectSelect.value).toBe("");
     expect(screen.getByText(/Select a project to see available drawings/i)).toBeInTheDocument();
+  });
+});
+
+// Two sets: "Main Steel - IFC" (2 sheets) and "Anchor Bolts - OFA" (1 sheet).
+const setDrawings = [
+  { id: "d1", project_id: "proj-1", sheet_number: "S-201", title: "Framing Plan", stage: "IFC", drawing_set_name: "Main Steel - IFC" },
+  { id: "d2", project_id: "proj-1", sheet_number: "S-202", title: "Roof Framing", stage: "IFC", drawing_set_name: "Main Steel - IFC" },
+  { id: "d3", project_id: "proj-1", sheet_number: "A-101", title: "Anchor Layout", stage: "OFA", drawing_set_name: "Anchor Bolts - OFA" },
+];
+
+describe("WPFormModal — set-based drawing assignment (§21)", () => {
+  it("groups linked sheets into a single drawing-set chip (not per-sheet)", () => {
+    const wp = { id: "wp-1", project_id: "proj-1", name: "WP A", linked_drawing_ids: "d1,d2" };
+    renderModal({ allDrawings: setDrawings, defaultProjectId: "proj-1", wp });
+    // One chip for the SET, labelled by set name + sheet count…
+    expect(screen.getByText("Main Steel - IFC")).toBeInTheDocument();
+    expect(screen.getByText(/2 sheets/i)).toBeInTheDocument();
+    // …and NOT individual per-sheet chips like the old "[S-201]" picker.
+    expect(screen.queryByText(/\[S-201\]/)).toBeNull();
+    expect(screen.queryByText(/\[S-202\]/)).toBeNull();
+  });
+
+  it("offers drawing SETS in the picker, not individual sheets", () => {
+    renderModal({ allDrawings: setDrawings, defaultProjectId: "proj-1" });
+    const search = screen.getByPlaceholderText(/search drawing sets by name/i);
+    fireEvent.focus(search);
+    // Both unlinked sets are offered…
+    expect(screen.getByText("Anchor Bolts - OFA")).toBeInTheDocument();
+    expect(screen.getByText("Main Steel - IFC")).toBeInTheDocument();
+    // …as sets (sheet-count summary), not raw sheet-number rows.
+    expect(screen.queryByText(/\[A-101\]/)).toBeNull();
   });
 });
