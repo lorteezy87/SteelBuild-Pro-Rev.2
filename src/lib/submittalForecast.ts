@@ -205,6 +205,9 @@ export interface SubmittalForecast {
   /** Human label for what the estimate is based on. */
   basis?: string;
   basisCount?: number;
+  /** True when the estimate rests on too little history (basisCount < MIN_BUCKET_SAMPLES):
+   *  the dates are a rough guess, not an authoritative ETA — the UI should say so. */
+  lowConfidence?: boolean;
   required?: string | null;
   risk?: ForecastRisk;
   label?: string;
@@ -299,6 +302,8 @@ export function forecastSubmittal(args: {
     : [];
   const fabImpact = risk !== "low" && linkedSets.length > 0;
 
+  const basisCount = picked ? picked.bucket.count : 0;
+
   return {
     forecastable: true,
     sentDate,
@@ -308,7 +313,8 @@ export function forecastSubmittal(args: {
     cycleP50: p50,
     cycleP75: p75,
     basis,
-    basisCount: picked ? picked.bucket.count : 0,
+    basisCount,
+    lowConfidence: basisCount < MIN_BUCKET_SAMPLES,
     required,
     risk,
     label,
