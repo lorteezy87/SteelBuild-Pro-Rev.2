@@ -6,7 +6,7 @@
 // are byte-identical to the originals (with defensive `|| []` guards added).
 import { summarizeProjectSchedule } from "./portfolioTimeline";
 import { statusIn, parseUTCDate, isOverdue, daysOverdue } from "../shared/formatters";
-import { computeWeightedHealth, HEALTH_ORDER } from "./portfolioHealth";
+import { computeWeightedHealth, HEALTH_ORDER, psrHealthProvenance } from "./portfolioHealth";
 
 /**
  * Split every change order into trust buckets: approved (committed), pending
@@ -462,15 +462,25 @@ export function computePortfolioKPIs(projects, allRFIs, allCOs, allCodes, allWPs
   };
 }
 
-/** Layer weighted-health scoring onto each project metric (auto vs manual health, worst wins). */
+/** Layer weighted-health scoring onto each project metric. Auto (live) vs manual
+ * (`health_status`) health, worst wins — EXCEPT a STALE PSR-snapshot manual verdict
+ * (driftRisk) is ignored so live data wins, instead of a weeks-old import keeping a
+ * closed-out job stuck at "At Risk". Carries the PSR provenance through (psrProvenance)
+ * so the portfolio can still flag the stale import. */
 export function enrichProjectMetrics(projectMetrics) {
   return (projectMetrics || []).map((p) => {
     const weighted = computeWeightedHealth(p);
+    const prov = psrHealthProvenance(p);
     const manual = p.health_status || "On Track";
     const SEVERITY = { "At Risk": 0, "Watch": 1, "On Track": 2 };
     const autoSev = SEVERITY[weighted.label] ?? 2;
     const manualSev = SEVERITY[manual] ?? 2;
-    const effectiveHealth = autoSev <= manualSev ? weighted.label : manual;
+    // A stale snapshot verdict doesn't get to drag health down: when the manual
+    // health is a stale snapshot still on the column (driftRisk), trust the live
+    // auto-health. Otherwise keep the conservative worst-of.
+    const effectiveHealth = prov.driftRisk
+      ? weighted.label
+      : (autoSev <= manualSev ? weighted.label : manual);
     return {
       ...p,
       healthScore: weighted.score,
@@ -478,6 +488,7 @@ export function enrichProjectMetrics(projectMetrics) {
       healthReasons: weighted.reasons,
       autoHealth: weighted.label,
       effectiveHealth,
+      psrProvenance: prov,
     };
   });
 }
