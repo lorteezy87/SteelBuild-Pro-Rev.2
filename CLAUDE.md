@@ -305,9 +305,9 @@ Important branches:
 - Claude Code feature branches: `claude/<short-slug>`
 - Codex feature branches, if used: `codex/<short-slug>`
 
-Vercel auto-deploys from `main`.
+**Production deploys are CI-gated (since 2026-06-19) — Vercel no longer auto-deploys from git.** A push to `main` triggers `.github/workflows/ci.yml`: the `ci` job (lint + typecheck + typecheck:js + `npm test` + production build) runs, and ONLY if it passes does the `deploy` job ship to Vercel via `vercel pull/build/deploy --prebuilt --prod` (using the `VERCEL_TOKEN`/`VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` repo secrets). Vercel's own git auto-deploy is OFF (`vercel.json` `git.deploymentEnabled.main=false`), so the Action is the sole production path. Consequences: a **red push CANNOT reach production** (it fails CI; the deploy job is skipped — prod stays on the last good build), and a green push deploys on its own ~5–8 min later. Watch a deploy with `gh run watch <id>` or `gh run list --branch main -R lorteezy87/SteelBuild-Pro-Rev.2`. Branch protection is unavailable (private repo on a free GitHub plan), and an in-repo `ignoreCommand` gate was tried and ERRORS the Vercel deploy — do NOT reintroduce it.
 
-A push to `main` is production-impacting. Do it only when the user has asked to deploy, ship, push to app, or publish.
+A push to `main` is production-impacting. Do it only when the user has asked to deploy, ship, push to app, or publish. Because CI re-runs lint/typecheck/test/build before the deploy, a push that's red there will simply not deploy — but still run the local validation ladder first (don't rely on CI to find what you could catch locally).
 
 ### Deploy From Main Checkout
 
