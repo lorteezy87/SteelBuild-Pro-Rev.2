@@ -6,8 +6,11 @@ RLS rejections, a wiring/async bug — the kind of failure only runtime shows).
 These specs sign in with a real session and assert the daily-driver registers
 (**drawings → submittals → RFIs**) actually render.
 
-They are **read-only** — they navigate and assert; they never create, edit, or
-delete project data.
+The **smoke** specs are **read-only** — they navigate and assert; they never
+create, edit, or delete project data. The **fab-release gate** spec
+(`fab-release-gate.spec.ts`) is the exception: it's mutation-aware (it inserts
+into the append-only `fab_release_log` audit trail to prove the server gate), so
+it MUST run against a dedicated **test org** only — see its section below.
 
 ## One-time setup (owner step)
 
@@ -34,6 +37,37 @@ accounts / handling passwords is out of scope for the agent). Do it once:
    The anon key is browser-public (it ships in the app bundle); it is not a
    secret. The **password** is — keep it in a secret store / CI secret, never in
    the repo.
+
+## Fab-release gate fixture (mutation-aware)
+
+`fab-release-gate.spec.ts` exercises the **server-arbitrated** fab-release gate
+(client → RLS → BEFORE-INSERT trigger) — the boundary the Vitest suite can't
+reach because it mocks supabase. It signs in via `fixtures/supabaseUser.ts`
+(API, no browser) and inserts into `public.fab_release_log`, asserting:
+
+- **BLOCKED** — an open RFI on a package sheet + no `override_reason` → the
+  trigger raises `FAB_RELEASE_BLOCKED`.
+- **OVERRIDE** — same package + an `override_reason` → inserts, and the *server*
+  snapshots the overridden RFIs into `blocking_rfi_numbers` (the client never
+  supplies them).
+- **CLEAN** — a package with no open RFIs → clean insert, empty blocking set.
+- **RLS** — a viewer-role user is rejected (insert needs **pm+** on the project).
+
+⚠️ It **writes** to `fab_release_log` (append-only — no update/delete policy, so
+no teardown). Run it against a **dedicated test org / project ONLY**, never live
+work.
+
+One-time fixture (in addition to `E2E_USER` / `E2E_PASS` / `E2E_SUPABASE_*`):
+
+| Var | What |
+|---|---|
+| `E2E_FAB_PROJECT_ID` | a project in the test org where the test user is **pm+** |
+| `E2E_BLOCKED_DRAWING_ID` | a drawing in that project whose sheet has an **OPEN** RFI |
+| `E2E_CLEAN_DRAWING_ID` | a drawing in that project with **no** open RFI |
+| `E2E_VIEWER_USER` / `E2E_VIEWER_PASS` | *(optional)* a viewer-role account; unset → the RLS-deny test skips |
+
+Each sub-test skips (doesn't fail) when its fixture vars are unset, so this spec
+is opt-in like the rest of the harness.
 
 ## Run locally
 
@@ -86,6 +120,7 @@ secrets are present):
 - **Routes assumed:** `/Drawings`, `/Submittals`, `/RFIs`. Confirm against
   `src/config/routes.js` if a register doesn't load.
 - **Fab release** is an action inside the submittal/drawing flow
-  (`ExportFabReleaseModal`), not a route — a deeper, mutation-aware spec that
-  exercises the gate is the natural next layer (run it against a **test org**
-  only, since it writes).
+  (`ExportFabReleaseModal`), not a route. The mutation-aware gate spec
+  (`fab-release-gate.spec.ts`, see "Fab-release gate fixture" above) now covers
+  the server boundary directly; a browser-driven path through
+  `ExportFabReleaseModal` is a further layer if wanted.
