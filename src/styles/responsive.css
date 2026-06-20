@@ -2,18 +2,21 @@
    RESPONSIVE — Density toggle, media queries, mobile overrides
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Compact density ── */
+/* ── Compact density ──
+   Of these vars only --density-row-height is consumed (row-based list pages:
+   Resources / Change Orders / RFIs). The dashboard KPI strip + section spacing
+   react to the `dashboard_density` USER PREFERENCE instead — driven by the same
+   topbar density toggle via auth.updateMe → useUserPrefs (see DensityToggle.jsx),
+   not to these vars or to CSS classes (the dashboard's KpiTile is inline-styled).
+   The former .kpi-card / .kpi-value / .sbp-table / .sbp-panel-header compact rules
+   were removed: those class names have zero component usages (the app renders the
+   sbd-* design-system classes). */
 [data-density="compact"] {
   --density-padding: 8px;
   --density-gap: 8px;
   --density-row-height: 36px;
   --density-font-scale: 0.9;
 }
-[data-density="compact"] .kpi-card { padding: 12px 14px; }
-[data-density="compact"] .kpi-value { font-size: 28px; }
-[data-density="compact"] .sbp-table tbody td { padding: 6px 12px; font-size: 12px; }
-[data-density="compact"] .sbp-table thead th { padding: 6px 12px; font-size: 8px; }
-[data-density="compact"] .sbp-panel-header { padding: 8px 14px; }
 
 /* ── Tablet (<=1024px) ── */
 @media (max-width: 1024px) {
