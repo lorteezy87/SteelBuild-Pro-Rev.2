@@ -229,22 +229,37 @@ export default function DataExchange() {
       if (!importApproved) throw new Error("Review and approve the import before committing records.");
 
       let skippedDuplicates = 0;
-      const existingRfiNumbers = targetKey === "rfis"
-        ? new Set(records.map((record) => rfiNumberDedupKey(record.rfi_number)).filter(Boolean))
+      // Skip rows that already exist (or repeat within the paste) by the
+      // target's natural key, so a re-import doesn't 409 on the unique index.
+      // RFIs key on the normalized rfi_number; submittals on submittal_number
+      // (the (project_id, submittal_number) unique index). Other targets have
+      // no natural key here and aren't deduped.
+      const dedupField =
+        targetKey === "rfis" ? "rfi_number"
+          : targetKey === "submittals" ? "submittal_number"
+            : null;
+      const dedupKey = (value) =>
+        targetKey === "rfis"
+          ? rfiNumberDedupKey(value)
+          : value == null ? "" : String(value).trim().toLowerCase();
+      const existingKeys = dedupField
+        ? new Set(records.map((record) => dedupKey(record[dedupField])).filter(Boolean))
         : null;
-      const stagedRfiNumbers = new Set();
+      const stagedKeys = new Set();
 
       const recordsToCreate = stagedImport.validRecords.flatMap((record) => {
         const nextRecord = targetKey === "rfis" && record.rfi_number
           ? { ...record, rfi_number: normalizeRfiNumber(record.rfi_number) }
           : record;
-        const rfiKey = targetKey === "rfis" ? rfiNumberDedupKey(nextRecord.rfi_number) : null;
-        if (rfiKey) {
-          if (existingRfiNumbers.has(rfiKey) || stagedRfiNumbers.has(rfiKey)) {
-            skippedDuplicates += 1;
-            return [];
+        if (dedupField) {
+          const key = dedupKey(nextRecord[dedupField]);
+          if (key) {
+            if (existingKeys.has(key) || stagedKeys.has(key)) {
+              skippedDuplicates += 1;
+              return [];
+            }
+            stagedKeys.add(key);
           }
-          stagedRfiNumbers.add(rfiKey);
         }
         const metadata = { ...(record.metadata || {}) };
         delete metadata.onboarding_import;
