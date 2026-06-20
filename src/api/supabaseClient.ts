@@ -1228,7 +1228,7 @@ export const integrations = {
               `Tool-use extraction will not work until you redeploy the edge function: ` +
               `\`supabase functions deploy llm-proxy\``;
             console.warn('[llm-proxy]', firstFailure);
-            // fall through to direct API — it might have tools support
+            // surface the stale-deploy error below — there is no client-side fallback
           } else {
             return data as InvokeLLMResult;
           }
@@ -1242,81 +1242,7 @@ export const integrations = {
         console.warn('[llm-proxy]', firstFailure);
       }
 
-      // ── 2. Direct browser LLM fallback is disabled ─
-      // This dead branch is kept only as a temporary rollback marker; the
-      // browser must never read or send provider API keys directly.
-      const directBrowserFallbackEnabled = false;
-      if (directBrowserFallbackEnabled) {
-        try {
-          const body: Record<string, unknown> = {
-            model: model || 'claude-sonnet-4-5',
-            max_tokens: Number(maxTokens) || 1000,
-            messages: messages || [{ role: 'user', content: prompt || '' }],
-          };
-          if (system) body.system = system;
-          if (typeof temperature === 'number' && Number.isFinite(temperature)) {
-            body.temperature = temperature;
-          }
-          if (Array.isArray(tools) && tools.length > 0) {
-            body.tools = tools;
-            // Mirror edge-function behaviour: force the first tool when the
-            // caller didn't specify a tool_choice. Most of our tool-use callers
-            // want structured output, not a chat response.
-            if (tool_choice) {
-              body.tool_choice = tool_choice;
-            } else if (tools[0]?.name) {
-              body.tool_choice = { type: 'tool', name: tools[0].name };
-            }
-          }
-
-          const resp = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify(body),
-          });
-          if (resp.ok) {
-            const result = await resp.json() as { content?: unknown };
-            // Walk the content blocks for the first text and first tool_use,
-            // matching the edge function's response normalization.
-            let firstText = '';
-            let firstToolUse: { name: string; input: unknown } | null = null;
-            if (Array.isArray(result?.content)) {
-              for (const block of result.content as Array<{ type?: string; text?: string; name?: string; input?: unknown }>) {
-                if (!block || typeof block !== 'object') continue;
-                if (block.type === 'tool_use' && !firstToolUse) {
-                  firstToolUse = { name: block.name as string, input: block.input };
-                } else if (block.type === 'text' && !firstText && typeof block.text === 'string') {
-                  firstText = block.text;
-                }
-              }
-            } else if (typeof result?.content === 'string') {
-              firstText = result.content;
-            }
-            const textOut = firstToolUse ? JSON.stringify(firstToolUse.input) : firstText;
-            return {
-              text: textOut,
-              content: textOut,
-              tool_use: firstToolUse,
-              raw: result,
-              protocol_version: EXPECTED_PROTOCOL_VERSION,
-            };
-          }
-          const errText = await resp.text();
-          const directDetail = `Anthropic API ${resp.status}: ${errText}`;
-          console.error('[llm-direct]', directDetail);
-          if (!firstFailure) firstFailure = directDetail;
-        } catch (directErr: unknown) {
-          const msg = (directErr as { message?: string } | undefined)?.message ?? String(directErr);
-          const directDetail = `direct Anthropic call threw: ${msg}`;
-          console.error('[llm-direct]', directDetail);
-          if (!firstFailure) firstFailure = directDetail;
-        }
-      }
-
-      // ── 3. No LLM available — surface the REAL reason ─────────────────────
+      // ── 2. No LLM available — surface the REAL reason ─────────────────────
       // We deliberately do NOT default to a generic "AI unavailable" string
       // when we know what actually went wrong. The first real failure (proxy
       // error, schema problem, stale deployment) is far more actionable than
