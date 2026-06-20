@@ -40,6 +40,36 @@ export function buildRfiPrefillFromDelta(delta, { sheetNumber } = {}) {
 }
 
 /**
+ * Build a create-mode RFIFormModal `prefill` from a deterministic Revision
+ * Summary (no AI delta needed). Backs the "Create RFI" action on the
+ * RevisionSummaryCard's "likely RFI" section. Pure.
+ */
+export function buildRfiPrefillFromSummary(summary) {
+  const s = summary || {};
+  const setName = s.setName || "drawing set";
+  const sheets = (s.likelyRfi?.sheets || []).filter(Boolean);
+  const reason = s.likelyRfi?.reason || "A revision introduced high-risk changes.";
+  const highRiskLines = (s.highRisk || [])
+    .map((h) => `• ${h?.sheetNumber || "sheet"}: ${h?.reason || ""}`)
+    .join("\n");
+  const parts = [
+    `A revision of "${setName}" changed ${s.sheetsChanged || 0} sheet(s).`,
+    reason,
+    highRiskLines ? `High-risk changes:\n${highRiskLines}` : null,
+    // impact.note is carried by the `description` field below — don't repeat it here.
+    "Please confirm the intended condition before fabrication proceeds.",
+  ].filter(Boolean);
+  const priority = s.impact?.level === "high" || (s.highRiskCount || 0) > 0 ? "High" : "Medium";
+  return {
+    title: `[Rev] ${setName} — revision review`.slice(0, 200),
+    question: parts.join("\n\n"),
+    description: s.impact?.note || "",
+    drawing_reference: sheets.join(", "),
+    priority,
+  };
+}
+
+/**
  * Create the RFI from the (reviewed) form payload and link it back to the
  * delta. Returns the created RFI row. A link write-back failure is logged but
  * does not fail the create — the RFI still exists.

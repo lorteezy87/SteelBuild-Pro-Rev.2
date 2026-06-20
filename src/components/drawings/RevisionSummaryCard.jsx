@@ -13,7 +13,7 @@ import { AlertTriangle, Boxes, FileWarning, Layers, Sparkles } from "lucide-reac
 const mono = "var(--font-mono)";
 const IMPACT_COLOR = { none: "var(--text-muted)", low: "#3FB950", medium: "#D29922", high: "#F85149" };
 
-export default function RevisionSummaryCard({ summary, onClose, onRunDeepDive }) {
+export default function RevisionSummaryCard({ summary, onClose, onRunDeepDive, onCreateRfi }) {
   if (!summary) return null;
   const impactColor = IMPACT_COLOR[summary.impact?.level] || "var(--text-muted)";
   const empty = (summary.sheetsChanged || 0) === 0;
@@ -58,6 +58,13 @@ export default function RevisionSummaryCard({ summary, onClose, onRunDeepDive })
                 <div style={{ fontSize: 12, color: "var(--text-secondary, var(--text-muted))", lineHeight: 1.5 }}>
                   {summary.likelyRfi.reason} — {summary.likelyRfi.sheets.join(", ")}
                 </div>
+                {onCreateRfi && (
+                  <div style={{ marginTop: 4 }}>
+                    <button type="button" className="sbd-btn sbd-btn-ghost" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => onCreateRfi(summary)}>
+                      <FileWarning size={12} style={{ marginRight: 5 }} /> Create RFI
+                    </button>
+                  </div>
+                )}
               </Section>
             )}
 
