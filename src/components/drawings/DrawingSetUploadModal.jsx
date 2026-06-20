@@ -13,6 +13,8 @@ import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawing
 import { STAGE_ORDER as CANONICAL_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import { withDrawingSetNumberMetadata } from "@/lib/drawingSetOrdering";
 import { isPdfFile, normalizeRevisionNumber, withTimeout, newUploadBatchId } from "@/lib/drawingUploadUtils";
+import { sheetReviewFlags } from "@/components/drawings/intakeReview";
+import { logActivity } from "@/services/auditLogger";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 // Canonical 7-stage flow (Not Started → IFA → OFA → BFA → OFS → IFC → Released)
@@ -405,6 +407,17 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
   // edit inline, so blocking the Create button here would dead-end them.
   const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge || r.extractFailed);
 
+  // Per-sheet review signal (intakeReview) — the honest "confidence" surface:
+  // the extractor returns no model confidence, so we flag sheets with a concrete
+  // quality problem (bad-source row, fallback, or missing sheet #) for a closer
+  // look before commit. Same fn the persisted ai_extraction_status uses, so the
+  // badge and the saved status never disagree.
+  const fileResultsByName = new Map(fileResults.map(r => [r.fileName, r]));
+  const reviewCount = sheets.reduce(
+    (n, s) => n + (sheetReviewFlags(s, fileResultsByName.get(s.sourceFile)).needsReview ? 1 : 0),
+    0,
+  );
+
   const aiBadge = (filled) => filled ? (
     <span title="Auto-filled by AI — edit if wrong" style={{
       fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.1em",
@@ -542,6 +555,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
         )}
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
           {sheets.length} sheets · <span style={{ color: "var(--status-warning)" }}>{selectedCount} selected</span>
+          {reviewCount > 0 && <> · <span style={{ color: "#D97706" }}>{reviewCount} to review</span></>}
         </span>
       </div>
 
@@ -559,7 +573,9 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
             </tr>
           </thead>
           <tbody>
-            {filtered.map((s, i) => (
+            {filtered.map((s, i) => {
+              const review = sheetReviewFlags(s, fileResultsByName.get(s.sourceFile));
+              return (
               <tr key={i} style={{ borderBottom: "1px solid var(--divider)", background: s.selected ? "var(--warning-muted)" : "transparent" }}>
                 <td style={{ padding: "6px 10px", textAlign: "center" }}>
                   <input type="checkbox" checked={!!s.selected} onChange={() => toggleOne(i)} style={{ accentColor: "var(--accent)", cursor: "pointer" }} />
@@ -573,6 +589,12 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
                     {s.sheetNumber && existingDrawings.some(d => d.sheet_number === s.sheetNumber) && (
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#D97706", background: "rgba(217,119,6,0.10)", border: "1px solid rgba(217,119,6,0.25)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
                         ⚠ EXISTS IN PROJECT
+                      </span>
+                    )}
+                    {review.needsReview && (
+                      <span title={`Needs review: ${review.reasons.join(", ")}`}
+                        style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#D97706", background: "rgba(217,119,6,0.10)", border: "1px solid rgba(217,119,6,0.25)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
+                        ⚠ REVIEW
                       </span>
                     )}
                   </div>
@@ -601,7 +623,8 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
                   </td>
                 )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
         {filtered.length === 0 && (
@@ -1088,11 +1111,10 @@ export default function DrawingSetUploadModal({
       const now = new Date().toISOString();
       const buildRecord = (sheet) => {
         const sourceResult = fileResults.find(r => r.fileName === sheet.sourceFile);
-        const needsReview =
-          sourceResult?.extractFailed ||
-          sourceResult?.scanned ||
-          sourceResult?.tooLarge ||
-          !!sheet._note;
+        // Same signal the review screen shows (intakeReview.sheetReviewFlags) so
+        // the persisted ai_extraction_status never disagrees with the badge — now
+        // also catches an empty sheet number, not just bad-source rows.
+        const needsReview = sheetReviewFlags(sheet, sourceResult).needsReview;
         // Validate pdf_page — must be a positive integer. Anything else
         // falls back to 1 with a warning so the user can hand-fix via
         // SheetFormModal. The extractor's assignPdfPages() should have
@@ -1232,6 +1254,27 @@ export default function DrawingSetUploadModal({
 
       if (cancelledRef.current) return;
       setCreatedCount(createdRows);
+
+      // Audit the AI-intake commit on the LIVE create path (importAnalyzedDrawings
+      // is dead code; this modal is the real intake). Fire-and-forget — logActivity
+      // swallows its own errors and never blocks the upload.
+      if (createdRows > 0) {
+        const needsReviewCount = sanitizedRecords.filter((r) => r.ai_extraction_status === "NeedsReview").length;
+        void logActivity(
+          "drawing",
+          "created",
+          { id: parentSetId, project_id: activeProject?.id, name: resolvedSetName },
+          {
+            projectId: activeProject?.id,
+            projectName: activeProject?.name,
+            description:
+              `Imported ${createdRows} sheet${createdRows === 1 ? "" : "s"} into "${resolvedSetName}" from AI intake` +
+              `${needsReviewCount ? ` (${needsReviewCount} flagged for review)` : ""}` +
+              `${failedRows ? ` — ${failedRows} failed to save` : ""}`,
+          },
+        );
+      }
+
       if (failedRows > 0) {
         setProcessError(`${failedRows} sheet(s) failed to save. ${createdRows} created successfully.`);
       }
