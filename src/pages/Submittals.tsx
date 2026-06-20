@@ -588,31 +588,24 @@ export default function Submittals() {
             onStatusChange={(status) => {
               if (!selected || status === selected.status) return;
               const today = localToday();
-              // A reviewer VERDICT (or release) is a review-round event — log it
-              // through the audited round path so the round history + cycle data
-              // fill from the status-flip workflow the team actually uses, not
-              // just the verb CTA (the round log sat empty because inline status
-              // changes bypassed it). §20: submittals.status stays the source of
-              // truth; this only stops the round log from drifting empty.
+              // Funnel real workflow moves through the audited round path so the
+              // round log stays the submit→return CYCLE truth (§20): a SEND opens
+              // (or advances) the open cycle, a VERDICT closes it — addSubmittalRound
+              // updates the open round in place or opens the next cycle. Draft/Void
+              // are plain status edits (no round). The round log sat empty because
+              // inline status changes used to bypass this entirely.
               const isVerdict = [
                 "Approved", "Approved as Noted", "Revise and Resubmit",
                 "Rejected", "Released for Fabrication",
               ].includes(status);
-              if (isVerdict) {
+              const isSent = status === "Submitted" || status === "Under Review";
+              if (isVerdict || isSent) {
                 advanceMut.mutate({
                   submittal: selected as any,
                   status,
                   ball_in_court: selected.ball_in_court ?? null,
-                  submitted_date: selected.submitted_date ?? undefined,
-                  returned_date: today,
-                });
-              } else if (status === "Submitted" || status === "Under Review") {
-                // Sent out for review — stamp the cycle's submitted date if
-                // missing so the eventual verdict-round has a start for cycle time.
-                updateMut.mutate({
-                  id: selected.id,
-                  status,
-                  ...(selected.submitted_date ? {} : { submitted_date: today }),
+                  submitted_date: isSent ? today : (selected.submitted_date ?? undefined),
+                  returned_date: isVerdict ? today : undefined,
                 });
               } else {
                 updateMut.mutate({ id: selected.id, status });

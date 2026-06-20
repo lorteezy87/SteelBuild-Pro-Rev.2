@@ -16,11 +16,20 @@ vi.mock("@/lib/drawingHub", () => ({
 }));
 
 const createRound = vi.fn(async (row: any) => ({ id: "round-1", ...row }));
+const updateRound = vi.fn(async (id: string, patch: any) => ({ id, ...patch }));
+// The latest round for the submittal (round model = submit→return cycle).
+// Default [] = no prior round; tests inject an open/closed round per case.
+const filterRound = vi.fn(async (..._a: any[]) => [] as any[]);
 const updateSubmittal = vi.fn(async (id: string, patch: any) => ({ id, drawing_set_ids: ["set-a"], ...patch }));
 const deleteRound = vi.fn(async (_id: string) => ({}));
 vi.mock("@/api/supabaseClient", () => ({
   entities: {
-    SubmittalRound: { create: (...a: any[]) => createRound(a[0]), delete: (...a: any[]) => deleteRound(a[0]) },
+    SubmittalRound: {
+      create: (...a: any[]) => createRound(a[0]),
+      update: (...a: any[]) => updateRound(a[0], a[1]),
+      filter: (...a: any[]) => filterRound(...a),
+      delete: (...a: any[]) => deleteRound(a[0]),
+    },
     Submittal: { update: (...a: any[]) => updateSubmittal(a[0], a[1]) },
   },
 }));
@@ -34,6 +43,7 @@ import { FabReleaseBlockedError } from "@/lib/fabRelease/releaseStatus";
 import {
   lockLinkedSetsIfApproved,
   addSubmittalRound,
+  planRoundWrite,
   TERMINAL_APPROVED_STATUSES,
 } from "../useSubmittals";
 
@@ -185,45 +195,100 @@ describe("lockLinkedSetsIfApproved", () => {
   });
 });
 
-describe("addSubmittalRound (single audited write path)", () => {
+describe("planRoundWrite (round = one submit→return cycle)", () => {
+  const open = { id: "r1", round_number: 1, submitted_date: "2026-06-01", returned_date: null };
+  const closed = { id: "r1", round_number: 1, submitted_date: "2026-06-01", returned_date: "2026-06-05" };
+
+  it("opens cycle 1 on the first send (no prior round)", () => {
+    expect(planRoundWrite(null, "Submitted")).toMatchObject({ action: "insert", roundNumber: 1, setSubmitted: true, setReturned: false });
+  });
+  it("advances the OPEN cycle in place on a sent→sent move (no new row)", () => {
+    expect(planRoundWrite(open, "Under Review")).toMatchObject({ action: "update", roundId: "r1", roundNumber: 1, setReturned: false });
+  });
+  it("closes the OPEN cycle on a verdict (update, stamps returned)", () => {
+    expect(planRoundWrite(open, "Approved")).toMatchObject({ action: "update", roundId: "r1", roundNumber: 1, setReturned: true });
+  });
+  it("opens the NEXT cycle on a resubmit (send on a CLOSED round)", () => {
+    expect(planRoundWrite(closed, "Submitted")).toMatchObject({ action: "insert", roundNumber: 2, setSubmitted: true });
+  });
+  it("opens-and-closes a cycle on a verdict with no open round (defensive)", () => {
+    expect(planRoundWrite(closed, "Rejected")).toMatchObject({ action: "insert", roundNumber: 2, setSubmitted: true, setReturned: true });
+  });
+});
+
+describe("addSubmittalRound (round = one submit→return cycle)", () => {
   beforeEach(() => {
     mockLockSet.mockClear();
     createRound.mockClear();
+    updateRound.mockClear();
+    filterRound.mockClear();
     updateSubmittal.mockClear();
   });
 
-  it("inserts a round (event seq = total_rounds+1), patches the submittal, and locks on terminal approval", async () => {
+  it("opens cycle 1 on a first send and does NOT lock (non-terminal)", async () => {
     await addSubmittalRound({
-      submittal: { id: "sub-1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1, round_number: 1 },
-      status: "Approved",
-      ball_in_court: "GC",
-      returned_date: "2026-06-01",
-    });
-    expect(createRound).toHaveBeenCalledWith(
-      expect.objectContaining({ submittal_id: "sub-1", project_id: "p1", round_number: 2, status: "Approved", drawing_set_ids: ["set-a"] }),
-    );
-    expect(updateSubmittal).toHaveBeenCalledWith(
-      "sub-1",
-      expect.objectContaining({ status: "Approved", ball_in_court: "GC", total_rounds: 2, current_round_id: "round-1" }),
-    );
-    // Approved is terminal-approved → lock fires for the linked set.
-    expect(mockLockSet).toHaveBeenCalled();
-  });
-
-  it("does NOT lock for a non-terminal status (Submitted)", async () => {
-    await addSubmittalRound({
-      submittal: { id: "s2", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0 },
+      submittal: { id: "s2", project_id: "p1", drawing_set_ids: ["set-a"] },
       status: "Submitted",
       ball_in_court: "EOR",
       submitted_date: "2026-06-01",
     });
-    expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 1, status: "Submitted" }));
+    expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 1, status: "Submitted", submitted_date: "2026-06-01" }));
+    expect(updateSubmittal).toHaveBeenCalledWith("s2", expect.objectContaining({ status: "Submitted", total_rounds: 1, current_round_id: "round-1" }));
     expect(mockLockSet).not.toHaveBeenCalled();
+  });
+
+  it("advances the OPEN round in place on a sent→sent move (updates, no new row)", async () => {
+    filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Submitted", submitted_date: "2026-06-01", returned_date: null }]);
+    await addSubmittalRound({
+      submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"] },
+      status: "Under Review",
+      ball_in_court: "EOR",
+    });
+    expect(updateRound).toHaveBeenCalledWith("r1", expect.objectContaining({ status: "Under Review" }));
+    expect(createRound).not.toHaveBeenCalled();
+    expect(updateSubmittal).toHaveBeenCalledWith("s1", expect.objectContaining({ total_rounds: 1, current_round_id: "r1" }));
+  });
+
+  it("closes the OPEN round on a verdict (updates it; locks on approval — no new row)", async () => {
+    filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Under Review", submitted_date: "2026-06-01", returned_date: null }]);
+    await addSubmittalRound({
+      submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"] },
+      status: "Approved",
+      ball_in_court: "GC",
+      returned_date: "2026-06-10",
+    });
+    expect(updateRound).toHaveBeenCalledWith("r1", expect.objectContaining({ status: "Approved", returned_date: "2026-06-10" }));
+    expect(createRound).not.toHaveBeenCalled();
+    expect(updateSubmittal).toHaveBeenCalledWith("s1", expect.objectContaining({ status: "Approved", total_rounds: 1, current_round_id: "r1" }));
+    expect(mockLockSet).toHaveBeenCalled();
+  });
+
+  it("opens the NEXT cycle on a resubmit (send on a CLOSED round)", async () => {
+    filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Revise and Resubmit", submitted_date: "2026-06-01", returned_date: "2026-06-05" }]);
+    await addSubmittalRound({
+      submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"] },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+    });
+    expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 2, status: "Submitted" }));
+    expect(updateSubmittal).toHaveBeenCalledWith("s1", expect.objectContaining({ total_rounds: 2 }));
+  });
+
+  it("opens-and-closes cycle 1 on a verdict with no prior round, and locks on approval", async () => {
+    await addSubmittalRound({
+      submittal: { id: "sub-1", project_id: "p1", drawing_set_ids: ["set-a"] },
+      status: "Approved",
+      ball_in_court: "GC",
+      returned_date: "2026-06-01",
+    });
+    expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 1, status: "Approved", returned_date: "2026-06-01" }));
+    expect(updateSubmittal).toHaveBeenCalledWith("sub-1", expect.objectContaining({ status: "Approved", total_rounds: 1, current_round_id: "round-1" }));
+    expect(mockLockSet).toHaveBeenCalled();
   });
 
   it("bumps the submittal revision round_number only when bumpRevision is set", async () => {
     await addSubmittalRound({
-      submittal: { id: "s3", project_id: "p1", round_number: 2, total_rounds: 3 },
+      submittal: { id: "s3", project_id: "p1", round_number: 2 },
       status: "Revise and Resubmit",
       bumpRevision: true,
     });
@@ -235,6 +300,8 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
   beforeEach(() => {
     mockLockSet.mockClear();
     createRound.mockClear();
+    updateRound.mockClear();
+    filterRound.mockClear();
     updateSubmittal.mockClear();
     deleteRound.mockClear();
     rpcMock.mockReset();

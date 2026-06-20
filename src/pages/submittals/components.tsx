@@ -173,7 +173,7 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.06em" }}>
             {row.submittal_number}
-            {row.round_number > 1 && <span style={{ marginLeft: 6, color: "var(--status-warning)" }}>R{row.round_number}</span>}
+            {row.total_rounds > 1 && <span style={{ marginLeft: 6, color: "var(--status-warning)" }}>R{row.total_rounds}</span>}
           </div>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {row.title}
@@ -299,7 +299,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.08em" }}>
               {submittal.submittal_number}
-              {submittal.round_number > 1 && <span style={{ marginLeft: 8, color: "var(--status-warning)" }}>ROUND {submittal.round_number}</span>}
+              {submittal.total_rounds > 1 && <span style={{ marginLeft: 8, color: "var(--status-warning)" }}>ROUND {submittal.total_rounds}</span>}
             </div>
             <InlineText
               value={submittal.title}
@@ -442,7 +442,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
             const isResubmit = ["Revise and Resubmit", "Rejected"].includes(submittal.status);
             const lastRoundNum = rounds.length
               ? (rounds[rounds.length - 1].round_number || rounds.length)
-              : (submittal.round_number || 0);
+              : (submittal.total_rounds || 0);
             const nextRoundNum = (lastRoundNum || 0) + 1;
             return (
               <div style={{ marginTop: 8 }}>

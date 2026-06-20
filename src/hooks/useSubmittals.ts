@@ -110,6 +110,8 @@ export interface AddRoundInput {
     drawing_set_ids?: string[] | null;
     total_rounds?: number | null;
     round_number?: number | null;
+    /** The submittal's current sent date — fallback when opening a cycle's round. */
+    submitted_date?: string | null;
     /** Status BEFORE this move — lets the smart triggers detect the transition. */
     status?: string | null;
   };
@@ -130,17 +132,72 @@ export interface AddRoundInput {
   fabReleaseOverrideReason?: string | null;
 }
 
+// ── Round model: a round = one submit→return CYCLE, not a per-event row ──
+// Sending out (Submitted / Under Review) opens a cycle; a verdict (Approved /
+// Approved as Noted / R&R / Rejected / Released) closes it. Within-cycle moves
+// UPDATE the open round in place; a resubmit (a send on a closed round) opens
+// the NEXT cycle. So `submittal_rounds.round_number` + `total_rounds` count
+// resubmission cycles the way a PM thinks ("on round 2"), not status events.
+export const SENT_STATUSES = new Set<string>(["Submitted", "Under Review"]);
+
+export interface CurrentRoundLite {
+  id: string;
+  round_number?: number | null;
+  status?: string | null;
+  ball_in_court?: string | null;
+  submitted_date?: string | null;
+  returned_date?: string | null;
+}
+
+export interface RoundWritePlan {
+  action: "update" | "insert";
+  roundId: string | null;
+  /** Resulting cycle number (= the round's round_number / the submittal's total_rounds). */
+  roundNumber: number;
+  setSubmitted: boolean;
+  setReturned: boolean;
+}
+
+/**
+ * Decide whether a status move UPDATES the current open round (same cycle) or
+ * OPENS a new one (a resubmission cycle). Pure — unit-tested.
+ *
+ *  - Sending out on a closed/absent round opens the next cycle; on an already-
+ *    open round it just advances that cycle (e.g. Submitted → Under Review).
+ *  - A verdict closes the open cycle (UPDATE, stamping returned_date); with no
+ *    open cycle it opens-and-closes one (defensive — e.g. a status set inline
+ *    on a fresh submittal).
+ */
+export function planRoundWrite(
+  currentRound: CurrentRoundLite | null | undefined,
+  status: string,
+): RoundWritePlan {
+  const curr = currentRound || null;
+  const isOpen = !!curr && !curr.returned_date;
+  const currNum = Number(curr?.round_number) || 0;
+
+  if (SENT_STATUSES.has(status)) {
+    if (isOpen) {
+      return { action: "update", roundId: curr!.id, roundNumber: currNum, setSubmitted: !curr!.submitted_date, setReturned: false };
+    }
+    return { action: "insert", roundId: null, roundNumber: currNum + 1, setSubmitted: true, setReturned: false };
+  }
+  if (isOpen) {
+    return { action: "update", roundId: curr!.id, roundNumber: currNum, setSubmitted: false, setReturned: true };
+  }
+  return { action: "insert", roundId: null, roundNumber: currNum + 1, setSubmitted: true, setReturned: true };
+}
+
 export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal> {
   const s = input.submittal;
-  const eventRound = (Number(s.total_rounds) || 0) + 1;
   const fabOverride = (input.fabReleaseOverrideReason || "").trim() || null;
   const isFabRelease = input.status === "Released for Fabrication";
 
   // Server-arbitrated fab-release gate (Option C): a submittal cannot reach
   // 'Released for Fabrication' while open RFIs reference its sheets. Pre-check
-  // BEFORE logging the round so a blocked release never orphans a round row; the
-  // DB trigger is the authoritative backstop (mapped below if it fires on a race
-  // between this check and the write).
+  // BEFORE touching the round so a blocked release never orphans/mutates a round
+  // row; the DB trigger is the authoritative backstop (mapped below if it fires
+  // on a race between this check and the write).
   if (isFabRelease && !fabOverride) {
     // `submittal_blocking_rfis` is a SECURITY DEFINER RPC not yet in the
     // generated DB types — cast the call (the result is handled defensively).
@@ -162,28 +219,50 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
     }
   }
 
-  const round = await entities.SubmittalRound.create({
-    project_id: s.project_id,
-    submittal_id: s.id,
-    round_number: eventRound,
-    status: input.status,
-    ball_in_court: input.ball_in_court ?? null,
-    submitted_date: input.submitted_date ?? null,
-    returned_date: input.returned_date ?? null,
-    response_notes: input.notes ?? null,
-    drawing_set_ids: Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [],
-    metadata: {},
-  } as Insert<"submittal_rounds">);
+  // Round = one submit→return cycle. Fetch the latest round for this submittal to
+  // decide whether this move continues/closes the open cycle or opens a new one.
+  const existing = (await entities.SubmittalRound.filter(
+    { submittal_id: s.id },
+    "-round_number",
+    1,
+  )) as unknown as CurrentRoundLite[] | null;
+  const currentRound = (Array.isArray(existing) ? existing[0] : null) || null;
+  const plan = planRoundWrite(currentRound, input.status);
+
+  let round: { id?: string } | null;
+  if (plan.action === "update" && plan.roundId) {
+    const upd: Record<string, unknown> = {
+      status: input.status,
+      ball_in_court: input.ball_in_court ?? null,
+    };
+    if (plan.setSubmitted && input.submitted_date) upd.submitted_date = input.submitted_date;
+    if (plan.setReturned) upd.returned_date = input.returned_date ?? null;
+    if (input.notes) upd.response_notes = input.notes;
+    round = await entities.SubmittalRound.update(plan.roundId, upd as Update<"submittal_rounds">);
+  } else {
+    round = await entities.SubmittalRound.create({
+      project_id: s.project_id,
+      submittal_id: s.id,
+      round_number: plan.roundNumber,
+      status: input.status,
+      ball_in_court: input.ball_in_court ?? null,
+      submitted_date: plan.setSubmitted ? (input.submitted_date ?? s.submitted_date ?? null) : null,
+      returned_date: plan.setReturned ? (input.returned_date ?? null) : null,
+      response_notes: input.notes ?? null,
+      drawing_set_ids: Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [],
+      metadata: {},
+    } as Insert<"submittal_rounds">);
+  }
 
   const patch: Record<string, unknown> = {
     status: input.status,
     ball_in_court: input.ball_in_court ?? null,
     current_round_id: round?.id,
-    total_rounds: eventRound,
+    total_rounds: plan.roundNumber,
     ...(input.extraPatch || {}),
   };
-  if (input.submitted_date) patch.submitted_date = input.submitted_date;
-  if (input.returned_date) patch.returned_date = input.returned_date;
+  if (input.submitted_date && plan.setSubmitted) patch.submitted_date = input.submitted_date;
+  if (input.returned_date && plan.setReturned) patch.returned_date = input.returned_date;
   if (input.bumpRevision) patch.round_number = (Number(s.round_number) || 1) + 1;
   if (isFabRelease) patch.fab_release_override_reason = fabOverride;
 
@@ -192,12 +271,21 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
     updated = await entities.Submittal.update(s.id, patch as Update<"submittals">);
   } catch (err) {
     // Backstop: the trigger blocked the transition (e.g. an RFI opened between
-    // the pre-check and this write). Undo the round we just logged so it can't
-    // orphan, and surface a typed block error.
+    // the pre-check and this write). Undo what we did to the round so it can't
+    // drift from the (unchanged) submittal status — delete a freshly-inserted
+    // round, or revert an in-place update to its pre-write state.
     if (isFabReleaseBlocked(err)) {
       const msg = (err as { message?: string })?.message || "Fab release blocked by open RFIs";
       try {
-        if (round?.id) await entities.SubmittalRound.delete(round.id as string);
+        if (plan.action === "insert" && round?.id) {
+          await entities.SubmittalRound.delete(round.id as string);
+        } else if (plan.action === "update" && currentRound?.id) {
+          await entities.SubmittalRound.update(currentRound.id, {
+            status: currentRound.status ?? null,
+            ball_in_court: currentRound.ball_in_court ?? null,
+            returned_date: currentRound.returned_date ?? null,
+          } as Update<"submittal_rounds">);
+        }
       } catch {
         /* best-effort cleanup */
       }
