@@ -26,6 +26,7 @@ import {
 } from '@/services/scheduleCascade';
 import { getActiveOrgId } from '@/lib/activeOrg';
 import { stripPrivilegeMeta } from '@/lib/authMeta';
+import { assertUploadAllowed, sanitizeFilename, type UploadWorkflow } from '@/lib/uploadValidation';
 
 // ─── Type helpers (DB row shapes) ─────────────────────────────────────────────
 
@@ -1057,7 +1058,16 @@ export const resolveFileUrl = async (fileUrl: string | null | undefined): Promis
   return getSignedUrl(fileUrl);
 };
 
-export type UploadFileArgs = { file: File };
+export type UploadFileArgs = {
+  file: File;
+  /**
+   * Optional workflow key (see src/lib/uploadValidation.ts). When supplied, the
+   * tighter per-workflow extension allowlist + size cap is enforced. When
+   * omitted, the fail-closed `default` backstop still applies (blocks dangerous
+   * executable/script extensions and caps size) so no upload path is unguarded.
+   */
+  workflow?: UploadWorkflow;
+};
 export type UploadFileResult = { file_url: string; file_name: string; path: string };
 
 export type InvokeLLMArgs = {
@@ -1106,8 +1116,15 @@ export const integrations = {
      * file_url is a signed URL valid for 1 hour. For long-term storage,
      * persist `path` to the database and call getSignedUrl(path) on demand.
      */
-    UploadFile: async ({ file }: UploadFileArgs): Promise<UploadFileResult> => {
+    UploadFile: async ({ file, workflow }: UploadFileArgs): Promise<UploadFileResult> => {
       if (!file) throw new Error('No file provided');
+      // Fail-closed content/size guard (#21). With a `workflow` this enforces the
+      // tighter per-workflow allowlist; without one the `default` backstop still
+      // blocks dangerous executable/script extensions and an absolute size
+      // ceiling. Throws a user-facing message that call sites surface via their
+      // existing UploadFile error handling. This is the single storage-write
+      // chokepoint, so every upload path is covered.
+      assertUploadAllowed(file, workflow ?? 'default');
       const ext = (file.name.split('.').pop() || '').toLowerCase();
       // Org-scoped path so storage RLS isolates tenants (`<org_id>/uploads/...`),
       // read from the org context that OrgProvider publishes. FAIL CLOSED: refuse
@@ -1168,8 +1185,10 @@ export const integrations = {
         .from('app-files')
         .upload(path, file, { contentType, upsert: false });
       if (error) throw error;
-      // Store the storage path — call getSignedUrl(path) on demand when displaying
-      return { file_url: data.path, file_name: file.name, path: data.path };
+      // Store the storage path — call getSignedUrl(path) on demand when displaying.
+      // Sanitize the display/stored name (strip control chars, path components,
+      // overly-long names). Normal filenames pass through unchanged.
+      return { file_url: data.path, file_name: sanitizeFilename(file.name), path: data.path };
     },
 
     /**

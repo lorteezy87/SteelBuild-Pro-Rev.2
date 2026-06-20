@@ -172,7 +172,7 @@ export default function FileUploadWithOCR({ fileType, linkedEntityId, linkedEnti
     }
 
     try {
-      const { file_url } = await integrations.Core.UploadFile({ file });
+      const { file_url } = await integrations.Core.UploadFile({ file, workflow: "ocr" });
 
       const uploadRecord = await entities.UploadedFile.create({
         project_id: projectId,

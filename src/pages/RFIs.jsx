@@ -363,7 +363,7 @@ export default function RFIs() {
       const now = new Date().toISOString();
 
       for (const file of files) {
-        const uploaded = await integrations.Core.UploadFile({ file });
+        const uploaded = await integrations.Core.UploadFile({ file, workflow: "attachment" });
         await entities.Document.create({
           project_id: rfiRecord.project_id || projectId,
           project_name: rfiRecord.project_name || project?.name || "",

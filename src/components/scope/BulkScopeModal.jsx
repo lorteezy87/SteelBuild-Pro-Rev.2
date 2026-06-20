@@ -65,7 +65,7 @@ export default function BulkScopeModal({ projectId, onClose, onCreated }) {
       // Upload the shared PDF once if present
       let file_url = null, storage_path = null, file_name = null;
       if (file) {
-        const up = await integrations.Core.UploadFile({ file });
+        const up = await integrations.Core.UploadFile({ file, workflow: "attachment" });
         file_url     = up.file_url || null;
         storage_path = up.path || null;
         file_name    = file.name;

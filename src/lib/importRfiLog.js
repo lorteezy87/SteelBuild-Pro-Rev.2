@@ -102,7 +102,7 @@ export async function uploadRfiLog(file) {
   if (file.size > MAX_PDF_BYTES) {
     throw new Error(`PDF exceeds 32 MB (${(file.size / 1e6).toFixed(1)} MB).`);
   }
-  const { file_url, path } = await integrations.Core.UploadFile({ file });
+  const { file_url, path } = await integrations.Core.UploadFile({ file, workflow: "attachment" });
   return { file_url, storage_path: path || "", file_name: file.name };
 }
 

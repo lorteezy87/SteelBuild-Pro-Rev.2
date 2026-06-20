@@ -258,7 +258,7 @@ export default function FieldToday() {
           file = raw; // compression failed — upload the original
         }
         try {
-          const result = await integrations.Core.UploadFile({ file });
+          const result = await integrations.Core.UploadFile({ file, workflow: "photo" });
           await entities.Photo.create({
             ...meta,
             file_url: result.file_url || result.path,

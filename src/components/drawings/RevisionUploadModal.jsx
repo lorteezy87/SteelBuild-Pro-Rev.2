@@ -572,7 +572,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       setStep("processing");
       setProcessingMsg("Uploading PDF...");
       setProcessingPct(10);
-      const res = await integrations.Core.UploadFile({ file: pdfFile });
+      const res = await integrations.Core.UploadFile({ file: pdfFile, workflow: "drawings" });
       setProcessingMsg("AI is reading the drawing set...");
       setProcessingPct(40);
       // Forward the set's saved titleblock template (if any) so the
