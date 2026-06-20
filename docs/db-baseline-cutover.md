@@ -4,9 +4,18 @@
 fresh Supabase branches, `supabase db reset`, and migration CI all work. Today they
 don't.
 
-**Status (2026-06-20):** scaffolding authored (this doc + `supabase/baseline/*`);
-the schema dump, the prod reconciliation, and the branch verification are **gated on
-the owner** (DB password, branch cost, a prod bookkeeping write). NOT yet executed.
+**Status (2026-06-20): ✅ DONE — executed and verified.** `supabase/migrations/` now
+holds the 3 baseline files; the 190 originals are in `supabase/migrations_archive/`;
+prod `schema_migrations` was reconciled to exactly the 3 baseline versions (200 stale
+rows reverted, bookkeeping-only). From-zero replay verified on a local stack (counts
+matched prod exactly: 102 tables / 321 policies / 5 storage policies / 2 buckets / 71
+functions / 147 triggers); `supabase migration list --linked` is clean (Local==Remote)
+and `supabase db push` reports "Remote database is up to date." The migration freeze
+has been lifted. Notes vs. the original plan below: the schema was dumped `--schema
+public` only (the managed `storage` schema can't be recreated by the migration role —
+its policies/buckets live in the guarded seed 3/3); verification was a local stack, not
+a disposable branch; and the reconcile reverted **200** stale versions, not the ~89
+first estimated. Going-forward lockstep rule is in `ARCHITECTURE.md` → Migrations.
 
 ---
 
