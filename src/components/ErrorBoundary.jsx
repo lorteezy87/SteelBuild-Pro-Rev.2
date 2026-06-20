@@ -39,7 +39,7 @@ export default class ErrorBoundary extends React.Component {
         fontFamily: 'system-ui, sans-serif',
         gap: 16, padding: 32, textAlign: 'center',
       }}>
-        <img src="/logo.png" alt="SteelBuild Pro" style={{ height: 40, marginBottom: 8, opacity: 0.8 }} />
+        <img src="/steelbuild-pro-logo.jpg" alt="SteelBuild Pro" style={{ height: 40, marginBottom: 8, opacity: 0.8 }} />
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Something went wrong</h2>
         <p style={{ margin: 0, opacity: 0.6, maxWidth: 480, fontSize: 14 }}>
           An unexpected error occurred. Refresh the page to continue. If the problem persists, contact support.

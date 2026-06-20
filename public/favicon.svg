@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SteelBuild Pro">
+  <title>SteelBuild Pro</title>
+  <defs>
+    <linearGradient id="sbp-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2230"/>
+      <stop offset="1" stop-color="#0a0d12"/>
+    </linearGradient>
+    <linearGradient id="sbp-steel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f1f3f5"/>
+      <stop offset="0.5" stop-color="#aab0b8"/>
+      <stop offset="1" stop-color="#d7dbe0"/>
+    </linearGradient>
+    <linearGradient id="sbp-gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0cf6e"/>
+      <stop offset="0.5" stop-color="#c89b20"/>
+      <stop offset="1" stop-color="#8a6a12"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark field (full-bleed; iOS rounds the apple-touch-icon itself) -->
+  <rect width="512" height="512" fill="url(#sbp-bg)"/>
+
+  <!-- Inner panel inside the diamond -->
+  <path d="M256 96 L416 256 L256 416 L96 256 Z" fill="#11151c"/>
+
+  <!-- Outer brushed-steel diamond frame -->
+  <path d="M256 72 L440 256 L256 440 L72 256 Z" fill="none"
+        stroke="url(#sbp-steel)" stroke-width="18" stroke-linejoin="miter"/>
+
+  <!-- Inner steel line (double-frame, echoes the wordmark logo) -->
+  <path d="M256 122 L390 256 L256 390 L122 256 Z" fill="none"
+        stroke="url(#sbp-steel)" stroke-width="8" opacity="0.85" stroke-linejoin="miter"/>
+
+  <!-- Gold corner gems on the four diamond vertices -->
+  <g fill="url(#sbp-gold)">
+    <path d="M256 50 l22 22 -22 22 -22 -22 Z"/>
+    <path d="M462 256 l-22 22 -22 -22 22 -22 Z"/>
+    <path d="M256 462 l22 -22 -22 -22 -22 22 Z"/>
+    <path d="M50 256 l22 -22 22 22 -22 22 Z"/>
+  </g>
+</svg>
