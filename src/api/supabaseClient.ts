@@ -306,20 +306,12 @@ const applyLiveProjectScope = (query: QueryBuilder, tableName: string): QueryBui
     ? query.eq('projects.is_deleted', false)
     : query;
 
-const PROJECT_CHILD_SOFT_DELETE_TABLES = Array.from(SOFT_DELETE_TABLES)
-  .filter((table) => table !== 'projects' && PROJECT_SCOPED_TABLES.has(table));
-
-const softDeleteProjectChildren = async (projectId: string, deletedAt: string): Promise<void> => {
-  await Promise.all(
-    PROJECT_CHILD_SOFT_DELETE_TABLES.map(async (table) => {
-      const { error } = await sbFrom(table)
-        .update({ is_deleted: true, deleted_at: deletedAt })
-        .eq('project_id', projectId)
-        .eq('is_deleted', false);
-      if (error) throw new SupabaseOperationError(table, 'deleteProjectChildren', error);
-    })
-  );
-};
+// Project archival is server-side + atomic: the soft_delete_project RPC
+// (migration 20260620030000) soft-deletes every project-scoped child + the
+// project root in ONE transaction, admin-gated. The former client-side
+// softDeleteProjectChildren / PROJECT_CHILD_SOFT_DELETE_TABLES were a
+// non-transactional Promise.all that could leave a project half-archived (#13)
+// and have been removed — see entities.Project.delete below.
 
 /**
  * Strip undefined values and camelCase keys (Postgres uses snake_case only).
@@ -543,15 +535,10 @@ export const entities = {
       return addAliases<RowWithAliases<'projects'>>(data as RowWithAliases<'projects'>, 'projects');
     },
     delete: async (id: string): Promise<{ success: true }> => {
-      const deletedAt = new Date().toISOString();
-      try {
-        await softDeleteProjectChildren(id, deletedAt);
-      } catch (err) {
-        console.warn('[projects.delete] child archival failed; project root will still be archived:', err);
-      }
-      const { error } = await (sbFrom('projects'))
-        .update({ is_deleted: true, deleted_at: deletedAt })
-        .eq('id', id);
+      // Atomic, admin-gated archive: the RPC soft-deletes every project-scoped
+      // child + the project root in one transaction, so the project can never be
+      // left half-archived (#13). Replaces the old best-effort multi-step delete.
+      const { error } = await supabase.rpc('soft_delete_project', { p_project_id: id });
       if (error) throw new SupabaseOperationError('projects', 'delete', error);
       return { success: true };
     },

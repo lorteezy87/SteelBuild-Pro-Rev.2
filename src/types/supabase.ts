@@ -7209,6 +7209,7 @@ export type Database = {
           }
       create_project: { Args: { project_data: Json }; Returns: Json }
       delete_drawing_set: { Args: { p_set_id: string }; Returns: number }
+      soft_delete_project: { Args: { p_project_id: string }; Returns: undefined }
       escalate_rfi_sla: { Args: never; Returns: number }
       fab_release_blocking_rfis: {
         Args: { p_drawing_ids: string[] }

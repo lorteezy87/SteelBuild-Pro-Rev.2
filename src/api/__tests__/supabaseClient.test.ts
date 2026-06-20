@@ -60,6 +60,7 @@ describe("supabase entity client", () => {
   beforeEach(() => {
     mocks.calls.length = 0;
     mocks.fromMock.mockClear();
+    mocks.rpcMock.mockClear();
   });
 
   it("scopes project child list reads to non-archived projects", async () => {
@@ -100,18 +101,19 @@ describe("supabase entity client", () => {
     });
   });
 
-  it("archives the project root even when cleaning project children", async () => {
+  it("archives a project atomically via the soft_delete_project RPC", async () => {
     await entities.Project.delete("project-1");
 
-    expect(mocks.calls).toContainEqual({
-      table: "work_packages",
-      op: "update",
-      value: expect.objectContaining({ is_deleted: true }),
+    // The whole cascade (children + root) runs server-side in one transaction;
+    // the client must NOT issue piecemeal per-table updates (#13).
+    expect(mocks.rpcMock).toHaveBeenCalledWith("soft_delete_project", {
+      p_project_id: "project-1",
     });
-    expect(mocks.calls).toContainEqual({
-      table: "projects",
-      op: "update",
-      value: expect.objectContaining({ is_deleted: true }),
-    });
+    expect(mocks.calls).not.toContainEqual(
+      expect.objectContaining({ table: "work_packages", op: "update" })
+    );
+    expect(mocks.calls).not.toContainEqual(
+      expect.objectContaining({ table: "projects", op: "update" })
+    );
   });
 });
