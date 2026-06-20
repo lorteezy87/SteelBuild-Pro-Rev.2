@@ -100,18 +100,20 @@ platform-maturity follow-ups._
 
 ### Database / migrations
 
-- **Migration history doesn't bootstrap from zero (no clean DB rebuild).**
-  Diagnosed 2026-06-17: prod's `supabase_migrations.schema_migrations` (185 rows)
-  STARTS at `003_user_projects_and_rls` — migrations 001 (`initial_schema`:
-  `projects`, `user_profiles` + base tables) and 002 were applied out-of-band and
-  never recorded, so `003`'s first statement references `public.projects` which no
-  tracked migration creates → any from-zero replay dies on the first statement.
-  Confirmed empirically: a fresh Supabase dev branch applied **0** migrations
-  (`MIGRATIONS_FAILED`), as do `main` and all prior branches. **Consequence:**
-  preview branches, `supabase db reset`, and CI-from-migrations are all broken; DDL
-  can only be validated read-only against prod. **Fix:** squash to a baseline
-  (`supabase db dump --schema-only` → `00000000000000_baseline.sql`, mark existing
-  as applied) so branches/CI/reset work again.
+- **✅ RESOLVED 2026-06-20 — Migration history now bootstraps from zero.**
+  The repo filenames (190) and the recorded `schema_migrations` versions (200) had
+  drifted almost completely apart — MCP `apply_migration` stamps an apply-time
+  version while repo files carried different filename timestamps — so a fresh Supabase
+  branch / `db reset` / CI applied **0** migrations (`MIGRATIONS_FAILED`) and DDL
+  could only be validated read-only against prod. **Fixed** by squashing to 3 baseline
+  files (`20260101000000/10/20` — extensions + `pg_dump --schema public` + guarded
+  storage/cron seed), archiving the 190 originals to `supabase/migrations_archive/`,
+  and reconciling prod `schema_migrations` to exactly the 3 baseline versions (200
+  stale rows reverted, bookkeeping-only). Verified from-zero on a local stack (counts
+  matched prod: 102 tables / 321 policies / 71 functions); `db push` reports up to date.
+  Runbook `docs/db-baseline-cutover.md`; **lockstep discipline to prevent re-drift** in
+  `ARCHITECTURE.md` → Migrations (after each MCP `apply_migration`, commit a repo file
+  named with the recorded version; or use `migration new` + `db push`).
 
 - **CI is advisory on the deploy path.** `ci.yml` gates
   lint→typecheck→typecheck:js→test→build on push to `main`/`claude/**` + PRs, but

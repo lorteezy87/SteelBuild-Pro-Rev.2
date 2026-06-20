@@ -302,12 +302,43 @@ with `<AdminRoute>` (checks `user_profiles.role === 'admin'`).
 
 ### Migrations
 
-`supabase/migrations/` — mixed legacy `NNN_name.sql` and timestamped
-`YYYYMMDDhhmmss_name.sql` (**170 as of this writing**; inspect the directory for
-the latest, don't assume a number). Apply live via the Supabase MCP
-(`apply_migration`) and commit the same SQL so repo history matches the
-database. A migration that changes the exposed schema ends with
-`NOTIFY pgrst, 'reload schema'`.
+**Re-baselined 2026-06-20 (P0 #2).** `supabase/migrations/` now holds **3 ordered
+baseline files** that reproduce a fresh DB from zero:
+
+- `20260101000000_baseline_extensions.sql` — extensions in the `extensions` schema
+  the dump omits (`uuid-ossp`, `pgcrypto`, `pg_trgm`).
+- `20260101000010_baseline_schema.sql` — a `pg_dump --schema public` of live prod
+  (102 tables, 321 policies, 71 functions, 147 triggers). The Supabase-**managed**
+  `storage` schema is deliberately dumped OUT (the migration role can't recreate it;
+  it already exists on every project).
+- `20260101000020_baseline_seed.sql` — the app's storage **buckets** + RLS **policies**
+  on `storage.objects` and the `pg_cron` jobs, each in a guarded `do $$ … $$` block
+  (skips gracefully where the role lacks privilege / pg_cron isn't installed).
+
+The 190 pre-baseline files are archived under `supabase/migrations_archive/` (moved,
+not deleted). Prod `schema_migrations` was reconciled to exactly these 3 versions, so
+`supabase db push` reports "up to date" and fresh branches / `db reset` / CI replay
+cleanly. Verified from-zero on a local stack 2026-06-20 (counts matched prod exactly).
+
+**Why it had to happen:** migrations were applied via MCP `apply_migration`, which
+stamps its **own apply-time version** into `schema_migrations` while repo files carried
+different filename timestamps — the two lineages drifted ~completely apart (200 remote
+versions, almost none matching a repo file), so from-zero replay died on the first
+statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay-broken`.
+
+**Going forward — keep filenames and `schema_migrations` in LOCKSTEP (do not re-drift):**
+
+- **Preferred (Docker available):** `npx supabase migration new <name>` → edit the file
+  → `npx supabase db push`. The CLI keeps the filename version == `schema_migrations`.
+- **MCP path (cloud/Linux sessions):** after `apply_migration(name, query)`, immediately
+  read the recorded version
+  (`select version from supabase_migrations.schema_migrations order by version desc limit 1`)
+  and commit a repo file named `supabase/migrations/<that-version>_<name>.sql` with the
+  **identical** SQL. Never let the on-disk name and the recorded version diverge.
+- Write DDL replay-safe (`IF NOT EXISTS`, `to_regprocedure()` guards). A migration that
+  changes the exposed schema ends with `NOTIFY pgrst, 'reload schema'`.
+- **NEVER** run `supabase db reset` (or point reset/branch tooling) at prod — it DROPS
+  and rebuilds the DB. Verify replay on a disposable branch or a local stack only.
 
 ### Edge Functions
 
@@ -623,7 +654,8 @@ src/
   utils/            Pure helpers (batchProcess, formatters, etc.)
 
 supabase/
-  migrations/       NNN_name.sql, applied in order
+  migrations/       3 baseline files (20260101000000/10/20) — replay from zero
+  migrations_archive/  190 pre-2026-06-20 migrations (history; not applied)
   functions/        Edge function source
 
 public/             Static assets including web-ifc wasm (public/wasm/) + pdf workers
@@ -632,6 +664,22 @@ public/             Static assets including web-ifc wasm (public/wasm/) + pdf wo
 ---
 
 ## Decision log (recent material decisions)
+
+### 2026-06-20 — DB migration baseline squash (P0 #2)
+
+`supabase/migrations/` could no longer bootstrap a DB from zero: MCP
+`apply_migration` stamps apply-time versions into `schema_migrations`, so over
+months the repo filenames (190 files) and the recorded versions (200 rows)
+drifted almost completely apart, and fresh branches / `db reset` / CI all failed
+at the first statement. Fixed by squashing to **3 baseline files** (extensions +
+a `pg_dump --schema public` of live prod + a guarded storage/cron seed),
+archiving the 190 originals to `supabase/migrations_archive/`, and reconciling
+prod `schema_migrations` to exactly the 3 baseline versions (the 200 stale rows
+reverted — bookkeeping only, no schema/data touched). Verified from-zero on a
+local stack (counts matched prod: 102 tables / 321 policies / 71 functions). The
+Supabase-managed `storage` schema is dumped OUT (the migration role can't
+recreate it). Going-forward lockstep rule: see **Migrations** above. Runbook:
+`docs/db-baseline-cutover.md`.
 
 ### 2026-06 — Large-component decomposition (behavior-preserving)
 

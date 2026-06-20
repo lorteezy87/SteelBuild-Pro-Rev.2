@@ -29,8 +29,8 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-06-20 | opus-db-baseline | 🧊 MIGRATION FREEZE — baseline squash cutover in progress | `supabase/migrations/**`, `supabase/baseline/**` | DO NOT apply migrations (apply_migration / db push) or edit supabase/migrations until this row is removed |
 
 ## Recently released
 
 <!-- Move finished claims here briefly, or just delete the row. -->
+- 2026-06-20 · opus-db-baseline · MIGRATION FREEZE lifted — baseline squash cutover DONE (3 baseline files in supabase/migrations/, 190 archived, prod schema_migrations reconciled, db push clean). New migrations OK again; follow the ARCHITECTURE.md → Migrations lockstep rule.
