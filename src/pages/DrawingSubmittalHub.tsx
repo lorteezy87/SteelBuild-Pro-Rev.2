@@ -69,6 +69,8 @@ import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
 import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
 import { buildRevisionSummary } from "@/lib/revisionSummary";
 import { saveRevisionSummary, getLatestSummariesByProject } from "@/lib/revisionSummaryRepo";
+import RFIFormModal from "@/components/rfis/RFIFormModal";
+import { buildRfiPrefillFromSummary, createRfiAndLink } from "@/lib/rfiFromDelta";
 const RevisionDeepDiveModal = lazyWithRetry(() => import("@/components/drawings/RevisionImpactReportModal"));
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
@@ -112,6 +114,8 @@ export default function DrawingSubmittalHub() {
   const [importModelOpen, setImportModelOpen] = useState(false);
   const [summaryCard, setSummaryCard] = useState<any | null>(null);
   const [deepDiveSet, setDeepDiveSet] = useState<any | null>(null);
+  const [rfiDraft, setRfiDraft] = useState<any | null>(null);
+  const [savingRfi, setSavingRfi] = useState(false);
   const qc = useQueryClient();
   const { can } = usePermissions();
   const projectId = activeProject?.id as string | undefined;
@@ -249,6 +253,27 @@ export default function DrawingSubmittalHub() {
     const pkg = setPackages.find((p: any) => String(p.setId) === String(summary?.setId));
     setSummaryCard(null);
     if (pkg) setDeepDiveSet(pkg);
+  };
+  // Create an RFI pre-filled from the deterministic summary (no AI diff needed);
+  // the user reviews/edits it in RFIFormModal before it is saved.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const openRfiFromSummary = (summary: any) => {
+    setSummaryCard(null);
+    setRfiDraft({ prefill: buildRfiPrefillFromSummary(summary) });
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const saveRfiFromSummary = async (formData: any) => {
+    setSavingRfi(true);
+    try {
+      const created = await createRfiAndLink({ projectId, formData, deltaId: undefined });
+      setRfiDraft(null);
+      toast.success(`Created ${created?.rfi_number || "RFI"} from revision summary`);
+      qc.invalidateQueries({ queryKey: ["rfis", projectId] });
+    } catch (err: any) {
+      toast.error("Failed to create RFI: " + (err?.message || "Unknown"));
+    } finally {
+      setSavingRfi(false);
+    }
   };
 
   // Lookup maps for readiness: WP by id, and the set of OPEN rfi ids.
@@ -880,6 +905,17 @@ export default function DrawingSubmittalHub() {
           summary={summaryCard}
           onClose={() => setSummaryCard(null)}
           onRunDeepDive={aiDiff ? openDeepDive : undefined}
+          onCreateRfi={can("create", "rfi") ? openRfiFromSummary : undefined}
+        />
+      )}
+      {rfiDraft && (
+        <RFIFormModal
+          projectId={projectId}
+          rfi={null}
+          prefill={rfiDraft.prefill}
+          saving={savingRfi}
+          onClose={() => setRfiDraft(null)}
+          onSave={saveRfiFromSummary}
         />
       )}
       {deepDiveSet && (
