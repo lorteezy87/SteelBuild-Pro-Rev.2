@@ -239,7 +239,7 @@ export default function PhotoUploadModal({ projectId, onClose }) {
         updateItem(item.id, { status: "uploading", error: null });
         try {
           const compressed = await compressImage(item.file);
-          const fileData = await integrations.Core.UploadFile({ file: compressed });
+          const fileData = await integrations.Core.UploadFile({ file: compressed, workflow: "photo" });
           await entities.Photo.create({
             project_id: globalProjectId,
             category: item.category,

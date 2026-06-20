@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { PAGES } from "@/config/routes";
+import { PAGES, PROJECT_SCOPED_PAGES } from "@/config/routes";
 import PageNotFound from "@/lib/PageNotFound";
 import PageErrorBoundary from "@/components/shared/ErrorBoundary";
+import ProjectScopedRoute from "@/components/shared/ProjectScopedRoute";
 import LayoutRoute from "@/boot/LayoutRoute";
 import PageLoader from "@/boot/PageLoader";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
@@ -134,7 +135,13 @@ export default function AppRoutes() {
             path={path === "Reports" ? "Reports/*" : path}
             element={
               <LazyRoute label={path}>
-                <Page />
+                {PROJECT_SCOPED_PAGES.has(path) ? (
+                  <ProjectScopedRoute>
+                    <Page />
+                  </ProjectScopedRoute>
+                ) : (
+                  <Page />
+                )}
               </LazyRoute>
             }
           />

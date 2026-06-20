@@ -54,7 +54,7 @@ export default function PhotoStripUploader({
       for (const rawFile of files) {
         try {
           const file = await compressImage(rawFile);
-          const result = await integrations.Core.UploadFile({ file });
+          const result = await integrations.Core.UploadFile({ file, workflow: "photo" });
           uploaded.push({
             file_url: result.file_url || result.path,
             path: result.path,

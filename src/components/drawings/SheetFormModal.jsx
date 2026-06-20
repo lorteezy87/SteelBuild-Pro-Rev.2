@@ -34,7 +34,7 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
     if (uploadFile) {
       setUploading(true);
       try {
-        const { file_url } = await integrations.Core.UploadFile({ file: uploadFile });
+        const { file_url } = await integrations.Core.UploadFile({ file: uploadFile, workflow: "attachment" });
         fileUrl = file_url;
       } catch (err) {
         toast.error("File upload failed: " + (err?.message || "Unknown error"));

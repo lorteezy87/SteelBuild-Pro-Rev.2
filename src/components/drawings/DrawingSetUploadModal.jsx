@@ -790,7 +790,7 @@ export default function DrawingSetUploadModal({
         let fileUrl;
         try {
           const res = await withTimeout(
-            integrations.Core.UploadFile({ file }),
+            integrations.Core.UploadFile({ file, workflow: "drawings" }),
             UPLOAD_TIMEOUT_MS,
             "File upload"
           );
