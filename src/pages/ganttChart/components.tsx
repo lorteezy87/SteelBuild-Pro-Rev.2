@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import StatusBadgeRaw from "@/components/shared/StatusBadge";
 import { formatDate } from "@/components/shared/formatters";
 import { GANTT_TODAY_HEX } from "@/lib/ganttTheme";
+import { formatLocalDate } from "@/utils/dates";
 import {
   PHASE_COLORS, STATUS_COLORS, ROW_HEIGHT, HEADER_HEIGHT, TASK_LIST_WIDTH, ZOOM_LEVELS,
   toLocalMidnight, getDaysBetween, isWeekend, isToday, getMonthLabel,
@@ -54,12 +55,12 @@ export function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, coll
                 </div>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", fontWeight: 600 }}>
                   {task.planned_start
-                    ? new Date(task.planned_start + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
+                    ? formatLocalDate(task.planned_start, "en-US", { month: "short", day: "numeric" })
                     : "—"}
                 </span>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", fontWeight: 600 }}>
                   {task.planned_end
-                    ? new Date(task.planned_end + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
+                    ? formatLocalDate(task.planned_end, "en-US", { month: "short", day: "numeric" })
                     : "—"}
                 </span>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: phase.solid, fontWeight: 700 }}>{task.avgPct}%</span>
@@ -113,10 +114,10 @@ export function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, coll
                 )}
               </div>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-                {task.planned_start ? new Date(task.planned_start + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "—"}
+                {task.planned_start ? formatLocalDate(task.planned_start, "en-US", { month: "short", day: "numeric" }) : "—"}
               </span>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-                {task.planned_end ? new Date(task.planned_end + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "—"}
+                {task.planned_end ? formatLocalDate(task.planned_end, "en-US", { month: "short", day: "numeric" }) : "—"}
               </span>
               <div style={{ display: "flex", alignItems: "center" }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLORS[task.status] || "var(--text-muted)" }} />
