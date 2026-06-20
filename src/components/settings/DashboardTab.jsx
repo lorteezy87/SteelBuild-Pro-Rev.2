@@ -61,9 +61,24 @@ const AVAILABLE_MODULES = [
   { id: 'WorkPackages',  label: 'Work Packages' },
 ];
 
+// Pages offered as a "default landing". Each id MUST be a real route key
+// (see src/config/routes.js) so the index-route redirect resolves. Labels are
+// friendly so the dropdown doesn't show raw camelCase keys. The Detailing
+// Control Center (the moat hub) and Field Today are first-class options here so
+// users can pin them — and they're the same targets the role-aware default
+// landing falls back to when no explicit pick is saved.
 const LANDING_PAGES = [
-  'Dashboard', 'Projects', 'RFIs', 'Drawings',
-  'DailyLogs', 'Deliveries', 'ChangeOrders', 'JobStatusReport',
+  { id: 'Dashboard',           label: 'Dashboard' },
+  { id: 'DrawingSubmittalHub', label: 'Detailing Control Center' },
+  { id: 'CommandCenter',       label: 'Command Center' },
+  { id: 'Projects',            label: 'Projects' },
+  { id: 'RFIs',                label: 'RFIs' },
+  { id: 'Drawings',            label: 'Drawings (Full Editor)' },
+  { id: 'FieldToday',          label: 'Field Today' },
+  { id: 'DailyLogs',           label: 'Daily Logs' },
+  { id: 'Deliveries',          label: 'Deliveries' },
+  { id: 'ChangeOrders',        label: 'Change Orders' },
+  { id: 'JobStatusReport',     label: 'Job Status Report' },
 ];
 
 export default function DashboardTab({ preferences, onSave, isSaving }) {
@@ -183,7 +198,7 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
           onChange={e => handleChange('default_landing', e.target.value)}
           style={selectStyle}
         >
-          {LANDING_PAGES.map(p => <option key={p} value={p}>{p}</option>)}
+          {LANDING_PAGES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
         <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
           This is the page you'll see when you open SteelBuild Pro each morning.
