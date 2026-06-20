@@ -9,8 +9,9 @@
 #      that the lint + typecheck passes don't notice)
 #
 # What does NOT run here:
-#   - End-to-end tests (no Playwright/E2E suite committed to this repo yet —
-#     `npm run test:e2e` will be wired in as a non-blocking job once it lands)
+#   - End-to-end tests as a BLOCKING gate. The Playwright suite runs in a
+#     separate, opt-in `e2e-smoke` job below — post-deploy and non-blocking, so
+#     it never gates production. See e2e/README.md.
 #   - Lighthouse / a11y / bundle-size budgets (queued for later)
 #   - Deploy — Vercel handles that on push to main
 #
@@ -140,3 +141,72 @@ jobs:
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+  # ── E2E smoke (post-deploy, NON-BLOCKING) ────────────────────────────────
+  # The "unit tests pass != it works" layer: signs in with a real session and
+  # asserts the daily-driver workflow (drawings -> submittals -> RFIs) plus the
+  # server-arbitrated fab-release gate against the JUST-DEPLOYED app.
+  #
+  # Deploy-safety: this runs AFTER `deploy`, and `deploy` does NOT list it in
+  # `needs`, so a flaky or failing E2E run can NEVER block or roll back a
+  # production deploy. It is observe-only.
+  #
+  # Opt-in: only runs when the `E2E_ENABLED` repo VARIABLE is "true" (a variable,
+  # not a secret — `secrets.*` is unreliable in a job-level `if`). Until you set
+  # it, this job is skipped (never red). Set it once the dedicated test account +
+  # secrets exist (see e2e/README.md). Each spec ALSO self-skips when its own
+  # fixture env is unset, so you can enable the read-only smoke first and add the
+  # mutation-aware fab-release gate later by setting the E2E_FAB_* secrets — the
+  # gate spec WRITES to fab_release_log, so point it at a TEST org only.
+  e2e-smoke:
+    name: E2E smoke (post-deploy, non-blocking)
+    needs: deploy
+    if: ${{ vars.E2E_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E suite
+        run: npm run test:e2e
+        env:
+          E2E_BASE_URL: https://steelbuild-pro.com
+          # Sign-in: global-setup (browser session) + the API fixtures. The
+          # passwords are secrets; the anon key is browser-public but stored as a
+          # secret for one consistent place.
+          E2E_USER: ${{ secrets.E2E_USER }}
+          E2E_PASS: ${{ secrets.E2E_PASS }}
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+          # Optional viewer account -> enables the fab-gate RLS-deny assertion.
+          E2E_VIEWER_USER: ${{ secrets.E2E_VIEWER_USER }}
+          E2E_VIEWER_PASS: ${{ secrets.E2E_VIEWER_PASS }}
+          # Fab-release gate fixture (TEST org ONLY — the spec WRITES one append-
+          # only row per run). Leave unset to skip that spec and run only the
+          # read-only smoke. Verify the two drawing ids with the gate's own fn:
+          #   select * from fab_release_blocking_rfis(array['<uuid>']::uuid[]);
+          E2E_FAB_PROJECT_ID: ${{ secrets.E2E_FAB_PROJECT_ID }}
+          E2E_BLOCKED_DRAWING_ID: ${{ secrets.E2E_BLOCKED_DRAWING_ID }}
+          E2E_CLEAN_DRAWING_ID: ${{ secrets.E2E_CLEAN_DRAWING_ID }}
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
