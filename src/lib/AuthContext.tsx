@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, type ReactNode } from 'react';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { stripPrivilegeMeta } from '@/lib/authMeta';
 
 export type AppUser = {
   id: string;
@@ -72,12 +73,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       (typeof meta.name === 'string' && meta.name) ||
       sbUser.email ||
       undefined;
+    // user_metadata is client-writable — strip privilege keys and place the
+    // server-authoritative fields LAST so metadata can never override `role`
+    // (which would otherwise open the client admin gates).
     return {
+      ...stripPrivilegeMeta(meta),
       id: sbUser.id,
       email: sbUser.email,
       full_name: fullName,
       role,
-      ...meta,
     };
   };
 

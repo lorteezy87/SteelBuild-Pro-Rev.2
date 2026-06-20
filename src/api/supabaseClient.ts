@@ -24,6 +24,7 @@ import {
   serializeDependencies as serializeScheduleDependencies,
 } from '@/services/scheduleCascade';
 import { getActiveOrgId } from '@/lib/activeOrg';
+import { stripPrivilegeMeta } from '@/lib/authMeta';
 
 // ─── Type helpers (DB row shapes) ─────────────────────────────────────────────
 
@@ -903,6 +904,20 @@ export type AuthMeResult = {
   [key: string]: unknown;
 };
 
+/**
+ * Server-authoritative role for a user — always from `user_profiles.role`,
+ * never the client-writable user_metadata. Falls back to 'user' on any error.
+ */
+async function fetchProfileRole(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase.from('user_profiles').select('role').eq('id', userId).maybeSingle();
+    const r = (data as { role?: unknown } | null)?.role;
+    return (typeof r === 'string' && r) || 'user';
+  } catch {
+    return 'user';
+  }
+}
+
 export const auth = {
   /**
    * Get the currently authenticated user.
@@ -918,12 +933,15 @@ export const auth = {
       (typeof meta.name === 'string' && meta.name) ||
       user.email ||
       '';
+    // role from user_profiles (server-authoritative), NOT client-writable meta;
+    // strip privilege keys and set the authoritative fields last.
+    const role = await fetchProfileRole(user.id);
     return {
+      ...stripPrivilegeMeta(meta),
       id: user.id,
       email: user.email,
       full_name: fullName,
-      role: (typeof meta.role === 'string' && meta.role) || 'user',
-      ...meta,
+      role,
     };
   },
 
@@ -985,12 +1003,15 @@ export const auth = {
       (typeof meta.full_name === 'string' && meta.full_name) ||
       data.user.email ||
       '';
+    // role from user_profiles (server-authoritative), never the returned meta;
+    // strip privilege keys and set the authoritative fields last.
+    const role = await fetchProfileRole(data.user.id);
     return {
+      ...stripPrivilegeMeta(meta),
       id: data.user.id,
       email: data.user.email,
       full_name: fullName,
-      role: (typeof meta.role === 'string' && meta.role) || 'user',
-      ...meta,
+      role,
     };
   },
 };
