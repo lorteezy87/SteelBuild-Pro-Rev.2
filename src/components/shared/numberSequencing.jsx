@@ -12,47 +12,29 @@ export const getNextNumber = async (projectId, recordType) => {
   if (!projectId) throw new Error("projectId is required");
   if (!recordType) throw new Error("recordType is required");
 
+  // Atomic, server-side sequencing via the get_next_sequence_number RPC
+  // (INSERT...ON CONFLICT DO UPDATE...RETURNING under a row lock, plus a
+  // project-access check). Concurrent callers serialize into DISTINCT numbers,
+  // replacing the former client-side read-modify-write which — on a stale read
+  // or retry exhaustion — could mint duplicate official record numbers. Retry
+  // the SERVER call on a transient error, then fail closed; never invent a
+  // number in the browser.
+  let lastError = null;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const { data: existing } = await supabase
-      .from('number_sequences')
-      .select('next_value')
-      .eq('project_id', projectId)
-      .eq('record_type', recordType)
-      .single();
-
-    if (existing) {
-      const current = existing.next_value || 1;
-      // Conditional update: only succeeds if next_value still equals what we read
-      const { data: updated } = await supabase
-        .from('number_sequences')
-        .update({ next_value: current + 1, updated_at: new Date().toISOString() })
-        .eq('project_id', projectId)
-        .eq('record_type', recordType)
-        .eq('next_value', current)
-        .select();
-
-      if (updated && updated.length > 0) {
-        return current;
-      }
-      // Another call incremented first — retry
-      continue;
-    } else {
-      // Create row starting at 1, return 1.
-      // If two calls race to insert, one will fail on the unique constraint;
-      // the retry loop will then find the existing row.
-      const { error } = await supabase.from('number_sequences').insert({
-        project_id: projectId,
-        record_type: recordType,
-        next_value: 2,
-      });
-      if (!error) return 1;
-      // Insert conflict — another call created the row first, retry
-      continue;
+    const { data, error } = await supabase.rpc('get_next_sequence_number', {
+      p_project_id: projectId,
+      p_record_type: recordType,
+    });
+    if (!error && typeof data === 'number') return data;
+    lastError = error;
+    if (attempt < MAX_RETRIES - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
     }
   }
 
   throw new Error(
     `Failed to allocate sequence number for ${recordType} after ${MAX_RETRIES} retries`
+    + (lastError?.message ? `: ${lastError.message}` : '')
   );
 };
 
