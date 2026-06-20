@@ -29,7 +29,11 @@ if (DSN) {
     dsn: DSN,
     environment: import.meta.env.MODE,
     release: import.meta.env.VITE_APP_VERSION || undefined,
-    sendDefaultPii: true,
+    // PII off: don't auto-attach IP address / user identifiers / request headers.
+    // Session replay is already masked (below); if richer triage is ever needed,
+    // attach only minimal scrubbed identifiers explicitly (e.g. hashed user id,
+    // org id) via Sentry.setUser — never email / financial / document data.
+    sendDefaultPii: false,
     integrations: [
       Sentry.browserTracingIntegration(),
       Sentry.replayIntegration({ maskAllText: true, blockAllMedia: true }),
