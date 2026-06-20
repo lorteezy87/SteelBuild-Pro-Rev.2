@@ -17,7 +17,7 @@ import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
-import type { Insert, Update } from "@/api/supabaseClient";
+import type { Insert } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 

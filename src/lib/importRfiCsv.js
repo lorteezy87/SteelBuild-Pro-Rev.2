@@ -136,7 +136,7 @@ const COLUMN_ALIASES = {
 // the preview step.
 const JOB_NUMBER_ALIASES = ["job number", "job #", "job no", "project number", "project #", "project no", "job", "project"];
 
-const normalize = (s) => String(s ?? "").toLowerCase().trim().replace(/[._\-]+/g, " ").replace(/\s+/g, " ");
+const normalize = (s) => String(s ?? "").toLowerCase().trim().replace(/[._-]+/g, " ").replace(/\s+/g, " ");
 
 function buildColumnIndex(headerRow) {
   const idx = { job_number: -1 };
