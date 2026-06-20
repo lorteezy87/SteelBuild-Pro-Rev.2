@@ -409,7 +409,7 @@ export default function Onboarding() {
       <section className="onboarding-checklist">
         <StepItem done={Boolean(createdProject)} icon={FolderPlus} title="Create company/project" detail="Project shell plus ownership membership" />
         <StepItem done={Boolean(templateKey)} icon={LayoutTemplate} title="Pick template" detail={selectedTemplate.name} />
-        <StepItem done={teamRows.some((row) => row.email.trim())} icon={Users} title="Invite users" detail="Team plan saved to onboarding metadata" />
+        <StepItem done={teamRows.some((row) => row.email.trim())} icon={Users} title="Plan team roles" detail="Send invites on the Team page after setup" />
         <StepItem done={stagedImport.validRecords.length > 0 && stagedImport.invalidRows.length === 0} icon={FileSpreadsheet} title="Import starter data" detail={`${stagedImport.validRecords.length} rows ready`} />
         <StepItem done={importApproved} icon={ClipboardCheck} title="Review setup" detail="Human approval required before imports" />
       </section>
@@ -516,6 +516,26 @@ export default function Onboarding() {
               </button>
             ))}
           </div>
+          {createdProject && (
+            <button
+              type="button"
+              className="onboarding-primary-btn"
+              style={{ marginTop: 12, width: "100%" }}
+              onClick={() =>
+                navigate(createPageUrl("OrgMembers"), {
+                  state: {
+                    prefillInvites: teamRows
+                      .filter((row) => row.email.trim())
+                      .map((row) => ({ email: row.email.trim(), role: row.role })),
+                  },
+                })
+              }
+            >
+              <Users size={15} />
+              Invite your team
+              <ChevronRight size={14} />
+            </button>
+          )}
         </section>
 
         <section className="onboarding-panel onboarding-wide">
