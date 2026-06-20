@@ -58,7 +58,7 @@ import type { LLMResponse, ProviderClient } from "./providers/types.ts";
 import { LLMError } from "./providers/types.ts";
 import { anthropicClient } from "./providers/anthropic.ts";
 import { openaiClient }    from "./providers/openai.ts";
-import { computeCostUsd }  from "./providers/cost.ts";
+import { computeCostUsd, isModelPriced } from "./providers/cost.ts";
 import { getProviderForUseCase } from "./router.ts";
 import { checkUserQuota } from "./quota.ts";
 
@@ -292,6 +292,30 @@ async function handle(req: Request): Promise<Response> {
       { error: `Unknown provider: "${provider}". Use "anthropic" or "openai".`, protocol_version: PROTOCOL_VERSION },
       400,
     );
+  }
+
+  // ── Model allowlist (cost + abuse control) ──────────────────────────────
+  // Callers may override provider/model (above), so gate the RESOLVED model to
+  // the rate card: allowed ≡ priced. Without this an unpriced/expensive model
+  // could be requested directly and would log cost_usd = NULL, silently escaping
+  // spend tracking. To allow a model, price it in providers/cost.ts.
+  if (!isModelPriced(provider, model)) {
+    return json(
+      { error: `Model not allowed: "${provider}/${model}". The gateway only serves models priced in its rate card.`, protocol_version: PROTOCOL_VERSION },
+      400,
+      req,
+    );
+  }
+
+  // ── Clamp output tokens (cost/abuse control) ────────────────────────────
+  // maxTokens is the main lever on a single call's output cost; clamp a
+  // caller-supplied value to a ceiling generous enough for every real caller
+  // (observed max is 8000 across extraction/import/copilot) yet tight enough
+  // that one request can't run away. Refine per-useCase here if ever needed.
+  const OUTPUT_TOKEN_CEILING = 16000;
+  if (typeof body?.maxTokens === "number" && body.maxTokens > OUTPUT_TOKEN_CEILING) {
+    console.warn(`[llm-proxy] clamping maxTokens ${body.maxTokens} -> ${OUTPUT_TOKEN_CEILING} (useCase=${useCase})`);
+    body.maxTokens = OUTPUT_TOKEN_CEILING;
   }
 
   // ── Diagnostic log (matches v7 format so existing log searches keep working)
