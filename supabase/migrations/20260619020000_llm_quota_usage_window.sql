@@ -6,12 +6,17 @@
 -- matters most), it calls this aggregate with the service-role key: one indexed
 -- query returning the rolling-window request count + cost sum.
 
--- 1. Composite index for the (user_id, occurred_at) window lookup. The quota
---    read runs on the hot path of EVERY llm-proxy request, so this must be
---    indexed. Mirrors the existing use_case / provider / project indexes
---    (occurred_at DESC) on this table.
-create index if not exists idx_llm_telemetry_user_occurred
-  on public.llm_telemetry (user_id, occurred_at desc);
+-- 1. PARTIAL composite index for the (user_id, occurred_at) window lookup. The
+--    quota read runs on the hot path of EVERY llm-proxy request, so it must be
+--    indexed. `WHERE user_id IS NOT NULL` because ~96% of llm_telemetry rows are
+--    user-less background work (email-classify) that the per-user quota query
+--    (user_id = $1) never touches — excluding them keeps the index ~20x smaller
+--    and off the hot insert path. (Supersedes an earlier full index of the same
+--    columns; the drop makes this migration safe to apply over that state.)
+drop index if exists public.idx_llm_telemetry_user_occurred;
+create index if not exists idx_llm_telemetry_user_recent
+  on public.llm_telemetry (user_id, occurred_at desc)
+  where user_id is not null;
 
 -- 2. Server-side usage aggregate. Returns exactly one row. SECURITY DEFINER
 --    because it reads cross-user telemetry; pinned empty search_path so the body
