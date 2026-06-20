@@ -22,13 +22,34 @@ function pushBuffer(entry) {
   }
 }
 
+// Callers often pass full project/email records as context; redact known
+// sensitive keys so financial / document / PII data can't surface in
+// window.__sbpErrorLog (readable in browser devtools).
+const SENSITIVE_KEYS = new Set([
+  "body_html", "body_text", "amount", "contract_value", "file_url",
+  "storage_path", "email", "recipients", "cc", "bcc",
+  "password", "token", "api_key", "secret",
+]);
+
+function scrubSensitive(value) {
+  if (Array.isArray(value)) return value.map(scrubSensitive);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [key, val] of Object.entries(value)) {
+      out[key] = SENSITIVE_KEYS.has(key) ? "[redacted]" : scrubSensitive(val);
+    }
+    return out;
+  }
+  return value;
+}
+
 function safeStringify(value) {
   if (value == null) return null;
   if (value instanceof Error) {
     return { name: value.name, message: value.message, stack: value.stack };
   }
   if (typeof value === "object") {
-    try { return JSON.parse(JSON.stringify(value)); } catch { return String(value); }
+    try { return scrubSensitive(JSON.parse(JSON.stringify(value))); } catch { return String(value); }
   }
   return value;
 }
