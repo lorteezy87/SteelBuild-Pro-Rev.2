@@ -1103,13 +1103,19 @@ export const integrations = {
     UploadFile: async ({ file }: UploadFileArgs): Promise<UploadFileResult> => {
       if (!file) throw new Error('No file provided');
       const ext = (file.name.split('.').pop() || '').toLowerCase();
-      // Prefer an org-scoped path so storage RLS isolates tenants
-      // (`<org_id>/uploads/...`), read from the org context that OrgProvider
-      // publishes. Fall back to a flat `uploads/...` path (grandfathered to the
-      // founding org in storage RLS) if it isn't set yet — never fail an upload
-      // over org scoping.
+      // Org-scoped path so storage RLS isolates tenants (`<org_id>/uploads/...`),
+      // read from the org context that OrgProvider publishes. FAIL CLOSED: refuse
+      // a NEW upload rather than writing to the grandfathered flat `uploads/...`
+      // namespace if the org isn't resolved yet — a flat-path write creates
+      // tenant-boundary ambiguity in a multi-tenant workspace. Legacy flat-path
+      // files stay READABLE via getSignedUrl/resolveFileUrl; only new writes
+      // require org scope. orgId is published by OrgProvider once the workspace
+      // resolves, so this only trips during the brief sign-in/load window.
       const orgId = getActiveOrgId();
-      const dir = orgId ? `${orgId}/uploads` : 'uploads';
+      if (!orgId) {
+        throw new Error('Workspace is still loading — please try again in a moment.');
+      }
+      const dir = `${orgId}/uploads`;
       const path = `${dir}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
       // Browsers report application/octet-stream for many construction file types.
