@@ -29,7 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| _(none active)_ | | | | |
+| 2026-06-19 | epic3-detailing-hub | Epic 3 — Detailing Control Center landing/nav | `src/boot/AppRoutes.jsx`, `src/components/settings/DashboardTab.jsx`, `src/lib/landingForRole*`, `src/lib/__tests__/landingForRole*` | Role-aware default landing + landing-picker fix |
 
 ## Recently released
 
