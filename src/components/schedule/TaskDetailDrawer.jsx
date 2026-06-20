@@ -193,7 +193,14 @@ function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search tasks..
           style={{
             position: 'absolute', left: 0, right: 0, top: '100%',
             marginTop: 4,
-            background: 'var(--bg-surface-low)',
+            // Opaque elevated surface — NOT --bg-surface-low, which the
+            // SteelBuild-Dark theme defines as a ~2%-white tint (great for a
+            // nested background, but a popover over it let the content behind
+            // bleed through). --bg-elevated is the floating-surface token;
+            // backdrop-blur kills any residual show-through from its 0.85 alpha.
+            background: 'var(--bg-elevated)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
             border: `1px solid ${drawerBorder}`,
             borderRadius: 8,
             maxHeight: 220,
