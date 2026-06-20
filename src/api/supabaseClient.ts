@@ -18,6 +18,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { env } from '@/lib/env';
 import type { Database } from '@/types/supabase';
 import {
   parseDependencies as parseScheduleDependencies,
@@ -1033,10 +1034,22 @@ export const getSignedUrl = async (storagePath: string, bucket: string = 'app-fi
   return data.signedUrl;
 };
 
+// Trusted host for already-resolved (full http) file URLs: our own Supabase
+// project, where signed/public storage URLs live. Stored file_url values are
+// storage PATHS (verified across every file_url table: 0 rows hold a full URL),
+// so the ONLY legitimate full URL is one on this host. Any other host is
+// untrusted — a poisoned / user-controlled file_url must never be rendered or
+// opened as a trusted project file (#20).
+const TRUSTED_FILE_HOST = (() => {
+  try { return new URL(env.supabaseUrl).host; } catch { return ''; }
+})();
+
 /**
  * Resolve a file_url to a usable URL.
  * If the value looks like a storage path (no protocol), generate a signed URL.
- * If it's already a full URL, return as-is.
+ * If it's already a full http(s) URL, return it ONLY when it's on our trusted
+ * Supabase host; any other host is blocked (returns null) so a user-controlled
+ * file_url can't surface arbitrary external content as a trusted project file.
  *
  * Bucket-prefixed paths ("email-attachments/<project_id>/<message_id>/<file>")
  * sign against that bucket — email attachments live in their own private
@@ -1044,7 +1057,13 @@ export const getSignedUrl = async (storagePath: string, bucket: string = 'app-fi
  */
 export const resolveFileUrl = async (fileUrl: string | null | undefined): Promise<string | null> => {
   if (!fileUrl) return null;
-  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) return fileUrl;
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+    let host = '';
+    try { host = new URL(fileUrl).host; } catch { return null; }
+    if (host && host === TRUSTED_FILE_HOST) return fileUrl;
+    console.warn(`[resolveFileUrl] blocked untrusted external file URL (host: ${host || 'unparseable'})`);
+    return null;
+  }
   if (fileUrl.startsWith('email-attachments/')) {
     return getSignedUrl(fileUrl.slice('email-attachments/'.length), 'email-attachments');
   }
