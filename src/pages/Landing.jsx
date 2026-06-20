@@ -410,6 +410,26 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
         </div>
       </section>
 
+      {/* ══ BRAND SHOWCASE — the mark, on the floor ══ */}
+      <section className="lp-fade" style={{ padding: "8px 0 28px" }}>
+        <div className="lp-wrap">
+          <img
+            src="/steelbuild-pro-logo.jpg"
+            alt="SteelBuild Pro — the project delivery platform built for structural steel"
+            style={{
+              display: "block", width: "100%", height: "auto",
+              borderRadius: 14, border: `1px solid ${C.line}`,
+              boxShadow: "0 1px 2px rgba(20,22,26,0.05), 0 34px 70px -38px rgba(20,22,26,0.38)",
+            }}
+          />
+          <div className="lp-dim" style={{ marginTop: 20 }}>
+            <span className="ln" />
+            <em style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontStyle: "normal" }}>Detailing office → shop floor → field</em>
+            <span className="ln" />
+          </div>
+        </div>
+      </section>
+
       {/* ══ PAIN POINTS ══ */}
       <section className="lp-sec lp-onwhite" style={{ borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}` }}>
         <div className="lp-wrap">
