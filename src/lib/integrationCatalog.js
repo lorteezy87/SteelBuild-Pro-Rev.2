@@ -5,6 +5,16 @@ export const INTEGRATION_AREAS = [
     category: "Communications",
     status: "Partially Live",
     risk: "Medium",
+    // Customer-facing readiness (clean product language; the dev `status`/`risk`
+    // above are kept for the admin/developer view).
+    customerStatus: "available",
+    customerSummary: "Manual forwarding and Power Automate are supported today; direct Outlook sign-in is coming soon.",
+    providers: [
+      { name: "Email forwarding", status: "available" },
+      { name: "Power Automate", status: "available" },
+      { name: "Outlook (direct connect)", status: "coming_soon" },
+      { name: "Gmail", status: "coming_soon" },
+    ],
     shortDescription: "Capture RFIs, submittals, tickets, photos, and project correspondence from monitored mailboxes.",
     systems: ["Outlook", "Gmail", "Shared project inboxes", "Power Automate", "SendGrid"],
     existingCapabilities: [
@@ -39,6 +49,14 @@ export const INTEGRATION_AREAS = [
     category: "Cost",
     status: "Adapter Required",
     risk: "High",
+    customerStatus: "custom_setup",
+    customerSummary: "CSV import/export workflow first; live QuickBooks/Sage API sync comes later, after field mapping is approved.",
+    providers: [
+      { name: "Change order CSV import", status: "available" },
+      { name: "Cost code CSV import", status: "custom_setup" },
+      { name: "Budget / SOV CSV export", status: "custom_setup" },
+      { name: "QuickBooks, Sage & Vista sync", status: "coming_soon" },
+    ],
     shortDescription: "Sync budgets, commitments, change orders, invoices, and cost codes with accounting systems.",
     systems: ["QuickBooks", "Sage", "Vista", "Foundation", "CSV export"],
     existingCapabilities: [
@@ -64,6 +82,15 @@ export const INTEGRATION_AREAS = [
     category: "Documents",
     status: "Partially Live",
     risk: "Medium",
+    customerStatus: "available",
+    customerSummary: "SteelBuild storage is live; SharePoint and OneDrive need a one-time setup; Google Drive and Dropbox are coming soon.",
+    providers: [
+      { name: "SteelBuild storage", status: "available" },
+      { name: "SharePoint", status: "setup_required" },
+      { name: "OneDrive", status: "setup_required" },
+      { name: "Google Drive", status: "coming_soon" },
+      { name: "Dropbox", status: "coming_soon" },
+    ],
     shortDescription: "Connect project files across SteelBuild storage, external drives, drawing folders, and field photos.",
     systems: ["Supabase Storage", "SharePoint", "OneDrive", "Google Drive", "Dropbox"],
     existingCapabilities: [
@@ -91,6 +118,14 @@ export const INTEGRATION_AREAS = [
     category: "Schedule",
     status: "Partially Live",
     risk: "Medium",
+    customerStatus: "available",
+    customerSummary: "MS Project XML import and calendar (ICS) export work today; MS Project export and Primavera P6 are coming soon.",
+    providers: [
+      { name: "MS Project XML import", status: "available" },
+      { name: "Calendar (ICS) export", status: "available" },
+      { name: "MS Project export", status: "coming_soon" },
+      { name: "Primavera P6 import / export", status: "coming_soon" },
+    ],
     shortDescription: "Move schedules between SteelBuild, MS Project, Primavera P6, Outlook, and field look-aheads.",
     systems: ["MS Project XML", "Primavera P6", "CSV", "ICS Calendar"],
     existingCapabilities: [
@@ -117,11 +152,21 @@ export const INTEGRATION_AREAS = [
     category: "Model",
     status: "Partially Live",
     risk: "High",
+    // viewer_3d is enabled:false (internal-only override) — the IFC viewer is NOT
+    // GA for customers, so this stays "coming soon" until the flag ships broadly.
+    customerStatus: "coming_soon",
+    customerSummary: "3D model (IFC / GLB / GLTF) viewing is coming soon; Autodesk cloud connectivity comes after that.",
+    providers: [
+      { name: "3D model (IFC / GLB / GLTF) viewing", status: "coming_soon" },
+      { name: "Model file registry", status: "coming_soon" },
+      { name: "Model-to-RFI linking", status: "coming_soon" },
+      { name: "Autodesk Construction Cloud", status: "coming_soon" },
+    ],
     shortDescription: "Connect IFC/model coordination to drawings, work packages, RFIs, and field issue workflows.",
     systems: ["IFC", "Revit exports", "Autodesk Construction Cloud", "Autodesk Platform Services"],
     existingCapabilities: [
-      "Model Viewer loads GLTF, GLB, and IFC files locally.",
-      "Portfolio BIM lens and Model Viewer already expose IFC/BIM viewing workflows.",
+      "Self-hosted IFC viewer (web-ifc + three) loads IFC/GLB/GLTF, but is gated behind the viewer_3d feature flag (internal only, not GA).",
+      "Per-piece fab-status coloring from model_elements is wired into the Detailing Control Center 3D Model tab.",
       "Documents can store IFC Model category files.",
     ],
     targetWorkflows: [
@@ -171,6 +216,48 @@ export function integrationSummary(areas = INTEGRATION_AREAS) {
     acc.partiallyLive += area.status === "Partially Live" ? 1 : 0;
     return acc;
   }, { total: 0, byStatus: {}, highRisk: 0, partiallyLive: 0 });
+}
+
+// ── Customer-facing readiness ────────────────────────────────────────
+// Clean product language shown to normal users; the dev `status`/`risk`
+// fields on each area stay for the admin/developer view.
+export const CUSTOMER_STATUS_META = {
+  available:      { label: "Available",              tone: "success" },
+  setup_required: { label: "Setup Required",         tone: "info" },
+  custom_setup:   { label: "Custom Setup",           tone: "info" },
+  coming_soon:    { label: "Coming Soon",            tone: "muted" },
+  admin_review:   { label: "Admin Review Required",  tone: "warning" },
+};
+
+export function customerStatusMeta(statusKey) {
+  return CUSTOMER_STATUS_META[statusKey] || CUSTOMER_STATUS_META.coming_soon;
+}
+
+// Filter options for the customer-facing catalog (by readiness label).
+export const CUSTOMER_STATUS_FILTERS = [
+  "All",
+  CUSTOMER_STATUS_META.available.label,
+  CUSTOMER_STATUS_META.setup_required.label,
+  CUSTOMER_STATUS_META.custom_setup.label,
+  CUSTOMER_STATUS_META.coming_soon.label,
+];
+
+// Filter the catalog by the customer-facing readiness label (e.g. "Available").
+export function filterByCustomerStatus(areas = INTEGRATION_AREAS, label = "All") {
+  if (label === "All") return areas;
+  return areas.filter((area) => customerStatusMeta(area.customerStatus).label === label);
+}
+
+// Roll up customer-facing readiness for the KPI strip.
+export function customerIntegrationSummary(areas = INTEGRATION_AREAS) {
+  return areas.reduce((acc, area) => {
+    acc.total += 1;
+    if (area.customerStatus === "available") acc.availableAreas += 1;
+    const providers = Array.isArray(area.providers) ? area.providers : [];
+    acc.availableProviders += providers.filter((p) => p.status === "available").length;
+    acc.comingSoonProviders += providers.filter((p) => p.status === "coming_soon").length;
+    return acc;
+  }, { total: 0, availableAreas: 0, availableProviders: 0, comingSoonProviders: 0 });
 }
 
 export const INTEGRATION_BUILD_ORDER = [
