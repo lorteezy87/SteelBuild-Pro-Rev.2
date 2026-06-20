@@ -29,7 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-06-19 | epic3-detailing-hub | Epic 3 ✅ shipped (`82f5af53`) → now Epic 4 onboarding | `src/pages/Onboarding.jsx`, `src/pages/OrgMembers.jsx`, `src/lib/org/*` | Wire onboarding-wizard roster → invites: finish → Team page prefilled |
+| _(none active)_ | | | | |
 
 ## Recently released
 

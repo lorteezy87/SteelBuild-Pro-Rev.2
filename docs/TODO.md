@@ -123,6 +123,29 @@ door without stranding the other roles.
 - [ ] Optional: per-role NAV (hide cost/detailing tabs from field) was considered and
   deferred — deep-link breakage risk, and page-level permissions already gate access. (S)
 
+## Thread H — AI Drawing Intake (Epic 5 — polish)
+
+Extraction + the in-modal review screen (`DrawingSetUploadModal` → StepReview) already
+work daily. Owner chose "polish the current flow" over a formal staging queue — the
+staging tables (`drawing_analyses`/`drawing_sheets`) exist + are RLS-hardened (verified
+live), but `importAnalyzedDrawings` is **dead** (no call sites); the live intake path is
+the upload modal's `handleCreate`.
+
+- [x] **Per-sheet review flag + audit-on-create — SHIPPED 2026-06-19.** The extractor
+  returns no model confidence, so instead of a fake %, a deterministic per-sheet
+  "⚠ REVIEW" chip (+ a "N to review" summary) flags sheets with a real quality problem
+  (bad-source row, fallback `_note`, or missing sheet #) via the pure
+  `src/components/drawings/intakeReview.js` (`sheetReviewFlags`, 7 tests). The SAME helper
+  feeds `buildRecord`'s persisted `ai_extraction_status`, so the badge and the saved status
+  can't disagree (it now also flags empty-sheet# rows — verified purely informational
+  downstream: counts + badges only, nothing hides/blocks NeedsReview rows). And a
+  fire-and-forget `logActivity("drawing","created",…)` on the live create path records the
+  intake commit (sheets imported / flagged / failed) to the Activity trail — closing the
+  §30 "no audit record of the intake" gap. Full suite 1549 green. **Code-verified, NOT
+  field-verified** — upload a real PDF → review → create and confirm the chip + Activity row. (M)
+- [ ] Deferred (not chosen): a formal staging/approval QUEUE (separate table, approver
+  audit, role-gated approval). Revisit if drawing review needs explicit sign-off. (L)
+
 ## Other (shipped last night)
 Submittal "Released for Fab" open-tally (`4d144c2c`), WP form project pre-select (`e19ddd23`),
 Gantt scroll position (`b37d7654`), denser/crisper sidebar (`0b734d55`/`84838b2d`).
