@@ -14,6 +14,7 @@ import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { formatLocalDate, localToday } from "@/utils/dates";
 import { formatMoney, sumMoney } from "@/lib/money";
+import { logActivity } from "@/services/auditLogger";
 import {
   createPayApplication,
   listLines,
@@ -97,7 +98,7 @@ export default function PayApplications() {
 
   const createMut = useMutation({
     mutationFn: (input) => createPayApplication({ projectId, ...input }, { sovItems, contract }),
-    onSuccess: (app) => { refresh(); setNewOpen(false); setSelectedId(app.id); toast.success(`Pay Application #${app.application_number} created`); },
+    onSuccess: (app) => { logActivity("pay_application", "created", app, { projectId }); refresh(); setNewOpen(false); setSelectedId(app.id); toast.success(`Pay Application #${app.application_number} created`); },
     onError: (e) => toast.error(e?.message?.includes("row-level security") ? "Only PM+ can create pay applications." : `Create failed: ${e?.message}`),
   });
   const lineMut = useMutation({
@@ -105,8 +106,8 @@ export default function PayApplications() {
     onSuccess: () => refresh(),
     onError: (e) => toast.error(`Update failed: ${e?.message}`),
   });
-  const statusMut = useMutation({ mutationFn: ({ id, status }) => updatePayApplication(id, { status }), onSuccess: () => { refresh(); toast.success("Updated"); }, onError: (e) => toast.error(`Update failed: ${e?.message}`) });
-  const delMut = useMutation({ mutationFn: (id) => softDeletePayApplication(id), onSuccess: () => { refresh(); setSelectedId(null); toast.success("Deleted"); }, onError: (e) => toast.error(`Delete failed: ${e?.message}`) });
+  const statusMut = useMutation({ mutationFn: ({ id, status }) => updatePayApplication(id, { status }), onSuccess: (data, { status }) => { logActivity("pay_application", "status_changed", data, { projectId, description: `→ ${status}` }); refresh(); toast.success("Updated"); }, onError: (e) => toast.error(`Update failed: ${e?.message}`) });
+  const delMut = useMutation({ mutationFn: (id) => softDeletePayApplication(id), onSuccess: (_r, id) => { logActivity("pay_application", "deleted", { id, project_id: projectId }, { projectId }); refresh(); setSelectedId(null); toast.success("Deleted"); }, onError: (e) => toast.error(`Delete failed: ${e?.message}`) });
 
   const exportPdf = () => {
     try {
