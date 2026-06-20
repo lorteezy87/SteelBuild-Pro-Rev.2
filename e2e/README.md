@@ -97,34 +97,28 @@ doesn't break when the sign-in UI changes. With nothing configured, the run
 fails fast with a clear message; `npx playwright test --list` works with no
 secrets (handy for verifying the config parses).
 
-## Wire into CI (after the account exists)
+## Enable in CI
 
-Keep this **separate from the deploy gate** so a missing test account never
-blocks a deploy. Add a job to `.github/workflows/ci.yml` (only runs when the
-secrets are present):
+The job is **already wired** — `e2e-smoke` in `.github/workflows/ci.yml`. It
+`needs: deploy` and `deploy` does **not** depend on it, so it runs *after* the
+production deploy and a failing E2E run can never block or roll back prod. It
+stays **skipped (never red)** until you switch it on. To enable:
 
-```yaml
-  e2e-smoke:
-    needs: ci
-    if: ${{ github.event_name == 'push' && secrets.E2E_PASS != '' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
-        env:
-          E2E_BASE_URL: https://steelbuild-pro.com
-          E2E_USER: ${{ secrets.E2E_USER }}
-          E2E_PASS: ${{ secrets.E2E_PASS }}
-          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
-          E2E_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with: { name: playwright-report, path: playwright-report/ }
-```
+1. **Set the repo VARIABLE** `E2E_ENABLED` = `true`
+   (Settings → Secrets and variables → Actions → **Variables**). A *variable*,
+   not a secret, because `secrets.*` is unreliable in a job-level `if`. Unset →
+   the whole job is skipped.
+2. **Set the repo SECRETS** (same page → **Secrets**) for sign-in:
+   `E2E_USER`, `E2E_PASS`, `E2E_SUPABASE_URL`, `E2E_SUPABASE_ANON_KEY`. With
+   `E2E_ENABLED=true` but these missing the run goes red by design (you opted
+   in). The `E2E_BASE_URL` is hard-set to production in the job.
+3. *(Optional)* the **fab-release gate** secrets to also run that spec
+   (test org ONLY — it writes): `E2E_FAB_PROJECT_ID`, `E2E_BLOCKED_DRAWING_ID`,
+   `E2E_CLEAN_DRAWING_ID`, plus `E2E_VIEWER_USER` / `E2E_VIEWER_PASS` for the
+   RLS-deny check. Leave these unset to run only the read-only smoke.
+
+The job uploads the Playwright HTML report as a `playwright-report` artifact on
+failure.
 
 ## Notes / follow-ups
 
