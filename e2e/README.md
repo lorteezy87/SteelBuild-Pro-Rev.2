@@ -66,8 +66,22 @@ One-time fixture (in addition to `E2E_USER` / `E2E_PASS` / `E2E_SUPABASE_*`):
 | `E2E_CLEAN_DRAWING_ID` | a drawing in that project with **no** open RFI |
 | `E2E_VIEWER_USER` / `E2E_VIEWER_PASS` | *(optional)* a viewer-role account; unset → the RLS-deny test skips |
 
-Each sub-test skips (doesn't fail) when its fixture vars are unset, so this spec
-is opt-in like the rest of the harness.
+**Pick the two drawings with the same function the gate uses**, so the fixture
+matches the trigger's own view of "blocked":
+
+```sql
+select * from fab_release_blocking_rfis(array['<drawing-uuid>']::uuid[]);
+-- >= 1 row  -> use it for E2E_BLOCKED_DRAWING_ID
+--    0 rows -> use it for E2E_CLEAN_DRAWING_ID
+```
+
+Each sub-test **skips** (doesn't fail) when its fixture vars are unset, so this
+spec is opt-in like the rest of the harness.
+
+`fab_release_log` is **append-only** (no update/delete RLS policy — it's the
+audit trail), so the OVERRIDE and CLEAN tests each add one row to the test
+project per run, by design. If accumulation ever bothers you, purge with a
+service-role script **against the TEST project only**.
 
 ## Run locally
 
