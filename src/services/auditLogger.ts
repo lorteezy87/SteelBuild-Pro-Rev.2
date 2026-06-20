@@ -30,6 +30,7 @@ const ENTITY_LABELS: Record<string, string> = {
   delivery:       "Delivery",
   rfi:            "RFI",
   submittal:      "Submittal",
+  pay_application: "PayApplication",
   change_order:   "ChangeOrder",
   expense:        "Expense",
   cost_code:      "CostCode",
@@ -53,6 +54,7 @@ function getEntityName(entityType: string, record: EntityRecord | null | undefin
     record.sheet_number ||
     record.rfi_number ||
     record.submittal_number ||
+    record.application_number ||
     record.co_number ||
     record.delivery_number ||
     record.delivery_title ||
