@@ -29,7 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| _(none active)_ | | | | |
+| 2026-06-20 | opus-db-baseline | 🧊 MIGRATION FREEZE — baseline squash cutover in progress | `supabase/migrations/**`, `supabase/baseline/**` | DO NOT apply migrations (apply_migration / db push) or edit supabase/migrations until this row is removed |
 
 ## Recently released
 
