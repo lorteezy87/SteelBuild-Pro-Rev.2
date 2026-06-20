@@ -84,6 +84,9 @@ export default function PayApplications() {
   }), [activeProject, changeOrders]);
 
   const selectedApp = payApps.find((a) => a.id === selectedId) || null;
+  // Only a DRAFT pay app is editable — once submitted/approved/paid the G703
+  // figures are a billing record (locked in the UI here + by the DB trigger, C2).
+  const isDraft = selectedApp?.status === "draft";
   const { data: lines = [] } = useQuery({ queryKey: ["payapp_lines", selectedId], queryFn: () => listLines(selectedId), enabled: !!selectedId });
   const g702 = useMemo(() => (selectedApp ? computeG702({
     contract: { originalContractSum: num(selectedApp.original_contract_sum), netChangeOrders: num(selectedApp.net_change_orders), retainagePercent: num(selectedApp.retainage_percent) },
@@ -103,7 +106,14 @@ export default function PayApplications() {
   });
   const lineMut = useMutation({
     mutationFn: ({ line, edit }) => updateLine(line, edit, num(selectedApp?.retainage_percent)),
-    onSuccess: () => refresh(),
+    onSuccess: (_app, { line, edit }) => {
+      // Audit every figure change (previously silently unlogged — §23).
+      const desc = edit.percentComplete != null
+        ? `G703 line ${line.line_item_number ?? line.id}: % complete ${num(line.percent_complete)} → ${edit.percentComplete}`
+        : `G703 line ${line.line_item_number ?? line.id}: stored ${num(line.materials_stored)} → ${edit.materialsStored}`;
+      logActivity("pay_application", "updated", { id: selectedApp?.id, project_id: projectId, application_number: selectedApp?.application_number }, { projectId, description: desc });
+      refresh();
+    },
     onError: (e) => toast.error(`Update failed: ${e?.message}`),
   });
   const statusMut = useMutation({ mutationFn: ({ id, status }) => updatePayApplication(id, { status }), onSuccess: (data, { status }) => { logActivity("pay_application", "status_changed", data, { projectId, description: `→ ${status}` }); refresh(); toast.success("Updated"); }, onError: (e) => toast.error(`Update failed: ${e?.message}`) });
@@ -176,12 +186,12 @@ export default function PayApplications() {
                 {PAY_APP_STATUSES.map((s) => <option key={s} value={s}>{PAY_APP_STATUS_LABELS[s]}</option>)}
               </select>
               <button style={btnP} onClick={exportPdf}>Export PDF</button>
-              <button style={{ ...btn, color: "var(--status-error)", borderColor: "var(--status-error)" }} onClick={() => { if (confirm("Delete this pay application?")) delMut.mutate(selectedApp.id); }}>Delete</button>
+              <button style={{ ...btn, color: "var(--status-error)", borderColor: "var(--status-error)", opacity: isDraft ? 1 : 0.4, cursor: isDraft ? "pointer" : "not-allowed" }} disabled={!isDraft} title={isDraft ? "" : "Only a draft pay application can be deleted — set status to void instead."} onClick={() => { if (confirm("Delete this pay application?")) delMut.mutate(selectedApp.id); }}>Delete</button>
             </div>
           </div>
 
           <div style={{ ...card, overflowX: "auto" }}>
-            <div style={{ ...lbl, marginBottom: 8 }}>G703 Continuation Sheet — enter % complete &amp; stored</div>
+            <div style={{ ...lbl, marginBottom: 8 }}>G703 Continuation Sheet — {isDraft ? "enter % complete & stored" : <span style={{ color: "var(--status-warning, var(--accent))" }}>🔒 {PAY_APP_STATUS_LABELS[selectedApp.status] || selectedApp.status} — figures locked</span>}</div>
             <table style={{ ...mono, width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
               <thead>
                 <tr style={{ color: "var(--text-muted)", textAlign: "right" }}>
@@ -208,11 +218,11 @@ export default function PayApplications() {
                       <td style={{ padding: 4, color: "var(--text-muted)" }}>{formatMoney(l.work_completed_previous)}</td>
                       <td style={{ padding: 4, color: "var(--text-primary)" }}>{formatMoney(l.work_completed_this_period)}</td>
                       <td style={{ padding: 4 }}>
-                        <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px" }} type="number" defaultValue={num(l.percent_complete)}
+                        <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft}
                           onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.percent_complete)) lineMut.mutate({ line: l, edit: { percentComplete: v } }); }} />
                       </td>
                       <td style={{ padding: 4 }}>
-                        <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px" }} type="number" defaultValue={num(l.materials_stored)}
+                        <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft}
                           onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.materials_stored)) lineMut.mutate({ line: l, edit: { materialsStored: v } }); }} />
                       </td>
                       <td style={{ padding: 4, color: "var(--text-primary)", fontWeight: 700 }}>{formatMoney(f.totalCompletedStored)}</td>
