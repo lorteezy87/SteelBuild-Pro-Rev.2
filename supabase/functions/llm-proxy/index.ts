@@ -249,13 +249,9 @@ async function handle(req: Request): Promise<Response> {
   // a throttled user never reaches a provider call.
   const quota = await checkUserQuota(auth.userId);
   if (!quota.ok) {
-    return new Response(
-      JSON.stringify({ error: quota.error, protocol_version: PROTOCOL_VERSION }),
-      {
-        status: quota.status,
-        headers: { ...corsHeaders(req), "Content-Type": "application/json", "Retry-After": String(quota.retryAfterSeconds) },
-      },
-    );
+    const res = json({ error: quota.error, protocol_version: PROTOCOL_VERSION }, quota.status, req);
+    res.headers.set("Retry-After", String(quota.retryAfterSeconds));
+    return res;
   }
 
   let body: any;
