@@ -47,6 +47,14 @@
 //   ANTHROPIC_API_KEY, OPENAI_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY,
 //   SUPABASE_SERVICE_ROLE_KEY (the last is for telemetry inserts).
 //
+// Optional secrets:
+//   ALLOWED_ORIGINS            — comma-separated CORS allowlist override. Unset →
+//                                baked production defaults + localhost + *.vercel.app.
+//                                Set to "*" to fully open CORS (escape hatch).
+//   LLM_KILL_SWITCH            — "1"/"true" halts ALL LLM calls (break-glass).
+//   LLM_DAILY_COST_LIMIT_USD   — per-user rolling-24h spend cap (see quota.ts).
+//   LLM_DAILY_REQUEST_LIMIT    — per-user rolling-24h request cap.
+//
 // Deploy:
 //   supabase functions deploy llm-proxy --no-verify-jwt
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,8 +84,34 @@ const PROVIDER_REGISTRY: Record<string, ProviderClient> = {
   openai:    openaiClient,
 };
 
+function isTruthy(v: string | undefined): boolean {
+  if (!v) return false;
+  return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
+}
+
+// Use-cases that send large document/image inputs (high per-call cost). For
+// these the quota check fails CLOSED when usage can't be verified, so a usage-
+// read outage can't be exploited to bypass the spend cap on the costly calls.
+// Cheap chat/extraction calls stay fail-open (telemetry never breaks the request).
+const EXPENSIVE_USE_CASES = new Set([
+  "drawing-analysis",
+  "revision-compare",
+  "sheet-extraction",
+  "photo-ocr",
+  "shipping-ticket-import",
+  "rfi-log-import",
+]);
+
+// Baked production allowlist so the default (no ALLOWED_ORIGINS env) is NOT "*"
+// (#11). Localhost + *.vercel.app previews are matched by regex below.
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://steelbuild-pro.com",
+  "https://www.steelbuild-pro.com",
+];
+
 function allowedOrigins(): string[] {
-  const raw = Deno.env.get("ALLOWED_ORIGINS") || "";
+  const raw = Deno.env.get("ALLOWED_ORIGINS");
+  if (!raw) return DEFAULT_ALLOWED_ORIGINS;
   return raw
     .split(",")
     .map((origin) => origin.trim())
@@ -86,7 +120,10 @@ function allowedOrigins(): string[] {
 
 function corsHeaders(req?: Request): Record<string, string> {
   const configured = allowedOrigins();
-  if (!req || configured.length === 0 || configured.includes("*")) {
+  // "*" in the env is an escape hatch to fully open CORS without a redeploy. With
+  // no req (response helpers) we also use "*" — the preflight, which has the req,
+  // is where cross-origin browsers are actually gated.
+  if (!req || configured.includes("*")) {
     return {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, sentry-trace, baggage",
@@ -94,9 +131,14 @@ function corsHeaders(req?: Request): Record<string, string> {
     };
   }
 
-  const origin = req?.headers.get("Origin") || "";
+  const origin = req.headers.get("Origin") || "";
   const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-  const allowOrigin = configured.includes(origin) || isLocalhost ? origin : "null";
+  const isVercelPreview = /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin);
+  // Disallowed origin → fall back to the canonical production origin so the
+  // browser's preflight fails (origin mismatch) and the request is blocked.
+  const allowOrigin = configured.includes(origin) || isLocalhost || isVercelPreview
+    ? origin
+    : (configured[0] || "https://steelbuild-pro.com");
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, sentry-trace, baggage",
@@ -244,15 +286,18 @@ async function handle(req: Request): Promise<Response> {
   const auth = await authenticateRequest(req);
   if (!auth.ok) return auth.response;
 
-  // Per-user daily spend/volume guard. No-op unless a cap secret is set; fails
-  // OPEN on any read error (see quota.ts). Checked before body parse/dispatch so
-  // a throttled user never reaches a provider call.
-  const quota = await checkUserQuota(auth.userId);
-  if (!quota.ok) {
-    const res = json({ error: quota.error, protocol_version: PROTOCOL_VERSION }, quota.status, req);
-    res.headers.set("Retry-After", String(quota.retryAfterSeconds));
-    return res;
+  // Global kill switch — break-glass to halt ALL LLM spend without a redeploy.
+  if (isTruthy(Deno.env.get("LLM_KILL_SWITCH"))) {
+    return json(
+      { error: "AI features are temporarily disabled. Please try again later.", protocol_version: PROTOCOL_VERSION },
+      503,
+      req,
+    );
   }
+
+  // NOTE: the per-user spend/volume quota is checked AFTER the routing decision
+  // (below), so it can fail CLOSED for expensive use-cases. Body parse + routing
+  // are cheap; the provider call (the thing being gated) is still well after it.
 
   let body: any;
   try {
@@ -316,6 +361,18 @@ async function handle(req: Request): Promise<Response> {
   if (typeof body?.maxTokens === "number" && body.maxTokens > OUTPUT_TOKEN_CEILING) {
     console.warn(`[llm-proxy] clamping maxTokens ${body.maxTokens} -> ${OUTPUT_TOKEN_CEILING} (useCase=${useCase})`);
     body.maxTokens = OUTPUT_TOKEN_CEILING;
+  }
+
+  // ── Per-user daily spend/volume guard ───────────────────────────────────
+  // No-op unless a cap secret is set. Now that the use-case is known, expensive
+  // (document/image) use-cases fail CLOSED if usage can't be verified; cheap
+  // calls stay fail-open. Checked before the provider call so a throttled user
+  // never reaches a provider.
+  const quota = await checkUserQuota(auth.userId, { failClosed: EXPENSIVE_USE_CASES.has(useCase) });
+  if (!quota.ok) {
+    const res = json({ error: quota.error, protocol_version: PROTOCOL_VERSION }, quota.status, req);
+    res.headers.set("Retry-After", String(quota.retryAfterSeconds));
+    return res;
   }
 
   // ── Diagnostic log (matches v7 format so existing log searches keep working)

@@ -26,6 +26,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { sanitizeAttachmentName } from "../_shared/attachments.ts";
 
 // Max combined raw (decoded) size of outbound attachments. base64 inflates
 // the payload ~33%, so the actual request body stays well under typical
@@ -341,7 +342,10 @@ async function storeSentAttachments(
       const bytes = base64ToBytes(att.content_base64);
       const contentType = att.content_type || "application/octet-stream";
       const contentHash = await hashContent(bytes);
-      const storagePath = `${projectId}/${messageId}/${att.filename}`;
+      // Sanitize the (user-supplied) filename before it enters the storage path —
+      // a name like "../x" or "a/b" would otherwise escape the message prefix.
+      const safeName = sanitizeAttachmentName(att.filename);
+      const storagePath = `${projectId}/${messageId}/${safeName}`;
 
       const uploadResp = await fetch(
         `${supabaseUrl}/storage/v1/object/email-attachments/${storagePath}`,
@@ -366,7 +370,7 @@ async function storeSentAttachments(
       const attRow = {
         message_id: messageId,
         project_id: projectId,
-        filename: att.filename,
+        filename: safeName,
         content_type: contentType,
         size_bytes: bytes.length,
         content_hash: contentHash,
@@ -475,7 +479,7 @@ async function storeSentMessage(
 // ── Main Handler ──────────────────────────────────────────────────────────────
 
 async function handle(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return errorResponse(405, "Method not allowed");
 
   // Authenticate

@@ -171,7 +171,7 @@ async function verifyJwt(
 // ── Handler ─────────────────────────────────────────────────────────────────────
 
 async function handle(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return errorResponse(405, "Method not allowed");
 
   const authHeader = req.headers.get("Authorization");

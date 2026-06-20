@@ -15,12 +15,7 @@
 
 import Stripe from "https://esm.sh/stripe@17?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, stripe-signature",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { corsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -35,7 +30,7 @@ function stripeClient(): Stripe {
 }
 
 const json = (obj: unknown, status = 200) =>
-  new Response(JSON.stringify(obj), { status, headers: { ...cors, "Content-Type": "application/json" } });
+  new Response(JSON.stringify(obj), { status, headers: { ...corsHeaders(), "Content-Type": "application/json" } });
 
 interface BillingConfig { pricePro: string; priceBusiness: string; webhookSecret: string; }
 
@@ -100,7 +95,7 @@ async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   const url = new URL(req.url);
   const stripe = stripeClient();
 
@@ -168,7 +163,12 @@ Deno.serve(async (req) => {
     return json({ error: "You don't have permission to manage this workspace's billing" }, 403);
   }
 
-  const origin = req.headers.get("origin") ?? "https://steelbuild-pro.com";
+  // Validate the Origin before it's baked into Stripe redirect URLs (#12). An
+  // unvalidated Origin would let an attacker point checkout success/cancel — and
+  // the billing-portal return — at an arbitrary site (post-payment open redirect).
+  // Any disallowed/missing origin falls back to the canonical production URL.
+  const rawOrigin = req.headers.get("origin") ?? "";
+  const origin = isAllowedOrigin(rawOrigin) ? rawOrigin : "https://steelbuild-pro.com";
 
   if (action === "checkout") {
     const cfg = await loadConfig();
