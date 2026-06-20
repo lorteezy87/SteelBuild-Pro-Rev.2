@@ -16,6 +16,7 @@
 import Stripe from "https://esm.sh/stripe@17?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
+import { type BillingConfig, checkoutOrgUpdate, subscriptionOrgUpdate } from "./webhookLogic.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -32,7 +33,7 @@ function stripeClient(): Stripe {
 const json = (obj: unknown, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { ...corsHeaders(), "Content-Type": "application/json" } });
 
-interface BillingConfig { pricePro: string; priceBusiness: string; webhookSecret: string; }
+// BillingConfig + the pure webhook->org mapping live in ./webhookLogic.ts (unit-tested).
 
 // Config (price ids + webhook secret) lives in the service-role-only billing_config
 // table so it can be provisioned via the Stripe API without writing env secrets at
@@ -54,28 +55,16 @@ async function loadConfig(): Promise<BillingConfig> {
   };
 }
 
-function priceToPlan(priceId: string | undefined, cfg: BillingConfig): string | null {
-  if (!priceId) return null;
-  if (priceId === cfg.pricePro) return "pro";
-  if (priceId === cfg.priceBusiness) return "business";
-  return null;
-}
-
 // deno-lint-ignore no-explicit-any
 async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
   if (event.type === "checkout.session.completed") {
     const s = event.data.object;
-    const orgId = s.metadata?.org_id || s.client_reference_id;
-    if (!orgId) return;
+    // Retrieve the subscription (side effect stays here); the org-update payload
+    // computation is the unit-tested pure logic in webhookLogic.ts.
     const sub = s.subscription ? await stripe.subscriptions.retrieve(s.subscription) : null;
-    const plan = s.metadata?.plan || priceToPlan(sub?.items?.data?.[0]?.price?.id, cfg) || "pro";
-    await admin.from("organizations").update({
-      plan,
-      subscription_status: sub?.status ?? "active",
-      stripe_subscription_id: s.subscription ?? null,
-      stripe_customer_id: s.customer ?? undefined,
-      current_period_end: sub?.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
-    }).eq("id", orgId);
+    const res = checkoutOrgUpdate(s, sub, cfg);
+    if (!res) return;
+    await admin.from("organizations").update(res.update).eq("id", res.orgId);
   } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
     const sub = event.data.object;
     let orgId = sub.metadata?.org_id;
@@ -84,13 +73,8 @@ async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
       orgId = org?.id;
     }
     if (!orgId) return;
-    const deleted = event.type === "customer.subscription.deleted";
-    await admin.from("organizations").update({
-      plan: deleted ? "free" : (priceToPlan(sub.items?.data?.[0]?.price?.id, cfg) ?? sub.metadata?.plan ?? undefined),
-      subscription_status: deleted ? "canceled" : sub.status,
-      stripe_subscription_id: sub.id,
-      current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
-    }).eq("id", orgId);
+    const update = subscriptionOrgUpdate(sub, cfg, { deleted: event.type === "customer.subscription.deleted" });
+    await admin.from("organizations").update(update).eq("id", orgId);
   }
 }
 
