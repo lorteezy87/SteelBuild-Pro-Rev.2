@@ -60,6 +60,7 @@ import { anthropicClient } from "./providers/anthropic.ts";
 import { openaiClient }    from "./providers/openai.ts";
 import { computeCostUsd }  from "./providers/cost.ts";
 import { getProviderForUseCase } from "./router.ts";
+import { checkUserQuota } from "./quota.ts";
 
 // Protocol versions:
 //   v3 = verify_jwt disabled
@@ -242,6 +243,20 @@ async function handle(req: Request): Promise<Response> {
 
   const auth = await authenticateRequest(req);
   if (!auth.ok) return auth.response;
+
+  // Per-user daily spend/volume guard. No-op unless a cap secret is set; fails
+  // OPEN on any read error (see quota.ts). Checked before body parse/dispatch so
+  // a throttled user never reaches a provider call.
+  const quota = await checkUserQuota(auth.userId);
+  if (!quota.ok) {
+    return new Response(
+      JSON.stringify({ error: quota.error, protocol_version: PROTOCOL_VERSION }),
+      {
+        status: quota.status,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json", "Retry-After": String(quota.retryAfterSeconds) },
+      },
+    );
+  }
 
   let body: any;
   try {
