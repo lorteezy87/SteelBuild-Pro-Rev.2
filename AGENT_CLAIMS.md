@@ -29,7 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-06-19 | epic3-detailing-hub | Epic 3 — Detailing Control Center landing/nav | `src/boot/AppRoutes.jsx`, `src/components/settings/DashboardTab.jsx`, `src/lib/landingForRole*`, `src/lib/__tests__/landingForRole*` | Role-aware default landing + landing-picker fix |
+| 2026-06-19 | epic3-detailing-hub | Epic 3 ✅ shipped (`82f5af53`) → now Epic 4 onboarding | `src/pages/Onboarding.jsx`, `src/pages/OrgMembers.jsx`, `src/lib/org/*` | Wire onboarding-wizard roster → invites: finish → Team page prefilled |
 
 ## Recently released
 
