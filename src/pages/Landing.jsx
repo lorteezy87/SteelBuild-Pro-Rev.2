@@ -273,12 +273,6 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
         .lp-dim .ln { flex: 1; height: 1px; background: ${C.graphite}; opacity: 0.5; position: relative; }
         .lp-dim .ln::before, .lp-dim .ln::after { content: ""; position: absolute; top: -3px; width: 1px; height: 7px; background: ${C.graphite}; }
         .lp-dim .ln::before { left: 0; } .lp-dim .ln::after { right: 0; }
-        .lp-band { position: relative; width: 100vw; margin-left: calc(50% - 50vw); height: clamp(300px, 40vw, 520px); background: ${C.steel}; overflow: hidden; }
-        .lp-band-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
-        .lp-band-seam-top, .lp-band-seam-bot { position: absolute; left: 0; right: 0; height: 64px; pointer-events: none; }
-        .lp-band-seam-top { top: 0; background: linear-gradient(to bottom, ${C.paper} 0%, rgba(251,250,247,0.55) 42%, rgba(251,250,247,0) 100%); }
-        .lp-band-seam-bot { bottom: 0; background: linear-gradient(to top, ${C.paper} 0%, rgba(251,250,247,0.55) 42%, rgba(251,250,247,0) 100%); }
-        .lp-band-vignette { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 90px rgba(15,18,24,0.45), inset 0 0 0 1px rgba(15,18,24,0.06); }
         .lp-specrow { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1.5px solid ${C.graphite}; border-bottom: 1.5px solid ${C.graphite}; }
         .lp-speccell { padding: 30px 26px; }
         .lp-speccell + .lp-speccell { border-left: 1px solid ${C.line}; }
@@ -306,10 +300,6 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
           .lp-speccell { padding: 24px 18px !important; }
           .lp-titleblock { flex-wrap: wrap !important; }
           .lp-tb { flex: 1 0 45% !important; border-top: 1px solid ${C.line}; }
-          .lp-band { height: clamp(190px, 56vw, 260px) !important; }
-          .lp-band-img { object-fit: contain !important; }
-          .lp-band-vignette { box-shadow: inset 0 0 50px rgba(15,18,24,0.32) !important; }
-          .lp-band-seam-top, .lp-band-seam-bot { height: 40px !important; }
         }
       `}</style>
 
@@ -416,31 +406,6 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
               </div>
             </div>
             <div className="lp-dim"><span className="ln" /><em style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontStyle: "normal" }}>3,847 tons · 428 pieces</em><span className="ln" /></div>
-          </div>
-        </div>
-      </section>
-
-      {/* ══ BRAND INTERSTITIAL — full-bleed cinematic band ══ */}
-      <section className="lp-fade" style={{ padding: "10px 0 30px" }} aria-label="SteelBuild Pro">
-        {/* Eyebrow anchor — sits in the light, just above the dark band */}
-        <div className="lp-wrap" style={{ textAlign: "center", marginBottom: 22 }}>
-          <span className="lp-eyebrow">Built for the floor</span>
-        </div>
-
-        {/* Full-bleed dark strip — escapes lp-wrap to span the viewport */}
-        <div className="lp-band" role="img" aria-label="The STEELBUILD PRO mark set inside a steel-fabrication shop — crane hook, I-beams, and blueprint framing over a wet-floor reflection">
-          <img className="lp-band-img" src="/steelbuild-pro-logo.jpg" alt="" aria-hidden="true" />
-          <div className="lp-band-seam-top" aria-hidden="true" />
-          <div className="lp-band-seam-bot" aria-hidden="true" />
-          <div className="lp-band-vignette" aria-hidden="true" />
-        </div>
-
-        {/* Drafting-mark caption — back in the light, just below the band */}
-        <div className="lp-wrap">
-          <div className="lp-dim" style={{ marginTop: 24 }}>
-            <span className="ln" />
-            <em style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontStyle: "normal" }}>Detailing office → shop floor → field</em>
-            <span className="ln" />
           </div>
         </div>
       </section>
