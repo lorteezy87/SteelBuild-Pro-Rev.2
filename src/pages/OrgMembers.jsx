@@ -8,13 +8,13 @@
  * (via Project Members) for project data.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Users, Mail, Link2, X, Shield } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useOrg } from "@/components/shared/OrgContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { usePlan } from "@/hooks/usePlan";
 import { seatCapacity } from "@/lib/billing/plans";
 import { CommandBar } from "@/components/design-system";
@@ -23,6 +23,7 @@ import {
   listOrgMembers, listInvitations, createInvitation, revokeInvitation,
   updateMemberRole, removeMember, inviteLink,
 } from "@/lib/org/repository";
+import { prepareOnboardingInvites, clampOrgRole } from "@/lib/org/onboardingInvites";
 
 const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "Member" };
 
@@ -58,6 +59,89 @@ export default function OrgMembers() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["org-members", orgId] });
     qc.invalidateQueries({ queryKey: ["org-invites", orgId] });
+  };
+
+  // ── Onboarding hand-off ────────────────────────────────────────────────────
+  // The setup wizard (Onboarding → "Invite your team") routes here with the
+  // collected roster on location.state.prefillInvites. Stage it for one-click
+  // review + batch send: prepareOnboardingInvites maps project roles → org roles
+  // and drops anyone already a member / already invited. Seeded ONCE, after the
+  // member + invite lists load (needed for the dedupe) so the user's edits stick.
+  const location = useLocation();
+  const prefill = location.state?.prefillInvites;
+  const [staged, setStaged] = useState([]);
+  const [stagedSkipped, setStagedSkipped] = useState(null);
+  const [sendingStaged, setSendingStaged] = useState(false);
+  const seededRef = useRef(false);
+
+  useEffect(() => {
+    if (seededRef.current) return;
+    if (!Array.isArray(prefill) || prefill.length === 0) return;
+    if (!orgId || loadingMembers || loadingInvites) return;
+    const { invites: prepared, skipped } = prepareOnboardingInvites(prefill, {
+      existingEmails: members.map((m) => m.email),
+      pendingEmails: invites.map((i) => i.email),
+    });
+    // Clamp: a non-owner cannot grant 'owner'. The DB enforces this too
+    // (org_invites_insert WITH CHECK), but clamping here keeps the role select
+    // from showing a stale 'owner' value and stops the batch attempting a
+    // doomed insert. owner→admin (the most an admin may grant).
+    const clamped = prepared.map((inv) => ({ ...inv, role: clampOrgRole(inv.role, { isOwner }) }));
+    setStaged(clamped);
+    setStagedSkipped(skipped);
+    seededRef.current = true;
+    if (clamped.length === 0) {
+      const dropped = skipped.alreadyMember + skipped.alreadyInvited + skipped.invalid + skipped.duplicate;
+      if (dropped > 0) toast.info(`Everyone from setup is already on the team or invited (${dropped} skipped)`);
+    }
+  }, [prefill, orgId, loadingMembers, loadingInvites, members, invites, isOwner]);
+
+  const stagedSkippedNote = useMemo(() => {
+    if (!stagedSkipped) return "";
+    const parts = [];
+    if (stagedSkipped.alreadyMember) parts.push(`${stagedSkipped.alreadyMember} already on the team`);
+    if (stagedSkipped.alreadyInvited) parts.push(`${stagedSkipped.alreadyInvited} already invited`);
+    if (stagedSkipped.invalid) parts.push(`${stagedSkipped.invalid} invalid`);
+    if (stagedSkipped.duplicate) parts.push(`${stagedSkipped.duplicate} duplicate`);
+    return parts.length ? `Skipped ${parts.join(", ")}.` : "";
+  }, [stagedSkipped]);
+
+  const seatsLeft = cap.unlimited ? Infinity : Math.max(0, (cap.limit ?? 0) - cap.used);
+
+  const setStagedRole = (idx, nextRole) =>
+    setStaged((rows) => rows.map((row, i) => (i === idx ? { ...row, role: nextRole } : row)));
+  const removeStaged = (idx) => setStaged((rows) => rows.filter((_, i) => i !== idx));
+
+  const sendStaged = async () => {
+    if (sendingStaged || staged.length === 0 || !orgId) return;
+    if (atMemberLimit) {
+      toast.error(`Your ${plan.name} plan includes ${memberLimit} member${memberLimit === 1 ? "" : "s"}. Upgrade to add more.`);
+      return;
+    }
+    setSendingStaged(true);
+    const results = [];
+    for (const inv of staged) {
+      // Defense-in-depth: never let a non-owner send an 'owner' invite even if a
+      // stale value slipped through (the seed already clamps; the DB enforces too).
+      const role = clampOrgRole(inv.role, { isOwner });
+      try {
+        await createInvitation(orgId, inv.email, role, user.id);
+        results.push({ email: inv.email, ok: true });
+      } catch {
+        results.push({ email: inv.email, ok: false });
+      }
+    }
+    setSendingStaged(false);
+    refresh();
+    const okCount = results.filter((r) => r.ok).length;
+    const failCount = results.length - okCount;
+    const failedEmails = new Set(results.filter((r) => !r.ok).map((r) => r.email));
+    setStaged((rows) => rows.filter((row) => failedEmails.has(row.email)));
+    if (okCount) {
+      toast.success(`Created ${okCount} invite${okCount === 1 ? "" : "s"}${failCount ? `, ${failCount} couldn't be sent` : ""} — copy links from Pending invites below`);
+    } else if (failCount) {
+      toast.error("Couldn't create invites — seat limit reached, or they're already invited");
+    }
   };
 
   const copyLink = async (token) => {
@@ -108,6 +192,44 @@ export default function OrgMembers() {
 
       {!(loadingMembers || loadingInvites) && (
         <CapacityMeter cap={cap} planName={plan.name} canManage={canManage} onUpgrade={() => navigate("/Billing")} />
+      )}
+
+      {canManage && staged.length > 0 && (
+        <div className="sbd-card" style={{ padding: 16, border: "1px solid color-mix(in srgb, var(--accent) 40%, var(--border-default))" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, color: "var(--text-primary)", fontWeight: 700, fontSize: 13 }}>
+            <Users size={15} style={{ color: "var(--accent)" }} /> Invite your team from setup
+          </div>
+          <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.5 }}>
+            Carried over from onboarding — review the roles, then send. Each becomes a 14-day invite link in Pending below.
+            Project roles (PM / field / viewer) are assigned later on Project Members.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {staged.map((inv, idx) => (
+              <div key={inv.email} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ flex: "1 1 240px", minWidth: 180, color: "var(--text-primary)", fontWeight: 600, fontSize: 14, wordBreak: "break-all" }}>{inv.email}</span>
+                <select value={inv.role} onChange={(e) => setStagedRole(idx, e.target.value)} disabled={sendingStaged} className="sbd-select" style={{ padding: "8px 10px", borderRadius: 9, minHeight: 38 }}>
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                  {isOwner && <option value="owner">Owner</option>}
+                </select>
+                <button type="button" onClick={() => removeStaged(idx)} disabled={sendingStaged} className="sbd-btn sbd-btn-ghost" style={{ ...smallBtn, color: "var(--status-error)" }} title="Remove from this batch"><X size={13} /></button>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
+            <button type="button" className="sbd-btn sbd-btn-primary" onClick={sendStaged} disabled={sendingStaged || atMemberLimit} style={{ minHeight: 40 }}>
+              {sendingStaged ? "Sending…" : `Send ${staged.length} invite${staged.length === 1 ? "" : "s"}`}
+            </button>
+            <button type="button" className="sbd-btn sbd-btn-ghost" onClick={() => setStaged([])} disabled={sendingStaged} style={{ minHeight: 40 }}>Dismiss</button>
+            {stagedSkippedNote && <span style={{ ...mono, fontSize: 11, color: "var(--text-muted)" }}>{stagedSkippedNote}</span>}
+          </div>
+          {!cap.unlimited && staged.length > seatsLeft && (
+            <div style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
+              Only {seatsLeft} seat{seatsLeft === 1 ? "" : "s"} left on {plan.name} — extra invites will be rejected. Remove some or{" "}
+              <button type="button" onClick={() => navigate("/Billing")} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>upgrade</button>.
+            </div>
+          )}
+        </div>
       )}
 
       {canManage && (
