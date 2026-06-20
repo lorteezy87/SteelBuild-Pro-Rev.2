@@ -1,0 +1,216 @@
+/* ════════════════════════════════════════════════════════════════
+   IRONFRAME — token bridge for SteelBuild Pro
+   ────────────────────────────────────────────────────────────────
+   Re-skins the app onto the Ironframe design system (safety-orange
+   primary · cool steel neutrals · Archivo type) WITHOUT touching any
+   component. It works purely by re-pointing existing token VALUES:
+
+   • DARK  — re-points the --sbd-* source tokens (steelbuild-dark.css).
+             The .steelbuild-dark overlay in tokens.css already maps
+             those onto the app's --* tokens (with !important), so every
+             dark surface / text / accent follows automatically.
+   • LIGHT — re-points the app's --* tokens directly inside
+             [data-theme="light"]; loaded after tokens.css so it wins
+             by source order (no !important needed).
+
+   Structural tokens (spacing, radii, font-sizes, density) are left
+   untouched — this is a re-skin, not a re-layout. Imported LAST in
+   globals.css; remove that one @import to fully revert.
+
+   Source of the ramp values: the Ironframe design-system handoff
+   (/ds/tokens.css). oklch + color-mix require a modern browser
+   (Chrome 111+ / Safari 16.4+ / Firefox 113+) — same baseline Vite
+   already targets.
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Primitive ramps (theme-independent) ─────────────────────── */
+  /* Safety Orange — primary / hi-vis */
+  --o-50:  oklch(0.972 0.014 60);
+  --o-100: oklch(0.945 0.036 58);
+  --o-200: oklch(0.895 0.074 55);
+  --o-300: oklch(0.826 0.118 52);
+  --o-400: oklch(0.757 0.156 50);
+  --o-500: oklch(0.688 0.176 48);
+  --o-600: oklch(0.623 0.169 46);
+  --o-700: oklch(0.548 0.150 44);
+  --o-800: oklch(0.468 0.122 43);
+  --o-900: oklch(0.398 0.096 42);
+
+  /* Structural Steel Blue — secondary / info */
+  --b-50:  oklch(0.972 0.012 250);
+  --b-100: oklch(0.940 0.030 250);
+  --b-200: oklch(0.888 0.058 252);
+  --b-300: oklch(0.808 0.090 253);
+  --b-400: oklch(0.712 0.130 255);
+  --b-500: oklch(0.628 0.150 257);
+  --b-600: oklch(0.552 0.150 260);
+  --b-700: oklch(0.470 0.130 262);
+  --b-800: oklch(0.392 0.100 263);
+  --b-900: oklch(0.330 0.074 264);
+
+  /* Cool steel neutrals */
+  --n-0:    #ffffff;
+  --n-25:   oklch(0.990 0.002 256);
+  --n-50:   oklch(0.979 0.004 256);
+  --n-100:  oklch(0.960 0.005 256);
+  --n-150:  oklch(0.938 0.006 256);
+  --n-200:  oklch(0.910 0.007 256);
+  --n-300:  oklch(0.858 0.009 256);
+  --n-400:  oklch(0.738 0.012 256);
+  --n-500:  oklch(0.622 0.014 256);
+  --n-600:  oklch(0.520 0.016 257);
+  --n-700:  oklch(0.420 0.018 257);
+  --n-800:  oklch(0.330 0.018 258);
+  --n-850:  oklch(0.288 0.017 258);
+  --n-900:  oklch(0.245 0.015 259);
+  --n-950:  oklch(0.206 0.013 259);
+  --n-1000: oklch(0.168 0.011 260);
+
+  /* Semantic hues */
+  --green-400: oklch(0.748 0.135 152);
+  --green-500: oklch(0.652 0.135 153);
+  --green-600: oklch(0.566 0.120 154);
+  --green-700: oklch(0.470 0.098 155);
+  --amber-400: oklch(0.812 0.135 78);
+  --amber-500: oklch(0.752 0.142 70);
+  --amber-600: oklch(0.648 0.130 62);
+  --amber-700: oklch(0.540 0.108 58);
+  --red-400:   oklch(0.700 0.165 28);
+  --red-500:   oklch(0.628 0.190 27);
+  --red-600:   oklch(0.552 0.184 26);
+  --red-700:   oklch(0.470 0.155 26);
+  --teal-500:  oklch(0.680 0.098 195);
+
+  /* Primary alias (default accent = safety orange) */
+  --primary-500: var(--o-500);
+  --primary-600: var(--o-600);
+  --primary-700: var(--o-700);
+
+  /* ── Type — Archivo for UI, IBM Plex Mono for data ──────────── */
+  --font-body:    'Archivo', system-ui, -apple-system, sans-serif;
+  --font-display: 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-data:    'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+  /* --font-mono already resolves to IBM Plex Mono in tokens.css */
+}
+
+/* ════ DARK — re-point the --sbd-* source palette to Ironframe ════
+   The .steelbuild-dark overlay (tokens.css) propagates these onto the
+   app's --* tokens with !important, so the whole dark UI follows.
+   Loaded after steelbuild-dark.css → wins by source order. */
+.steelbuild-dark {
+  /* Surfaces — graphite / blueprint */
+  --sbd-bg-base:        var(--n-1000);
+  --sbd-bg-page:        var(--n-1000);
+  --sbd-bg-surface:     var(--n-950);
+  --sbd-bg-surface-hi:  var(--n-900);
+  --sbd-bg-elevated:    var(--n-900);
+  --sbd-bg-input:       var(--n-900);
+  --sbd-bg-row-hover:   color-mix(in oklch, var(--o-500) 9%, transparent);
+
+  /* Borders */
+  --sbd-border:         oklch(1 0 0 / 0.10);
+  --sbd-border-card:    var(--n-850);
+  --sbd-border-strong:  oklch(1 0 0 / 0.16);
+  --sbd-divider:        oklch(1 0 0 / 0.06);
+
+  /* Accents — safety orange primary, blue secondary */
+  --sbd-accent:         var(--o-500);
+  --sbd-accent-light:   var(--o-400);
+  --sbd-accent-muted:   color-mix(in oklch, var(--o-500) 18%, transparent);
+  --sbd-accent-border:  color-mix(in oklch, var(--o-500) 45%, transparent);
+  --sbd-gold:           var(--o-500);
+  --sbd-gold-light:     var(--o-400);
+
+  /* Status */
+  --sbd-success:        var(--green-400);
+  --sbd-warning:        var(--amber-400);
+  --sbd-error:          var(--red-400);
+  --sbd-info:           var(--b-400);
+  --sbd-review:         var(--o-400);
+
+  /* Phase palette */
+  --sbd-phase-detailing:   var(--o-500);
+  --sbd-phase-fabrication: var(--b-400);
+  --sbd-phase-delivery:    var(--teal-500);
+  --sbd-phase-erection:    var(--green-400);
+
+  /* Text */
+  --sbd-text:            oklch(0.945 0.006 256);
+  --sbd-text-secondary:  oklch(0.760 0.012 256);
+  --sbd-text-muted:      oklch(0.600 0.014 257);
+
+  /* App tokens the .steelbuild-dark overlay does NOT funnel through
+     --sbd-* — point them at Ironframe too (overlay uses !important on
+     the surface/accent/text it owns, so match it here for these). */
+  --accent-orange:         var(--o-500) !important;
+  --accent-orange-light:   var(--o-400) !important;
+  --accent-orange-hover:   var(--o-600) !important;
+  --status-success-bright: var(--green-400) !important;
+  --status-warning-bright: var(--amber-400) !important;
+  --status-error-bright:   var(--red-400) !important;
+  --success:               var(--green-400) !important;
+  --warning:               var(--amber-400) !important;
+  --danger:                var(--red-400) !important;
+  --info:                  var(--b-400) !important;
+  --phase-detailing:       var(--o-500) !important;
+  --phase-fab:             var(--b-400) !important;
+  --phase-delivery:        var(--teal-500) !important;
+  --phase-erection:        var(--green-400) !important;
+}
+
+/* ════ LIGHT — re-point the app's --* tokens to Ironframe ════
+   Loaded after tokens.css → wins by source order. (Explicit
+   data-accent presets, specificity 0,1,1, still override --accent on
+   purpose — a deliberate user pick; the default falls through here.) */
+[data-theme="light"] {
+  --bg-void:               var(--n-300);
+  --bg-page:               var(--n-50);
+  --bg-base:               var(--n-50);
+  --bg-surface:            var(--n-0);
+  --bg-surface-low:        var(--n-50);
+  --bg-surface-mid:        var(--n-100);
+  --bg-surface-high:       var(--n-150);
+  --bg-surface-highest:    var(--n-200);
+  --bg-surface-lowest:     var(--n-50);
+  --bg-input:              var(--n-0);
+  --bg-sidebar:            var(--n-0);
+  --bg-card:               var(--n-0);
+  --bg-elevated:           var(--n-0);
+  --bg-base:               var(--n-50);
+  --bg-surface-secondary:  var(--n-50);
+
+  --border-default:        var(--n-200);
+  --border-strong:         var(--n-300);
+  --border:                var(--n-200);
+  --divider:               var(--n-150);
+
+  --accent:                var(--o-500);
+  --accent-light:          var(--o-400);
+  --accent-hover:          var(--o-600);
+  --accent-muted:          color-mix(in oklch, var(--o-500) 12%, transparent);
+  --accent-border:         color-mix(in oklch, var(--o-500) 38%, transparent);
+  --secondary:             var(--b-600);
+  --secondary-muted:       color-mix(in oklch, var(--b-600) 12%, transparent);
+  --secondary-border:      color-mix(in oklch, var(--b-600) 35%, transparent);
+  --accent-orange:         var(--o-500);
+  --accent-orange-light:   var(--o-400);
+  --accent-orange-hover:   var(--o-600);
+
+  --text-primary:          var(--n-900);
+  --text-secondary:        var(--n-600);
+  --text-muted:            var(--n-500);
+
+  --status-success:        var(--green-600);
+  --status-warning:        var(--amber-600);
+  --status-error:          var(--red-600);
+  --status-info:           var(--b-600);
+  --success:               var(--green-600);
+  --warning:               var(--amber-600);
+  --danger:                var(--red-600);
+  --info:                  var(--b-600);
+  --phase-detailing:       var(--o-500);
+  --phase-fab:             var(--b-600);
+  --phase-delivery:        var(--teal-500);
+  --phase-erection:        var(--green-600);
+}
