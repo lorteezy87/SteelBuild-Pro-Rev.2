@@ -3,6 +3,7 @@ import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { lockLinkedSetsIfApproved, addSubmittalRound } from "@/hooks/useSubmittals";
+import { logActivity, logTransition } from "@/services/auditLogger";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { localToday } from "@/utils/dates";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -185,8 +186,15 @@ export default function Submittals() {
 
   const createMut = useMutation({
     mutationFn: (data: any) => entities.Submittal.create(data),
-    onSuccess: (row) => { invalidate(); setSelectedId(row?.id || null); toast.success("Submittal created"); },
-    onError: (err: any) => toast.error(`Create failed: ${err.message}`),
+    onSuccess: (row) => { invalidate(); logActivity("submittal", "created", row, { projectId }); setSelectedId(row?.id || null); toast.success("Submittal created"); },
+    onError: (err: any) => {
+      const msg = String(err?.message || "");
+      toast.error(
+        /submittals_unique_per_project|duplicate key/i.test(msg)
+          ? "That submittal number already exists in this project — use a different number."
+          : `Create failed: ${err.message}`,
+      );
+    },
   });
   const updateMut = useMutation({
     // Lock-aware: terminal-approved statuses auto-lock the linked drawing sets
@@ -201,16 +209,23 @@ export default function Submittals() {
       // draft detailing task (deduped inside; never throws).
       if (typeof data.status === "string") {
         await runSubmittalStatusTriggers({ submittal: updated as any, prevStatus, nextStatus: data.status });
+        logTransition("submittal", updated as any, prevStatus ?? "—", data.status, { projectId });
+      } else {
+        logActivity("submittal", "updated", updated as any, { projectId });
       }
       return updated;
     },
     onSuccess: () => { invalidate(); toast.success("Updated"); },
-    onError: (err: any) =>
+    onError: (err: any) => {
+      const msg = String(err?.message || "");
       toast.error(
         isFabReleaseBlocked(err)
           ? `Release blocked by open RFIs — use the "Release for Fabrication" action to override, or resolve the RFIs.`
-          : `Update failed: ${err.message}`,
-      ),
+          : /submittals_unique_per_project|duplicate key/i.test(msg)
+            ? "That submittal number already exists in this project — use a different number."
+            : `Update failed: ${err.message}`,
+      );
+    },
   });
   // Verb CTA → the single audited write path: logs a submittal_rounds row +
   // patches + auto-locks, atomically (activates the previously-empty round log).
@@ -229,7 +244,10 @@ export default function Submittals() {
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => entities.Submittal.delete(id),
-    onSuccess: () => { invalidate(); setSelectedId(null); setToDelete(null); toast.success("Deleted"); },
+    onSuccess: (_d, id) => {
+      logActivity("submittal", "deleted", rows.find((r: any) => r.id === id) || { id, project_id: projectId }, { projectId });
+      invalidate(); setSelectedId(null); setToDelete(null); toast.success("Deleted");
+    },
     onError: (err: any) => toast.error(`Delete failed: ${err.message}`),
   });
 
@@ -254,8 +272,13 @@ export default function Submittals() {
         return entities.Submittal.update(id, rowPatch);
       });
     },
-    onSuccess: (results) => {
+    onSuccess: (results, variables) => {
       invalidate();
+      const patchStatus = (variables as any)?.data?.status;
+      results.succeeded.forEach(({ value, item }: any) => {
+        if (patchStatus) logActivity("submittal", "status_changed", value || { id: item, project_id: projectId }, { projectId, description: `→ ${patchStatus}` });
+        else logActivity("submittal", "updated", value || { id: item, project_id: projectId }, { projectId });
+      });
       setSelectedIds(new Set());
       const ok = results.succeeded.length;
       if (results.failed.length > 0) {
@@ -271,6 +294,8 @@ export default function Submittals() {
     mutationFn: async (ids: string[]) => batchProcess(ids, (id) => entities.Submittal.delete(id)),
     onSuccess: (results) => {
       invalidate();
+      results.succeeded.forEach(({ item }: any) =>
+        logActivity("submittal", "deleted", rows.find((r: any) => r.id === item) || { id: item, project_id: projectId }, { projectId }));
       const ok = results.succeeded.length;
       if (selectedId && [...selectedIds].includes(selectedId)) setSelectedId(null);
       setSelectedIds(new Set());
@@ -295,6 +320,8 @@ export default function Submittals() {
     ),
     onSuccess: (results) => {
       invalidate();
+      results.succeeded.forEach(({ value, item }: any) =>
+        logActivity("submittal", "created", value || item || { project_id: projectId }, { projectId }));
       setShowBulkAdd(false);
       const ok = results.succeeded.length;
       if (results.failed.length > 0) {
@@ -660,6 +687,12 @@ export default function Submittals() {
           availableSets={drawingSets}
           allDrawings={allDrawings}
           allRfis={allRfis}
+          existingNumbers={new Set(
+            rows
+              .filter((r: any) => r.id !== editing?.id)
+              .map((r: any) => String(r.submittal_number || "").trim())
+              .filter(Boolean),
+          )}
           onClose={() => { setShowCreate(false); setEditingId(null); }}
           onSubmit={async (data) => {
             if (editing) await updateMut.mutateAsync({ id: editing.id, ...data });
