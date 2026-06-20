@@ -21,11 +21,24 @@
 // Secrets required:
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, EMAIL_WEBHOOK_SECRET
 //
+// Optional secrets (AI email classification cost guard, #6):
+//   OPENAI_API_KEY              — without it, classification uses the free regex path
+//   EMAIL_CLASSIFY_DISABLED     — "1"/"true" forces the regex classifier (kill switch)
+//   EMAIL_CLASSIFY_DAILY_LIMIT  — per-project rolling-24h cap on paid classify calls
+//                                 (default 200; 0 = unlimited). Over the cap → regex.
+//
 // Deploy:
 //   supabase functions deploy email-ingest --no-verify-jwt
 // ─────────────────────────────────────────────────────────────────────────────
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_TOTAL_BYTES,
+  MAX_ATTACHMENT_COUNT,
+  isDangerousAttachment,
+  sanitizeAttachmentName,
+} from "../_shared/attachments.ts";
 
 interface ParsedEmail {
   externalId: string;
@@ -441,11 +454,72 @@ Return ONLY valid JSON matching this schema:
   "action_required": string|null
 }`;
 
-async function classifyEmailWithAI(email: ParsedEmail): Promise<EmailClassification> {
+function isTruthy(v: string | undefined): boolean {
+  if (!v) return false;
+  return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
+}
+
+function numEnv(name: string, fallback: number): number {
+  const raw = Deno.env.get(name);
+  if (!raw) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/**
+ * Count this project's email-classify LLM calls in the rolling 24h window via
+ * the same llm_telemetry table the gateway uses. Returns null when it can't be
+ * read (caller treats null as "don't block"). Bounded so a stalled read can't
+ * hang ingestion.
+ */
+async function emailClassifyCountToday(projectId: string): Promise<number | null> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) return null;
+  const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const resp = await fetch(
+      `${supabaseUrl}/rest/v1/llm_telemetry?project_id=eq.${projectId}&use_case=eq.email-classify&occurred_at=gte.${encodeURIComponent(sinceIso)}&select=id&limit=1`,
+      {
+        headers: {
+          "apikey": serviceKey,
+          "Authorization": `Bearer ${serviceKey}`,
+          "Prefer": "count=exact",
+        },
+        signal: AbortSignal.timeout(2000),
+      },
+    );
+    if (!resp.ok) return null;
+    const range = resp.headers.get("content-range") || "";
+    const total = Number(range.split("/")[1]);
+    return Number.isFinite(total) ? total : null;
+  } catch {
+    return null;
+  }
+}
+
+async function classifyEmailWithAI(email: ParsedEmail, projectId: string): Promise<EmailClassification> {
+  // Kill switch + per-project daily cap (#6). A leaked webhook secret can spam
+  // emails into paid classify calls; degrade to the free regex classifier when
+  // disabled or over the cap. Fail-open to AI when the count can't be read so a
+  // telemetry hiccup doesn't quietly downgrade every classification.
+  if (isTruthy(Deno.env.get("EMAIL_CLASSIFY_DISABLED"))) {
+    return classifyEmailRegex(email);
+  }
+
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) {
     console.log("[email-ingest] OPENAI_API_KEY not set, falling back to regex");
     return classifyEmailRegex(email);
+  }
+
+  const dailyLimit = numEnv("EMAIL_CLASSIFY_DAILY_LIMIT", 200);
+  if (dailyLimit > 0) {
+    const used = await emailClassifyCountToday(projectId);
+    if (used !== null && used >= dailyLimit) {
+      console.warn(`[email-ingest] email-classify daily cap reached project=${projectId} (${used} >= ${dailyLimit}); using regex`);
+      return classifyEmailRegex(email);
+    }
   }
 
   const bodySnippet = (email.bodyText || "").slice(0, 2000);
@@ -526,7 +600,7 @@ async function classifyEmailWithAI(email: ParsedEmail): Promise<EmailClassificat
     );
 
     // Best-effort telemetry
-    logClassifyTelemetry(inputTokens, outputTokens, latencyMs, true, null).catch(() => {});
+    logClassifyTelemetry(inputTokens, outputTokens, latencyMs, true, null, projectId).catch(() => {});
 
     return { type, confidence, extracted };
   } catch (err) {
@@ -542,6 +616,7 @@ async function logClassifyTelemetry(
   latencyMs: number,
   success: boolean,
   errorKind: string | null,
+  projectId: string | null = null,
 ): Promise<void> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -565,7 +640,7 @@ async function logClassifyTelemetry(
         provider: "openai",
         model: "gpt-4o-mini",
         user_id: null,
-        project_id: null,
+        project_id: projectId,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         cost_usd: Math.round(costUsd * 1_000_000) / 1_000_000,
@@ -682,7 +757,7 @@ async function handle(req: Request): Promise<Response> {
     }
   }
 
-  const classification = await classifyEmailWithAI(email);
+  const classification = await classifyEmailWithAI(email, projectId);
 
   // Insert email_message
   const messageRow = {
@@ -724,12 +799,36 @@ async function handle(req: Request): Promise<Response> {
   const [insertedMsg] = await msgResp.json();
   const messageId = insertedMsg.id;
 
-  // Store attachments
+  // Store attachments (bounded + sanitized — see _shared/attachments.ts, #7).
+  // External senders control both the filename and the payload, so cap the
+  // count/size, drop dangerous extensions, and sanitize the name before it ever
+  // enters a storage path (a name like "../x" or "a/b" would otherwise escape
+  // the per-message prefix).
+  if (email.attachments.length > MAX_ATTACHMENT_COUNT) {
+    console.warn(`[email-ingest] attachment count ${email.attachments.length} > ${MAX_ATTACHMENT_COUNT}; extra dropped`);
+  }
+  const incomingAttachments = email.attachments.slice(0, MAX_ATTACHMENT_COUNT);
   const storedAttachments: string[] = [];
-  for (const att of email.attachments) {
+  let attachmentBytesTotal = 0;
+  for (const att of incomingAttachments) {
     try {
+      if (isDangerousAttachment(att.filename)) {
+        console.warn(`[email-ingest] skipped disallowed attachment type: ${sanitizeAttachmentName(att.filename)}`);
+        continue;
+      }
+      if (att.sizeBytes > MAX_ATTACHMENT_BYTES) {
+        console.warn(`[email-ingest] skipped oversize attachment (${att.sizeBytes} bytes)`);
+        continue;
+      }
+      if (attachmentBytesTotal + att.sizeBytes > MAX_ATTACHMENTS_TOTAL_BYTES) {
+        console.warn(`[email-ingest] per-message attachment total cap reached; remaining dropped`);
+        break;
+      }
+      attachmentBytesTotal += att.sizeBytes;
+
+      const safeName = sanitizeAttachmentName(att.filename);
       const contentHash = await hashContent(att.content);
-      const storagePath = `${projectId}/${messageId}/${att.filename}`;
+      const storagePath = `${projectId}/${messageId}/${safeName}`;
 
       const uploadResp = await fetch(
         `${supabaseUrl}/storage/v1/object/email-attachments/${storagePath}`,
@@ -754,7 +853,7 @@ async function handle(req: Request): Promise<Response> {
       const attRow = {
         message_id: messageId,
         project_id: projectId,
-        filename: att.filename,
+        filename: safeName,
         content_type: att.contentType,
         size_bytes: att.sizeBytes,
         content_hash: contentHash,
@@ -772,7 +871,7 @@ async function handle(req: Request): Promise<Response> {
         const detail = await attResp.text();
         console.error(`[email-ingest] Insert attachment failed for ${att.filename}: ${detail.slice(0, 200)}`);
       } else {
-        storedAttachments.push(att.filename);
+        storedAttachments.push(safeName);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

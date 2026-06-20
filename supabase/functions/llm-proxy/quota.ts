@@ -17,12 +17,13 @@
 // Either dimension is DISABLED when its env var is unset or <= 0, so you can ship
 // with just a cost cap, just a request cap, or both.
 //
-// Failure policy: FAIL-OPEN. If the usage read errors (Supabase REST hiccup,
-// missing env, migration not yet applied → 404), we log and ALLOW the call —
-// consistent with this codebase's "telemetry never breaks the user-facing
-// request" rule. Flip ALLOW→DENY in the catch / non-2xx branches if you'd rather
-// fail closed on the spend guard once you have paying tenants. The window is
-// rolling, not calendar-day, so there's no midnight reset cliff.
+// Failure policy: PER-CALL. If the usage read errors (Supabase REST hiccup,
+// missing env, migration not yet applied → 404) we either ALLOW (fail-open) or
+// DENY with 503 (fail-closed) depending on the caller's `failClosed` flag — set
+// for expensive document/image use-cases so a usage-read outage can't be used to
+// bypass the spend cap on the costly calls, while cheap calls keep the codebase's
+// "telemetry never breaks the user-facing request" rule. The over-limit verdict
+// is always a 429. The window is rolling, not calendar-day, so no reset cliff.
 //
 // Secrets required (already present for telemetry):
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -47,28 +48,56 @@ function numEnv(name: string): number {
 
 export interface QuotaDenied {
   ok: false;
-  status: 429;
+  status: 429 | 503;
   error: string;
   retryAfterSeconds: number;
 }
 export type QuotaResult = { ok: true } | QuotaDenied;
 
+export interface QuotaOptions {
+  /**
+   * When true, an INABILITY TO VERIFY usage (config missing, REST error, timeout)
+   * denies the request (503) instead of failing open. Set for expensive use-cases
+   * (document/image extraction) so a usage-read outage can't be used to bypass the
+   * spend cap on the costly calls. Cheap calls stay fail-open so a telemetry hiccup
+   * never breaks the everyday user-facing request.
+   */
+  failClosed?: boolean;
+}
+
 /**
- * Returns { ok: true } to proceed, or a QuotaDenied the caller renders as 429.
- * Caller passes the authenticated user id (from authenticateRequest).
+ * The usage read couldn't produce a verdict. Fail OPEN for cheap calls (the
+ * codebase's "telemetry never breaks the request" rule); fail CLOSED (503) when
+ * the caller flagged this as an expensive use-case.
  */
-export async function checkUserQuota(userId: string): Promise<QuotaResult> {
+function unavailable(failClosed?: boolean): QuotaResult {
+  if (!failClosed) return { ok: true };
+  return {
+    ok: false,
+    status: 503,
+    error: "AI usage limits can't be verified right now. Please retry shortly.",
+    retryAfterSeconds: 30,
+  };
+}
+
+/**
+ * Returns { ok: true } to proceed, or a QuotaDenied the caller renders as 429
+ * (over limit) or 503 (can't verify + failClosed). Caller passes the
+ * authenticated user id (from authenticateRequest).
+ */
+export async function checkUserQuota(userId: string, opts: QuotaOptions = {}): Promise<QuotaResult> {
   const costLimit = numEnv("LLM_DAILY_COST_LIMIT_USD");
   const reqLimit  = numEnv("LLM_DAILY_REQUEST_LIMIT");
 
-  // Both caps off → nothing to enforce. Skip the round trip entirely.
+  // Both caps off → nothing to enforce. Skip the round trip entirely. (Nothing to
+  // fail closed about — there is no configured limit to protect.)
   if (costLimit === 0 && reqLimit === 0) return { ok: true };
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceKey) {
     console.error("[llm-proxy] quota skipped: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing");
-    return { ok: true }; // fail-open
+    return unavailable(opts.failClosed);
   }
 
   const sinceIso = new Date(Date.now() - WINDOW_MS).toISOString();
@@ -87,7 +116,7 @@ export async function checkUserQuota(userId: string): Promise<QuotaResult> {
     });
     if (!resp.ok) {
       console.error(`[llm-proxy] quota read ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
-      return { ok: true }; // fail-open
+      return unavailable(opts.failClosed);
     }
 
     // The TABLE-returning RPC yields a one-row array. numeric (cost_sum) is
@@ -121,6 +150,6 @@ export async function checkUserQuota(userId: string): Promise<QuotaResult> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[llm-proxy] quota check threw: ${msg}`);
-    return { ok: true }; // fail-open
+    return unavailable(opts.failClosed);
   }
 }
