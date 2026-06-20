@@ -29,7 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| _(none active)_ | | | | |
+| 2026-06-20 | opus-edgefn-hardening | Edge function security batch (#5/#6/#7/#11/#12) | `supabase/functions/_shared/*`, `llm-proxy/{index,quota}.ts`, `email-ingest/index.ts`, `email-send/index.ts`, `stripe-billing/index.ts`, `project-export/index.ts` | quota fail-closed+kill switch, email-classify limits, attachment guards, CORS allowlist, Stripe origin validation |
 
 ## Recently released
 
