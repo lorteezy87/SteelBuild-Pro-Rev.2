@@ -25,6 +25,10 @@
 @import './styles/steelbuild-dark.css';
 @import './styles/tailwind-compat.css';
 @import './styles/steelbuild-light.css';
+/* Ironframe re-skin — re-points the palette to safety-orange + steel
+ * neutrals + Archivo. MUST load last so it wins by source order.
+ * Remove this one @import to fully revert to the prior gold theme. */
+@import './styles/ironframe.css';
 
 @tailwind base;
 @tailwind components;
