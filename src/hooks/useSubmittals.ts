@@ -22,6 +22,7 @@ import { entities } from "@/api/supabaseClient";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
+import { logTransition } from "@/services/auditLogger";
 import { lockSet } from "@/lib/drawingHub";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { supabase } from "@/lib/supabase";
@@ -301,6 +302,9 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
     prevStatus: s.status ?? null,
     nextStatus: input.status,
   });
+  // Audit the status transition (fire-and-forget). Centralized here because every
+  // round-based status move — including the fab-release gate — flows through this.
+  logTransition("submittal", (updated as Submittal) || s, s.status ?? "—", input.status, { projectId: s.project_id }).catch(() => {});
   return updated as Submittal;
 }
 
