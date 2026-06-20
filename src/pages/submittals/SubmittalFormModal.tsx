@@ -14,11 +14,14 @@ interface SubmittalFormModalProps {
   availableSets?: DrawingSet[];
   allDrawings?: any[];
   allRfis?: any[];
+  /** Submittal numbers already used in this project (excluding the row being
+   *  edited) — used to block a duplicate before it 409s on the unique index. */
+  existingNumbers?: Set<string>;
   onClose: () => void;
   onSubmit: (record: Record<string, any>) => void | Promise<void>;
 }
 
-export default function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], onClose, onSubmit }: SubmittalFormModalProps) {
+export default function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], existingNumbers, onClose, onSubmit }: SubmittalFormModalProps) {
   const [form, setForm] = useState({
     submittal_number: initial.submittal_number || "",
     title:            initial.title            || "",
@@ -41,8 +44,17 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
   const isEdit = !!initial.id;
 
   const handleSubmit = async () => {
-    if (!form.submittal_number.trim() || !form.title.trim()) {
+    const number = form.submittal_number.trim();
+    if (!number || !form.title.trim()) {
       toast.error("Submittal number + title are required");
+      return;
+    }
+    // Block a duplicate up front (the DB enforces unique (project_id,
+    // submittal_number); without this the user gets a raw 409). The set the
+    // parent passes already excludes the row being edited, so re-saving an
+    // edit with its own number is fine.
+    if (existingNumbers?.has(number)) {
+      toast.error(`Submittal # "${number}" already exists in this project — use a different number.`);
       return;
     }
     const record = {
