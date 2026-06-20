@@ -59,6 +59,17 @@ export function computeCostUsd(
   return Math.round(cost * 1_000_000) / 1_000_000;
 }
 
+/**
+ * Whether (provider, model) is a model the gateway will serve — defined as
+ * "priced in the rate card above". Tying allowed ≡ priced means an allowed call
+ * always records a real cost_usd (an unpriced model would log NULL, silently
+ * escaping spend tracking) and a caller can't request an arbitrary/expensive
+ * model via an explicit provider/model override. To allow a model, price it here.
+ */
+export function isModelPriced(provider: string, model: string): boolean {
+  return Boolean(RATE_CARD[provider]?.[model]);
+}
+
 /** Exported for tests + admin tooling. */
 export function getRateCard(): typeof RATE_CARD {
   return RATE_CARD;

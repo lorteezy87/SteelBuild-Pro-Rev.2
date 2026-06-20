@@ -21,7 +21,28 @@ import {
 import {
   computeCostUsd,
   getRateCard,
+  isModelPriced,
 } from "../../supabase/functions/llm-proxy/providers/cost";
+
+describe("cost.isModelPriced (gateway model allowlist)", () => {
+  it("allows every model the router can route to (allowlist superset of routing table)", () => {
+    for (const target of Object.values(ROUTING_TABLE)) {
+      expect(isModelPriced(target.provider, target.model)).toBe(true);
+    }
+  });
+  it("allows the priced models", () => {
+    expect(isModelPriced("openai", "gpt-4o")).toBe(true);
+    expect(isModelPriced("openai", "gpt-4o-mini")).toBe(true);
+    expect(isModelPriced("anthropic", "claude-sonnet-4-5")).toBe(true);
+  });
+  it("rejects an unpriced / unknown model (would log NULL cost)", () => {
+    expect(isModelPriced("openai", "gpt-5-ultra-expensive")).toBe(false);
+    expect(isModelPriced("anthropic", "claude-opus-4-1-max")).toBe(false);
+  });
+  it("rejects an unknown provider", () => {
+    expect(isModelPriced("evilcorp", "gpt-4o")).toBe(false);
+  });
+});
 
 describe("router.getProviderForUseCase", () => {
   it("routes drawing-analysis to OpenAI gpt-4o-mini", () => {
