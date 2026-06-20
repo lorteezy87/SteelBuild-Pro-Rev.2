@@ -29,7 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| _(none active)_ | | | | |
+| 2026-06-20 | opus-upload-routeguard | Upload validation (#21) + route project-scope guard (#14) | `src/lib/uploadValidation.ts` (new), `src/api/supabaseClient.ts` (UploadFile), `src/components/shared/ProjectScopedRoute.jsx` (new), `src/boot/AppRoutes.jsx`, upload call-site modals | Central validateUpload + ProjectScopedRoute deep-link guard |
 
 ## Recently released
 
