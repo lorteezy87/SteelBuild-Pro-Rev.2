@@ -666,6 +666,8 @@ Admin pages:
 
 When adding a new page, query, mutation, export, RPC, or Edge Function, verify access at the database or server boundary. UI-only gates are not sufficient.
 
+Project-scoped pages (those in `PROJECT_SCOPED_PAGES`) are wrapped at the route level by `src/components/shared/ProjectScopedRoute.jsx` (mounted in `boot/AppRoutes.jsx`): it shows an Access-Denied screen when an explicit `?projectId=`/`?project=` deep-link names a project outside the user's RLS-scoped accessible list. Defense-in-depth + clean UX only — RLS stays authoritative; never rely on this guard for access control.
+
 ---
 
 ## 15. Supabase And Migration Rules
@@ -710,7 +712,7 @@ Edge functions live in:
 supabase/functions/
 ```
 
-Current functions:
+Current functions (the 8 actually deployed — verify with `list_edge_functions`):
 
 ```text
 llm-proxy           external LLM gateway — ALL model calls route here
@@ -718,14 +720,16 @@ schedule-assistant  schedule chat/tooling; routes model turns through llm-proxy
 email-ingest        inbound email -> staged project records (Power Automate path)
 email-send          outbound email compose/reply send pipeline
 project-export      RLS-scoped, audited per-project data export (powers the workspace backup)
-stripe-billing      Stripe checkout + portal for subscription plans
-stripe-setup        Stripe product/price setup helper
-stripe-webhook      Stripe webhook -> updates organizations.plan (service role only)
-stripe-worker       async billing work
-_shared             shared helpers (CORS, etc.) imported by the functions above
+stripe-billing      Stripe checkout + portal + the /webhook route (org.plan anchor)
+_shared             shared helpers: cors.ts (origin allowlist), attachments.ts (upload guards)
 sharepoint-proxy    DEPRECATED — still deployed, no longer client-invoked
 bluebeam-proxy      DEPRECATED — still deployed, no longer client-invoked
 ```
+
+GONE (deleted Stripe Sync Engine orphans — do NOT re-add): `stripe-setup`,
+`stripe-webhook`, `stripe-worker`. The Stripe webhook is a **`/webhook` route inside
+`stripe-billing`**, not a separate function. ⚠ A dangling caller (cron/pg_cron) still
+POSTs `stripe-worker` every ~60s → 404 in the edge logs; trace and stop that caller.
 
 The deprecated integration functions (`sharepoint-proxy`, `bluebeam-proxy`) followed one pattern — OAuth/user tokens stored server-side, the Edge Function proxies every external API call, RLS enforces project membership — and are no longer client-invoked (slated for `functions delete`). The general rule still holds for any new integration: do not move tokens or provider calls into the browser. Outbound email columns live in `20260520002000_email_send_columns.sql` with client logic in `src/services/emailSendService.js`. **Billing:** `stripe-billing` holds the price ids in its env, the client passes only a plan key, and `organizations.plan` is changed only by the webhook (service role) — never weaken that boundary.
 
@@ -738,13 +742,40 @@ Rules:
 - Keep function responses minimal and safe.
 - Add telemetry where it helps debug production issues without leaking data.
 
-Deploy `llm-proxy` with:
+### Deploying edge functions
+
+Edge functions are **NOT deployed by the git push** — the CI pipeline only builds +
+ships the frontend (`dist`). Each function must be deployed explicitly with the
+Supabase CLI. The CLI + Deno are **not installed** in the local checkout, so use
+`npx` (and `--project-ref`, which avoids `supabase link`):
 
 ```powershell
-supabase functions deploy llm-proxy --no-verify-jwt
+npx supabase login   # once, or set $env:SUPABASE_ACCESS_TOKEN
+npx supabase functions deploy <name> --project-ref kjrwqagyeswwoxpjkcko [--no-verify-jwt]
 ```
 
-`--no-verify-jwt` is required for `llm-proxy` because the function performs its own JWT verification.
+Pass `--no-verify-jwt` for functions that do their own auth / are webhooks —
+`llm-proxy`, `email-ingest`, `stripe-billing`. Deploy `email-send` + `project-export`
+**without** it (platform JWT verify on). Match the function's CURRENT `verify_jwt`
+(check `list_edge_functions`) unless you mean to change it. A change to `_shared/*`
+requires redeploying **every** importer.
+
+**Verify by runtime outcome, not the deploy log** (see §32). A successful deploy only
+proves the bundle loads. Confirm the function actually works via `llm_telemetry`
+success rows (LLM calls) or the real app result — a CORS-blocked POST returns a green
+`OPTIONS` preflight but the function never runs (no telemetry row, no POST log).
+
+**CORS is OPT-IN** (`_shared/cors.ts` + `llm-proxy`): permissive (`*`) unless the
+`ALLOWED_ORIGINS` env is set to real origins (non-`*`). A too-narrow list silently
+blocks the app's origin (it broke prod AI once — see the [[edge-cors-optin-verification]]
+memory). `ALLOWED_ORIGINS=*` or unset = permissive escape hatch (takes effect
+~30–60s, no redeploy). `isAllowedOrigin()` stays strict regardless — it also guards
+the Stripe redirect target.
+
+**Optional cost-guard secrets:** `LLM_DAILY_COST_LIMIT_USD` / `LLM_DAILY_REQUEST_LIMIT`
+(per-user rolling-24h caps — the quota is a no-op until one is set), `LLM_KILL_SWITCH=1`
+(halt ALL LLM calls), `EMAIL_CLASSIFY_DAILY_LIMIT` / `EMAIL_CLASSIFY_DISABLED`
+(per-project email-classify cap → free regex fallback).
 
 ---
 
@@ -776,6 +807,10 @@ Rules:
 - Log enough telemetry to debug provider, model, latency, use-case, and failure issues.
 - Do not log full sensitive prompts or documents.
 - Maintain deterministic fallbacks for critical PM workflows when possible.
+- Spend control lives in `llm-proxy`: a per-user rolling-24h quota (`quota.ts`) + a
+  resolved-model allowlist (priced-only, `providers/cost.ts`) + a `maxTokens` clamp +
+  a `LLM_KILL_SWITCH`. Expensive document/image use-cases fail CLOSED when usage
+  can't be verified; cheap calls fail open. Configure caps via §16 secrets.
 - AI may summarize, classify, draft, extract, suggest, flag, compare, link, and explain.
 - AI must not auto-approve, auto-close, auto-commit, or silently alter project-critical data.
 
@@ -1204,6 +1239,7 @@ For spreadsheet, email, document, or AI-extracted imports:
 - Never silently overwrite project-critical data.
 - Match projects conservatively.
 - Flag ambiguous matches instead of guessing.
+- Route ALL file uploads through `integrations.Core.UploadFile` (the single storage-write path), which enforces `src/lib/uploadValidation.ts` — a per-workflow extension allowlist + size cap, plus a fail-closed dangerous-extension/size-ceiling backstop. Pass the `workflow` arg for the tighter profile; never write user files to storage by another path. On the edge side, email attachments are guarded by `_shared/attachments.ts` (filename sanitize + count/size/extension caps).
 
 For email-delivered workflows, preserve the source path and auditability.
 
