@@ -1346,39 +1346,25 @@ export const functions = {
       case 'numberSequence': {
         const { project_id, record_type } = params as { project_id?: string; record_type?: string };
         if (!project_id || !record_type) return { data: { number: 1 } };
-        try {
+        // Atomic, server-side ONLY. The RPC does INSERT...ON CONFLICT DO UPDATE
+        // ...RETURNING under a row lock, so concurrent callers serialize and get
+        // DISTINCT official numbers (and it re-checks project access). NEVER fall
+        // back to a client read-modify-write — two concurrent creates would read
+        // the same next_value and mint DUPLICATE RFI/CO/submittal numbers, a
+        // serious record-integrity problem. On a transient RPC error, retry the
+        // SERVER call, then fail closed (no browser-side sequencing).
+        let lastError: unknown = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
           const { data, error } = await supabase.rpc('get_next_sequence_number', {
             p_project_id: project_id,
             p_record_type: record_type,
           });
-          if (error) throw error;
-          return { data: { number: data } };
-        } catch (err) {
-          console.error('Atomic sequence RPC failed, using fallback:', err);
-          // Fallback: client-side (only if RPC somehow unavailable)
-          const { data } = await supabase
-            .from('number_sequences')
-            .select('next_value')
-            .eq('project_id', project_id)
-            .eq('record_type', record_type)
-            .single();
-          if (data) {
-            const next = (data.next_value || 1);
-            await supabase
-              .from('number_sequences')
-              .update({ next_value: next + 1, updated_at: new Date().toISOString() })
-              .eq('project_id', project_id)
-              .eq('record_type', record_type);
-            return { data: { number: next } };
-          } else {
-            await supabase.from('number_sequences').insert({
-              project_id,
-              record_type,
-              next_value: 2,
-            });
-            return { data: { number: 1 } };
-          }
+          if (!error) return { data: { number: data } };
+          lastError = error;
+          console.warn(`[numberSequence] atomic RPC attempt ${attempt + 1}/3 failed:`, error?.message ?? error);
+          if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
         }
+        throw new SupabaseOperationError('number_sequences', 'get_next_sequence_number', lastError);
       }
 
       // LLM proxy
