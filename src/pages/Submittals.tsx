@@ -262,14 +262,22 @@ export default function Submittals() {
       // Snapshot the current cache once — avoids N reads per row.
       const cached = (qc.getQueryData(["submittals", projectId]) || []) as any[];
       const byId = new Map(cached.map((r) => [r.id, r]));
-      return batchProcess(ids, (id) => {
+      const patchHasStatus = typeof patch.status === "string";
+      return batchProcess(ids, async (id) => {
         const existing = byId.get(id);
         const rowPatch: Record<string, any> = { ...patch };
         if (notesAppend) {
           const prior = (existing?.notes || "").trimEnd();
           rowPatch.notes = prior ? `${prior}\n\n${notesAppend}` : notesAppend;
         }
-        return entities.Submittal.update(id, rowPatch);
+        const updated = await entities.Submittal.update(id, rowPatch);
+        // §20: a bulk move to a terminal-approved status must auto-lock the
+        // linked drawing sets, exactly like the single-row updateMut — otherwise
+        // bulk-approving releases a package to fab without locking it. The
+        // canonical helper no-ops for non-approved statuses and swallows lock
+        // failures (best-effort, never breaks the batch).
+        if (patchHasStatus) await lockLinkedSetsIfApproved(updated as any);
+        return updated;
       });
     },
     onSuccess: (results, variables) => {
