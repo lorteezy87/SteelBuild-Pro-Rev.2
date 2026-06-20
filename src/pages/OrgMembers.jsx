@@ -16,7 +16,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { useOrg } from "@/components/shared/OrgContext";
 import { useNavigate } from "react-router-dom";
 import { usePlan } from "@/hooks/usePlan";
-import { withinLimit } from "@/lib/billing/plans";
+import { seatCapacity } from "@/lib/billing/plans";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import {
@@ -53,7 +53,8 @@ export default function OrgMembers() {
   const { plan } = usePlan();
   const navigate = useNavigate();
   const memberLimit = plan.limits.members;
-  const atMemberLimit = !withinLimit(memberLimit, members.length + invites.length);
+  const cap = seatCapacity(members.length, invites.length, memberLimit);
+  const atMemberLimit = cap.atLimit;
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["org-members", orgId] });
     qc.invalidateQueries({ queryKey: ["org-invites", orgId] });
@@ -104,6 +105,10 @@ export default function OrgMembers() {
   return (
     <div className="page-content" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 920 }}>
       <CommandBar eyebrow={currentOrg?.name || "Workspace"} title="Team" count={members.length} unit=" members" subtitle="Invite teammates and manage who can access this workspace" />
+
+      {!(loadingMembers || loadingInvites) && (
+        <CapacityMeter cap={cap} planName={plan.name} canManage={canManage} onUpgrade={() => navigate("/Billing")} />
+      )}
 
       {canManage && (
         <div className="sbd-card" style={{ padding: 16 }}>
@@ -211,6 +216,36 @@ const mono = { fontFamily: "var(--font-mono)" };
 const sectionHdr = { padding: "10px 14px", background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 };
 const td = { padding: "10px 14px", borderBottom: "1px solid var(--divider)", color: "var(--text-secondary)" };
 const smallBtn = { padding: "4px 8px", fontSize: 11, minHeight: 28, display: "inline-flex", alignItems: "center", gap: 4 };
+
+function CapacityMeter({ cap, planName, canManage, onUpgrade }) {
+  const barColor = cap.atLimit ? "var(--status-error)" : cap.near ? "var(--status-warning)" : "var(--accent)";
+  const countColor = cap.atLimit ? "var(--status-error)" : "var(--text-primary)";
+  return (
+    <div className="sbd-card" style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ ...mono, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 }}>Workspace seats</span>
+          <span style={{ color: countColor, fontWeight: 800, fontSize: 15 }}>
+            {cap.unlimited ? cap.used : `${cap.used} / ${cap.limit}`}
+          </span>
+          <span style={{ ...mono, fontSize: 11, color: "var(--text-muted)" }}>
+            {cap.members} member{cap.members === 1 ? "" : "s"}
+            {cap.pending > 0 ? ` · ${cap.pending} pending invite${cap.pending === 1 ? "" : "s"}` : ""}
+            {cap.unlimited ? ` · Unlimited on ${planName}` : ""}
+          </span>
+        </div>
+        {!cap.unlimited && cap.atLimit && canManage && (
+          <button type="button" onClick={onUpgrade} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11, fontWeight: 700 }}>Upgrade →</button>
+        )}
+      </div>
+      {!cap.unlimited && (
+        <div style={{ height: 6, borderRadius: 999, background: "var(--bg-surface-low)", overflow: "hidden" }}>
+          <div style={{ width: `${cap.pct}%`, height: "100%", background: barColor, borderRadius: 999, transition: "width .2s ease" }} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Badge({ children, tone }) {
   return (
