@@ -123,63 +123,63 @@ export default function CommandCenter() {
   // no special wiring needed per-mutation site, no cache-key drift.
   const { data: projects = EMPTY_LIST, isLoading: projLoading } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => entities.Project.list(),
+    queryFn: () => entities.Project.listAll(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: rfis = EMPTY_LIST, isLoading: rfiLoading } = useQuery({
     queryKey: ["rfis"],
-    queryFn: () => entities.RFI.list("-submitted_date"),
+    queryFn: () => entities.RFI.listAll("-submitted_date"),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: drawings = EMPTY_LIST } = useQuery({
     queryKey: ["drawings"],
-    queryFn: () => entities.Drawing.list(),
+    queryFn: () => entities.Drawing.listAll(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: drawingSets = EMPTY_LIST } = useQuery({
     queryKey: ["drawing-sets"],
-    queryFn: () => entities.DrawingSet.list(),
+    queryFn: () => entities.DrawingSet.listAll(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: changeOrders = EMPTY_LIST } = useQuery({
     queryKey: ["change-orders"],
-    queryFn: () => entities.ChangeOrder.list(),
+    queryFn: () => entities.ChangeOrder.listAll(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: deliveries = EMPTY_LIST } = useQuery({
     queryKey: ["deliveries"],
-    queryFn: () => entities.Delivery.list(),
+    queryFn: () => entities.Delivery.listAll(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: workPackages = EMPTY_LIST } = useQuery({
     queryKey: ["work-packages"],
-    queryFn: () => entities.WorkPackage.list(),
+    queryFn: () => entities.WorkPackage.listAll(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: sovItems = EMPTY_LIST } = useQuery({
     queryKey: ["sov-items"],
-    queryFn: () => entities.SOVItem.list(),
+    queryFn: () => entities.SOVItem.listAll(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: productionNotes = EMPTY_LIST } = useQuery({
     queryKey: ["production-notes"],
-    queryFn: () => entities.ProductionNote.list("-note_date"),
+    queryFn: () => entities.ProductionNote.listAll("-note_date"),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
@@ -189,7 +189,7 @@ export default function CommandCenter() {
   // sees on the Gantt also shows up here.
   const { data: scheduleTasks = EMPTY_LIST } = useQuery({
     queryKey: ["schedule-tasks"],
-    queryFn: () => entities.ScheduleTask.list("-start_date"),
+    queryFn: () => entities.ScheduleTask.listAll("-start_date"),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });

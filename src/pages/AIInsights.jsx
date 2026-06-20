@@ -197,14 +197,14 @@ export default function PortfolioOverview() {
   const [healthFilter, setHealthFilter] = useState("All");
   const [search, setSearch] = useState("");
 
-  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => entities.Project.list(), staleTime: 5 * 60 * 1000 });
-  const { data: rfis = [] } = useQuery({ queryKey: ["portfolio-rfis"], queryFn: () => entities.RFI.list(), staleTime: 30 * 1000 });
-  const { data: cos = [] } = useQuery({ queryKey: ["portfolio-cos"], queryFn: () => entities.ChangeOrder.list(), staleTime: 60 * 1000 });
-  const { data: codes = [] } = useQuery({ queryKey: ["portfolio-codes"], queryFn: () => entities.CostCode.list(), staleTime: 60 * 1000 });
-  const { data: wps = [] } = useQuery({ queryKey: ["portfolio-wps"], queryFn: () => entities.WorkPackage.list(), staleTime: 30 * 1000 });
-  const { data: deliveries = [] } = useQuery({ queryKey: ["portfolio-deliveries"], queryFn: () => entities.Delivery.list(), staleTime: 30 * 1000 });
-  const { data: actionItems = [] } = useQuery({ queryKey: ["portfolio-action-items"], queryFn: () => entities.ActionItem.list(), staleTime: 30 * 1000 });
-  const { data: scheduleTasks = [] } = useQuery({ queryKey: ["portfolio-schedule-tasks"], queryFn: () => entities.ScheduleTask.list("-start_date"), staleTime: 60 * 1000 });
+  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => entities.Project.listAll(), staleTime: 5 * 60 * 1000 });
+  const { data: rfis = [] } = useQuery({ queryKey: ["portfolio-rfis"], queryFn: () => entities.RFI.listAll(), staleTime: 30 * 1000 });
+  const { data: cos = [] } = useQuery({ queryKey: ["portfolio-cos"], queryFn: () => entities.ChangeOrder.listAll(), staleTime: 60 * 1000 });
+  const { data: codes = [] } = useQuery({ queryKey: ["portfolio-codes"], queryFn: () => entities.CostCode.listAll(), staleTime: 60 * 1000 });
+  const { data: wps = [] } = useQuery({ queryKey: ["portfolio-wps"], queryFn: () => entities.WorkPackage.listAll(), staleTime: 30 * 1000 });
+  const { data: deliveries = [] } = useQuery({ queryKey: ["portfolio-deliveries"], queryFn: () => entities.Delivery.listAll(), staleTime: 30 * 1000 });
+  const { data: actionItems = [] } = useQuery({ queryKey: ["portfolio-action-items"], queryFn: () => entities.ActionItem.listAll(), staleTime: 30 * 1000 });
+  const { data: scheduleTasks = [] } = useQuery({ queryKey: ["portfolio-schedule-tasks"], queryFn: () => entities.ScheduleTask.listAll("-start_date"), staleTime: 60 * 1000 });
 
   useEffect(() => {
     if (selectedProjectId || !projectId || projects.length === 0) return;
