@@ -29,7 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| _(none active)_ | | | | |
+| 2026-06-19 | refactor-rivetbrief | Refactor `ScheduleRivetBrief.jsx` (largest-files campaign — note `ScheduleGantt.jsx` is being decomposed by another session, leave it) | `src/components/schedule/ScheduleRivetBrief.jsx`, `src/components/schedule/rivetBrief*` | Behavior-preserving decomposition: pure helpers + `buildBrief` engine + styles → sibling modules w/ tests |
 
 ## Recently released
 
