@@ -155,9 +155,45 @@ platform-maturity follow-ups._
   correctly names `steelbuildpro-og` (the live production project), not the deleted
   `steelbuild-pro`. No action needed.
 
+### Edge-function security follow-ups (from the 2026-06-20 hardening batch)
+
+The audit's edge findings — #5 (quota fail-closed + `LLM_KILL_SWITCH`), #6
+(email-classify per-project cap + kill switch), #7 (inbound-attachment count/size/
+extension guards + filename sanitize), #11 (CORS allowlist), #12 (Stripe
+redirect-origin validation) — shipped + deployed 2026-06-20 (commits `4dff88e5`,
+hotfix `e968f48d`). #5 + #11 are field-verified (a live AI call + CORS preflight).
+Remaining:
+
+- **Dangling `stripe-worker` caller** — the function is deleted (returns 404) but
+  something (likely `cron`/`pg_cron`) still POSTs `…/functions/v1/stripe-worker`
+  every ~60s → a steady 404 stream in the edge logs. Find it (`select * from cron.job`)
+  and remove/repoint it. Harmless but noisy + wasted invocations.
+- **#10 client protocol bump** — `llm-proxy` returns protocol v8; bump the client
+  `EXPECTED_PROTOCOL_VERSION` (currently 3) → 8 in `src/api/supabaseClient.ts`. Safe
+  now that the live proxy is v8. Ships via the normal git push (frontend).
+- **Activate CORS lockdown (optional)** — CORS is opt-in permissive by default and
+  `ALLOWED_ORIGINS=*` is currently set. To enforce #11, set it to the real app
+  origins (baked prod defaults + localhost + `*.vercel.app` are always allowed on
+  top). Confirm the actual production origin first. Low priority (bearer-token auth,
+  not cookies). See the [[edge-cors-optin-verification]] memory.
+- **Field-verify #6 / #7 / #12** — still need a real-traffic pass: an inbound email
+  (classify cap path), an inbound email with attachments (caps + sanitize), and a
+  Stripe checkout (redirect lands on an allowed origin).
+- **Set a real spend cap** — `LLM_DAILY_COST_LIMIT_USD` is unset, so the #5 quota is
+  a no-op. Set it once a sensible per-user daily ceiling is decided.
+
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- 2026-06-20 **Security batch (audit #5/#6/#7/#11/#12 + #21/#14):** edge-function
+  hardening — quota fail-closed + `LLM_KILL_SWITCH`, email-classify per-project cap,
+  inbound-attachment count/size/extension guards + filename sanitize, CORS opt-in
+  allowlist, Stripe redirect-origin validation — written, committed, and deployed via
+  the Supabase CLI. Plus frontend: `src/lib/uploadValidation.ts` central upload guard
+  enforced at the `UploadFile` chokepoint (#21) and `ProjectScopedRoute` route-level
+  deep-link guard (#14), both unit-tested. Commits `6c6686e6`, `4dff88e5`, `e968f48d`.
+  Residual follow-ups under Active items → "Edge-function security follow-ups".
 
 - 2026-06-17 **DB perf/security hardening (tech-debt Phase 1):** applied live via
   MCP, advisor-confirmed. `20260617000000` — 9 `auth_rls_initplan` policy wraps
