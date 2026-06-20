@@ -3,7 +3,7 @@
  * in-transit tracking, receiving, and exception follow-up.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { logActivity } from "@/services/auditLogger";
@@ -281,6 +281,9 @@ export default function Deliveries() {
     return groups;
   }, [filtered]);
 
+  // In-session dedup so the 60s metrics refetch doesn't re-run the alert pass
+  // for deliveries already handled (the DB title/id check still backstops it).
+  const alertsCreatedRef = useRef(new Set<string>());
   useEffect(() => {
     if (!projectId || !metrics.overdue.length) return undefined;
     const createDeliveryAlerts = async () => {
@@ -290,6 +293,7 @@ export default function Deliveries() {
         const existingTitles = new Set(existing.map((alert) => alert.title));
         for (const delivery of metrics.overdue) {
           if (existingIds.has(delivery.id)) continue;
+          if (alertsCreatedRef.current.has(delivery.id)) continue;
           const projectName = projectMap[delivery.project_id] || "";
           const wp = workPackageMap[delivery.work_package_id];
           const desc = getDeliveryDisplayName(delivery, wp);
@@ -305,6 +309,7 @@ export default function Deliveries() {
             project_id: delivery.project_id,
             project_name: projectName,
           });
+          alertsCreatedRef.current.add(delivery.id);
         }
       } catch (error) {
         console.warn("Delivery alert error:", error);
