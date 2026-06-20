@@ -73,3 +73,49 @@ export function planFor(planKey: string | null | undefined): Plan {
 export function withinLimit(limit: number | null, count: number): boolean {
   return limit === null || count < limit;
 }
+
+export interface SeatCapacity {
+  /** Accepted members + still-pending invites — what counts against the limit. */
+  used: number;
+  members: number;
+  pending: number;
+  /** Plan member limit; null = unlimited (Business / Enterprise). */
+  limit: number | null;
+  unlimited: boolean;
+  /** Seats left before the limit; null when unlimited. */
+  remaining: number | null;
+  /** Used / limit as a 0–100 bar percentage (0 when unlimited). */
+  pct: number;
+  atLimit: boolean;
+  /** ≥ 80% of a finite limit (and not yet at it) — worth a heads-up. */
+  near: boolean;
+}
+
+/**
+ * Workspace seat usage for the capacity meter. Counts accepted members PLUS
+ * still-pending invites against the plan member limit — matching the server
+ * invite gate (enforce_org_invite_limit counts members + pending), so the UI
+ * can't promise a seat the gate will reject. `limit === null` = unlimited.
+ */
+export function seatCapacity(
+  members: number,
+  pending: number,
+  limit: number | null,
+): SeatCapacity {
+  const m = Math.max(0, Math.floor(members || 0));
+  const p = Math.max(0, Math.floor(pending || 0));
+  const used = m + p;
+  const unlimited = limit === null || limit === undefined;
+  const lim = unlimited ? null : (limit as number);
+  return {
+    used,
+    members: m,
+    pending: p,
+    limit: lim,
+    unlimited,
+    remaining: lim === null ? null : Math.max(0, lim - used),
+    pct: lim === null ? 0 : Math.min(100, Math.round((used / Math.max(1, lim)) * 100)),
+    atLimit: lim !== null && used >= lim,
+    near: lim !== null && used < lim && used / lim >= 0.8,
+  };
+}

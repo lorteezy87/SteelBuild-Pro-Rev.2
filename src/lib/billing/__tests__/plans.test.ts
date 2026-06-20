@@ -2,7 +2,7 @@
 // paying customer's projects/members. Pure functions, no mocks.
 
 import { describe, it, expect } from "vitest";
-import { PLANS, PLAN_BY_KEY, planFor, withinLimit } from "@/lib/billing/plans";
+import { PLANS, PLAN_BY_KEY, planFor, withinLimit, seatCapacity } from "@/lib/billing/plans";
 
 describe("planFor", () => {
   it("resolves a known plan key", () => {
@@ -35,6 +35,60 @@ describe("withinLimit", () => {
     expect(withinLimit(1, 1)).toBe(false); // Free: at 1 project → 2nd blocked
     expect(withinLimit(10, 9)).toBe(true); // Pro: room for the 10th
     expect(withinLimit(10, 10)).toBe(false); // Pro: at 10 → 11th blocked
+  });
+});
+
+describe("seatCapacity", () => {
+  it("counts members + pending invites against a finite limit", () => {
+    const cap = seatCapacity(3, 2, 15); // Pro
+    expect(cap.used).toBe(5);
+    expect(cap.members).toBe(3);
+    expect(cap.pending).toBe(2);
+    expect(cap.limit).toBe(15);
+    expect(cap.remaining).toBe(10);
+    expect(cap.unlimited).toBe(false);
+    expect(cap.atLimit).toBe(false);
+    expect(cap.near).toBe(false);
+    expect(cap.pct).toBe(33);
+  });
+
+  it("flags atLimit when members + pending reach the limit (matches the invite gate)", () => {
+    const cap = seatCapacity(1, 1, 2); // Free: 1 member + 1 pending = 2/2
+    expect(cap.used).toBe(2);
+    expect(cap.atLimit).toBe(true);
+    expect(cap.remaining).toBe(0);
+    expect(cap.pct).toBe(100);
+  });
+
+  it("flags near at ≥80% of a finite limit (but not yet at it)", () => {
+    const cap = seatCapacity(12, 0, 15); // 12/15 = 80%
+    expect(cap.near).toBe(true);
+    expect(cap.atLimit).toBe(false);
+  });
+
+  it("treats a null limit as unlimited (no bar, no atLimit)", () => {
+    const cap = seatCapacity(40, 5, null); // Business / Enterprise
+    expect(cap.unlimited).toBe(true);
+    expect(cap.limit).toBeNull();
+    expect(cap.remaining).toBeNull();
+    expect(cap.atLimit).toBe(false);
+    expect(cap.near).toBe(false);
+    expect(cap.pct).toBe(0);
+    expect(cap.used).toBe(45);
+  });
+
+  it("caps pct at 100 when over the limit and never goes negative on remaining", () => {
+    const cap = seatCapacity(20, 0, 15); // already over (e.g. after a downgrade)
+    expect(cap.pct).toBe(100);
+    expect(cap.remaining).toBe(0);
+    expect(cap.atLimit).toBe(true);
+  });
+
+  it("is safe on junk counts", () => {
+    const cap = seatCapacity(-3, NaN as unknown as number, 2);
+    expect(cap.members).toBe(0);
+    expect(cap.pending).toBe(0);
+    expect(cap.used).toBe(0);
   });
 });
 
