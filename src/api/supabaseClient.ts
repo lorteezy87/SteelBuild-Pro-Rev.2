@@ -332,6 +332,10 @@ const cleanRecord = (record: Record<string, unknown>): Record<string, unknown> =
 
 export type EntityClient<T extends TableName> = {
   list: (sortBy?: string) => Promise<Array<RowWithAliases<T>>>;
+  /** Like list() but PAGINATES to completeness — no silent DEFAULT_LIST_LIMIT
+   *  cap. For portfolio/dashboard reads that span all projects and can outgrow
+   *  the cap as a tenant grows (CommandCenter / AIInsights). */
+  listAll: (sortBy?: string) => Promise<Array<RowWithAliases<T>>>;
   filter: (conditions?: Conditions, sortBy?: string, limit?: number) => Promise<Array<RowWithAliases<T>>>;
   get: (id: string) => Promise<RowWithAliases<T>>;
   create: (record: Insert<T>) => Promise<RowWithAliases<T>>;
@@ -388,6 +392,36 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     if (error) throw new SupabaseOperationError(tableName as string, 'list', error);
     warnIfTruncated(tableName as string, 'list', data?.length ?? 0, DEFAULT_LIST_LIMIT);
     return addAliasesToList<RowWithAliases<T>>(data, tableName as string);
+  },
+
+  /**
+   * Like list() but pages through ALL matching rows via .range() instead of one
+   * capped read — so portfolio-wide dashboards (CommandCenter / AIInsights) don't
+   * silently truncate at DEFAULT_LIST_LIMIT as a tenant grows. The primary sort
+   * plus an `id` tiebreaker keeps page boundaries stable (no dropped/dup rows).
+   */
+  listAll: async (sortBy) => {
+    const PAGE = 1000;
+    const SAFETY_MAX_ROWS = 100_000;
+    const sort = parseSortBy(sortBy);
+    const all: Array<RowWithAliases<T>> = [];
+    for (let offset = 0; offset < SAFETY_MAX_ROWS; offset += PAGE) {
+      let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
+      q = applyLiveProjectScope(q, tableName as string);
+      if (SOFT_DELETE_TABLES.has(tableName as string)) q = q.eq('is_deleted', false);
+      if ((tableName as string) === 'projects') q = q.eq('on_hold', false);
+      if (sort) q = q.order(sort.column, { ascending: sort.ascending });
+      else q = q.order('created_at', { ascending: false });
+      q = q.order('id', { ascending: true }).range(offset, offset + PAGE - 1);
+      const { data, error } = await q;
+      if (error) throw new SupabaseOperationError(tableName as string, 'listAll', error);
+      all.push(...addAliasesToList<RowWithAliases<T>>(data, tableName as string));
+      if (!data || data.length < PAGE) return all;
+    }
+    // Hit the safety ceiling — surface in PROD too (unlike list()'s dev-only warn).
+    // eslint-disable-next-line no-console
+    console.warn(`[supabaseClient] ${tableName}.listAll() stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
+    return all;
   },
 
   /**
