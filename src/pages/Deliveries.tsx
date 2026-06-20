@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType, CSSProperties, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { logActivity } from "@/services/auditLogger";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Clock3, PackageCheck, Search, Truck } from "lucide-react";
@@ -175,6 +176,7 @@ export default function Deliveries() {
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
       entities.Delivery.update(id, data),
     onSuccess: async (updated, variables) => {
+      logActivity("delivery", "status_changed", updated, { projectId });
       replaceRecordInCaches(qc, deliveryQueryKeys, updated);
       await invalidateDeliveries();
       setDetail((prev) => (prev?.id === variables.id ? null : prev));
@@ -186,6 +188,7 @@ export default function Deliveries() {
   const deleteMut = useMutation({
     mutationFn: (id: string) => entities.Delivery.delete(id),
     onSuccess: async (_result, deletedId) => {
+      logActivity("delivery", "deleted", deleteTarget || { id: deletedId, project_id: projectId }, { projectId });
       removeRecordFromCaches(qc, deliveryQueryKeys, deletedId);
       await invalidateDeliveries();
       if (detail?.id === deleteTarget?.id) setDetail(null);
@@ -214,7 +217,9 @@ export default function Deliveries() {
       }
       return { succeeded, failed };
     },
-    onSuccess: async (results) => {
+    onSuccess: async (results, variables) => {
+      results.succeeded.forEach(({ value, item }: any) =>
+        logActivity("delivery", "status_changed", value || { id: item, project_id: projectId }, { projectId, description: `→ ${variables.status}` }));
       await invalidateDeliveries();
       setSelectedIds(new Set());
       if (results.failed.length > 0) {

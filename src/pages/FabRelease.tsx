@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { logActivity } from "@/services/auditLogger";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { invalidateEntity, getQueryKey } from "@/services/cacheRegistry";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -162,6 +163,7 @@ export default function FabRelease() {
   const createWPMut = useMutation({
     mutationFn: (data: any) => entities.WorkPackage.create(data),
     onSuccess: async (created) => {
+      logActivity("work_package", "created", created, { projectId });
       appendRecordToCaches(qc, wpQueryKeys, created, ((record: any, key: any) => !key[1] || record.project_id === key[1]) as unknown as () => boolean);
       await invalidateWorkPackages();
       setWPModalOpen(false);
@@ -174,6 +176,8 @@ export default function FabRelease() {
   const updateWPMut = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => entities.WorkPackage.update(id, data),
     onSuccess: async (updated, variables) => {
+      if (variables.data?.status) logActivity("work_package", "status_changed", updated, { projectId });
+      else logActivity("work_package", "updated", updated, { projectId });
       replaceRecordInCaches(qc, wpQueryKeys, updated);
       await invalidateWorkPackages();
       setWPModalOpen(false);
@@ -187,6 +191,7 @@ export default function FabRelease() {
   const deleteMut = useMutation({
     mutationFn: (id: string) => entities.WorkPackage.delete(id),
     onSuccess: async (_, deletedId) => {
+      logActivity("work_package", "deleted", deleteTarget || { id: deletedId, project_id: projectId }, { projectId });
       removeRecordFromCaches(qc, wpQueryKeys, deletedId);
       await invalidateWorkPackages();
       setDetailWP((prev) => (prev?.id === deletedId ? null : prev));
@@ -203,6 +208,7 @@ export default function FabRelease() {
         percent_complete: 100,
       }),
     onSuccess: async (updated, id) => {
+      logActivity("work_package", "status_changed", updated, { projectId });
       replaceRecordInCaches(qc, wpQueryKeys, updated);
       await invalidateWorkPackages();
       setDetailWP((prev) => (prev?.id === id ? null : prev));
