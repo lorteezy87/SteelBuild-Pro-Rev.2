@@ -1,10 +1,12 @@
 # Stripe production go-live checklist
 
-> Status as of 2026-06-17 (verified against the live `kjrwqagyeswwoxpjkcko` project).
-> The billing **code path is complete and correct**; what remains is live-account
-> configuration (owner-only) + a decision on a duplicate integration. The flow has
-> never run end-to-end yet (1 org, `enterprise`/internal, no Stripe customer;
-> `billing_events` table exists with 0 rows — all expected pre-launch).
+> Status as of 2026-06-20 (verified against the live `kjrwqagyeswwoxpjkcko` project).
+> The billing **code path is complete and correct** and `billing_config` is populated
+> (Pro + Business `price_…` IDs and a `whsec_…` signing secret are all present). What
+> remains is an owner-run **test-mode end-to-end** — the flow has never processed a
+> webhook (`billing_events` has 0 rows; the only org is `enterprise`/internal with no
+> Stripe customer — all expected pre-launch). An automated **webhook-replay test** now
+> guards the handler's org-mapping logic (see "Already done in code").
 
 ## How billing works (the path the app uses)
 
@@ -21,20 +23,15 @@ Billing.jsx → billingService.ts → supabase fn "stripe-billing"
   display prices only — must match what you create in Stripe).
 - Webhook is signature-verified and idempotent (unique `stripe_event_id` in `billing_events`).
 
-## ⚠️ Decision needed — two Stripe integrations are deployed
+## ✅ Resolved — single Stripe integration
 
-The live project has **four** Stripe functions, but the app only uses one:
-
-| Function | Source in repo? | Used by app? | What it is |
-|---|---|---|---|
-| `stripe-billing` | ✅ yes | ✅ yes (billingService) | the custom checkout/portal/webhook this app relies on |
-| `stripe-setup` / `stripe-worker` / `stripe-webhook` | ❌ no (deployed out-of-band) | ❌ no | the **Supabase Stripe Sync Engine** template (mirrors Stripe objects into a `stripe` schema). `stripe-webhook` is a 1.17 MB bundle. |
-
-The sync-engine trio is an unused parallel path. Before launch, **either** remove it
-(`supabase functions delete stripe-setup stripe-worker stripe-webhook`) **or**, if you
-want Stripe data mirrored into Postgres, keep it but point only `stripe-billing/webhook`
-at the app's webhook (the app reads `organizations`, not the `stripe` schema). Leaving
-both wired to the same Stripe account doubles webhook delivery and is confusing.
+Earlier the project also had the **Supabase Stripe Sync Engine** template deployed
+(`stripe-setup` / `stripe-worker` / `stripe-webhook`) as an unused parallel path.
+Those are **gone** — only the 8 app functions are deployed now, and `stripe-billing`
+(with its `/webhook` route) is the sole Stripe integration. A leftover `pg_cron` job
+(`stripe-sync-worker`) that POSTed the deleted `stripe-worker` every minute (→ 404 noise
+in the edge logs) was **unscheduled 2026-06-20** (`select cron.unschedule('stripe-sync-worker')`).
+Do **not** re-deploy the sync trio (it would double webhook delivery).
 
 ## Go-live steps (owner — needs the live Stripe account)
 
@@ -57,13 +54,22 @@ both wired to the same Stripe account doubles webhook delivery and is confusing.
    Then verify "Manage billing" opens the portal and a cancel flips the plan back.
 5. **Flip to live keys** and repeat one real (or `$0` coupon) transaction.
 
-## Already done in code (2026-06-17)
+## Already done in code
 
-- **Error surfacing fix** (`billingService.ts`): `functions.invoke` wraps a non-2xx
-  response in a `FunctionsHttpError` whose `.message` is generic, so the real reason
-  ("Plan X isn't available", "You don't have permission…", "No billing account yet")
-  was being swallowed in the Billing UI. Now reads `error.context` to show the actual
-  cause. (+5 unit tests.)
+- **Error surfacing fix** (`billingService.ts`, 2026-06-17): `functions.invoke` wraps a
+  non-2xx response in a `FunctionsHttpError` whose `.message` is generic, so the real
+  reason ("Plan X isn't available", "You don't have permission…", "No billing account
+  yet") was being swallowed in the Billing UI. Now reads `error.context` to show the
+  actual cause. (+5 unit tests.)
+- **Webhook-replay test** (2026-06-20, `supabase/functions/stripe-billing/__tests__/webhookReplay.test.ts`):
+  the pure org-mapping logic was extracted to `webhookLogic.ts` (behavior-identical;
+  `index.ts` keeps the Stripe calls + DB writes) and is unit-tested for
+  `checkout.session.completed`, `customer.subscription.updated`, and `.deleted` —
+  plan/status/period mapping, `metadata.plan` precedence, `client_reference_id`
+  fallback, unknown-price fallback. Runs under `npm test`, gating CI against handler
+  regressions. **Does NOT replace** the owner test-mode E2E (step 4) — that proves the
+  real Stripe signature round-trip + DB write, which a unit test cannot.
+- **Sync-engine trio removed + stale `stripe-sync-worker` pg_cron unscheduled** (2026-06-20).
 
 ## Notes
 
