@@ -116,7 +116,13 @@ async function bulkCreateWithFallback(entity, records) {
     console.warn("[onboarding] bulkCreate failed, falling back to row creates", err);
     const created = [];
     for (const record of records) {
-      created.push(await entity.create(record));
+      try {
+        created.push(await entity.create(record));
+      } catch (rowErr) {
+        // Skip a failing row (e.g. a duplicate unique key) instead of aborting
+        // the seed and leaving an unhandled rejection.
+        console.warn("[onboarding] seed row skipped:", rowErr?.message || rowErr);
+      }
     }
     return created;
   }

@@ -114,7 +114,14 @@ export async function bulkCreateWithFallback(entity, records, logPrefix = "data-
     console.warn(`[${logPrefix}] bulkCreate failed, falling back to row creates`, err);
     const created = [];
     for (const record of records) {
-      created.push(await entity.create(record));
+      try {
+        created.push(await entity.create(record));
+      } catch (rowErr) {
+        // Skip the failing row (e.g. a duplicate unique key on re-import)
+        // rather than aborting the whole batch and leaving an unhandled
+        // promise rejection. The caller still gets every row that DID create.
+        console.warn(`[${logPrefix}] row create skipped:`, rowErr?.message || rowErr);
+      }
     }
     return created;
   }
