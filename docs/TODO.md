@@ -35,6 +35,22 @@ logo refresh across splash/favicon/social + sign-in modal (`c90d836b`).
 - [x] Function `search_path` hardening — pinned `search_path=''` on 5 advisor-flagged public fns (backcharge/payapp/piece_production touch triggers + plan-limit lookups); migration `20260616010000`, applied live 2026-06-16.
 - [x] Definer-function anon lockdown — revoked anon `EXECUTE` on 8 internal `SECURITY DEFINER` fns (advisor 0028): 2 triggers locked from all client roles, 4 RLS helpers + `create_organization`/`accept_invitation` kept `authenticated`-only, `get_invitation` left anon (invite preview). Migration `20260616020000`, applied live + privilege-verified 2026-06-16.
 
+- [x] **Onboarding wizard → team invites hand-off (Epic 4) — SHIPPED 2026-06-19.** The setup
+  wizard (`Onboarding.jsx`) collected a roster into `project.metadata.onboarding.team_plan` but
+  never sent invites (orphaned data) and had no finish hand-off. Now: a post-create
+  "Invite your team →" CTA carries the roster to the Team page via nav state; `OrgMembers.jsx`
+  stages it (`prepareOnboardingInvites`: map project→org role, validate, dedupe vs
+  members/pending) into a review panel with per-row role/remove + seat-aware **batch send**
+  (per-row-failure tolerant). The misleading "Invite users ✓" checklist step relabeled
+  "Plan team roles". Adversarial review caught a **privilege-escalation** (a non-owner admin
+  could mint an `owner` invite via the staged value) → fixed at BOTH layers: client
+  `clampOrgRole` (owner→admin for non-owners) AND a DB guard tightening `org_invites_insert`
+  so only an owner can create an owner invite (migration `20260619010000`, applied live +
+  verified). Pure helpers (10 tests); full suite 1542 green. **Code-verified, NOT field-verified**
+  — run create-project → Invite your team → Send in the app. Deferred: auto-add invitees to the
+  wizard's project with their intended project role on accept (needs accept_invitation extension);
+  invite-accepted email. (M)
+
 ## Thread C — Revision Intelligence — COMPLETE
 
 **Shipped:** per-sheet diff (`559cfd18`) → package report (`1ae4e148`) → RFI-from-delta (`01564d8e`)
@@ -79,6 +95,33 @@ review-return forecasting (`5e6283c5`).
 - [~] **Round-model ambiguity RESOLVED — a round = one submit→return CYCLE (SHIPPED `abbdbc0d`; owner chose cycle, not event-log).** `addSubmittalRound` no longer inserts a row + bumps `total_rounds` on every status move; it now **find-or-updates** the latest round — a send opens/advances the open cycle, a verdict closes it in place, and a new row opens only on a real resubmit (send on a closed round). Pure `planRoundWrite()` decides update-vs-insert (unit-tested); `onStatusChange` routes sends through it too; the "ROUND N" header/row + "Start Resubmittal — Round N+1" read `total_rounds` (the cycle count; `round_number` is the vestigial legacy revision counter). The fab-release backstop reverts an in-place update / deletes a fresh insert. 28 submittal-hook tests, suite 1514 green. **Remaining: write-path field-verify** — code-verified + the `SubmittalRound.filter(…,"-round_number",1)` pattern is proven elsewhere, but flipping a real submittal through its cycle wasn't done in-app (it mutates live workflow: auto-locks + smart triggers). Confirm on the next real workflow move. (M)
 - [x] **Server-enforce the fab-release gate (moat) — DONE 2026-06-18.** Extended the `fab_release_log` BEFORE-INSERT trigger (`enforce_fab_release_gate`, migration `20260618010000`) to also block **rejected / R&R sheets** and **superseded-revision** sheets, mirroring `computeFabReleaseGate` exactly — so a client that skips the UI can't release past them. The audited PM `override_reason` still short-circuits every dimension. **Field-verified** via a rolled-back synthetic insert: superseded package → `FAB_RELEASE_BLOCKED` (correct sheet in the message), override → bypass. SECURITY INVOKER, no new advisor warning. **⚠ Also found + fixed a latent moat bug:** the live `fab_release_log` was missing `drawing_count` (the enforcement migration's `create table if not exists` no-op'd over an earlier table shape), so EVERY real `recordFabRelease()` would have thrown "column does not exist" — the gated release path had never successfully run (0 rows, masking it). Added the column (migration `20260618020000`). **Still client-only:** the opt-in missing-fab-signoff dimension (needs a per-project setting lookup) — lower priority. (M)
 - [ ] **Submittal detail panel froze CDP screenshot capture (low confidence it's user-facing).** During live verification, opening any submittal detail reliably timed out `Page.captureScreenshot` (30s) while the DOM a11y tree + console stayed instantly responsive and error-free — so most likely a capture/GPU artifact, not a real freeze. But the detail mounts `SubmittalReviewStrip` + the forecast/matrix `useMemo`s on selection; profile a detail-open on a data-heavy submittal and defer/memoize the strip if there's real main-thread cost. (S)
+
+## Thread G — Detailing Control Center (Epic 3 — the centerpiece)
+
+The Hub (`DrawingSubmittalHub`, labeled "Detailing Control Center") is already the
+sole DETAILING nav entry + the DRAWINGS tab default. Epic 3 = make it the front
+door without stranding the other roles.
+
+- [x] **Role-aware default landing + Hub-selectable picker — SHIPPED 2026-06-19 (`82f5af53`).**
+  At `/` (`IndexRoute`), when there's no explicit `default_landing` pref, land by
+  per-project role: field → Field Today, pm/admin/owner → Detailing Control Center,
+  viewer/unknown → Dashboard (pure `src/lib/landingForRole.js`, 5 tests). An explicit
+  pref still wins and redirects immediately. `roleReady` waits for the per-project
+  role only when a project is active/pending — a zero-project / no-pref user decides
+  immediately (no spinner through ProjectContext's ~4.5s empty-list retry backoff),
+  and there's no infinite loader if a default-project pref points at a deleted project.
+  `DashboardTab` landing picker now offers the Hub + Field Today with friendly labels
+  (the Hub wasn't selectable at all before). 7-case boot-invariant test
+  (`src/boot/__tests__/IndexRoute.test.jsx`). Adversarially reviewed (correctness /
+  regression / edge lenses; zero-project spinner + missing test were the real findings,
+  both fixed). Full suite 1532/1532 + build green. **Code-verified, NOT field-verified**
+  — exercise the role-routed first-load redirect in the running app (clear sessionStorage
+  `sbp-landing-redirected`, open `/`). (M)
+- [x] /Drawings "fate" decision (keep + Back-to-Hub banner) — ALREADY satisfied: the
+  demotion banner exists in `Drawings.jsx` (`!embedded` → "← Back to the Hub" →
+  `/DrawingSubmittalHub`). Standalone route kept, nav-orphaned by design.
+- [ ] Optional: per-role NAV (hide cost/detailing tabs from field) was considered and
+  deferred — deep-link breakage risk, and page-level permissions already gate access. (S)
 
 ## Other (shipped last night)
 Submittal "Released for Fab" open-tally (`4d144c2c`), WP form project pre-select (`e19ddd23`),
