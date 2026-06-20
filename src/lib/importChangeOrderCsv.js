@@ -224,7 +224,7 @@ function normalizeDate(raw) {
 // the DB sees a real number or nothing at all (no NaN coercion).
 function normalizeMoney(raw) {
   if (raw === null || raw === undefined) return null;
-  const s = String(raw).replace(/[$,\s]/g, "").replace(/[^\d.\-]/g, "");
+  const s = String(raw).replace(/[$,\s]/g, "").replace(/[^\d.-]/g, "");
   if (!s) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;

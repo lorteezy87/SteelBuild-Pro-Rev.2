@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, ChevronRight, FileStack, ClipboardCheck, MessageCircleQuestion, PackageCheck, X } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useGettingStarted } from "@/hooks/useGettingStarted";
-import type { GettingStartedStepKey, StepStatus } from "@/lib/gettingStarted";
+import type { GettingStartedStepKey } from "@/lib/gettingStarted";
 
 type StepMeta = { title: string; why: string; cta: string; page: string; icon: typeof FileStack };
 

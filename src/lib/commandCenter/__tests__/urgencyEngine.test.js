@@ -11,8 +11,6 @@ import {
   rfiUrgency,
   drawingUrgency,
   deliveryUrgency,
-  sovUrgency,
-  workPackageUrgency,
   drawingSetUrgency,
   changeOrderUrgency,
 } from "../urgencyEngine";

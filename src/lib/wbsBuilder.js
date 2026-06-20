@@ -450,7 +450,7 @@ function extractBuildings(line) {
 // can see which sheet the scope traces back to without opening the
 // original bid doc.
 const DRAWING_REF_RE = /\b[A-Z]{1,3}[-]?[A-Z]?\d+\.\d{3}[A-Z]?\b/g;    // P-S1.010, PA8.005A, PA1.101B
-const DETAIL_REF_RE  = /\b(?:ref(?:erence)?\s+)?(?:detail\s+[A-Z]*\d+|[A-Z]*\d+\s*\/\s*[A-Z\-]+\d+(?:\.\d+)?[A-Z]?|keynote\s+\d+(?:\/[A-Z\-]+\d+(?:\.\d+)?[A-Z]?)?)/gi;
+const DETAIL_REF_RE  = /\b(?:ref(?:erence)?\s+)?(?:detail\s+[A-Z]*\d+|[A-Z]*\d+\s*\/\s*[A-Z-]+\d+(?:\.\d+)?[A-Z]?|keynote\s+\d+(?:\/[A-Z-]+\d+(?:\.\d+)?[A-Z]?)?)/gi;
 
 function extractRefs(text) {
   if (!text) return { drawings: [], details: [] };
@@ -465,7 +465,7 @@ function cleanLabel(raw) {
   if (!raw) return "";
   return raw
     .replace(/^\s*(?:\d+[a-z]?|[a-z]|[ivx]+)\.\s*/i, "")   // "1.", "1a.", "a.", "ii."
-    .replace(/^\s*[\-•*]\s*/, "")                         // bullet markers
+    .replace(/^\s*[-•*]\s*/, "")                         // bullet markers
     .replace(/\s+/g, " ")
     .trim();
 }

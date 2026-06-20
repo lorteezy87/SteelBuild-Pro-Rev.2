@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import type { ComponentType, Dispatch, PropsWithChildren, SetStateAction } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileText, Link2, Paperclip, Plus, Reply, ReplyAll, Send, X } from "lucide-react";
+import { FileText, Link2, Paperclip, Reply, ReplyAll, Send, X } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { Modal as ModalRaw } from "@/components/design-system";
 import { invalidateEntity } from "@/services/cacheRegistry";

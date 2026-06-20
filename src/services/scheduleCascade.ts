@@ -1,4 +1,4 @@
-import { buildGateMap, type GateOptions, type TaskGate } from "./scheduleGatekeeper";
+import { buildGateMap, type GateOptions } from "./scheduleGatekeeper";
 
 // Module-scoped set of cycle keys that have already been warned about.
 // Persists across calls to computeEffectiveDates so the same cycle
