@@ -13,9 +13,12 @@
 // WITHOUT a req) keep "*", which is safe — a disallowed origin never gets past
 // preflight in a browser, and there are no cookies to protect.
 //
-// Allowlist = baked production defaults ∪ localhost (any port) ∪ *.vercel.app
-// preview deploys, OVERRIDABLE via the ALLOWED_ORIGINS env (comma-separated; set
-// it to "*" as an escape hatch to fully open CORS without a redeploy).
+// OPT-IN: CORS is permissive ("*") by default and ONLY enforced when
+// ALLOWED_ORIGINS is explicitly set to real origins (comma-separated, non-"*").
+// This avoids the failure mode where a too-narrow baked default silently blocks a
+// legitimate app origin. When enforced, the allowed set is the baked production
+// defaults ∪ ALLOWED_ORIGINS entries ∪ localhost (any port) ∪ *.vercel.app
+// previews. ALLOWED_ORIGINS="*" (or unset) = fully permissive.
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://steelbuild-pro.com",
@@ -29,35 +32,41 @@ const DEFAULT_ALLOWED_ORIGINS = [
 const ALLOW_HEADERS =
   "authorization, x-client-info, apikey, content-type, sentry-trace, baggage, stripe-signature, x-webhook-secret";
 
-function configuredOrigins(): string[] {
+// Explicit, non-"*" origins configured via env — ADDITIONS to the baked defaults.
+function envOrigins(): string[] {
   const raw = Deno.env.get("ALLOWED_ORIGINS");
-  if (!raw) return DEFAULT_ALLOWED_ORIGINS;
-  return raw.split(",").map((o) => o.trim()).filter(Boolean);
+  if (!raw) return [];
+  return raw.split(",").map((o) => o.trim()).filter((o) => o && o !== "*");
 }
 
+// CORS is ENFORCED only when ALLOWED_ORIGINS is explicitly set to something other
+// than "*". Unset (or "*") → permissive ("*"), so a too-narrow baked list can
+// never silently block a real app origin (the failure mode that took down AI
+// calls once). To opt into the lockdown, set ALLOWED_ORIGINS to your real origins.
+function corsLockedDown(): boolean {
+  const raw = Deno.env.get("ALLOWED_ORIGINS");
+  return !!raw && raw.trim() !== "*";
+}
+
+// Is `origin` a known, legitimate app origin? ALWAYS strict — baked defaults + env
+// additions + localhost + *.vercel.app. Independent of the CORS permissive default:
+// used for redirect-target validation (#12), which must stay bounded even when CORS
+// is wide open (a "*" env does NOT make this return true for arbitrary origins).
 export function isAllowedOrigin(origin: string | null | undefined): boolean {
   if (!origin) return false;
-  const configured = configuredOrigins();
-  if (configured.includes("*")) return true;
-  if (configured.includes(origin)) return true;
+  if (DEFAULT_ALLOWED_ORIGINS.includes(origin)) return true;
+  if (envOrigins().includes(origin)) return true;
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
   if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin)) return true;
   return false;
 }
 
-/** Canonical production origin — the safe fallback for a disallowed request. */
-export function primaryOrigin(): string {
-  const firstExact = configuredOrigins().find(
-    (o) => o !== "*" && /^https?:\/\//.test(o),
-  );
-  return firstExact || "https://steelbuild-pro.com";
-}
-
 export function corsHeaders(req?: Request): Record<string, string> {
-  // No request context: response helpers default to "*". The preflight (which
-  // always gets the req) is where cross-origin browsers are gated, so a POST
-  // response staying "*" is safe (no cookies; a blocked origin never reaches here).
-  if (!req) {
+  // Permissive unless explicitly locked down (and for response helpers with no
+  // req). The preflight — which has the req — is where a locked-down config gates
+  // cross-origin browsers; non-preflight responses staying "*" is safe (bearer-
+  // token auth, no cookies).
+  if (!req || !corsLockedDown()) {
     return {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": ALLOW_HEADERS,
@@ -65,7 +74,9 @@ export function corsHeaders(req?: Request): Record<string, string> {
     };
   }
   const origin = req.headers.get("Origin") || "";
-  const allow = isAllowedOrigin(origin) ? origin : primaryOrigin();
+  const allow = isAllowedOrigin(origin)
+    ? origin
+    : (DEFAULT_ALLOWED_ORIGINS[0] || "https://steelbuild-pro.com");
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Headers": ALLOW_HEADERS,

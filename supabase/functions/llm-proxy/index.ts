@@ -48,9 +48,10 @@
 //   SUPABASE_SERVICE_ROLE_KEY (the last is for telemetry inserts).
 //
 // Optional secrets:
-//   ALLOWED_ORIGINS            — comma-separated CORS allowlist override. Unset →
-//                                baked production defaults + localhost + *.vercel.app.
-//                                Set to "*" to fully open CORS (escape hatch).
+//   ALLOWED_ORIGINS            — CORS lockdown (OPT-IN). Unset or "*" → permissive.
+//                                Set to comma-separated real origins to enforce
+//                                (baked prod defaults + localhost + *.vercel.app
+//                                are always allowed alongside the configured ones).
 //   LLM_KILL_SWITCH            — "1"/"true" halts ALL LLM calls (break-glass).
 //   LLM_DAILY_COST_LIMIT_USD   — per-user rolling-24h spend cap (see quota.ts).
 //   LLM_DAILY_REQUEST_LIMIT    — per-user rolling-24h request cap.
@@ -102,28 +103,32 @@ const EXPENSIVE_USE_CASES = new Set([
   "rfi-log-import",
 ]);
 
-// Baked production allowlist so the default (no ALLOWED_ORIGINS env) is NOT "*"
-// (#11). Localhost + *.vercel.app previews are matched by regex below.
+// CORS is OPT-IN: permissive ("*") unless ALLOWED_ORIGINS is explicitly set to
+// real origins (non-"*"). A too-narrow baked default once silently blocked AI
+// calls (the preflight echoed a non-matching origin → the browser dropped the
+// POST), so the default stays permissive. Set ALLOWED_ORIGINS to lock down.
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://steelbuild-pro.com",
   "https://www.steelbuild-pro.com",
 ];
 
-function allowedOrigins(): string[] {
+// Explicit non-"*" origins from env — additions to the baked defaults.
+function envOrigins(): string[] {
   const raw = Deno.env.get("ALLOWED_ORIGINS");
-  if (!raw) return DEFAULT_ALLOWED_ORIGINS;
-  return raw
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  if (!raw) return [];
+  return raw.split(",").map((o) => o.trim()).filter((o) => o && o !== "*");
+}
+
+function corsLockedDown(): boolean {
+  const raw = Deno.env.get("ALLOWED_ORIGINS");
+  return !!raw && raw.trim() !== "*";
 }
 
 function corsHeaders(req?: Request): Record<string, string> {
-  const configured = allowedOrigins();
-  // "*" in the env is an escape hatch to fully open CORS without a redeploy. With
-  // no req (response helpers) we also use "*" — the preflight, which has the req,
-  // is where cross-origin browsers are actually gated.
-  if (!req || configured.includes("*")) {
+  // Permissive unless explicitly locked down (and for response helpers with no
+  // req). The preflight, which has the req, is where a locked-down config gates
+  // cross-origin browsers.
+  if (!req || !corsLockedDown()) {
     return {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, sentry-trace, baggage",
@@ -136,9 +141,9 @@ function corsHeaders(req?: Request): Record<string, string> {
   const isVercelPreview = /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin);
   // Disallowed origin → fall back to the canonical production origin so the
   // browser's preflight fails (origin mismatch) and the request is blocked.
-  const allowOrigin = configured.includes(origin) || isLocalhost || isVercelPreview
+  const allowOrigin = DEFAULT_ALLOWED_ORIGINS.includes(origin) || envOrigins().includes(origin) || isLocalhost || isVercelPreview
     ? origin
-    : (configured[0] || "https://steelbuild-pro.com");
+    : DEFAULT_ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, sentry-trace, baggage",
