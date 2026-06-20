@@ -115,17 +115,37 @@ Deno.serve(async (req) => {
     } catch (e) {
       return new Response(`Webhook signature verification failed: ${(e as Error).message}`, { status: 400 });
     }
-    // Idempotency: a unique stripe_event_id means we've already handled it.
-    const { error: dupErr } = await admin.from("billing_events").insert({ stripe_event_id: event.id, type: event.type });
-    if (dupErr) {
-      if (String(dupErr.message).toLowerCase().includes("duplicate")) return new Response("ok (already processed)", { status: 200 });
-      console.error("billing_events insert error", dupErr);
-    }
+    // Idempotency: short-circuit only if a PRIOR delivery FULLY processed this
+    // event. The marker is written AFTER handleEvent succeeds (below), so a
+    // transient handler failure no longer permanently drops the event — Stripe's
+    // retry re-runs it instead of short-circuiting on a premature marker.
+    const { data: seen } = await admin
+      .from("billing_events")
+      .select("stripe_event_id")
+      .eq("stripe_event_id", event.id)
+      .maybeSingle();
+    if (seen) return new Response("ok (already processed)", { status: 200 });
+
+    // Best-effort org id for the audit row (object is a Checkout session or a
+    // subscription). Typed cast keeps it deno-check-clean over the Stripe union.
+    const obj = (event.data?.object ?? {}) as { metadata?: { org_id?: string }; client_reference_id?: string };
+    const eventOrgId = obj.metadata?.org_id ?? obj.client_reference_id ?? null;
+
     try {
       await handleEvent(stripe, event, cfg);
     } catch (e) {
       console.error("webhook handler error", e);
-      return new Response("handler error", { status: 500 }); // let Stripe retry
+      // NOT marked processed → Stripe's retry re-runs handleEvent. That's the fix.
+      return new Response("handler error", { status: 500 });
+    }
+
+    // Mark processed ONLY after success. A concurrent double-delivery loses the
+    // race on the UNIQUE stripe_event_id and is ignored (handleEvent is idempotent).
+    const { error: markErr } = await admin
+      .from("billing_events")
+      .insert({ stripe_event_id: event.id, type: event.type, org_id: eventOrgId });
+    if (markErr && !String(markErr.message).toLowerCase().includes("duplicate")) {
+      console.error("billing_events mark error", markErr);
     }
     return new Response("ok", { status: 200 });
   }
