@@ -103,7 +103,10 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
         invalidateEntity(qc, "action_item", projectId);
       } else if (entityType === "submittal") {
         createdRecord = await entities.Submittal.create({
-          project_id: projectId, title, description, status: "Open",
+          // "Draft" is the canonical not-yet-submitted status. ("Open" is valid
+          // for RFI/ActionItem above but is rejected by submittals_status_check,
+          // which previously made this create always throw.)
+          project_id: projectId, title, description, status: "Draft",
           ...(extracted?.submittal_number ? { submittal_number: extracted.submittal_number } : {}),
         } as any);
         invalidateEntity(qc, "submittal", projectId);

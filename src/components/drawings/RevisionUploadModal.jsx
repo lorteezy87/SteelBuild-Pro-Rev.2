@@ -723,6 +723,10 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             file_url: newFileUrl,
             pdf_page: addedPage ?? 1,
             drawing_set_name: selectedSet.set_name,
+            // Carry the parent set FK so added sheets aren't orphaned from the
+            // count-sync trigger / fab gate / health score / 3D coloring (all
+            // key on drawing_set_id). Omitted for derived/virtual sets (no row).
+            ...(selectedSet.id ? { drawing_set_id: selectedSet.id } : {}),
             ifc_status: revMeta.revisionLabel.toUpperCase().includes("IFC") ? "IFC" : undefined,
             is_superseded: false,
           });
@@ -771,6 +775,9 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               issued_by: revMeta.issuedBy || existing.issued_by,
               file_url: newFileUrl,
               pdf_page: updatedPage ?? 1,
+              // Backfill the parent set FK in case this sheet predates the FK
+              // being set, so it stays attached to the real set (not orphaned).
+              ...(selectedSet.id ? { drawing_set_id: selectedSet.id } : {}),
               is_superseded: false,
             });
             updated++;
