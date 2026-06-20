@@ -1,3 +1,12 @@
 # Supabase CLI cache — do not commit
 .temp/
 .branches/
+
+# Supabase
+.branches
+.temp
+
+# dotenvx
+.env.keys
+.env.local
+.env.*.local
