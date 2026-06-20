@@ -1,24 +1,23 @@
-﻿# CI — lint + typecheck + test + build on every push and PR.
+﻿# CI + gated deploy — lint, typecheck, test, build, then ship.
 #
-# What runs here:
-#   1. Install (cached node_modules via actions/setup-node)
-#   2. ESLint (warnings allowed, errors fail the build)
-#   3. TypeScript checks for both .ts (tsconfig) and .js/.jsx (jsconfig)
-#   4. Vitest unit tests (the full unit suite — `npm test`)
-#   5. Production Vite build (catches dead-imports / runtime-only refs
-#      that the lint + typecheck passes don't notice)
+# Jobs (defined below):
+#   - ci:        ESLint + TypeScript (.ts via tsconfig, .js/.jsx via jsconfig)
+#                + Vitest unit suite + production Vite build. Runs on EVERY push
+#                and pull request to any branch, so contributors get green/red
+#                feedback before merge.
+#   - deploy:    production deploy to Vercel via the Vercel CLI (prebuilt output).
+#                GATED on `ci` and ONLY on a push to main. This GitHub Action is
+#                the SOLE production deploy path: Vercel's own git auto-deploy is
+#                turned OFF (vercel.json `git.deploymentEnabled.main=false`), so a
+#                red lint/typecheck/test/build can no longer reach
+#                steelbuild-pro.com — only a green push to main deploys.
+#   - e2e-smoke: Playwright smoke AFTER deploy, NON-BLOCKING (it is not in
+#                `deploy.needs`, so it can never gate or roll back prod). Opt-in
+#                via the E2E_ENABLED repo variable. See e2e/README.md.
 #
 # What does NOT run here:
-#   - End-to-end tests as a BLOCKING gate. The Playwright suite runs in a
-#     separate, opt-in `e2e-smoke` job below — post-deploy and non-blocking, so
-#     it never gates production. See e2e/README.md.
-#   - Lighthouse / a11y / bundle-size budgets (queued for later)
-#   - Deploy — Vercel handles that on push to main
-#
-# This workflow runs against EVERY push and pull request to any branch
-# so contributors see green/red feedback before merging into deploy.
-# The deploy branch (main) gets the same gates plus
-# Vercel's own build, so a regression has two chances to be caught.
+#   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
+#   - Lighthouse / a11y / bundle-size budgets (queued for later).
 
 name: CI
 
