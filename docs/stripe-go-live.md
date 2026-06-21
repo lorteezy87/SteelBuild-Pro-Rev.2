@@ -48,11 +48,44 @@ Do **not** re-deploy the sync trio (it would double webhook delivery).
    subscribe to `checkout.session.completed`, `customer.subscription.updated`,
    `customer.subscription.deleted`; copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
    The function is deployed `verify_jwt = false` (it verifies the Stripe signature itself).
-4. **Test-mode E2E** (before going live): with `sk_test_…` keys + a test price, from a
-   non-enterprise org click Pro → complete Checkout with card `4242 4242 4242 4242` →
-   confirm `organizations.plan` flips to `pro` and a row lands in `billing_events`.
-   Then verify "Manage billing" opens the portal and a cancel flips the plan back.
-5. **Flip to live keys** and repeat one real (or `$0` coupon) transaction.
+4. **Test-mode E2E** (before going live): see **"Test-mode E2E (safe toggle)"** below.
+   As of 2026-06-21 it flips `billing_config` (incl. `livemode=false`) instead of the
+   env secrets, so the live `STRIPE_SECRET_KEY` is never touched.
+5. **Going live** is the steady state (`billing_config.livemode=true`, live `price_…`
+   + live `whsec_…`). After a test run, just restore the live `billing_config` row.
+
+## Test-mode E2E (safe toggle — `billing_config.livemode`)
+
+`stripe-billing` chooses its Stripe key from `billing_config.livemode` (added 2026-06-21):
+`true` (default + steady state) → `STRIPE_SECRET_KEY` (live, **unchanged behavior**);
+`false` → `STRIPE_SK_TEST`. So a test run is a `billing_config` flip — the live secret
+key is **never overwritten** (Stripe won't re-reveal a live secret key, so overwriting
+it would be unrecoverable without rolling it).
+
+**Owner (Stripe dashboard, Test mode):**
+1. Confirm the `STRIPE_SK_TEST` edge secret holds your current test secret key
+   (`sk_test_…`): `npx supabase secrets set STRIPE_SK_TEST=sk_test_… --project-ref kjrwqagyeswwoxpjkcko`.
+2. Create a **test-mode** recurring Price for Pro (and Business if testing it). Copy the `price_…` id(s).
+3. Add a **test-mode** Webhook → `https://kjrwqagyeswwoxpjkcko.supabase.co/functions/v1/stripe-billing/webhook`,
+   events `checkout.session.completed` + `customer.subscription.updated` + `.deleted`. Copy the `whsec_…`.
+4. Hand the engineer: the test `price_…` id(s) + the test `whsec_…`.
+
+**Engineer (Supabase):** capture the live `billing_config` row first (for restore), then
+`update public.billing_config set livemode=false, stripe_price_pro=<test>,
+stripe_price_business=<test>, stripe_webhook_secret=<test whsec> where scope='default';`
+The deployed function then uses `STRIPE_SK_TEST` automatically — no secret swap.
+
+**Owner (app):** on a **free** org (sign up a throwaway one — the founder org is
+`enterprise`), Billing → upgrade to Pro → pay with `4242 4242 4242 4242` (any future
+expiry/CVC) → redirected to `/Billing?status=success`.
+
+**Engineer (verify):** `select plan, subscription_status, stripe_customer_id,
+stripe_subscription_id from organizations where id=<test org>` → expect `pro` / `active`
+/ ids set; confirm a `billing_events` row. Optionally test the portal + a cancel (→ `free`).
+
+**Engineer (revert to live):** restore the captured live row (`livemode=true`, live
+`price_…`, live `whsec_…`); confirm a bad-sig webhook → 400 against the live secret. Owner
+may then delete the test webhook + test org.
 
 ## Already done in code
 
@@ -70,6 +103,10 @@ Do **not** re-deploy the sync trio (it would double webhook delivery).
   regressions. **Does NOT replace** the owner test-mode E2E (step 4) — that proves the
   real Stripe signature round-trip + DB write, which a unit test cannot.
 - **Sync-engine trio removed + stale `stripe-sync-worker` pg_cron unscheduled** (2026-06-20).
+- **livemode-aware key selection** (2026-06-21, `index.ts`): the Stripe client key is
+  chosen by `billing_config.livemode` (live → `STRIPE_SECRET_KEY`, `false` → `STRIPE_SK_TEST`),
+  so a test-mode E2E flips `billing_config` with no risk to the live key. Deployed + verified
+  (bad-sig webhook → 400; CORS locked). Live (`livemode=true`) path byte-identical.
 
 ## Notes
 

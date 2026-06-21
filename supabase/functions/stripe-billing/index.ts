@@ -7,11 +7,15 @@
 // table (provisioned via the Stripe API), falling back to env (STRIPE_PRICE_PRO /
 // STRIPE_PRICE_BUSINESS / STRIPE_WEBHOOK_SECRET). The client only passes a plan KEY.
 //
-// The Stripe client is built per-invocation (reads STRIPE_SECRET_KEY fresh), so a
-// secret rotation (e.g. test -> live) takes effect without also redeploying.
+// The Stripe client KEY is chosen by billing_config.livemode: live (the default and
+// the current prod state) uses STRIPE_SECRET_KEY; livemode=false uses STRIPE_SK_TEST.
+// This lets an owner run a test-mode checkout E2E by flipping billing_config alone
+// (livemode + test price ids + test webhook secret) WITHOUT overwriting the live
+// secret key — Stripe never re-reveals a live secret key, so overwriting it would be
+// unrecoverable. The client is built per-invocation so the choice is always current.
 //
 // Required edge-function secrets:
-//   STRIPE_SECRET_KEY   (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY injected)
+//   STRIPE_SECRET_KEY (live), STRIPE_SK_TEST (test E2E)   (SUPABASE_URL / SERVICE_ROLE_KEY / ANON_KEY injected)
 
 import Stripe from "https://esm.sh/stripe@17?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -24,10 +28,15 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 // service-role client: bypasses RLS + the billing-tamper trigger (auth.role()='service_role').
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-// Built per-invocation so a STRIPE_SECRET_KEY rotation (test -> live) is picked up
-// without a redeploy.
-function stripeClient(): Stripe {
-  return new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
+// Built per-invocation. livemode (the default + current prod) uses STRIPE_SECRET_KEY,
+// so the live billing path is UNCHANGED. Only an explicit billing_config.livemode=false
+// selects STRIPE_SK_TEST — so a test-mode E2E never overwrites the live key. Falls back
+// to STRIPE_SECRET_KEY if the test key isn't set.
+function stripeClient(livemode: boolean): Stripe {
+  const key = livemode
+    ? (Deno.env.get("STRIPE_SECRET_KEY") ?? "")
+    : (Deno.env.get("STRIPE_SK_TEST") ?? Deno.env.get("STRIPE_SECRET_KEY") ?? "");
+  return new Stripe(key, { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
 }
 
 const json = (obj: unknown, status = 200) =>
@@ -39,19 +48,22 @@ const json = (obj: unknown, status = 200) =>
 // table so it can be provisioned via the Stripe API without writing env secrets at
 // runtime. Env is the fallback.
 async function loadConfig(): Promise<BillingConfig> {
-  let row: Record<string, string> | null = null;
+  let row: Record<string, unknown> | null = null;
   try {
     const { data } = await admin
       .from("billing_config")
-      .select("stripe_price_pro, stripe_price_business, stripe_webhook_secret")
+      .select("stripe_price_pro, stripe_price_business, stripe_webhook_secret, livemode")
       .eq("scope", "default")
       .maybeSingle();
-    row = data as Record<string, string> | null;
+    row = data as Record<string, unknown> | null;
   } catch (_e) { /* fall back to env */ }
   return {
-    pricePro: row?.stripe_price_pro || Deno.env.get("STRIPE_PRICE_PRO") || "",
-    priceBusiness: row?.stripe_price_business || Deno.env.get("STRIPE_PRICE_BUSINESS") || "",
-    webhookSecret: row?.stripe_webhook_secret || Deno.env.get("STRIPE_WEBHOOK_SECRET") || "",
+    pricePro: (row?.stripe_price_pro as string) || Deno.env.get("STRIPE_PRICE_PRO") || "",
+    priceBusiness: (row?.stripe_price_business as string) || Deno.env.get("STRIPE_PRICE_BUSINESS") || "",
+    webhookSecret: (row?.stripe_webhook_secret as string) || Deno.env.get("STRIPE_WEBHOOK_SECRET") || "",
+    // Default to LIVE unless billing_config.livemode is explicitly false — a missing
+    // row or read error must never silently select the test key for live traffic.
+    livemode: row?.livemode !== false,
   };
 }
 
@@ -81,13 +93,15 @@ async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   const url = new URL(req.url);
-  const stripe = stripeClient();
+  // Load config FIRST so the Stripe client uses the correct key (live vs test) —
+  // billing_config is the single source of truth for the live/test environment.
+  const cfg = await loadConfig();
+  const stripe = stripeClient(cfg.livemode !== false);
 
   // ── Stripe webhook (signature-verified; no JWT) ──
   if (url.pathname.endsWith("/webhook")) {
     const sig = req.headers.get("stripe-signature");
     const raw = await req.text();
-    const cfg = await loadConfig();
     let event;
     try {
       event = await stripe.webhooks.constructEventAsync(raw, sig ?? "", cfg.webhookSecret);
@@ -155,7 +169,6 @@ Deno.serve(async (req) => {
   const origin = isAllowedOrigin(rawOrigin) ? rawOrigin : "https://steelbuild-pro.com";
 
   if (action === "checkout") {
-    const cfg = await loadConfig();
     const PRICE: Record<string, string> = { pro: cfg.pricePro, business: cfg.priceBusiness };
     const priceId = plan ? PRICE[plan] : "";
     if (!priceId) return json({ error: `Plan "${plan}" isn't available for checkout yet` }, 400);
