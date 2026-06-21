@@ -15,6 +15,13 @@ export interface BillingConfig {
   pricePro: string;
   priceBusiness: string;
   webhookSecret: string;
+  /**
+   * Whether to use the LIVE Stripe key (STRIPE_SECRET_KEY) vs the TEST key
+   * (STRIPE_SK_TEST). Read off billing_config.livemode in index.ts's stripeClient();
+   * the pure webhook→org mapping in this module ignores it. Optional so the unit-test
+   * literals and the env-fallback path stay valid; absence ⇒ treat as live.
+   */
+  livemode?: boolean;
 }
 
 // Minimal shapes we read off Stripe objects (avoids a Stripe type dependency here).
