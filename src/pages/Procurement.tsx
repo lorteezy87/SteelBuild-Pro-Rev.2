@@ -35,7 +35,13 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import DeleteDialog from '@/components/shared/DeleteDialog';
 import { KpiTile as KpiTileRaw } from '@/components/design-system';
-import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from '@/components/operations/OperationsPageShell';
+import {
+  OperationsPageShell as OperationsPageShellRaw,
+  OpsActionButton,
+  OpsFilterPanel,
+} from '@/components/operations/OperationsPageShell';
+import type { RowWithAliases } from '@/api/supabaseClient';
+import type { Json } from '@/types/supabase';
 import { Plus, Download, Printer } from 'lucide-react';
 import { useProjectId } from '@/hooks/useProjectId';
 import { useAutoOpenCreate } from '@/hooks/useAutoOpenCreate';
@@ -48,6 +54,30 @@ import {
 // KpiTile is a still-.jsx primitive; cast at the boundary.
 const KpiTile = KpiTileRaw as any;
 
+// OperationsPageShell is a still-.jsx primitive whose JS default params
+// (`meta = []`, `metrics = []`, `actions = null`) make TS infer the props as
+// `never[]` / `null`. Re-type it at the boundary with its real prop shape so
+// callers can pass the meta/metric tiles and action node. Behavior unchanged.
+type OpsTile = {
+  key?: string;
+  label: string;
+  value: React.ReactNode;
+  sub?: string;
+  color?: string;
+};
+type OperationsPageShellProps = {
+  eyebrow?: React.ReactNode;
+  title?: React.ReactNode;
+  subtitle?: React.ReactNode;
+  meta?: OpsTile[];
+  metrics?: OpsTile[];
+  actions?: React.ReactNode;
+  children?: React.ReactNode;
+  fullHeight?: boolean;
+};
+const OperationsPageShell =
+  OperationsPageShellRaw as React.FC<OperationsPageShellProps>;
+
 export default function Procurement() {
   const [searchParams, setSearchParams] = useSearchParams();
   const projectId = useProjectId();
@@ -55,8 +85,8 @@ export default function Procurement() {
 
   const [view, setView] = useState('pipeline');
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [editing, setEditing] = useState<RowWithAliases<'deliveries'> | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RowWithAliases<'deliveries'> | null>(null);
   const [filterCat, setFilterCat] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [search, setSearch] = useState('');
@@ -273,6 +303,15 @@ export default function Procurement() {
       'Lead (wk)', 'Long Lead', 'Weight (T)', 'Pieces',
       'Cost Estimate', 'Work Package', 'Notes',
     ];
+    // metadata is jsonb (Json | null). cost_estimate is only ever stored as a
+    // string (see procurement form), but the Json type also admits object/array
+    // members — read it only when metadata is a plain object, then keep the
+    // original `value || ''` semantics for the string/number it can actually be.
+    const costEstimate = (meta: Json | null | undefined): string | number => {
+      if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return '';
+      const v = meta.cost_estimate;
+      return (typeof v === 'string' || typeof v === 'number') ? (v || '') : '';
+    };
     const rows = filtered.map((i) => [
       i.description || '',
       i.procurement_category || '',
@@ -287,7 +326,7 @@ export default function Procurement() {
       i.is_long_lead ? 'Yes' : 'No',
       Number(i.weight_tons || 0) || '',
       Number(i.pieces || 0) || '',
-      i.metadata?.cost_estimate || '',
+      costEstimate(i.metadata),
       i.work_package_id ? (wpById.get(i.work_package_id)?.wp_number || wpById.get(i.work_package_id)?.name || '') : '',
       i.notes || '',
     ]);

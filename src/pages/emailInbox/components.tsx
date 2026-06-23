@@ -44,7 +44,7 @@ interface EmailRowProps {
 export function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, onStar, attachmentCount }: EmailRowProps) {
   const isUnread = !message.is_read;
   const isOutbound = message.direction === "outbound";
-  const typeInfo = TYPE_STYLES[message.parsed_type] || TYPE_STYLES.unknown;
+  const typeInfo = TYPE_STYLES[message.parsed_type ?? "unknown"] || TYPE_STYLES.unknown;
   const labels = Array.isArray(message.labels) ? message.labels : [];
 
   // For outbound messages, show first recipient instead of sender
@@ -252,8 +252,8 @@ export function EmailDetail({
   labelDropdownOpen, onToggleLabelDropdown, onReply, onReplyAll,
 }: EmailDetailProps) {
   const [customLabel, setCustomLabel] = useState("");
-  const status = STATUS_STYLES[message.import_status] || STATUS_STYLES.pending;
-  const typeInfo = TYPE_STYLES[message.parsed_type] || TYPE_STYLES.unknown;
+  const status = STATUS_STYLES[message.import_status ?? "pending"] || STATUS_STYLES.pending;
+  const typeInfo = TYPE_STYLES[message.parsed_type ?? "unknown"] || TYPE_STYLES.unknown;
   const labels = Array.isArray(message.labels) ? message.labels : [];
 
   return (

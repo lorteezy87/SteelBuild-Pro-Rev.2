@@ -1,10 +1,16 @@
 import { useState } from "react";
+import type { ComponentType } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./uiCompat";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
-import DrawingSetSelector from "@/components/submittals/DrawingSetSelector";
+import DrawingSetSelectorRaw from "@/components/submittals/DrawingSetSelector";
 import { STATUSES, TYPES, BIC_CHOICES } from "./format";
 import type { DrawingSet, Submittal } from "./types";
+
+// DrawingSetSelector is still .jsx, so TS infers its array props from `[]`
+// default params as `never[]`; cast at the boundary (removable once it is
+// typed) so the typed parent can pass real arrays. Runtime is unchanged.
+const DrawingSetSelector = DrawingSetSelectorRaw as unknown as ComponentType<Record<string, any>>;
 
 interface SubmittalFormModalProps {
   open: boolean;

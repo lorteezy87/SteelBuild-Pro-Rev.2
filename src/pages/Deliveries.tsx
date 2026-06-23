@@ -22,8 +22,8 @@ import {
   toastCrudError,
 } from "@/components/shared/crudFeedback";
 import { usePermissions } from "@/services/permissions";
-import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
-import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
+import DeliveryFormModalRaw from "@/components/deliveries/DeliveryFormModal";
+import ShippingTicketImportModalRaw from "@/components/deliveries/ShippingTicketImportModal";
 import ShippingListImportModal from "@/components/deliveries/ShippingListImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
@@ -34,7 +34,7 @@ import {
   EmptyState as EmptyStateRaw,
   StatusPill,
 } from "@/components/design-system";
-import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
+import SequenceFilterRaw, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { exportDeliveriesCSV, isFabComplete } from "./deliveries/utils";
 import {
   buildDeliveryMetrics,
@@ -65,7 +65,7 @@ import {
   RegisterView,
   ScheduleView,
 } from "./deliveries/components";
-import type { DeliveryRecord } from "./deliveries/types";
+import type { DeliveryMetrics, DeliveryRecord } from "./deliveries/types";
 
 // The design-system primitives and LoadingSkeleton are still .jsx, so TS infers
 // permissive types. These casts are removable once the shared layer is typed.
@@ -74,10 +74,19 @@ const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 const EmptyState = EmptyStateRaw as unknown as ComponentType<AnyProps>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
+// Same boundary cast for the .jsx feature components whose default-valued props
+// (e.g. `items = []`, `delivery = null`) make TS infer overly narrow prop types.
+const SequenceFilter = SequenceFilterRaw as unknown as ComponentType<AnyProps>;
+const DeliveryFormModal = DeliveryFormModalRaw as unknown as ComponentType<AnyProps>;
+const ShippingTicketImportModal = ShippingTicketImportModalRaw as unknown as ComponentType<AnyProps>;
 
 export default function Deliveries() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
+  const { activeProject: activeProjectRaw } = useProjectContext();
+  // ProjectContext.jsx is untyped JS, so activeProject infers as `null`/`never`.
+  // Cast at the boundary to its real shape (drop once ProjectContext is typed),
+  // mirroring the same boundary cast in useProjectId.ts.
+  const activeProject = activeProjectRaw as { name?: string | null } | null;
   const projectId = useProjectId();
   const qc = useQueryClient();
   const { can } = usePermissions();
@@ -153,6 +162,12 @@ export default function Deliveries() {
     () => buildDeliveryMetrics(activeDeliveries, workPackages),
     [activeDeliveries, workPackages]
   );
+  // analytics.js is untyped JS; buildDeliveryMetrics over-pessimistically infers
+  // `today` as Date | null (dateValue can return null) — at runtime it always
+  // resolves to a real Date (todayStart falls back to new Date()). Re-typed view
+  // for the .tsx components that take the canonical DeliveryMetrics shape; kept
+  // separate so the loose-typed `metrics` is unchanged for the rest of this file.
+  const metricsTyped = metrics as DeliveryMetrics;
 
   useEffect(() => {
     if (!receiveMode) return;
@@ -346,7 +361,7 @@ export default function Deliveries() {
   };
 
   const setDeliveryStatus = (delivery: DeliveryRecord, status: string) => {
-    if (!delivery || transitMut.isPending) return;
+    if (!delivery || !delivery.id || transitMut.isPending) return;
     if (status === "Delivered" && !isFabComplete(delivery, workPackages)) {
       const wp = workPackages.find((item) => item.id === delivery.work_package_id);
       toast.error(`Cannot mark delivered - WP "${wp?.name || wp?.wp_number || "linked"}" fabrication is not complete`);
@@ -385,7 +400,7 @@ export default function Deliveries() {
     );
   }
 
-  const projectName = projectMap[projectId] || activeProject?.name || "All Projects";
+  const projectName = projectMap[projectId ?? ""] || activeProject?.name || "All Projects";
   const selectedDeliveries = filtered.filter((delivery) => selectedIds.has(delivery.id));
 
   return (
@@ -470,7 +485,7 @@ export default function Deliveries() {
 
       {receiveMode && (
         <ReceivingQuickPanel
-          metrics={metrics}
+          metrics={metricsTyped}
           projectMap={projectMap}
           workPackageMap={workPackageMap}
           onOpen={setDetail}
@@ -557,7 +572,7 @@ export default function Deliveries() {
 
       <section className="delivery-layout">
         <ExceptionRail
-          metrics={metrics}
+          metrics={metricsTyped}
           projectMap={projectMap}
           workPackageMap={workPackageMap}
           onOpen={setDetail}
@@ -609,7 +624,7 @@ export default function Deliveries() {
 
           {view === "schedule" && (
             <ScheduleView
-              metrics={metrics}
+              metrics={metricsTyped}
               filtered={filtered}
               projectMap={projectMap}
               workPackageMap={workPackageMap}
@@ -724,7 +739,7 @@ export default function Deliveries() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => deleteTarget?.id && deleteMut.mutate(deleteTarget.id)}
         title="Delete delivery?"
         description="This delivery will be removed."
       />

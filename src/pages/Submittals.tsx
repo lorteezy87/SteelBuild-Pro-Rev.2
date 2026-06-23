@@ -19,9 +19,9 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { daysUntil } from "@/lib/dateMath";
 import SubmittalBulkEditModal from "@/components/submittals/SubmittalBulkEditModal";
 import SubmittalBulkAddModal from "@/components/submittals/SubmittalBulkAddModal";
-import NewRoundModal from "@/components/submittals/NewRoundModal";
-import ReleaseGateOverrideModal from "@/components/submittals/ReleaseGateOverrideModal";
-import SheetResponseGrid from "@/components/submittals/SheetResponseGrid";
+import NewRoundModalRaw from "@/components/submittals/NewRoundModal";
+import ReleaseGateOverrideModalRaw from "@/components/submittals/ReleaseGateOverrideModal";
+import SheetResponseGridRaw from "@/components/submittals/SheetResponseGrid";
 import { FabReleaseBlockedError, isFabReleaseBlocked } from "@/lib/fabRelease/releaseStatus";
 import {
   collectOpenItems,
@@ -35,7 +35,7 @@ import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submitta
 import { Dialog, DialogContent, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./submittals/uiCompat";
 import { SubmittalDetail, SubmittalVirtualList } from "./submittals/components";
 import SubmittalFormModal from "./submittals/SubmittalFormModal";
-import type { DrawingSet, DrawingSetsById } from "./submittals/types";
+import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types";
 
 /**
  * Submittals — formal transmittal register.
@@ -58,6 +58,12 @@ const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
 const PhoenixPanel = PhoenixPanelRaw as unknown as ComponentType<AnyProps>;
+// These modals are still .jsx, so TS infers their array props from `[]` default
+// params as `never[]`; cast at the boundary (removable once each is typed) so
+// the typed parent can pass real arrays. Runtime is unchanged.
+const NewRoundModal = NewRoundModalRaw as unknown as ComponentType<AnyProps>;
+const ReleaseGateOverrideModal = ReleaseGateOverrideModalRaw as unknown as ComponentType<AnyProps>;
+const SheetResponseGrid = SheetResponseGridRaw as unknown as ComponentType<AnyProps>;
 
 export default function Submittals() {
   const qc = useQueryClient();
@@ -107,9 +113,13 @@ export default function Submittals() {
   });
 
   const drawingSetsById: DrawingSetsById = useMemo(() => {
+    // Bridge the generated DB row to the page's domain `DrawingSet` view (same
+    // data, nullable columns modeled as optional). Cast preserves runtime; the
+    // map only ever holds real drawing-set rows. Removable once `types` models
+    // the nullable columns directly.
     const map = new Map<string, DrawingSet>();
     for (const set of drawingSets) {
-      if (set?.id) map.set(set.id, set);
+      if (set?.id) map.set(set.id, set as DrawingSet);
     }
     return map;
   }, [drawingSets]);
@@ -368,6 +378,9 @@ export default function Submittals() {
   const saveSheetResponsesMut = useMutation({
     mutationFn: async ({ roundId, responses }: { roundId: string; responses: any[] }) => {
       const results = { succeeded: 0, failed: 0 };
+      // The page early-returns without a project, so this never runs unscoped;
+      // narrow projectId to a string for the row insert (no-op guard at runtime).
+      if (!projectId) return results;
       for (const resp of responses) {
         try {
           if (resp.id) {
@@ -435,7 +448,9 @@ export default function Submittals() {
     }
     return list
       .slice()
-      .sort((a, b) => compareSubmittalsByDrawingSet(a, b, drawingSetsById));
+      // Domain-view bridge for the comparator (same rows, nullable columns
+      // modeled as optional) — no runtime change.
+      .sort((a, b) => compareSubmittalsByDrawingSet(a as Submittal, b as Submittal, drawingSetsById));
   }, [rows, filterStatus, filterBIC, search, drawingSetsById]);
 
   const stats = useMemo(() => {
@@ -467,8 +482,20 @@ export default function Submittals() {
   );
   const reviewsAtRisk = reviewForecast.summary.atRisk + reviewForecast.summary.late;
 
-  const selected = selectedId ? rows.find((r) => r.id === selectedId) : null;
-  const editing = editingId ? rows.find((r) => r.id === editingId) : null;
+  const selected = (selectedId ? rows.find((r) => r.id === selectedId) : null) ?? null;
+  const editing = (editingId ? rows.find((r) => r.id === editingId) : null) ?? null;
+
+  // Domain-view bridges for the typed child components. The queries yield
+  // generated DB rows (nullable string columns); the child props use the page's
+  // `Submittal`/`DrawingSet` interfaces, which model those same columns as
+  // optional. These casts bridge that null↔undefined representation gap only —
+  // identical data, no runtime change, null preserved. Removable once
+  // `./submittals/types` models the nullable columns directly.
+  const rowsView = rows as Submittal[];
+  const filteredView = filtered as Submittal[];
+  const drawingSetsView = drawingSets as DrawingSet[];
+  const selectedView = selected as Submittal | null;
+  const editingView = editing as Submittal | null;
 
   // ── Selection helpers ─────────────────────────────────────────────
   const toggleSelect = useCallback((id: string) => {
@@ -585,9 +612,9 @@ export default function Submittals() {
         <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
           {/* List */}
           <SubmittalVirtualList
-            filtered={filtered}
+            filtered={filteredView}
             isLoading={isLoading}
-            rows={rows}
+            rows={rowsView}
             selectedId={selectedId}
             selectedIds={selectedIds}
             toggleSelect={toggleSelect}
@@ -597,9 +624,9 @@ export default function Submittals() {
 
           {/* Detail panel */}
           <SubmittalDetail
-            submittal={selected}
-            allSubmittals={rows}
-            drawingSets={drawingSets}
+            submittal={selectedView}
+            allSubmittals={rowsView}
+            drawingSets={drawingSetsView}
             rounds={selected ? (roundsBySubmittal[selected.id] || []) : []}
             sheetResponses={
               selected
@@ -689,10 +716,10 @@ export default function Submittals() {
       {(showCreate || editing) && (
         <SubmittalFormModal
           open={showCreate || !!editing}
-          initial={editing || {}}
+          initial={editingView || {}}
           projectId={projectId}
           projectName={activeProject?.project_name || activeProject?.name || ""}
-          availableSets={drawingSets}
+          availableSets={drawingSetsView}
           allDrawings={allDrawings}
           allRfis={allRfis}
           existingNumbers={new Set(

@@ -8,21 +8,28 @@ import { nextSubmittalAction } from "@/lib/submittalActionEngine";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 import CommentThreadRaw from "@/components/collaboration/CommentThread";
-import RoundTimeline from "@/components/submittals/RoundTimeline";
-import ResponseMatrix from "@/components/submittals/ResponseMatrix";
+import RoundTimelineRaw from "@/components/submittals/RoundTimeline";
+import ResponseMatrixRaw from "@/components/submittals/ResponseMatrix";
 import SubmittalForecastCard from "@/components/submittals/SubmittalForecastCard";
 import { buildResponseMatrix } from "@/lib/submittalResubmittal";
 import { forecastSubmittal } from "@/lib/submittalForecast";
 import type { CycleStats } from "@/lib/submittalForecast";
-import { LinkedRFIs, LinkedTasks } from "@/components/submittals/LinkedEntities";
-import SubmittalReviewStrip from "@/components/submittals/SubmittalReviewStrip";
+import { LinkedRFIs as LinkedRFIsRaw, LinkedTasks as LinkedTasksRaw } from "@/components/submittals/LinkedEntities";
+import SubmittalReviewStripRaw from "@/components/submittals/SubmittalReviewStrip";
 import ApprovalChainPanelRaw from "@/components/submittals/ApprovalChainPanel";
 import { BIC_CHOICES, STATUSES, STATUS_CFG, TYPES } from "./format";
 import type { DrawingSet, DrawingSetsById, Submittal, SubmittalRoundRecord } from "./types";
 
-// CommentThread is still .jsx; cast at the boundary (removable once typed).
+// These children are still .jsx, so TS infers their array props from `[]`
+// default params as `never[]`; cast at the boundary (removable once each is
+// typed) so the typed parent can pass real arrays. Runtime is unchanged.
 const CommentThread = CommentThreadRaw as unknown as ComponentType<Record<string, any>>;
 const ApprovalChainPanel = ApprovalChainPanelRaw as unknown as ComponentType<Record<string, any>>;
+const RoundTimeline = RoundTimelineRaw as unknown as ComponentType<Record<string, any>>;
+const ResponseMatrix = ResponseMatrixRaw as unknown as ComponentType<Record<string, any>>;
+const SubmittalReviewStrip = SubmittalReviewStripRaw as unknown as ComponentType<Record<string, any>>;
+const LinkedRFIs = LinkedRFIsRaw as unknown as ComponentType<Record<string, any>>;
+const LinkedTasks = LinkedTasksRaw as unknown as ComponentType<Record<string, any>>;
 
 // ── Virtual list wrapper ───────────────────────────────────────────────
 
@@ -110,7 +117,7 @@ interface SubmittalRowProps {
 }
 
 function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsById }: SubmittalRowProps) {
-  const cfg = STATUS_CFG[row.status] || STATUS_CFG.Draft;
+  const cfg = STATUS_CFG[row.status ?? ""] || STATUS_CFG.Draft;
   // Derived workflow stage — gives users IFA/OFA/BFA/OFS/IFC/Released
   // alongside the literal submittal status. R&R outcomes are surfaced
   // explicitly so users can see "looped back to IFA" at a glance.
@@ -123,7 +130,7 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
   const primarySet = linkedSets[0] || null;
   const overdue =
     row.required_date &&
-    !["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(row.status) &&
+    !["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(row.status ?? "") &&
     daysUntil(row.required_date) < 0;
 
   // The list is dense — give each row a status-tinted left rail and a
@@ -273,7 +280,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
   // doesn't fire a network update — small UX nicety, also stops
   // accidental "Updated" toasts when the user just tabs through.
   const patch = (field: string, value: any) => {
-    if (!onFieldChange) return;
+    if (!submittal || !onFieldChange) return;
     if ((submittal[field] ?? "") === (value ?? "")) return;
     onFieldChange({ [field]: value === "" ? null : value });
   };
@@ -286,10 +293,10 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
     );
   }
 
-  const cfg = STATUS_CFG[submittal.status] || STATUS_CFG.Draft;
+  const cfg = STATUS_CFG[submittal.status ?? ""] || STATUS_CFG.Draft;
   const overdue =
     submittal.required_date &&
-    !["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(submittal.status) &&
+    !["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(submittal.status ?? "") &&
     daysUntil(submittal.required_date) < 0;
 
   return (
@@ -439,7 +446,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
             // After an R&R / Rejected return the next round IS the resubmittal,
             // so make that the obvious next action and label it as such — it
             // opens the round prefilled with the reviewer's open comments (§20).
-            const isResubmit = ["Revise and Resubmit", "Rejected"].includes(submittal.status);
+            const isResubmit = ["Revise and Resubmit", "Rejected"].includes(submittal.status ?? "");
             const lastRoundNum = rounds.length
               ? (rounds[rounds.length - 1].round_number || rounds.length)
               : (submittal.total_rounds || 0);
@@ -1019,7 +1026,7 @@ function EditableMeta({ label, value, displayValue, kind = "text", choices, allo
           style={baseStyle}
         >
           {allowClear && <option value="">— none —</option>}
-          {choices.map((c) => <option key={c} value={c}>{c}</option>)}
+          {(choices ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
     );

@@ -25,13 +25,13 @@ import {
 import { usePermissions } from "@/services/permissions";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
-import WPFormModal from "@/components/workpackages/WPFormModal";
-import WPBulkAddModal from "@/components/workpackages/WPBulkAddModal";
+import WorkPackageDetailModalRaw from "@/components/workpackages/WorkPackageDetailModal";
+import WPFormModalRaw from "@/components/workpackages/WPFormModal";
+import WPBulkAddModalRaw from "@/components/workpackages/WPBulkAddModal";
 import { getNextNumber } from "@/components/shared/numberSequencing";
 import { batchProcess } from "@/utils/batchProcess";
 import { BulkActionBar as BulkActionBarRaw } from "@/components/design-system";
-import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
+import SequenceFilterRaw, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { exportWorkPackagesCSV } from "./workPackages/utils";
 import { buildWorkPackageMetrics, sortWorkPackagesForExecution } from "./workPackages/analytics";
 import { RESPONSIVE_CSS, contentGridStyle, pageStyle } from "./workPackages/styles";
@@ -46,11 +46,17 @@ import {
 } from "./workPackages/components";
 import type { WorkPackage } from "./workPackages/types";
 
-// The design-system primitives + LoadingSkeleton are still .jsx; these
-// casts are removable once the shared layer is typed.
+// The design-system primitives, LoadingSkeleton, and the workpackages
+// modals/filter are still .jsx; their destructured `= []` prop defaults make
+// TS infer `never[]` props. These boundary casts are removable once those
+// shared/feature components are typed.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
+const SequenceFilter = SequenceFilterRaw as unknown as ComponentType<AnyProps>;
+const WPBulkAddModal = WPBulkAddModalRaw as unknown as ComponentType<AnyProps>;
+const WPFormModal = WPFormModalRaw as unknown as ComponentType<AnyProps>;
+const WorkPackageDetailModal = WorkPackageDetailModalRaw as unknown as ComponentType<AnyProps>;
 
 export default function WorkPackages() {
   const projectId = useProjectId();
@@ -164,7 +170,7 @@ export default function WorkPackages() {
       if (!rows?.length) throw new Error("No rows to add");
       if (!effectiveProjectId) throw new Error("Select a project first");
       const needsNumbers = rows.filter((row) => !row.wp_number);
-      let nextStart = null;
+      let nextStart: number | null = null;
       if (needsNumbers.length > 0) {
         try {
           nextStart = await getNextNumber(effectiveProjectId, "wp_number");
@@ -286,7 +292,7 @@ export default function WorkPackages() {
         .reduce((max, n) => Math.max(max, n), 0);
       wpNumber = `WP-${String(maxNum + 1).padStart(3, "0")}`;
     }
-    setEditingWP({ wp_number: wpNumber, project_id: effectiveProjectId });
+    setEditingWP({ wp_number: wpNumber, project_id: effectiveProjectId ?? undefined });
     setWPModalOpen(true);
   }, [effectiveProjectId, workPackages]);
 
@@ -444,7 +450,7 @@ export default function WorkPackages() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => { if (deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }}
         title="Delete Work Package"
         description={`Delete "${deleteTarget?.name}" (${deleteTarget?.wp_number})? This cannot be undone.`}
       />

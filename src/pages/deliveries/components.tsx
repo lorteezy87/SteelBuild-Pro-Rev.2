@@ -106,7 +106,7 @@ export function ReceivingQuickPanel({
                   <strong>{getDeliveryDisplayName(delivery, wp)}</strong>
                   <span>{delivery.vendor || "Vendor TBD"} - {projectMap[delivery.project_id as string] || delivery.project_name || "Project TBD"}</span>
                 </div>
-                <StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} size="xs" />
+                <StatusPill label={delivery._signals?.status ?? ""} color={STATUS_COLOR[delivery._signals?.status ?? ""]} size="xs" />
               </button>
             );
           })
@@ -178,7 +178,7 @@ export function ExceptionRail({ metrics, projectMap, workPackageMap, onOpen, onF
             return (
               <button key={delivery.id} type="button" className="delivery-watch-card" onClick={() => onOpen(delivery)}>
                 <div className="delivery-watch-top">
-                  <StatusPill label={delivery._signals.risk === "high" ? "Exception" : "Warning"} color={riskColor(delivery._signals.risk)} size="xs" />
+                  <StatusPill label={delivery._signals?.risk === "high" ? "Exception" : "Warning"} color={riskColor(delivery._signals?.risk ?? "clear")} size="xs" />
                   <span>{formatDate(delivery.scheduled_date)}</span>
                 </div>
                 <strong>{getDeliveryDisplayName(delivery, wp)}</strong>
@@ -186,7 +186,7 @@ export function ExceptionRail({ metrics, projectMap, workPackageMap, onOpen, onF
                   {delivery.vendor || "No vendor"} - {projectMap[delivery.project_id as string] || "Project TBD"}
                 </small>
                 <div className="delivery-flag-row">
-                  {delivery._signals.flags.slice(0, 3).map((flag) => (
+                  {(delivery._signals?.flags ?? []).slice(0, 3).map((flag) => (
                     <span key={flag.key}>{flag.label}</span>
                   ))}
                 </div>
@@ -280,7 +280,7 @@ interface DeliveryLoadCardProps {
 export function DeliveryLoadCard({ delivery, projectMap, workPackageMap, selected, onToggle, onOpen, onSetStatus }: DeliveryLoadCardProps) {
   const wp = workPackageMap[delivery.work_package_id as string];
   const title = getDeliveryDisplayName(delivery, wp);
-  const flags = delivery._signals.flags;
+  const flags = delivery._signals?.flags ?? [];
   return (
     <article className={`delivery-load-card ${selected ? "is-selected" : ""}`} onClick={onOpen}>
       <div className="delivery-card-top">
@@ -291,7 +291,7 @@ export function DeliveryLoadCard({ delivery, projectMap, workPackageMap, selecte
           onClick={(event) => event.stopPropagation()}
           aria-label={`Select ${title}`}
         />
-        <StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} size="xs" />
+        <StatusPill label={delivery._signals?.status ?? ""} color={STATUS_COLOR[delivery._signals?.status ?? ""]} size="xs" />
         <span className="delivery-card-date">{formatDate(delivery.scheduled_date)}</span>
       </div>
       <h3>{title}</h3>
@@ -306,10 +306,10 @@ export function DeliveryLoadCard({ delivery, projectMap, workPackageMap, selecte
         <MetaMini icon={MapPin} label="Receive" value={(delivery.receiving_location as string) || "TBD"} />
       </div>
       <ProgressBar
-        value={delivery._signals.readinessScore}
-        color={riskColor(delivery._signals.risk)}
+        value={delivery._signals?.readinessScore ?? 0}
+        color={riskColor(delivery._signals?.risk ?? "clear")}
         height={4}
-        sub={`${delivery._signals.readinessScore}% receiving readiness`}
+        sub={`${delivery._signals?.readinessScore ?? 0}% receiving readiness`}
       />
       {flags.length > 0 && (
         <div className="delivery-flag-row">
@@ -319,12 +319,12 @@ export function DeliveryLoadCard({ delivery, projectMap, workPackageMap, selecte
         </div>
       )}
       <div className="delivery-card-actions" onClick={(event) => event.stopPropagation()}>
-        {delivery._signals.status === "Scheduled" && (
+        {delivery._signals?.status === "Scheduled" && (
           <button type="button" onClick={() => onSetStatus(delivery, "In Transit")}>
             Start Transit
           </button>
         )}
-        {delivery._signals.status !== "Delivered" && (
+        {delivery._signals?.status !== "Delivered" && (
           <button type="button" onClick={() => onSetStatus(delivery, "Delivered")}>
             Delivered
           </button>
@@ -377,7 +377,7 @@ export function ScheduleView({ metrics, filtered, projectMap, workPackageMap, on
                   const wp = workPackageMap[delivery.work_package_id as string];
                   return (
                     <button key={delivery.id} type="button" onClick={() => onOpen(delivery)}>
-                      <span style={{ background: STATUS_COLOR[delivery._signals.status] || "var(--accent)" }} />
+                      <span style={{ background: STATUS_COLOR[delivery._signals?.status ?? ""] || "var(--accent)" }} />
                       <strong>{getDeliveryDisplayName(delivery, wp)}</strong>
                       <small>{delivery.vendor || "Vendor TBD"} - {formatTons(delivery.weight_tons)}</small>
                     </button>
@@ -402,7 +402,7 @@ export function ScheduleView({ metrics, filtered, projectMap, workPackageMap, on
                 <strong>{getDeliveryDisplayName(delivery, wp)}</strong>
                 <span>{projectMap[delivery.project_id as string] || delivery.project_name || "Project TBD"}</span>
               </div>
-              <StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} size="xs" />
+              <StatusPill label={delivery._signals?.status ?? ""} color={STATUS_COLOR[delivery._signals?.status ?? ""]} size="xs" />
             </button>
           );
         })}
@@ -485,8 +485,8 @@ export function RegisterView({
                   <strong>{delivery.receiving_location || "Location TBD"}</strong>
                   <span>{delivery.received_by || "Receiver TBD"}</span>
                 </td>
-                <td><StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} size="xs" /></td>
-                <td><StatusPill label={delivery._signals.risk} color={riskColor(delivery._signals.risk)} size="xs" /></td>
+                <td><StatusPill label={delivery._signals?.status ?? ""} color={STATUS_COLOR[delivery._signals?.status ?? ""]} size="xs" /></td>
+                <td><StatusPill label={delivery._signals?.risk ?? "clear"} color={riskColor(delivery._signals?.risk ?? "clear")} size="xs" /></td>
                 <td onClick={(event) => event.stopPropagation()}>
                   <button type="button" onClick={() => onEdit(delivery)}>Edit</button>
                 </td>
@@ -529,15 +529,15 @@ export function DeliveryDetailModal({ delivery, projectMap, workPackageMap, onCl
         </div>
 
         <div className="delivery-detail-status">
-          <StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} />
-          <StatusPill label={`${delivery._signals.readinessScore}% Ready`} color={riskColor(delivery._signals.risk)} />
+          <StatusPill label={delivery._signals?.status ?? ""} color={STATUS_COLOR[delivery._signals?.status ?? ""]} />
+          <StatusPill label={`${delivery._signals?.readinessScore ?? 0}% Ready`} color={riskColor(delivery._signals?.risk ?? "clear")} />
           {delivery.inspection_required && <StatusPill label="Inspection" color="var(--status-warning)" />}
           {delivery.is_long_lead && <StatusPill label="Long Lead" color="var(--accent)" />}
         </div>
 
-        {delivery._signals.flags.length > 0 && (
+        {(delivery._signals?.flags ?? []).length > 0 && (
           <div className="delivery-detail-flags">
-            {delivery._signals.flags.map((flag) => (
+            {(delivery._signals?.flags ?? []).map((flag) => (
               <span key={flag.key}>{flag.label}</span>
             ))}
           </div>
@@ -582,12 +582,12 @@ export function DeliveryDetailModal({ delivery, projectMap, workPackageMap, onCl
         )}
 
         <div className="delivery-detail-actions">
-          {delivery._signals.status !== "In Transit" && delivery._signals.status !== "Delivered" && (
+          {delivery._signals?.status !== "In Transit" && delivery._signals?.status !== "Delivered" && (
             <Button variant="secondary" icon="arrow" onClick={() => onSetStatus(delivery, "In Transit")}>
               In Transit
             </Button>
           )}
-          {delivery._signals.status !== "Delivered" && (
+          {delivery._signals?.status !== "Delivered" && (
             <Button variant="primary" icon="check" onClick={() => onSetStatus(delivery, "Delivered")}>
               Mark Delivered
             </Button>
