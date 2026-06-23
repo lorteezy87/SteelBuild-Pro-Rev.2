@@ -22,6 +22,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { PLANS } from "@/lib/billing/plans";
+import { supabase } from "@/lib/supabase";
 
 /* ─── Palette + fonts (self-contained, dark) ──────────────────── */
 
@@ -170,6 +171,8 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
 
   const [demoForm, setDemoForm] = useState({ name: "", email: "", company: "", tonnage: "", message: "" });
   const [demoSent, setDemoSent] = useState(false);
+  const [demoError, setDemoError] = useState(null);
+  const [demoSubmitting, setDemoSubmitting] = useState(false);
 
   const sectionRefs = {
     features: useRef(null),
@@ -256,9 +259,26 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
     }
   };
 
-  const handleDemoSubmit = (e) => {
+  const handleDemoSubmit = async (e) => {
     e.preventDefault();
-    setDemoSent(true);
+    if (demoSubmitting) return;
+    setDemoError(null);
+    setDemoSubmitting(true);
+    try {
+      const { error } = await supabase.from("demo_requests").insert({
+        name: demoForm.name.trim(),
+        email: demoForm.email.trim(),
+        company: demoForm.company.trim() || null,
+        tonnage: demoForm.tonnage.trim() || null,
+        message: demoForm.message.trim() || null,
+      });
+      if (error) throw error;
+      setDemoSent(true);
+    } catch {
+      setDemoError("Something went wrong sending your request. Please email support@steelbuild-pro.com or try again.");
+    } finally {
+      setDemoSubmitting(false);
+    }
   };
 
   return (
@@ -710,7 +730,10 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
                   <label style={monoLabel({ display: "block", marginBottom: 7 })}>What's hurting right now?</label>
                   <textarea className="lp-input" rows={3} placeholder="RFIs, submittals, close-out docs…" value={demoForm.message} onChange={(e) => setDemoForm({ ...demoForm, message: e.target.value })} style={{ resize: "vertical" }} />
                 </div>
-                <button className="lp-btn lp-btn-primary" type="submit" style={{ width: "100%", padding: 15 }}>Request my walkthrough</button>
+                {demoError && (
+                  <p style={{ fontSize: 13, color: "#f87171", lineHeight: 1.5, margin: "0 0 12px" }}>{demoError}</p>
+                )}
+                <button className="lp-btn lp-btn-primary" type="submit" disabled={demoSubmitting} style={{ width: "100%", padding: 15, opacity: demoSubmitting ? 0.7 : 1, cursor: demoSubmitting ? "wait" : "pointer" }}>{demoSubmitting ? "Sending…" : "Request my walkthrough"}</button>
               </form>
             )}
           </Reveal>
@@ -769,7 +792,7 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
               <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: C.goldB, marginBottom: 14 }}>Legal</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {["Privacy", "Terms", "Security"].map((l) => (
-                  <span key={l} style={{ fontSize: 13.5, color: C.muted }}>{l}</span>
+                  <a key={l} href={`/${l}`} className="lp-footlink">{l}</a>
                 ))}
               </div>
             </div>
