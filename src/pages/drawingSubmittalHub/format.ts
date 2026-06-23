@@ -152,7 +152,7 @@ export function earliestDate(values: any[]): any {
 }
 
 export function isClosedSubmittal(submittal: Submittal | null | undefined): boolean {
-  return CLOSED_SUBMITTAL_STATUSES.has(submittal?.status);
+  return CLOSED_SUBMITTAL_STATUSES.has(submittal?.status ?? "");
 }
 
 export function isClosedDrawing(drawing: Drawing | null | undefined): boolean {
@@ -208,8 +208,8 @@ export function isClosedPackage(pkg: SetPackage | null | undefined): boolean {
 export function rollupDrawingStage(sheets: Drawing[]): string {
   if (!sheets.length) return "No sheets";
   if (sheets.every(isClosedDrawing)) return "Released";
-  if (sheets.some((d) => ["Rejected", "Revise and Resubmit", "Returned"].includes(d.stage))) return "Needs Action";
-  if (sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage))) return "In Review";
+  if (sheets.some((d) => ["Rejected", "Revise and Resubmit", "Returned"].includes(d.stage ?? ""))) return "Needs Action";
+  if (sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage ?? ""))) return "In Review";
   return sheets[0]?.stage || "No stage";
 }
 
@@ -224,19 +224,21 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
   );
   const packages = new Map<string, SetPackage>();
 
-  const ensurePackage = ({ setId = null, legacyName = "", parent = null }: { setId?: string | null; legacyName?: string; parent?: DrawingSet | null }) => {
+  const ensurePackage = ({ setId = null, legacyName = "", parent = null }: { setId?: string | null; legacyName?: string; parent?: DrawingSet | null }): SetPackage => {
     const key = setId ? `id:${setId}` : `name:${(legacyName || "").trim() || "Ungrouped drawing set"}`;
-    if (!packages.has(key)) {
-      packages.set(key, {
+    let pkg = packages.get(key);
+    if (!pkg) {
+      pkg = {
         key,
         setId,
         name: getSetDisplayName({ parent, legacyName }),
         parent,
         sheets: [],
         submittals: [],
-      });
+      };
+      packages.set(key, pkg);
     }
-    return packages.get(key);
+    return pkg;
   };
 
   for (const parent of parentsById.values()) {

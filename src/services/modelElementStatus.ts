@@ -81,7 +81,9 @@ const RFI_CLOSED = new Set(["Answered", "Closed", "Void"]);
  * Build the set of piece marks held by OPEN fab-hold RFIs.
  * `rfis.piece_marks` is free text — comma/whitespace separated marks.
  */
-export function buildHeldPieceMarkSet(rfis: RfiLike[] | null | undefined): Set<string> {
+export function buildHeldPieceMarkSet(
+  rfis: (RfiLike | null | undefined)[] | null | undefined,
+): Set<string> {
   const held = new Set<string>();
   for (const rfi of rfis || []) {
     if (!rfi || RFI_CLOSED.has(String(rfi.status ?? "")) || !rfi.fab_hold) continue;
@@ -166,9 +168,9 @@ export function summarizeElementStatuses(
   heldPieceMarks: Set<string> = new Set(),
 ): ElementStatusSummary {
   const counts = Object.fromEntries(BUCKETS.map((b) => [b, 0])) as Record<ElementStatusKey, number>;
-  const guidsByStatus = Object.fromEntries(BUCKETS.map((b) => [b, []])) as Record<ElementStatusKey, string[]>;
-  const marksByStatus = Object.fromEntries(BUCKETS.map((b) => [b, []])) as Record<ElementStatusKey, string[]>;
-  const idsByStatus = Object.fromEntries(BUCKETS.map((b) => [b, []])) as Record<ElementStatusKey, string[]>;
+  const guidsByStatus = Object.fromEntries(BUCKETS.map((b) => [b, [] as string[]])) as Record<ElementStatusKey, string[]>;
+  const marksByStatus = Object.fromEntries(BUCKETS.map((b) => [b, [] as string[]])) as Record<ElementStatusKey, string[]>;
+  const idsByStatus = Object.fromEntries(BUCKETS.map((b) => [b, [] as string[]])) as Record<ElementStatusKey, string[]>;
 
   let total = 0;
   for (const el of elements || []) {

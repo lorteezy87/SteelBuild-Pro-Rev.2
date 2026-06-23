@@ -9,8 +9,13 @@ import { planFor } from "@/lib/billing/plans";
 
 export function usePlan() {
   const { currentOrg } = useOrg();
-  const planKey = currentOrg?.plan || "free";
-  const status = currentOrg?.subscription_status || null;
+  // OrgContext.jsx is untyped JS, so currentOrg infers as `null`. Cast at the
+  // boundary to the real org shape (drop once OrgContext is typed).
+  const org = currentOrg as
+    | { plan?: string | null; subscription_status?: string | null }
+    | null;
+  const planKey = org?.plan || "free";
+  const status = org?.subscription_status || null;
   return {
     plan: planFor(planKey),
     planKey,

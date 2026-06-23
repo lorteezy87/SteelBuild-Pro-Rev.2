@@ -117,7 +117,9 @@ export function useDrawings(projectId: string | null | undefined) {
       if (created?.id) {
         const { created: n, skipped: _skipped, failed } = await autoCreateDetailingTasks(
           [created],
-          { projectName: created.project_name }
+          // project_name is string | null on the row; pass "" for a missing name
+          // (same fallback the helper's `projectName = ""` default would apply).
+          { projectName: created.project_name ?? "" }
         );
         if (n > 0)       toast.success("Schedule task auto-created");
         else if (failed) toast.error("Schedule task failed to create");
