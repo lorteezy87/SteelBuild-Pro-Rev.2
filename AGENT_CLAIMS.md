@@ -29,6 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-06-22 · opus-noimplicitany · noImplicitAny CI ratchet | `tsconfig.noimplicitany.json`, `scripts/lib/tscDiagnostics.mjs`, `scripts/noimplicitany-typecheck.mjs`, `scripts/strict-typecheck.mjs` (refactor to shared helpers), `package.json`, `.github/workflows/ci.yml`, + fix-set (`services/workflowEngine.ts`, `setupTests.ts`, 3 `*.test.ts`, `DrawingSubmittalHub.tsx`, `Deliveries.tsx`, `submittals/components.tsx`, `schedule/wbs.ts`, `drawingSubmittalHub/EscalateModal.tsx`) | lock the noImplicitAny floor + clean engine/tests; grandfather 13 heavy pages |
 
 ## Recently released
 
