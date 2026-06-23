@@ -29,9 +29,9 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-06-22 · opus-gtm-batch · GTM readiness batch | `vercel.json` (security headers), legal pages (`src/pages/Privacy/Terms/Security.jsx` + `routes.js`), demo form (`Landing.jsx` + `demo_requests` migration + email-send wire), `package.json` (engines), eslint a11y, storage-backfill script | ship security headers + legal + demo form + CI/a11y quick-wins; WRITE (not run) the storage backfill |
 
 ## Recently released
+- 2026-06-22 · opus-gtm-batch · GTM readiness batch SHIPPED + field-verified — security headers (HSTS + Permissions-Policy + CSP Report-Only in `vercel.json`), public legal pages (`Privacy/Terms/Security.jsx` + `App.jsx` short-circuit), demo form → `public.demo_requests` (migration `20260623032908`, anon insert / admin select; Landing wired), `package.json` engines. Storage backfill = WRITTEN ONLY (`scripts/storage-backfill-legacy-uploads.mjs`, dry-run) — see runbook `docs/HANDOFF-2026-06-22-gtm-batch.md`. Owner follow-ups: demo email-notify, flip CSP→enforcing, legal counsel review, E2E enable, Sentry alerts, a11y pass.
 
 <!-- Move finished claims here briefly, or just delete the row. -->
 - 2026-06-22 · opus-noimplicitany · noImplicitAny CI ratchet SHIPPED — `npm run typecheck:noimplicitany` now blocks the `ci` job (sibling of typecheck:strict, shares `scripts/lib/tscDiagnostics.mjs`). Core `services/workflowEngine.ts` + tests + small pages cleaned; 13 heavy schedule/gantt/procurement/submittal/work-package pages grandfathered in `NOIMPLICITANY_IGNORE` — SHRINK that list, never grow it.
