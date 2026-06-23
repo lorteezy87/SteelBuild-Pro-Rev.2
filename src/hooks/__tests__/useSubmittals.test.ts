@@ -196,7 +196,7 @@ describe("lockLinkedSetsIfApproved", () => {
 });
 
 describe("planRoundWrite (round = one submit→return cycle)", () => {
-  const open = { id: "r1", round_number: 1, submitted_date: "2026-06-01", returned_date: null };
+  const open = { id: "r1", round_number: 1, submitted_date: "2026-06-01", returned_date: null as string | null };
   const closed = { id: "r1", round_number: 1, submitted_date: "2026-06-01", returned_date: "2026-06-05" };
 
   it("opens cycle 1 on the first send (no prior round)", () => {

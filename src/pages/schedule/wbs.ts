@@ -15,7 +15,7 @@ import type { SanitizedTaskUpdate, ScheduleTask } from "./types";
  * that we'd rather have something consistent than invent a prefix.
  */
 export function generateWBS(phase: string | undefined, existingTasks: ScheduleTask[]): string {
-  const phaseNum = PHASE_NUMBER[phase] ?? 0;
+  const phaseNum = PHASE_NUMBER[phase as keyof typeof PHASE_NUMBER] ?? 0;
   const samePhase = (existingTasks || []).filter((t) => t.phase === phase);
   // Match the new X.Y / X.Y.Z format. The final numeric segment is
   // this task's index within the phase — we take the max and add 1.

@@ -513,8 +513,8 @@ export default function DrawingSubmittalHub() {
         routeTab: "submittals",
         // Entity references for inline editing
         _submittalId: submittal.id,
-        _drawingSetId: null,
-        _firstSheetId: null,
+        _drawingSetId: null as string | null,
+        _firstSheetId: null as string | null,
       };
     });
 
@@ -779,7 +779,7 @@ export default function DrawingSubmittalHub() {
                   lineHeight: 1.2,
                 }}
               >
-                {tabCounts[tab.key] ?? 0}
+                {tabCounts[tab.key as keyof typeof tabCounts] ?? 0}
               </span>
             </button>
           );

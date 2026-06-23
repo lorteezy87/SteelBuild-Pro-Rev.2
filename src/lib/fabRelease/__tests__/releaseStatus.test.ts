@@ -63,7 +63,7 @@ describe("recordFabRelease", () => {
   };
 
   it("inserts a clean release and returns the server record", async () => {
-    const record = { id: "r1", project_id: "p1", drawing_ids: ["d1", "d2"], blocking_rfi_numbers: [], override_reason: null };
+    const record = { id: "r1", project_id: "p1", drawing_ids: ["d1", "d2"], blocking_rfi_numbers: [] as string[], override_reason: null as string | null };
     const { client, from, insert } = mockSupabase({ data: record, error: null });
     const out = await recordFabRelease(client, baseInput);
     expect(out).toBe(record);

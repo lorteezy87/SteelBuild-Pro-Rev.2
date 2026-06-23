@@ -221,7 +221,7 @@ export default function Deliveries() {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      const { succeeded, failed } = await batchProcess(ids, (id) =>
+      const { succeeded, failed } = await batchProcess(ids, (id: string) =>
         entities.Delivery.update(id, {
           status,
           actual_date: status === "Delivered" ? todayIso() : null,
@@ -312,7 +312,7 @@ export default function Deliveries() {
           const projectName = projectMap[delivery.project_id] || "";
           const wp = workPackageMap[delivery.work_package_id];
           const desc = getDeliveryDisplayName(delivery, wp);
-          const daysLate = delivery._signals.flags.find((flag) => flag.key === "overdue")?.label || "late";
+          const daysLate = delivery._signals.flags.find((flag: { key?: string; label?: string }) => flag.key === "overdue")?.label || "late";
           const alertTitle = `Delivery from ${delivery.vendor || "Unknown"} is ${daysLate}`;
           if (existingTitles.has(alertTitle)) continue;
           await entities.Alert.create({
