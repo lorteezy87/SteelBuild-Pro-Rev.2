@@ -29,9 +29,9 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-06-22 · opus-strict-ratchet · TypeScript strictNullChecks CI gate | `tsconfig.strict.json`, `scripts/strict-typecheck.mjs`, `package.json`, `.github/workflows/ci.yml`, the 24 strict-null offender `.ts/.tsx` (schedule/gantt/deliveries/submittals/workpackages/emailinbox pages + shared engines/hooks + `drawingSubmittalHub/format.ts`) | #8 Phase 2: add `typecheck:strict` ratchet gate + burn ~204 errors; grandfather ResourceScheduling.tsx + GanttChart.tsx |
 
 ## Recently released
 
 <!-- Move finished claims here briefly, or just delete the row. -->
+- 2026-06-22 · opus-strict-ratchet · strictNullChecks CI ratchet SHIPPED — `npm run typecheck:strict` (filter script, not naive exclude) now blocks the `ci` job; all 395 strict-null errors resolved except ResourceScheduling.tsx + GanttChart.tsx (grandfathered in `scripts/strict-typecheck.mjs` STRICT_NULL_IGNORE — SHRINK that list, never grow it). noImplicitAny stays a separate future ratchet. Design: `docs/superpowers/specs/2026-06-22-strictnullchecks-ratchet-design.md`.
 - 2026-06-20 · opus-db-baseline · MIGRATION FREEZE lifted — baseline squash cutover DONE (3 baseline files in supabase/migrations/, 190 archived, prod schema_migrations reconciled, db push clean). New migrations OK again; follow the ARCHITECTURE.md → Migrations lockstep rule.
