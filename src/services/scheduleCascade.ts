@@ -227,13 +227,13 @@ function applyLink(
     const minStart = addDaysIso(predResolved.end, lag);
     if (minStart && minStart > candStart) {
       candStart = minStart;
-      candEnd = addDaysIso(candStart, dur);
+      candEnd = addDaysIso(candStart, dur) || candEnd;
     }
   } else if (type === "SS") {
     const minStart = addDaysIso(predResolved.start, lag);
     if (minStart && minStart > candStart) {
       candStart = minStart;
-      candEnd = addDaysIso(candStart, dur);
+      candEnd = addDaysIso(candStart, dur) || candEnd;
     }
   } else if (type === "FF") {
     const minEnd = addDaysIso(predResolved.end, lag);

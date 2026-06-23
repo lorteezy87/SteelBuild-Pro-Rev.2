@@ -76,7 +76,7 @@ export function hasGoverningSubmittal(submittalsForSet) {
 /**
  * The package's effective operational state.
  *
- * @param {{ detailing_state?: string|null }} pkg — the drawing_set row
+ * @param {{ detailing_state?: string|null }|null|undefined} pkg — the drawing_set row (null when the package has no parent set)
  * @param {Array} submittalsForSet — submittals whose drawing_set_ids includes the set
  * @param {Array} [sheetsForSet]   — drawings belonging to the set (legacy fallback)
  * @returns {string} a value in DETAILING_STATE_ORDER

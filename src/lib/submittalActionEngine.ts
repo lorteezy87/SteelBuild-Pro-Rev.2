@@ -88,7 +88,9 @@ export function nextSubmittalAction(submittal: SubmittalLike | null | undefined)
   const chain = chainState(submittal);
   if (chain.steps) {
     if (ROUTING_STATUSES.has(status) && chain.stepIndex != null && !chain.atFinalStep) {
-      const nextParty = chain.steps[chain.stepIndex + 1].party;
+      // steps elements are non-null (normalizeChain drops invalid entries) and
+      // the index is in-bounds (stepIndex != null && !atFinalStep, guarded above).
+      const nextParty = chain.steps[chain.stepIndex + 1]!.party;
       const routedStage = submittalStatusToStage("Submitted", nextParty, null) || "OFA";
       return {
         label: `Route to ${nextParty} (${chain.stepIndex + 2}/${chain.steps.length})`,
@@ -105,7 +107,8 @@ export function nextSubmittalAction(submittal: SubmittalLike | null | undefined)
     // outbound (non-detailing) hop of the route.
     if (isRRStatus(status)) {
       const restartIndex = firstExternalStepIndex(chain.steps);
-      const restartParty = chain.steps[restartIndex].party;
+      // firstExternalStepIndex returns an in-bounds index; elements are non-null.
+      const restartParty = chain.steps[restartIndex]!.party;
       const restartStage = submittalStatusToStage("Submitted", restartParty, null) || "OFA";
       return {
         label: `Resubmit & route to ${restartParty}`,
