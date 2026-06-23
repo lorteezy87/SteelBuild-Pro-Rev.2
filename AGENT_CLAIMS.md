@@ -29,6 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-06-22 · opus-strict-ratchet · TypeScript strictNullChecks CI gate | `tsconfig.strict.json`, `scripts/strict-typecheck.mjs`, `package.json`, `.github/workflows/ci.yml`, the 24 strict-null offender `.ts/.tsx` (schedule/gantt/deliveries/submittals/workpackages/emailinbox pages + shared engines/hooks + `drawingSubmittalHub/format.ts`) | #8 Phase 2: add `typecheck:strict` ratchet gate + burn ~204 errors; grandfather ResourceScheduling.tsx + GanttChart.tsx |
 
 ## Recently released
 
