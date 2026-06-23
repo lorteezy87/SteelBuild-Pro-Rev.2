@@ -80,6 +80,15 @@ jobs:
         # remaining business logic migrates toward TypeScript coverage.
         run: npm run typecheck:js
 
+      - name: Typecheck (strictNullChecks ratchet)
+        # Blocking: enforces strictNullChecks on every .ts/.tsx EXCEPT the
+        # grandfathered files listed in scripts/strict-typecheck.mjs. New code
+        # and all already-clean files are strict-null by default; a new null
+        # error fails CI unless the file is explicitly added to the ignore list.
+        # Shrink that list as the two remaining schedule/gantt pages are cleaned.
+        # See docs/superpowers/specs/2026-06-22-strictnullchecks-ratchet-design.md
+        run: npm run typecheck:strict
+
       - name: Run Vitest tests
         run: npm test
 
