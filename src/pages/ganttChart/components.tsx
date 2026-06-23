@@ -131,7 +131,7 @@ export function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, coll
 }
 
 export function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smartMode }) {
-  const scrollRef = useRef(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const { minDate, maxDate } = dateRange;
   const { pxPerDay } = ZOOM_LEVELS[zoom];
 
@@ -142,7 +142,7 @@ export function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRang
   }, [tasks]);
 
   const days = useMemo(() => {
-    const result = [];
+    const result: Date[] = [];
     let d = new Date(minDate);
     while (d <= maxDate) { result.push(new Date(d)); d.setDate(d.getDate() + 1); }
     return result;
@@ -151,7 +151,7 @@ export function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRang
   const timelineWidth = days.length * pxPerDay;
 
   const monthHeaders = useMemo(() => {
-    const headers = [];
+    const headers: { label: string; startIdx: number }[] = [];
     let currentMonth = "";
     days.forEach((d, i) => { const label = getMonthLabel(d); if (label !== currentMonth) { headers.push({ label, startIdx: i }); currentMonth = label; } });
     return headers.map((h, i) => { const end = i + 1 < headers.length ? headers[i + 1].startIdx : days.length; return { ...h, width: (end - h.startIdx) * pxPerDay }; });

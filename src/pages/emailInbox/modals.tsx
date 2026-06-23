@@ -65,7 +65,8 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
   }, [message.parsed_metadata]);
 
   const validTypes = ENTITY_TYPE_OPTIONS.map((o) => o.value);
-  const defaultType = validTypes.includes(message.parsed_type) ? message.parsed_type : "action_item";
+  const parsedType = message.parsed_type ?? "";
+  const defaultType = validTypes.includes(parsedType) ? parsedType : "action_item";
 
   const [entityType, setEntityType] = useState(defaultType);
   const [title, setTitle] = useState(message.subject || "");

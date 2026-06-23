@@ -27,9 +27,9 @@ import {
 import { usePermissions } from "@/services/permissions";
 import { getNextNumber } from "@/components/shared/numberSequencing";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
-import WPFormModal from "@/components/workpackages/WPFormModal";
+import WPFormModalRaw from "@/components/workpackages/WPFormModal";
 import { Button as ButtonRaw, EmptyState as EmptyStateRaw } from "@/components/design-system";
-import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
+import SequenceFilterRaw, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import {
   BOARD_LANES,
   FAB_STAGES,
@@ -64,6 +64,11 @@ type AnyProps = PropsWithChildren<Record<string, unknown>>;
 const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 const EmptyState = EmptyStateRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
+// WPFormModal and SequenceFilter are still .jsx; their untyped default-valued
+// array props (`projects`, `allDrawings`, `items`) infer as `never[]` when
+// consumed from .tsx. Treat them as permissive components until they are typed.
+const WPFormModal = WPFormModalRaw as unknown as ComponentType<AnyProps>;
+const SequenceFilter = SequenceFilterRaw as unknown as ComponentType<AnyProps>;
 
 export default function FabRelease() {
   const [searchParams] = useSearchParams();
@@ -153,7 +158,11 @@ export default function FabRelease() {
   });
 
   const project = projects.find((item) => item.id === projectId) || activeProject || null;
-  const projectName = project?.project_name || project?.name || "Project";
+  // `projects` rows expose `name`; some legacy callers still carry a `project_name`
+  // alias. Read the legacy key through a loose view so the original `||` fallback
+  // order (legacy alias → canonical name → "Project") is preserved unchanged.
+  const projectLegacyName = (project as Record<string, unknown> | null)?.project_name as string | undefined;
+  const projectName = projectLegacyName || project?.name || "Project";
 
   const wpQueryKeys = [["work-packages", projectId], ["work_packages", projectId], getQueryKey("work_package", projectId)];
   useRealtimeInvalidation("work_packages", projectId, wpQueryKeys);
@@ -284,7 +293,7 @@ export default function FabRelease() {
   }, [metrics.enriched, riskFilter, search, seqFilter, stageFilter]);
 
   const laneGroups = useMemo(() => {
-    const groups = Object.fromEntries(BOARD_LANES.map((lane) => [lane, []]));
+    const groups: Record<string, EnrichedWorkPackage[]> = Object.fromEntries(BOARD_LANES.map((lane) => [lane, []]));
     for (const wp of filtered) {
       const lane = fabReleaseLane(wp);
       if (groups[lane]) groups[lane].push(wp);
@@ -294,7 +303,7 @@ export default function FabRelease() {
   }, [filtered]);
 
   const statusGroups = useMemo(() => {
-    const groups = Object.fromEntries(STATUS_ORDER.map((status) => [status, []]));
+    const groups: Record<string, EnrichedWorkPackage[]> = Object.fromEntries(STATUS_ORDER.map((status) => [status, []]));
     for (const wp of filtered) {
       const status = STATUS_ORDER.includes(wp._signals.status) ? wp._signals.status : "Not Started";
       groups[status].push(wp);

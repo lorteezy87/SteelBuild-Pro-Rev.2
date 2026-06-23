@@ -63,6 +63,7 @@ import {
   textPrimary,
   warning,
 } from "./drawingSubmittalHub/format";
+import type { Drawing as HubDrawing, DrawingSet as HubDrawingSet, Submittal as HubSubmittal } from "./drawingSubmittalHub/types";
 import { ApprovalMatrix, DrawingRegisterTable, FleetHealthStrip, HeaderSignal, LeadTimesModal, RevisionImpactBoard, TriageBoard } from "./drawingSubmittalHub/components";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
@@ -195,7 +196,10 @@ export default function DrawingSubmittalHub() {
   });
 
   const setPackages = useMemo(
-    () => buildSetPackages(drawings, drawingSets, submittals),
+    // The hub-local Drawing/Submittal interfaces and the hooks' DB-row types
+    // describe the same runtime rows; reconcile the two parallel shapes at the
+    // boundary (behavior-preserving — no value is changed).
+    () => buildSetPackages(drawings as unknown as HubDrawing[], drawingSets as unknown as HubDrawingSet[], submittals as unknown as HubSubmittal[]),
     [drawings, drawingSets, submittals]
   );
 
@@ -396,7 +400,7 @@ export default function DrawingSubmittalHub() {
     const released = setPackages.filter(isClosedPackage).length;
     // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
     const inReview = setPackages.filter((pkg) =>
-      pkg.sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage))
+      pkg.sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage ?? ""))
     ).length;
     const overdueDrawings = setPackages.filter((pkg) =>
       pkg.sheets.some((d) => dueInfo(getDrawingDueDate(d), isClosedDrawing(d)).overdue)
@@ -445,8 +449,8 @@ export default function DrawingSubmittalHub() {
       // never reach the hit list anyway, but guard against stale per-sheet
       // Rejected/Returned stages on packages that have since been released).
       const needsAction = !closed && (
-        (latestSubmittal && ACTION_STATUSES.has(latestSubmittal.status)) ||
-        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage))
+        (latestSubmittal && ACTION_STATUSES.has(latestSubmittal.status ?? "")) ||
+        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage ?? ""))
       );
       const status = latestSubmittal?.status || rollupDrawingStage(pkg.sheets);
       const canDraft = !hasGoverningSubmittal(pkg.submittals);
@@ -835,7 +839,7 @@ export default function DrawingSubmittalHub() {
             {activeTab === "matrix" && (
               <ApprovalMatrix
                 drawingSets={drawingSets}
-                submittals={submittals}
+                submittals={submittals as unknown as HubSubmittal[]}
                 roundsBySubmittal={roundsBySubmittal}
                 isLoading={isLoading}
               />

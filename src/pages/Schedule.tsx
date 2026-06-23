@@ -8,10 +8,10 @@ import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import ScheduleRivetBrief from "@/components/schedule/ScheduleRivetBrief";
+import ScheduleRivetBriefRaw from "@/components/schedule/ScheduleRivetBrief";
 import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
 import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
-import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
+import TaskDetailDrawerRaw from "@/components/schedule/TaskDetailDrawer";
 import { PHASES, PHASE_NUMBER } from "@/utils/phases";
 import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw, Button as ButtonRaw } from "@/components/design-system";
@@ -33,6 +33,12 @@ const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>
 const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
 const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
+// These two schedule children are still .jsx and default their list props to
+// `[]`, which TS infers as `never[]` — too narrow to accept ScheduleTask[].
+// Wrap them at the import boundary like the primitives above; removable once
+// the components are typed.
+const ScheduleRivetBrief = ScheduleRivetBriefRaw as unknown as ComponentType<AnyProps>;
+const TaskDetailDrawer = TaskDetailDrawerRaw as unknown as ComponentType<AnyProps>;
 // Code-split the heaviest, view-/modal-gated schedule screens out of the
 // Schedule route chunk. ScheduleGantt is by far the largest child (only renders
 // on the Gantt tab) and the add/bulk/WBS modals only matter once opened, so
@@ -93,7 +99,13 @@ export default function Schedule() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const qc = useQueryClient();
 
-  const { scheduleTasks } = useScheduleTasks(projectId);
+  // useScheduleTasks is still .js and yields DB rows (RowWithAliases<"schedule_tasks">,
+  // whose nullable columns are `string | null`). ScheduleTask is the loose view-model
+  // the whole schedule layer consumes (optional fields + `[key: string]: any`); every
+  // consumer here is already null-safe. Normalize once at the boundary so downstream
+  // call sites stay clean. Removable once the hook is typed.
+  const { scheduleTasks: scheduleTasksRaw } = useScheduleTasks(projectId);
+  const scheduleTasks = scheduleTasksRaw as unknown as ScheduleTask[];
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -171,7 +183,10 @@ export default function Schedule() {
         phaseCounts[ph] = (phaseCounts[ph] || 0) + 1;
         const wbs = `${phaseNum}.${phaseCounts[ph]}`;
         result.push({ ...t, wbs_code: wbs });
-        toBackfill.push({ id: t.id, wbs });
+        // Only persisted rows (those with a DB id) can be backfilled; a row
+        // without an id can't be UPDATE-targeted anyway, so skipping it is
+        // behavior-preserving.
+        if (t.id) toBackfill.push({ id: t.id, wbs });
       }
     });
     // Background-persist generated WBS codes to DB
@@ -217,6 +232,7 @@ export default function Schedule() {
   const updateTaskMut = useMutation({
     mutationFn: (data: ScheduleTask) => {
       const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
+      if (!id) throw new Error("Cannot update a task without an id");
       return entities.ScheduleTask.update(id, fields);
     },
     onSuccess: () => {
@@ -494,7 +510,7 @@ export default function Schedule() {
       // Create ALL tasks (including summaries) in order — sequential to preserve parent refs
       for (const t of allParsed) {
         const phaseName = derivePhaseFromHierarchy(t, allParsed);
-        const phase = PHASE_NAME_MAP[phaseName?.toUpperCase()] || phaseName || "Fabrication";
+        const phase = PHASE_NAME_MAP[phaseName?.toUpperCase() ?? ""] || phaseName || "Fabrication";
 
         const parentUid = uidToParentUid[t.uid];
         const parentDbId = parentUid ? uidToDbId[parentUid] : null;
@@ -536,7 +552,9 @@ export default function Schedule() {
           const dbId = uidToDbId[t.uid];
           const predLinks = t.preds
             .map((p) => {
-              const id = uidToDbId[p.predUid];
+              // predUid may be null/undefined; an absent/empty key misses the
+              // map and is discarded by the !id guard below — same as before.
+              const id = uidToDbId[p.predUid ?? ""];
               if (!id) return null;
               const type = MS_LINK_TYPE[p.linkType] || "FS";
               // Convert tenths-of-minutes to whole days; round so a
@@ -847,6 +865,7 @@ export default function Schedule() {
                 onSave={async (data) => {
                   const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                   try {
+                    if (!id) throw new Error("Cannot update a task without an id");
                     await entities.ScheduleTask.update(id, fields);
                     invalidateEntity(qc, "schedule_task", projectId);
                     toast.success("Task saved");
@@ -892,6 +911,7 @@ export default function Schedule() {
               onSave={async (data) => {
                 const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                 try {
+                  if (!id) throw new Error("Cannot update a task without an id");
                   await entities.ScheduleTask.update(id, fields);
                   invalidateEntity(qc, "schedule_task", projectId);
                   toast.success("Task saved");

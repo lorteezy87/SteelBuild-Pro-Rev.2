@@ -95,8 +95,10 @@ export default function EmailInbox() {
   const attachmentsByMessage = useMemo(() => {
     const map: Record<string, any[]> = {};
     attachments.forEach((att) => {
-      if (!map[att.message_id]) map[att.message_id] = [];
-      map[att.message_id].push(att);
+      const messageId = att.message_id;
+      if (messageId == null) return;
+      if (!map[messageId]) map[messageId] = [];
+      map[messageId].push(att);
     });
     return map;
   }, [attachments]);
@@ -621,7 +623,7 @@ export default function EmailInbox() {
         <CreateRecordModal
           message={createModal}
           attachments={attachmentsByMessage[createModal.id] || []}
-          projectId={projectId}
+          projectId={projectId ?? ""}
           onClose={() => setCreateModal(null)}
           onSuccess={() => {
             setCreateModal(null);
@@ -634,7 +636,7 @@ export default function EmailInbox() {
       {linkModal && (
         <LinkToExistingModal
           message={linkModal}
-          projectId={projectId}
+          projectId={projectId ?? ""}
           onClose={() => setLinkModal(null)}
           onSuccess={() => {
             setLinkModal(null);
@@ -646,7 +648,7 @@ export default function EmailInbox() {
       {/* Compose Modal */}
       {composeModal && (
         <ComposeEmailModal
-          projectId={projectId}
+          projectId={projectId ?? ""}
           onClose={() => setComposeModal(false)}
           onSent={() => {
             setComposeModal(false);
@@ -658,7 +660,7 @@ export default function EmailInbox() {
       {/* Reply Modal */}
       {replyState && (
         <ReplyEmailModal
-          projectId={projectId}
+          projectId={projectId ?? ""}
           originalMessage={replyState.message}
           mode={replyState.mode}
           currentUserEmail={currentUserEmail}
