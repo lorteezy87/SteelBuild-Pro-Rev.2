@@ -12,6 +12,7 @@
     "typecheck": "tsc -p ./tsconfig.json",
     "typecheck:js": "tsc -p ./jsconfig.json",
     "typecheck:strict": "node scripts/strict-typecheck.mjs",
+    "typecheck:noimplicitany": "node scripts/noimplicitany-typecheck.mjs",
     "types:db": "supabase gen types typescript --project-id kjrwqagyeswwoxpjkcko > src/types/supabase.ts",
     "perf:bundle": "node scripts/perf-bundle-report.cjs",
     "perf:trace": "node scripts/perf-browser-trace.mjs",
