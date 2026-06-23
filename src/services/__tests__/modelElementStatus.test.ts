@@ -36,7 +36,7 @@ describe("buildHeldPieceMarkSet", () => {
 });
 
 describe("resolveElementStatus", () => {
-  const setMap = (r) => new Map([["set-1", r]]);
+  const setMap = (r: any) => new Map([["set-1", r]]);
 
   it("unmapped when the element resolves to no package", () => {
     expect(resolveElementStatus({ piece_mark: "1B1" }, new Map())).toBe("unmapped");
@@ -100,7 +100,7 @@ describe("summarizeElementStatuses", () => {
     const elements = [
       { id: "e1", element_guid: "g1", piece_mark: "1B1", drawing_set_id: "set-ok" },
       { id: "e2", element_guid: "g2", piece_mark: "2B2", drawing_set_id: "set-rev" },
-      { id: "e3", element_guid: null, piece_mark: "3B3" },                       // unmapped, no guid
+      { id: "e3", element_guid: null as string | null, piece_mark: "3B3" },      // unmapped, no guid
       { id: "e4", element_guid: "g4", piece_mark: "4B4", is_deleted: true },     // skipped
     ];
 

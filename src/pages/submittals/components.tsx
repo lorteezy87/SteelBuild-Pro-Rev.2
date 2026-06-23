@@ -599,7 +599,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
           <LinkedRFIs
             value={submittal.linked_rfi_ids || []}
             allRfis={allRfis}
-            onChange={(next) => onFieldChange && onFieldChange({ linked_rfi_ids: next })}
+            onChange={(next: string[]) => onFieldChange && onFieldChange({ linked_rfi_ids: next })}
           />
         </DetailSection>
 
@@ -608,7 +608,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
           <LinkedTasks
             value={submittal.linked_task_ids || []}
             allTasks={allTasks}
-            onChange={(next) => onFieldChange && onFieldChange({ linked_task_ids: next })}
+            onChange={(next: string[]) => onFieldChange && onFieldChange({ linked_task_ids: next })}
           />
         </DetailSection>
 

@@ -102,8 +102,8 @@ export const WORKFLOWS = {
     transitions: {
       "pending→approved":    { requiredFields: ["reviewer"],       minRole: "pm",    label: "Approve Set" },
       "pending→rejected":    { requiredFields: ["notes"],          minRole: "pm",    label: "Reject Set" },
-      "approved→superseded": { requiredFields: [],                 minRole: "pm",    label: "Supersede" },
-      "rejected→pending":    { requiredFields: [],                 minRole: "pm",    label: "Re-submit" },
+      "approved→superseded": { requiredFields: [] as string[],                 minRole: "pm",    label: "Supersede" },
+      "rejected→pending":    { requiredFields: [] as string[],                 minRole: "pm",    label: "Re-submit" },
     },
   },
 
@@ -116,18 +116,18 @@ export const WORKFLOWS = {
     states: ["Not Started", "IFA", "OFA", "BFA", "OFS", "IFC", "Released"],
     initial: "Not Started",
     transitions: {
-      "Not Started→IFA": { requiredFields: [], minRole: "field", label: "Start (In For Approval)" },
-      "IFA→OFA":         { requiredFields: [], minRole: "field", label: "Send Out For Approval" },
-      "OFA→BFA":         { requiredFields: [], minRole: "field", label: "Receive Back From Approval" },
-      "BFA→OFS":         { requiredFields: [], minRole: "pm",    label: "Send to Scrub" },
-      "OFS→IFC":         { requiredFields: [], minRole: "pm",    label: "Issue For Construction" },
-      "IFC→Released":    { requiredFields: [], minRole: "pm",    label: "Release for Fabrication" },
+      "Not Started→IFA": { requiredFields: [] as string[], minRole: "field", label: "Start (In For Approval)" },
+      "IFA→OFA":         { requiredFields: [] as string[], minRole: "field", label: "Send Out For Approval" },
+      "OFA→BFA":         { requiredFields: [] as string[], minRole: "field", label: "Receive Back From Approval" },
+      "BFA→OFS":         { requiredFields: [] as string[], minRole: "pm",    label: "Send to Scrub" },
+      "OFS→IFC":         { requiredFields: [] as string[], minRole: "pm",    label: "Issue For Construction" },
+      "IFC→Released":    { requiredFields: [] as string[], minRole: "pm",    label: "Release for Fabrication" },
       // R&R loop-back — any post-prep stage can rewind to IFA
       "OFA→IFA":         { requiredFields: ["notes"], minRole: "pm", label: "Revise & Resubmit (R&R)" },
       "BFA→IFA":         { requiredFields: ["notes"], minRole: "pm", label: "Revise & Resubmit (R&R)" },
       "OFS→IFA":         { requiredFields: ["notes"], minRole: "pm", label: "Revise & Resubmit (R&R)" },
       // Allow skip-forward for admin
-      "Not Started→Released": { requiredFields: [], minRole: "admin", label: "Force Release" },
+      "Not Started→Released": { requiredFields: [] as string[], minRole: "admin", label: "Force Release" },
     },
   },
 
@@ -144,11 +144,11 @@ export const WORKFLOWS = {
       "Open→Under Review":                    { requiredFields: ["assigned_to"], minRole: "field", label: "Submit for Review" },
       "Under Review→Answered":                { requiredFields: ["response"],    minRole: "pm",    label: "Answer" },
       "Under Review→Incomplete Response":     { requiredFields: ["response"],    minRole: "pm",    label: "Mark Response Incomplete" },
-      "Incomplete Response→Under Review":     { requiredFields: [],              minRole: "pm",    label: "Re-route for Review" },
+      "Incomplete Response→Under Review":     { requiredFields: [] as string[],              minRole: "pm",    label: "Re-route for Review" },
       "Incomplete Response→Answered":         { requiredFields: ["response"],    minRole: "pm",    label: "Answer" },
-      "Answered→Closed":                      { requiredFields: [],              minRole: "pm",    label: "Close" },
-      "Under Review→Open":                    { requiredFields: [],              minRole: "pm",    label: "Return to Open" },
-      "Closed→Open":                          { requiredFields: [],              minRole: "admin", label: "Reopen" },
+      "Answered→Closed":                      { requiredFields: [] as string[],              minRole: "pm",    label: "Close" },
+      "Under Review→Open":                    { requiredFields: [] as string[],              minRole: "pm",    label: "Return to Open" },
+      "Closed→Open":                          { requiredFields: [] as string[],              minRole: "admin", label: "Reopen" },
     },
   },
 
@@ -159,7 +159,7 @@ export const WORKFLOWS = {
     initial: "Draft",
     transitions: {
       "Draft→Submitted":          { requiredFields: ["co_amount", "title"],   minRole: "pm",    label: "Submit" },
-      "Submitted→Under Review":   { requiredFields: [],                       minRole: "pm",    label: "Begin Review" },
+      "Submitted→Under Review":   { requiredFields: [] as string[],                       minRole: "pm",    label: "Begin Review" },
       "Under Review→Approved":    { requiredFields: ["approved_by"],          minRole: "pm",    label: "Approve",
         guard: (record) => {
           if (!record.co_amount || record.co_amount === 0) return { valid: false, reason: "CO amount must be non-zero to approve." };
@@ -167,7 +167,7 @@ export const WORKFLOWS = {
         },
       },
       "Under Review→Rejected":   { requiredFields: ["notes"],                minRole: "pm",    label: "Reject" },
-      "Rejected→Draft":           { requiredFields: [],                       minRole: "pm",    label: "Revise" },
+      "Rejected→Draft":           { requiredFields: [] as string[],                       minRole: "pm",    label: "Revise" },
       "Approved→Void":            { requiredFields: ["notes"],                minRole: "admin", label: "Void" },
     },
   },
@@ -178,12 +178,12 @@ export const WORKFLOWS = {
     states: ["Unpaid", "Pending Approval", "Paid", "Disputed", "Voided"],
     initial: "Unpaid",
     transitions: {
-      "Unpaid→Pending Approval":       { requiredFields: [],                  minRole: "field", label: "Request Approval" },
+      "Unpaid→Pending Approval":       { requiredFields: [] as string[],                  minRole: "field", label: "Request Approval" },
       "Pending Approval→Paid":         { requiredFields: ["approved_by"],     minRole: "pm",    label: "Approve & Pay" },
       "Pending Approval→Disputed":     { requiredFields: ["notes"],           minRole: "pm",    label: "Dispute" },
-      "Unpaid→Paid":                   { requiredFields: [],                  minRole: "pm",    label: "Mark Paid" },
+      "Unpaid→Paid":                   { requiredFields: [] as string[],                  minRole: "pm",    label: "Mark Paid" },
       "Paid→Voided":                   { requiredFields: ["notes"],           minRole: "admin", label: "Void" },
-      "Disputed→Unpaid":               { requiredFields: [],                  minRole: "pm",    label: "Resolve Dispute" },
+      "Disputed→Unpaid":               { requiredFields: [] as string[],                  minRole: "pm",    label: "Resolve Dispute" },
     },
   },
 
@@ -193,8 +193,8 @@ export const WORKFLOWS = {
     states: ["Not Started", "Detailing", "Fabrication", "Erection", "Install", "Complete"],
     initial: "Not Started",
     transitions: {
-      "Not Started→Detailing":   { requiredFields: [],                        minRole: "pm",   label: "Start Detailing" },
-      "Detailing→Fabrication":   { requiredFields: [],                        minRole: "pm",   label: "Start Fabrication",
+      "Not Started→Detailing":   { requiredFields: [] as string[],                        minRole: "pm",   label: "Start Detailing" },
+      "Detailing→Fabrication":   { requiredFields: [] as string[],                        minRole: "pm",   label: "Start Fabrication",
         guard: (record) => {
           if (!record.linked_drawing_ids && !record.linkedDrawings?.length) {
             return { valid: false, reason: "Fabrication requires at least one linked, approved drawing." };
@@ -202,9 +202,9 @@ export const WORKFLOWS = {
           return { valid: true };
         },
       },
-      "Fabrication→Erection":    { requiredFields: [],                        minRole: "pm",   label: "Start Erection" },
-      "Erection→Install":        { requiredFields: [],                        minRole: "field", label: "Start Install" },
-      "Install→Complete":        { requiredFields: [],                        minRole: "pm",   label: "Mark Complete" },
+      "Fabrication→Erection":    { requiredFields: [] as string[],                        minRole: "pm",   label: "Start Erection" },
+      "Erection→Install":        { requiredFields: [] as string[],                        minRole: "field", label: "Start Install" },
+      "Install→Complete":        { requiredFields: [] as string[],                        minRole: "pm",   label: "Mark Complete" },
     },
   },
 
@@ -214,13 +214,13 @@ export const WORKFLOWS = {
     states: ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected", "Delayed"],
     initial: "Scheduled",
     transitions: {
-      "Scheduled→In Transit":  { requiredFields: [],                          minRole: "field", label: "Mark In Transit" },
+      "Scheduled→In Transit":  { requiredFields: [] as string[],                          minRole: "field", label: "Mark In Transit" },
       "Scheduled→Delayed":     { requiredFields: ["notes"],                   minRole: "field", label: "Mark Delayed" },
-      "In Transit→Delivered":  { requiredFields: [],                          minRole: "field", label: "Mark Delivered" },
+      "In Transit→Delivered":  { requiredFields: [] as string[],                          minRole: "field", label: "Mark Delivered" },
       "In Transit→Partial":    { requiredFields: ["notes"],                   minRole: "field", label: "Partial Delivery" },
       "In Transit→Rejected":   { requiredFields: ["notes"],                   minRole: "field", label: "Reject" },
-      "Delayed→In Transit":    { requiredFields: [],                          minRole: "field", label: "Resume Transit" },
-      "Partial→Delivered":     { requiredFields: [],                          minRole: "field", label: "Complete Delivery" },
+      "Delayed→In Transit":    { requiredFields: [] as string[],                          minRole: "field", label: "Resume Transit" },
+      "Partial→Delivered":     { requiredFields: [] as string[],                          minRole: "field", label: "Complete Delivery" },
     },
   },
 
@@ -230,10 +230,10 @@ export const WORKFLOWS = {
     states: ["Draft", "Submitted", "Approved", "Paid", "Finalized"],
     initial: "Draft",
     transitions: {
-      "Draft→Submitted":       { requiredFields: [],                          minRole: "pm",   label: "Submit" },
-      "Submitted→Approved":    { requiredFields: [],                          minRole: "pm",   label: "Approve" },
-      "Approved→Paid":         { requiredFields: [],                          minRole: "pm",   label: "Mark Paid" },
-      "Paid→Finalized":        { requiredFields: [],                          minRole: "admin", label: "Finalize" },
+      "Draft→Submitted":       { requiredFields: [] as string[],                          minRole: "pm",   label: "Submit" },
+      "Submitted→Approved":    { requiredFields: [] as string[],                          minRole: "pm",   label: "Approve" },
+      "Approved→Paid":         { requiredFields: [] as string[],                          minRole: "pm",   label: "Mark Paid" },
+      "Paid→Finalized":        { requiredFields: [] as string[],                          minRole: "admin", label: "Finalize" },
     },
   },
 } satisfies Record<string, WorkflowDefinition>;

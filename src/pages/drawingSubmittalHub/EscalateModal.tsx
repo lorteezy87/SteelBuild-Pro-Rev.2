@@ -127,7 +127,7 @@ export default function EscalateModal({ item, initialKind = "rfi", projectId, pr
   ];
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(o: boolean) => !o && onClose()}>
       <DialogContent style={{
         maxWidth: 560,
         background: "var(--bg-surface-secondary)",
