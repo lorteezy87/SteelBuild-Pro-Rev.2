@@ -29,6 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-06-22 · opus-gtm-batch · GTM readiness batch | `vercel.json` (security headers), legal pages (`src/pages/Privacy/Terms/Security.jsx` + `routes.js`), demo form (`Landing.jsx` + `demo_requests` migration + email-send wire), `package.json` (engines), eslint a11y, storage-backfill script | ship security headers + legal + demo form + CI/a11y quick-wins; WRITE (not run) the storage backfill |
 
 ## Recently released
 
