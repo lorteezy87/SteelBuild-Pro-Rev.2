@@ -29,10 +29,10 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-06-22 · opus-noimplicitany · noImplicitAny CI ratchet | `tsconfig.noimplicitany.json`, `scripts/lib/tscDiagnostics.mjs`, `scripts/noimplicitany-typecheck.mjs`, `scripts/strict-typecheck.mjs` (refactor to shared helpers), `package.json`, `.github/workflows/ci.yml`, + fix-set (`services/workflowEngine.ts`, `setupTests.ts`, 3 `*.test.ts`, `DrawingSubmittalHub.tsx`, `Deliveries.tsx`, `submittals/components.tsx`, `schedule/wbs.ts`, `drawingSubmittalHub/EscalateModal.tsx`) | lock the noImplicitAny floor + clean engine/tests; grandfather 13 heavy pages |
 
 ## Recently released
 
 <!-- Move finished claims here briefly, or just delete the row. -->
-- 2026-06-22 · opus-strict-ratchet · strictNullChecks CI ratchet SHIPPED — `npm run typecheck:strict` (filter script, not naive exclude) now blocks the `ci` job; all 395 strict-null errors resolved except ResourceScheduling.tsx + GanttChart.tsx (grandfathered in `scripts/strict-typecheck.mjs` STRICT_NULL_IGNORE — SHRINK that list, never grow it). noImplicitAny stays a separate future ratchet. Design: `docs/superpowers/specs/2026-06-22-strictnullchecks-ratchet-design.md`.
+- 2026-06-22 · opus-noimplicitany · noImplicitAny CI ratchet SHIPPED — `npm run typecheck:noimplicitany` now blocks the `ci` job (sibling of typecheck:strict, shares `scripts/lib/tscDiagnostics.mjs`). Core `services/workflowEngine.ts` + tests + small pages cleaned; 13 heavy schedule/gantt/procurement/submittal/work-package pages grandfathered in `NOIMPLICITANY_IGNORE` — SHRINK that list, never grow it.
+- 2026-06-22 · opus-strict-ratchet · strictNullChecks CI ratchet SHIPPED — `npm run typecheck:strict` (filter script, not naive exclude) now blocks the `ci` job; all 395 strict-null errors resolved except ResourceScheduling.tsx + GanttChart.tsx (grandfathered in `scripts/strict-typecheck.mjs` STRICT_NULL_IGNORE — SHRINK that list, never grow it). Both type-safety gates share the filter. Design: `docs/superpowers/specs/2026-06-22-strictnullchecks-ratchet-design.md`.
 - 2026-06-20 · opus-db-baseline · MIGRATION FREEZE lifted — baseline squash cutover DONE (3 baseline files in supabase/migrations/, 190 archived, prod schema_migrations reconciled, db push clean). New migrations OK again; follow the ARCHITECTURE.md → Migrations lockstep rule.
