@@ -127,39 +127,79 @@ export default function Terms() {
         </p>
       </Section>
 
-      <Section title="7. Warranties and disclaimers">
+      <Section title="7. Disclaimer of warranties">
         <p>
           THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES
-          OF ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING IMPLIED WARRANTIES OF
-          MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
-          We do not warrant that the Service will be uninterrupted, error-free, or
-          secure, or that any information it produces is accurate or fit for your
-          specific construction or engineering decisions.
+          OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY. S&amp;H Steel
+          expressly disclaims all implied warranties of merchantability, fitness
+          for a particular purpose, title, and non-infringement.
         </p>
-      </Section>
-
-      <Section title="8. Limitation of liability">
         <p>
-          TO THE MAXIMUM EXTENT PERMITTED BY LAW, S&amp;H STEEL WILL NOT BE LIABLE
-          FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE
-          DAMAGES, OR ANY LOSS OF PROFITS, DATA, OR GOODWILL, ARISING OUT OF OR
-          RELATED TO YOUR USE OF THE SERVICE. OUR TOTAL AGGREGATE LIABILITY FOR
-          ANY CLAIM WILL NOT EXCEED THE AMOUNTS YOU PAID US FOR THE SERVICE IN THE
-          TWELVE (12) MONTHS PRECEDING THE CLAIM.
+          The Service includes tools that generate, calculate, organize, and
+          surface project data — including but not limited to fabrication release
+          determinations, RFI and submittal tracking, schedule outputs, pay
+          application figures (including G702/G703 calculations), change order and
+          backcharge records, and AI-generated content.{" "}
+          <strong style={strong}>
+            We do not warrant that any output is accurate, complete, current, or
+            suitable for any construction, fabrication, erection, contractual, or
+            financial decision.
+          </strong>{" "}
+          All outputs are informational aids only and do not constitute
+          engineering, financial, legal, or professional advice.
         </p>
       </Section>
 
-      <Section title="9. Indemnification">
+      <Section title="8. Customer responsibility">
         <p>
-          You agree to indemnify and hold harmless S&amp;H Steel and its
-          affiliates, officers, and employees from any claims, damages, losses,
-          or expenses (including reasonable attorneys' fees) arising from your use
-          of the Service, your content, or your violation of these Terms or
-          applicable law.
+          You are solely responsible for independently verifying all data,
+          calculations, and outputs of the Service before relying on them. You
+          retain full responsibility for all project, fabrication, erection,
+          scheduling, billing, and contractual decisions. The Service does not
+          replace the professional judgment of licensed engineers, the review of
+          the engineer of record, or the obligations of any party under your
+          contracts. We are not a party to, and assume no responsibility for, your
+          contracts with general contractors, owners, architects, engineers, or
+          any third party.
         </p>
       </Section>
 
-      <Section title="10. Termination">
+      <Section title="9. Limitation of liability">
+        <p>
+          TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL S&amp;H STEEL,
+          ITS MEMBERS, OFFICERS, EMPLOYEES, OR AGENTS BE LIABLE FOR ANY INDIRECT,
+          INCIDENTAL, SPECIAL, CONSEQUENTIAL, PUNITIVE, OR EXEMPLARY DAMAGES, OR
+          FOR ANY LOSS OF PROFITS, REVENUE, DATA, BUSINESS, GOODWILL, PROJECT
+          SCHEDULE, OR ANTICIPATED SAVINGS, ARISING OUT OF OR RELATING TO THE
+          SERVICE, WHETHER BASED IN CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT
+          LIABILITY, OR OTHERWISE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+          DAMAGES.
+        </p>
+        <p>
+          Our total aggregate liability for all claims arising out of or relating
+          to the Service shall not exceed the total fees actually paid by you to
+          us in the twelve (12) months immediately preceding the event giving rise
+          to the claim.
+        </p>
+        <p>
+          Some jurisdictions do not allow the exclusion or limitation of certain
+          damages, so portions of the above may not apply to you.
+        </p>
+      </Section>
+
+      <Section title="10. Indemnification">
+        <p>
+          You agree to indemnify, defend, and hold harmless S&amp;H Steel and its
+          members, officers, employees, and agents from and against any claims,
+          damages, liabilities, losses, costs, and expenses (including reasonable
+          attorneys' fees) arising out of or relating to (a) your use of the
+          Service, (b) your reliance on any output of the Service, (c) your
+          violation of these Terms, or (d) your violation of any contract, law, or
+          third-party right.
+        </p>
+      </Section>
+
+      <Section title="11. Termination">
         <p>
           You may stop using the Service and close your account at any time. We
           may suspend or terminate your access if you breach these Terms, fail to
@@ -171,16 +211,17 @@ export default function Terms() {
         </p>
       </Section>
 
-      <Section title="11. Governing law">
+      <Section title="12. Governing law">
         <p>
           These Terms are governed by the laws of the State of Arizona, USA,
-          without regard to its conflict-of-laws rules. You agree to the exclusive
-          jurisdiction of the state and federal courts located in Arizona for any
-          dispute arising out of these Terms or the Service.
+          without regard to its conflict-of-laws principles. You agree to the
+          exclusive jurisdiction of the state and federal courts located in
+          Arizona for any dispute arising out of or relating to these Terms or the
+          Service.
         </p>
       </Section>
 
-      <Section title="12. Changes to these terms">
+      <Section title="13. Changes to these terms">
         <p>
           We may update these Terms from time to time. When we make material
           changes, we will update the "Last updated" date above and, where
@@ -189,7 +230,7 @@ export default function Terms() {
         </p>
       </Section>
 
-      <Section title="13. Contact us">
+      <Section title="14. Contact us">
         <p>
           Questions about these Terms? Reach us at{" "}
           <a href={`mailto:${CONTACT.support}`} style={inlineLink}>{CONTACT.support}</a>.
