@@ -54,8 +54,8 @@ export default function Terms() {
     <LegalShell title="Terms of Service" lastUpdated={LAST_UPDATED}>
       <p>
         These Terms of Service ("Terms") govern your access to and use of
-        SteelBuild Pro (the "Service"), operated by S&amp;H Steel ("S&amp;H
-        Steel," "we," "us," or "our"). By creating an account or using the
+        SteelBuild Pro (the "Service"), operated by SteelBuild Pro LLC
+        ("SteelBuild Pro LLC," "we," "us," or "our"). By creating an account or using the
         Service, you agree to these Terms. If you are using the Service on behalf
         of an organization, you represent that you are authorized to bind that
         organization to these Terms.
@@ -120,8 +120,8 @@ export default function Terms() {
       <Section title="6. Intellectual property">
         <p>
           The Service, including its software, design, trademarks, and all related
-          intellectual property, is and remains the exclusive property of S&amp;H
-          Steel and its licensors. These Terms do not grant you any right to our
+          intellectual property, is and remains the exclusive property of
+          SteelBuild Pro LLC and its licensors. These Terms do not grant you any right to our
           intellectual property except the limited right to use the Service as
           permitted here.
         </p>
@@ -130,7 +130,7 @@ export default function Terms() {
       <Section title="7. Disclaimer of warranties">
         <p>
           THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES
-          OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY. S&amp;H Steel
+          OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY. SteelBuild Pro LLC
           expressly disclaims all implied warranties of merchantability, fitness
           for a particular purpose, title, and non-infringement.
         </p>
@@ -166,7 +166,7 @@ export default function Terms() {
 
       <Section title="9. Limitation of liability">
         <p>
-          TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL S&amp;H STEEL,
+          TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL STEELBUILD PRO LLC,
           ITS MEMBERS, OFFICERS, EMPLOYEES, OR AGENTS BE LIABLE FOR ANY INDIRECT,
           INCIDENTAL, SPECIAL, CONSEQUENTIAL, PUNITIVE, OR EXEMPLARY DAMAGES, OR
           FOR ANY LOSS OF PROFITS, REVENUE, DATA, BUSINESS, GOODWILL, PROJECT
@@ -189,7 +189,7 @@ export default function Terms() {
 
       <Section title="10. Indemnification">
         <p>
-          You agree to indemnify, defend, and hold harmless S&amp;H Steel and its
+          You agree to indemnify, defend, and hold harmless SteelBuild Pro LLC and its
           members, officers, employees, and agents from and against any claims,
           damages, liabilities, losses, costs, and expenses (including reasonable
           attorneys' fees) arising out of or relating to (a) your use of the
@@ -329,7 +329,7 @@ function LegalShell({ title, lastUpdated, children }) {
           display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14,
         }}>
           <span style={{ fontFamily: F.mono, fontSize: 11.5, letterSpacing: "0.06em", color: C.muted }}>
-            © {new Date().getFullYear()} S&amp;H Steel · SteelBuild Pro
+            © {new Date().getFullYear()} SteelBuild Pro LLC
           </span>
           <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
             <Link to="/privacy" className="legal-topbar-link">Privacy</Link>

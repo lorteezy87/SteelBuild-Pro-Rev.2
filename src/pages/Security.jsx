@@ -53,7 +53,7 @@ export default function Security() {
   return (
     <LegalShell title="Security" lastUpdated={LAST_UPDATED}>
       <p>
-        Security is foundational to SteelBuild Pro, operated by S&amp;H Steel.
+        Security is foundational to SteelBuild Pro, operated by SteelBuild Pro LLC.
         Steel fabricators and erectors trust us with sensitive project data —
         drawings, submittals, RFIs, schedules, costs, and field records — and we
         design the platform to keep that data confidential, available, and
@@ -253,7 +253,7 @@ function LegalShell({ title, lastUpdated, children }) {
           display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14,
         }}>
           <span style={{ fontFamily: F.mono, fontSize: 11.5, letterSpacing: "0.06em", color: C.muted }}>
-            © {new Date().getFullYear()} S&amp;H Steel · SteelBuild Pro
+            © {new Date().getFullYear()} SteelBuild Pro LLC
           </span>
           <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
             <Link to="/privacy" className="legal-topbar-link">Privacy</Link>
