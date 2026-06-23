@@ -90,6 +90,7 @@ billing secrets live server-side in the Edge Functions' environment.
 | `npm run lint:fix`     | ESLint with autofix                            |
 | `npm run typecheck`    | `tsc --noEmit` against `tsconfig.json` (TS)    |
 | `npm run typecheck:js` | `tsc --noEmit` against `jsconfig.json` (JS/JSX)|
+| `npm run typecheck:strict` | strictNullChecks ratchet — all `.ts/.tsx` except the grandfathered list |
 | `npm test`             | Vitest run (unit + jsdom integration tests)    |
 | `npm run test:watch`   | Vitest in watch mode                           |
 
