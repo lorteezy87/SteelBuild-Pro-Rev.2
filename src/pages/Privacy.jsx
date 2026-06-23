@@ -56,7 +56,7 @@ export default function Privacy() {
   return (
     <LegalShell title="Privacy Policy" lastUpdated={LAST_UPDATED}>
       <p>
-        S&amp;H Steel ("S&amp;H Steel," "we," "us," or "our"), the operator of
+        SteelBuild Pro LLC ("SteelBuild Pro LLC," "we," "us," or "our"), the operator of
         SteelBuild Pro (the "Service"), respects your privacy. This Privacy
         Policy explains what information we collect when you use SteelBuild Pro,
         how we use and share it, and the choices you have. By using the Service
@@ -304,7 +304,7 @@ function LegalShell({ title, lastUpdated, children }) {
           display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14,
         }}>
           <span style={{ fontFamily: F.mono, fontSize: 11.5, letterSpacing: "0.06em", color: C.muted }}>
-            © {new Date().getFullYear()} S&amp;H Steel · SteelBuild Pro
+            © {new Date().getFullYear()} SteelBuild Pro LLC
           </span>
           <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
             <Link to="/privacy" className="legal-topbar-link">Privacy</Link>
