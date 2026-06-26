@@ -63,19 +63,17 @@ into the workstream that introduces the behavior.
 - `isRfiOpen` lives in a `.js` file; importing into the `.ts` engines is fine (mixed repo). Keep a one‑line comment in each consumer pointing at the canonical predicate.
 - **Tests:** a shared test asserting `isRfiOpen` for every real status; update any health/revision tests that encoded the old per‑engine behavior.
 
-### Workstream 2 — 3D model element status: truthful + `fab_status`
+### Workstream 2 — 3D model status: remove dead path + truthful panel (leverage existing Fab mode)
 
-- **Remove** `buildHeldPieceMarkSet` and the `rfi.fab_hold` / `rfi.piece_marks` reads from `modelElementStatus.ts` and the hub call site (`DrawingSubmittalHub.tsx` ~333). The `rfi_blocked` bucket remains driven by package‑level `readiness.rfiBlocked`.
-- **Status precedence per element (new):**
-  1. If the element resolves to a drawing set (has `drawing_set_id`, or `drawing_id` → sheet → set): keep the existing readiness‑derived buckets (`rfi_blocked` / `behind_schedule` / `erection_ready` / `fab_ready` / `in_review` / `in_detailing`).
-  2. Else if the element has a known `fab_status`: bucket by a fab‑lifecycle mapping — `erected` → erected, `shipped`/`fabricated` → fabricated, `in_fabrication` → in_fabrication, `not_started` → not_started. (New buckets distinct from the detailing buckets so the two concepts don't blur.)
-  3. Else: `unknown` (truly no signal).
-- **`summarizeElementStatuses` / panel relabel:** report three honest numbers instead of "% mapped":
-  - `linkedToPackage` (count with a resolved drawing set) — the ~0% today,
-  - `withFabStatus` (count bucketed by `fab_status`) — ~47%,
-  - `unknown`.
-  The panel header reads e.g. "82,007 members · 47% with fab status · 0% linked to detailing packages," and the unlinked state is labeled "Not linked to detailing packages — colored by fabrication status" rather than "unmapped." The `Model3DTab` coloring uses whichever bucket the element resolved to.
-- **Tests:** new `modelElementStatus` test file covering set‑linked precedence, `fab_status` fallback (each value), and `unknown`.
+**Refinement (discovered during planning):** the 3D viewer **already** has a separate, working **"Fab" color mode** — `src/lib/fabStatus.js` (`FAB_STATUS_META`, `FAB_STATUS_ORDER` = `not_started→in_fabrication→fabricated→shipped→erected`, matching the DB exactly) + `buildFabByGuid`/`buildFabByMark` in `viewerColoring.js` color pieces directly from `element.fab_status`, and `fabStatus.js` explicitly documents itself as *"distinct from the detailing‑readiness engine."* So the element's own `fab_status` is **already usable in the viewer**, and the viewer's detailing "status" mode legend is already honest ("use the Fab mode" for hand‑set status). Folding `fab_status` into the detailing buckets (the spec's original wording) would duplicate and blur that deliberate separation. The cleaner fix — same user outcome — is:
+
+- **Remove the inert path.** Delete `buildHeldPieceMarkSet` and the `rfi.fab_hold` / `rfi.piece_marks` reads from `modelElementStatus.ts`; drop the `heldPieceMarks` param from `resolveElementStatus`/`summarizeElementStatuses`; remove its import + call in `DrawingSubmittalHub.tsx` (~line 29, 347). The `rfi_blocked` bucket stays driven by package‑level `readiness.rfiBlocked`. (This also removes the only RFI‑status check in this file, so WS1 doesn't touch it.) Keep the detailing `ElementStatusKey` union unchanged.
+- **Make the hub's `ModelMappingSection` panel truthful** (`drawingSubmittalHub/components.tsx`, ~lines 405–437):
+  - Relabel "Mapped to packages — N%" → "**Linked to detailing packages — N%**" so the ~0% reads as "elements aren't tied to detailing packages yet" (the real story) rather than implying missing data.
+  - Add a **fabrication‑status breakdown** below it: counts per `FAB_STATUS_ORDER` from the elements' own `fab_status`, using `FAB_STATUS_META` labels/colors (the panel already receives the `elements` array), with a one‑line pointer to the viewer's Fab mode. This surfaces the real, populated data (~47%) instead of an empty detailing mapping.
+- **New helper:** add `summarizeFabStatus(elements)` to `src/lib/fabStatus.js` → `{ counts: Record<status, number>, withFabStatus: number, total: number, pct: number }`, with a unit test. The panel renders from it.
+- **`mappedPct` stays** (it's correct — it IS the package‑linkage coverage); only its **label** changes. No change to `ElementStatusKey`, `BUCKETS`, `ELEMENT_STATUS_META`, `ELEMENT_BUCKET_ORDER`, `viewerColoring.js`, or `Model3DTab` coloring — keeping the blast radius small.
+- **Tests:** update `modelElementStatus.test.ts` for the dropped `heldPieceMarks` param (remove the held‑mark cases); add `summarizeFabStatus` tests.
 
 ### Workstream 3 — KPI / reasoning cleanups
 
