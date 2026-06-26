@@ -118,4 +118,21 @@ describe("DrawingRegisterGrid — release affordance", () => {
     renderGrid();
     expect(screen.getByRole("button", { name: /set up tracking for all \(2\)/i })).toBeInTheDocument();
   });
+
+  it("bulk-provisions every untracked row on click, then invalidates the register query once", async () => {
+    registerRows = [
+      makeRow({ drawing_id: "a", current_revision_id: null }),
+      makeRow({ drawing_id: "b", current_revision_id: "rev-b" }), // already tracked — skipped
+      makeRow({ drawing_id: "c", current_revision_id: null }),
+    ];
+    renderGrid();
+    await userEvent.click(screen.getByRole("button", { name: /set up tracking for all \(2\)/i }));
+    // One ensureCurrentRevision per UNTRACKED row (a + c), not the tracked one (b).
+    await waitFor(() => expect(ensureCurrentRevision).toHaveBeenCalledTimes(2));
+    const provisionedIds = ensureCurrentRevision.mock.calls.map((c) => c[0].drawing.id).sort();
+    expect(provisionedIds).toEqual(["a", "c"]);
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drawing-register", "proj-1"] }),
+    );
+  });
 });

@@ -138,6 +138,8 @@ export function DrawingRegisterGrid({ projectId }: { projectId: string | null })
     if (untracked.length === 0 || bulkProvisioning) return;
     setBulkProvisioning(true);
     try {
+      // `batchProcess` is untyped JS, so its callback param doesn't infer from
+      // `untracked: DrawingRegisterRow[]` — annotate to satisfy noImplicitAny.
       const { failed } = await batchProcess(untracked, (row: DrawingRegisterRow) => {
         const drawing = registerRowToDrawing(row);
         if (!drawing) return Promise.reject(new Error("missing project"));
@@ -183,7 +185,6 @@ export function DrawingRegisterGrid({ projectId }: { projectId: string | null })
 
   return (
     <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
-      <style>{"@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}"}</style>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <div>
           <h3 style={{ margin: 0, color: primary, fontSize: 16 }}>Drawing Register</h3>
