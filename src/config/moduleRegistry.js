@@ -24,7 +24,7 @@ export const PRIMARY_TABS = [
   // FieldPlan added here so it's no longer orphaned from the registry.
   { label: "FABRICATION", pages: ["WorkPackages", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "MarginRisk", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling", "ResourceManagement"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
-  { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "GanttChart", "ProjectCalendar", "LookAheadSchedule"] },
+  { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldToday", "FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "COST",        pages: ["CostHub", "Financials", "CostDashboard", "ChangeOrders", "Backcharges", "SOV", "PayApplications", "ContractManagement"] },
   { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "AIInsights", "JobStatusReport", "DecisionLog", "Reports", "AlertsCenter", "Activity"] },
@@ -70,7 +70,6 @@ export const ALL_MODULES = [
   { icon: "⏱", name: "Budget Hours",            group: "Fabrication",   page: "BudgetHours" },
   { icon: "\uD83D\uDCE6", name: "Procurement",        group: "Fabrication",   page: "Procurement" },
   { icon: "\uD83D\uDC41", name: "Look-Ahead",         group: "Fab",           page: "LookAheadSchedule" },
-  { icon: "\u25A5", name: "Gantt Chart",              group: "Fab",           page: "GanttChart" },
   { icon: "📅", name: "Project Calendar",         group: "Field",         page: "ProjectCalendar" },
   { icon: "\ud83d\udcf2", name: "Field Today",                  group: "Field",         page: "FieldToday" },
   { icon: "\ud83c\udfd7", name: "Field Hub",                    group: "Field",         page: "FieldHub" },

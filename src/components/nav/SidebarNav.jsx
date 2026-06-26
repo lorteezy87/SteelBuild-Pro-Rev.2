@@ -67,7 +67,6 @@ const PAGE_ICON = {
 
   // Project management
   Schedule:                     CalendarRange,
-  GanttChart:                   CalendarRange,
   ProjectCalendar:              CalendarDays,
   ActionItems:                  CheckSquare,
   RFIs:                         HelpCircle,

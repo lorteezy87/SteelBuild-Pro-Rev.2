@@ -155,6 +155,9 @@ export default function AppRoutes() {
             </LazyRoute>
           }
         />
+
+        {/* /GanttChart was retired — redirect old deep-links to /Schedule */}
+        <Route path="GanttChart" element={<Navigate to="/Schedule" replace />} />
       </Route>
 
       {/* 404 — outside layout */}
