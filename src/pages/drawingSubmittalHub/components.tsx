@@ -43,6 +43,7 @@ import {
   getSubmittalDueDate,
   info,
   isClosedSubmittal,
+  itemUrgency,
   mono,
   pluralize,
   review,
@@ -150,7 +151,11 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
     .slice(0, 6);
   const focusRoute = focusItem?.routeTab || "matrix";
   const criticalItems = Array.from(
-    new Map([...triage.overdue, ...triage.needsAction, ...triage.dueSoon].map((item: any) => [item.id, item])).values()
+    new Map(
+      [...triage.overdue, ...triage.needsAction, ...triage.dueSoon]
+        .sort(itemUrgency)
+        .map((item: any) => [item.id, item]),
+    ).values(),
   ).slice(0, 12) as any[];
 
   return (
