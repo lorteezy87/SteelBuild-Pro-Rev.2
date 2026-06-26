@@ -17,9 +17,6 @@ import { runTscGate } from './lib/tscDiagnostics.mjs'
 // are the heavy schedule/gantt/procurement/submittal/work-package pages whose
 // backlog is being burned down incrementally. SHRINK THIS LIST — never grow it.
 export const NOIMPLICITANY_IGNORE = [
-  'src/pages/GanttChart.tsx',
-  'src/pages/ganttChart/components.tsx',
-  'src/pages/ganttChart/format.ts',
   'src/pages/procurement/components.tsx',
   'src/pages/ResourceScheduling.tsx',
   'src/pages/resourceScheduling/components.tsx',
