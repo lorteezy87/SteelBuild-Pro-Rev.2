@@ -19,10 +19,53 @@ import {
   type DrawingHealthScore,
 } from "../drawingHealthScore";
 
+// ─── Fixture shapes ───────────────────────────────────────────────────────────
+// The engine takes `pkg: any` / `context.rfis: any[]`, so these loose shapes only
+// exist to satisfy noImplicitAny (TS7018) on the null/[] literals below — they do
+// not change any runtime behavior.
+
+interface SheetFixture {
+  id: string;
+  drawing_number?: string;
+  stage?: string;
+  linked_rfi_ids?: string | null;
+}
+
+interface SubmittalFixture {
+  id: string;
+  status: string;
+  ball_in_court: string | null;
+  approved_date: string | null;
+  round_number: number;
+  is_deleted: boolean;
+}
+
+interface ParentFixture {
+  due_date?: string | null;
+  material_impacted?: boolean;
+  long_lead_impact?: boolean;
+  sheet_count?: number;
+}
+
+interface PkgFixture {
+  setId: string;
+  name: string;
+  sheets: SheetFixture[];
+  submittals: SubmittalFixture[];
+  parent: ParentFixture | null;
+}
+
+interface RfiFixture {
+  id: string;
+  rfi_number: string;
+  status: string;
+  is_deleted: boolean;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Minimal clean pkg (released, no RFIs, no revisions, sheets present). */
-const cleanPkg = () => ({
+const cleanPkg = (): PkgFixture => ({
   setId: "set-1",
   name: "Main Steel - IFC",
   sheets: [
@@ -43,7 +86,7 @@ const cleanPkg = () => ({
 });
 
 /** Minimal empty pkg (no submittals, no sheets, no parent). */
-const emptyPkg = () => ({
+const emptyPkg = (): PkgFixture => ({
   setId: "set-empty",
   name: "Anchor Bolts",
   sheets: [],
@@ -52,7 +95,7 @@ const emptyPkg = () => ({
 });
 
 /** Pkg with a single "Approved as Noted" terminal submittal (not Released for Fab). */
-const approvedNotedPkg = () => ({
+const approvedNotedPkg = (): PkgFixture => ({
   setId: "set-2",
   name: "Misc Steel - BFA",
   sheets: [{ id: "s3", drawing_number: "M1", stage: "BFA", linked_rfi_ids: null }],
@@ -70,7 +113,7 @@ const approvedNotedPkg = () => ({
 });
 
 /** Pkg with one open RFI linked to a sheet; submittal is "Draft" (IFA). */
-const rfiBlockedPkg = (openRfiCount = 1) => {
+const rfiBlockedPkg = (openRfiCount = 1): PkgFixture => {
   const linkedIds = Array.from({ length: openRfiCount }, (_, i) => `RFI-${i + 1}`).join(",");
   return {
     setId: "set-rfi",
@@ -91,7 +134,7 @@ const rfiBlockedPkg = (openRfiCount = 1) => {
 };
 
 /** Build RFI objects — open by default (status "Open"); closed = "Answered". */
-const makeRfi = (rfi_number: string, open = true) => ({
+const makeRfi = (rfi_number: string, open = true): RfiFixture => ({
   id: `rfi-${rfi_number}`,
   rfi_number,
   status: open ? "Open" : "Answered",
@@ -99,7 +142,7 @@ const makeRfi = (rfi_number: string, open = true) => ({
 });
 
 /** Pkg that is 30 days overdue (for the aging factor), no submittal. */
-const overduePkg = (today = "2026-07-01") => ({
+const overduePkg = (today = "2026-07-01"): PkgFixture => ({
   setId: "set-overdue",
   name: "Erection - OFA",
   sheets: [{ id: "s5", drawing_number: "E1", stage: "Not Started", linked_rfi_ids: null }],
@@ -272,7 +315,7 @@ describe("calculateDrawingHealthScore", () => {
     // 30d overdue → agingDed = min(14, round(30*14/30)) = 14
     // total = 50; score = 50 → grade F, band critical
     const linkedIds = "RFI-1,RFI-2,RFI-3,RFI-4";
-    const pkg = {
+    const pkg: PkgFixture = {
       setId: "set-f",
       name: "Critical set",
       sheets: [{ id: "s1", drawing_number: "F1", linked_rfi_ids: linkedIds }],
