@@ -36,9 +36,20 @@ describe("reparentTasks", () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  it("writes sequentially and audits each change", async () => {
+  it("writes sequentially with increasing sort_order and audits each change", async () => {
     await reparentTasks(["b", "c"], null, { tasks });
     expect(updateMock).toHaveBeenCalledTimes(2);
     expect(logActivityMock).toHaveBeenCalledTimes(2);
+    const firstOrder = updateMock.mock.calls[0][1].sort_order;
+    const secondOrder = updateMock.mock.calls[1][1].sort_order;
+    expect(typeof firstOrder).toBe("number");
+    expect(secondOrder).toBeGreaterThan(firstOrder); // order += 1000 sequencing
+  });
+
+  it("honors dropIndex when computing sort_order", async () => {
+    await reparentTasks(["c"], "a", { tasks, dropIndex: 0 });
+    expect(updateMock).toHaveBeenCalledWith("c", expect.objectContaining({ parent_task_id: "a" }));
+    const fields = updateMock.mock.calls[0][1];
+    expect(typeof fields.sort_order).toBe("number");
   });
 });
