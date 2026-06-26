@@ -43,6 +43,7 @@ import {
   TABS,
   accent,
   border,
+  buildCurrentRevisionMap,
   buildSetPackages,
   dueDateWriteTargets,
   dueInfo,
@@ -64,7 +65,7 @@ import {
   textPrimary,
   warning,
 } from "./drawingSubmittalHub/format";
-import type { Drawing as HubDrawing, DrawingSet as HubDrawingSet, Submittal as HubSubmittal } from "./drawingSubmittalHub/types";
+import type { Drawing as HubDrawing, DrawingRevision as HubDrawingRevision, DrawingSet as HubDrawingSet, Submittal as HubSubmittal } from "./drawingSubmittalHub/types";
 import { ApprovalMatrix, DrawingRegisterTable, FleetHealthStrip, HeaderSignal, LeadTimesModal, RevisionImpactBoard, TriageBoard } from "./drawingSubmittalHub/components";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
@@ -203,6 +204,15 @@ export default function DrawingSubmittalHub() {
     // boundary (behavior-preserving — no value is changed).
     () => buildSetPackages(drawings as unknown as HubDrawing[], drawingSets as unknown as HubDrawingSet[], submittals as unknown as HubSubmittal[]),
     [drawings, drawingSets, submittals]
+  );
+
+  // Authoritative per-drawing current revision (§20-21): drawing_id → {code,
+  // version} from drawing_revisions WHERE is_current=true. The Drawing Register's
+  // "Rev" column reads THIS (matching Doc Control) instead of the deprecated,
+  // drift-prone drawings.revision_number string.
+  const currentRevByDrawingId = useMemo(
+    () => buildCurrentRevisionMap(drawingRevisions as unknown as HubDrawingRevision[]),
+    [drawingRevisions]
   );
 
   // Per-set Drawing Health Score (slice 2) — deterministic; feeds the Register
@@ -890,6 +900,7 @@ export default function DrawingSubmittalHub() {
                 drawingSets={drawingSets}
                 isLoading={isLoading}
                 healthByKey={healthByKey}
+                currentRevByDrawingId={currentRevByDrawingId}
                 summariesBySet={summariesBySet}
                 onRevisionUploaded={handleRevisionUploaded}
                 onOpenSummary={setSummaryCard}

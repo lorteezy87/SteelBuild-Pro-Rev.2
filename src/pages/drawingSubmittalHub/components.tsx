@@ -34,6 +34,7 @@ import {
   accent,
   border,
   buildApprovalMatrixRows,
+  currentRevisionForPackage,
   summarizeApprovalMatrix,
   dueInfo,
   error,
@@ -57,7 +58,7 @@ import {
   toDateInputValue,
   warning,
 } from "./format";
-import type { DueInfo, Submittal } from "./types";
+import type { CurrentRevisionInfo, DueInfo, Submittal } from "./types";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1572,10 +1573,13 @@ function RegisterVirtualList({
  * Full sheet-level management still lives on the standalone Drawings page.
  */
 export function DrawingRegisterTable({
-  setPackages, projectId, activeProject, drawingSets = [], isLoading, healthByKey, summariesBySet, onRevisionUploaded, onOpenSummary,
+  setPackages, projectId, activeProject, drawingSets = [], isLoading, healthByKey, currentRevByDrawingId, summariesBySet, onRevisionUploaded, onOpenSummary,
 }: {
   setPackages: any[]; projectId?: string; activeProject?: any; drawingSets?: any[]; isLoading?: boolean;
   healthByKey?: Map<string, any>;
+  /** Authoritative current revision per drawing (drawing_revisions.is_current) —
+   *  drives the "Rev" column instead of the deprecated drawings.revision_number. */
+  currentRevByDrawingId?: Map<string, CurrentRevisionInfo>;
   summariesBySet?: Map<string, any>;
   onRevisionUploaded?: (pkgKey: string) => void;
   onOpenSummary?: (summary: any) => void;
@@ -1634,7 +1638,12 @@ export function DrawingRegisterTable({
         const effectiveState = effectiveDetailingState(pkg.parent, submittals, sheets);
         const due = dueInfo(getSubmittalDueDate(latestSubmittal), done);
         const discipline = pkg.parent?.discipline || [...new Set(sheets.map((d) => d.discipline).filter(Boolean))][0] || "—";
-        const maxRev = sheets.reduce((m, d) => Math.max(m, Number(String(d.revision_number || "0").replace(/[^\d]/g, "")) || 0), 0);
+        // §20-21: the displayed Rev is a per-set rollup of the AUTHORITATIVE
+        // current revision (drawing_revisions.is_current via currentRevByDrawingId)
+        // — the code of the highest-version sheet — NOT the drift-prone, free-text
+        // drawings.revision_number. currentRevisionForPackage already falls back
+        // to the legacy number, then "—", when no sheet has a current revision.
+        const maxRev = currentRevisionForPackage(sheets, currentRevByDrawingId || new Map());
         const stageCounts: Record<string, number> = {};
         for (const d of sheets) if (d.stage) stageCounts[d.stage] = (stageCounts[d.stage] || 0) + 1;
         const dominantStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
@@ -1667,7 +1676,7 @@ export function DrawingRegisterTable({
         }
         return compareDrawingSetPackages(a.pkg.parent || a.pkg, b.pkg.parent || b.pkg);
       });
-  }, [setPackages, search, healthByKey, sortByHealth, summariesBySet]);
+  }, [setPackages, search, healthByKey, sortByHealth, summariesBySet, currentRevByDrawingId]);
 
   // Above this many rows, render the virtualized grid instead of a full <table>
   // so large projects (1000+ sets) stay fast. Small projects keep the exact
