@@ -39,6 +39,7 @@ import { GanttStatsBar, GanttQuickFilters, GanttMetricCards, GanttLegend } from 
 import { useColumnResize } from "./useColumnResize";
 import { useGanttLayout } from "./useGanttLayout";
 import { useTaskBarDrag } from "./useTaskBarDrag";
+import { useTaskRowDnD } from "./useTaskRowDnD";
 
 const DELIVERY_STATUS_DOT = {
   "Scheduled":  GANTT_PHASE_HEX.Procurement,
@@ -61,7 +62,7 @@ const HEAD_H  = 40;
 const DETAILING_STAGES = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
 const STAGE_DISPLAY = {};  // no aliases — display each stage by its key
 
-export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, phaseFilter = "all", externalFocus = null }) {
+export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, onReparent, phaseFilter = "all", externalFocus = null }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
   const [showSubmittals, setShowSubmittals] = useState(true);
@@ -215,189 +216,22 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     [allTasks, focusedTaskId]
   );
 
-  // ── Hierarchy helpers (inline indent / outdent) ─────────────────────
+  // ── Hierarchy editing via drag-and-drop ─────────────────────────────
   //
-  // Each task carries parent_task_id in the DB. `buildTreeOrder()` (at
-  // the top of this file) flattens the tree per phase so we already
-  // have _depth / _hasChildren on every row. These helpers compute the
-  // new parent_task_id when the user clicks the in-row indent/outdent
-  // buttons (or hits Tab / Shift+Tab while hovering a row):
-  //
-  //   Indent: make the task a child of the closest preceding task
-  //           whose depth is ≤ this task's depth. New depth = that
-  //           task's depth + 1. Flat-order traversal guarantees we
-  //           never nest into our own descendants (they come after
-  //           us in the list) so cycle-safety is automatic.
-  //   Outdent: promote up one level — new parent = current parent's
-  //            parent_task_id (or null → root).
-  const phaseFlatByKey = useMemo(() => {
-    const m = {};
-    for (const g of grouped) m[g.phase.key] = g.tasks;
-    return m;
-  }, [grouped]);
-
-  const computeIndentTarget = (task) => {
-    const flat = phaseFlatByKey[task.phase] || [];
-    const idx = flat.findIndex((t) => t.id === task.id);
-    if (idx <= 0) return null;
-    const myDepth = task._depth || 0;
-    for (let i = idx - 1; i >= 0; i--) {
-      const prev = flat[i];
-      if ((prev._depth || 0) <= myDepth) {
-        return { newParentId: prev.id };
-      }
-    }
-    return null;
-  };
-
-  const computeOutdentTarget = (task) => {
-    if (!task.parent_task_id) return null;
-    const parent = taskById.get(task.parent_task_id);
-    return { newParentId: parent?.parent_task_id || null };
-  };
-
-  const canIndent  = (task) => computeIndentTarget(task)  !== null;
-  const canOutdent = (task) => computeOutdentTarget(task) !== null;
-
-  // ── Move Up / Move Down (manual ordering within siblings) ───────────
-  //
-  // Siblings = tasks in the same phase AND same parent_task_id. A root
-  // task's siblings are the other root tasks in its phase. A child's
-  // siblings are the other children of its parent.
-  //
-  // Move mechanics: swap sort_order with the adjacent sibling. Both
-  // rows are updated; the user sees the move land after the next
-  // refetch. If the task has no sort_order yet (shouldn't happen
-  // post-backfill but defend anyway), we synthesize one from its
-  // position before swapping.
-  const findSiblings = (task) => {
-    const flat = phaseFlatByKey[task.phase] || [];
-    return flat.filter((t) => (t.parent_task_id || null) === (task.parent_task_id || null));
-  };
-  const computeMoveUpTarget = (task) => {
-    const sibs = findSiblings(task);
-    const idx = sibs.findIndex((t) => t.id === task.id);
-    if (idx <= 0) return null;
-    return sibs[idx - 1];
-  };
-  const computeMoveDownTarget = (task) => {
-    const sibs = findSiblings(task);
-    const idx = sibs.findIndex((t) => t.id === task.id);
-    if (idx < 0 || idx >= sibs.length - 1) return null;
-    return sibs[idx + 1];
-  };
-  const canMoveUp   = (task) => computeMoveUpTarget(task)   !== null;
-  const canMoveDown = (task) => computeMoveDownTarget(task) !== null;
-
-  // Swap sort_order between two sibling tasks. Falls back to assigning
-  // sensible numbers if either is null. We fire both updates in
-  // parallel — the query invalidation after onSave picks up both.
-  const swapOrder = async (taskA, taskB) => {
-    if (!onSave) return;
-    let a = taskA.sort_order;
-    let b = taskB.sort_order;
-    // Post-backfill everyone has a sort_order, but defend against
-    // a future where a freshly-created task lands here with null.
-    if (a == null && b == null) { a = 2000; b = 1000; }
-    else if (a == null)          { a = b + 1000; }
-    else if (b == null)          { b = a + 1000; }
-    try {
-      await Promise.all([
-        onSave({ id: taskA.id, sort_order: b }),
-        onSave({ id: taskB.id, sort_order: a }),
-      ]);
-    } catch { /* onSave toasts errors itself */ }
-  };
-  const handleMoveUp = async (task) => {
-    if (!onSave) return;
-    const tgt = computeMoveUpTarget(task);
-    if (!tgt) {
-      toast.info("Already at the top of its group.");
-      return;
-    }
-    await swapOrder(task, tgt);
-  };
-  const handleMoveDown = async (task) => {
-    if (!onSave) return;
-    const tgt = computeMoveDownTarget(task);
-    if (!tgt) {
-      toast.info("Already at the bottom of its group.");
-      return;
-    }
-    await swapOrder(task, tgt);
-  };
-
-  // onSave writes its own "Task saved" toast. We add targeted toasts
-  // for the disabled / no-op paths so a hover-click that went nowhere
-  // tells the user why ("Already at root", etc.) instead of feeling
-  // broken. Errors from onSave still surface via its own toast path.
-  const handleIndent = async (task) => {
-    if (!onSave) return;
-    const tgt = computeIndentTarget(task);
-    if (!tgt) {
-      toast.info("Nothing above to nest under — this is the first task in its phase.");
-      return;
-    }
-    try {
-      await onSave({ id: task.id, parent_task_id: tgt.newParentId });
-    } catch { /* onSave toasts errors itself */ }
-  };
-  const handleOutdent = async (task) => {
-    if (!onSave) return;
-    const tgt = computeOutdentTarget(task);
-    if (!tgt) {
-      toast.info("Already at top level — can't outdent further.");
-      return;
-    }
-    try {
-      await onSave({ id: task.id, parent_task_id: tgt.newParentId });
-    } catch { /* onSave toasts errors itself */ }
-  };
-
-  // Tab / Shift+Tab while hovering a task row indents / outdents that
-  // row without needing the user to click the small in-row buttons.
-  // We only bind when a task row is hovered AND we're not inside a
-  // text input (to avoid hijacking Tab inside the inline edit input).
-  useEffect(() => {
-    if (!hoveredRowId) return undefined;
-    const onKey = (ev) => {
-      const el = document.activeElement;
-      const inEditable = el && (
-        el.tagName === "INPUT" ||
-        el.tagName === "TEXTAREA" ||
-        el.tagName === "SELECT" ||
-        el.isContentEditable
-      );
-      if (inEditable) return;
-      const task = taskById.get(hoveredRowId);
-      if (!task) return;
-      // Tab / Shift+Tab → indent / outdent (change parent_task_id)
-      if (ev.key === "Tab") {
-        ev.preventDefault();
-        if (ev.shiftKey) handleOutdent(task);
-        else             handleIndent(task);
-        return;
-      }
-      // Alt+ArrowUp / Alt+ArrowDown → move up / down among siblings
-      // (swap sort_order). Alt avoids clashing with the browser's
-      // own Home/End/PageUp scrolling behaviours.
-      if (ev.altKey && ev.key === "ArrowUp") {
-        ev.preventDefault();
-        handleMoveUp(task);
-        return;
-      }
-      if (ev.altKey && ev.key === "ArrowDown") {
-        ev.preventDefault();
-        handleMoveDown(task);
-        return;
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // Only re-bind when the hovered row changes — handlers close over
-    // allTasks + sort_order state which is refetched into allTasks.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hoveredRowId, taskById]);
+  // Each task carries parent_task_id in the DB. `buildTreeOrder()` (at the
+  // top of this file) flattens the tree per phase so every row already has
+  // _depth / _hasChildren. The left-panel rows are made draggable: drop ON
+  // a row nests the dragged task under it; drop in the top/bottom band
+  // reorders it as a sibling. The reparent is delegated to the parent via
+  // onReparent (Schedule.tsx's reparentMut), which validates cycles, writes
+  // sort_order, audits, and invalidates the cache. The pure zone math +
+  // cycle filtering live in useTaskRowDnD / hierarchy.js so this surface
+  // can't drift from the drawer picker or bulk reparent.
+  const { dragId, dropTarget, onDragStart, onDragOverRow, onDropRow, onDragEnd } = useTaskRowDnD({
+    tasks: allTasks,
+    onReparent: (p) => onReparent?.(p),
+    getScrollEl: () => leftRef.current,
+  });
 
   // ── Effective dates: cascade through dependencies so a late predecessor
   // automatically shifts its successors forward in the gantt view. The
@@ -1436,7 +1270,23 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             const isFocused = focusedTaskId && String(task.id) === String(focusedTaskId);
             return (
               <div key={`task-${task.id}`}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: isFocused ? `${GANTT_STATUS_HEX.inProgress}24` : leftHovered ? `${GANTT_STATUS_HEX.inProgress}12` : critical ? `${GANTT_PHASE_HEX.Procurement}0C` : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: isFocused ? `3px solid ${GANTT_STATUS_HEX.inProgress}` : overdue ? `3px solid ${GANTT_STATUS_HEX.delayed}` : critical ? `3px solid ${GANTT_PHASE_HEX.Procurement}` : "3px solid transparent", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
+                draggable={!isEditing}
+                onDragStart={(e) => {
+                  // Don't start a row drag when the gesture begins on an
+                  // interactive control (inline-edit input, expand caret,
+                  // status menu) — let those keep their native behaviour.
+                  const t = e.target;
+                  const tag = t && t.tagName;
+                  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || tag === "BUTTON" || (t && t.isContentEditable)) {
+                    e.preventDefault();
+                    return;
+                  }
+                  onDragStart(e, task);
+                }}
+                onDragOver={(e) => onDragOverRow(e, task)}
+                onDrop={(e) => onDropRow(e, task)}
+                onDragEnd={onDragEnd}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: isFocused ? `${GANTT_STATUS_HEX.inProgress}24` : leftHovered ? `${GANTT_STATUS_HEX.inProgress}12` : critical ? `${GANTT_PHASE_HEX.Procurement}0C` : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: isFocused ? `3px solid ${GANTT_STATUS_HEX.inProgress}` : overdue ? `3px solid ${GANTT_STATUS_HEX.delayed}` : critical ? `3px solid ${GANTT_PHASE_HEX.Procurement}` : "3px solid transparent", boxShadow: dropTarget?.id === task.id && dropTarget.zone === "nest" ? "inset 0 0 0 2px var(--accent)" : isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none", opacity: dragId === task.id ? 0.4 : 1, borderTop: dropTarget?.id === task.id && dropTarget.zone === "before" ? "2px solid var(--accent)" : undefined, borderBottomColor: dropTarget?.id === task.id && dropTarget.zone === "after" ? "var(--accent)" : undefined, borderBottomWidth: dropTarget?.id === task.id && dropTarget.zone === "after" ? 2 : undefined }}
                 onClick={() => onTaskClick && onTaskClick(task)}
                 onMouseEnter={() => setHoveredRowId(task.id)}
                 onMouseLeave={() => setHoveredRowId(null)}
@@ -1459,88 +1309,11 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                     onDoubleClick={e => onSave && startInlineEdit(task, e)}
                     style={{ display: "flex", alignItems: "center", gap: 4, paddingLeft: (task._depth || 0) * 16, overflow: "hidden" }}
                   >
-                    {/* Inline hierarchy + ordering controls — only
-                        the hovered row shows these so the name column
-                        stays quiet. Four buttons in a single strip:
-                          ▲  move up within siblings (swap sort_order)
-                          ▼  move down within siblings
-                          ◂  outdent one level
-                          ▸  indent under the task above
-                        Keyboard mirrors the clicks: Alt+↑/↓ for move,
-                        Tab/Shift+Tab for indent/outdent. */}
-                    {leftHovered && (
-                      <span style={{ display: "inline-flex", alignItems: "center", flexShrink: 0, marginRight: 2, gap: 1 }}>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleMoveUp(task); }}
-                          disabled={!canMoveUp(task)}
-                          title="Move up (Alt+↑) — reorder within siblings"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: canMoveUp(task) ? "pointer" : "not-allowed",
-                            color: canMoveUp(task) ? "var(--accent)" : "var(--divider)",
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 10,
-                            lineHeight: 1,
-                            padding: "0 3px",
-                          }}
-                        >
-                          ▲
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleMoveDown(task); }}
-                          disabled={!canMoveDown(task)}
-                          title="Move down (Alt+↓) — reorder within siblings"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: canMoveDown(task) ? "pointer" : "not-allowed",
-                            color: canMoveDown(task) ? "var(--accent)" : "var(--divider)",
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 10,
-                            lineHeight: 1,
-                            padding: "0 3px",
-                          }}
-                        >
-                          ▼
-                        </button>
-                        <span style={{ width: 1, height: 10, background: "var(--divider)", margin: "0 2px" }} />
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleOutdent(task); }}
-                          disabled={!canOutdent(task)}
-                          title="Outdent (Shift+Tab) — promote one level up"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: canOutdent(task) ? "pointer" : "not-allowed",
-                            color: canOutdent(task) ? "var(--accent)" : "var(--divider)",
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 11,
-                            lineHeight: 1,
-                            padding: "0 3px",
-                          }}
-                        >
-                          ◂
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleIndent(task); }}
-                          disabled={!canIndent(task)}
-                          title="Indent (Tab) — make this a subtask of the task above"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: canIndent(task) ? "pointer" : "not-allowed",
-                            color: canIndent(task) ? "var(--accent)" : "var(--divider)",
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 11,
-                            lineHeight: 1,
-                            padding: "0 3px",
-                          }}
-                        >
-                          ▸
-                        </button>
-                      </span>
-                    )}
+                    {/* Hierarchy is edited by dragging this row onto
+                        another (nest) or into the gap between rows
+                        (reorder) — see useTaskRowDnD. The old inline
+                        ▲▼◂▸ move/indent buttons + Tab/Alt-arrow keys
+                        were removed in favour of drag-and-drop. */}
                     {task._hasChildren && (
                       <button onClick={(e) => { e.stopPropagation(); toggleTask(task.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 9, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}>
                         {collapsedTasks[task.id] ? "▶" : "▾"}

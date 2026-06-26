@@ -916,6 +916,9 @@ export default function Schedule() {
                     throw err;
                   }
                 }}
+                onReparent={(p: { ids: string[]; newParentId: string | null; dropIndex?: number | null }) =>
+                  reparentMut.mutate(p)
+                }
                 phaseFilter={phaseFilter}
                 externalFocus={ganttFocus}
               />
