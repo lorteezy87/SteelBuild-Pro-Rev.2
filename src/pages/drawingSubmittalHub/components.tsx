@@ -1908,7 +1908,7 @@ const REV_DOWNSTREAM: Record<string, { label: string; color: string }> = {
 
 // Shared CSS-grid column template for the virtualized Revision Impact board
 // (header + rows use this exact string, so they always align). Distinct from
-// REGISTER_GRID_COLS — these are the impact board's 8 columns. Widths approximate
+// REVISION_GRID_COLS — these are the impact board's 8 columns. Widths approximate
 // the table's auto-layout: a wide changed-sheet column (has a set-name subline),
 // then content columns, then the right-aligned RFI / pieces / action columns.
 const REVISION_GRID_COLS =

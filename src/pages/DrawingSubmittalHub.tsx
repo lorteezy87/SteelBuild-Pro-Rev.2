@@ -72,6 +72,7 @@ import { buildRevisionSummary } from "@/lib/revisionSummary";
 import { saveRevisionSummary, getLatestSummariesByProject } from "@/lib/revisionSummaryRepo";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { buildRfiPrefillFromSummary, createRfiAndLink } from "@/lib/rfiFromDelta";
+import { isRfiOpen } from "@/lib/entityPredicates";
 const RevisionDeepDiveModal = lazyWithRetry(() => import("@/components/drawings/RevisionImpactReportModal"));
 
 // Lazy-load the existing pages as tab content — use lazyWithRetry so stale-
@@ -289,11 +290,10 @@ export default function DrawingSubmittalHub() {
     return m;
   }, [workPackages]);
 
-  const CLOSED_RFI = new Set(["Closed", "Void", "Cancelled", "Resolved"]);
   const openRfiIds = useMemo(() => {
     const s = new Set<string>();
     for (const r of (rfis as any[]) || []) {
-      if (r && !r.is_deleted && r.id && !CLOSED_RFI.has(r.status)) s.add(String(r.id));
+      if (r && !r.is_deleted && r.id && isRfiOpen(r)) s.add(String(r.id));
     }
     return s;
   }, [rfis]);
