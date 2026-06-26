@@ -1050,10 +1050,15 @@ export default function Schedule() {
             <select
               className="sbd-select"
               defaultValue=""
-              onChange={(e) => bulkSetParent(e.target.value || null)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) return;
+                bulkSetParent(v === "__root__" ? null : v);
+              }}
               style={{ width: "100%" }}
             >
-              <option value="">— Top level (no parent) —</option>
+              <option value="" disabled>— Select a parent… —</option>
+              <option value="__root__">Top level (no parent)</option>
               {bulkParentOptions.map((t: any) => (
                 <option key={t.id} value={t.id}>
                   {t.wbs_code ? `${t.wbs_code} — ` : ""}{t.task_name}
