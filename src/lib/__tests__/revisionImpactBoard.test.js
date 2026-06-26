@@ -71,6 +71,21 @@ describe("buildRevisionImpactRows", () => {
     expect(row.fabBlocked).toBe(false);
   });
 
+  it("counts an Answered RFI as CLOSED (canonical predicate)", () => {
+    const [row] = buildRevisionImpactRows(
+      [{ drawingId: "d1", sheetNumber: "S2.1", severity: "high", drawingSetName: "Set 1" }],
+      {
+        drawings: [{ id: "d1", drawing_set_id: "set-1", linked_rfi_ids: "100" }],
+        drawingSets: [{ id: "set-1", set_name: "Set 1" }],
+        workPackages: [],
+        rfis: [{ id: "r1", rfi_number: "100", status: "Answered", fab_hold: true }],
+        modelElements: [],
+      },
+    );
+    expect(row.openRfiCount).toBe(0);
+    expect(row.fabBlocked).toBe(false);
+  });
+
   it("degrades gracefully for an orphan revision (no matching drawing)", () => {
     const [row] = buildRevisionImpactRows([{ drawingId: "missing", drawingSetName: "Orphan" }], { drawings: [] });
     expect(row.setName).toBe("Orphan");

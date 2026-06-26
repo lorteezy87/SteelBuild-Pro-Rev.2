@@ -12,9 +12,7 @@
  * live (0 rows), so it is not used.
  */
 
-// Case-insensitive "not open" RFI statuses (preserves the hub's prior board
-// behavior: drafts/answered still count as open here).
-const RFI_CLOSED = new Set(["closed", "void", "cancelled", "canceled", "resolved"]);
+import { isRfiOpen } from "@/lib/entityPredicates";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normRfi(x: any): string {
@@ -29,7 +27,7 @@ function wpSequenceOf(wp: any): string | null {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isOpenRfi(r: any): boolean {
-  return !!r && !RFI_CLOSED.has(String(r.status ?? "").trim().toLowerCase());
+  return isRfiOpen(r);
 }
 
 export interface RevisionImpactSources {
