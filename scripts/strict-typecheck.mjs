@@ -17,7 +17,6 @@ import { runTscGate } from './lib/tscDiagnostics.mjs'
 // are repo-relative POSIX. SHRINK THIS LIST — it should only ever get shorter.
 export const STRICT_NULL_IGNORE = [
   'src/pages/ResourceScheduling.tsx',
-  'src/pages/GanttChart.tsx',
 ]
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
