@@ -1420,10 +1420,12 @@ function GridCell({ children, align = "left", style = {} }: { children?: ReactNo
   );
 }
 
+// ⚠ MIRROR of the table-branch <Td> cells in DrawingRegisterTable (the
+// !shouldVirtualize branch). Any column add/edit MUST be made in BOTH places.
 /**
- * RegisterGridCells — virtualized mirror of RegisterCells. Same content and
- * styling, rendered as grid <div> cells (in REGISTER_GRID_COLS order) so the
- * absolute-positioned virtual rows line up with the grid header.
+ * RegisterGridCells — virtualized mirror of the inline table <Td> cells. Same
+ * content and styling, rendered as grid <div> cells (in REGISTER_GRID_COLS
+ * order) so the absolute-positioned virtual rows line up with the grid header.
  */
 function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
   return (
@@ -1720,6 +1722,7 @@ export function DrawingRegisterTable({
                 borderTop: `1px solid ${border}`,
                 borderLeft: r.late ? "3px solid var(--status-error)" : r.done ? "3px solid var(--status-success)" : "3px solid transparent",
               }}>
+                {/* ⚠ MIRROR of RegisterGridCells (virtualized branch) — edit both when changing columns. */}
                 <Td style={{ color: textPrimary, fontWeight: 600 }}>
                   {r.pkg.name}
                   {r.locked && (
