@@ -134,6 +134,27 @@ export function getDrawingDueDate(drawing: Drawing | null | undefined): string |
   return drawing?.due_date || drawing?.required_date || drawing?.target_date || null;
 }
 
+/** Returns the entity ids to update when an operator edits the due date on a
+ *  Control Board triage item.
+ *
+ *  - Submittal-governed packages: one submittal id (required_date is the source
+ *    of truth; the read side is getSubmittalDueDate).
+ *  - Drawing-set packages (no linked submittal): ALL sheet ids so that the
+ *    displayed due date (earliestDate over all sheets) always reflects the write.
+ *    Writing only sheets[0] produced a stale display because earliestDate could
+ *    return a different sheet's date after the refetch.
+ *
+ * Returns { submittalId } | { sheetIds } so the caller never confuses the two paths.
+ */
+export function dueDateWriteTargets(
+  item: Pick<TriageItem, "_submittalId" | "_sheetIds">
+): { submittalId: string } | { sheetIds: string[] } {
+  if (item._submittalId) {
+    return { submittalId: item._submittalId };
+  }
+  return { sheetIds: item._sheetIds ?? [] };
+}
+
 export function getSetDisplayName({ parent, legacyName, fallback = "Ungrouped drawing set" }: { parent?: DrawingSet | null; legacyName?: string; fallback?: string } = {}): string {
   return (parent?.set_name || legacyName || fallback).trim();
 }

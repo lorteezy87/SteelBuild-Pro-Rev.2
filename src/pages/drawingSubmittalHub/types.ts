@@ -61,6 +61,9 @@ export interface TriageItem {
   _submittalId: string | null;
   _drawingSetId: string | null;
   _firstSheetId: string | null;
+  /** All sheet ids in the package — used by the due-date edit to write ALL sheets
+   *  (not just sheets[0]) so the displayed earliestDate always reflects the write. */
+  _sheetIds: string[];
   /** Effective operational state (coalesced drafting → submittal → release). */
   detailingState?: string;
   /** True when no submittal governs the package, so a drafting state applies. */
