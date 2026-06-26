@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveFabMarks } from "../fabStatus";
+import { resolveFabMarks, summarizeFabStatus, FAB_STATUS_ORDER } from "../fabStatus";
 
 const map = (entries) => new Map(entries);
 
@@ -61,5 +61,34 @@ describe("resolveFabMarks", () => {
 
   it("is safe with no arguments", () => {
     expect(resolveFabMarks()).toEqual([]);
+  });
+});
+
+describe("summarizeFabStatus", () => {
+  it("counts elements by fab_status and computes coverage", () => {
+    const els = [
+      { fab_status: "erected" }, { fab_status: "erected" },
+      { fab_status: "in_fabrication" },
+      { fab_status: null }, { fab_status: "" }, {},
+      { fab_status: "bogus" },
+    ];
+    const s = summarizeFabStatus(els);
+    expect(s.total).toBe(7);
+    expect(s.counts.erected).toBe(2);
+    expect(s.counts.in_fabrication).toBe(1);
+    expect(s.withFabStatus).toBe(3);
+    expect(s.pct).toBe(Math.round((3 / 7) * 100));
+  });
+  it("handles empty input", () => {
+    const s = summarizeFabStatus([]);
+    expect(s.total).toBe(0);
+    expect(s.withFabStatus).toBe(0);
+    expect(s.pct).toBe(0);
+    for (const k of FAB_STATUS_ORDER) expect(s.counts[k]).toBe(0);
+  });
+  it("ignores deleted elements", () => {
+    const s = summarizeFabStatus([{ fab_status: "erected", is_deleted: true }, { fab_status: "shipped" }]);
+    expect(s.total).toBe(1);
+    expect(s.counts.shipped).toBe(1);
   });
 });
