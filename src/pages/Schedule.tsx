@@ -24,6 +24,7 @@ import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "./schedule/wbs";
 import { PHASE_NAME_MAP, derivePhaseFromHierarchy, inferTaskType, parseMsProjectXml } from "./schedule/mppImport";
 import { reparentTasks } from "@/lib/schedule/reparentTasks";
+import { validReparentTargets } from "@/lib/schedule/hierarchy";
 import BulkActionToolbar from "./schedule/BulkActionToolbar";
 import type { ScheduleTask } from "./schedule/types";
 
@@ -97,6 +98,7 @@ export default function Schedule() {
   const [bulkResourceValue, setBulkResourceValue] = useState("");
   const [showBulkDates, setShowBulkDates] = useState(false);
   const [showBulkDuration, setShowBulkDuration] = useState(false);
+  const [showBulkParent, setShowBulkParent] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const qc = useQueryClient();
 
@@ -637,11 +639,34 @@ export default function Schedule() {
     bulkDurationMut.mutate({ ids, mode, days });
   };
 
+  const bulkSetParent = (newParentId: string | null) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    reparentMut.mutate({ ids, newParentId });
+    setShowBulkParent(false);
+  };
+
   const confirmBulkDelete = () => {
     const ids = Array.from(selectedIds);
     bulkDeleteMut.mutate(ids);
     setShowBulkDeleteConfirm(false);
   };
+
+  // Legal parent options for the bulk "Set Parent" picker — intersection of
+  // valid reparent targets across every selected task, minus the selected tasks
+  // themselves. A parent must be valid for ALL selected children.
+  const bulkParentOptions = useMemo(() => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return [];
+    let allowed: Set<string> | null = null;
+    for (const childId of ids) {
+      const v = validReparentTargets(enrichedTasks, childId);
+      allowed = allowed ? new Set([...allowed].filter((x) => v.has(x))) : v;
+    }
+    const allowedSet = allowed || new Set<string>();
+    ids.forEach((id) => allowedSet.delete(id));
+    return enrichedTasks.filter((t: any) => allowedSet.has(t.id));
+  }, [selectedIds, enrichedTasks]);
 
   // Phase counts for KPI row
   const phaseCounts = useMemo(() => {
@@ -1016,6 +1041,32 @@ export default function Schedule() {
         </Suspense>
       )}
 
+      {showBulkParent && (
+        <div onClick={() => setShowBulkParent(false)} style={{ position: "fixed", inset: 0, background: "rgba(1,4,10,0.6)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg-surface-high)", border: "1px solid var(--accent-border)", borderRadius: 14, padding: 20, width: 420 }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", marginBottom: 12 }}>
+              SET PARENT FOR {selectedIds.size} TASK{selectedIds.size !== 1 ? "S" : ""}
+            </div>
+            <select
+              className="sbd-select"
+              defaultValue=""
+              onChange={(e) => bulkSetParent(e.target.value || null)}
+              style={{ width: "100%" }}
+            >
+              <option value="">— Top level (no parent) —</option>
+              {bulkParentOptions.map((t: any) => (
+                <option key={t.id} value={t.id}>
+                  {t.wbs_code ? `${t.wbs_code} — ` : ""}{t.task_name}
+                </option>
+              ))}
+            </select>
+            <div style={{ marginTop: 14, textAlign: "right" }}>
+              <button className="sbd-btn sbd-btn-ghost" onClick={() => setShowBulkParent(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showWbsBuilder && (
         <Suspense fallback={null}>
           <WbsBuilderModal
@@ -1060,6 +1111,8 @@ export default function Schedule() {
           onDelete={bulkDelete}
           onEditDates={() => setShowBulkDates(true)}
           onEditDurations={() => setShowBulkDuration(true)}
+          parentPending={reparentMut.isPending}
+          onSetParent={() => setShowBulkParent(true)}
           onShowResourceInput={() => setShowBulkResource(true)}
           onResourceValueChange={setBulkResourceValue}
           onApplyResource={() => bulkResourceMut.mutate({ ids: Array.from(selectedIds), resource_names: bulkResourceValue.trim() })}
