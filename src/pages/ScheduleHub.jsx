@@ -17,13 +17,11 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 const SchedulePage = lazyWithRetry(() => import("@/pages/Schedule"));
 const LookAheadPage = lazyWithRetry(() => import("@/pages/LookAheadSchedule"));
-const GanttPage = lazyWithRetry(() => import("@/pages/GanttChart"));
 const CalendarPage = lazyWithRetry(() => import("@/pages/ProjectCalendar"));
 
 const TABS = [
   { key: "schedule", label: "Schedule", Component: SchedulePage },
   { key: "lookahead", label: "Look-Ahead", Component: LookAheadPage },
-  { key: "gantt", label: "Gantt", Component: GanttPage },
   { key: "calendar", label: "Calendar", Component: CalendarPage },
 ];
 

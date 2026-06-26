@@ -167,7 +167,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["sched-detail", pid],        // ProjectDetailView.jsx
       ["schedule-tasks-wp", pid],   // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
       ["lookahead", pid],           // LookAheadSchedule.jsx
-      ["lookahead-gantt", pid],     // GanttChart.jsx
+      ["lookahead-gantt", pid],     // GanttChart (retired — key kept for cache invalidation parity)
     ],
   },
 
