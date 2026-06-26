@@ -1,5 +1,6 @@
-import { Fragment, lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, ReactNode } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   AlertTriangle,
   ArrowRight,
@@ -1383,6 +1384,183 @@ interface ApprovalMatrixProps {
   isLoading: boolean;
 }
 
+// Per-row action/state handlers shared by the table and virtualized branches of
+// the Drawing Register. The cell content is identical in both; only the wrapping
+// element differs (<td> in the table, grid <div> in the virtual list).
+interface RegisterRowHandlers {
+  rowBtn: CSSProperties;
+  aiDiffEnabled: boolean;
+  onOpenSummary?: (summary: any) => void;
+  setHealthDetail: (h: any) => void;
+  setRevisionSet: (pkg: any) => void;
+  setReportSet: (pkg: any) => void;
+}
+
+// Shared CSS-grid column template for the virtualized Drawing Register (header +
+// rows use this exact string, so they always align). Widths approximate the
+// table's auto-layout: a wide set-name column, content columns, then the
+// right-aligned numeric / action columns.
+const REGISTER_GRID_COLS =
+  "minmax(220px, 2.4fr) minmax(64px, 0.8fr) minmax(80px, 0.9fr) 64px minmax(120px, 1.1fr) minmax(96px, 1fr) minmax(80px, 0.8fr) minmax(96px, 1fr) 56px minmax(150px, 1fr)";
+
+// One grid cell mirroring a <Td>: same padding / typography, alignment-aware.
+function GridCell({ children, align = "left", style = {} }: { children?: ReactNode; align?: "left" | "right"; style?: CSSProperties }) {
+  return (
+    <div className="sbd-num" style={{
+      padding: "8px 12px",
+      fontFamily: mono, fontSize: 12,
+      color: textPrimary,
+      display: "flex", alignItems: "center",
+      justifyContent: align === "right" ? "flex-end" : "flex-start",
+      minWidth: 0,
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * RegisterGridCells — virtualized mirror of RegisterCells. Same content and
+ * styling, rendered as grid <div> cells (in REGISTER_GRID_COLS order) so the
+ * absolute-positioned virtual rows line up with the grid header.
+ */
+function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
+  return (
+    <>
+      <GridCell style={{ color: textPrimary, fontWeight: 600 }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", minWidth: 0 }}>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.pkg.name}</span>
+          {r.locked && (
+            <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "#f59e0b", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.4)", textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
+              <Lock size={9} /> Locked
+            </span>
+          )}
+          {r.revSummary && (
+            <button type="button" title="View the revision summary" onClick={(e) => { e.stopPropagation(); h.onOpenSummary?.(r.revSummary.summary); }}
+              style={{ marginLeft: 8, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", padding: "1px 6px", borderRadius: 4, cursor: "pointer", flexShrink: 0, background: "color-mix(in srgb, var(--accent) 14%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)", color: accent }}>
+              revised · {r.revSummary.sheets_changed}
+            </button>
+          )}
+        </span>
+      </GridCell>
+      <GridCell style={{ color: textMuted }}>{r.setNo}</GridCell>
+      <GridCell style={{ color: textMuted }}>{r.discipline}</GridCell>
+      <GridCell align="right">{r.sheetCount}</GridCell>
+      <GridCell>{r.status ? <StatusChip status={r.status} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}</GridCell>
+      <GridCell>{r.health ? <HealthChip health={r.health} onClick={() => h.setHealthDetail(r.health)} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>—</span>}</GridCell>
+      <GridCell style={{ color: r.done ? success : textMuted }}>{r.releasedCount}/{r.sheetCount}</GridCell>
+      <GridCell><DueChip info={r.due} /></GridCell>
+      <GridCell align="right" style={{ color: textMuted }}>{r.maxRev || "—"}</GridCell>
+      <GridCell align="right" style={{ whiteSpace: "nowrap" }}>
+        {r.pkg.parent && (
+          <button
+            type="button"
+            disabled={r.locked}
+            title={r.locked ? `Locked — ${r.lockedReason || "an admin must unlock before a new revision"}` : "Upload a new revision for this set"}
+            onClick={() => { if (!r.locked) h.setRevisionSet(r.pkg); }}
+            style={{ ...h.rowBtn, opacity: r.locked ? 0.45 : 1, cursor: r.locked ? "not-allowed" : "pointer" }}
+          >New Rev</button>
+        )}
+        {h.aiDiffEnabled && (
+          <button type="button" title="AI Revision Impact Report" onClick={() => h.setReportSet(r.pkg)} style={{ ...h.rowBtn, marginLeft: 6, color: accent, borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}>✦ Report</button>
+        )}
+      </GridCell>
+    </>
+  );
+}
+
+// Grid header cell — mirrors <Th> typography for the virtualized register.
+function GridHeaderCell({ children, align = "left", style = {} }: { children?: ReactNode; align?: "left" | "right"; style?: CSSProperties }) {
+  return (
+    <div style={{
+      padding: "10px 12px",
+      fontFamily: mono, fontSize: 10, fontWeight: 600,
+      textTransform: "uppercase", letterSpacing: "0.08em",
+      color: textMuted, display: "flex", alignItems: "center",
+      justifyContent: align === "right" ? "flex-end" : "flex-start",
+      minWidth: 0,
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * RegisterVirtualList — virtualized rendering of the Drawing Register, used only
+ * when row count exceeds VIRTUALIZE_THRESHOLD. Uses a sticky CSS-grid header and
+ * absolute-positioned grid rows (the repo's useVirtualizer house pattern). The
+ * left-border late/done accent and row keys are preserved from the table.
+ */
+function RegisterVirtualList({
+  rows, sortByHealth, setSortByHealth, h,
+}: {
+  rows: any[];
+  sortByHealth: null | "asc" | "desc";
+  setSortByHealth: (fn: (s: null | "asc" | "desc") => null | "asc" | "desc") => void;
+  h: RegisterRowHandlers;
+}) {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 41,
+    overscan: 12,
+  });
+
+  return (
+    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
+      <div style={{
+        display: "grid", gridTemplateColumns: REGISTER_GRID_COLS,
+        borderBottom: `1px solid ${border}`, borderLeft: "3px solid transparent",
+      }}>
+        <GridHeaderCell>Drawing Set Package</GridHeaderCell>
+        <GridHeaderCell>Set #</GridHeaderCell>
+        <GridHeaderCell>Discipline</GridHeaderCell>
+        <GridHeaderCell align="right">Sheets</GridHeaderCell>
+        <GridHeaderCell>Status</GridHeaderCell>
+        <GridHeaderCell>
+          <span
+            onClick={() => setSortByHealth((s) => (s === "asc" ? "desc" : s === "desc" ? null : "asc"))}
+            style={{ cursor: "pointer", userSelect: "none" }}
+            title="Sort by health score"
+          >
+            Health{sortByHealth === "asc" ? " ▲" : sortByHealth === "desc" ? " ▼" : ""}
+          </span>
+        </GridHeaderCell>
+        <GridHeaderCell>Released</GridHeaderCell>
+        <GridHeaderCell>Due</GridHeaderCell>
+        <GridHeaderCell align="right">Rev</GridHeaderCell>
+        <GridHeaderCell align="right">{""}</GridHeaderCell>
+      </div>
+      <div ref={parentRef} style={{ maxHeight: 600, overflowY: "auto" }}>
+        <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const r = rows[virtualRow.index];
+            return (
+              <div
+                key={r.pkg.key}
+                ref={virtualizer.measureElement}
+                data-index={virtualRow.index}
+                style={{
+                  position: "absolute", top: 0, left: 0, width: "100%",
+                  transform: `translateY(${virtualRow.start}px)`,
+                  display: "grid", gridTemplateColumns: REGISTER_GRID_COLS,
+                  borderTop: virtualRow.index === 0 ? "none" : `1px solid ${border}`,
+                  borderLeft: r.late ? "3px solid var(--status-error)" : r.done ? "3px solid var(--status-success)" : "3px solid transparent",
+                }}
+              >
+                <RegisterGridCells r={r} h={h} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * DrawingRegisterTable — the Drawing Register as a clean, flat, per-set table,
  * mirroring the Approval/Submittal register look (same Th/Td/StatusChip/DueChip
@@ -1470,6 +1648,15 @@ export function DrawingRegisterTable({
       });
   }, [setPackages, search, healthByKey, sortByHealth, summariesBySet]);
 
+  // Above this many rows, render the virtualized grid instead of a full <table>
+  // so large projects (1000+ sets) stay fast. Small projects keep the exact
+  // table rendering below — unchanged.
+  const VIRTUALIZE_THRESHOLD = 100;
+  const shouldVirtualize = rows.length > VIRTUALIZE_THRESHOLD;
+  const rowHandlers: RegisterRowHandlers = {
+    rowBtn, aiDiffEnabled, onOpenSummary, setHealthDetail, setRevisionSet, setReportSet,
+  };
+
   if (isLoading) return <LoadingSkeleton />;
 
   return (
@@ -1494,6 +1681,9 @@ export function DrawingRegisterTable({
         <button type="button" className="sbd-btn" title="Full Drawings editor — filters, bulk actions, rename / delete, per-sheet" onClick={() => navigate("/Drawings")}>Open full editor ↗</button>
       </div>
 
+      {shouldVirtualize ? (
+        <RegisterVirtualList rows={rows} sortByHealth={sortByHealth} setSortByHealth={setSortByHealth} h={rowHandlers} />
+      ) : (
       <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -1571,6 +1761,7 @@ export function DrawingRegisterTable({
           </tbody>
         </table>
       </div>
+      )}
 
       {healthDetail && <HealthBreakdownDialog health={healthDetail} onClose={() => setHealthDetail(null)} />}
 
