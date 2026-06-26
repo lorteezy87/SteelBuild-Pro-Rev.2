@@ -1,9 +1,9 @@
 /**
  * ScheduleHub — consolidates the schedule surfaces under one nav entry
  * (module-consolidation). Schedule (schedule_tasks authority), the Look-Ahead
- * planner and its Gantt (LookAhead entity), and the multi-entity Project
- * Calendar were four separate nav entries spread across the PM/Production
- * groups; this puts them side-by-side as tabs.
+ * planner (LookAhead entity), and the multi-entity Project Calendar were three
+ * separate nav entries spread across the PM/Production groups; this puts them
+ * side-by-side as tabs.
  *
  * Thin tab shell (the DrawingSubmittalHub / FieldHub / CostHub pattern): each
  * tab lazy-loads the existing page unchanged; all stay independently routable.
