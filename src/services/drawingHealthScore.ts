@@ -18,6 +18,7 @@ import { STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import { derivedSetStage, isRRStatus, pickMostRecentSubmittal } from "@/lib/submittalStageMapping";
 import { selectChangedSheets } from "@/lib/revisionPackageReport";
 import { daysBetween, todayLocalISO } from "@/lib/dateMath";
+import { isRfiOpen } from "@/lib/entityPredicates";
 
 export type Grade = "A" | "B" | "C" | "D" | "F";
 export type BandKey = "excellent" | "good" | "at_risk" | "critical";
@@ -63,8 +64,6 @@ const WEIGHTS = {
 } as const;
 
 const TERMINAL_APPROVED = new Set(["Approved", "Approved as Noted", "Released for Fabrication"]);
-// RFI statuses that do NOT block (not "open"): drafts aren't issued yet; the rest are resolved.
-const RFI_NON_OPEN = new Set(["draft", "answered", "closed", "void", "cancelled", "canceled"]);
 
 const BANDS: Record<BandKey, { label: string; color: string }> = {
   excellent: { label: "Excellent", color: "#2EA043" },
@@ -117,8 +116,7 @@ function countOpenRfis(sheets: any[], rfis: any[]): number {
   for (const rfi of rfis || []) {
     if (!rfi || rfi.is_deleted) continue;
     if (!linked.has(normRfi(rfi.rfi_number))) continue;
-    const status = String(rfi.status ?? "").trim().toLowerCase();
-    if (!RFI_NON_OPEN.has(status)) open += 1;
+    if (isRfiOpen(rfi)) open += 1;
   }
   return open;
 }
