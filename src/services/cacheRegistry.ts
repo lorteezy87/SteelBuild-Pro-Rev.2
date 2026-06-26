@@ -455,6 +455,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
       ["drawing-revisions", pid],
       ["drawing-revisions"],
       ["drawings", pid],
+      ["drawing-register", pid],   // Doc Control register reads current revision from drawing_register_view
     ],
   },
 

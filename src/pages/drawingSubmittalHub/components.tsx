@@ -1599,6 +1599,10 @@ export function DrawingRegisterTable({
     qc.invalidateQueries({ queryKey: ["drawings"] });
     qc.invalidateQueries({ queryKey: ["drawing-sets", projectId] });
     qc.invalidateQueries({ queryKey: ["drawing-revisions", projectId] });
+    // Doc Control register reads the current revision from drawing_register_view
+    // under this key — without it the register served a stale revision after an
+    // upload until a manual page reload.
+    qc.invalidateQueries({ queryKey: ["drawing-register", projectId] });
   };
 
   const rowBtn: CSSProperties = {
