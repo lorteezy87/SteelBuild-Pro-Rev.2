@@ -2,7 +2,7 @@ import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldCheck
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { effectiveDetailingState, hasGoverningSubmittal } from "@/lib/detailingPackageState";
-import type { Drawing, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
+import type { CurrentRevisionInfo, Drawing, DrawingRevision, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
 // Use the SAME CSS custom-property names as the rest of the app (Submittals,
@@ -300,6 +300,69 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
   return Array.from(packages.values())
     .filter((pkg) => pkg.name && pkg.name !== "Ungrouped drawing set" ? true : pkg.sheets.length || pkg.submittals.length)
     .sort(compareDrawingSetPackages);
+}
+
+// ── Authoritative current revision (§20-21) ────────────────────────────────
+// The Drawing Register's "Rev" column must read the AUTHORITATIVE current
+// revision from `drawing_revisions` (the row WHERE is_current=true), NOT the
+// deprecated free-text `drawings.revision_number` (which drifts: it lags the
+// real revision_code, and values like "A " parse to 0). One row is current per
+// drawing (DB-enforced), so the map is a simple drawing_id → {code, version}.
+
+/**
+ * Build the per-drawing current-revision lookup from the authoritative source.
+ * Only `is_current=true` rows contribute; the last one wins if (against the DB
+ * invariant) more than one is flagged current for a drawing.
+ */
+export function buildCurrentRevisionMap(
+  drawingRevisions: DrawingRevision[] | null | undefined,
+): Map<string, CurrentRevisionInfo> {
+  const map = new Map<string, CurrentRevisionInfo>();
+  for (const rev of drawingRevisions || []) {
+    if (!rev || rev.is_current !== true) continue;
+    const drawingId = rev.drawing_id;
+    if (!drawingId) continue;
+    map.set(String(drawingId), {
+      code: (rev.revision_code ?? "").toString().trim(),
+      version: Number(rev.version_number) || 0,
+    });
+  }
+  return map;
+}
+
+/**
+ * Package-level displayed revision = the current revision of the set's
+ * HIGHEST-version sheet (a per-set rollup), shown as that sheet's revision_code.
+ *
+ * Rules / edge cases:
+ *  - A sheet with NO current `drawing_revisions` row contributes nothing.
+ *  - If NO sheet in the set has a current revision, fall back to the legacy
+ *    `drawings.revision_number` (the max numeric value) as last-resort metadata,
+ *    then "—" when even that is empty.
+ *  - revision_code is heterogeneous and NOT proportional to version_number
+ *    (v2 can be code "0"/"1"/"2"/"A"), so we pick the MAX version_number and
+ *    display ITS code — never the lexical/numeric max of the codes.
+ */
+export function currentRevisionForPackage(
+  sheets: Drawing[] | null | undefined,
+  currentRevByDrawingId: Map<string, CurrentRevisionInfo>,
+): string {
+  let best: CurrentRevisionInfo | null = null;
+  for (const sheet of sheets || []) {
+    const drawingId = sheet?.id;
+    if (!drawingId) continue;
+    const cur = currentRevByDrawingId.get(String(drawingId));
+    if (!cur) continue;
+    if (!best || cur.version > best.version) best = cur;
+  }
+  if (best) return best.code || "—";
+
+  // Last-resort fallback: legacy free-text revision_number (max numeric).
+  const legacyMax = (sheets || []).reduce(
+    (m, d) => Math.max(m, Number(String(d?.revision_number || "0").replace(/[^\d]/g, "")) || 0),
+    0,
+  );
+  return legacyMax ? String(legacyMax) : "—";
 }
 
 export function itemUrgency(a: TriageItem, b: TriageItem): number {

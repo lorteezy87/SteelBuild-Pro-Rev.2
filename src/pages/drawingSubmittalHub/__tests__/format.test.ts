@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   CLOSED_SUBMITTAL_STATUSES,
+  buildCurrentRevisionMap,
   buildSetPackages,
+  currentRevisionForPackage,
   dueInfo,
   dueDateWriteTargets,
   fmtDate,
@@ -483,5 +485,77 @@ describe("dueDateWriteTargets (due-date write-target dispatch)", () => {
     const result = dueDateWriteTargets({ _submittalId: "sub-xyz", _sheetIds: ["d1"] });
     expect("submittalId" in result).toBe(true);
     expect("sheetIds" in result).toBe(false);
+  });
+});
+
+// The Hub Drawing Register's "Rev" column must read the AUTHORITATIVE current
+// revision (drawing_revisions.is_current → revision_code), matching Doc Control,
+// NOT the deprecated, drift-prone free-text drawings.revision_number. These guard
+// that rollup: max version wins, its CODE displays, and the documented fallbacks.
+describe("buildCurrentRevisionMap (authoritative current-revision lookup)", () => {
+  it("indexes only is_current=true rows by drawing_id, carrying code + version", () => {
+    const map = buildCurrentRevisionMap([
+      { drawing_id: "d1", revision_code: "2", version_number: 3, is_current: true },
+      { drawing_id: "d1", revision_code: "1", version_number: 2, is_current: false },
+      { drawing_id: "d2", revision_code: "A", version_number: 2, is_current: true },
+    ]);
+    expect(map.get("d1")).toEqual({ code: "2", version: 3 });
+    expect(map.get("d2")).toEqual({ code: "A", version: 2 });
+    expect(map.size).toBe(2);
+  });
+
+  it("trims a code with trailing whitespace (the 'A ' → '—' display bug)", () => {
+    const map = buildCurrentRevisionMap([
+      { drawing_id: "d1", revision_code: "A ", version_number: 2, is_current: true },
+    ]);
+    expect(map.get("d1")).toEqual({ code: "A", version: 2 });
+  });
+
+  it("tolerates null/empty input and skips rows missing drawing_id", () => {
+    expect(buildCurrentRevisionMap(null).size).toBe(0);
+    expect(buildCurrentRevisionMap(undefined).size).toBe(0);
+    const map = buildCurrentRevisionMap([
+      { revision_code: "2", version_number: 2, is_current: true },
+    ]);
+    expect(map.size).toBe(0);
+  });
+});
+
+describe("currentRevisionForPackage (per-set authoritative Rev rollup)", () => {
+  const map = buildCurrentRevisionMap([
+    { drawing_id: "d1", revision_code: "1", version_number: 2, is_current: true },
+    { drawing_id: "d2", revision_code: "3", version_number: 3, is_current: true },
+    { drawing_id: "d3", revision_code: "0", version_number: 1, is_current: true },
+  ]);
+
+  it("returns the CODE of the highest-version sheet (mixed versions → max wins)", () => {
+    // d2 is the max version (3) → its code "3", even though codes aren't ordered.
+    expect(currentRevisionForPackage([{ id: "d1" }, { id: "d2" }, { id: "d3" }], map)).toBe("3");
+  });
+
+  it("does NOT take the lexical/numeric max of codes (heterogeneous codes)", () => {
+    // v2='A', v3='0' — picking max-code would give 'A'; max-VERSION gives '0'.
+    const m = buildCurrentRevisionMap([
+      { drawing_id: "x1", revision_code: "A", version_number: 2, is_current: true },
+      { drawing_id: "x2", revision_code: "0", version_number: 3, is_current: true },
+    ]);
+    expect(currentRevisionForPackage([{ id: "x1" }, { id: "x2" }], m)).toBe("0");
+  });
+
+  it("ignores a sheet with no current revision row (it contributes nothing)", () => {
+    // d2 (v3) has a current rev; "missing" does not → rollup stays "3".
+    expect(currentRevisionForPackage([{ id: "missing" }, { id: "d2" }], map)).toBe("3");
+  });
+
+  it("falls back to the legacy revision_number max when NO sheet has a current rev", () => {
+    // The whole set is un-revisioned in drawing_revisions → last-resort metadata.
+    expect(
+      currentRevisionForPackage([{ id: "u1", revision_number: "1" }, { id: "u2", revision_number: "2" }], map),
+    ).toBe("2");
+  });
+
+  it("returns the em dash when there is neither a current rev nor a legacy number", () => {
+    expect(currentRevisionForPackage([{ id: "u1" }, { id: "u2", revision_number: "A " }], map)).toBe("—");
+    expect(currentRevisionForPackage([], map)).toBe("—");
   });
 });
