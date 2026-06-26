@@ -251,13 +251,14 @@ export default function Schedule() {
         tasks: enrichedTasks,
         dropIndex: vars.dropIndex ?? null,
         projectId: projectId || undefined,
+        projectName: selectedProject?.name || undefined,
       }),
     onSuccess: (_r, vars) => {
       invalidateEntity(qc, "schedule_task", projectId);
       setSelectedIds(new Set());
       toast.success(vars.ids.length > 1 ? `Reparented ${vars.ids.length} tasks` : "Task moved");
     },
-    onError: (err: any) => toast.error(err?.message || "Reparent failed"),
+    onError: (err: any) => { invalidateEntity(qc, "schedule_task", projectId); toast.error(err?.message || "Reparent failed"); },
   });
 
   const createTaskMut = useMutation({
