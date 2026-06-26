@@ -27,7 +27,7 @@ import { usePermissions } from "@/services/permissions";
 // ── Domain config & utils ───────────────────────────────────────────────────
 import {
   STAGE_ORDER, DISCIPLINES, EMPTY_FORM, IN_REVIEW_STAGES, STAGES,
-  mono, surface,
+  mono, surface, stageUpdatePatch,
 } from "@/components/drawings/drawingsConfig";
 import {
   isOverdue, exportTransmittal, computeStatsFromSubmittals, computeDisciplineCounts, buildRevisionAlerts,
@@ -513,7 +513,13 @@ export default function Drawings({ embedded = false } = {}) {
           const v = validateStageTransition(current.stage, bulkStage);
           if (!v.ok) throw new Error(v.reason);
         }
-        return entities.Drawing.update(id, { stage: bulkStage });
+        // When moving a sheet AWAY from "Released", stageUpdatePatch also clears
+        // the deprecated legacy approval columns (§20-21). Otherwise a stale
+        // set_approval_status="approved" re-derives the sheet as Released on the
+        // next refetch and the manual stage change appears to revert. The
+        // Set-Approval flow (useDrawings.approveSetMut) is untouched — it owns the
+        // "approved" pills and is never reached from this stage-edit path.
+        return entities.Drawing.update(id, stageUpdatePatch(bulkStage));
       },
     );
     invalidate();
@@ -1041,7 +1047,12 @@ export default function Drawings({ embedded = false } = {}) {
           // Pre-Sprint-2 fallback: mutate drawings.stage directly. The
           // workflow source of truth is now on submittals; this path is
           // kept for cleanup of orphan sheets without linked submittals.
-          updateMut.mutate({ id: drawingId, stage: targetStage });
+          // stageUpdatePatch clears the deprecated legacy approval columns
+          // (§20-21) when moving AWAY from "Released" so a stale
+          // set_approval_status="approved" doesn't silently re-derive the sheet
+          // as Released and revert this change on the next refetch. (Set-Approval
+          // pills are unaffected — that flow lives in approveSetMut, not here.)
+          updateMut.mutate({ id: drawingId, ...stageUpdatePatch(targetStage) });
           setAdvanceTarget(null);
         }}
         onViaSubmittal={({ setId, targetStage }) => {

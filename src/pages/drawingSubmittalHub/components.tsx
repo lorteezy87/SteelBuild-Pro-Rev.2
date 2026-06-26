@@ -24,7 +24,7 @@ import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
 import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
-import { DRAFTING_STATES } from "@/lib/detailingPackageState";
+import { DRAFTING_STATES, effectiveDetailingState } from "@/lib/detailingPackageState";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import type { ElementStatusKey, ElementStatusSummary } from "@/services/modelElementStatus";
 import { FAB_STATUS_META, FAB_STATUS_ORDER, summarizeFabStatus } from "@/lib/fabStatus";
@@ -43,6 +43,7 @@ import {
   getStatusColor,
   getSubmittalDueDate,
   info,
+  isClosedPackage,
   isClosedSubmittal,
   itemUrgency,
   mono,
@@ -1449,7 +1450,7 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
       <GridCell style={{ color: textMuted }}>{r.setNo}</GridCell>
       <GridCell style={{ color: textMuted }}>{r.discipline}</GridCell>
       <GridCell align="right">{r.sheetCount}</GridCell>
-      <GridCell>{r.status ? <StatusChip status={r.status} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}</GridCell>
+      <GridCell>{r.effectiveState && r.effectiveState !== "Not Started" ? <OperationalStateChip state={r.effectiveState} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}</GridCell>
       <GridCell>{r.health ? <HealthChip health={r.health} onClick={() => h.setHealthDetail(r.health)} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>—</span>}</GridCell>
       <GridCell style={{ color: r.done ? success : textMuted }}>{r.releasedCount}/{r.sheetCount}</GridCell>
       <GridCell><DueChip info={r.due} /></GridCell>
@@ -1612,10 +1613,21 @@ export function DrawingRegisterTable({
         const sheets: any[] = pkg.sheets || [];
         const submittals: any[] = pkg.submittals || [];
         const latestSubmittal = submittals.slice().sort((a, b) => (b.round_number || 1) - (a.round_number || 1))[0] || null;
-        const closed = latestSubmittal ? isClosedSubmittal(latestSubmittal) : false;
         const sheetCount = sheets.length || (pkg.parent?.sheet_count ?? 0);
+        // Per-sheet "released" count is DISPLAY ONLY (the n/total badge). It still
+        // reads the legacy columns to show progress, but it MUST NOT decide the
+        // package's released/done state — that is submittal-governed below.
         const releasedCount = sheets.filter((d) => d.stage === "Released" || d.set_approval_status === "approved").length;
-        const done = closed || (sheetCount > 0 && releasedCount === sheetCount);
+        // §20-21: the package's released/done state is the submittal authority, via
+        // the SAME predicate as the hub's "Sets Released" KPI (isClosedPackage), so
+        // the Released column and the KPI never disagree. A stale legacy
+        // set_approval_status="approved" on a sheet can no longer force "Released"
+        // while a governing submittal is still mid-flow.
+        const done = isClosedPackage(pkg);
+        // Operational (coalesced) state drives the Status chip so it agrees with the
+        // Released column — a mid-flow submittal can't render alongside a green
+        // "Released", and a released package reads "Released" in both columns.
+        const effectiveState = effectiveDetailingState(pkg.parent, submittals, sheets);
         const due = dueInfo(getSubmittalDueDate(latestSubmittal), done);
         const discipline = pkg.parent?.discipline || [...new Set(sheets.map((d) => d.discipline).filter(Boolean))][0] || "—";
         const maxRev = sheets.reduce((m, d) => Math.max(m, Number(String(d.revision_number || "0").replace(/[^\d]/g, "")) || 0), 0);
@@ -1624,7 +1636,7 @@ export function DrawingRegisterTable({
         const dominantStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
         return {
           pkg, due, sheetCount, releasedCount, discipline, maxRev, dominantStage,
-          status: latestSubmittal?.status || null, done, late: !!due.overdue && !done,
+          status: latestSubmittal?.status || null, effectiveState, done, late: !!due.overdue && !done,
           health: healthByKey?.get(pkg.key) || null,
           locked: !!pkg.parent?.is_locked,
           lockedReason: pkg.parent?.locked_reason || null,
@@ -1740,7 +1752,7 @@ export function DrawingRegisterTable({
                 <Td style={{ color: textMuted }}>{r.setNo}</Td>
                 <Td style={{ color: textMuted }}>{r.discipline}</Td>
                 <Td style={{ textAlign: "right" }}>{r.sheetCount}</Td>
-                <Td>{r.status ? <StatusChip status={r.status} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}</Td>
+                <Td>{r.effectiveState && r.effectiveState !== "Not Started" ? <OperationalStateChip state={r.effectiveState} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}</Td>
                 <Td>{r.health ? <HealthChip health={r.health} onClick={() => setHealthDetail(r.health)} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>—</span>}</Td>
                 <Td style={{ color: r.done ? success : textMuted }}>{r.releasedCount}/{r.sheetCount}</Td>
                 <Td><DueChip info={r.due} /></Td>

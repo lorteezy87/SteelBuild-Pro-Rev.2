@@ -159,6 +159,22 @@ describe("isClosedPackage (the layer the reported bug lives in)", () => {
     ).toBe(false);
   });
 
+  it("does NOT roll up to Released when a sheet carries set_approval_status='approved' but the governing submittal is mid-flow", () => {
+    // The exact field-reported bug: a sheet stamped 'approved' by the deprecated
+    // legacy Set-Approval flow must NOT mark the package Released while the
+    // governing submittal is still in review. This is the predicate that drives
+    // the hub Drawing Register's green "Released" column (DrawingRegisterTable),
+    // so a false "approved" sheet flag can no longer paint the package as done.
+    expect(
+      isClosedPackage(
+        pkg({
+          sheets: [{ set_approval_status: "approved" }, { stage: "IFA" }],
+          submittals: [{ status: "Submitted", round_number: 1, ball_in_court: "EOR" }],
+        }),
+      ),
+    ).toBe(false);
+  });
+
   it("keeps a MANUALLY-released package (detailing_state) closed even with a mid-flow submittal", () => {
     // Manual release stays authoritative via the detailing_state signal — must
     // not regress when the deprecated columns are gated.

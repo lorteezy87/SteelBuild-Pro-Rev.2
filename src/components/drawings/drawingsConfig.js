@@ -55,6 +55,29 @@ export const STAGE_ORDER = STAGES.map(s => s.key);
  */
 export const IN_REVIEW_STAGES = ["IFA", "OFA", "BFA", "OFS", "IFC"];
 
+/**
+ * Build the `entities.Drawing.update` patch for a direct (legacy) sheet-stage
+ * change. Single source of truth for the two direct-mutation paths on the
+ * Drawings page (the bulk stage edit and the AdvanceStageDialog legacy
+ * fallback).
+ *
+ * §20-21: `drawings.set_approval_status` / `set_approved_date` are DEPRECATED
+ * legacy approval columns. When a stage moves AWAY from "Released", we clear
+ * those columns in the SAME patch — otherwise a stale set_approval_status=
+ * "approved" silently re-derives the sheet as Released on the next refetch and
+ * the manual change appears to revert. Moving TO "Released" leaves them alone
+ * (the dedicated Set-Approval flow owns the "approved" pills).
+ *
+ * @param {string} newStage — the target stage key (e.g. "IFA", "Released")
+ * @returns {{ stage: string, set_approval_status?: null, set_approved_date?: null }}
+ */
+export function stageUpdatePatch(newStage) {
+  return {
+    stage: newStage,
+    ...(newStage !== "Released" ? { set_approval_status: null, set_approved_date: null } : {}),
+  };
+}
+
 // ─── Discipline List ────────────────────────────────────────────────────────
 
 export const DISCIPLINES = [
