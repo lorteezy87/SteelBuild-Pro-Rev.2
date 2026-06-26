@@ -721,6 +721,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                       {currentParent.wbs_code ? `${currentParent.wbs_code} — ` : ''}{currentParent.task_name}
                     </span>
                     <button
+                      type="button"
                       onClick={() => onUpdate({ id: task.id, parent_task_id: null })}
                       style={{ fontSize: 11, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--divider)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
                     >
