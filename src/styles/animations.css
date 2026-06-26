@@ -27,6 +27,13 @@
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+/* Continuous spinner (Loader2 / RefreshCw icons across the app). Defined once
+   here so components can use `style={{ animation: "spin 1s linear infinite" }}`
+   without each injecting its own per-render <style> tag. */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 @keyframes rowHighlight {
   0%   { background: rgba(200,155,32,0.12); }
   100% { background: transparent; }
