@@ -44,6 +44,7 @@ import {
   accent,
   border,
   buildSetPackages,
+  dueDateWriteTargets,
   dueInfo,
   earliestDate,
   error,
@@ -517,6 +518,8 @@ export default function DrawingSubmittalHub() {
         _submittalId: submittal.id,
         _drawingSetId: null as string | null,
         _firstSheetId: null as string | null,
+        // Unlinked submittals always dispatch through the submittal branch, so [].
+        _sheetIds: [] as string[],
       };
     });
 
@@ -591,16 +594,19 @@ export default function DrawingSubmittalHub() {
   });
 
   const updateDueDateMut = useMutation({
-    mutationFn: async ({ item, date }: { item: any; date: string | null }) => {
-      if (item._submittalId) {
-        await entities.Submittal.update(item._submittalId, { required_date: date });
+    mutationFn: async ({ item, date }: { item: any; date: string }) => {
+      // dueDateWriteTargets (format.ts, unit-tested) is the single source of truth
+      // for the submittal-vs-sheets dispatch — the mutation just executes its result.
+      const targets = dueDateWriteTargets(item);
+      if ("submittalId" in targets) {
+        await entities.Submittal.update(targets.submittalId, { required_date: date });
       } else {
         // For drawing-set packages (no linked submittal), write to ALL sheets so
         // earliestDate() picks up the change regardless of fetch order. Writing
         // only sheets[0] left the displayed date stale when sheets[0] wasn't the
         // sheet earliestDate() was returning.
-        const ids: string[] = Array.isArray(item._sheetIds) && item._sheetIds.length
-          ? item._sheetIds
+        const ids = targets.sheetIds.length
+          ? targets.sheetIds
           : item._firstSheetId ? [item._firstSheetId] : [];
         if (!ids.length) throw new Error("No entity available to set due date");
         await Promise.all(ids.map((id: string) => entities.Drawing.update(id, { due_date: date })));
