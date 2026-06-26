@@ -978,6 +978,7 @@ export default function Schedule() {
         open={showDrawer}
         onClose={() => { setShowDrawer(false); setSelectedTask(null); }}
         onUpdate={(data) => updateTaskMut.mutate(data)}
+        onReparent={(childId: string, newParentId: string | null) => reparentMut.mutate({ ids: [childId], newParentId })}
         onDelete={(id) => deleteTaskMut.mutate(id)}
         allTasks={enrichedTasks}
         effectiveDates={effectiveDatesMap}
