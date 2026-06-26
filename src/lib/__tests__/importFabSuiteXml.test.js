@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { parseFabSuiteXml, stageModelElements } from "../importFabSuiteXml";
+import { parseFabSuiteXml, stageModelElements, teklaRowToModelElement } from "../importFabSuiteXml";
 
 // Fixture mirrors the real TeklaPowerFab schema (default xmlns, AssemblyData →
 // Assembly → AssemblyPart, AssemblyDrawings, a duplicate drawing without a
@@ -151,5 +151,41 @@ describe("stageModelElements", () => {
       { id: "m1", element_guid: "model-1", is_deleted: true },
     ]);
     expect(stats.update).toBe(0);
+  });
+});
+
+describe("teklaRowToModelElement", () => {
+  const VALID_SOURCES = ["csv", "ifc", "manual"];
+
+  it("produces a constraint-valid source value (csv)", () => {
+    const staged = { action: "create", existing_id: null, piece_mark: "502C2002", element_guid: "model-1", profile: "W12X26" };
+    const row = teklaRowToModelElement(staged, "proj-1");
+    expect(VALID_SOURCES).toContain(row.source);
+    expect(row.source).toBe("csv");
+  });
+
+  it("records the Tekla origin in metadata.import_format", () => {
+    const staged = { action: "create", existing_id: null, piece_mark: "502C2002", element_guid: "model-1" };
+    const row = teklaRowToModelElement(staged, "proj-1");
+    expect(row.metadata).toMatchObject({ import_format: "tekla_epm_xml" });
+  });
+
+  it("preserves existing metadata fields without clobbering them", () => {
+    const staged = { action: "create", existing_id: null, piece_mark: "X1", element_guid: "g-x", metadata: { erp_ref: "ABC123" } };
+    const row = teklaRowToModelElement(staged, "proj-1");
+    expect(row.metadata).toMatchObject({ erp_ref: "ABC123", import_format: "tekla_epm_xml" });
+  });
+
+  it("strips action and existing_id from the output row", () => {
+    const staged = { action: "update", existing_id: "some-id", piece_mark: "X2", element_guid: "g-2" };
+    const row = teklaRowToModelElement(staged, "proj-1");
+    expect(row).not.toHaveProperty("action");
+    expect(row).not.toHaveProperty("existing_id");
+  });
+
+  it("sets project_id from the argument", () => {
+    const staged = { action: "create", existing_id: null, piece_mark: "X3", element_guid: "g-3" };
+    const row = teklaRowToModelElement(staged, "my-project-id");
+    expect(row.project_id).toBe("my-project-id");
   });
 });
