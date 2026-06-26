@@ -91,6 +91,7 @@ export default function Submittals() {
   const [releaseBlock, setReleaseBlock] = useState<{ input: any; rfis: string[] } | null>(null);
   const [showSheetResponse, setShowSheetResponse] = useState<any>(null); // round object or null
 
+  // Key ["submittals", projectId] matches getQueryKey("submittal", projectId) in useSubmittals.ts — React Query dedupes; no second fetch when embedded in the DCC hub.
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["submittals", projectId],
     queryFn: () => projectId
