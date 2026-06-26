@@ -152,6 +152,11 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   // Assign scope: "piece" (per-GUID, default) flips only the clicked piece(s);
   // "assembly" (per-mark) flips every part sharing the clicked piece's mark.
   const [fabScope, setFabScope] = useState("piece");
+  // This tab is reused (not remounted) when the active project changes — it's
+  // rendered inline by DrawingSubmittalHub from project context, not keyed on an
+  // id — so reset the scope to the per-piece default per project instead of
+  // carrying the previous project's choice over.
+  useEffect(() => { setFabScope("piece"); }, [projectId]);
   const fabByGuid = useMemo(() => {
     const map = buildFabByGuid(modelElementRows);
     for (const [guid, status] of optimisticFab) {
@@ -275,6 +280,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
       setBuffer(null); setModelFile(null); setSource(null); setFileName(null);
       setPicked(null); setRoster({ step: "idle" }); setRemoveConfirm(false);
       setOptimisticFab(new Map()); setOptimisticFabByMark(new Map());
+      setFabScope("piece");
       toast.success("Model removed from this project.");
     } catch (err) {
       toast.error("Couldn't remove the model: " + (err?.message || String(err)));
