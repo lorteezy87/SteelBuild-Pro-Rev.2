@@ -120,10 +120,21 @@ export function buildStatusByMark(modelMapping) {
  * relevant map, we resolve its piece mark via markByGuid and consult the
  * mark-keyed fallback — so CSV rosters and the un-updated parts of an assembly
  * color too. Omitting the mark maps reproduces the original GUID-only behavior.
+ *
+ * Per-piece fab coloring (`perPieceFab: true`, the viewer's default): fab status
+ * is assigned per individual GlobalId, so a piece with NO individual fab_status
+ * stays NEUTRAL — it must NOT borrow a same-mark sibling's mark-keyed color.
+ * Without this, marking one joist would still bleed onto the rest of the mark
+ * (the bug this fixes). In per-piece mode the mark fallback is therefore skipped
+ * for fab entirely: the mark map is a whole-assembly concept. When `perPieceFab`
+ * is false (whole-assembly mode) the original "GUID then mark" precedence applies
+ * so flipping a whole mark colors every part — including CSV-roster pieces whose
+ * status only lives at the mark level. (Sequence/Detailing modes are unaffected:
+ * those describe the assembly, so their mark fallback always applies.)
  */
 export function colorFnFor(
   colorMode,
-  { statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark } = {},
+  { statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark, perPieceFab = true } = {},
 ) {
   if (colorMode === "type") return (info) => TYPE_PALETTE[info.ifcType] || TYPE_PALETTE.other;
   const markOf = (info) => (info.guid ? markByGuid?.get(info.guid) : undefined);
@@ -142,7 +153,14 @@ export function colorFnFor(
   if (colorMode === "fab") {
     return (info) => {
       if (!info.guid) return null;
-      const fab = fabByGuid?.get(info.guid) ?? fabByMark?.get(markOf(info));
+      const individual = fabByGuid?.get(info.guid);
+      if (individual) return FAB_STATUS_META[individual]?.color ?? null;
+      // No individual status. Per-piece mode (default) stops here — a piece with
+      // no GUID status stays neutral and can't inherit a same-mark sibling's
+      // color. Whole-assembly mode falls back to the mark so flipping a mark
+      // (or a CSV-roster status) colors every part.
+      if (perPieceFab) return null;
+      const fab = fabByMark?.get(markOf(info));
       return FAB_STATUS_META[fab]?.color ?? null;
     };
   }

@@ -48,6 +48,66 @@ export function resolveFabMarks({ picked, selectedGuids = [], guidToMark } = {})
 }
 
 /**
+ * Decide what a "Set fab status" click should target, given the current viewer
+ * selection and the requested scope. This is the pure core of the per-piece vs
+ * whole-assembly fix: it returns EITHER a guid-scoped or a mark-scoped target so
+ * the caller's DB write + optimistic recolor stay in lockstep.
+ *
+ * Scope "piece" (default — per-piece): target ONLY the selected GlobalIds that
+ * exist in the saved roster (so the DB `.in("element_guid", …)` actually hits a
+ * row). Only the clicked piece(s) change — a same-mark sibling is untouched.
+ *
+ * Fallback: if NONE of the selected GUIDs are in the roster — a CSV-only roster
+ * (element_guid is NULL) or a re-exported Tekla model whose GUIDs regenerated
+ * while marks stayed stable — per-piece can't target by GUID, so we fall back to
+ * marks (via resolveFabMarks) and flag it (`fellBackToMark`) so the UI can say
+ * the change hit the whole mark. We never silently no-op a guid-less assign.
+ *
+ * Scope "assembly" (whole-assembly): always mark-scoped (resolveFabMarks) — flips
+ * every part sharing the clicked mark, the original behavior.
+ *
+ * @param {object} args
+ * @param {"piece"|"assembly"} [args.scope]  default "piece"
+ * @param {{ assemblyMark?: string, partMark?: string }|null} [args.picked]
+ * @param {string[]} [args.selectedGuids]  GlobalIds of selected meshes
+ * @param {Map<string, string>} [args.guidToMark]  roster GlobalId → piece_mark
+ * @returns {{ mode: "guid", guids: string[], marks: [] }
+ *          | { mode: "mark", guids: [], marks: string[], fellBackToMark?: boolean }
+ *          | { mode: "none", guids: [], marks: [] }}
+ *   mode "none" = nothing targetable (no selection / no mark + not in roster).
+ */
+export function resolveFabAssignment({
+  scope = "piece",
+  picked,
+  selectedGuids = [],
+  guidToMark,
+} = {}) {
+  if (scope === "assembly") {
+    const marks = resolveFabMarks({ picked, selectedGuids, guidToMark });
+    return marks.length
+      ? { mode: "mark", guids: [], marks }
+      : { mode: "none", guids: [], marks: [] };
+  }
+  // Per-piece: keep only GUIDs the roster actually knows (a real model_elements
+  // row exists to update). De-dupe while preserving order.
+  const guids = [];
+  const seen = new Set();
+  for (const guid of selectedGuids) {
+    if (guid && guidToMark?.has?.(guid) && !seen.has(guid)) {
+      seen.add(guid);
+      guids.push(guid);
+    }
+  }
+  if (guids.length) return { mode: "guid", guids, marks: [] };
+  // No selected GUID is in the roster → can't scope by GUID. Fall back to mark
+  // so a CSV-roster / re-exported-model piece is still assignable, and flag it.
+  const marks = resolveFabMarks({ picked, selectedGuids, guidToMark });
+  return marks.length
+    ? { mode: "mark", guids: [], marks, fellBackToMark: true }
+    : { mode: "none", guids: [], marks: [] };
+}
+
+/**
  * Summarize a project's model elements by their own fab_status (the populated,
  * hand-set/imported fab stage). Distinct from the detailing-readiness engine.
  * `counts` is keyed by FAB_STATUS_ORDER; unknown/blank statuses count toward

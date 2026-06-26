@@ -83,21 +83,22 @@ describe("mark-keyed fallback (CSV rosters / multi-part assemblies)", () => {
     expect(m.size).toBe(3); // the guid-less row is not a bridge entry
   });
 
-  it("fab: colors every part of an assembly from a single mark-keyed status", () => {
+  it("fab: colors every part of an assembly from a single mark-keyed status (whole-assembly mode)", () => {
     // CSV/production data set fab_status on the assembly mark, no per-GUID rows.
+    // This broad mark fallback is whole-assembly behavior (perPieceFab:false).
     const fabByMark = buildFabByMark([{ piece_mark: "A1", fab_status: "shipped" }]);
     const markByGuid = buildMarkByGuid(ifcRows);
-    const fn = colorFnFor("fab", { fabByGuid: buildFabByGuid([]), markByGuid, fabByMark });
+    const fn = colorFnFor("fab", { fabByGuid: buildFabByGuid([]), markByGuid, fabByMark, perPieceFab: false });
     // Both parts of A1 color, even though neither GUID is in any fab-by-GUID map.
     expect(fn({ guid: "g-a1-p1" })).toBe(FAB_STATUS_META.shipped.color);
     expect(fn({ guid: "g-a1-p2" })).toBe(FAB_STATUS_META.shipped.color);
     expect(fn({ guid: "g-b2-p1" })).toBeNull(); // B2 has no status → native
   });
 
-  it("fab: GUID-keyed status wins over the mark fallback", () => {
+  it("fab: GUID-keyed status wins over the mark fallback (whole-assembly mode)", () => {
     const fabByGuid = buildFabByGuid([{ element_guid: "g-a1-p1", piece_mark: "A1", fab_status: "fabricated" }]);
     const fabByMark = buildFabByMark([{ piece_mark: "A1", fab_status: "shipped" }]);
-    const fn = colorFnFor("fab", { fabByGuid, markByGuid: buildMarkByGuid(ifcRows), fabByMark });
+    const fn = colorFnFor("fab", { fabByGuid, markByGuid: buildMarkByGuid(ifcRows), fabByMark, perPieceFab: false });
     expect(fn({ guid: "g-a1-p1" })).toBe(FAB_STATUS_META.fabricated.color); // GUID wins
     expect(fn({ guid: "g-a1-p2" })).toBe(FAB_STATUS_META.shipped.color);    // falls back to mark
   });
@@ -128,5 +129,56 @@ describe("mark-keyed fallback (CSV rosters / multi-part assemblies)", () => {
     const fn = colorFnFor("fab", { markByGuid: new Map(), fabByMark });
     expect(fn({ guid: "ghost" })).toBeNull();
     expect(fn({})).toBeNull(); // no guid at all
+  });
+});
+
+describe("per-piece fab coloring (perPieceFab, the viewer default)", () => {
+  // Two parts share mark A1. Only g-a1-p1 was individually assigned (per-piece).
+  // The optimistic-mirror that caused the bug is GONE, so fabByMark does NOT carry
+  // A1 in per-piece data — but even if it did (a stale mark row), per-piece mode
+  // must NOT let the clicked piece's color bleed onto the un-set sibling.
+  const ifcRows = [
+    { element_guid: "g-a1-p1", piece_mark: "A1" },
+    { element_guid: "g-a1-p2", piece_mark: "A1" },
+    { element_guid: "g-csv", piece_mark: "C9" }, // bridged, but its status is mark-only
+  ];
+
+  it("an un-set same-mark sibling does NOT inherit the clicked piece's color (per-piece)", () => {
+    const fabByGuid = buildFabByGuid([{ element_guid: "g-a1-p1", piece_mark: "A1", fab_status: "erected" }]);
+    // A stale/leftover mark status for A1 must be ignored for the un-set sibling
+    // because g-a1-p2 IS an individual roster GUID (in markByGuid).
+    const fabByMark = buildFabByMark([{ piece_mark: "A1", fab_status: "erected" }]);
+    const markByGuid = buildMarkByGuid(ifcRows);
+    const fn = colorFnFor("fab", { fabByGuid, markByGuid, fabByMark, perPieceFab: true });
+    expect(fn({ guid: "g-a1-p1" })).toBe(FAB_STATUS_META.erected.color); // the clicked piece
+    expect(fn({ guid: "g-a1-p2" })).toBeNull();                          // sibling stays neutral
+  });
+
+  it("whole-assembly mode (perPieceFab:false) keeps the broad mark fallback", () => {
+    const fabByMark = buildFabByMark([{ piece_mark: "A1", fab_status: "erected" }]);
+    const markByGuid = buildMarkByGuid(ifcRows);
+    const fn = colorFnFor("fab", { fabByGuid: buildFabByGuid([]), markByGuid, fabByMark, perPieceFab: false });
+    expect(fn({ guid: "g-a1-p1" })).toBe(FAB_STATUS_META.erected.color);
+    expect(fn({ guid: "g-a1-p2" })).toBe(FAB_STATUS_META.erected.color); // whole mark colors
+  });
+
+  it("a mark-only (CSV) status colors only in WHOLE-ASSEMBLY mode, never in per-piece", () => {
+    // A CSV/production status lives at the mark level (no per-GUID fab row).
+    // Per-piece mode deliberately ignores it (the mark map is a whole-assembly
+    // concept) so a piece can't inherit a mark-wide color; whole-assembly mode
+    // honors it. The user switches to "Whole assembly" to see/flip mark statuses.
+    const fabByMark = buildFabByMark([{ piece_mark: "C9", fab_status: "shipped" }]);
+    const markByGuid = new Map([["g-csv", "C9"]]);
+    const perPiece = colorFnFor("fab", { fabByGuid: buildFabByGuid([]), markByGuid, fabByMark, perPieceFab: true });
+    const wholeAssembly = colorFnFor("fab", { fabByGuid: buildFabByGuid([]), markByGuid, fabByMark, perPieceFab: false });
+    expect(perPiece({ guid: "g-csv" })).toBeNull();                          // per-piece: neutral
+    expect(wholeAssembly({ guid: "g-csv" })).toBe(FAB_STATUS_META.shipped.color); // whole-assembly: colored
+  });
+
+  it("defaults to per-piece when perPieceFab is omitted", () => {
+    const fabByGuid = buildFabByGuid([{ element_guid: "g-a1-p1", piece_mark: "A1", fab_status: "erected" }]);
+    const fabByMark = buildFabByMark([{ piece_mark: "A1", fab_status: "erected" }]);
+    const fn = colorFnFor("fab", { fabByGuid, markByGuid: buildMarkByGuid(ifcRows), fabByMark });
+    expect(fn({ guid: "g-a1-p2" })).toBeNull(); // sibling neutral by default
   });
 });
