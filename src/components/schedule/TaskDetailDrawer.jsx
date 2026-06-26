@@ -265,7 +265,7 @@ function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search tasks..
   );
 }
 
-export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete, effectiveDates = {} }) {
+export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onReparent, allTasks = [], onDelete, effectiveDates = {} }) {
   const [formData, setFormData] = useState(task || {});
   const [activeTab, setActiveTab] = useState('details');
   // Local editable copy of the detailing stage-gate dates. Mirrors
@@ -431,6 +431,12 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
   const currentParent = task.parent_task_id
     ? allTasks.find((t) => t.id === task.parent_task_id)
     : null;
+
+  // Route parent changes through the shared, audited reparent writer
+  // (sort_order append + audit entry) so the drawer matches the drag and
+  // bulk-reparent paths. Falls back to a bare parent_task_id patch if the
+  // host page didn't wire onReparent, so the drawer still works standalone.
+  const applyParent = onReparent || ((childId, newParentId) => onUpdate({ id: childId, parent_task_id: newParentId }));
 
   const addSuccessor = (sucId) => {
     const sucTask = allTasks.find((t) => t.id === sucId);
@@ -707,10 +713,11 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
 
               {/* Parent task picker — lets a user set or clear the hierarchy
                   parent directly from the drawer (there is no drag-reparent on
-                  mobile / when the Gantt indent buttons aren't visible). Calls
-                  onUpdate with parent_task_id so the same page mutation handles
-                  it. parentOptions already excludes self + descendants; the DB
-                  cycle trigger is defense-in-depth. */}
+                  mobile / when the Gantt indent buttons aren't visible). Routes
+                  through applyParent → the shared audited reparent writer so the
+                  drawer matches the drag and bulk-reparent paths (sort_order +
+                  audit). parentOptions already excludes self + descendants; the
+                  DB cycle trigger is defense-in-depth. */}
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontFamily: 'var(--font-mono)' }}>
                   PARENT TASK
@@ -722,7 +729,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                     </span>
                     <button
                       type="button"
-                      onClick={() => onUpdate({ id: task.id, parent_task_id: null })}
+                      onClick={() => applyParent(task.id, null)}
                       style={{ fontSize: 11, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--divider)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
                     >
                       Promote to top level
@@ -733,7 +740,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 )}
                 <SearchableTaskPicker
                   tasks={parentOptions}
-                  onSelect={(id) => onUpdate({ id: task.id, parent_task_id: id })}
+                  onSelect={(id) => applyParent(task.id, id)}
                   placeholder="+ Set parent task…"
                 />
               </div>
