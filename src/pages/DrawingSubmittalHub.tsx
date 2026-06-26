@@ -755,7 +755,7 @@ export default function DrawingSubmittalHub() {
       {/* Only shown when there are NO drawing sets yet but submittals exist —
           the situation where drawing-set tiles read 0 while Overdue is non-zero.
           Hidden for normal projects where setPackages is populated. */}
-      {setPackages.length === 0 && submittals.filter((s) => !(s as any).is_deleted).length > 0 && (
+      {setPackages.length === 0 && submittals.filter((s) => !s.is_deleted).length > 0 && (
         <div
           role="note"
           style={{
