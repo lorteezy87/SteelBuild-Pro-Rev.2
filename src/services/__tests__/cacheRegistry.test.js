@@ -90,6 +90,15 @@ describe("getQueryFamilies", () => {
     expect(families).toContainEqual(["pill-rfis-quick"]);
     expect(families).toContainEqual(["modal-rfis", "proj-1"]);
   });
+
+  it("includes the Doc Control register key for drawing, drawing_revision, and drawingSet", () => {
+    // The register grid (useDrawingRegister) reads drawing_register_view under
+    // ["drawing-register", projectId]. Every drawing/revision/set mutation must
+    // fan out to it so a revised upload advances the register without a reload.
+    expect(getQueryFamilies("drawing", "proj-1")).toContainEqual(["drawing-register", "proj-1"]);
+    expect(getQueryFamilies("drawing_revision", "proj-1")).toContainEqual(["drawing-register", "proj-1"]);
+    expect(getQueryFamilies("drawingSet", "proj-1")).toContainEqual(["drawing-register", "proj-1"]);
+  });
 });
 
 describe("invalidateEntity", () => {
@@ -121,6 +130,25 @@ describe("invalidateEntity", () => {
     expect(calls).toContainEqual(["drawings-all"]);
     expect(calls).toContainEqual(["drawings-nav-count", "proj-1"]);
     expect(calls).toContainEqual(["draw-detail", "proj-1"]);
+    // Doc Control register view — a drawing mutation must refresh it (a revised
+    // upload showed a stale current revision until manual reload without this).
+    expect(calls).toContainEqual(["drawing-register", "proj-1"]);
+  });
+
+  it("invalidates the Doc Control register on a revision mutation", async () => {
+    await invalidateEntity(qc, "drawing_revision", "proj-1");
+    const calls = qc.invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+
+    expect(calls).toContainEqual(["drawing-revisions", "proj-1"]);
+    expect(calls).toContainEqual(["drawings", "proj-1"]);
+    expect(calls).toContainEqual(["drawing-register", "proj-1"]);
+  });
+
+  it("invalidates the Doc Control register on a drawing-set mutation", async () => {
+    await invalidateEntity(qc, "drawingSet", "proj-1");
+    const calls = qc.invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+
+    expect(calls).toContainEqual(["drawing-register", "proj-1"]);
   });
 
   it("falls back for unknown entity", async () => {

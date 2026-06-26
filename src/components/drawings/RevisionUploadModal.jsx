@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { entities, integrations } from "@/api/supabaseClient";
 import { useQueryClient } from "@tanstack/react-query";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 import { extractSheetsFromPdf, validatePdfPage } from "@/lib/pdfSheetExtractor";
@@ -791,8 +792,12 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     }
 
       setApplyStats({ updated, added, removed });
-      qc.invalidateQueries({ queryKey: ["drawings"] });
-      qc.invalidateQueries({ queryKey: ["drawing-revisions"] });
+      // Route through the registry so EVERY drawing/revision-reading cache —
+      // including the Doc Control register view (["drawing-register", projectId])
+      // — is invalidated from one place. Without the register key the register
+      // grid served a stale current revision until a manual page reload.
+      await invalidateEntity(qc, "drawing", activeProject?.id);
+      await invalidateEntity(qc, "drawing_revision", activeProject?.id);
       if (failed > 0) {
         setFlowError(`${failed} sheet(s) failed to process. ${updated + added + removed} succeeded.`);
       } else if (historyFailed > 0) {
