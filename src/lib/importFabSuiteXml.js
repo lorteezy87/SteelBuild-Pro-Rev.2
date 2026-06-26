@@ -198,6 +198,28 @@ export function stageModelElements(pieces, existingElements = []) {
   return { rows, stats: { create, update } };
 }
 
+/**
+ * Map a staged Tekla EPM row to a model_elements insert/update payload.
+ *
+ * The `source` column has a DB CHECK constraint: csv | ifc | manual.
+ * Tekla EPM XML is a file-based piece import → "csv" bucket.
+ * The Tekla-specific origin is preserved in metadata.import_format so
+ * provenance is never lost.
+ *
+ * @param {object} row  — a staged row from stageModelElements (has action + existing_id)
+ * @param {string} projectId
+ * @returns {object} ready for ModelElement.bulkCreate / ModelElement.update
+ */
+export function teklaRowToModelElement(row, projectId) {
+  const { action: _action, existing_id: _existingId, ...fields } = row;
+  return {
+    ...fields,
+    project_id: projectId,
+    source: "csv",
+    metadata: { ...(fields.metadata || {}), import_format: "tekla_epm_xml" },
+  };
+}
+
 /** "FOR APPROVAL ONLY" → IFA, "FOR FABRICATION" → IFC, else null. */
 function inferStage(drawings) {
   for (const d of drawings) {

@@ -22,7 +22,7 @@ import { X, Upload, FileText, CheckCircle2, Boxes, FileStack } from "lucide-reac
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
-import { parseFabSuiteXml, stageModelElements } from "@/lib/importFabSuiteXml";
+import { parseFabSuiteXml, stageModelElements, teklaRowToModelElement } from "@/lib/importFabSuiteXml";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -98,8 +98,7 @@ export default function TeklaEpmImportModal({ open, projectId, projectName, onCl
 
     setStep("committing"); setErr(null);
     try {
-      const toRow = ({ action: _action, existing_id: _existingId, ...fields }) => ({ ...fields, project_id: projectId, source: "tekla_epm_xml" });
-      const creates = kept.filter((r) => r.action === "create").map(toRow);
+      const creates = kept.filter((r) => r.action === "create").map((r) => teklaRowToModelElement(r, projectId));
       const updates = kept.filter((r) => r.action === "update" && r.existing_id);
 
       let created = 0;
@@ -113,7 +112,7 @@ export default function TeklaEpmImportModal({ open, projectId, projectName, onCl
       let failed = 0;
       for (let i = 0; i < updates.length; i += 10) {
         const chunk = updates.slice(i, i + 10);
-        const results = await Promise.allSettled(chunk.map((r) => entities.ModelElement.update(r.existing_id, toRow(r))));
+        const results = await Promise.allSettled(chunk.map((r) => entities.ModelElement.update(r.existing_id, teklaRowToModelElement(r, projectId))));
         updated += results.filter((x) => x.status === "fulfilled").length;
         failed += results.filter((x) => x.status === "rejected").length;
       }
