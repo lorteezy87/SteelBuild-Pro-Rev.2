@@ -20,6 +20,7 @@ import {
 import MultiSelectChips from '@/components/shared/MultiSelectChips';
 import { logActivity } from '@/services/auditLogger';
 import DateOrTbdInput from './DateOrTbdInput';
+import { validReparentTargets } from '@/lib/schedule/hierarchy';
 
 // Coerce JSONB values that may come back from Postgres as strings or null.
 // Mirrors the helper in DailyLogForm — the entity wrapper also normalises,
@@ -422,6 +423,15 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
     t.id !== task.id && !successorIds.has(t.id) && !predecessorIds.includes(t.id)
   );
 
+  // Parent picker — valid reparent targets exclude self + all descendants
+  // so the picker can never offer an illegal parent. The DB cycle trigger
+  // is defense-in-depth.
+  const parentTargetIds = validReparentTargets(allTasks, task.id);
+  const parentOptions = allTasks.filter((t) => parentTargetIds.has(t.id));
+  const currentParent = task.parent_task_id
+    ? allTasks.find((t) => t.id === task.parent_task_id)
+    : null;
+
   const addSuccessor = (sucId) => {
     const sucTask = allTasks.find((t) => t.id === sucId);
     if (!sucTask) return;
@@ -692,6 +702,38 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                     metadata: { ...(formData.metadata || {}), is_critical: !!v },
                   })}
                   hint="Surfaces this task on the dashboard's Critical Path panel."
+                />
+              </div>
+
+              {/* Parent task picker — lets a user set or clear the hierarchy
+                  parent directly from the drawer (there is no drag-reparent on
+                  mobile / when the Gantt indent buttons aren't visible). Calls
+                  onUpdate with parent_task_id so the same page mutation handles
+                  it. parentOptions already excludes self + descendants; the DB
+                  cycle trigger is defense-in-depth. */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontFamily: 'var(--font-mono)' }}>
+                  PARENT TASK
+                </label>
+                {currentParent ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                      {currentParent.wbs_code ? `${currentParent.wbs_code} — ` : ''}{currentParent.task_name}
+                    </span>
+                    <button
+                      onClick={() => onUpdate({ id: task.id, parent_task_id: null })}
+                      style={{ fontSize: 11, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--divider)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
+                    >
+                      Promote to top level
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Top level (no parent)</div>
+                )}
+                <SearchableTaskPicker
+                  tasks={parentOptions}
+                  onSelect={(id) => onUpdate({ id: task.id, parent_task_id: id })}
+                  placeholder="+ Set parent task…"
                 />
               </div>
             </div>
