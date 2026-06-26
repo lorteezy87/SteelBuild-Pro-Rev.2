@@ -36,6 +36,17 @@ export const FAB_STATUS_ORDER = ["not_started", "in_fabrication", "fabricated", 
  * @param {Map<string, string>} [args.guidToMark]  roster GlobalId → piece_mark
  * @returns {string[]} distinct piece marks (Assembly preferred over Part)
  */
+export function resolveFabMarks({ picked, selectedGuids = [], guidToMark } = {}) {
+  const marks = new Set();
+  const live = picked && (picked.assemblyMark || picked.partMark);
+  if (live) marks.add(String(live));
+  for (const guid of selectedGuids) {
+    const mark = guidToMark?.get?.(guid);
+    if (mark) marks.add(String(mark));
+  }
+  return [...marks];
+}
+
 /**
  * Summarize a project's model elements by their own fab_status (the populated,
  * hand-set/imported fab stage). Distinct from the detailing-readiness engine.
@@ -56,15 +67,4 @@ export function summarizeFabStatus(elements) {
     }
   }
   return { counts, withFabStatus, total, pct: total > 0 ? Math.round((withFabStatus / total) * 100) : 0 };
-}
-
-export function resolveFabMarks({ picked, selectedGuids = [], guidToMark } = {}) {
-  const marks = new Set();
-  const live = picked && (picked.assemblyMark || picked.partMark);
-  if (live) marks.add(String(live));
-  for (const guid of selectedGuids) {
-    const mark = guidToMark?.get?.(guid);
-    if (mark) marks.add(String(mark));
-  }
-  return [...marks];
 }
