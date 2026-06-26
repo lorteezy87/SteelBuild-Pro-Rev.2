@@ -732,9 +732,55 @@ export default function DrawingSubmittalHub() {
         <KpiTile compact label="Sets In Review" value={drawingKpis.inReview} color={info} loading={isLoading} />
         <KpiTile compact label="Submittals" value={kpis.total} sub={`${kpis.pending} pending`} color={accent} loading={isLoading} />
         <KpiTile compact label="Needs Action" value={kpis.rejected} color={review} loading={isLoading} />
-        <KpiTile compact label="Overdue" value={triage.overdue.length} sub="packages + unlinked subs" color={error} loading={isLoading} />
+        <KpiTile
+          compact
+          label="Overdue"
+          value={triage.overdue.length}
+          sub={
+            triage.overdueDrawingSets > 0 && triage.overdueUnlinkedSubmittals > 0
+              ? `${triage.overdueDrawingSets} set${triage.overdueDrawingSets === 1 ? "" : "s"} · ${triage.overdueUnlinkedSubmittals} unlinked sub${triage.overdueUnlinkedSubmittals === 1 ? "" : "s"}`
+              : triage.overdueUnlinkedSubmittals > 0
+              ? `${triage.overdueUnlinkedSubmittals} unlinked sub${triage.overdueUnlinkedSubmittals === 1 ? "" : "s"}`
+              : triage.overdueDrawingSets > 0
+              ? `${triage.overdueDrawingSets} drawing set${triage.overdueDrawingSets === 1 ? "" : "s"}`
+              : "packages + unlinked subs"
+          }
+          color={error}
+          loading={isLoading}
+        />
         <KpiTile compact label="Fab Ready" value={`${fabReady.numerator}/${fabReady.denominator}`} sub={`${fabReady.percent}% released`} color={success} loading={isLoading} />
       </div>
+
+      {/* ── Zero-state legibility note ───────────────────────────────── */}
+      {/* Only shown when there are NO drawing sets yet but submittals exist —
+          the situation where drawing-set tiles read 0 while Overdue is non-zero.
+          Hidden for normal projects where setPackages is populated. */}
+      {setPackages.length === 0 && submittals.filter((s) => !(s as any).is_deleted).length > 0 && (
+        <div
+          role="note"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 12,
+            padding: "7px 12px",
+            borderRadius: 8,
+            border: `1px solid color-mix(in srgb, ${warning} 28%, ${border})`,
+            background: `color-mix(in srgb, ${warning} 6%, var(--bg-surface-low))`,
+            fontFamily: mono,
+            fontSize: 11,
+            color: textMuted,
+            lineHeight: 1.4,
+          }}
+        >
+          <AlertTriangle size={12} color={warning} style={{ flexShrink: 0 }} />
+          <span>
+            No drawing sets linked yet — set-level tiles above show 0.{" "}
+            Overdue items below are unlinked submittals.{" "}
+            Link submittals to a drawing set (or upload drawings) to populate set-level metrics.
+          </span>
+        </div>
+      )}
 
       {/* ── Tab Bar ──────────────────────────────────────────────────── */}
       <div className="sbp-hub-tabbar" style={{
