@@ -1566,7 +1566,7 @@ function RegisterVirtualList({
 
 /**
  * DrawingRegisterTable — the Drawing Register as a clean, flat, per-set table,
- * mirroring the Approval/Submittal register look (same Th/Td/StatusChip/DueChip
+ * mirroring the Approval/Submittal register look (same Th/Td/OperationalStateChip/DueChip
  * primitives) instead of the dense grouped DrawingsTable. One row per drawing
  * set. Left border: red = late, green = done (good to go), neutral = in progress.
  * Full sheet-level management still lives on the standalone Drawings page.
@@ -1636,6 +1636,9 @@ export function DrawingRegisterTable({
         const dominantStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
         return {
           pkg, due, sheetCount, releasedCount, discipline, maxRev, dominantStage,
+          // `status` (raw latest-submittal status) is retained for the search
+          // filter below ONLY — it does NOT drive the Status cell, which renders
+          // from `effectiveState` (the coalesced operational state).
           status: latestSubmittal?.status || null, effectiveState, done, late: !!due.overdue && !done,
           health: healthByKey?.get(pkg.key) || null,
           locked: !!pkg.parent?.is_locked,
