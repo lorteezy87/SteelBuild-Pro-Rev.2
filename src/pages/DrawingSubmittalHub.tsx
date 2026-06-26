@@ -26,7 +26,7 @@ import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components
 import { computeFabReady } from "@/lib/submittalAnalytics";
 import { effectiveDetailingState, hasGoverningSubmittal, isPackageRR } from "@/lib/detailingPackageState";
 import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
-import { buildHeldPieceMarkSet, summarizeElementStatuses } from "@/services/modelElementStatus";
+import { summarizeElementStatuses } from "@/services/modelElementStatus";
 import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
@@ -344,9 +344,8 @@ export default function DrawingSubmittalHub() {
         if (s?.id) sheetSetIdByDrawingId.set(String(s.id), target);
       }
     }
-    const held = buildHeldPieceMarkSet(rfis as any[]);
-    return summarizeElementStatuses(modelElements as any[], readinessBySetId, sheetSetIdByDrawingId, held);
-  }, [modelElements, setPackages, readinessByKey, rfis]);
+    return summarizeElementStatuses(modelElements as any[], readinessBySetId, sheetSetIdByDrawingId);
+  }, [modelElements, setPackages, readinessByKey]);
 
   // Revision Impact Tracker: change-revisions joined to their sheet's downstream
   // status (fabricated / delivered / in-field), worst impact first.
