@@ -23,6 +23,7 @@ import { useProjectId } from "@/hooks/useProjectId";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "./schedule/wbs";
 import { PHASE_NAME_MAP, derivePhaseFromHierarchy, inferTaskType, parseMsProjectXml } from "./schedule/mppImport";
+import { reparentTasks } from "@/lib/schedule/reparentTasks";
 import BulkActionToolbar from "./schedule/BulkActionToolbar";
 import type { ScheduleTask } from "./schedule/types";
 
@@ -242,6 +243,21 @@ export default function Schedule() {
       toast.success("Task updated");
     },
     onError: (err: any) => toast.error("Update failed: " + err.message),
+  });
+
+  const reparentMut = useMutation({
+    mutationFn: (vars: { ids: string[]; newParentId: string | null; dropIndex?: number | null }) =>
+      reparentTasks(vars.ids, vars.newParentId, {
+        tasks: enrichedTasks,
+        dropIndex: vars.dropIndex ?? null,
+        projectId: projectId || undefined,
+      }),
+    onSuccess: (_r, vars) => {
+      invalidateEntity(qc, "schedule_task", projectId);
+      setSelectedIds(new Set());
+      toast.success(vars.ids.length > 1 ? `Reparented ${vars.ids.length} tasks` : "Task moved");
+    },
+    onError: (err: any) => toast.error(err?.message || "Reparent failed"),
   });
 
   const createTaskMut = useMutation({
