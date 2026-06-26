@@ -103,10 +103,18 @@ describe("DrawingRegisterTable (Drawing Register)", () => {
     expect(screen.getByText("Anchor Bolts - OFA")).toBeInTheDocument();
   });
 
-  it("shows submittal-aware status + released counts per set", () => {
+  it("shows operational-state chips + released counts per set", () => {
     renderTable();
-    expect(screen.getByText("Released for Fabrication")).toBeInTheDocument();
-    expect(screen.getByText("Issued for Approval")).toBeInTheDocument();
+    // Status cell now renders an OperationalStateChip (the coalesced operational
+    // state) instead of the raw latest-submittal status string.
+    // Set 1 "Main Steel - IFC": submittal "Released for Fabrication" → "Released"
+    // state. ("Released" also appears as the column header, hence getAllByText.)
+    expect(screen.getAllByText("Released").length).toBeGreaterThanOrEqual(2);
+    // Set 2 "Anchor Bolts - OFA": "Issued for Approval" is not a recognized
+    // submittal status, so no submittal governs and it falls back to the
+    // sheet-derived stage "IFA".
+    expect(screen.getByText("IFA")).toBeInTheDocument();
+    // Released count stays a display-only "n/total" badge.
     expect(screen.getByText("3/3")).toBeInTheDocument(); // Main Steel fully released
     expect(screen.getByText("0/2")).toBeInTheDocument(); // Anchor Bolts none released
   });
