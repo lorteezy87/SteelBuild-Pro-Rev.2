@@ -36,6 +36,28 @@ export const FAB_STATUS_ORDER = ["not_started", "in_fabrication", "fabricated", 
  * @param {Map<string, string>} [args.guidToMark]  roster GlobalId → piece_mark
  * @returns {string[]} distinct piece marks (Assembly preferred over Part)
  */
+/**
+ * Summarize a project's model elements by their own fab_status (the populated,
+ * hand-set/imported fab stage). Distinct from the detailing-readiness engine.
+ * `counts` is keyed by FAB_STATUS_ORDER; unknown/blank statuses count toward
+ * `total` only. `pct` = % of non-deleted elements with a known fab status.
+ */
+export function summarizeFabStatus(elements) {
+  const counts = Object.fromEntries(FAB_STATUS_ORDER.map((s) => [s, 0]));
+  let total = 0;
+  let withFabStatus = 0;
+  for (const el of Array.isArray(elements) ? elements : []) {
+    if (!el || el.is_deleted) continue;
+    total += 1;
+    const s = el.fab_status;
+    if (s && Object.prototype.hasOwnProperty.call(counts, s)) {
+      counts[s] += 1;
+      withFabStatus += 1;
+    }
+  }
+  return { counts, withFabStatus, total, pct: total > 0 ? Math.round((withFabStatus / total) * 100) : 0 };
+}
+
 export function resolveFabMarks({ picked, selectedGuids = [], guidToMark } = {}) {
   const marks = new Set();
   const live = picked && (picked.assemblyMark || picked.partMark);
