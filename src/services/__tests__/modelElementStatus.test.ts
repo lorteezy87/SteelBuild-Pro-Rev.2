@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildHeldPieceMarkSet,
   normalizePieceMark,
   resolveElementStatus,
   summarizeElementStatuses,
@@ -22,18 +21,6 @@ describe("normalizePieceMark", () => {
   });
 });
 
-describe("buildHeldPieceMarkSet", () => {
-  it("collects marks only from OPEN fab-hold RFIs", () => {
-    const held = buildHeldPieceMarkSet([
-      { status: "Open", fab_hold: true, piece_marks: "1B1, 2c3  4D4" },
-      { status: "Open", fab_hold: false, piece_marks: "5E5" },        // no hold
-      { status: "Closed", fab_hold: true, piece_marks: "6F6" },       // terminal
-      { status: "Answered", fab_hold: true, piece_marks: "7G7" },     // terminal
-      null,
-    ]);
-    expect(held).toEqual(new Set(["1B1", "2C3", "4D4"]));
-  });
-});
 
 describe("resolveElementStatus", () => {
   const setMap = (r: any) => new Map([["set-1", r]]);
@@ -51,19 +38,6 @@ describe("resolveElementStatus", () => {
         bySheet,
       ),
     ).toBe("fab_ready");
-  });
-
-  it("piece-mark fab hold wins even over a healthy package (and over unmapped)", () => {
-    const held = new Set(["1B1"]);
-    expect(
-      resolveElementStatus(
-        { piece_mark: "1b1", drawing_set_id: "set-1" },
-        setMap(readiness({ erectionReady: true, fabricationReady: true })),
-        new Map(),
-        held,
-      ),
-    ).toBe("rfi_blocked");
-    expect(resolveElementStatus({ piece_mark: "1B1" }, new Map(), new Map(), held)).toBe("rfi_blocked");
   });
 
   it("package rfiBlocked -> rfi_blocked; atRisk -> behind_schedule (in priority order)", () => {

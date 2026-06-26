@@ -10,8 +10,7 @@
  *
  * Status precedence (first match wins):
  *   1. unmapped         — element resolves to no detailing package
- *   2. rfi_blocked      — piece-mark fab hold (open RFI listing the mark) or
- *                         the package itself is RFI-blocked
+ *   2. rfi_blocked      — the package itself is RFI-blocked
  *   3. behind_schedule  — the package's backward schedule is at risk
  *   4. erection_ready   — package erection-ready (terminal good state)
  *   5. fab_ready        — package fabrication-ready
@@ -62,38 +61,9 @@ export interface PackageReadinessLike {
   [key: string]: unknown;
 }
 
-export interface RfiLike {
-  status?: string | null;
-  fab_hold?: boolean | null;
-  piece_marks?: string | null;
-  [key: string]: unknown;
-}
-
 /** Trim/uppercase a piece mark for matching ("1b1 " -> "1B1"). */
 export function normalizePieceMark(mark: unknown): string {
   return String(mark ?? "").trim().toUpperCase();
-}
-
-// Mirrors entityPredicates.isRfiOpen (terminal statuses close an RFI).
-const RFI_CLOSED = new Set(["Answered", "Closed", "Void"]);
-
-/**
- * Build the set of piece marks held by OPEN fab-hold RFIs.
- * `rfis.piece_marks` is free text — comma/whitespace separated marks.
- */
-export function buildHeldPieceMarkSet(
-  rfis: (RfiLike | null | undefined)[] | null | undefined,
-): Set<string> {
-  const held = new Set<string>();
-  for (const rfi of rfis || []) {
-    if (!rfi || RFI_CLOSED.has(String(rfi.status ?? "")) || !rfi.fab_hold) continue;
-    String(rfi.piece_marks ?? "")
-      .split(/[,;\s]+/)
-      .map(normalizePieceMark)
-      .filter(Boolean)
-      .forEach((m) => held.add(m));
-  }
-  return held;
 }
 
 const IFA_IDX = DETAILING_STATE_ORDER.indexOf("IFA");
@@ -105,27 +75,21 @@ const IFA_IDX = DETAILING_STATE_ORDER.indexOf("IFA");
  * @param readinessBySetId   drawing_set_id -> readiness (hub-computed)
  * @param sheetSetIdByDrawingId  drawing_id -> drawing_set_id (for elements
  *                           linked to a sheet but not directly to a set)
- * @param heldPieceMarks     from buildHeldPieceMarkSet
  */
 export function resolveElementStatus(
   element: ModelElementLike,
   readinessBySetId: Map<string, PackageReadinessLike>,
   sheetSetIdByDrawingId: Map<string, string> = new Map(),
-  heldPieceMarks: Set<string> = new Set(),
 ): ElementStatusKey {
   const setId =
     (element.drawing_set_id as string | null) ||
     (element.drawing_id ? sheetSetIdByDrawingId.get(String(element.drawing_id)) ?? null : null);
   const readiness = setId ? readinessBySetId.get(String(setId)) : undefined;
-
-  const markHeld = heldPieceMarks.has(normalizePieceMark(element.piece_mark));
-  if (!readiness) return markHeld ? "rfi_blocked" : "unmapped";
-
-  if (markHeld || readiness.rfiBlocked) return "rfi_blocked";
+  if (!readiness) return "unmapped";
+  if (readiness.rfiBlocked) return "rfi_blocked";
   if (readiness.atRisk) return "behind_schedule";
   if (readiness.erectionReady) return "erection_ready";
   if (readiness.fabricationReady) return "fab_ready";
-
   const stateIdx = DETAILING_STATE_ORDER.indexOf(String(readiness.effectiveState ?? ""));
   return stateIdx >= IFA_IDX ? "in_review" : "in_detailing";
 }
@@ -165,7 +129,6 @@ export function summarizeElementStatuses(
   elements: ModelElementLike[] | null | undefined,
   readinessBySetId: Map<string, PackageReadinessLike>,
   sheetSetIdByDrawingId: Map<string, string> = new Map(),
-  heldPieceMarks: Set<string> = new Set(),
 ): ElementStatusSummary {
   const counts = Object.fromEntries(BUCKETS.map((b) => [b, 0])) as Record<ElementStatusKey, number>;
   const guidsByStatus = Object.fromEntries(BUCKETS.map((b) => [b, [] as string[]])) as Record<ElementStatusKey, string[]>;
@@ -176,7 +139,7 @@ export function summarizeElementStatuses(
   for (const el of elements || []) {
     if (!el || el.is_deleted) continue;
     total += 1;
-    const status = resolveElementStatus(el, readinessBySetId, sheetSetIdByDrawingId, heldPieceMarks);
+    const status = resolveElementStatus(el, readinessBySetId, sheetSetIdByDrawingId);
     counts[status] += 1;
     if (el.element_guid) guidsByStatus[status].push(String(el.element_guid));
     const mark = normalizePieceMark(el.piece_mark);
