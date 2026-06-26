@@ -59,7 +59,15 @@ describe("computeSiblingSortOrder", () => {
     expect(computeSiblingSortOrder(tasks, "c", null)).toBe(1000);
   });
   it("returns a midpoint between neighbors on a gap drop", () => {
-    const roots = [{ id: "a", parent_task_id: null, sort_order: 1000 }, { id: "e", parent_task_id: null, sort_order: 3000 }];
+    const roots = [
+      { id: "a", parent_task_id: null, sort_order: 1000 },
+      { id: "e", parent_task_id: null, sort_order: 3000 },
+    ];
     expect(computeSiblingSortOrder(roots, null, 1)).toBe(2000);
+  });
+  it("prepends before the first sibling on a dropIndex 0 drop", () => {
+    // children of "a" are b=1000, d=3000; prepend before sort_order 1000
+    // yields 0 — a known, acceptable behavior of the integer-midpoint scheme.
+    expect(computeSiblingSortOrder(tasks, "a", 0)).toBe(0);
   });
 });

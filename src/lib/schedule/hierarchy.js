@@ -88,6 +88,8 @@ function siblingsOf(tasks, parentId) {
  *   - Gap drop (dropIndex provided): midpoint between the siblings that
  *     straddle dropIndex; at an end, neighbor ± 1000.
  * Null sibling sort_orders are seeded so the result is always a finite number.
+ * NOTE: uses integer midpoints, so callers should reindex siblings when the
+ * numeric space between two neighbors is exhausted (e.g. adjacent integers).
  */
 export function computeSiblingSortOrder(tasks, newParentId, dropIndex) {
   const sibs = siblingsOf(tasks, newParentId);
