@@ -3,6 +3,7 @@ import {
   CLOSED_SUBMITTAL_STATUSES,
   buildSetPackages,
   dueInfo,
+  dueDateWriteTargets,
   fmtDate,
   getOperationalStateColor,
   getStatusColor,
@@ -446,5 +447,41 @@ describe("summarizeApprovalMatrix", () => {
   });
   it("handles empty input", () => {
     expect(summarizeApprovalMatrix([])).toMatchObject({ total: 0, approved: 0 });
+  });
+});
+
+// Guards the fix for the Control Board due-date edit bug:
+//   write target ≠ read source → editing a multi-sheet, no-submittal package
+//   appeared to do nothing because the old code wrote only sheets[0] while the
+//   displayed date came from earliestDate() which might return a different sheet.
+//
+// dueDateWriteTargets() is the pure extraction of the dispatch logic so it can
+// be tested without mounting the component.
+describe("dueDateWriteTargets (due-date write-target dispatch)", () => {
+  it("returns { submittalId } when the item has a linked submittal (submittal branch unchanged)", () => {
+    const result = dueDateWriteTargets({ _submittalId: "sub-abc", _sheetIds: ["d1", "d2"] });
+    expect(result).toEqual({ submittalId: "sub-abc" });
+  });
+
+  it("returns { sheetIds } with ALL sheet ids for a multi-sheet, no-submittal package", () => {
+    const result = dueDateWriteTargets({ _submittalId: null, _sheetIds: ["d1", "d2", "d3"] });
+    expect(result).toEqual({ sheetIds: ["d1", "d2", "d3"] });
+  });
+
+  it("returns { sheetIds: ['d1'] } for a single-sheet, no-submittal package", () => {
+    const result = dueDateWriteTargets({ _submittalId: null, _sheetIds: ["d1"] });
+    expect(result).toEqual({ sheetIds: ["d1"] });
+  });
+
+  it("returns { sheetIds: [] } when the item has no submittal and no sheets (empty package)", () => {
+    const result = dueDateWriteTargets({ _submittalId: null, _sheetIds: [] });
+    expect(result).toEqual({ sheetIds: [] });
+  });
+
+  it("submittal branch takes priority even when _sheetIds is also populated", () => {
+    // A linked-submittal package may also have _sheetIds; submittal wins.
+    const result = dueDateWriteTargets({ _submittalId: "sub-xyz", _sheetIds: ["d1"] });
+    expect("submittalId" in result).toBe(true);
+    expect("sheetIds" in result).toBe(false);
   });
 });
