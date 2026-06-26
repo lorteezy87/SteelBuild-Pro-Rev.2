@@ -26,6 +26,7 @@ import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawing
 import { DRAFTING_STATES } from "@/lib/detailingPackageState";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import type { ElementStatusKey, ElementStatusSummary } from "@/services/modelElementStatus";
+import { FAB_STATUS_META, FAB_STATUS_ORDER, summarizeFabStatus } from "@/lib/fabStatus";
 import {
   BIC_CHOICES,
   STATUS_COLORS,
@@ -374,6 +375,7 @@ function ModelMappingSection({ summary, elements, onImport }: { summary?: Elemen
   }, [openBucket, summary, elements]);
 
   const openMeta = openBucket ? ELEMENT_STATUS_META[openBucket] : null;
+  const fab = useMemo(() => summarizeFabStatus(elements || []), [elements]);
 
   return (
     <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
@@ -401,7 +403,7 @@ function ModelMappingSection({ summary, elements, onImport }: { summary?: Elemen
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10, color: textPrimary, marginBottom: 4 }}>
-              <span style={{ color: textMuted }}>Mapped to packages</span>
+              <span style={{ color: textMuted }}>Linked to detailing packages</span>
               <span className="sbd-num">{summary?.mappedPct ?? 0}%</span>
             </div>
             <div style={{ height: 7, borderRadius: 999, background: surface2, overflow: "hidden", border: `1px solid ${border}` }}>
@@ -436,6 +438,31 @@ function ModelMappingSection({ summary, elements, onImport }: { summary?: Elemen
               );
             })}
           </div>
+
+          {fab.total > 0 && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10, color: textPrimary, marginBottom: 6 }}>
+                <span style={{ color: textMuted }}>Fabrication status (from model)</span>
+                <span className="sbd-num">{fab.pct}% tracked</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {FAB_STATUS_ORDER.map((s) => {
+                  const count = fab.counts[s] || 0;
+                  if (!count) return null;
+                  const meta = (FAB_STATUS_META as any)[s];
+                  return (
+                    <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 8px", borderRadius: 999, background: surface2, border: `1px solid ${border}`, fontFamily: mono, fontSize: 10, color: textPrimary }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 2, background: meta.color }} />
+                      {meta.label} · <span className="sbd-num">{count}</span>
+                    </span>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 6, fontFamily: mono, fontSize: 9, color: textMuted }}>
+                Color the model by these in the 3D Model tab → Fab mode.
+              </div>
+            </div>
+          )}
 
           {openBucket && openMeta && (
             <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
