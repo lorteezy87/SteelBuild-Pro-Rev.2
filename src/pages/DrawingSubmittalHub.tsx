@@ -717,7 +717,7 @@ export default function DrawingSubmittalHub() {
         <KpiTile compact label="Sets In Review" value={drawingKpis.inReview} color={info} loading={isLoading} />
         <KpiTile compact label="Submittals" value={kpis.total} sub={`${kpis.pending} pending`} color={accent} loading={isLoading} />
         <KpiTile compact label="Needs Action" value={kpis.rejected} color={review} loading={isLoading} />
-        <KpiTile compact label="Overdue" value={Math.max(kpis.overdue, triage.overdue.length)} color={error} loading={isLoading} />
+        <KpiTile compact label="Overdue" value={triage.overdue.length} sub="packages + unlinked subs" color={error} loading={isLoading} />
         <KpiTile compact label="Fab Ready" value={`${fabReady.numerator}/${fabReady.denominator}`} sub={`${fabReady.percent}% released`} color={success} loading={isLoading} />
       </div>
 
