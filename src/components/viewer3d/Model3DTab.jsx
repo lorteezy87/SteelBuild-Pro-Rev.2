@@ -11,8 +11,8 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
-import { FAB_STATUS_META, FAB_STATUS_ORDER, resolveFabMarks } from "@/lib/fabStatus";
+import { ELEMENT_STATUS_META, normalizePieceMark } from "@/services/modelElementStatus";
+import { FAB_STATUS_META, FAB_STATUS_ORDER, resolveFabAssignment } from "@/lib/fabStatus";
 import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, buildMarkByGuid, buildStatusByMark, buildSeqByMark, buildFabByMark, colorFnFor } from "@/lib/ifc/viewerColoring";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
@@ -145,6 +145,13 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   // Optimistic fab colors: applied the instant you assign a status, so the model
   // recolors immediately instead of waiting on a slow (12k-row) refetch. guid → status.
   const [optimisticFab, setOptimisticFab] = useState(() => new Map());
+  // Optimistic mark-wide fab assignments (whole-assembly mode only). Kept SEPARATE
+  // from optimisticFab so a per-piece assign never leaks onto the mark map and
+  // bleeds color onto same-mark siblings. mark → status.
+  const [optimisticFabByMark, setOptimisticFabByMark] = useState(() => new Map());
+  // Assign scope: "piece" (per-GUID, default) flips only the clicked piece(s);
+  // "assembly" (per-mark) flips every part sharing the clicked piece's mark.
+  const [fabScope, setFabScope] = useState("piece");
   const fabByGuid = useMemo(() => {
     const map = buildFabByGuid(modelElementRows);
     for (const [guid, status] of optimisticFab) {
@@ -169,23 +176,29 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   const statusByMark = useMemo(() => buildStatusByMark(modelMapping), [modelMapping]);
   const fabByMark = useMemo(() => {
     const map = buildFabByMark(modelElementRows);
-    // Mirror optimistic assignments onto the mark map so a fresh fab assignment
-    // colors the whole assembly immediately, not just the parts that had a row.
-    for (const [guid, status] of optimisticFab) {
-      const mark = markByGuid.get(guid);
-      if (!mark) continue;
-      if (status) map.set(mark, status); else map.delete(mark);
+    // Mirror only WHOLE-ASSEMBLY optimistic assignments onto the mark map, so a
+    // mark-wide assign colors the whole assembly immediately. Per-piece assigns
+    // live in optimisticFab (guid-keyed) ONLY and must not touch the mark map —
+    // otherwise one piece's status would bleed onto its same-mark siblings.
+    for (const [mark, status] of optimisticFabByMark) {
+      const mk = normalizePieceMark(mark);
+      if (!mk) continue;
+      if (status) map.set(mk, status); else map.delete(mk);
     }
     return map;
-  }, [modelElementRows, optimisticFab, markByGuid]);
+  }, [modelElementRows, optimisticFabByMark]);
 
   // The mode-aware color function the viewer paints with (null → native IFC color).
   const colorFor = useMemo(
     () => colorFnFor(colorMode, {
       statusByGuid, seqByGuid, fabByGuid,
       markByGuid, statusByMark, seqByMark, fabByMark,
+      // Per-piece coloring: a roster GUID with no individual fab status stays
+      // neutral instead of inheriting a same-mark sibling's color. Whole-assembly
+      // mode keeps the broad mark fallback so flipping a mark paints every part.
+      perPieceFab: fabScope === "piece",
     }),
-    [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark],
+    [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark, fabScope],
   );
 
   // Persist a freshly-picked model so it auto-loads next time: upload the .ifc to
@@ -261,57 +274,90 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
       qc.invalidateQueries({ queryKey: ["project-model", projectId] });
       setBuffer(null); setModelFile(null); setSource(null); setFileName(null);
       setPicked(null); setRoster({ step: "idle" }); setRemoveConfirm(false);
+      setOptimisticFab(new Map()); setOptimisticFabByMark(new Map());
       toast.success("Model removed from this project.");
     } catch (err) {
       toast.error("Couldn't remove the model: " + (err?.message || String(err)));
     }
   };
 
-  // Manual fab-status assignment: set every part of an assembly (matched by
-  // piece_mark) to a stage, then recolor by it. Null clears the status.
+  // Manual fab-status assignment. Two scopes:
+  //  - guid: per-piece — UPDATE only the selected element_guid(s), so only the
+  //    clicked piece changes (siblings sharing the mark are untouched).
+  //  - mark: whole-assembly (or guid-less fallback) — UPDATE every row sharing
+  //    the piece_mark, flipping the whole assembly.
+  // Null status clears the stage.
   const assignFab = useMutation({
-    mutationFn: async ({ pieceMarks, status }) => {
-      const { error } = await supabase
+    mutationFn: async ({ mode, guids, marks, status }) => {
+      let query = supabase
         .from("model_elements")
         .update({ fab_status: status })
         .eq("project_id", projectId)
-        .in("piece_mark", pieceMarks)
         .eq("is_deleted", false);
+      query = mode === "guid"
+        ? query.in("element_guid", guids)
+        : query.in("piece_mark", marks);
+      const { error } = await query;
       if (error) throw error;
-      return { status, pieceMarks };
+      return { mode, guids, marks, status };
     },
-    onSuccess: ({ status, pieceMarks }) => {
-      // Recolor NOW — set every loaded part of these assemblies (+ the selected
-      // ones) optimistically, so the colors flip immediately without the refetch.
-      const markSet = new Set(pieceMarks);
-      setOptimisticFab((prev) => {
-        const next = new Map(prev);
-        for (const r of modelElementRows || []) {
-          if (r?.element_guid && markSet.has(r.piece_mark)) next.set(r.element_guid, status);
-        }
-        for (const g of selectedGuids) next.set(g, status);
-        return next;
-      });
+    onSuccess: ({ mode, guids, marks, status }) => {
+      // Recolor NOW, scoped to match the write, so colors flip immediately
+      // without waiting on the (12k-row) refetch.
+      if (mode === "guid") {
+        // Per-piece: only the assigned GUID(s). Do NOT touch the mark map, so
+        // same-mark siblings keep their own (often native) color.
+        setOptimisticFab((prev) => {
+          const next = new Map(prev);
+          for (const g of guids) next.set(g, status);
+          return next;
+        });
+      } else {
+        // Whole-assembly: mirror onto the mark map (colors every part of the
+        // mark) AND set the loaded GUIDs of those marks so they paint at once.
+        const markSet = new Set(marks.map((m) => normalizePieceMark(m)));
+        setOptimisticFabByMark((prev) => {
+          const next = new Map(prev);
+          for (const m of marks) next.set(normalizePieceMark(m), status);
+          return next;
+        });
+        setOptimisticFab((prev) => {
+          const next = new Map(prev);
+          for (const r of modelElementRows || []) {
+            if (r?.element_guid && markSet.has(normalizePieceMark(r.piece_mark))) next.set(r.element_guid, status);
+          }
+          for (const g of selectedGuids) next.set(g, status);
+          return next;
+        });
+      }
       setColorMode("fab");
       qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
-      const n = pieceMarks.length;
-      toast.success(status ? `${n} piece${n === 1 ? "" : "s"} → ${FAB_STATUS_META[status].label}` : "Fab status cleared");
+      const n = mode === "guid" ? guids.length : marks.length;
+      const unit = mode === "guid" ? "piece" : "mark";
+      toast.success(status
+        ? `${n} ${unit}${n === 1 ? "" : "s"} → ${FAB_STATUS_META[status].label}`
+        : "Fab status cleared");
     },
     onError: (e) => toast.error(e?.message || "Couldn't set fab status."),
   });
 
-  // Assign a status to every currently-selected piece (1 or many). Resolves the
-  // selection to piece marks using the clicked piece's LIVE mark first, so it
-  // works even when the rendered model's GUIDs don't match the saved roster.
+  // Assign a status to the current selection at the chosen scope. Per-piece
+  // targets the selected GUID(s) directly; whole-assembly (or a guid-less piece
+  // in per-piece mode) targets the piece mark(s).
   const setFab = (status) => {
-    const marks = resolveFabMarks({ picked, selectedGuids, guidToMark });
-    if (!marks.length) {
+    const target = resolveFabAssignment({ scope: fabScope, picked, selectedGuids, guidToMark });
+    if (target.mode === "none") {
       toast.error(selectedGuids.length
-        ? "This piece has no Assembly/Part mark to set a status on."
+        ? "This piece has no roster row or Assembly/Part mark to set a status on."
         : "Select a piece first.");
       return;
     }
-    assignFab.mutate({ pieceMarks: marks, status });
+    if (target.fellBackToMark) {
+      // Per-piece couldn't scope by GUID (CSV roster / re-exported model) — be
+      // explicit that this flips the whole mark instead of just the clicked part.
+      toast.info("This piece isn't matched to the model by GlobalId, so the status applies to its whole mark.");
+    }
+    assignFab.mutate({ mode: target.mode, guids: target.guids, marks: target.marks, status });
   };
 
   const legend = useMemo(() => {
@@ -500,6 +546,30 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
                   <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>Set fab status</div>
                   {hasRoster ? (
                     <>
+                      {/* Scope toggle: per-piece (default) vs whole-assembly. */}
+                      <div role="group" aria-label="Fab status scope" style={{ display: "flex", gap: 4, marginTop: 7 }}>
+                        {[["piece", "This piece"], ["assembly", "Whole assembly"]].map(([key, label]) => {
+                          const active = fabScope === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => setFabScope(key)}
+                              style={{
+                                flex: 1, padding: "5px 6px", borderRadius: 6, cursor: "pointer",
+                                border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
+                                background: active ? "color-mix(in srgb, var(--accent) 16%, var(--bg-surface-high))" : "var(--bg-surface-low)",
+                                color: active ? "var(--accent)" : "var(--text-muted)",
+                                fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 700,
+                                letterSpacing: "0.04em", textTransform: "uppercase",
+                              }}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 7 }}>
                         {FAB_STATUS_ORDER.map((s) => {
                           const single = selectedGuids.length === 1 ? selectedGuids[0] : null;
@@ -527,9 +597,13 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
                         })}
                       </div>
                       <div style={{ ...mono, fontSize: 8.5, color: "var(--text-muted)", marginTop: 7, lineHeight: 1.4 }}>
-                        {selectedGuids.length > 1
-                          ? `Applies to all ${selectedGuids.length} selected pieces.`
-                          : `Applies to the whole assembly (${picked?.assemblyMark || picked?.partMark || "—"}).`}
+                        {fabScope === "assembly"
+                          ? (selectedGuids.length > 1
+                              ? `Applies to every part of all ${selectedGuids.length} selected marks.`
+                              : `Applies to the whole assembly (${picked?.assemblyMark || picked?.partMark || "—"}).`)
+                          : (selectedGuids.length > 1
+                              ? `Applies only to the ${selectedGuids.length} selected pieces.`
+                              : "Applies only to this piece — same-mark siblings are unaffected.")}
                       </div>
                     </>
                   ) : (

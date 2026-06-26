@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveFabMarks, summarizeFabStatus, FAB_STATUS_ORDER } from "../fabStatus";
+import { resolveFabMarks, resolveFabAssignment, summarizeFabStatus, FAB_STATUS_ORDER } from "../fabStatus";
 
 const map = (entries) => new Map(entries);
 
@@ -61,6 +61,82 @@ describe("resolveFabMarks", () => {
 
   it("is safe with no arguments", () => {
     expect(resolveFabMarks()).toEqual([]);
+  });
+});
+
+describe("resolveFabAssignment", () => {
+  it("per-piece (default) targets the selected GUID(s) that exist in the roster", () => {
+    const target = resolveFabAssignment({
+      picked: { assemblyMark: "A1" },
+      selectedGuids: ["g1", "g2"],
+      guidToMark: map([["g1", "A1"], ["g2", "A1"]]),
+    });
+    expect(target).toEqual({ mode: "guid", guids: ["g1", "g2"], marks: [] });
+  });
+
+  it("per-piece targets ONLY the one clicked GUID, not its same-mark siblings", () => {
+    // g1 and g2 share mark A1, but only g1 is selected → only g1 is targeted.
+    const target = resolveFabAssignment({
+      picked: { assemblyMark: "A1" },
+      selectedGuids: ["g1"],
+      guidToMark: map([["g1", "A1"], ["g2", "A1"]]),
+    });
+    expect(target.mode).toBe("guid");
+    expect(target.guids).toEqual(["g1"]);
+    expect(target.guids).not.toContain("g2");
+  });
+
+  it("per-piece keeps only roster-known GUIDs and de-dupes", () => {
+    const target = resolveFabAssignment({
+      selectedGuids: ["g1", "g1", "ghost"], // dup + one not in roster
+      guidToMark: map([["g1", "A1"]]),
+    });
+    expect(target).toEqual({ mode: "guid", guids: ["g1"], marks: [] });
+  });
+
+  it("per-piece falls back to the mark when NO selected GUID is in the roster (re-exported model)", () => {
+    // GUIDs drifted on re-export; the piece is still marked via its live pick.
+    const target = resolveFabAssignment({
+      picked: { assemblyMark: "703GR1009" },
+      selectedGuids: ["drifted-guid"],
+      guidToMark: map([["some-other", "A9"]]),
+    });
+    expect(target.mode).toBe("mark");
+    expect(target.marks).toEqual(["703GR1009"]);
+    expect(target.fellBackToMark).toBe(true);
+  });
+
+  it("per-piece falls back to the mark for a CSV roster (element_guid NULL → not in guidToMark)", () => {
+    const target = resolveFabAssignment({
+      picked: { partMark: "t1014" },
+      selectedGuids: ["render-guid-not-in-roster"],
+      guidToMark: map([]),
+    });
+    expect(target).toEqual({ mode: "mark", guids: [], marks: ["t1014"], fellBackToMark: true });
+  });
+
+  it("whole-assembly scope always resolves to marks (every part of the mark)", () => {
+    const target = resolveFabAssignment({
+      scope: "assembly",
+      picked: { assemblyMark: "A1" },
+      selectedGuids: ["g1"],
+      guidToMark: map([["g1", "A1"]]),
+    });
+    expect(target).toEqual({ mode: "mark", guids: [], marks: ["A1"] });
+    expect(target.fellBackToMark).toBeUndefined(); // a deliberate choice, not a fallback
+  });
+
+  it("returns mode 'none' for a guid-less, unmarked selection with nothing to target", () => {
+    const target = resolveFabAssignment({
+      picked: { name: "JOIST" }, // no marks
+      selectedGuids: ["gX"],
+      guidToMark: map([]),
+    });
+    expect(target.mode).toBe("none");
+  });
+
+  it("is safe with no arguments (defaults to per-piece, nothing selected)", () => {
+    expect(resolveFabAssignment()).toEqual({ mode: "none", guids: [], marks: [] });
   });
 });
 
