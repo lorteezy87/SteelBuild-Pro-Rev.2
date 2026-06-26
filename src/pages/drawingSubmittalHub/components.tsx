@@ -449,11 +449,11 @@ function ModelMappingSection({ summary, elements, onImport }: { summary?: Elemen
                 {FAB_STATUS_ORDER.map((s) => {
                   const count = fab.counts[s] || 0;
                   if (!count) return null;
-                  const meta = (FAB_STATUS_META as any)[s];
+                  const meta = FAB_STATUS_META[s as keyof typeof FAB_STATUS_META];
                   return (
                     <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 8px", borderRadius: 999, background: surface2, border: `1px solid ${border}`, fontFamily: mono, fontSize: 10, color: textPrimary }}>
                       <span style={{ width: 9, height: 9, borderRadius: 2, background: meta.color }} />
-                      {meta.label} · <span className="sbd-num">{count}</span>
+                      {meta.label} <span aria-hidden="true">·</span> <span className="sbd-num">{count}</span>
                     </span>
                   );
                 })}
