@@ -127,31 +127,35 @@ The differentiator. ~30 module icons produced as a cohesive raster set.
 
 ### 5.1 Art-direction spec (one master style)
 
-Locked style (2026-06-26): **dark glass tile + inner-glow emblem.** Darker and more
-photoreal than a bright colored squircle — the premium/industrial direction the owner
-approved.
+Locked style (2026-06-26, REVISED): **cinematic photographic tiles.** This supersedes
+the earlier glossy-3D-emblem direction after the owner provided full-grid photo-tile
+reference mockups. Each launcher module is a real construction photograph, darkened,
+with a clean white outline icon + label on top — premium, editorial, unmistakably steel.
 
-- **Tile:** rounded-square ("squircle") in **dark glass** — a near-black charcoal
-  gradient body (top ~`#222b3a` → mid `#121826` → bottom `#070a11`) with a beveled,
-  light-catching top edge, an inner ambient-occlusion ring, a glossy top **sheen
-  sweep**, and a floating **contact shadow** beneath. Reads as one cohesive dark
-  family.
-- **Emblem:** a detailed, dimensional object per module that **glows from within** —
-  the module's phase color sits as a soft radial glow behind/under the emblem so the
-  color identity reads on the dark tile without brightening the whole tile. Emblem
-  materials are realistic (steel, glass, paint, gold) with their own speculars/AO.
-- **Lighting/camera:** fixed across all icons (front-slightly-top, key light
-  upper-left), so the set is consistent.
-- **Phase-color identity (as inner glow, not tile fill):** Detailing = executive gold;
-  Fabrication = steel blue / foundry orange; Delivery = teal; Field/Erection = green;
-  Cost = amber; cross-cutting/admin = neutral steel-gray.
-- **Output:** transparent background, square canvas, **1024px master** → derived
-  `@3x/@2x/@1x` (WebP).
-- **Legibility:** each icon must read clearly at **dock size (~44–52px)** — emblems
-  bold and uncluttered, glow strong enough to carry color identity when small.
-- The hand-drawn SVG iterations in this brainstorming session are the **direction
-  reference**; the production raster pack should match this style and push material
-  realism further.
+- **Tile:** a landscape card filled by a **construction photograph** (steel stacks,
+  detailing on-screen, a welder throwing sparks, erection cranes, flatbeds loaded with
+  steel, stacked hard hats, calculators/paperwork, contracts, bolts, a dashboard on a
+  laptop), with a **dark gradient scrim** (stronger toward the bottom) so the
+  foreground reads. Slight corner rounding; thin near-black gutters on a near-black
+  canvas.
+- **Foreground:** a **white outline icon** (the shared lucide set from
+  `src/config/pageIcons`) centered slightly above middle, with a **white label**
+  centered beneath. Two-weight type, sentence case.
+- **Photography direction:** consistent dark, moody, real (not stocky), shallow depth
+  of field, cool industrial grade; framed so the center stays uncluttered for the icon.
+  Landscape ~16:9–3:2.
+- **Full launcher set:** EVERY module in the real nav gets a tile (not a curated
+  subset) — matches the owner's full-grid reference. Distinct photos where it matters;
+  tasteful reuse of a shared library is fine for similar modules (paperwork shots for
+  financial modules, PPE/site shots for field, steel shots for production).
+- **Fallback:** a module with no photo yet renders a **dark steel-gradient tile** +
+  the same white icon + label — so the launcher ships and looks coherent before the
+  photo library is complete (mirrors the lucide-icon fallback philosophy).
+- **Output:** photos as `public/photos/desktop/<page>.webp` (landscape), sensible
+  compression; lazy-loaded in the launcher grid.
+- **Icons elsewhere stay vector:** dock chips and all in-app inline icons use the white
+  lucide outline set — no raster there.
+- The owner's reference mockups in this session are the **direction reference**.
 
 ### 5.2 Module → icon concept map (initial ~30)
 
