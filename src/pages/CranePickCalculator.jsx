@@ -25,6 +25,13 @@ import {
   angleFromHeightSpan,
   buildWarnings,
 } from "@/utils/riggingCalculations";
+import CalcKey from "@/components/calculators/CalcKey";
+import CalcTape from "@/components/calculators/CalcTape";
+import useCalcTape from "@/components/calculators/useCalcTape";
+import "@/components/calculators/calc.css";
+
+// Persisted Pick-History tape key (device-kit history, NOT part of the math).
+const PICK_TAPE_KEY = "crane-pick-history";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const body = { fontFamily: "var(--font-body)" };
@@ -98,7 +105,13 @@ export default function CranePickCalculator() {
   const [boomLength, setBoomLength]       = useState("");
   const [workingRadius, setWorkingRadius] = useState("");
   const [counterweight, setCounterweight] = useState("");
-  const [summaryOpen, setSummaryOpen]     = useState(false);
+  // The summary modal renders a SNAPSHOT (`summaryData`) rather than reading
+  // live state directly, so a Pick-History recall can re-open a past pick.
+  const [summaryData, setSummaryData]     = useState(null);
+  const summaryOpen = summaryData !== null;
+
+  // ── Pick History (device-kit tape — persisted, NOT part of the math) ──
+  const pickTape = useCalcTape(PICK_TAPE_KEY, 30);
 
   // ── Derived values (live, no Calculate button) ──────────────
   // Parse all inputs once — downstream computations propagate NaN for
@@ -184,6 +197,35 @@ export default function CranePickCalculator() {
     setAngleDeg("60"); setHspanH(""); setHspanS("");
     setCraneCapacity("");
     setCraneModel(""); setBoomLength(""); setWorkingRadius(""); setCounterweight("");
+  };
+
+  // Build a self-contained snapshot of the current pick for the summary modal
+  // AND the Pick-History tape. Pure data — derives nothing new from the math.
+  const buildSnapshot = () => ({
+    pieceWeight: piece, riggingWeight: rigging, totalLoad,
+    numLegs, angleDegrees: effectiveAngle, laf, tensionPerLeg,
+    craneCapacity: cap, utilization,
+    capacityStatus, angleStatus, warnings,
+    craneModel, boomLength, workingRadius, counterweight,
+  });
+
+  // Generate Pick Summary — open the modal AND record the pick on the
+  // persisted history tape so a planner can recall earlier picks.
+  const openSummary = () => {
+    if (!hasValidResults) return;
+    const snapshot = buildSnapshot();
+    setSummaryData(snapshot);
+    pickTape.push({
+      expr: pickTapeExpr(snapshot),
+      value: `${snapshot.utilization.toFixed(0)}%`,
+      snapshot,
+    });
+  };
+
+  // Recall a historical pick — re-open the summary modal from its stored
+  // snapshot. Does not mutate the live inputs (read-only review).
+  const recallPick = (row) => {
+    if (row && row.snapshot) setSummaryData(row.snapshot);
   };
 
   // ── Render ────────────────────────────────────────────────
@@ -283,16 +325,18 @@ export default function CranePickCalculator() {
                   <div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                       <span style={{ ...labelStyle, marginBottom: 0 }}>Sling Angle</span>
-                      <div style={{ display: "flex", gap: 4 }}>
+                      <div className="crane-pick-keyrow" style={{ display: "flex", gap: 4 }}>
                         {[
-                          { key: ANGLE_MODES.DEGREES,     label: "DEGREES" },
+                          { key: ANGLE_MODES.DEGREES,     label: "DEG" },
                           { key: ANGLE_MODES.HEIGHT_SPAN, label: "H/S" },
                         ].map((m) => (
-                          <button key={m.key}
-                            onClick={() => setAngleMode(m.key)}
-                            style={modeToggleStyle(angleMode === m.key)}>
-                            {m.label}
-                          </button>
+                          <CalcKey
+                            key={m.key}
+                            label={m.label}
+                            variant={angleMode === m.key ? "accent" : "fn"}
+                            onPress={() => setAngleMode(m.key)}
+                            ariaLabel={m.key === ANGLE_MODES.DEGREES ? "Degrees angle mode" : "Height over span angle mode"}
+                          />
                         ))}
                       </div>
                     </div>
@@ -302,12 +346,15 @@ export default function CranePickCalculator() {
                         <input style={inputStyle} inputMode="decimal" value={angleDeg}
                           onChange={(e) => setAngleDeg(e.target.value)}
                           placeholder="0 – 90" />
-                        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                        <div className="crane-pick-keyrow" style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                           {ANGLE_PRESETS.map((a) => (
-                            <button key={a} onClick={() => setAngleDeg(String(a))}
-                              style={presetBtnStyle(String(a) === String(angleDeg))}>
-                              {a}°
-                            </button>
+                            <CalcKey
+                              key={a}
+                              label={`${a}°`}
+                              variant={String(a) === String(angleDeg) ? "accent" : "op"}
+                              onPress={() => setAngleDeg(String(a))}
+                              ariaLabel={`Set sling angle to ${a} degrees`}
+                            />
                           ))}
                         </div>
                       </>
@@ -362,12 +409,7 @@ export default function CranePickCalculator() {
                 <div>
                   <button
                     onClick={() => setRefOpen((v) => !v)}
-                    style={{
-                      background: "transparent", border: "1px solid var(--border-default)",
-                      borderRadius: 4, padding: "6px 10px", ...mono, fontSize: 9,
-                      letterSpacing: "0.10em", textTransform: "uppercase",
-                      color: "var(--text-secondary)", cursor: "pointer",
-                    }}
+                    style={keycapButtonStyle(false, { fullWidth: false })}
                   >
                     {refOpen ? "▾" : "▸"} Reference Details (metadata only)
                   </button>
@@ -470,29 +512,18 @@ export default function CranePickCalculator() {
               </div>
             </div>
 
-            {/* SECTION 5 — Actions */}
+            {/* SECTION 5 — Actions (keycap-styled to match the device kit) */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button
-                onClick={() => setSummaryOpen(true)}
+                onClick={openSummary}
                 disabled={!hasValidResults}
-                style={{
-                  ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
-                  padding: "10px 18px", borderRadius: 6, cursor: hasValidResults ? "pointer" : "not-allowed",
-                  background: "var(--status-review)", color: "#FFFFFF",
-                  border: "none", textTransform: "uppercase",
-                  opacity: hasValidResults ? 1 : 0.55,
-                }}
+                style={keycapButtonStyle("accent", { disabled: !hasValidResults })}
               >
                 Generate Pick Summary
               </button>
               <button
                 onClick={clearAll}
-                style={{
-                  ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
-                  padding: "10px 18px", borderRadius: 6, cursor: "pointer",
-                  background: "var(--bg-surface)", color: "var(--text-secondary)",
-                  border: "1px solid var(--border-default)", textTransform: "uppercase",
-                }}
+                style={keycapButtonStyle("danger")}
               >
                 Clear
               </button>
@@ -501,16 +532,24 @@ export default function CranePickCalculator() {
                   v2: Supabase `lift_plans` table keyed on project_id. */}
               <button
                 onClick={() => toast.info("Saving picks to a project is coming soon.")}
-                style={{
-                  ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
-                  padding: "10px 18px", borderRadius: 6, cursor: "pointer",
-                  background: "transparent", color: "var(--text-muted)",
-                  border: "1px dashed var(--border-default)", textTransform: "uppercase",
-                }}
+                style={keycapButtonStyle("stub")}
                 title="Future: save this pick to the active project's lift plan"
               >
                 Save to Project (soon)
               </button>
+            </div>
+
+            {/* Pick History — device-kit tape. Each generated Pick Summary is
+                recorded here; click a row to re-open that pick's summary. */}
+            <div>
+              <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 6 }}>
+                Pick History
+              </div>
+              <CalcTape
+                rows={pickTape.rows}
+                onRecall={recallPick}
+                onClear={pickTape.clear}
+              />
             </div>
           </div>
         </div>
@@ -529,17 +568,11 @@ export default function CranePickCalculator() {
           }
         `}</style>
 
-        {/* Pick Summary modal */}
+        {/* Pick Summary modal — renders the captured snapshot (live or recalled) */}
         {summaryOpen && (
           <PickSummaryModal
-            onClose={() => setSummaryOpen(false)}
-            data={{
-              pieceWeight: piece, riggingWeight: rigging, totalLoad,
-              numLegs, angleDegrees: effectiveAngle, laf, tensionPerLeg,
-              craneCapacity: cap, utilization,
-              capacityStatus, angleStatus, warnings,
-              craneModel, boomLength, workingRadius, counterweight,
-            }}
+            onClose={() => setSummaryData(null)}
+            data={summaryData}
           />
         )}
       </div>
@@ -675,9 +708,9 @@ function PickSummaryModal({ onClose, data }) {
           borderTop: "1px solid var(--divider)", background: "var(--bg-surface-low)",
           justifyContent: "flex-end",
         }}>
-          <button onClick={onClose} style={footerBtn("secondary")}>Close</button>
-          <button onClick={copySummary} style={footerBtn("secondary")}>Copy</button>
-          <button onClick={doPrint}    style={footerBtn("primary")}>Print</button>
+          <button onClick={onClose}    style={keycapButtonStyle("ghost", { compact: true })}>Close</button>
+          <button onClick={copySummary} style={keycapButtonStyle("ghost", { compact: true })}>Copy</button>
+          <button onClick={doPrint}     style={keycapButtonStyle("accent", { compact: true })}>Print</button>
         </div>
       </div>
     </div>
@@ -734,48 +767,93 @@ function buildSummaryText(d) {
   return lines.join("\n");
 }
 
-function modeToggleStyle(active) {
-  return {
-    ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
-    padding: "3px 8px", borderRadius: 4, cursor: "pointer",
-    background: active ? "var(--accent)"     : "var(--bg-surface-low)",
-    color:      active ? "var(--accent-text)": "var(--text-secondary)",
-    border:     `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
+/**
+ * keycapButtonStyle — tactile "keycap" chrome for the page's action / toggle
+ * buttons so they read as part of the SteelBuild calculator device kit. This
+ * is presentation only; it changes NO rigging math or workflow behavior.
+ *
+ *   variant — "accent" | "danger" | "ghost" | "stub" | false (neutral)
+ *   opts    — { disabled, compact, fullWidth }
+ */
+function keycapButtonStyle(variant, opts = {}) {
+  const { disabled = false, compact = false } = opts;
+  const base = {
+    ...mono,
+    fontSize: compact ? 10 : 11,
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    padding: compact ? "8px 16px" : "10px 18px",
+    minHeight: compact ? 38 : 44,
+    borderRadius: 10,
+    cursor: disabled ? "not-allowed" : "pointer",
+    // Subtle keycap relief — matches the .sbd-calc-key shadow language.
+    boxShadow: "0 1px 0 var(--border-strong), inset 0 1px 0 rgba(255,255,255,0.04)",
+    transition: "transform 0.04s, background 0.12s",
   };
-}
-function presetBtnStyle(active) {
-  return {
-    ...mono, fontSize: 10, fontWeight: 700,
-    padding: "5px 10px", borderRadius: 4, cursor: "pointer",
-    background: active ? "var(--accent-muted)" : "var(--bg-surface)",
-    color:      active ? "var(--accent)"       : "var(--text-secondary)",
-    border:     `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
-  };
-}
-function footerBtn(variant) {
-  if (variant === "primary") {
+
+  if (variant === "accent") {
     return {
-      ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-      padding: "8px 16px", borderRadius: 6, cursor: "pointer",
-      background: "var(--status-review)", color: "#FFFFFF",
-      border: "none", textTransform: "uppercase",
+      ...base,
+      background: "var(--accent)",
+      color: "var(--accent-text, #04121f)",
+      border: "1px solid var(--accent)",
+      opacity: disabled ? 0.55 : 1,
+      cursor: disabled ? "not-allowed" : "pointer",
     };
   }
+  if (variant === "danger") {
+    return {
+      ...base,
+      background: "var(--bg-surface)",
+      color: "var(--status-error)",
+      border: "1px solid var(--danger-border, var(--status-error))",
+    };
+  }
+  if (variant === "stub") {
+    // Disabled-affordance stub (Save to Project) — dashed, muted, discoverable.
+    return {
+      ...base,
+      background: "transparent",
+      color: "var(--text-muted)",
+      border: "1px dashed var(--border-default)",
+      boxShadow: "none",
+    };
+  }
+  // "ghost" / neutral — quiet keycap.
   return {
-    ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-    padding: "8px 16px", borderRadius: 6, cursor: "pointer",
-    background: "var(--bg-surface-low)", color: "var(--text-secondary)",
-    border: "1px solid var(--border-default)", textTransform: "uppercase",
+    ...base,
+    background: "var(--bg-surface)",
+    color: "var(--text-secondary)",
+    border: "1px solid var(--border-strong)",
   };
+}
+
+/**
+ * pickTapeExpr — compact one-line description of a pick for the history tape.
+ * Presentation only; reads the snapshot, derives no new engineering values.
+ */
+function pickTapeExpr(s) {
+  const tons = Number.isFinite(s.totalLoad) ? `${(s.totalLoad / 2000).toFixed(1)}T` : "—";
+  const angle = s.numLegs === 1
+    ? "vert"
+    : (Number.isFinite(s.angleDegrees) ? `${s.angleDegrees.toFixed(0)}°` : "—");
+  return `${tons} · ${s.numLegs}-leg · ${angle}`;
 }
 
 // ── Sub-components ────────────────────────────────────────────────
 function SectionHeader({ n, label }) {
   return (
     <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", alignItems: "center", gap: 10 }}>
+      {/* Keycap-style step badge — ties the section card to the device kit. */}
       <span style={{
         ...mono, fontSize: 9, fontWeight: 800, color: "var(--accent)",
-        letterSpacing: "0.16em",
+        letterSpacing: "0.10em",
+        minWidth: 22, height: 22, display: "inline-flex",
+        alignItems: "center", justifyContent: "center",
+        borderRadius: 6, border: "1px solid var(--accent)",
+        background: "color-mix(in srgb, var(--accent) 12%, transparent)",
+        boxShadow: "0 1px 0 var(--border-strong), inset 0 1px 0 rgba(255,255,255,0.04)",
       }}>{String(n).padStart(2, "0")}</span>
       <span style={{
         ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)",
