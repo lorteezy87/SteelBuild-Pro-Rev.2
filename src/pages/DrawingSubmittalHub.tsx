@@ -689,49 +689,70 @@ export default function DrawingSubmittalHub() {
         padding: "24px 28px",
       }}
     >
-      {/* ── Command Bar ──────────────────────────────────────────────── */}
-      <CommandBar
-        eyebrow={projectName ? `Detailing control - ${projectName}` : "Detailing control"}
-        title="Drawing & Submittal Control"
-        count={drawingKpis.totalSets}
-        unit={` sets | ${drawingKpis.totalSheets} sheets`}
-        subtitle="Set-level drawing packages, submittal status, due dates, ownership, and fabrication-release readiness."
-      >
-        <HeaderSignal
-          icon={AlertTriangle}
-          label="Overdue"
-          value={triage.overdue.length}
-          tone={triage.overdue.length ? error : success}
+      {/* ── Command Bar / Module Header (flag-branched) ──────────────── */}
+      {desktopShell ? (
+        <ModuleHeader
+          page="DrawingSubmittalHub"
+          title="Drawing & Submittal Control"
+          subtitle={projectName ? `Detailing control · ${projectName}` : "Detailing control"}
+          stats={[
+            { label: "Overdue", value: triage.overdue.length, tone: triage.overdue.length ? "danger" : "neutral" },
+            { label: "At Risk", value: triage.atRiskCount, tone: triage.atRiskCount ? "amber" : "neutral" },
+            { label: "In Review", value: drawingKpis.inReview, tone: drawingKpis.inReview ? "blue" : "neutral" },
+            { label: "Unlinked", value: triage.unlinkedSubmittalItems.length, tone: triage.unlinkedSubmittalItems.length ? "amber" : "neutral" },
+          ]}
+          actions={
+            <button type="button" className="sbd-btn-ghost" onClick={() => setLeadModalOpen(true)}
+              title="Edit the project's detailing lead times (drives the backward schedule)"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 32 }}>
+              <CalendarClock size={14} /> Lead Times
+            </button>
+          }
         />
-        <HeaderSignal
-          icon={CalendarClock}
-          label="At Risk"
-          value={triage.atRiskCount}
-          tone={triage.atRiskCount ? warning : success}
-        />
-        <HeaderSignal
-          icon={Gauge}
-          label="In Review"
-          value={drawingKpis.inReview}
-          tone={drawingKpis.inReview > 0 ? info : textMuted}
-        />
-        <HeaderSignal
-          icon={Link2}
-          label="Unlinked"
-          value={triage.unlinkedSubmittalItems.length}
-          tone={triage.unlinkedSubmittalItems.length ? warning : textMuted}
-        />
-        <button
-          type="button"
-          className="sbd-btn-ghost"
-          onClick={() => setLeadModalOpen(true)}
-          title="Edit the project's detailing lead times (drives the backward schedule)"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
+      ) : (
+        <CommandBar
+          eyebrow={projectName ? `Detailing control - ${projectName}` : "Detailing control"}
+          title="Drawing & Submittal Control"
+          count={drawingKpis.totalSets}
+          unit={` sets | ${drawingKpis.totalSheets} sheets`}
+          subtitle="Set-level drawing packages, submittal status, due dates, ownership, and fabrication-release readiness."
         >
-          <CalendarClock size={14} />
-          Lead Times
-        </button>
-      </CommandBar>
+          <HeaderSignal
+            icon={AlertTriangle}
+            label="Overdue"
+            value={triage.overdue.length}
+            tone={triage.overdue.length ? error : success}
+          />
+          <HeaderSignal
+            icon={CalendarClock}
+            label="At Risk"
+            value={triage.atRiskCount}
+            tone={triage.atRiskCount ? warning : success}
+          />
+          <HeaderSignal
+            icon={Gauge}
+            label="In Review"
+            value={drawingKpis.inReview}
+            tone={drawingKpis.inReview > 0 ? info : textMuted}
+          />
+          <HeaderSignal
+            icon={Link2}
+            label="Unlinked"
+            value={triage.unlinkedSubmittalItems.length}
+            tone={triage.unlinkedSubmittalItems.length ? warning : textMuted}
+          />
+          <button
+            type="button"
+            className="sbd-btn-ghost"
+            onClick={() => setLeadModalOpen(true)}
+            title="Edit the project's detailing lead times (drives the backward schedule)"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
+          >
+            <CalendarClock size={14} />
+            Lead Times
+          </button>
+        </CommandBar>
+      )}
 
       {/* ── KPI Strip ────────────────────────────────────────────────── */}
       <div className="sbp-hub-kpi-strip" style={{
