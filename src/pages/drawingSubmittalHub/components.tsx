@@ -2169,117 +2169,119 @@ export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isL
   if (isLoading) return <LoadingSkeleton />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* ── Analytics (cycle-time + aging) ───────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: 16 }}>
-        <CycleTimeCard submittals={submittals} isLoading={isLoading} />
-        <AgingReportTable submittals={submittals} isLoading={isLoading} />
-      </div>
-
-      {/* ── Summary Bar ──────────────────────────────────────────── */}
-      <div style={{
-        display: "flex", gap: 10, flexWrap: "wrap",
-        alignItems: "center",
-        padding: 14,
-        borderRadius: 16,
-        border: `1px solid ${border}`,
-        background: surface1,
-      }}>
-        <div style={{ flex: "1 1 320px", minWidth: 220 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <Layers3 size={15} color={accent} />
-            <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: accent }}>
-              Approval Matrix
-            </div>
-          </div>
-          <label style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            maxWidth: 520,
-            padding: "8px 11px",
-            borderRadius: 10,
-            border: `1px solid ${border}`,
-            background: surface2,
-            color: textMuted,
-          }}>
-          <Search size={15} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search sets, submittals..."
-            style={{
-              width: "100%",
-              background: "transparent",
-              color: textPrimary,
-              border: 0,
-              fontFamily: mono, fontSize: 12,
-              outline: "none",
-            }}
-          />
-          </label>
+    <SectionCard title="Approval matrix">
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* ── Analytics (cycle-time + aging) ───────────────────────── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: 16 }}>
+          <CycleTimeCard submittals={submittals} isLoading={isLoading} />
+          <AgingReportTable submittals={submittals} isLoading={isLoading} />
         </div>
-        <SummaryChip icon={Layers3} label="Sets" value={summary.total} color={accent} />
-        <SummaryChip icon={Link2} label="No Submittal" value={summary.noSubmittal} color={textMuted} />
-        <SummaryChip icon={AlertTriangle} label="Overdue" value={summary.overdue} color={error} />
-        <SummaryChip icon={Clock3} label="Due Soon" value={summary.dueSoon} color={warning} />
-        <SummaryChip icon={ClipboardList} label="Pending" value={summary.pending} color={warning} />
-        <SummaryChip icon={ShieldCheck} label="Approved" value={summary.approved} color={success} />
-        <SummaryChip icon={AlertTriangle} label="Needs Action" value={summary.rejected} color={review} />
-      </div>
 
-      {/* ── Matrix Table ─────────────────────────────────────────── */}
-      <div className="sbd-card" style={{
-        borderRadius: 16, border: `1px solid ${border}`,
-        overflowX: "auto",
-        padding: 0,
-      }}>
-        <table className="sbd-table" style={{
-          width: "100%", minWidth: 980, borderCollapse: "collapse",
-          fontFamily: mono, fontSize: 12,
+        {/* ── Summary Bar ──────────────────────────────────────────── */}
+        <div style={{
+          display: "flex", gap: 10, flexWrap: "wrap",
+          alignItems: "center",
+          padding: 14,
+          borderRadius: 16,
+          border: `1px solid ${border}`,
+          background: surface1,
         }}>
-          <thead>
-            <tr style={{ background: surface2 }}>
-              <Th>Drawing Set Package</Th>
-              <Th>Set #</Th>
-              <Th>Discipline</Th>
-              <Th style={{ textAlign: "center" }}>Sheets</Th>
-              <Th>Linked Submittal</Th>
-              <Th>Status</Th>
-              <Th>Due Status</Th>
-              <Th style={{ textAlign: "center" }}>Round</Th>
-              <Th>Ball In Court</Th>
-              <Th>Submitted</Th>
-              <Th>Required</Th>
-              <Th>Returned</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {matrixRows.length === 0 ? (
-              <tr>
-                <td colSpan={12} style={{
-                  padding: 40, textAlign: "center", color: textMuted,
-                }}>
-                  {search ? "No matching drawing sets." : "No drawing sets yet."}
-                </td>
+          <div style={{ flex: "1 1 320px", minWidth: 220 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <Layers3 size={15} color={accent} />
+              <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: accent }}>
+                Approval Matrix
+              </div>
+            </div>
+            <label style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              maxWidth: 520,
+              padding: "8px 11px",
+              borderRadius: 10,
+              border: `1px solid ${border}`,
+              background: surface2,
+              color: textMuted,
+            }}>
+            <Search size={15} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search sets, submittals..."
+              style={{
+                width: "100%",
+                background: "transparent",
+                color: textPrimary,
+                border: 0,
+                fontFamily: mono, fontSize: 12,
+                outline: "none",
+              }}
+            />
+            </label>
+          </div>
+          <SummaryChip icon={Layers3} label="Sets" value={summary.total} color={accent} />
+          <SummaryChip icon={Link2} label="No Submittal" value={summary.noSubmittal} color={textMuted} />
+          <SummaryChip icon={AlertTriangle} label="Overdue" value={summary.overdue} color={error} />
+          <SummaryChip icon={Clock3} label="Due Soon" value={summary.dueSoon} color={warning} />
+          <SummaryChip icon={ClipboardList} label="Pending" value={summary.pending} color={warning} />
+          <SummaryChip icon={ShieldCheck} label="Approved" value={summary.approved} color={success} />
+          <SummaryChip icon={AlertTriangle} label="Needs Action" value={summary.rejected} color={review} />
+        </div>
+
+        {/* ── Matrix Table ─────────────────────────────────────────── */}
+        <div className="sbd-card" style={{
+          borderRadius: 16, border: `1px solid ${border}`,
+          overflowX: "auto",
+          padding: 0,
+        }}>
+          <table className="sbd-table" style={{
+            width: "100%", minWidth: 980, borderCollapse: "collapse",
+            fontFamily: mono, fontSize: 12,
+          }}>
+            <thead>
+              <tr style={{ background: surface2 }}>
+                <Th>Drawing Set Package</Th>
+                <Th>Set #</Th>
+                <Th>Discipline</Th>
+                <Th style={{ textAlign: "center" }}>Sheets</Th>
+                <Th>Linked Submittal</Th>
+                <Th>Status</Th>
+                <Th>Due Status</Th>
+                <Th style={{ textAlign: "center" }}>Round</Th>
+                <Th>Ball In Court</Th>
+                <Th>Submitted</Th>
+                <Th>Required</Th>
+                <Th>Returned</Th>
               </tr>
-            ) : (
-              matrixRows.map((row) => (
-                <MatrixRow
-                  key={row.id}
-                  drawingSet={row}
-                  sub={row.latestSubmittal}
-                  due={row.due}
-                  allSubmittals={row.submittals}
-                  roundsBySubmittal={roundsBySubmittal}
-                />
-              ))
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {matrixRows.length === 0 ? (
+                <tr>
+                  <td colSpan={12} style={{
+                    padding: 40, textAlign: "center", color: textMuted,
+                  }}>
+                    {search ? "No matching drawing sets." : "No drawing sets yet."}
+                  </td>
+                </tr>
+              ) : (
+                matrixRows.map((row) => (
+                  <MatrixRow
+                    key={row.id}
+                    drawingSet={row}
+                    sub={row.latestSubmittal}
+                    due={row.due}
+                    allSubmittals={row.submittals}
+                    roundsBySubmittal={roundsBySubmittal}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </SectionCard>
   );
 }
 
