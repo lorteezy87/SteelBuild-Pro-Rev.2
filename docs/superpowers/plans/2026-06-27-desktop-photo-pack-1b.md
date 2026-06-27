@@ -93,7 +93,22 @@ Final prompt for each = **[master style above] + [subject below]**. Filename col
 - `PHOTO_ASSETS` in `src/config/launcherConfig.js` is pre-filled with all 31 `/photos/desktop/<PageKey>.webp` paths.
 - Drop folder: `public/photos/desktop/` (served at `/photos/desktop/...`).
 
-**Your loop:** generate an image → save as the exact `<PageKey>.webp` → drop in `public/photos/desktop/` → reload the launcher; that tile now shows the photo. No code changes needed per photo.
+**Optimizer:** `scripts/optimize-desktop-photos.mjs` turns raw generated images
+into finished tiles. Drop images (any size/format — png/jpg/webp/avif) into
+`public/photos/desktop/_raw/`, named by PageKey **or** human label
+(`FabRelease.png`, `fab release.jpg`, `schedule of values.png` all work), then run:
+
+```powershell
+node scripts/optimize-desktop-photos.mjs
+```
+
+It center-crops to 3:2, resizes to 1536×1024, encodes WebP under ~180 KB, writes
+`public/photos/desktop/<PageKey>.webp`, and prints what it placed + which of the 31
+are still missing. (`sharp` self-installs once into the gitignored `scripts/.imgtools/`;
+`_raw/` is gitignored, the optimized `.webp` outputs are committed.)
+
+**Your loop:** generate images → drop them in `_raw/` → run the script → reload the
+launcher; the tiles light up. No per-photo code changes needed.
 
 ## 4. Acceptance
 - All 31 tiles show distinct, cohesive photos with legible white icon + label.
