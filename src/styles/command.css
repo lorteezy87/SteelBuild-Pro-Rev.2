@@ -1,0 +1,106 @@
+/* Command UI — light-default design system, matched to 06_rfis.png.
+   Scoped under [data-skin="command"] so it never touches the classic dark app. */
+[data-skin="command"] {
+  --cmd-bg: #f4f6f9;
+  --cmd-surface: #ffffff;
+  --cmd-border: #e4e8ee;
+  --cmd-text: #1b2430;
+  --cmd-text-muted: #6b7585;
+  --cmd-gold: #d7a928;
+  --cmd-good: #1f9d57;
+  --cmd-warn: #c9810b;
+  --cmd-danger: #d8463d;
+  --cmd-info: #2f6fd0;
+  --cmd-review: #6b54c8;
+  background: var(--cmd-bg);
+  color: var(--cmd-text);
+}
+[data-skin="command"] .rfi-cc { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+
+/* Hero — light, dark text, optional faint photo from the right */
+[data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 14px; background: var(--cmd-surface); overflow: hidden; }
+[data-skin="command"] .cmd-hero--photo::after { content: ""; position: absolute; inset: 0; background: var(--cmd-hero-photo) right center / 55% cover no-repeat; opacity: 0.16; pointer-events: none; }
+[data-skin="command"] .cmd-hero--photo::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--cmd-surface) 32%, rgba(255,255,255,0.4) 100%); pointer-events: none; z-index: 1; }
+[data-skin="command"] .cmd-hero__left, [data-skin="command"] .cmd-hero__right { position: relative; z-index: 2; }
+[data-skin="command"] .cmd-hero__left { display: flex; gap: 14px; align-items: flex-start; }
+[data-skin="command"] .cmd-hero__icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #fdf3da; color: var(--cmd-gold); flex-shrink: 0; }
+[data-skin="command"] .cmd-hero__title { font-size: 26px; font-weight: 700; margin: 0; color: var(--cmd-text); }
+[data-skin="command"] .cmd-hero__subtitle { margin: 3px 0 11px; max-width: 520px; color: var(--cmd-text-muted); font-size: 13px; }
+[data-skin="command"] .cmd-hero__chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+[data-skin="command"] .cmd-hero__project { font-weight: 600; font-size: 13px; }
+[data-skin="command"] .cmd-chip { padding: 3px 10px; border-radius: 999px; background: #eef1f5; color: var(--cmd-text-muted); font-size: 12px; }
+[data-skin="command"] .cmd-chip--good { background: #e3f5ea; color: var(--cmd-good); }
+[data-skin="command"] .cmd-hero__right { display: flex; gap: 12px; }
+[data-skin="command"] .cmd-statcard { min-width: 96px; padding: 10px 14px; border: 1px solid var(--cmd-border); border-radius: 10px; background: var(--cmd-surface); text-align: center; }
+[data-skin="command"] .cmd-statcard__value { font-size: 24px; font-weight: 700; }
+[data-skin="command"] .cmd-statcard__label { font-size: 11px; color: var(--cmd-text-muted); }
+
+/* KPI cards — a row of individual white cards */
+[data-skin="command"] .cmd-kpi-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
+[data-skin="command"] .cmd-kpi { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; padding: 14px; }
+[data-skin="command"] .cmd-kpi__icon { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: #f1f4f8; color: var(--cmd-text-muted); margin-bottom: 8px; }
+[data-skin="command"] .cmd-kpi__value { font-size: 26px; font-weight: 700; line-height: 1.1; }
+[data-skin="command"] .cmd-kpi__label { font-size: 12px; color: var(--cmd-text); margin-top: 2px; }
+[data-skin="command"] .cmd-kpi__sub { font-size: 11px; color: var(--cmd-text-muted); }
+[data-skin="command"] .cmd-kpi--good .cmd-kpi__value { color: var(--cmd-good); }
+[data-skin="command"] .cmd-kpi--good .cmd-kpi__icon { background: #e3f5ea; color: var(--cmd-good); }
+[data-skin="command"] .cmd-kpi--warn .cmd-kpi__value { color: var(--cmd-warn); }
+[data-skin="command"] .cmd-kpi--warn .cmd-kpi__icon { background: #fdf1dc; color: var(--cmd-warn); }
+[data-skin="command"] .cmd-kpi--danger .cmd-kpi__value { color: var(--cmd-danger); }
+[data-skin="command"] .cmd-kpi--danger .cmd-kpi__icon { background: #fae4e3; color: var(--cmd-danger); }
+[data-skin="command"] .cmd-kpi--info .cmd-kpi__value { color: var(--cmd-info); }
+[data-skin="command"] .cmd-kpi--info .cmd-kpi__icon { background: #e6effb; color: var(--cmd-info); }
+
+/* Decision panels */
+[data-skin="command"] .cmd-panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+[data-skin="command"] .cmd-panel { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; }
+[data-skin="command"] .cmd-panel__head { display: flex; justify-content: space-between; align-items: center; padding: 13px 16px; border-bottom: 1px solid var(--cmd-border); }
+[data-skin="command"] .cmd-panel__title { font-size: 14px; font-weight: 700; margin: 0; }
+[data-skin="command"] .cmd-panel__viewall { background: none; border: none; color: var(--cmd-info); cursor: pointer; font-size: 12px; }
+[data-skin="command"] .cmd-panel__body { padding: 6px 16px 12px; }
+[data-skin="command"] .cmd-row { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 9px 0; border-top: 1px solid var(--cmd-border); }
+[data-skin="command"] .cmd-row.is-clickable { cursor: pointer; }
+[data-skin="command"] .cmd-row:first-child { border-top: none; }
+[data-skin="command"] .cmd-row__num { font-weight: 700; font-size: 13px; }
+[data-skin="command"] .cmd-row__meta { font-size: 12px; color: var(--cmd-text-muted); }
+
+/* Pills */
+[data-skin="command"] .cmd-pill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+[data-skin="command"] .cmd-pill--neutral { background: #eef1f5; color: #4a5560; }
+[data-skin="command"] .cmd-pill--good { background: #e3f5ea; color: var(--cmd-good); }
+[data-skin="command"] .cmd-pill--warn { background: #fdf1dc; color: var(--cmd-warn); }
+[data-skin="command"] .cmd-pill--danger { background: #fae4e3; color: var(--cmd-danger); }
+[data-skin="command"] .cmd-pill--info { background: #e6effb; color: var(--cmd-info); }
+[data-skin="command"] .cmd-pill--review { background: #ece8fb; color: var(--cmd-review); }
+
+/* Filter bar + buttons */
+[data-skin="command"] .cmd-filterbar { display: flex; gap: 10px; align-items: center; background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; padding: 10px 12px; }
+[data-skin="command"] .cmd-search { display: flex; align-items: center; gap: 6px; flex: 0 1 320px; padding: 6px 10px; border: 1px solid var(--cmd-border); border-radius: 8px; color: var(--cmd-text-muted); }
+[data-skin="command"] .cmd-search__input { border: none; outline: none; width: 100%; background: transparent; color: var(--cmd-text); font-size: 13px; }
+[data-skin="command"] .cmd-filterbar__filters { display: flex; gap: 8px; flex: 1; flex-wrap: wrap; }
+[data-skin="command"] .cmd-filterbar__actions { display: flex; gap: 8px; }
+[data-skin="command"] .cmd-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--cmd-border); background: var(--cmd-surface); color: var(--cmd-text); }
+[data-skin="command"] .cmd-btn--primary { background: var(--cmd-gold); border-color: var(--cmd-gold); color: #20160a; }
+[data-skin="command"] .cmd-btn--ghost { background: transparent; }
+[data-skin="command"] .cmd-chip-btn { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--cmd-border); background: var(--cmd-surface); color: var(--cmd-text-muted); cursor: pointer; font-size: 12px; }
+[data-skin="command"] .cmd-chip-btn.is-active { background: var(--cmd-gold); border-color: var(--cmd-gold); color: #20160a; }
+
+/* Table */
+[data-skin="command"] .cmd-table-wrap { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; overflow: auto; }
+[data-skin="command"] .cmd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+[data-skin="command"] .cmd-table th { text-align: left; padding: 10px 14px; color: var(--cmd-text-muted); font-weight: 600; border-bottom: 1px solid var(--cmd-border); white-space: nowrap; }
+[data-skin="command"] .cmd-table td { padding: 11px 14px; border-bottom: 1px solid var(--cmd-border); }
+[data-skin="command"] .cmd-table tr.is-clickable { cursor: pointer; }
+[data-skin="command"] .cmd-table tr.is-clickable:hover td { background: #f7f9fc; }
+[data-skin="command"] .cmd-table__empty { text-align: center; color: var(--cmd-text-muted); padding: 32px; }
+[data-skin="command"] .cmd-overdue { color: var(--cmd-danger); font-weight: 600; }
+
+/* Responsive: stack KPI cards + panels on narrow viewports */
+@media (max-width: 1100px) {
+  [data-skin="command"] .cmd-kpi-strip { grid-template-columns: repeat(4, 1fr); }
+  [data-skin="command"] .cmd-panels { grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  [data-skin="command"] .cmd-kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  [data-skin="command"] .cmd-hero { flex-direction: column; align-items: flex-start; }
+}
