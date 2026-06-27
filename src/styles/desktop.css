@@ -1,0 +1,45 @@
+/*
+ * Desktop skin — the Linux-desktop-environment look, scoped to
+ * [data-skin="desktop"] on <html> (set by DesktopShell while mounted).
+ * Layers on top of the existing token system; does not replace SteelBuild Dark.
+ */
+[data-skin="desktop"] {
+  --desk-canvas: radial-gradient(130% 100% at 50% -15%, #243140 0%, #141c26 48%, #0a0e15 100%);
+  --desk-grid: rgba(120, 160, 220, 0.05);
+  --desk-dock-bg: linear-gradient(180deg, rgba(20, 27, 36, 0.7), rgba(10, 14, 20, 0.5));
+  --desk-dock-edge: rgba(120, 140, 170, 0.14);
+  --desk-topbar-bg: linear-gradient(180deg, rgba(8, 11, 16, 0.72), rgba(8, 11, 16, 0.35));
+  --desk-window-bg: linear-gradient(180deg, rgba(22, 29, 39, 0.92), rgba(14, 19, 26, 0.95));
+  --desk-window-edge: #2b3445;
+  --desk-window-header: linear-gradient(180deg, #222c39, #19212c);
+  --desk-tile: linear-gradient(180deg, #222b3a 0%, #121826 55%, #070a11 100%);
+  --desk-tile-edge: rgba(255, 255, 255, 0.12);
+  --desk-tile-shadow: 0 6px 12px rgba(0, 0, 0, 0.5);
+  --desk-tile-glyph: #e8ebf2;
+}
+
+[data-skin="desktop"] .desk-canvas {
+  position: relative;
+  min-height: 100vh;
+  background: var(--desk-canvas);
+}
+[data-skin="desktop"] .desk-canvas::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--desk-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--desk-grid) 1px, transparent 1px);
+  background-size: 34px 34px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-skin="desktop"] .desk-dock-btn { transition: transform 120ms ease, filter 120ms ease; }
+[data-skin="desktop"] .desk-dock-btn:hover { transform: translateX(2px) scale(1.06); }
+[data-skin="desktop"] .desk-dock-btn:active { transform: scale(0.96); }
+[data-skin="desktop"] .desk-launch-tile { transition: transform 120ms ease, box-shadow 120ms ease; }
+[data-skin="desktop"] .desk-launch-tile:hover { transform: translateY(-3px); box-shadow: 0 12px 26px rgba(0,0,0,0.55); }
+
+[data-motion="reduced"] [data-skin="desktop"] .desk-dock-btn,
+[data-motion="reduced"] [data-skin="desktop"] .desk-launch-tile { transition: none; }

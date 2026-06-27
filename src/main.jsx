@@ -7,6 +7,7 @@ import App from '@/App.jsx'
 import { installDateOnlyShim } from '@/lib/dateOnly'
 import { logError } from '@/lib/telemetry'
 import '@/globals.css'
+import "@/styles/desktop.css"
 
 installDateOnlyShim()
 
