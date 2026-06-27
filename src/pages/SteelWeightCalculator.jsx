@@ -27,7 +27,7 @@ import {
   parseLength,
   ticksToDecimalFeet,
   formatLength,
-} from "./FeetInchesCalculator";
+} from "@/utils/lengthMath";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const body = { fontFamily: "var(--font-body)" };
