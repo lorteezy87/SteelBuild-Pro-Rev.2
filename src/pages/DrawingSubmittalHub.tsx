@@ -34,6 +34,7 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
 import { AlertTriangle, Box, CalendarClock, Gauge, Link2 } from "lucide-react";
 import { useFlag } from "@/hooks/useFeatureFlag";
+import { ModuleHeader } from "@/components/desktop/module";
 import Model3DTab from "@/components/viewer3d/Model3DTab";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
@@ -127,6 +128,8 @@ export default function DrawingSubmittalHub() {
 
   // The 3D model viewer is flag-gated until verified against real models in prod.
   const show3d = useFlag("viewer_3d");
+  // Desktop shell skin — ModuleHeader replaces CommandBar when on.
+  const desktopShell = useFlag("desktop_shell");
   const tabs = useMemo(
     () => (show3d ? [...TABS, { key: "model3d", label: "3D Model", icon: Box }] : TABS),
     [show3d],
