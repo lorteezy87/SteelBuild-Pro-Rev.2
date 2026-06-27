@@ -116,8 +116,9 @@ public/          static assets, web-ifc wasm, pdf workers
 ## Database migrations
 
 Migrations live in `supabase/migrations/` (mixed legacy `NNN_name.sql` and
-timestamped `YYYYMMDDhhmmss_name.sql` — **170 as of this writing**; inspect the
-directory for the latest rather than assuming a number). Apply live changes via
+timestamped `YYYYMMDDhhmmss_name.sql` — the history was **re-baselined** (≈7
+active files; ~190 legacy migrations archived), so inspect the directory for the
+latest rather than assuming a number). Apply live changes via
 the Supabase MCP (`apply_migration`) and commit the same SQL so repo history
 matches the database. After a migration that changes the exposed schema, the SQL
 ends with `NOTIFY pgrst, 'reload schema'`.
@@ -157,7 +158,7 @@ project the caller can access — fetched through the RLS-scoped, audit-logged
 
 ## Testing
 
-~1,485 Vitest tests: pure-helper suites (default `node` env) + jsdom integration
+~1,740 Vitest tests: pure-helper suites (default `node` env) + jsdom integration
 tests (`// @vitest-environment jsdom`) that drive real components/import flows
 with the Supabase client mocked. No full-browser E2E yet (see `TECH_DEBT.md`).
 (The count keeps climbing as large components are thinned — their extracted logic

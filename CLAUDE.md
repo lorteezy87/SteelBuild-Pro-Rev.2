@@ -62,7 +62,7 @@ Frontend (`src/`):
 - `main.jsx`, `App.jsx`, `Layout.jsx` — entry point, root component, app shell.
 - `boot/` — app bootstrap split: `AppProviders`, `AppRoutes`, `AuthenticatedApp`, `AppLoader`, `LayoutRoute`, `PageLoader`.
 - `config/` — `routes.js` is the **page-registry source of truth** (lazy component + label + `projectScoped` flag per page; `PAGES`, `PAGE_LABELS`, `ALL_ROUTE_PATHS` derive from it). `src/routes.js` is a back-compat re-export shim. `moduleRegistry.js` drives nav modules; `schemas.js` holds shared schemas.
-- `pages/` — ~75 route-level screens (Dashboard, Drawings, Submittals, RFIs, ChangeOrders/ChangeRequests, SOV, CostDashboard/Expenses/BudgetHours, Schedule/GanttChart/LookAheadSchedule, WorkPackages, FabRelease, Procurement, Deliveries, Field/FieldPlan, QualityControl/Inspections, Safety, EmailInbox, Integrations, BluebeamCallback, ProjectMembers, FeatureFlagsAdmin, CommandCenter, calculators, …) plus per-domain subfolders (`dashboard/`, `financials/`, `rfis/`, `workPackages/`, `changeOrders/`, `deliveries/`, `documents/`, …).
+- `pages/` — ~75 route-level screens (Dashboard, Drawings, Submittals, RFIs, ChangeOrders/ChangeRequests, SOV, CostDashboard/Expenses/BudgetHours, Schedule/LookAheadSchedule, WorkPackages, FabRelease, Procurement, Deliveries, Field/FieldPlan, QualityControl/Inspections, Safety, EmailInbox, Integrations, BluebeamCallback, ProjectMembers, FeatureFlagsAdmin, CommandCenter, calculators, …) plus per-domain subfolders (`dashboard/`, `financials/`, `rfis/`, `workPackages/`, `changeOrders/`, `deliveries/`, `documents/`, …).
 - `components/` — feature-scoped UI grouped by domain (`drawings/`, `submittals/`, `financials/`, `sov/`, `expenses/`, `gantt/`, `schedule/`, `email/`, `integrations/`, `commandcenter/`, `dms/`, `rfis/`, `workpackages/`, `qc/`, `safety/`, …), plus `ui/` (radix/shadcn primitives), `design-system/`, and `shared/`.
 - `services/` — deterministic domain engines: `marginRiskEngine`, `autoLinkEngine`, `constraintEngine`, `scheduleCascade`, `workflowEngine`, `permissions`, `validation`, `auditLogger`, `cacheRegistry`, `emailSendService`.
 - `hooks/` — TanStack Query CRUD + state hooks (`useDrawings`, `useSubmittals`, `useFinancials`, `useDeliveries`, `useAlerts`, `useProjectRole`, `useFeatureFlag`, `useCrudMutation`, `useSaveMutation`, `useRealtimeInvalidation`, `useProjectId`, …).
@@ -991,6 +991,8 @@ Rules:
 - Do not duplicate set-ordering logic. Reuse existing helpers when available.
 - Revision uploads are PARTIAL by default: a sheet in the set but not in the uploaded PDF is KEPT (left current), never auto-retired. Superseding unlisted sheets is opt-in via the "Full re-issue" checkbox in `RevisionUploadModal`. "Removed" sets `drawings.is_superseded=true` (recoverable — flip it back), NOT `is_deleted`. Never silently supersede sheets a revision upload didn't include.
 
+- A drawing's CURRENT revision authority is `drawing_revisions.is_current=true` (→ `revision_code`, ordered by `version_number`); `drawings.revision_number` is deprecated display metadata that DRIFTS. Both registers read the authoritative source — the Doc Control grid via `drawing_register_view`, the Hub "Drawing Register" tab via `currentRevisionForPackage`/`buildCurrentRevisionMap` (`drawingSubmittalHub/format.ts`). Any drawing/revision mutation must invalidate the `["drawing-register", projectId]` cache key (fanned out in `cacheRegistry` for the `drawing`/`drawingSet`/`drawing_revision` entities — use `invalidateEntity`). Most drawings have NO current `drawing_revisions` row until provisioned on demand (`components/drawings/register/registerProvision.ts` → idempotent `ensureCurrentRevision`); the Doc Control "Release…" control is disabled without one.
+
 Before changing drawing set ordering or identity, inspect existing helpers such as:
 
 ```text
@@ -1011,6 +1013,7 @@ Rules:
 - Do not invent dates to satisfy chart rendering.
 - Preserve dependencies, blockers, and ownership.
 - Surface unscheduled critical work as an exception.
+- `src/components/schedule/ScheduleGantt.jsx` is the SOLE canonical Gantt (standalone `GanttChart.tsx` was retired 2026-06; `/GanttChart` redirects to `/Schedule`). Task hierarchy edits — drag-to-reparent (drop-on-row = nest, drop-in-gap = reorder), the drawer parent picker, and bulk "Set parent" — all route through the single audited writer `src/lib/schedule/reparentTasks.js` (cycle-guarded by `lib/schedule/hierarchy.js` + a DB `prevent_schedule_task_cycle` BEFORE-trigger). Do not duplicate reparent/sort_order logic or resurrect a second Gantt.
 
 Before changing schedule TBD behavior, inspect:
 
