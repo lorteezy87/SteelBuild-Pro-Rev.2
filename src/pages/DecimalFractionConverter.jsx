@@ -1,12 +1,20 @@
 /**
  * DecimalFractionConverter.jsx
  *
- * Two-panel convenience tool: decimal ↔ fractional dimensions for
- * shop-drawing, submittal, and embed-book reviews. No calculate button
- * — results update live as the user types (this is a reference tool
- * where speed matters).
+ * Convert tool for the SteelBuild calculator device. Three sub-modes:
+ *   • Dec → Frac — decimal feet/inches → fractional dimension
+ *   • Frac → Dec — ft/in/fraction (incl. custom) → decimal
+ *   • Units      — steel-shop unit conversion (length, weight, stress, …)
  *
- * Pure math lives in src/utils/fractionConversion.js (unit-tested).
+ * No calculate button — results update live as the user types (this is a
+ * reference tool where speed matters).
+ *
+ * Pure math lives in:
+ *   src/utils/fractionConversion.js  (decimal ↔ fraction, unit-tested)
+ *   src/utils/unitConversions.js     (convert / CONVERSIONS, unit-tested)
+ *
+ * Chrome uses the shared calculator kit (CalcKey keycaps + calc.css tokens);
+ * the page renders ONLY its tool content — the Hub provides the outer shell.
  */
 
 import React, { useMemo, useState } from "react";
@@ -18,13 +26,16 @@ import {
   ftInToDecimalInches,
   roundingDelta,
 } from "@/utils/fractionConversion";
+import { convert, CONVERSIONS } from "@/utils/unitConversions";
+import CalcKey from "@/components/calculators/CalcKey";
+import "@/components/calculators/calc.css";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
 const cardStyle = {
   background: "var(--bg-surface)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 8,
+  border: "1px solid var(--border-strong)",
+  borderRadius: 12,
   overflow: "hidden",
 };
 const inputStyle = {
@@ -55,6 +66,18 @@ const DECIMAL_MODES = {
   INCHES: "inches",
 };
 
+// Three Convert sub-modes — a tool rail within the Convert tool.
+const SUB_MODES = {
+  DEC_FRAC: "dec_frac",
+  FRAC_DEC: "frac_dec",
+  UNITS:    "units",
+};
+const SUB_MODE_TABS = [
+  { key: SUB_MODES.DEC_FRAC, label: "Dec → Frac" },
+  { key: SUB_MODES.FRAC_DEC, label: "Frac → Dec" },
+  { key: SUB_MODES.UNITS,    label: "Units" },
+];
+
 // 16ths ladder — the full Pacific-Coast detailer's cheat sheet,
 // reduced at display time by the shared helper so the UI stays clean.
 const COMMON_FRACTIONS = [
@@ -77,6 +100,8 @@ const COMMON_FRACTIONS = [
 ];
 
 export default function DecimalFractionConverter() {
+  const [subMode, setSubMode] = useState(SUB_MODES.DEC_FRAC);
+
   return (
     <div style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
       <div style={{ maxWidth: 1080, margin: "0 auto" }}>
@@ -89,21 +114,46 @@ export default function DecimalFractionConverter() {
             textTransform: "uppercase", letterSpacing: "-0.01em",
             color: "var(--text-primary)",
           }}>
-            {"Decimal \u2194 Fraction Converter"}
+            {"Decimal ↔ Fraction Converter"}
           </div>
           <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.10em", marginTop: 4 }}>
             Cross-reference engineer decimals against detailer fractions · live conversion · 1/16 default
           </div>
         </div>
 
-        {/* 2-panel grid */}
+        {/* Sub-mode tool rail */}
+        <div
+          className="sbd-calc-tool-rail"
+          role="tablist"
+          aria-label="Conversion mode"
+          style={{ marginBottom: 16 }}
+        >
+          {SUB_MODE_TABS.map((t) => {
+            const active = subMode === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={`sbd-calc-tool-rail__btn${active ? " sbd-calc-tool-rail__btn--active" : ""}`}
+                onClick={() => setSubMode(t.key)}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Active panel — single column; each sub-mode owns its layout */}
         <div className="frac-grid" style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+          gridTemplateColumns: "minmax(0, 1fr)",
           gap: 16, alignItems: "start",
         }}>
-          <DecimalToFractionPanel />
-          <FractionToDecimalPanel />
+          {subMode === SUB_MODES.DEC_FRAC && <DecimalToFractionPanel />}
+          {subMode === SUB_MODES.FRAC_DEC && <FractionToDecimalPanel />}
+          {subMode === SUB_MODES.UNITS    && <UnitsPanel />}
         </div>
 
         {/* Mobile */}
@@ -233,33 +283,22 @@ function DecimalToFractionPanel() {
           )}
         </div>
 
-        {/* Actions */}
+        {/* Actions — keycap-styled */}
         <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={copyResult}
+          <CalcKey
+            label="Copy Result"
+            variant="accent"
+            wide
             disabled={!formatted}
-            style={{
-              ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-              padding: "8px 16px", borderRadius: 6,
-              cursor: formatted ? "pointer" : "not-allowed",
-              background: "var(--status-review)", color: "#FFFFFF",
-              border: "none", textTransform: "uppercase",
-              opacity: formatted ? 1 : 0.55,
-            }}
-          >
-            Copy Result
-          </button>
-          <button
-            onClick={clear}
-            style={{
-              ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-              padding: "8px 16px", borderRadius: 6, cursor: "pointer",
-              background: "var(--bg-surface)", color: "var(--text-secondary)",
-              border: "1px solid var(--border-default)", textTransform: "uppercase",
-            }}
-          >
-            Clear
-          </button>
+            onPress={copyResult}
+            ariaLabel="Copy result"
+          />
+          <CalcKey
+            label="Clear"
+            variant="danger"
+            onPress={clear}
+            ariaLabel="Clear"
+          />
         </div>
       </div>
     </div>
@@ -385,7 +424,7 @@ function FractionToDecimalPanel() {
                     cursor: "pointer",
                   }}
                 >
-                  {"\u00D7"}
+                  {"×"}
                 </button>
               </div>
             ) : (
@@ -420,7 +459,7 @@ function FractionToDecimalPanel() {
 
         {errors.length > 0 && (
           <div role="alert" style={inlineErrorStyle}>
-            {"\u26A0"} {errors.join(" ")}
+            {"⚠"} {errors.join(" ")}
           </div>
         )}
 
@@ -437,18 +476,191 @@ function FractionToDecimalPanel() {
           <OutputRow label="Decimal inches" value={decIn != null ? decIn.toFixed(4) : null} onCopy={() => copy(decIn != null ? decIn.toFixed(4) : null)} suffix="in" />
         </div>
 
+        <div style={{ display: "flex" }}>
+          <CalcKey
+            label="Clear"
+            variant="danger"
+            onPress={clear}
+            ariaLabel="Clear"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PANEL C — Units (steel-shop unit conversion)
+// ══════════════════════════════════════════════════════════════════
+function UnitsPanel() {
+  // Default to the first category, and that category's first two units.
+  const [categoryId, setCategoryId] = useState(CONVERSIONS[0].id);
+  const category = useMemo(
+    () => CONVERSIONS.find((c) => c.id === categoryId) ?? CONVERSIONS[0],
+    [categoryId],
+  );
+
+  const [fromUnit, setFromUnit] = useState(CONVERSIONS[0].units[0]);
+  const [toUnit, setToUnit]     = useState(
+    CONVERSIONS[0].units[1] ?? CONVERSIONS[0].units[0],
+  );
+  const [value, setValue]       = useState("");
+
+  // When the category changes, reset the unit selects to its first two units.
+  const onCategoryChange = (id) => {
+    const cat = CONVERSIONS.find((c) => c.id === id) ?? CONVERSIONS[0];
+    setCategoryId(id);
+    setFromUnit(cat.units[0]);
+    setToUnit(cat.units[1] ?? cat.units[0]);
+  };
+
+  const swap = () => {
+    setFromUnit(toUnit);
+    setToUnit(fromUnit);
+  };
+
+  // Live conversion — null when input is empty / non-numeric / incompatible.
+  const result = useMemo(() => {
+    if (value.trim() === "") return null;
+    const out = convert(value, fromUnit, toUnit);
+    return out == null ? null : out;
+  }, [value, fromUnit, toUnit]);
+
+  const resultStr = result == null ? "—" : trimNumber(result);
+
+  const copyResult = async () => {
+    if (result == null) return;
+    try {
+      await navigator.clipboard.writeText(trimNumber(result));
+      toast.success("Copied");
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+
+  const clear = () => { setValue(""); };
+
+  return (
+    <div className="sbd-card" style={cardStyle}>
+      <PanelHeader label="Units" />
+      <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+
+        {/* Category */}
         <div>
+          <label style={labelStyle}>Category</label>
+          <select
+            style={{ ...selectStyle, maxWidth: 240 }}
+            value={categoryId}
+            onChange={(e) => onCategoryChange(e.target.value)}
+            aria-label="Conversion category"
+          >
+            {CONVERSIONS.map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* From / To selects */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 10, alignItems: "end" }}>
+          <div>
+            <label style={labelStyle}>From</label>
+            <select
+              style={selectStyle}
+              value={fromUnit}
+              onChange={(e) => setFromUnit(e.target.value)}
+              aria-label="From unit"
+            >
+              {category.units.map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ paddingBottom: 2 }}>
+            <CalcKey
+              label={"⇄"}
+              variant="op"
+              onPress={swap}
+              ariaLabel="Swap from and to units"
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>To</label>
+            <select
+              style={selectStyle}
+              value={toUnit}
+              onChange={(e) => setToUnit(e.target.value)}
+              aria-label="To unit"
+            >
+              {category.units.map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Value */}
+        <div>
+          <label style={labelStyle}>Value</label>
+          <input
+            style={inputStyle}
+            inputMode="decimal"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={`e.g. 1 ${fromUnit}`}
+            aria-label="Value to convert"
+          />
+        </div>
+
+        {/* Output */}
+        <div style={resultCardStyle}>
+          <div style={labelStyle}>Result</div>
           <button
-            onClick={clear}
+            type="button"
+            onClick={copyResult}
+            disabled={result == null}
+            title={result == null ? "" : "Copy"}
+            aria-label="Converted value"
             style={{
-              ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-              padding: "8px 16px", borderRadius: 6, cursor: "pointer",
-              background: "var(--bg-surface)", color: "var(--text-secondary)",
-              border: "1px solid var(--border-default)", textTransform: "uppercase",
+              ...mono,
+              background: "transparent", border: "none", padding: 0,
+              textAlign: "left",
+              fontSize: 28, fontWeight: 800,
+              lineHeight: 1.1,
+              fontVariantNumeric: "tabular-nums",
+              color: result != null ? "var(--accent)" : "var(--text-muted)",
+              cursor: result != null ? "pointer" : "default",
             }}
           >
-            Clear
+            {resultStr}
+            {result != null && (
+              <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginLeft: 8 }}>
+                {toUnit}
+              </span>
+            )}
           </button>
+          {result != null && (
+            <div style={deltaLineStyle}>
+              {trimNumber(numOrZero(value))} {fromUnit} = {resultStr} {toUnit}
+            </div>
+          )}
+        </div>
+
+        {/* Actions — keycap-styled */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <CalcKey
+            label="Copy Result"
+            variant="accent"
+            wide
+            disabled={result == null}
+            onPress={copyResult}
+            ariaLabel="Copy result"
+          />
+          <CalcKey
+            label="Clear"
+            variant="danger"
+            onPress={clear}
+            ariaLabel="Clear"
+          />
         </div>
       </div>
     </div>
@@ -532,4 +744,13 @@ function numOrZero(raw) {
   if (raw == null || raw === "") return 0;
   const n = parseFloat(raw);
   return Number.isFinite(n) ? n : 0;
+}
+
+// Format a converted number cleanly: trim trailing zeros, but keep enough
+// precision for shop work (up to 6 significant decimals).
+function trimNumber(n) {
+  if (!Number.isFinite(n)) return "—";
+  // Round to 6 decimals, then strip trailing zeros / dot.
+  const fixed = n.toFixed(6);
+  return fixed.replace(/\.?0+$/, "");
 }
