@@ -5,16 +5,16 @@ import Launcher from "@/components/desktop/Launcher";
 
 describe("Launcher", () => {
   it("renders the module grid and category rail", () => {
-    const { getByText, getAllByText } = render(<Launcher onNavigate={() => {}} />);
+    const { getByText, getByLabelText } = render(<Launcher onNavigate={() => {}} />);
     expect(getByText("ALL")).toBeTruthy();
-    expect(getAllByText("Deliveries").length).toBeGreaterThan(0);
+    expect(getByLabelText("Open Deliveries")).toBeTruthy();
   });
 
   it("filters by search query", () => {
-    const { getByPlaceholderText, queryByText } = render(<Launcher onNavigate={() => {}} />);
+    const { getByPlaceholderText, queryByLabelText } = render(<Launcher onNavigate={() => {}} />);
     fireEvent.change(getByPlaceholderText(/type to search/i), { target: { value: "deliver" } });
-    expect(queryByText("Deliveries")).toBeTruthy();
-    expect(queryByText("Fab Release")).toBeNull();
+    expect(queryByLabelText("Open Deliveries")).toBeTruthy();
+    expect(queryByLabelText("Open Fab Release")).toBeNull();
   });
 
   it("navigates when a module tile is clicked", () => {
@@ -25,9 +25,9 @@ describe("Launcher", () => {
   });
 
   it("filters by category when a rail item is chosen", () => {
-    const { getByText, queryByText } = render(<Launcher onNavigate={() => {}} />);
+    const { getByText, queryByLabelText } = render(<Launcher onNavigate={() => {}} />);
     fireEvent.click(getByText("COST"));
-    expect(queryByText("Deliveries")).toBeNull();
-    expect(queryByText("Change Orders")).toBeTruthy();
+    expect(queryByLabelText("Open Deliveries")).toBeNull();
+    expect(queryByLabelText("Open Change Orders")).toBeTruthy();
   });
 });
