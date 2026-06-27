@@ -1,10 +1,11 @@
 /**
- * ModuleTile — a launcher tile: a darkened construction photo with a white
- * outline icon + label on top. The photo loads lazily as an <img>; if missing
- * or it fails (onError) the tile shows the dark steel gradient. The tile is a
- * cinematic dark image card in BOTH themes, so its text/icon stay white on
- * purpose (do not swap to theme tokens). Memoized so the launcher grid doesn't
- * re-render unchanged tiles on search/category changes.
+ * ModuleTile — a square launcher tile.
+ *
+ * Generated tiles are COMPLETE images (photo + icon + label baked in), so when
+ * a photo is present the tile shows the full image as its face with NO overlay.
+ * When there's no photo yet, it falls back to a dark gradient + the shared white
+ * lucide icon + label. The button's aria-label carries the accessible name in
+ * both cases. Memoized so the grid doesn't re-render unchanged tiles.
  *
  * Props: page, label, onSelect(page), photoSrc (optional override).
  */
@@ -29,10 +30,10 @@ function ModuleTile({ page, label, onSelect, photoSrc }) {
         position: "relative",
         display: "block",
         width: "100%",
-        aspectRatio: "3 / 2",
-        borderRadius: 10,
+        aspectRatio: "1 / 1",
+        borderRadius: 14,
         overflow: "hidden",
-        border: "1px solid rgba(255,255,255,0.06)",
+        border: "1px solid var(--desk-tile-edge)",
         cursor: "pointer",
         padding: 0,
         color: "#fff",
@@ -40,7 +41,7 @@ function ModuleTile({ page, label, onSelect, photoSrc }) {
         boxShadow: "0 6px 16px rgba(0,0,0,0.45)",
       }}
     >
-      {showPhoto && (
+      {showPhoto ? (
         <img
           src={photo}
           alt=""
@@ -51,49 +52,41 @@ function ModuleTile({ page, label, onSelect, photoSrc }) {
           onError={() => setImgFailed(true)}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
         />
-      )}
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "linear-gradient(180deg, rgba(8,11,16,0.45) 0%, rgba(8,11,16,0.22) 40%, rgba(8,11,16,0.86) 100%)",
-        }}
-      />
-      <span
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
-          padding: 10,
-        }}
-      >
-        <Icon
-          size={34}
-          strokeWidth={1.6}
-          color="#fff"
-          aria-hidden="true"
-          style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.65))" }}
-        />
+      ) : (
         <span
           style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 13,
-            fontWeight: 500,
-            color: "#fff",
-            textAlign: "center",
-            lineHeight: 1.2,
-            textShadow: "0 1px 3px rgba(0,0,0,0.85)",
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
+            padding: 12,
           }}
         >
-          {name}
+          <Icon
+            size={40}
+            strokeWidth={1.5}
+            color="#fff"
+            aria-hidden="true"
+            style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.65))" }}
+          />
+          <span
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 14,
+              fontWeight: 500,
+              color: "#fff",
+              textAlign: "center",
+              lineHeight: 1.2,
+              textShadow: "0 1px 3px rgba(0,0,0,0.85)",
+            }}
+          >
+            {name}
+          </span>
         </span>
-      </span>
+      )}
     </button>
   );
 }

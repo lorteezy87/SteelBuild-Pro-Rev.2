@@ -7,8 +7,8 @@
  * the human label (e.g. "fab release.png", "schedule of values.jpg"). Then run:
  *   node scripts/optimize-desktop-photos.mjs
  *
- * For each matched file it center-crops to 3:2, resizes to 1536x1024, encodes
- * WebP under ~180KB, and writes public/photos/desktop/<PageKey>.webp — which the
+ * For each matched file it resizes to fit within 1024px (no crop — tiles are
+ * complete square images), encodes WebP, and writes public/photos/desktop/<PageKey>.webp — which the
  * launcher (PHOTO_ASSETS / ModuleTile) picks up automatically on reload.
  *
  * sharp is installed once into scripts/.imgtools (gitignored) so the repo's
@@ -27,9 +27,8 @@ const rawDir = path.join(repoRoot, "public", "photos", "desktop", "_raw");
 const outDir = path.join(repoRoot, "public", "photos", "desktop");
 const toolsDir = path.join(__dirname, ".imgtools");
 
-const WIDTH = 1536;
-const HEIGHT = 1024; // 3:2
-const MAX_BYTES = 180 * 1024;
+const MAX_DIM = 1024; // tiles are square, complete images — fit inside, never crop
+const MAX_BYTES = 200 * 1024;
 const QUALITY_LADDER = [80, 72, 64, 56, 48, 42];
 
 // PageKey -> accepted aliases (matched case/space/punctuation-insensitive).
@@ -91,7 +90,7 @@ function ensureSharp() {
 }
 
 async function encodeUnderCap(sharp, inputPath) {
-  const base = sharp(inputPath).resize(WIDTH, HEIGHT, { fit: "cover", position: "centre" });
+  const base = sharp(inputPath).resize(MAX_DIM, MAX_DIM, { fit: "inside", withoutEnlargement: true });
   let last = null;
   for (const quality of QUALITY_LADDER) {
     const buf = await base.clone().webp({ quality, effort: 5 }).toBuffer();
