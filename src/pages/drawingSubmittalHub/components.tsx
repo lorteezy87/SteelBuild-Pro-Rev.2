@@ -539,16 +539,13 @@ interface SequenceReadinessRow {
 
 function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
   return (
-    <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
-        <div>
-          <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>Sequence Readiness</h3>
-          <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
-            Detailing progress + fab/erection readiness by erection sequence.
-          </p>
-        </div>
-        <span className="sbd-badge-info">{rows.length}</span>
-      </div>
+    <SectionCard
+      title="Sequence readiness"
+      headerAction={<span className="sbd-badge-info">{rows.length}</span>}
+    >
+      <p style={{ margin: "0 0 12px", color: textMuted, fontSize: 12 }}>
+        Detailing progress + fab/erection readiness by erection sequence.
+      </p>
       {rows.length === 0 ? (
         <EmptyState text="No packages linked to an erection sequence yet — link work packages to drawing sets to populate this." />
       ) : (
@@ -583,7 +580,7 @@ function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
           ))}
         </div>
       )}
-    </section>
+    </SectionCard>
   );
 }
 
