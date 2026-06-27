@@ -60,6 +60,7 @@ export default function DesktopShell({ currentPageName, children }) {
 
   const handleNavigate = (page) => navigate(createPageUrl(page));
   const title = PAGE_LABELS[currentPageName] || currentPageName || "Dashboard";
+  const showLauncher = launcherOpen || currentPageName === "Launcher";
 
   return (
     <div className={`desk-canvas ${isDark ? "steelbuild-dark" : ""}`} style={{
@@ -70,6 +71,7 @@ export default function DesktopShell({ currentPageName, children }) {
 
       <DesktopTopBar
         currentPageName={currentPageName}
+        title={title}
         onShowLauncher={() => setLauncherOpen((v) => !v)}
         onOpenSearch={() => setSearchOpen(true)}
         user={user}
@@ -85,7 +87,7 @@ export default function DesktopShell({ currentPageName, children }) {
           <Dock currentPageName={currentPageName} onNavigate={handleNavigate} onShowLauncher={() => setLauncherOpen((v) => !v)} />
         )}
 
-        {launcherOpen ? (
+        {showLauncher ? (
           <Launcher onNavigate={handleNavigate} />
         ) : (
           <ModuleSurface title={title} isMobile={isMobile}>

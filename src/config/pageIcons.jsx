@@ -1,7 +1,7 @@
 /**
  * pageIcons — page → lucide icon map (single source of truth).
  *
- * Extracted from SidebarNav so the desktop ModuleIcon fallback and the
+ * Extracted from SidebarNav so the desktop ModuleTile fallback and the
  * sidebar share one icon vocabulary. Adding a page = one line here.
  */
 import {

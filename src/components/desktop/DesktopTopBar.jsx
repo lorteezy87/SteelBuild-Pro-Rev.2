@@ -17,7 +17,7 @@ function prettyTitle(page) {
 }
 
 export default function DesktopTopBar({
-  currentPageName, onShowLauncher, onOpenSearch, user, onLogout,
+  currentPageName, title, onShowLauncher, onOpenSearch, user, onLogout,
   alerts, unreadCount, onMarkAllRead, onViewAllAlerts,
 }) {
   return (
@@ -48,7 +48,7 @@ export default function DesktopTopBar({
         margin: "0 auto", fontSize: 12, color: "var(--text-secondary)",
         fontFamily: "var(--font-body)",
       }}>
-        {prettyTitle(currentPageName)}
+        {title || prettyTitle(currentPageName)}
       </span>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
