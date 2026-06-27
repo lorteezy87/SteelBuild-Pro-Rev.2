@@ -10,13 +10,14 @@ describe("ModuleTile", () => {
     expect(container.querySelector("svg")).toBeTruthy();
   });
 
-  it("renders an <img> with the resolved photo src", () => {
+  it("renders a lazy <img> with the resolved photo src", () => {
     const { container } = render(
       <ModuleTile page="Deliveries" label="Deliveries" photoSrc="/photos/desktop/deliveries.webp" />,
     );
     const img = container.querySelector("img");
     expect(img).toBeTruthy();
     expect(img.getAttribute("src")).toContain("deliveries.webp");
+    expect(img.getAttribute("loading")).toBe("lazy");
   });
 
   it("renders no <img> and shows the gradient when there is no photo", () => {
@@ -25,10 +26,10 @@ describe("ModuleTile", () => {
     expect(getByLabelText("Open Nothing").style.background).toContain("linear-gradient");
   });
 
-  it("calls onClick when clicked", () => {
-    const onClick = vi.fn();
-    const { getByLabelText } = render(<ModuleTile page="Deliveries" label="Deliveries" onClick={onClick} />);
+  it("calls onSelect with the page when clicked", () => {
+    const onSelect = vi.fn();
+    const { getByLabelText } = render(<ModuleTile page="Deliveries" label="Deliveries" onSelect={onSelect} />);
     fireEvent.click(getByLabelText("Open Deliveries"));
-    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith("Deliveries");
   });
 });

@@ -24,7 +24,7 @@ export default function DesktopTopBar({
     <nav
       aria-label="Primary"
       style={{
-        height: 30, minHeight: 30, padding: "0 12px",
+        height: 34, minHeight: 34, padding: "0 12px",
         display: "flex", alignItems: "center", gap: 12,
         background: "var(--desk-topbar-bg)",
         color: "var(--text-primary)", position: "relative", zIndex: 50, flexShrink: 0,
@@ -36,7 +36,7 @@ export default function DesktopTopBar({
         style={{
           display: "flex", alignItems: "center", gap: 6, background: "none",
           border: "none", cursor: "pointer", color: "var(--accent)",
-          fontFamily: "var(--font-body)", fontSize: 12, padding: "2px 4px",
+          fontFamily: "var(--font-body)", fontSize: 12, padding: "4px 6px", borderRadius: 6,
         }}
       >
         <Grid3x3 size={15} strokeWidth={1.9} aria-hidden="true" /> Activities
@@ -54,7 +54,7 @@ export default function DesktopTopBar({
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <button
           onClick={onOpenSearch} aria-label="Search"
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center", padding: 6, borderRadius: 6 }}
         >
           <Search size={16} strokeWidth={1.8} aria-hidden="true" />
         </button>
