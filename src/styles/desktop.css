@@ -90,7 +90,7 @@
 
 /* ── Phase 2 module kit ─────────────────────────────────────────── */
 [data-skin="desktop"] .desk-stat { display: flex; flex-direction: column; gap: 1px; }
-[data-skin="desktop"] .desk-stat__label { font-size: 9px; letter-spacing: .4px; color: var(--text-muted); text-transform: uppercase; }
+[data-skin="desktop"] .desk-stat__label { font-size: 11px; letter-spacing: .2px; color: var(--text-muted); }
 [data-skin="desktop"] .desk-stat__value { font-size: 20px; font-weight: 500; line-height: 1; color: var(--text-primary); }
 [data-skin="desktop"] .desk-stat--gold .desk-stat__value { color: #e0b030; }
 [data-skin="desktop"] .desk-stat--blue .desk-stat__value { color: #5b9bf0; }
@@ -105,7 +105,8 @@
 [data-skin="desktop"] .desk-status-pill--done { background: rgba(95,206,122,.18); color: #7ed694; }
 [data-skin="desktop"] .desk-status-pill--danger { background: rgba(240,101,90,.18); color: #f08a80; }
 
-[data-skin="desktop"] .desk-section-card { border-radius: 12px; border: 1px solid var(--desk-window-edge); background: var(--desk-window-bg); overflow: hidden; }
+[data-skin="desktop"] .desk-section-card { border-radius: 16px; border: 1px solid rgba(255,255,255,0.10); background: linear-gradient(180deg, #141D2A 0%, #0D141F 100%); box-shadow: 0 16px 40px rgba(0,0,0,0.28); overflow: hidden; }
+[data-skin="desktop"][data-theme="light"] .desk-section-card { border: 1px solid rgba(30,41,59,0.12); background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%); box-shadow: 0 12px 28px rgba(15,23,42,0.10); }
 [data-skin="desktop"] .desk-section-card__head { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border-bottom: 1px solid var(--divider, rgba(48,54,61,.6)); color: var(--text-secondary); font-size: 12px; font-weight: 500; }
 [data-skin="desktop"] .desk-section-card__title { flex: 0 1 auto; }
 [data-skin="desktop"] .desk-section-card__action { margin-left: auto; font-size: 11px; color: var(--text-muted); }
@@ -155,3 +156,18 @@
   [data-skin="desktop"] .desk-module-header__main { flex-direction: column; align-items: flex-start; gap: 10px; }
   [data-skin="desktop"] .desk-module-header__right { margin-left: 0; flex-wrap: wrap; }
 }
+
+/* ── Industrial Command System: standardized badges + buttons ───── */
+[data-skin="desktop"] .desk-status-pill--overdue     { background: rgba(239,68,68,0.16);  color: #fca5a5; }
+[data-skin="desktop"] .desk-status-pill--atrisk      { background: rgba(245,158,11,0.16); color: #fcd34d; }
+[data-skin="desktop"] .desk-status-pill--inreview    { background: rgba(56,189,248,0.16); color: #7dd3fc; }
+[data-skin="desktop"] .desk-status-pill--approved    { background: rgba(34,197,94,0.16);  color: #86efac; }
+[data-skin="desktop"] .desk-status-pill--needsaction { background: rgba(245,158,11,0.16); color: #fcd34d; }
+[data-skin="desktop"] .desk-status-pill--fabready    { background: rgba(34,197,94,0.16);  color: #86efac; }
+[data-skin="desktop"] .desk-status-pill--fieldready  { background: rgba(56,189,248,0.16); color: #7dd3fc; }
+[data-skin="desktop"] .desk-status-pill--blocked     { background: rgba(239,68,68,0.16);  color: #fca5a5; }
+
+[data-skin="desktop"] .desk-btn-primary { display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(180deg,#E0B032,#B8860B); color: #101010; border: none; border-radius: 10px; font-family: var(--font-body); font-weight: 600; font-size: 12px; padding: 8px 14px; cursor: pointer; }
+[data-skin="desktop"] .desk-btn-secondary { display: inline-flex; align-items: center; gap: 6px; background: #141C28; color: #F4F7FA; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; font-family: var(--font-body); font-size: 12px; padding: 8px 14px; cursor: pointer; }
+[data-skin="desktop"] .desk-btn-danger { display: inline-flex; align-items: center; gap: 6px; background: rgba(239,68,68,0.12); color: #FCA5A5; border: 1px solid rgba(239,68,68,0.45); border-radius: 10px; font-family: var(--font-body); font-size: 12px; padding: 8px 14px; cursor: pointer; }
+[data-skin="desktop"][data-theme="light"] .desk-btn-secondary { background: #ffffff; color: #1e293b; border: 1px solid rgba(30,41,59,0.14); }
