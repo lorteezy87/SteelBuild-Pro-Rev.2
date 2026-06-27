@@ -17,123 +17,15 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  // Overview
-  LayoutDashboard, Terminal, Sparkles, Grid3x3, Briefcase, BarChart3,
-  // Project management
-  CalendarRange, CalendarDays, CheckSquare, HelpCircle, DollarSign,
-  Mail,
-  // Design & drawings
-  FileText, Eye, Box, ScanLine,
-  // Production
-  Package, Truck, Wrench, Users2,
-  // Financials
-  Wallet, TrendingUp, Receipt,
-  // Documents & reports
-  Folder, FileBarChart, Activity as ActivityIcon,
-  // Field
-  ClipboardList, Shield, ShieldAlert, FlaskConical, Camera,
-  // Administration
-  Contact2, Building2, UserCog, Settings as SettingsIcon,
-  // Tools
-  Ruler, Calculator, HardHat, ArrowLeftRight,
-  // Help
-  BookOpen,
-  // Chrome
   ChevronsLeft, ChevronsRight, Search, Clock, ChevronRight as ChevronRightIcon,
-  // Favorites
   Star,
 } from "lucide-react";
+import { PAGE_ICON, FallbackIcon } from "@/config/pageIcons";
 import { SIDEBAR_GROUPS, saveSidebarState } from "@/config/moduleRegistry";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { BrandLogo } from "./BrandLogo";
-
-// ── Page → lucide icon map ──────────────────────────────────────────
-//
-// Central lookup so the registry can stay text-only (emoji-free) and
-// adding a new page just needs one line here. Missing entries fall
-// back to a neutral circle so the sidebar never renders an empty
-// slot. Keeping this map explicit (vs. auto-inferring from page name)
-// guarantees a consistent visual language across the app.
-const PAGE_ICON = {
-  // Overview
-  Dashboard:                    LayoutDashboard,
-  CommandCenter:                Terminal,
-  AIInsights:                   Sparkles,
-  ExecutiveView:                BarChart3,
-  Projects:                     Briefcase,
-  PortfolioOverview:            Grid3x3,
-
-  // Project management
-  Schedule:                     CalendarRange,
-  ProjectCalendar:              CalendarDays,
-  ActionItems:                  CheckSquare,
-  RFIs:                         HelpCircle,
-  RFIHub:                       HelpCircle,
-  Submittals:                   FileText,
-  ChangeOrders:                 DollarSign,
-  ChangeRequests:               DollarSign,
-  EmailInbox:                   Mail,
-  ProjectCloseout:              Box,
-  ProductionNotes:              FileText,
-
-  // Design & drawings
-  Drawings:                     FileText,
-  DrawingViewer:                Eye,
-  Documents:                    Folder,
-
-  // Production
-  WorkPackages:                 Package,
-  Constraints:                  Shield,
-  FabRelease:                   Wrench,
-  Procurement:                  Package,
-  LookAheadSchedule:            CalendarRange,
-  Deliveries:                   Truck,
-  ResourceScheduling:           Users2,
-  ResourceManagement:           Users2,
-
-  // Financials
-  Financials:                   Wallet,
-  CostDashboard:                TrendingUp,
-  SOV:                          Receipt,
-  ContractManagement:           FileText,
-  Expenses:                     Wallet,
-
-  // Documents & reports
-  Reports:                      FileBarChart,
-  JobStatusReport:              FileBarChart,
-  Activity:                     ActivityIcon,
-  AlertsCenter:                 ShieldAlert,
-
-  // Field
-  DailyLogs:                    ClipboardList,
-  Photos:                       Camera,
-  Inspections:                  ScanLine,
-  Safety:                       Shield,
-  QualityControl:               FlaskConical,
-  Punchlist:                    CheckSquare,
-  LEMs:                         ClipboardList,
-  Warranty:                     Shield,
-
-  // Administration
-  Contacts:                     Contact2,
-  Vendors:                      Building2,
-  UsersManagement:              UserCog,
-  Settings:                     SettingsIcon,
-  ScopeExclusions:              FileText,
-  Tutorial:                     BookOpen,
-
-  // Tools
-  Calculator:                   Calculator,
-  FeetInchesCalculator:         Ruler,
-  SteelWeightCalculator:        Calculator,
-  CranePickCalculator:          HardHat,
-  DecimalFractionConverter:     ArrowLeftRight,
-};
-
-// Fallback for anything missing — also a decent default shape.
-const FallbackIcon = Grid3x3;
 
 // ── Local storage helpers ───────────────────────────────────────────
 const RAIL_LS_KEY    = "sbp-sidebar-rail";
