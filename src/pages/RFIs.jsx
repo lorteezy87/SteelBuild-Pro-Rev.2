@@ -46,6 +46,8 @@ import RfiInsightsStrip from "./rfis/RfiInsightsStrip";
 import RfiCommandCenter from "./rfis/RfiCommandCenter";
 import AgendaPanel from "./rfis/AgendaPanel";
 import { buildRfiAgenda } from "@/lib/commandCenter/rfiAgenda";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import RfiControlCenter from "./rfis/RfiControlCenter";
 
 const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
 
@@ -77,6 +79,7 @@ export default function RFIs() {
   const projectId = useProjectId();
   const qc = useQueryClient();
   const { can } = usePermissions();
+  const commandUi = useFlag("command_ui");
 
   const [filter, setFilter] = useState("all");
   const [disciplineFilter, setDisciplineFilter] = useState("All");
@@ -406,6 +409,153 @@ export default function RFIs() {
 
   const activeProjectName = projects.find((p) => p.id === projectId)?.name || "All Projects";
 
+  const modals = (
+    <>
+      {/* Modals */}
+      <RfiDetailModal
+        rfi={selectedRFI}
+        onClose={() => setSelectedRFI(null)}
+        onEdit={() => {
+          setEditingRFI(selectedRFI);
+          setSelectedRFI(null);
+          setShowForm(true);
+        }}
+        onAdvanceStatus={(status) => {
+          if (!selectedRFI) return;
+          const extra = ["Answered", "Closed"].includes(status)
+            ? { date_answered: new Date().toISOString().split("T")[0] }
+            : {};
+          updateMut.mutate({ id: selectedRFI.id, data: { status, ...extra } });
+        }}
+        onNudge={() => setNudgeRFI(selectedRFI)}
+        onCreateCO={() => {
+          if (selectedRFI) navigate(`/ChangeOrders?fromRfi=${selectedRFI.id}`);
+        }}
+        onDownstreamAction={(key) => {
+          if (!selectedRFI) return;
+          const r = selectedRFI;
+          if (key === "notify_field") {
+            notifyFieldMut.mutate(r);
+            return;
+          }
+          // Create CO + the drawing jump land WITH context (ChangeOrders reads
+          // ?fromRfi to prefill the CO form; Drawings filters by ?sheet). WP +
+          // Constraints don't consume a param yet, so navigate to the module
+          // honestly rather than tack on a dangling, unread ?fromRfi.
+          const dest = {
+            create_co: `/ChangeOrders?fromRfi=${r.id}`,
+            update_drawing: r.drawing_reference
+              ? `/Drawings?sheet=${encodeURIComponent(r.drawing_reference)}`
+              : "/Drawings",
+            open_wp: "/WorkPackages",
+            add_constraint: "/Constraints",
+          }[key];
+          if (dest) navigate(dest);
+        }}
+      />
+
+      <NudgeDraftModal
+        rfi={nudgeRFI}
+        open={!!nudgeRFI}
+        onClose={() => setNudgeRFI(null)}
+      />
+
+      <RfiLogImportModal
+        open={showLogImport}
+        projectId={projectId}
+        projectName={projects.find((p) => p.id === projectId)?.name}
+        projects={projects}
+        onClose={() => setShowLogImport(false)}
+      />
+
+      {showForm && (
+        <RFIFormModal
+          open={showForm}
+          onClose={() => { setShowForm(false); setEditingRFI(null); }}
+          onSave={async (data, pdfFiles = []) => {
+            try {
+              if (editingRFI) {
+                const updated = await updateMut.mutateAsync({
+                  id: editingRFI.id,
+                  data: {
+                    ...data,
+                    project_name:
+                      projects.find((p) => p.id === (data.project_id || projectId))?.name ||
+                      data.project_name ||
+                      editingRFI.project_name ||
+                      "",
+                  },
+                });
+                await uploadRfiPdfDocuments(updated || { ...editingRFI, ...data }, pdfFiles);
+              } else {
+                const num =
+                  data.rfi_number ||
+                  (await getNextFormattedNumber({
+                    projectId: data.project_id || projectId,
+                    recordType: "RFI",
+                    entityName: "RFI",
+                    fieldName: "rfi_number",
+                    prefix: "RFI #",
+                  }));
+                const created = await createMut.mutateAsync({
+                  ...data,
+                  rfi_number: num,
+                  project_name:
+                    projects.find((p) => p.id === (data.project_id || projectId))?.name ||
+                    data.project_name ||
+                    "",
+                });
+                await uploadRfiPdfDocuments(created, pdfFiles);
+              }
+              setShowForm(false);
+              setEditingRFI(null);
+            } catch (error) {
+              toastCrudError(error, "Failed to save RFI");
+            }
+          }}
+          saving={createMut.isPending || updateMut.isPending || savingAttachments}
+          rfi={editingRFI}
+          projectId={projectId}
+        />
+      )}
+
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        title="Delete RFI"
+        description={`Delete "${deleteTarget?.title}"? This cannot be undone.`}
+      />
+      <DeleteDialog
+        open={showBulkDelete}
+        onClose={() => setShowBulkDelete(false)}
+        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+        title={`Delete ${selectedIds.size} RFIs`}
+        description={`Permanently delete ${selectedIds.size} selected RFI${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
+      />
+    </>
+  );
+
+  if (commandUi) {
+    return (
+      <div className="rfi-page" style={{ "--density-row-height": `${densityPreset.rowHeight}px`, "--rfi-row-grid": RFI_ROW_GRID }}>
+        <RfiControlCenter
+          projectName={activeProjectName}
+          rfis={rfis}
+          filtered={filtered}
+          search={search}
+          onSearch={setSearch}
+          disciplineFilter={disciplineFilter}
+          onDisciplineChange={setDisciplineFilter}
+          onOpenRfi={setSelectedRFI}
+          onExport={() => exportRFIsToCSV(filtered)}
+          onCreate={can("create", "rfi") ? () => { setEditingRFI(null); setShowForm(true); } : null}
+        />
+        {modals}
+      </div>
+    );
+  }
+
   return (
     <div
       className="rfi-page"
@@ -593,128 +743,7 @@ export default function RFIs() {
         }}
       />
 
-      {/* Modals */}
-      <RfiDetailModal
-        rfi={selectedRFI}
-        onClose={() => setSelectedRFI(null)}
-        onEdit={() => {
-          setEditingRFI(selectedRFI);
-          setSelectedRFI(null);
-          setShowForm(true);
-        }}
-        onAdvanceStatus={(status) => {
-          if (!selectedRFI) return;
-          const extra = ["Answered", "Closed"].includes(status)
-            ? { date_answered: new Date().toISOString().split("T")[0] }
-            : {};
-          updateMut.mutate({ id: selectedRFI.id, data: { status, ...extra } });
-        }}
-        onNudge={() => setNudgeRFI(selectedRFI)}
-        onCreateCO={() => {
-          if (selectedRFI) navigate(`/ChangeOrders?fromRfi=${selectedRFI.id}`);
-        }}
-        onDownstreamAction={(key) => {
-          if (!selectedRFI) return;
-          const r = selectedRFI;
-          if (key === "notify_field") {
-            notifyFieldMut.mutate(r);
-            return;
-          }
-          // Create CO + the drawing jump land WITH context (ChangeOrders reads
-          // ?fromRfi to prefill the CO form; Drawings filters by ?sheet). WP +
-          // Constraints don't consume a param yet, so navigate to the module
-          // honestly rather than tack on a dangling, unread ?fromRfi.
-          const dest = {
-            create_co: `/ChangeOrders?fromRfi=${r.id}`,
-            update_drawing: r.drawing_reference
-              ? `/Drawings?sheet=${encodeURIComponent(r.drawing_reference)}`
-              : "/Drawings",
-            open_wp: "/WorkPackages",
-            add_constraint: "/Constraints",
-          }[key];
-          if (dest) navigate(dest);
-        }}
-      />
-
-      <NudgeDraftModal
-        rfi={nudgeRFI}
-        open={!!nudgeRFI}
-        onClose={() => setNudgeRFI(null)}
-      />
-
-      <RfiLogImportModal
-        open={showLogImport}
-        projectId={projectId}
-        projectName={projects.find((p) => p.id === projectId)?.name}
-        projects={projects}
-        onClose={() => setShowLogImport(false)}
-      />
-
-      {showForm && (
-        <RFIFormModal
-          open={showForm}
-          onClose={() => { setShowForm(false); setEditingRFI(null); }}
-          onSave={async (data, pdfFiles = []) => {
-            try {
-              if (editingRFI) {
-                const updated = await updateMut.mutateAsync({
-                  id: editingRFI.id,
-                  data: {
-                    ...data,
-                    project_name:
-                      projects.find((p) => p.id === (data.project_id || projectId))?.name ||
-                      data.project_name ||
-                      editingRFI.project_name ||
-                      "",
-                  },
-                });
-                await uploadRfiPdfDocuments(updated || { ...editingRFI, ...data }, pdfFiles);
-              } else {
-                const num =
-                  data.rfi_number ||
-                  (await getNextFormattedNumber({
-                    projectId: data.project_id || projectId,
-                    recordType: "RFI",
-                    entityName: "RFI",
-                    fieldName: "rfi_number",
-                    prefix: "RFI #",
-                  }));
-                const created = await createMut.mutateAsync({
-                  ...data,
-                  rfi_number: num,
-                  project_name:
-                    projects.find((p) => p.id === (data.project_id || projectId))?.name ||
-                    data.project_name ||
-                    "",
-                });
-                await uploadRfiPdfDocuments(created, pdfFiles);
-              }
-              setShowForm(false);
-              setEditingRFI(null);
-            } catch (error) {
-              toastCrudError(error, "Failed to save RFI");
-            }
-          }}
-          saving={createMut.isPending || updateMut.isPending || savingAttachments}
-          rfi={editingRFI}
-          projectId={projectId}
-        />
-      )}
-
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
-        title="Delete RFI"
-        description={`Delete "${deleteTarget?.title}"? This cannot be undone.`}
-      />
-      <DeleteDialog
-        open={showBulkDelete}
-        onClose={() => setShowBulkDelete(false)}
-        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
-        title={`Delete ${selectedIds.size} RFIs`}
-        description={`Permanently delete ${selectedIds.size} selected RFI${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
-      />
+      {modals}
     </div>
   );
 }

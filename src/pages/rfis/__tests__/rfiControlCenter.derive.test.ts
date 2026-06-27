@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { daysUntil, riskScore, ballInCourtSummary, buildRfiSummary } from "../rfiControlCenter.derive";
-import { daysOpen } from "../utils";
 
 // Build an ISO date (YYYY-MM-DD) `offsetDays` from today (UTC midnight basis).
 function isoOffset(offsetDays: number): string {
