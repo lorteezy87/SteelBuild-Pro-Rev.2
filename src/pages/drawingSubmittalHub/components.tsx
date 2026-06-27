@@ -169,15 +169,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
         gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))",
         gap: 14,
       }}>
-        <div className="sbd-card-strong" style={{
-          padding: 20,
-          borderRadius: 16,
-          border: `1px solid ${triage.overdue.length ? "color-mix(in srgb, var(--status-error) 56%, var(--border-default))" : border}`,
-          background: triage.overdue.length
-            ? "linear-gradient(135deg, color-mix(in srgb, var(--status-error) 13%, var(--bg-surface) 87%), var(--bg-surface-low))"
-            : "linear-gradient(135deg, color-mix(in srgb, var(--status-success) 8%, var(--bg-surface) 92%), var(--bg-surface-low))",
-          boxShadow: triage.overdue.length ? "0 16px 42px rgba(248,81,73,0.12)" : "var(--shadow-card)",
-        }}>
+        <SectionCard title="Critical work queue">
           <div style={{
             display: "inline-flex",
             alignItems: "center",
@@ -216,7 +208,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
             <RiskPill icon={CalendarClock} label="Missing dates" value={triage.noDate.length} color={textMuted} />
             <RiskPill icon={CheckCircle2} label="Sets Released" value={drawingKpis.released} color={success} />
           </div>
-        </div>
+        </SectionCard>
 
         <div className="sbd-card" style={{ padding: 18, borderRadius: 16, border: `1px solid ${focusItem ? focusTone : border}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
