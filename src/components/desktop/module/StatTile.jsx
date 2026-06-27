@@ -7,9 +7,9 @@ import React from "react";
 const TONES = new Set(["neutral", "gold", "blue", "teal", "green", "amber", "danger"]);
 
 export default function StatTile({ label, value, tone = "neutral" }) {
-  const t = TONES.has(tone) ? tone : "neutral";
+  const t = TONES.has(tone) && tone !== "neutral" ? tone : null;
   return (
-    <div className={`desk-stat desk-stat--${t}`}>
+    <div className={`desk-stat${t ? ` desk-stat--${t}` : ""}`}>
       <div className="desk-stat__label">{label}</div>
       <div className="desk-stat__value">{value}</div>
     </div>
