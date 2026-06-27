@@ -1748,7 +1748,20 @@ export function DrawingRegisterTable({
                 <Td style={{ color: textMuted }}>{r.setNo}</Td>
                 <Td style={{ color: textMuted }}>{r.discipline}</Td>
                 <Td className="is-num" style={{ textAlign: "right" }}>{r.sheetCount}</Td>
-                <Td>{r.effectiveState && r.effectiveState !== "Not Started" ? <OperationalStateChip state={r.effectiveState} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}</Td>
+                <Td>{r.effectiveState && r.effectiveState !== "Not Started"
+                  // C3: render the operational state via kit StatusPill — tone mapped from
+                  // the coalesced state string. OperationalStateChip is still used elsewhere
+                  // in this file (triage lists, next-decision panel); only the register
+                  // Status cell is swapped here.
+                  ? <StatusPill tone={
+                      /Released for Fabrication|Approved|Partially Released|Released for Erection/i.test(r.effectiveState) ? "done"
+                      : /Internal Review|OFA|BFA|OFS|IFC/i.test(r.effectiveState) ? "review"
+                      : /R&R|Revise/i.test(r.effectiveState) ? "danger"
+                      : /IFA|In Detailing|Ready to Submit/i.test(r.effectiveState) ? "open"
+                      : "neutral"
+                    }>{r.effectiveState}</StatusPill>
+                  : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>
+                }</Td>
                 <Td>{r.health ? <HealthChip health={r.health} onClick={() => setHealthDetail(r.health)} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>—</span>}</Td>
                 <Td className="is-num" style={{ color: r.done ? success : textMuted }}>{r.releasedCount}/{r.sheetCount}</Td>
                 <Td><DueChip info={r.due} /></Td>
