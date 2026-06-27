@@ -9,7 +9,7 @@
   --cmd-border: #e4e8ee;
   --cmd-text: #1b2430;
   --cmd-text-muted: #6b7585;
-  --cmd-gold: #d7a928;
+  --cmd-gold: #f2a706;
   --cmd-good: #1f9d57;
   --cmd-warn: #c9810b;
   --cmd-danger: #d8463d;
@@ -25,8 +25,14 @@
 
 /* Hero — light, dark text, optional faint photo from the right */
 [data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 14px; background: var(--cmd-surface); overflow: hidden; }
-[data-skin="command"] .cmd-hero--photo::after { content: ""; position: absolute; inset: 0; background: var(--cmd-hero-photo) right center / 55% cover no-repeat; opacity: 0.16; pointer-events: none; }
-[data-skin="command"] .cmd-hero--photo::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--cmd-surface) 32%, rgba(255,255,255,0.4) 100%); pointer-events: none; z-index: 1; }
+/* Photo + scrim in ONE background shorthand (gradient layer first = on top) so
+   the jobsite image shows on the right while the title stays readable on the left. */
+[data-skin="command"] .cmd-hero--photo {
+  background-image: linear-gradient(90deg, var(--cmd-surface) 26%, rgba(255,255,255,0.55) 62%, rgba(255,255,255,0.32) 100%), var(--cmd-hero-photo);
+  background-size: cover;
+  background-position: center, right center;
+  background-repeat: no-repeat;
+}
 [data-skin="command"] .cmd-hero__left, [data-skin="command"] .cmd-hero__right { position: relative; z-index: 2; }
 [data-skin="command"] .cmd-hero__left { display: flex; gap: 14px; align-items: flex-start; }
 [data-skin="command"] .cmd-hero__icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #fdf3da; color: var(--cmd-gold); flex-shrink: 0; }

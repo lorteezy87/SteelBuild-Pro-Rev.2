@@ -48,6 +48,7 @@ import AgendaPanel from "./rfis/AgendaPanel";
 import { buildRfiAgenda } from "@/lib/commandCenter/rfiAgenda";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import RfiControlCenter from "./rfis/RfiControlCenter";
+import { calcWpProgress } from "@/utils/projectKpis";
 
 const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
 
@@ -122,6 +123,13 @@ export default function RFIs() {
     queryFn: () => entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
     enabled: !!projectId,
   });
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work-packages", projectId],
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
   useRealtimeInvalidation("rfis", projectId, rfiQueryKeys);
 
@@ -409,6 +417,15 @@ export default function RFIs() {
 
   const activeProjectName = projects.find((p) => p.id === projectId)?.name || "All Projects";
 
+  // Project-level context for the RFI Control Center hero (real, from the project
+  // record + work-package progress — same %-complete source as the Projects page).
+  const activeProject = projects.find((p) => p.id === projectId);
+  const projectHealth = activeProject?.health_status || null;
+  const percentComplete =
+    activeProject?.scope_complete_pct_override != null
+      ? Number(activeProject.scope_complete_pct_override)
+      : (workPackages.length ? calcWpProgress(workPackages).pct : null);
+
   const modals = (
     <>
       {/* Modals */}
@@ -547,9 +564,12 @@ export default function RFIs() {
           onSearch={setSearch}
           disciplineFilter={disciplineFilter}
           onDisciplineChange={setDisciplineFilter}
+          onFilterChange={setFilter}
           onOpenRfi={setSelectedRFI}
           onExport={() => exportRFIsToCSV(filtered)}
           onCreate={can("create", "rfi") ? () => { setEditingRFI(null); setShowForm(true); } : null}
+          projectHealth={projectHealth}
+          percentComplete={percentComplete}
         />
         {modals}
       </div>
