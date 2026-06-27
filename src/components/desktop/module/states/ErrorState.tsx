@@ -1,7 +1,13 @@
 import React from "react";
 import { AlertTriangle } from "lucide-react";
 
-export default function ErrorState({ title = "Couldn't load this", message, onRetry }) {
+interface Props {
+  title?: React.ReactNode;
+  message?: React.ReactNode;
+  onRetry?: () => void;
+}
+
+export default function ErrorState({ title = "Couldn't load this", message, onRetry }: Props) {
   return (
     <div className="desk-state" role="alert">
       <AlertTriangle size={28} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--status-error, #f0655a)" }} />

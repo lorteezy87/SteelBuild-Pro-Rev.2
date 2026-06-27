@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 // This is a focused unit of the header branch logic. The full hub has heavy
 // providers; rather than boot it, assert ModuleHeader renders the stats it is
 // given (the integration with the flag is exercised by the existing hub smoke

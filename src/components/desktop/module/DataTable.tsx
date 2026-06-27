@@ -8,7 +8,24 @@ import React from "react";
 import LoadingSkeleton from "./states/LoadingSkeleton";
 import EmptyState from "./states/EmptyState";
 
-export default function DataTable({ columns, rows, rowKey = "id", loading = false, emptyMessage = "Nothing here yet." }) {
+interface Column {
+  key: string;
+  label: React.ReactNode;
+  align?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  render?: (row: any) => React.ReactNode;
+}
+
+interface Props {
+  columns: Column[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rows: any[];
+  rowKey?: string;
+  loading?: boolean;
+  emptyMessage?: string;
+}
+
+export default function DataTable({ columns, rows, rowKey = "id", loading = false, emptyMessage = "Nothing here yet." }: Props) {
   if (loading) {
     return <div style={{ padding: 12 }}><LoadingSkeleton rows={5} /></div>;
   }

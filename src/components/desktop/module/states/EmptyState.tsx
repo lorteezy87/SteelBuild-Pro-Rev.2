@@ -1,7 +1,15 @@
 import React from "react";
 import { Inbox } from "lucide-react";
 
-export default function EmptyState({ icon: Icon = Inbox, title, message, action }) {
+interface Props {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  icon?: React.ComponentType<any>;
+  title?: React.ReactNode;
+  message?: React.ReactNode;
+  action?: { label: React.ReactNode; onClick: () => void };
+}
+
+export default function EmptyState({ icon: Icon = Inbox, title, message, action }: Props) {
   return (
     <div className="desk-state" role="status">
       <Icon size={28} strokeWidth={1.5} aria-hidden="true" />

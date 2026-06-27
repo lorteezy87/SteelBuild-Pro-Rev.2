@@ -4,7 +4,16 @@
  */
 import React from "react";
 
-export default function SectionCard({ title, icon: Icon, headerAction, className = "", children }) {
+interface Props {
+  title?: React.ReactNode;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  icon?: React.ComponentType<any>;
+  headerAction?: React.ReactNode;
+  className?: string;
+  children?: React.ReactNode;
+}
+
+export default function SectionCard({ title, icon: Icon, headerAction, className = "", children }: Props) {
   const hasHead = title || headerAction || Icon;
   return (
     <section className={`desk-section-card ${className}`.trim()}>
