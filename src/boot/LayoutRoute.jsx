@@ -1,26 +1,26 @@
 import { Outlet, useLocation } from "react-router-dom";
 import PageErrorBoundary from "@/components/shared/ErrorBoundary";
 import Layout from "@/Layout";
+import DesktopShell from "@/components/desktop/DesktopShell";
+import { useFlag } from "@/hooks/useFeatureFlag";
 
 /**
- * LayoutRoute — react-router layout route that mounts <Layout> ONCE and stays
- * mounted across all page navigations. Only the <Outlet> (page content) swaps
- * when the route changes.
- *
- * Wrapping in PageErrorBoundary catches a crash in Layout's chrome (sidebar,
- * top utility bar, breadcrumbs) without taking down the whole app — the user
- * still sees the page content with a recoverable banner.
+ * LayoutRoute — mounts the app chrome ONCE and keeps it across navigations.
+ * Chooses DesktopShell (flag: desktop_shell) or the classic Layout. Both render
+ * the page <Outlet>, so all routes work identically under either shell.
  */
 export default function LayoutRoute() {
   const location = useLocation();
-  // Derive currentPageName from URL path (e.g. "/Drawings" → "Drawings")
   const currentPageName = location.pathname.replace(/^\//, "") || "Dashboard";
+  const desktopShell = useFlag("desktop_shell");
+
+  const Shell = desktopShell ? DesktopShell : Layout;
 
   return (
     <PageErrorBoundary label="Layout" key="layout-boundary">
-      <Layout currentPageName={currentPageName}>
+      <Shell currentPageName={currentPageName}>
         <Outlet />
-      </Layout>
+      </Shell>
     </PageErrorBoundary>
   );
 }
