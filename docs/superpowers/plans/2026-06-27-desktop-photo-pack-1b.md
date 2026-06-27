@@ -8,25 +8,31 @@
 
 ## 1. Master art-direction (applies to EVERY image)
 
-Use this as a style preamble/suffix on every prompt so the whole set reads as one family:
+Each tile is a COMPLETE, finished **square** image — scene + icon + label baked in (like
+the RFIs reference). Use this style for every tile so the set reads as one family:
 
-> Cinematic, photorealistic industrial construction photography. Dark and moody, cool
-> desaturated color grade with subtle warm accents. Shallow depth of field, soft
-> directional or overcast light, fine grain. Authentic working environment — real, not
-> stock-cheesy — with accurate structural-steel detail and correct PPE (hard hats,
-> hi-vis vests). Shot full-frame, 35mm, f/2.8. **Landscape 3:2.** Composition keeps the
-> CENTER relatively simple and slightly darker so a centered white icon + text label
-> stay legible; push visual interest toward the edges/corners. Keep important detail in
-> the upper two-thirds (the bottom third gets darkened by a UI gradient). No text, no
-> logos, no watermarks, no signage, no sharp-focus faces (use over-the-shoulder, backs,
-> or motion blur), no distorted hands.
+> Cinematic, photorealistic industrial construction photography, **square 1:1**
+> composition. Dark and moody, cool desaturated color grade with subtle warm accents,
+> shallow depth of field, fine grain. Authentic working environment (not stock-cheesy),
+> accurate structural-steel detail, correct PPE (white hard hat, hi-vis vest). A subtle
+> dark vignette frames the image with slightly rounded corners. Centered in the frame: a
+> clean **white thin-outline icon of [ICON]**, and beneath it the label **"[LABEL]"** in
+> clean white sans-serif, medium weight. Faces out of focus / over-the-shoulder. Shot
+> full-frame, 35mm, f/2.8.
 
-**Negative prompt:** `text, words, letters, logos, watermark, signage, captions, UI, deformed hands, extra fingers, cartoon, illustration, oversaturated, HDR halo, faces in sharp focus`
+Per tile, swap in **[ICON]** and **[LABEL]** from section 2 (LABEL = the exact module
+name — spell it exactly; image models often mangle text, so verify each render). A
+subtle "STEEL BUILD PRO" on the hard hat is a nice touch where a hard hat appears.
+
+**Negative prompt:** `misspelled text, distorted letters, gibberish text, deformed hands, extra fingers, watermark, unwanted logos, cartoon, illustration, oversaturated, HDR halo, blurry icon`
 
 **Technical output:**
-- Aspect ratio **3:2 landscape**, render ~**1536×1024** (or 1200×800).
-- Export each as **WebP**, target **≤180 KB** each (quality ~78). Keep filenames EXACT (case-sensitive) as listed below.
-- For consistency across the set: keep the same style suffix + (if your tool supports it) a fixed seed / "style reference" image, and generate in one session/batch.
+- **Square 1:1**, render ~**1024×1024** (or larger).
+- Drop each into `public/photos/desktop/_raw/` named by PageKey or label, then run the
+  optimizer (section 3) — it fits to 1024 (no crop, so the baked label isn't cut),
+  encodes WebP ≤~200 KB, and places each as `<PageKey>.webp`.
+- For consistency: reuse the same style text + a fixed seed / "style-reference" image
+  (your RFIs tile is a perfect anchor) and generate the set in one session.
 
 ---
 

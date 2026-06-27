@@ -127,32 +127,31 @@ The differentiator. ~30 module icons produced as a cohesive raster set.
 
 ### 5.1 Art-direction spec (one master style)
 
-Locked style (2026-06-26, REVISED): **cinematic photographic tiles.** This supersedes
-the earlier glossy-3D-emblem direction after the owner provided full-grid photo-tile
-reference mockups. Each launcher module is a real construction photograph, darkened,
-with a clean white outline icon + label on top — premium, editorial, unmistakably steel.
+Locked style (2026-06-27, REVISED): **complete square photo tiles.** Each launcher
+module is a single, finished **square (1:1)** image — a cinematic construction
+photograph with the module's white outline icon AND its label **baked into the image**
+(per the owner's RFIs reference: a "STEEL BUILD PRO" hard-hat worker reading a shop
+drawing on a tablet, darkened, with a white question-bubble icon + "RFIs" centered, in
+a rounded dark frame). The app shows the full tile image as-is and does NOT overlay its
+own icon/label when a photo exists.
 
-- **Tile:** a landscape card filled by a **construction photograph** (steel stacks,
-  detailing on-screen, a welder throwing sparks, erection cranes, flatbeds loaded with
-  steel, stacked hard hats, calculators/paperwork, contracts, bolts, a dashboard on a
-  laptop), with a **dark gradient scrim** (stronger toward the bottom) so the
-  foreground reads. Slight corner rounding; thin near-black gutters on a near-black
-  canvas.
-- **Foreground:** a **white outline icon** (the shared lucide set from
-  `src/config/pageIcons`) centered slightly above middle, with a **white label**
-  centered beneath. Two-weight type, sentence case.
-- **Photography direction:** consistent dark, moody, real (not stocky), shallow depth
-  of field, cool industrial grade; framed so the center stays uncluttered for the icon.
-  Landscape ~16:9–3:2.
-- **Full launcher set:** EVERY module in the real nav gets a tile (not a curated
-  subset) — matches the owner's full-grid reference. Distinct photos where it matters;
-  tasteful reuse of a shared library is fine for similar modules (paperwork shots for
-  financial modules, PPE/site shots for field, steel shots for production).
-- **Fallback:** a module with no photo yet renders a **dark steel-gradient tile** +
-  the same white icon + label — so the launcher ships and looks coherent before the
-  photo library is complete (mirrors the lucide-icon fallback philosophy).
-- **Output:** photos as `public/photos/desktop/<page>.webp` (landscape), sensible
-  compression; lazy-loaded in the launcher grid.
+- **Tile:** a square card — a construction scene (steel stacks, detailing on-screen, a
+  welder throwing sparks, erection cranes, flatbeds of steel, stacked hard hats,
+  paperwork, contracts, bolts, dashboards) darkened with a vignette, the module's
+  **white outline icon** centered, the **label** in clean white sans-serif beneath, a
+  subtle rounded dark frame. One cohesive family across all tiles.
+- **Rendering:** `ModuleTile` displays the image full-bleed (aspect 1:1, `object-fit:
+  cover`), no overlay. The button's `aria-label` carries the accessible name (screen
+  readers don't read baked-in pixels).
+- **Fallback:** a module with no image yet renders a dark steel-gradient tile + the
+  shared white **lucide** icon + label (app-drawn) — so the launcher is coherent before
+  the set is complete.
+- **Full launcher set:** EVERY module in the real nav gets a tile.
+- **Text caveat:** image models render text unreliably — verify baked-in labels for
+  spelling across all ~31 (the `aria-label` stays correct regardless). A tile whose
+  text comes out wrong can be regenerated or left on the app-drawn fallback.
+- **Output:** `public/photos/desktop/<PageKey>.webp`, square, ≤~200 KB, lazy-loaded;
+  the `scripts/optimize-desktop-photos.mjs` pipeline fits-to-1024 (no crop) + encodes.
 - **Icons elsewhere stay vector:** dock chips and all in-app inline icons use the white
   lucide outline set — no raster there.
 - The owner's reference mockups in this session are the **direction reference**.
