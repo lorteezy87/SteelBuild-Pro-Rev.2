@@ -25,8 +25,8 @@ describe("launcherConfig", () => {
     }
   });
 
-  it("photoFor returns null until the photo pack ships", () => {
-    expect(photoFor("Dashboard")).toBeNull();
+  it("photoFor returns the mapped path for known modules, null for unknown", () => {
+    expect(photoFor("Dashboard")).toBe("/photos/desktop/Dashboard.webp");
     expect(photoFor("NoSuchPage")).toBeNull();
   });
 

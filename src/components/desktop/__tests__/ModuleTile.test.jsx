@@ -10,19 +10,19 @@ describe("ModuleTile", () => {
     expect(container.querySelector("svg")).toBeTruthy();
   });
 
-  it("uses the photo as a background image when one is provided", () => {
-    const { getByLabelText } = render(
+  it("renders an <img> with the resolved photo src", () => {
+    const { container } = render(
       <ModuleTile page="Deliveries" label="Deliveries" photoSrc="/photos/desktop/deliveries.webp" />,
     );
-    const btn = getByLabelText("Open Deliveries");
-    expect(btn.style.backgroundImage).toContain("deliveries.webp");
+    const img = container.querySelector("img");
+    expect(img).toBeTruthy();
+    expect(img.getAttribute("src")).toContain("deliveries.webp");
   });
 
-  it("falls back to a gradient (no background image) when there is no photo", () => {
-    const { getByLabelText } = render(<ModuleTile page="Deliveries" label="Deliveries" />);
-    const btn = getByLabelText("Open Deliveries");
-    expect(btn.style.backgroundImage).toBe("");
-    expect(btn.style.background).toContain("linear-gradient");
+  it("renders no <img> and shows the gradient when there is no photo", () => {
+    const { container, getByLabelText } = render(<ModuleTile page="__none__" label="Nothing" />);
+    expect(container.querySelector("img")).toBeNull();
+    expect(getByLabelText("Open Nothing").style.background).toContain("linear-gradient");
   });
 
   it("calls onClick when clicked", () => {
