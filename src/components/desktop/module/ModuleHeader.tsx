@@ -10,8 +10,25 @@ import { getPageIcon } from "@/config/pageIcons";
 import { photoFor } from "@/config/launcherConfig";
 import StatTile from "./StatTile";
 
-export default function ModuleHeader({ page, title, subtitle, stats = [], actions, photoSrc, children }) {
-  const Icon = getPageIcon(page);
+interface Stat {
+  label: React.ReactNode;
+  value: React.ReactNode;
+  tone?: string;
+}
+
+interface Props {
+  page: string;
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  stats?: Stat[];
+  actions?: React.ReactNode;
+  photoSrc?: string | null;
+  children?: React.ReactNode;
+}
+
+export default function ModuleHeader({ page, title, subtitle, stats = [], actions, photoSrc, children }: Props) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const Icon: any = getPageIcon(page);
   const photo = photoSrc ?? photoFor(page);
   const [imgFailed, setImgFailed] = useState(false);
   const showPhoto = !!photo && !imgFailed;
@@ -41,7 +58,7 @@ export default function ModuleHeader({ page, title, subtitle, stats = [], action
         <div className="desk-module-header__right">
           {stats.length > 0 && (
             <div className="desk-module-header__stats">
-              {stats.map((s) => <StatTile key={s.label} label={s.label} value={s.value} tone={s.tone} />)}
+              {stats.map((s) => <StatTile key={String(s.label)} label={s.label} value={s.value} tone={s.tone} />)}
             </div>
           )}
           {actions ? <div className="desk-module-header__actions">{actions}</div> : null}

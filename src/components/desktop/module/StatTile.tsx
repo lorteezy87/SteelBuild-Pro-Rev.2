@@ -4,9 +4,15 @@
  */
 import React from "react";
 
+interface Props {
+  label: React.ReactNode;
+  value: React.ReactNode;
+  tone?: string;
+}
+
 const TONES = new Set(["neutral", "gold", "blue", "teal", "green", "amber", "danger"]);
 
-export default function StatTile({ label, value, tone = "neutral" }) {
+export default function StatTile({ label, value, tone = "neutral" }: Props) {
   const t = TONES.has(tone) && tone !== "neutral" ? tone : null;
   return (
     <div className={`desk-stat${t ? ` desk-stat--${t}` : ""}`}>

@@ -5,11 +5,22 @@
 import React from "react";
 import { useSearchParams } from "react-router-dom";
 
-export default function ModuleTabs({ tabs, param = "x_tab", defaultTab }) {
+interface Tab {
+  id: string;
+  label: React.ReactNode;
+}
+
+interface Props {
+  tabs: Tab[];
+  param?: string;
+  defaultTab?: string;
+}
+
+export default function ModuleTabs({ tabs, param = "x_tab", defaultTab }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const active = searchParams.get(param) || defaultTab || (tabs[0] && tabs[0].id);
 
-  const select = (id) => {
+  const select = (id: string) => {
     const next = new URLSearchParams(searchParams);
     next.set(param, id);
     setSearchParams(next, { replace: true });
