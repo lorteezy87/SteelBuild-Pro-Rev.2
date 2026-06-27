@@ -33,10 +33,42 @@ export const DOCK_DEFAULT_PAGES = [
 ];
 
 /**
- * Background photos by page key. EMPTY until the construction-photo pack lands
- * under public/photos/desktop/. Each value is a path to a landscape WebP.
+ * Background photos by page key, served from public/photos/desktop/.
+ * A tile whose file is missing falls back to the gradient (ModuleTile onError).
  */
-export const PHOTO_ASSETS = {};
+export const PHOTO_ASSETS = {
+  Dashboard: "/photos/desktop/Dashboard.webp",
+  CommandCenter: "/photos/desktop/CommandCenter.webp",
+  PortfolioHub: "/photos/desktop/PortfolioHub.webp",
+  ProjectsHub: "/photos/desktop/ProjectsHub.webp",
+  DrawingSubmittalHub: "/photos/desktop/DrawingSubmittalHub.webp",
+  ScheduleHub: "/photos/desktop/ScheduleHub.webp",
+  RFIs: "/photos/desktop/RFIs.webp",
+  ActionItems: "/photos/desktop/ActionItems.webp",
+  WorkPackages: "/photos/desktop/WorkPackages.webp",
+  FabRelease: "/photos/desktop/FabRelease.webp",
+  ProductionStatus: "/photos/desktop/ProductionStatus.webp",
+  Procurement: "/photos/desktop/Procurement.webp",
+  BudgetHours: "/photos/desktop/BudgetHours.webp",
+  RiskHub: "/photos/desktop/RiskHub.webp",
+  ResourceHub: "/photos/desktop/ResourceHub.webp",
+  Deliveries: "/photos/desktop/Deliveries.webp",
+  FieldToday: "/photos/desktop/FieldToday.webp",
+  FieldHub: "/photos/desktop/FieldHub.webp",
+  CostHub: "/photos/desktop/CostHub.webp",
+  ChangeOrders: "/photos/desktop/ChangeOrders.webp",
+  SOV: "/photos/desktop/SOV.webp",
+  PayApplications: "/photos/desktop/PayApplications.webp",
+  Backcharges: "/photos/desktop/Backcharges.webp",
+  Expenses: "/photos/desktop/Expenses.webp",
+  Documents: "/photos/desktop/Documents.webp",
+  ReportsHub: "/photos/desktop/ReportsHub.webp",
+  OrgMembers: "/photos/desktop/OrgMembers.webp",
+  Billing: "/photos/desktop/Billing.webp",
+  Vendors: "/photos/desktop/Vendors.webp",
+  Settings: "/photos/desktop/Settings.webp",
+  CalculatorsHub: "/photos/desktop/CalculatorsHub.webp",
+};
 
 /** Background photo path for a launcher tile, or null to use the gradient fallback. */
 export function photoFor(page) {
