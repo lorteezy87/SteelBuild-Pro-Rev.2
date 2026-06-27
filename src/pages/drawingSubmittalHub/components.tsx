@@ -375,24 +375,21 @@ function ModelMappingSection({ summary, elements, onImport }: { summary?: Elemen
   const fab = useMemo(() => summarizeFabStatus(elements || []), [elements]);
 
   return (
-    <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-          <Boxes size={18} style={{ color: accent, marginTop: 2 }} />
-          <div>
-            <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>3D Model Mapping</h3>
-            <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
-              Steel members mapped to packages by piece mark — this drives the BIM viewer&apos;s status coloring.
-            </p>
-          </div>
-        </div>
+    <SectionCard
+      title="3D model mapping"
+      icon={Boxes}
+      headerAction={
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {total > 0 && <span className="sbd-badge-info">{total} members</span>}
           <button className="sbd-btn sbd-btn-ghost" onClick={onImport} style={{ fontSize: 12 }}>
             Import member CSV
           </button>
         </div>
-      </div>
+      }
+    >
+      <p style={{ margin: "0 0 12px", color: textMuted, fontSize: 12 }}>
+        Steel members mapped to packages by piece mark — this drives the BIM viewer&apos;s status coloring.
+      </p>
 
       {total === 0 ? (
         <EmptyState text="No model members yet — export a member/assembly report (CSV) from Tekla or SDS2 and import it to map the physical steel to packages, sequences, and RFIs." />
@@ -515,7 +512,7 @@ function ModelMappingSection({ summary, elements, onImport }: { summary?: Elemen
           )}
         </div>
       )}
-    </section>
+    </SectionCard>
   );
 }
 
