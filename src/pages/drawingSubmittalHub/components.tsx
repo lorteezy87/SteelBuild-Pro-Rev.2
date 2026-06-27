@@ -1,5 +1,6 @@
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, ReactNode } from "react";
+import { SectionCard, StatusPill } from "@/components/desktop/module";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   AlertTriangle,
