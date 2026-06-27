@@ -824,6 +824,7 @@ export default function DrawingSubmittalHub() {
         alignItems: "center",
         padding: 6,
         marginBottom: 16,
+        marginTop: desktopShell ? 14 : 0,
         background: "color-mix(in srgb, var(--bg-surface) 82%, transparent)",
         border: `1px solid ${border}`,
         borderRadius: 14,
