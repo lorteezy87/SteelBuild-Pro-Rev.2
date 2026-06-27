@@ -1966,9 +1966,7 @@ function RevisionGridCells({ r, onCompareRevision }: { r: any; onCompareRevision
       </GridCell>
       <GridCell style={{ color: textMuted }}>{r.revisionCode}</GridCell>
       <GridCell>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 10, fontWeight: 700, color: dm.color }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: dm.color, flexShrink: 0 }} />{dm.label}
-        </span>
+        <StatusPill label={dm.label} color={dm.color} />
       </GridCell>
       <GridCell style={{ color: r.wpNames?.length ? textPrimary : textMuted }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{r.wpNames?.length ? r.wpNames.join(", ") : "—"}</span>
@@ -1979,9 +1977,7 @@ function RevisionGridCells({ r, onCompareRevision }: { r: any; onCompareRevision
         ) : <span style={{ color: textMuted }}>—</span>}
       </GridCell>
       <GridCell>
-        {r.fabBlocked
-          ? <span style={{ fontFamily: mono, fontSize: 9.5, fontWeight: 800, color: "#F85149", background: "rgba(248,81,73,0.12)", border: "1px solid rgba(248,81,73,0.4)", borderRadius: 4, padding: "1px 6px", textTransform: "uppercase" }}>Yes</span>
-          : <span style={{ fontFamily: mono, fontSize: 9.5, color: textMuted }}>No</span>}
+        <StatusPill label={r.fabBlocked ? "Blocked" : "Clear"} color={r.fabBlocked ? "#F85149" : textMuted} />
       </GridCell>
       <GridCell align="right" style={{ color: r.affectedPieces != null ? textPrimary : textMuted }}>{r.affectedPieces != null ? r.affectedPieces : "—"}</GridCell>
       <GridCell align="right">
@@ -2078,91 +2074,89 @@ export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }:
   if (isLoading) return <LoadingSkeleton />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <GitCompareArrows size={15} color={accent} />
-        <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: textPrimary, textTransform: "uppercase" }}>Revision Impact</span>
-        <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{rows.length} changed sheet{rows.length === 1 ? "" : "s"}</span>
-        <div style={{ flex: 1 }} />
-        <div style={{ position: "relative", flex: "0 1 320px", minWidth: 180 }}>
-          <Search size={14} color={textMuted} style={{ position: "absolute", left: 10, top: 9 }} />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search sheet / set / WP…" style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 8, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }} />
+    <SectionCard title="Revision impact">
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <GitCompareArrows size={15} color={accent} />
+          <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: textPrimary, textTransform: "uppercase" }}>Revision Impact</span>
+          <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{rows.length} changed sheet{rows.length === 1 ? "" : "s"}</span>
+          <div style={{ flex: 1 }} />
+          <div style={{ position: "relative", flex: "0 1 320px", minWidth: 180 }}>
+            <Search size={14} color={textMuted} style={{ position: "absolute", left: 10, top: 9 }} />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search sheet / set / WP…" style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 8, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }} />
+          </div>
+        </div>
+
+        {shouldVirtualize ? (
+          <RevisionVirtualList rows={filtered} onCompareRevision={onCompareRevision} />
+        ) : (
+        <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <Th>Changed Sheet</Th>
+                <Th>Rev</Th>
+                <Th>Downstream</Th>
+                <Th>Linked Work Package</Th>
+                <Th style={{ textAlign: "right" }}>RFIs (open/all)</Th>
+                <Th>Fab Blocked?</Th>
+                <Th style={{ textAlign: "right" }}>
+                  <span title="Pieces tied to this set — exact when the roster links pieces to the set, otherwise estimated via the linked work-package sequence. '—' when neither resolves.">Pieces ≈</span>
+                </Th>
+                <Th style={{ textAlign: "right" }}>{""}</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><Td colSpan={8} style={{ textAlign: "center", color: textMuted, padding: 28 }}>
+                  No changed sheets {search ? "match your search" : "yet — the board lights up when a new revision is uploaded for an existing sheet"}.
+                </Td></tr>
+              ) : filtered.map((r) => {
+                const dm = REV_DOWNSTREAM[r.severity] || REV_DOWNSTREAM.low;
+                return (
+                  <tr key={r.revisionId || `${r.drawingId}-${r.revisionCode}`} style={{
+                    borderTop: `1px solid ${border}`,
+                    borderLeft: r.severity === "critical" ? "3px solid #F85149" : r.severity === "high" ? "3px solid #F0883E" : "3px solid transparent",
+                  }}>
+                    {/* ⚠ MIRROR of RevisionGridCells (virtualized branch) — edit both when changing columns. */}
+                    <Td style={{ color: textPrimary, fontWeight: 600 }}>
+                      {r.sheetNumber || "Sheet"}
+                      <span style={{ display: "block", fontFamily: mono, fontSize: 9.5, color: textMuted, fontWeight: 400 }}>{r.setName}</span>
+                    </Td>
+                    <Td style={{ color: textMuted }}>{r.revisionCode}</Td>
+                    <Td>
+                      <StatusPill label={dm.label} color={dm.color} />
+                    </Td>
+                    <Td style={{ color: r.wpNames?.length ? textPrimary : textMuted }}>{r.wpNames?.length ? r.wpNames.join(", ") : "—"}</Td>
+                    <Td style={{ textAlign: "right" }}>
+                      {r.rfiCount ? (
+                        <span style={{ fontFamily: mono, fontSize: 11, color: r.openRfiCount ? "#F0883E" : textMuted }}>{r.openRfiCount}<span style={{ color: textMuted }}> / {r.rfiCount}</span></span>
+                      ) : <span style={{ color: textMuted }}>—</span>}
+                    </Td>
+                    <Td>
+                      <StatusPill label={r.fabBlocked ? "Blocked" : "Clear"} color={r.fabBlocked ? "#F85149" : textMuted} />
+                    </Td>
+                    <Td style={{ textAlign: "right", color: r.affectedPieces != null ? textPrimary : textMuted }}>{r.affectedPieces != null ? r.affectedPieces : "—"}</Td>
+                    <Td style={{ textAlign: "right" }}>
+                      {onCompareRevision && r.drawingId && (
+                        <button type="button" title="Open the revision overlay compare" onClick={() => onCompareRevision(r.drawingId)}
+                          style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer", background: "transparent", border: `1px solid ${border}`, color: accent }}>
+                          Compare
+                        </button>
+                      )}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        )}
+        <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, lineHeight: 1.5 }}>
+          Downstream severity: <span style={{ color: "#F85149" }}>in field</span> &gt; <span style={{ color: "#F0883E" }}>delivered</span> &gt; <span style={{ color: "#D29922" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
         </div>
       </div>
-
-      {shouldVirtualize ? (
-        <RevisionVirtualList rows={filtered} onCompareRevision={onCompareRevision} />
-      ) : (
-      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <Th>Changed Sheet</Th>
-              <Th>Rev</Th>
-              <Th>Downstream</Th>
-              <Th>Linked Work Package</Th>
-              <Th style={{ textAlign: "right" }}>RFIs (open/all)</Th>
-              <Th>Fab Blocked?</Th>
-              <Th style={{ textAlign: "right" }}>
-                <span title="Pieces tied to this set — exact when the roster links pieces to the set, otherwise estimated via the linked work-package sequence. '—' when neither resolves.">Pieces ≈</span>
-              </Th>
-              <Th style={{ textAlign: "right" }}>{""}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><Td colSpan={8} style={{ textAlign: "center", color: textMuted, padding: 28 }}>
-                No changed sheets {search ? "match your search" : "yet — the board lights up when a new revision is uploaded for an existing sheet"}.
-              </Td></tr>
-            ) : filtered.map((r) => {
-              const dm = REV_DOWNSTREAM[r.severity] || REV_DOWNSTREAM.low;
-              return (
-                <tr key={r.revisionId || `${r.drawingId}-${r.revisionCode}`} style={{
-                  borderTop: `1px solid ${border}`,
-                  borderLeft: r.severity === "critical" ? "3px solid #F85149" : r.severity === "high" ? "3px solid #F0883E" : "3px solid transparent",
-                }}>
-                  {/* ⚠ MIRROR of RevisionGridCells (virtualized branch) — edit both when changing columns. */}
-                  <Td style={{ color: textPrimary, fontWeight: 600 }}>
-                    {r.sheetNumber || "Sheet"}
-                    <span style={{ display: "block", fontFamily: mono, fontSize: 9.5, color: textMuted, fontWeight: 400 }}>{r.setName}</span>
-                  </Td>
-                  <Td style={{ color: textMuted }}>{r.revisionCode}</Td>
-                  <Td>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 10, fontWeight: 700, color: dm.color }}>
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: dm.color, flexShrink: 0 }} />{dm.label}
-                    </span>
-                  </Td>
-                  <Td style={{ color: r.wpNames?.length ? textPrimary : textMuted }}>{r.wpNames?.length ? r.wpNames.join(", ") : "—"}</Td>
-                  <Td style={{ textAlign: "right" }}>
-                    {r.rfiCount ? (
-                      <span style={{ fontFamily: mono, fontSize: 11, color: r.openRfiCount ? "#F0883E" : textMuted }}>{r.openRfiCount}<span style={{ color: textMuted }}> / {r.rfiCount}</span></span>
-                    ) : <span style={{ color: textMuted }}>—</span>}
-                  </Td>
-                  <Td>
-                    {r.fabBlocked
-                      ? <span style={{ fontFamily: mono, fontSize: 9.5, fontWeight: 800, color: "#F85149", background: "rgba(248,81,73,0.12)", border: "1px solid rgba(248,81,73,0.4)", borderRadius: 4, padding: "1px 6px", textTransform: "uppercase" }}>Yes</span>
-                      : <span style={{ fontFamily: mono, fontSize: 9.5, color: textMuted }}>No</span>}
-                  </Td>
-                  <Td style={{ textAlign: "right", color: r.affectedPieces != null ? textPrimary : textMuted }}>{r.affectedPieces != null ? r.affectedPieces : "—"}</Td>
-                  <Td style={{ textAlign: "right" }}>
-                    {onCompareRevision && r.drawingId && (
-                      <button type="button" title="Open the revision overlay compare" onClick={() => onCompareRevision(r.drawingId)}
-                        style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer", background: "transparent", border: `1px solid ${border}`, color: accent }}>
-                        Compare
-                      </button>
-                    )}
-                  </Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      )}
-      <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, lineHeight: 1.5 }}>
-        Downstream severity: <span style={{ color: "#F85149" }}>in field</span> &gt; <span style={{ color: "#F0883E" }}>delivered</span> &gt; <span style={{ color: "#D29922" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
-      </div>
-    </div>
+    </SectionCard>
   );
 }
 
