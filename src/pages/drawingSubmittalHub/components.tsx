@@ -1660,7 +1660,13 @@ export function DrawingRegisterTable({
   if (isLoading) return <LoadingSkeleton />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <SectionCard
+      title="Drawing register"
+      headerAction={
+        <button type="button" className="sbd-btn" title="Full Drawings editor — filters, bulk actions, rename / delete, per-sheet" onClick={() => navigate("/Drawings")}>Open full editor ↗</button>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: "0 1 440px", minWidth: 200 }}>
           <Search size={14} color={textMuted} style={{ position: "absolute", left: 10, top: 9 }} />
@@ -1678,7 +1684,6 @@ export function DrawingRegisterTable({
         {canEdit && (
           <button type="button" className="sbd-btn" onClick={() => setLogImportOpen(true)}>Import Log</button>
         )}
-        <button type="button" className="sbd-btn" title="Full Drawings editor — filters, bulk actions, rename / delete, per-sheet" onClick={() => navigate("/Drawings")}>Open full editor ↗</button>
       </div>
 
       {shouldVirtualize ? (
@@ -1786,7 +1791,8 @@ export function DrawingRegisterTable({
           <DrawingLogImportModal open projectId={projectId} projectName={activeProject?.name} onClose={() => setLogImportOpen(false)} onImported={refetchDrawings} />
         </Suspense>
       )}
-    </div>
+      </div>
+    </SectionCard>
   );
 }
 
