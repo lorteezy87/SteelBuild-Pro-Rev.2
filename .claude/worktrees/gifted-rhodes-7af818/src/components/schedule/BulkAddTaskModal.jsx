@@ -1,0 +1,368 @@
+import React, { useState, useEffect } from "react";
+import { PHASES } from "../../utils/phases";
+import DateOrTbdInput from "./DateOrTbdInput";
+
+const TASK_TYPES = ["Task", "Fabrication", "Delivery", "Install", "Submittal", "RFI", "Milestone"];
+const STATUSES   = ["Not Started", "In Progress", "Complete", "On Hold", "Cancelled"];
+const PRIORITIES = ["Low", "Normal", "High", "Critical"];
+
+const today = () => new Date().toISOString().split("T")[0];
+
+function emptyRow(id) {
+  return {
+    _id:            id,
+    task_name:      "",
+    task_type:      "Task",
+    phase:          "Fabrication",
+    start_date:     today(),
+    end_date:       today(),
+    status:         "Not Started",
+    priority:       "Normal",
+    resource_names: "",
+    parent_task_id: null,
+  };
+}
+
+const CELL = {
+  padding: "0 7px",
+  height: "100%",
+  display: "flex",
+  alignItems: "center",
+  minWidth: 0,
+};
+
+const INPUT_STYLE = {
+  width: "100%",
+  minWidth: 0,
+  height: 34,
+  boxSizing: "border-box",
+  background: "rgb(14,20,31)",
+  border: "1px solid rgba(135,154,180,0.24)",
+  borderRadius: 6,
+  outline: "none",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  lineHeight: "18px",
+  padding: "7px 9px",
+};
+
+const SELECT_STYLE = {
+  width: "100%",
+  minWidth: 0,
+  height: 34,
+  boxSizing: "border-box",
+  background: "rgb(14,20,31)",
+  border: "1px solid rgba(135,154,180,0.24)",
+  borderRadius: 6,
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  lineHeight: "16px",
+  padding: "0 8px",
+  cursor: "pointer",
+  outline: "none",
+};
+
+const COL_WIDTHS = "40px minmax(240px, 1.3fr) 108px 132px 166px 166px 130px 106px 150px 170px 54px";
+const GRID_MIN_WIDTH = 1462;
+const ROW_BG = "rgb(10,15,23)";
+const ROW_ALT_BG = "rgb(13,19,29)";
+const ROW_ERROR_BG = "rgb(41,19,24)";
+const PANEL_BG = "linear-gradient(180deg, rgb(12,17,25) 0%, rgb(7,10,16) 100%)";
+
+export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName, isSaving, existingTasks }) {
+  const [rows, setRows] = useState(() => [emptyRow(1), emptyRow(2), emptyRow(3)]);
+  const [nextId, setNextId] = useState(4);
+  const [errors, setErrors] = useState({});
+
+  // Reset form state every time the modal opens so stale rows from a
+  // previous bulk-add session are never carried over.
+  useEffect(() => {
+    if (open) {
+      setRows([emptyRow(1), emptyRow(2), emptyRow(3)]);
+      setNextId(4);
+      setErrors({});
+    }
+  }, [open]);
+
+  const updateRow = (id, key, val) => {
+    setRows((prev) => prev.map((r) => r._id === id ? { ...r, [key]: val } : r));
+    setErrors((prev) => { const e = { ...prev }; delete e[id]; return e; });
+  };
+
+  const addRow = () => {
+    setRows((prev) => [...prev, emptyRow(nextId)]);
+    setNextId((n) => n + 1);
+  };
+
+  const removeRow = (id) => {
+    setRows((prev) => prev.filter((r) => r._id !== id));
+  };
+
+  const duplicateRow = (id) => {
+    const src = rows.find((r) => r._id === id);
+    if (!src) return;
+    setRows((prev) => {
+      const idx = prev.findIndex((r) => r._id === id);
+      const newRow = { ...src, _id: nextId, task_name: src.task_name ? src.task_name + " (copy)" : "" };
+      const next = [...prev];
+      next.splice(idx + 1, 0, newRow);
+      return next;
+    });
+    setNextId((n) => n + 1);
+  };
+
+  const handleSave = () => {
+    const errs = {};
+    rows.forEach((r) => {
+      if (!r.task_name.trim()) errs[r._id] = "Name required";
+    });
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    const filled = rows.filter((r) => r.task_name.trim());
+    if (!filled.length) return;
+    const payload = filled.map(({ _id, ...rest }) => ({
+      ...rest,
+      start_date: rest.start_date || null,
+      end_date: rest.end_date || null,
+      resource_names: rest.resource_names || null,
+      parent_task_id: rest.parent_task_id || null,
+    }));
+    onSubmit(payload);
+  };
+
+  const handleClose = () => {
+    setRows([emptyRow(1), emptyRow(2), emptyRow(3)]);
+    setNextId(4);
+    setErrors({});
+    onClose();
+  };
+
+  if (!open) return null;
+
+  return (
+    <>
+      <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.74)", backdropFilter: "blur(6px)", zIndex: 998 }} />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+        width: "min(1420px, 96vw)", maxHeight: "88vh",
+        background: PANEL_BG, border: "1px solid rgba(200,155,32,0.38)",
+        borderRadius: 14, boxShadow: "0 24px 64px rgba(0,0,0,0.80)", zIndex: 999,
+        display: "flex", flexDirection: "column", overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid var(--bg-surface-high)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+                BULK ADD TASKS
+              </div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 3, letterSpacing: "0.10em" }}>
+                {projectName ? `PROJECT: ${projectName.toUpperCase()}` : "NO PROJECT SELECTED"} · {rows.length} ROWS
+              </div>
+            </div>
+            <button onClick={handleClose} style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
+          </div>
+        </div>
+
+        {/* Column headers */}
+        <div style={{
+          display: "grid", gridTemplateColumns: COL_WIDTHS,
+          minWidth: GRID_MIN_WIDTH,
+          gap: 0, padding: "0 16px",
+          height: 32, background: "rgb(10,15,23)",
+          borderBottom: "1px solid var(--divider)",
+          flexShrink: 0, alignItems: "center",
+        }}>
+          <div />
+          {["TASK NAME", "TYPE", "PHASE", "START DATE", "END DATE", "STATUS", "PRIORITY", "RESOURCES", "PARENT TASK", ""].map((h, headerIndex) => (
+            <div key={`${h || "actions"}-${headerIndex}`} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", padding: "0 7px", whiteSpace: "nowrap" }}>
+              {h}
+            </div>
+          ))}
+        </div>
+
+        {/* Rows — scrollable */}
+        <div style={{ flex: 1, overflow: "auto" }}>
+          {rows.map((row, idx) => {
+            const hasErr = !!errors[row._id];
+            return (
+              <div
+                key={row._id}
+                style={{
+                  display: "grid", gridTemplateColumns: COL_WIDTHS,
+                  minWidth: GRID_MIN_WIDTH,
+                  alignItems: "center", height: 42,
+                  borderBottom: "1px solid var(--hover-bg)",
+                  background: hasErr ? ROW_ERROR_BG : idx % 2 === 1 ? ROW_ALT_BG : ROW_BG,
+                  border: hasErr ? "1px solid rgba(255,59,59,0.25)" : undefined,
+                  padding: "0 16px",
+                }}
+              >
+                {/* Row number */}
+                <div style={{ ...CELL, justifyContent: "center" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{idx + 1}</span>
+                </div>
+
+                {/* Task name */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)", position: "relative" }}>
+                  <input
+                    value={row.task_name}
+                    onChange={(e) => updateRow(row._id, "task_name", e.target.value)}
+                    onFocus={(e) => e.target.style.background = "rgb(18,25,38)"}
+                    onBlur={(e) => e.target.style.background = INPUT_STYLE.background}
+                    placeholder={hasErr ? "Required" : "Task name…"}
+                    style={{ ...INPUT_STYLE, color: hasErr && !row.task_name ? "var(--status-error)" : "var(--text-primary)" }}
+                  />
+                </div>
+
+                {/* Task type */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <select value={row.task_type} onChange={(e) => updateRow(row._id, "task_type", e.target.value)} style={SELECT_STYLE}>
+                    {TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+
+                {/* Phase */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <select value={row.phase} onChange={(e) => updateRow(row._id, "phase", e.target.value)} style={SELECT_STYLE}>
+                    {PHASES.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                {/* Start date */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <DateOrTbdInput
+                    compact
+                    value={row.start_date}
+                    onChange={(v) => updateRow(row._id, "start_date", v)}
+                    inputStyle={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark", padding: "7px 8px" }}
+                  />
+                </div>
+
+                {/* End date */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <DateOrTbdInput
+                    compact
+                    value={row.end_date}
+                    onChange={(v) => updateRow(row._id, "end_date", v)}
+                    inputStyle={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark", padding: "7px 8px" }}
+                  />
+                </div>
+
+                {/* Status */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <select value={row.status} onChange={(e) => updateRow(row._id, "status", e.target.value)} style={SELECT_STYLE}>
+                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                {/* Priority */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <select value={row.priority} onChange={(e) => updateRow(row._id, "priority", e.target.value)} style={SELECT_STYLE}>
+                    {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                {/* Resources */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <input
+                    value={row.resource_names}
+                    onChange={(e) => updateRow(row._id, "resource_names", e.target.value)}
+                    placeholder="e.g. Fab A, John"
+                    style={{ ...INPUT_STYLE, fontSize: 10 }}
+                  />
+                </div>
+
+                {/* Parent Task */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <select
+                    value={row.parent_task_id || ""}
+                    onChange={(e) => updateRow(row._id, "parent_task_id", e.target.value || null)}
+                    style={SELECT_STYLE}
+                  >
+                    <option value="">— None —</option>
+                    {(existingTasks || []).map(t => (
+                      <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ""}{t.task_name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Actions */}
+                <div style={{ ...CELL, gap: 4, justifyContent: "center" }}>
+                  <button
+                    onClick={() => duplicateRow(row._id)}
+                    title="Duplicate row"
+                    style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 11, padding: 2, lineHeight: 1 }}
+                  >⧉</button>
+                  <button
+                    onClick={() => removeRow(row._id)}
+                    title="Remove row"
+                    style={{ background: "none", border: "none", color: "rgba(255,80,80,0.35)", cursor: "pointer", fontSize: 13, padding: 2, lineHeight: 1 }}
+                  >✕</button>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Add row button */}
+          <div
+            onClick={addRow}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "8px 24px", cursor: "pointer",
+              color: "rgba(200,155,32,0.50)", fontFamily: "var(--font-mono)", fontSize: 10,
+              letterSpacing: "0.08em", fontWeight: 700,
+              borderBottom: "1px solid var(--hover-bg)",
+              background: "rgb(10,15,23)",
+              transition: "color 0.12s",
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
+            onMouseLeave={(e) => e.currentTarget.style.color = "rgba(200,155,32,0.50)"}
+          >
+            + ADD ROW
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "12px 24px", borderTop: "1px solid var(--bg-surface-high)",
+          background: "rgb(10,15,23)", flexShrink: 0,
+        }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
+            {rows.filter((r) => r.task_name.trim()).length} of {rows.length} rows ready to save
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={handleClose}
+              style={{
+                background: "transparent", border: "1px solid var(--border-default)",
+                borderRadius: 6, padding: "7px 18px", color: "var(--text-muted)",
+                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer",
+                letterSpacing: "0.09em", textTransform: "uppercase",
+              }}
+            >
+              CANCEL
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              style={{
+                background: isSaving ? "rgba(200,155,32,0.5)" : "var(--accent)",
+                border: "none", borderRadius: 6, padding: "7px 22px",
+                color: "#fff", fontFamily: "var(--font-mono)", fontSize: 10,
+                fontWeight: 800, cursor: isSaving ? "not-allowed" : "pointer",
+                letterSpacing: "0.09em", textTransform: "uppercase",
+                transition: "background 0.15s",
+              }}
+            >
+              {isSaving ? "SAVING…" : `SAVE ${rows.filter((r) => r.task_name.trim()).length} TASKS`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}

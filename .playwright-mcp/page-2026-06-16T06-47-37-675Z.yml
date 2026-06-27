@@ -1,0 +1,304 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: SB
+        - generic [ref=e7]: STEELBUILD PRO
+      - generic [ref=e8]:
+        - link "Platform" [ref=e9] [cursor=pointer]:
+          - /url: "#"
+        - link "Workflow" [ref=e10] [cursor=pointer]:
+          - /url: "#"
+        - link "Why steel" [ref=e11] [cursor=pointer]:
+          - /url: "#"
+        - link "Contact" [ref=e12] [cursor=pointer]:
+          - /url: "#"
+        - link "Sign in" [ref=e13] [cursor=pointer]:
+          - /url: "#"
+        - button "Request a demo" [ref=e14] [cursor=pointer]
+  - generic [ref=e16]:
+    - generic [ref=e17]:
+      - generic [ref=e18]: Built for structural steel
+      - heading "Your steel is only as good as the system behind it." [level=1] [ref=e19]
+      - paragraph [ref=e20]: From detailing approval to turnover package — every piece mark, every heat number, every weld record, in one system built for fabricators and erectors.
+      - paragraph [ref=e21]: No more chasing mill certs through email, tracking bolt-up on paper, or losing RFIs in spreadsheet tabs.
+      - generic [ref=e22]:
+        - button "See it on your project" [ref=e23] [cursor=pointer]
+        - button "Watch a 2-min tour" [ref=e24] [cursor=pointer]
+      - generic [ref=e25]:
+        - generic [ref=e26]: AISC certified
+        - generic [ref=e27]: /
+        - generic [ref=e28]: AWS D1.1
+        - generic [ref=e29]: /
+        - generic [ref=e30]: OSHA record-ready
+    - generic [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - generic [ref=e34]: Active project
+          - generic [ref=e35]: 24426 · Capstone Medical Center
+          - generic [ref=e36]: 3,847 tons · 428 pieces · Phase 2 erection
+        - generic [ref=e37]: On track
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]: Fab released
+          - generic [ref=e41]: 89%
+        - generic [ref=e43]:
+          - generic [ref=e44]: Erected
+          - generic [ref=e45]: 62%
+        - generic [ref=e47]:
+          - generic [ref=e48]: Open RFIs
+          - generic [ref=e49]: "7"
+      - generic [ref=e51]:
+        - generic [ref=e53]:
+          - generic [ref=e54]: Detailing
+          - generic [ref=e55]: 100%
+        - generic [ref=e59]:
+          - generic [ref=e60]: Fabrication
+          - generic [ref=e61]: 89%
+        - generic [ref=e65]:
+          - generic [ref=e66]: Erection
+          - generic [ref=e67]: 62%
+        - generic [ref=e71]:
+          - generic [ref=e72]: Close-out
+          - generic [ref=e73]: 15%
+  - generic [ref=e77]:
+    - generic [ref=e78]:
+      - generic [ref=e79]: The cost of gaps
+      - heading "Steel projects don't fail all at once." [level=2] [ref=e80]
+      - paragraph [ref=e81]: They fail in a thousand small gaps — documents that can't be found, inspections that weren't recorded, evidence that doesn't exist when you need it.
+    - generic [ref=e82]:
+      - generic [ref=e83]:
+        - heading "Mill certs buried in an inbox" [level=3] [ref=e84]
+        - paragraph [ref=e85]: Your CWI needs the MTR for W14×90 heat 84726 — but it's a forwarded email from three weeks ago, and nobody knows which attachment is current.
+      - generic [ref=e86]:
+        - heading "Field photos with no context" [level=3] [ref=e87]
+        - paragraph [ref=e88]: 200 bolt-up photos on a foreman's phone. No piece marks, no grid lines, no connection IDs. Useless for the turnover package.
+      - generic [ref=e89]:
+        - heading "RFIs in spreadsheet purgatory" [level=3] [ref=e90]
+        - paragraph [ref=e91]: The log is 14 tabs deep. The GC says they answered RFI-047 Tuesday. Your PM never got it. The EOR is waiting on both.
+      - generic [ref=e92]:
+        - heading "Drawings marked up on paper" [level=3] [ref=e93]
+        - paragraph [ref=e94]: The detailer sent Rev. C, but the shop floor is fabricating Rev. B. The approval stamp lives in a folder called "FINAL_FINAL_v2."
+      - generic [ref=e95]:
+        - heading "NCRs on sticky notes" [level=3] [ref=e96]
+        - paragraph [ref=e97]: A flange was welded on the wrong side. The welder knows. The foreman knows. The NCR won't exist until someone writes it up — if ever.
+      - generic [ref=e98]:
+        - heading "Change orders you can't prove" [level=3] [ref=e99]
+        - paragraph [ref=e100]: The GC added 47 embed plates outside the original scope. The email's somewhere. Good luck finding it when they dispute the CO.
+  - generic [ref=e102]:
+    - generic [ref=e103]:
+      - generic [ref=e104]: 3.2×
+      - generic [ref=e106]: Faster RFI cycles
+      - generic [ref=e107]: 12-day average to under 4
+    - generic [ref=e108]:
+      - generic [ref=e109]: 100%
+      - generic [ref=e111]: MTR traceability
+      - generic [ref=e112]: Heat number to piece mark to grid
+    - generic [ref=e113]:
+      - generic [ref=e114]: 67%
+      - generic [ref=e116]: Less admin time
+      - generic [ref=e117]: Manage steel, not spreadsheets
+    - generic [ref=e118]:
+      - generic [ref=e119]: "0"
+      - generic [ref=e121]: Lost close-out docs
+      - generic [ref=e122]: A digital turnover package, every time
+  - generic [ref=e124]:
+    - generic [ref=e125]:
+      - generic [ref=e126]: The platform
+      - heading "Built for steel, not adapted to it." [level=2] [ref=e127]
+      - paragraph [ref=e128]: Every module speaks the language of structural steel — piece marks, heat numbers, connection IDs, grid lines, erection sequences.
+    - generic [ref=e129]:
+      - generic [ref=e130]:
+        - generic [ref=e131]: 01 — Shop
+        - heading "Fabrication tracking" [level=3] [ref=e132]
+        - paragraph [ref=e133]: Every piece from detailing through CNC, fit-up, welding, coating, and load-out. Weld maps, NDT, and DFTs linked to piece marks.
+        - separator [ref=e134]
+        - generic [ref=e135]:
+          - text: —
+          - generic [ref=e136]: CNC file management & nesting
+        - generic [ref=e137]:
+          - text: —
+          - generic [ref=e138]: Weld procedure tracking (WPS/PQR)
+        - generic [ref=e139]:
+          - text: —
+          - generic [ref=e140]: Coating & DFT inspection logs
+      - generic [ref=e141]:
+        - generic [ref=e142]: 02 — Field
+        - heading "Erection management" [level=3] [ref=e143]
+        - paragraph [ref=e144]: Erection sequences, crane pick plans, and bolt-up logs tied to the model. Know what's shaken out, plumbed, and punched.
+        - separator [ref=e145]
+        - generic [ref=e146]:
+          - text: —
+          - generic [ref=e147]: Shake-out & plumb-up tracking
+        - generic [ref=e148]:
+          - text: —
+          - generic [ref=e149]: High-strength bolt inspection
+        - generic [ref=e150]:
+          - text: —
+          - generic [ref=e151]: Crane pick planning
+      - generic [ref=e152]:
+        - generic [ref=e153]: 03 — Quality
+        - heading "QA/QC & inspections" [level=3] [ref=e154]
+        - paragraph [ref=e155]: CWI reports, torque logs, and weld records with geo-tagged photos linked to connection IDs. Turnover builds as you go.
+        - separator [ref=e156]
+        - generic [ref=e157]:
+          - text: —
+          - generic [ref=e158]: AWS D1.1 / D1.8 compliance
+        - generic [ref=e159]:
+          - text: —
+          - generic [ref=e160]: Torque & tension logs
+        - generic [ref=e161]:
+          - text: —
+          - generic [ref=e162]: Automated turnover assembly
+      - generic [ref=e163]:
+        - generic [ref=e164]: 04 — Documents
+        - heading "Drawing & submittal control" [level=3] [ref=e165]
+        - paragraph [ref=e166]: Version-controlled drawing sets with automated approval routing. AI extracts piece marks and quantities from submittals.
+        - separator [ref=e167]
+        - generic [ref=e168]:
+          - text: —
+          - generic [ref=e169]: Automatic revision control
+        - generic [ref=e170]:
+          - text: —
+          - generic [ref=e171]: AI drawing data extraction
+        - generic [ref=e172]:
+          - text: —
+          - generic [ref=e173]: Mark-up overlay comparison
+      - generic [ref=e174]:
+        - generic [ref=e175]: 05 — Commercial
+        - heading "Commercial & cost control" [level=3] [ref=e176]
+        - paragraph [ref=e177]: SOV progress tied to actual field completion. Change-order backup assembled from RFIs, drawing deltas, and field directives.
+        - separator [ref=e178]
+        - generic [ref=e179]:
+          - text: —
+          - generic [ref=e180]: SOV linked to erection progress
+        - generic [ref=e181]:
+          - text: —
+          - generic [ref=e182]: Change-order evidence packaging
+        - generic [ref=e183]:
+          - text: —
+          - generic [ref=e184]: Cost code by work package
+      - generic [ref=e185]:
+        - generic [ref=e186]: 06 — Schedule
+        - heading "Schedule & risk intelligence" [level=3] [ref=e187]
+        - paragraph [ref=e188]: Gantt logic built for steel delivery. AI flags when a late approval will cascade into an erection delay — before it happens.
+        - separator [ref=e189]
+        - generic [ref=e190]:
+          - text: —
+          - generic [ref=e191]: Steel-specific milestones
+        - generic [ref=e192]:
+          - text: —
+          - generic [ref=e193]: Approval-to-fab lead tracking
+        - generic [ref=e194]:
+          - text: —
+          - generic [ref=e195]: Critical-path risk alerts
+  - generic [ref=e197]:
+    - generic [ref=e198]:
+      - generic [ref=e199]: The lifecycle
+      - heading "Award to turnover. Every piece tracked." [level=2] [ref=e200]
+      - paragraph [ref=e201]: SteelBuild Pro follows the actual lifecycle of a steel project — not a generic plan, build, close framework.
+    - generic [ref=e204]:
+      - generic [ref=e205]:
+        - generic [ref=e206]: "1"
+        - heading "Award → detailing" [level=3] [ref=e207]
+        - paragraph [ref=e208]: Import scope, set up drawing sets, assign detailers. Submittal packages route automatically.
+        - generic [ref=e209]: Submittals out
+      - generic [ref=e210]:
+        - generic [ref=e211]: "2"
+        - heading "Shop → fab" [level=3] [ref=e212]
+        - paragraph [ref=e213]: Approved drawings release to CNC. Track every piece through fit-up, welding, NDT, and coating.
+        - generic [ref=e214]: Load-out ready
+      - generic [ref=e215]:
+        - generic [ref=e216]: "3"
+        - heading "Delivery → erection" [level=3] [ref=e217]
+        - paragraph [ref=e218]: Shipping tickets match to erection sequences. Crews log shake-out, plumb-up, and bolt-up with photos.
+        - generic [ref=e219]: Topped out
+      - generic [ref=e220]:
+        - generic [ref=e221]: "4"
+        - heading "Punch → close-out" [level=3] [ref=e222]
+        - paragraph [ref=e223]: Punch lists, final inspections, and as-builts flow into a sealed turnover package. One deliverable.
+        - generic [ref=e224]: Turnover complete
+  - generic [ref=e226]:
+    - generic [ref=e227]: “
+    - heading "We tried Procore. We tried Fieldwire. Neither one speaks steel." [level=2] [ref=e228]:
+      - text: We tried Procore. We tried Fieldwire.
+      - text: Neither one speaks steel.
+    - paragraph [ref=e229]: General construction software forces steel contractors into workarounds. SteelBuild Pro was designed from day one for how structural steel actually works.
+    - generic [ref=e230]:
+      - generic [ref=e231]:
+        - generic [ref=e232]: Piece-mark tracking
+        - generic [ref=e233]: Not generic tasks
+      - generic [ref=e234]:
+        - generic [ref=e235]: Connection-based QC
+        - generic [ref=e236]: Not punchlists
+      - generic [ref=e237]:
+        - generic [ref=e238]: Heat-number trace
+        - generic [ref=e239]: Not just material logs
+      - generic [ref=e240]:
+        - generic [ref=e241]: Erection sequence
+        - generic [ref=e242]: Not Gantt-only
+  - generic [ref=e244]:
+    - generic [ref=e245]:
+      - generic [ref=e246]: See it with your data
+      - heading "Put your worst project in it." [level=2] [ref=e247]
+      - paragraph [ref=e248]: Bring the job with the 14-tab RFI log and the missing mill certs. We'll show you what it looks like when every piece, document, and inspection lives in one system.
+      - generic [ref=e249]:
+        - generic [ref=e252]: A walkthrough with a steel PM, not a sales rep
+        - generic [ref=e255]: Set up on one of your real projects
+        - generic [ref=e258]: No credit card, no long-term commitment
+    - generic [ref=e259]:
+      - generic [ref=e260]:
+        - generic [ref=e261]:
+          - generic [ref=e262]: Name
+          - textbox "Jane Foreman" [ref=e263]
+        - generic [ref=e264]:
+          - generic [ref=e265]: Work email
+          - textbox "jane@fabshop.com" [ref=e266]
+        - generic [ref=e267]:
+          - generic [ref=e268]: Company
+          - textbox "Acme Steel" [ref=e269]
+        - generic [ref=e270]:
+          - generic [ref=e271]: Annual tonnage
+          - textbox "8,000" [ref=e272]
+      - generic [ref=e273]:
+        - generic [ref=e274]: What's hurting right now?
+        - textbox "RFIs, submittals, close-out docs…" [ref=e275]
+      - button "Request my walkthrough" [ref=e276] [cursor=pointer]
+  - contentinfo [ref=e277]:
+    - generic [ref=e278]:
+      - generic [ref=e279]:
+        - generic [ref=e280]:
+          - generic [ref=e281]: SB
+          - generic [ref=e282]: STEELBUILD PRO
+        - paragraph [ref=e283]: The project delivery platform built for structural steel fabricators and erectors.
+      - generic [ref=e284]:
+        - generic [ref=e285]:
+          - generic [ref=e286]: Platform
+          - generic [ref=e287]:
+            - link "Modules" [ref=e288] [cursor=pointer]:
+              - /url: "#"
+            - link "Workflow" [ref=e289] [cursor=pointer]:
+              - /url: "#"
+            - link "Integrations" [ref=e290] [cursor=pointer]:
+              - /url: "#"
+        - generic [ref=e291]:
+          - generic [ref=e292]: Company
+          - generic [ref=e293]:
+            - link "About" [ref=e294] [cursor=pointer]:
+              - /url: "#"
+            - link "Contact" [ref=e295] [cursor=pointer]:
+              - /url: "#"
+            - link "Request a demo" [ref=e296] [cursor=pointer]:
+              - /url: "#"
+        - generic [ref=e297]:
+          - generic [ref=e298]: Legal
+          - generic [ref=e299]:
+            - link "Privacy" [ref=e300] [cursor=pointer]:
+              - /url: "#"
+            - link "Terms" [ref=e301] [cursor=pointer]:
+              - /url: "#"
+            - link "Security" [ref=e302] [cursor=pointer]:
+              - /url: "#"
+    - generic [ref=e303]:
+      - generic [ref=e304]: © 2026 SteelBuild Pro
+      - generic [ref=e305]: Built by steel people, for steel people.

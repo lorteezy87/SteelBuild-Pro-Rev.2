@@ -1,0 +1,78 @@
+/* ═══════════════════════════════════════════════════════════════
+   ANIMATIONS — Keyframes, entrance effects, urgency tiers, glow
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Keyframes ── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(239,68,68,0.15); }
+  50%      { box-shadow: 0 0 20px rgba(239,68,68,0.35); }
+}
+@keyframes gentlePulse {
+  0%, 100% { opacity: 0.75; }
+  50%      { opacity: 1; }
+}
+@keyframes spinOnce {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes rowHighlight {
+  0%   { background: rgba(200,155,32,0.12); }
+  100% { background: transparent; }
+}
+@keyframes photoShimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* ── Animation utilities ── */
+.anim-fade-in      { animation: fadeIn 0.2s ease-out both; }
+.anim-slide-up     { animation: slideUp 0.25s ease-out both; }
+.anim-slide-right  { animation: slideInRight 0.2s ease-out both; }
+.anim-pulse-glow   { animation: pulseGlow 2s ease-in-out infinite; }
+.anim-gentle-pulse { animation: gentlePulse 2s ease-in-out infinite; }
+.row-highlight     { animation: rowHighlight 1.5s ease-out forwards; }
+
+/* ── Urgency tiers — visual escalation for overdue items ── */
+.urgency-warn {
+  border-left: 3px solid var(--status-warning) !important;
+  background: var(--warning-muted) !important;
+}
+.urgency-danger {
+  border-left: 4px solid var(--status-error) !important;
+  background: var(--danger-muted) !important;
+}
+.urgency-critical {
+  border-left: 4px solid var(--status-error) !important;
+  background: var(--danger-muted) !important;
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* ── Glow states — status card indicators ── */
+.glow-state-gold {
+  box-shadow: var(--shadow-glow-gold);
+  border-color: var(--accent-border) !important;
+}
+.glow-state-red {
+  box-shadow: var(--shadow-glow-red);
+  border-color: var(--danger-border) !important;
+}
+.glow-state-green {
+  box-shadow: var(--shadow-glow-green);
+  border-color: var(--success-border) !important;
+}
+.glow-state-blue {
+  box-shadow: var(--shadow-glow-blue);
+  border-color: var(--info-border) !important;
+}

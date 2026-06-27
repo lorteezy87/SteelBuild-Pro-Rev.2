@@ -1,0 +1,31 @@
+/**
+ * globals.css - SteelBuild Pro Design System
+ *
+ * This file is a manifest that imports focused partials:
+ *  - tokens.css     — CSS custom properties (dark + light themes)
+ *  - base.css       — Resets, typography, scrollbars, form elements
+ *  - components.css — Class-based UI components (badges, cards, tables, buttons)
+ *  - animations.css — Keyframes, urgency tiers, glow states
+ *  - responsive.css — Density toggle, breakpoints, mobile overrides
+ *  - tailwind-compat.css — shadcn/ui HSL bridge, Tailwind class remaps
+ *
+ * PostCSS requires @import before @tailwind directives.
+ * Font loading is done in index.html <link> tags instead.
+ */
+
+@import './styles/tokens.css';
+@import './styles/base.css';
+@import './styles/components.css';
+@import './styles/animations.css';
+@import './styles/responsive.css';
+/* SteelBuild Dark — industrial dark theme. Self-contained, scoped under
+ * .steelbuild-dark so it can't leak. Body wrapper class applied in
+ * Layout.jsx. Token-mapping overlay below picks up new palette for
+ * existing inline-style components automatically. */
+@import './styles/steelbuild-dark.css';
+@import './styles/tailwind-compat.css';
+@import './styles/steelbuild-light.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
