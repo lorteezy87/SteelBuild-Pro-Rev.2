@@ -568,8 +568,29 @@ export default function RFIs() {
           onOpenRfi={setSelectedRFI}
           onExport={() => exportRFIsToCSV(filtered)}
           onCreate={can("create", "rfi") ? () => { setEditingRFI(null); setShowForm(true); } : null}
+          onImport={can("create", "rfi") ? () => setShowLogImport(true) : null}
           projectHealth={projectHealth}
           percentComplete={percentComplete}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onToggleAll={toggleAll}
+        />
+        <BulkActionBar
+          count={selectedIds.size}
+          onClear={() => setSelectedIds(new Set())}
+          actions={[
+            { label: "MARK ANSWERED", icon: "check", onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Answered", date_answered: new Date().toISOString().split("T")[0] } }) },
+            { label: "MARK UNDER REVIEW", icon: "clock", onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Under Review" } }) },
+            { label: "BULK EDIT", icon: "edit", onClick: () => setShowBulkEdit(true) },
+            { label: "EXPORT", icon: "download", onClick: () => exportRFIsToCSV(filtered.filter((r) => selectedIds.has(r.id))) },
+            ...(can("delete", "rfi") ? [{ label: "DELETE", icon: "x", variant: "danger", onClick: () => setShowBulkDelete(true) }] : []),
+          ]}
+        />
+        <RfiBulkEditModal
+          open={showBulkEdit}
+          count={selectedIds.size}
+          onCancel={() => setShowBulkEdit(false)}
+          onSubmit={(data) => { bulkUpdateMut.mutate({ ids: [...selectedIds], data }); setShowBulkEdit(false); }}
         />
         {modals}
       </div>

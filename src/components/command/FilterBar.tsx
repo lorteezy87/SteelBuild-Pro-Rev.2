@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { Search, Download, Plus } from "lucide-react";
+import { Search, Download, Plus, Upload } from "lucide-react";
 
 export function FilterBar({
   search,
   onSearch,
   searchPlaceholder = "Search…",
   filters,
+  onImport,
   onExport,
   primaryLabel,
   onPrimary,
@@ -14,6 +15,7 @@ export function FilterBar({
   onSearch: (v: string) => void;
   searchPlaceholder?: string;
   filters?: ReactNode;
+  onImport?: (() => void) | null;
   onExport?: () => void;
   primaryLabel?: string;
   onPrimary?: (() => void) | null;
@@ -26,6 +28,9 @@ export function FilterBar({
       </div>
       <div className="cmd-filterbar__filters">{filters}</div>
       <div className="cmd-filterbar__actions">
+        {onImport ? (
+          <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImport}><Upload size={14} /> Import</button>
+        ) : null}
         {onExport ? (
           <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}><Download size={14} /> Export</button>
         ) : null}
