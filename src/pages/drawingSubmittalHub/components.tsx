@@ -1687,10 +1687,15 @@ export function DrawingRegisterTable({
       </div>
 
       {shouldVirtualize ? (
+        // ≥100 rows: virtualized grid. desk-table is intentionally NOT applied here —
+        // RegisterVirtualList uses its own CSS grid layout (not a <table> element)
+        // and the divergence is deliberate so the plain-table codepath can adopt
+        // kit table styling without breaking the virtual renderer's grid geometry.
         <RegisterVirtualList rows={rows} sortByHealth={sortByHealth} setSortByHealth={setSortByHealth} h={rowHandlers} />
       ) : (
       <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        {/* desk-table: kit table class — plain-table codepath only (see note on RegisterVirtualList above). */}
+        <table className="desk-table" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
               <Th>Drawing Set Package</Th>
@@ -1742,12 +1747,12 @@ export function DrawingRegisterTable({
                 </Td>
                 <Td style={{ color: textMuted }}>{r.setNo}</Td>
                 <Td style={{ color: textMuted }}>{r.discipline}</Td>
-                <Td style={{ textAlign: "right" }}>{r.sheetCount}</Td>
+                <Td className="is-num" style={{ textAlign: "right" }}>{r.sheetCount}</Td>
                 <Td>{r.effectiveState && r.effectiveState !== "Not Started" ? <OperationalStateChip state={r.effectiveState} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{r.dominantStage || "No submittal"}</span>}</Td>
                 <Td>{r.health ? <HealthChip health={r.health} onClick={() => setHealthDetail(r.health)} /> : <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>—</span>}</Td>
-                <Td style={{ color: r.done ? success : textMuted }}>{r.releasedCount}/{r.sheetCount}</Td>
+                <Td className="is-num" style={{ color: r.done ? success : textMuted }}>{r.releasedCount}/{r.sheetCount}</Td>
                 <Td><DueChip info={r.due} /></Td>
-                <Td style={{ textAlign: "right", color: textMuted }}>{r.maxRev || "—"}</Td>
+                <Td className="is-num" style={{ textAlign: "right", color: textMuted }}>{r.maxRev || "—"}</Td>
                 <Td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   {r.pkg.parent && (
                     <button
@@ -2441,9 +2446,9 @@ function Th({ children, style = {} }: { children?: ReactNode; style?: CSSPropert
   );
 }
 
-function Td({ children, style = {}, colSpan }: { children?: ReactNode; style?: CSSProperties; colSpan?: number }) {
+function Td({ children, style = {}, colSpan, className }: { children?: ReactNode; style?: CSSProperties; colSpan?: number; className?: string }) {
   return (
-    <td colSpan={colSpan} className="sbd-num" style={{
+    <td colSpan={colSpan} className={className ? `sbd-num ${className}` : "sbd-num"} style={{
       padding: "8px 12px",
       fontFamily: mono, fontSize: 12,
       color: textPrimary,
