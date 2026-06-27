@@ -210,17 +210,13 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
           </div>
         </SectionCard>
 
-        <div className="sbd-card" style={{ padding: 18, borderRadius: 16, border: `1px solid ${focusItem ? focusTone : border}` }}>
+        <SectionCard title="Next decision" headerAction={<DueChip info={focusItem?.due || dueInfo(null)} compact />}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
             <div>
-              <div style={{ fontFamily: mono, color: textMuted, fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                Next Decision
-              </div>
               <h3 style={{ margin: "6px 0 0", color: textPrimary, fontSize: 18, lineHeight: 1.2 }}>
                 {focusItem ? focusItem.title : "No open exception"}
               </h3>
             </div>
-            <DueChip info={focusItem?.due || dueInfo(null)} compact />
           </div>
           {focusItem ? (
             <>
@@ -300,7 +296,7 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
           ) : (
             <EmptyState text="No overdue, due-soon, action, or missing-date work is currently flagged." />
           )}
-        </div>
+        </SectionCard>
       </section>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
