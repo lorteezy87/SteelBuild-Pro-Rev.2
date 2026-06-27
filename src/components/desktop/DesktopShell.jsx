@@ -4,7 +4,7 @@
  * (Launcher overlay | ModuleSurface(children)). Reuses Layout's overlays so all
  * page functionality (search, toasts, error banner) is preserved.
  */
-import React, { Suspense, useEffect, useState, useContext } from "react";
+import React, { Suspense, useEffect, useState, useContext, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { lazyWithRetry } from "@/lib/lazyRetry";
@@ -58,9 +58,17 @@ export default function DesktopShell({ currentPageName, children }) {
 
   useEffect(() => { setLauncherOpen(false); }, [currentPageName]);
 
-  const handleNavigate = (page) => navigate(createPageUrl(page));
+  const handleNavigate = useCallback((page) => navigate(createPageUrl(page)), [navigate]);
   const title = PAGE_LABELS[currentPageName] || currentPageName || "Dashboard";
   const showLauncher = launcherOpen || currentPageName === "Launcher";
+
+  // Activities/Show-Applications toggles the launcher overlay — but when you're
+  // already ON the /Launcher route, toggling launcherOpen can't close it (the
+  // route keeps showLauncher true), so navigate to the Dashboard to leave it.
+  const handleActivities = useCallback(() => {
+    if (currentPageName === "Launcher") handleNavigate("Dashboard");
+    else setLauncherOpen((v) => !v);
+  }, [currentPageName, handleNavigate]);
 
   return (
     <div className={`desk-canvas ${isDark ? "steelbuild-dark" : ""}`} style={{
@@ -72,7 +80,7 @@ export default function DesktopShell({ currentPageName, children }) {
       <DesktopTopBar
         currentPageName={currentPageName}
         title={title}
-        onShowLauncher={() => setLauncherOpen((v) => !v)}
+        onShowLauncher={handleActivities}
         onOpenSearch={() => setSearchOpen(true)}
         user={user}
         onLogout={logout}
@@ -84,7 +92,7 @@ export default function DesktopShell({ currentPageName, children }) {
 
       <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative", zIndex: 1 }}>
         {!isMobile && (
-          <Dock currentPageName={currentPageName} onNavigate={handleNavigate} onShowLauncher={() => setLauncherOpen((v) => !v)} />
+          <Dock currentPageName={currentPageName} isMobile={false} onNavigate={handleNavigate} onShowLauncher={handleActivities} />
         )}
 
         {showLauncher ? (
@@ -98,7 +106,7 @@ export default function DesktopShell({ currentPageName, children }) {
       </div>
 
       {isMobile && (
-        <Dock currentPageName={currentPageName} onNavigate={handleNavigate} onShowLauncher={() => setLauncherOpen((v) => !v)} />
+        <Dock currentPageName={currentPageName} isMobile={true} onNavigate={handleNavigate} onShowLauncher={handleActivities} />
       )}
 
       {searchOpen && (

@@ -16,6 +16,37 @@
   --desk-tile-edge: rgba(255, 255, 255, 0.12);
   --desk-tile-shadow: 0 6px 12px rgba(0, 0, 0, 0.5);
   --desk-tile-glyph: #e8ebf2;
+  --desk-search-bg: rgba(8, 11, 16, 0.55);
+}
+
+/* Light theme: re-tint the chrome so the desktop shell isn't dark-on-light.
+   (Launcher photo tiles intentionally stay dark image cards in both themes.) */
+[data-skin="desktop"][data-theme="light"] {
+  --desk-canvas: radial-gradient(130% 100% at 50% -15%, #f1f5f9 0%, #e2e8f0 55%, #cbd5e1 100%);
+  --desk-grid: rgba(30, 41, 59, 0.05);
+  --desk-dock-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.75));
+  --desk-dock-edge: rgba(30, 41, 59, 0.12);
+  --desk-topbar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.7));
+  --desk-window-bg: linear-gradient(180deg, #ffffff, #f1f5f9);
+  --desk-window-edge: #cbd5e1;
+  --desk-window-header: linear-gradient(180deg, #f8fafc, #eef2f6);
+  --desk-tile: linear-gradient(180deg, #ffffff, #e2e8f0);
+  --desk-tile-edge: rgba(30, 41, 59, 0.14);
+  --desk-tile-shadow: 0 6px 12px rgba(15, 23, 42, 0.12);
+  --desk-tile-glyph: #334155;
+  --desk-search-bg: rgba(255, 255, 255, 0.85);
+}
+
+/* High-contrast: opaque chrome for sunlight legibility. */
+[data-skin="desktop"][data-contrast="high"] {
+  --desk-topbar-bg: #05070b;
+  --desk-dock-bg: #0b0f16;
+  --desk-window-bg: #0b0f16;
+}
+[data-skin="desktop"][data-contrast="high"][data-theme="light"] {
+  --desk-topbar-bg: #ffffff;
+  --desk-dock-bg: #ffffff;
+  --desk-window-bg: #ffffff;
 }
 
 [data-skin="desktop"] .desk-canvas {
@@ -33,6 +64,19 @@
   background-size: 34px 34px;
   pointer-events: none;
   z-index: 0;
+}
+
+/* Keyboard focus rings — base.css removes default outlines and only restores
+   them under [data-theme="light"], so the desktop skin must define its own. */
+[data-skin="desktop"] button:focus-visible,
+[data-skin="desktop"] .desk-dock-btn:focus-visible,
+[data-skin="desktop"] .desk-launch-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+[data-skin="desktop"] .desk-search:focus-within {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-muted);
 }
 
 [data-skin="desktop"] .desk-dock-btn { transition: transform 120ms ease, filter 120ms ease; }

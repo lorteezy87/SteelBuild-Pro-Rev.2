@@ -1,20 +1,18 @@
 /**
  * ModuleTile — a launcher tile: a darkened construction photo with a white
- * outline icon + label on top. The photo loads as an <img>; if it's missing or
- * fails to load (onError) the tile shows the dark steel gradient instead, so the
- * pack can be dropped in incrementally. Icon is the shared lucide outline.
+ * outline icon + label on top. The photo loads lazily as an <img>; if missing
+ * or it fails (onError) the tile shows the dark steel gradient. The tile is a
+ * cinematic dark image card in BOTH themes, so its text/icon stay white on
+ * purpose (do not swap to theme tokens). Memoized so the launcher grid doesn't
+ * re-render unchanged tiles on search/category changes.
  *
- * Props:
- *   page      route key (drives icon + photo lookup)
- *   label     display + accessible name (defaults to page)
- *   onClick   tile click handler
- *   photoSrc  optional explicit photo override (defaults to photoFor(page))
+ * Props: page, label, onSelect(page), photoSrc (optional override).
  */
 import React, { useState } from "react";
 import { getPageIcon } from "@/config/pageIcons";
 import { photoFor } from "@/config/launcherConfig";
 
-export default function ModuleTile({ page, label, onClick, photoSrc }) {
+function ModuleTile({ page, label, onSelect, photoSrc }) {
   const name = label || page || "";
   const photo = photoSrc ?? photoFor(page);
   const Icon = getPageIcon(page);
@@ -24,7 +22,7 @@ export default function ModuleTile({ page, label, onClick, photoSrc }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => onSelect && onSelect(page)}
       aria-label={`Open ${name}`}
       className="desk-launch-tile"
       style={{
@@ -48,6 +46,8 @@ export default function ModuleTile({ page, label, onClick, photoSrc }) {
           alt=""
           aria-hidden="true"
           draggable={false}
+          loading="lazy"
+          decoding="async"
           onError={() => setImgFailed(true)}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
         />
@@ -58,7 +58,7 @@ export default function ModuleTile({ page, label, onClick, photoSrc }) {
           position: "absolute",
           inset: 0,
           background:
-            "linear-gradient(180deg, rgba(8,11,16,0.35) 0%, rgba(8,11,16,0.12) 40%, rgba(8,11,16,0.80) 100%)",
+            "linear-gradient(180deg, rgba(8,11,16,0.45) 0%, rgba(8,11,16,0.22) 40%, rgba(8,11,16,0.86) 100%)",
         }}
       />
       <span
@@ -88,7 +88,7 @@ export default function ModuleTile({ page, label, onClick, photoSrc }) {
             color: "#fff",
             textAlign: "center",
             lineHeight: 1.2,
-            textShadow: "0 1px 3px rgba(0,0,0,0.75)",
+            textShadow: "0 1px 3px rgba(0,0,0,0.85)",
           }}
         >
           {name}
@@ -97,3 +97,5 @@ export default function ModuleTile({ page, label, onClick, photoSrc }) {
     </button>
   );
 }
+
+export default React.memo(ModuleTile);
