@@ -1,0 +1,535 @@
+/* ═══════════════════════════════════════════════════════════════
+   DESIGN TOKENS — CSS Custom Properties
+   Primary gold #C89B20 · Dark navy-black · Professional
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Per-user customisation hooks (set by ThemeContext) ──────────
+   Every preference flows through a CSS variable / data-attribute
+   toggle so the rest of the stylesheet doesn't need to know about
+   the user-prefs system at all. */
+
+/* Font-scale: sm 0.94 · md 1.00 · lg 1.12 — applied to html font-size
+   so every rem-sized control scales automatically. */
+html {
+  font-size: calc(16px * var(--font-scale, 1));
+}
+
+/* Reduce motion: kills all transitions/animations regardless of OS
+   preference, for users who explicitly opt in. */
+[data-motion="reduced"] *,
+[data-motion="reduced"] *::before,
+[data-motion="reduced"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* High-contrast mode: lift text + borders so WCAG AA (4.5:1 small,
+   3:1 large) is met on all dark-theme surfaces. Field-tablet optimised
+   — readable in direct sunlight without washing out the palette.
+   ──────────────────────────────────────────────────────────────── */
+[data-contrast="high"] {
+  /* Text: every tier bumped to pass 4.5:1 against --bg-surface (#161B22) */
+  --text-primary:   #FFFFFF;
+  --text-secondary: #D6DEF0;
+  --text-muted:     #A8B4C8;
+  --text-disabled:  rgba(168, 180, 200, 0.68);
+
+  /* Borders: visible in sunlight (meets 3:1 against adjacent surfaces) */
+  --border-default: #5A6677;
+  --border-strong:  #7A8899;
+  --border:         #5A6677;
+  --divider:        rgba(120, 132, 150, 0.85);
+  --outline:        rgba(255, 255, 255, 0.65);
+
+  /* NC legacy tokens */
+  --nc-border-default: rgba(255, 255, 255, 0.18);
+  --nc-text-muted:     var(--text-muted);
+
+  /* Status text — bump to ensure legibility over muted bg chips */
+  --status-success: #4ADE80;
+  --status-warning: #FCD34D;
+  --status-error:   #FCA5A5;
+  --status-info:    #7DD3FC;
+}
+
+/* Font-weight bump for small text in high-contrast mode.
+   Thin strokes at <=11px disappear under glare; 500→600 fixes this
+   without looking heavy at normal DPI. */
+[data-contrast="high"] .sbd-nav-section,
+[data-contrast="high"] .sbd-label,
+[data-contrast="high"] .sbd-kpi-label,
+[data-contrast="high"] .sbd-badge,
+[data-contrast="high"] .sbd-topbar-eyebrow,
+[data-contrast="high"] [style*="fontSize: 10"],
+[data-contrast="high"] [style*="fontSize: 9"],
+[data-contrast="high"] [style*="fontSize: 8"] {
+  font-weight: 700 !important;
+}
+[data-contrast="high"] .sbd-text-muted,
+[data-contrast="high"] .sbd-text-secondary {
+  color: var(--text-muted) !important;
+}
+
+/* High-contrast + SteelBuild Dark: override the SBD text tokens
+   which are normally translucent white at 42%/72%. */
+[data-contrast="high"].steelbuild-dark,
+[data-contrast="high"] .steelbuild-dark {
+  --sbd-text:           rgba(255, 255, 255, 1);
+  --sbd-text-secondary: rgba(255, 255, 255, 0.88);
+  --sbd-text-muted:     rgba(255, 255, 255, 0.62);
+  --sbd-border:         rgba(255, 255, 255, 0.18);
+  --sbd-border-strong:  rgba(255, 255, 255, 0.30);
+  --sbd-divider:        rgba(255, 255, 255, 0.12);
+}
+
+/* High-contrast + Light theme: deepen muted text further */
+[data-contrast="high"][data-theme="light"] {
+  --text-primary:   #000000;
+  --text-secondary: #1E293B;
+  --text-muted:     #334155;
+  --text-disabled:  rgba(51, 65, 85, 0.72);
+  --border-default: #94A3B8;
+  --border-strong:  #64748B;
+  --border:         #94A3B8;
+  --divider:        #CBD5E1;
+}
+
+/* Accent color presets — override the gold/teal/blue/amber/slate
+   accent token. The rest of the accent-* tokens (muted, border,
+   hover) are recomputed from the new base hue. */
+[data-accent="teal"] {
+  --accent:        #0D9488;
+  --accent-light:  #14B8A6;
+  --accent-hover:  #14B8A6;
+  --accent-muted:  rgba(13, 148, 136, 0.12);
+  --accent-border: rgba(13, 148, 136, 0.40);
+  --secondary:        var(--accent);
+  --secondary-muted:  var(--accent-muted);
+  --secondary-border: var(--accent-border);
+}
+[data-accent="blue"] {
+  --accent:        #2563EB;
+  --accent-light:  #3B82F6;
+  --accent-hover:  #3B82F6;
+  --accent-muted:  rgba(37, 99, 235, 0.12);
+  --accent-border: rgba(37, 99, 235, 0.40);
+  --secondary:        var(--accent);
+  --secondary-muted:  var(--accent-muted);
+  --secondary-border: var(--accent-border);
+}
+[data-accent="amber"] {
+  --accent:        #F59E0B;
+  --accent-light:  #FBBF24;
+  --accent-hover:  #FBBF24;
+  --accent-muted:  rgba(245, 158, 11, 0.12);
+  --accent-border: rgba(245, 158, 11, 0.40);
+  --secondary:        var(--accent);
+  --secondary-muted:  var(--accent-muted);
+  --secondary-border: var(--accent-border);
+}
+[data-accent="slate"] {
+  --accent:        #64748B;
+  --accent-light:  #94A3B8;
+  --accent-hover:  #94A3B8;
+  --accent-muted:  rgba(100, 116, 139, 0.14);
+  --accent-border: rgba(100, 116, 139, 0.45);
+  --secondary:        var(--accent);
+  --secondary-muted:  var(--accent-muted);
+  --secondary-border: var(--accent-border);
+}
+/* "gold" is the default already declared on :root; no override needed. */
+
+/* ── DARK THEME (default) ──────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+
+  /* Background scale — layered dark mode (Industrial OS) */
+  --bg-void:                  #060810;
+  --bg-page:                  #0B0E11;
+  --bg-surface:               #161B22;
+  --bg-surface-low:           #0E1116;
+  --bg-surface-mid:           #1C2128;
+  --bg-surface-high:          #21262D;
+  --bg-surface-highest:       #2D333B;
+  --bg-surface-lowest:        #08090D;
+  --bg-input:                 #1C2128;
+  --bg-sidebar:               #0D1117;
+  --bg-card:                  #161B22;
+  --bg-base:                  #0B0E11;
+  --bg-elevated:              #21262D;
+  --bg-surface-secondary:     #161B22;
+
+  /* NC tokens (legacy compat) */
+  --nc-bg-primary:            #0A0C10;
+  --nc-bg-secondary:          #0E1116;
+  --nc-bg-tertiary:           #12151A;
+  --nc-bg-panel:              #0C0E13;
+  --nc-accent-cyan:           var(--accent);
+  --nc-accent-orange:         var(--accent);
+  --nc-accent-blue:           #2B7FFF;
+  --nc-accent-green:          #22C55E;
+  --nc-accent-red:            #EF4444;
+  --nc-text-primary:          var(--text-primary);
+  --nc-text-muted:            var(--text-muted);
+  --nc-text-cyan:             var(--accent);
+  --nc-text-orange:           var(--accent);
+  --nc-border-default:        rgba(255,255,255,0.07);
+  --nc-border-cyan:           var(--accent-border);
+  --nc-border-orange:         var(--accent-border);
+
+  /* Borders */
+  --border-default:           #30363D;
+  --border-strong:            #484F58;
+  --border:                   #30363D;
+  --divider:                  rgba(48,54,61,0.60);
+  --outline:                  rgba(255,255,255,0.20);
+
+  /* Primary accent: Executive Gold */
+  --accent:                   #C89B20;
+  --accent-light:             #E0B030;
+  --accent-hover:             #E0B030;
+  --accent-muted:             rgba(200,155,32,0.10);
+  --accent-border:            rgba(200,155,32,0.35);
+  --accent-text:              #FFFFFF;
+  --on-accent:                #FFFFFF;
+
+  /* Aliases */
+  --secondary:                #C89B20;
+  --secondary-muted:          rgba(200,155,32,0.08);
+  --secondary-border:         rgba(200,155,32,0.30);
+  --accent-orange:            var(--accent);
+  --accent-orange-light:      var(--accent-light);
+  --accent-orange-hover:      #B08818;
+  --accent-orange-muted:      var(--accent-muted);
+  --accent-orange-border:     var(--accent-border);
+
+  /* Text */
+  --text-primary:             #E8EBF2;
+  --text-secondary:           #A8B4C8;
+  --text-muted:               #7B8BA2;
+  --text-disabled:            rgba(123,139,162,0.50);
+
+  /* Semantic status colors
+   *
+   * Two-tier palette:
+   *   --status-*         soft/subtle — mono chips, table-row status, inline
+   *                      text on plain surfaces. GitHub-like muted palette.
+   *   --status-*-bright  vivid/high-contrast — Gantt bars, workflow badges,
+   *                      map/status tiles, on-hold/complete indicators, and
+   *                      anything that needs to read clearly over colored
+   *                      backgrounds. Use for glanceable visual signals.
+   */
+  --status-success:           #3FB950;
+  --status-warning:           #E3B341;
+  --status-error:             #F85149;
+  --status-info:              #58A6FF;
+  --status-review:            #F97316;
+  --status-review-muted:      rgba(249,115,22,0.12);
+  --status-review-border:     rgba(249,115,22,0.40);
+  --status-success-bright:    #00D68F;
+  --status-warning-bright:    #FFB400;
+  --status-error-bright:      #FF3D3D;
+  --success:                  #3FB950;
+  --success-muted:            rgba(63,185,80,0.10);
+  --success-border:           rgba(63,185,80,0.30);
+  --warning:                  #E3B341;
+  --warning-muted:            rgba(227,179,65,0.08);
+  --warning-border:           rgba(227,179,65,0.30);
+  --danger:                   #F85149;
+  --danger-muted:             rgba(248,81,73,0.08);
+  --danger-border:            rgba(248,81,73,0.30);
+  --info:                     #58A6FF;
+  --info-muted:               rgba(88,166,255,0.08);
+  --info-border:              rgba(88,166,255,0.25);
+
+  /* Phase colors */
+  --phase-detailing:          #C89B20;
+  --phase-fab:                #3B82F6;
+  --phase-delivery:           #14B8A6;
+  --phase-erection:           #22C55E;
+  --phase-closeout:           #6B7280;
+
+  /* Shadows */
+  --shadow-sm:                0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-card:              0 4px 20px rgba(0,0,0,0.5);
+  --shadow-lg:                0 8px 30px rgba(0,0,0,0.4), 0 12px 60px rgba(0,0,0,0.3);
+  --shadow-orange-glow:       0 0 20px rgba(200,155,32,0.15);
+  --shadow-cyan-glow:         0 0 20px rgba(200,155,32,0.15);
+  --shadow-glow-gold:         0 0 20px rgba(200,155,32,0.20), 0 0 40px rgba(200,155,32,0.08);
+  --shadow-glow-red:          0 0 16px rgba(239,68,68,0.25), 0 0 32px rgba(239,68,68,0.10);
+  --shadow-glow-green:        0 0 16px rgba(34,197,94,0.20), 0 0 32px rgba(34,197,94,0.08);
+  --shadow-glow-blue:         0 0 16px rgba(59,130,246,0.20), 0 0 32px rgba(59,130,246,0.08);
+
+  /* Interaction */
+  --hover-bg:                 rgba(255,255,255,0.04);
+  --bg-hover:                 rgba(255,255,255,0.04);
+  --bg-row-hover:             rgba(255,255,255,0.03);
+  --nav-bg:                   rgba(7,9,14,0.97);
+  --nav-hover-bg:             rgba(200,155,32,0.08);
+
+  /* Radius */
+  --radius-card:              10px;
+  --radius-btn:               8px;
+  --radius-input:             8px;
+  --radius-badge:             6px;
+
+  /* Glassmorphism */
+  --glass-bg:                 rgba(16,18,24,0.82);
+  --glass-border:             rgba(255,255,255,0.08);
+  --glass-blur:               20px;
+
+  /* Density (comfortable default) */
+  --density-padding:          12px;
+  --density-gap:              14px;
+  --density-row-height:       44px;
+  --density-font-scale:       1;
+
+  /* Fonts */
+  --font-display:             'Barlow Condensed', 'Inter', sans-serif;
+  --font-body:                'Inter', 'Barlow', sans-serif;
+  --font-mono:                'IBM Plex Mono', 'Courier New', monospace;
+  --font-data:                'JetBrains Mono', 'IBM Plex Mono', monospace;
+}
+
+/* ── LIGHT THEME ────────────────────────────────────────────
+ * Industrial HD palette — tuned for the steel-fab domain.
+ *
+ * Goals for this rewrite (Apr 2026):
+ *   1. CRISPNESS — borders and dividers at a contrast that's actually
+ *      visible (the old values were rgba(0,0,0,0.08) and rgba(…,0.25)
+ *      which looked like nothing on white).
+ *   2. DEPTH — a layered surface scale so cards "lift" off the page
+ *      with real shadow, not wispy blurs that disappear at low zoom.
+ *   3. CONTRAST — WCAG AA+ across every text/surface pair. Deeper
+ *      blacks, richer secondary, darker mutes.
+ *   4. PUNCH ON WHITE — status colors pulled 100 points deeper so
+ *      they stay vivid on the near-white surfaces.
+ *
+ * Color system: Tailwind slate/neutral scale for surfaces/borders/text,
+ * deep industrial gold (#B8860B) for accent, amber/emerald/red/azure
+ * for semantic signals. No purple, no pink.
+ * ────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  /* Backgrounds — 6-step surface scale */
+  --bg-void:                  #CBD5E1;  /* slate-300 — offscreen/behind-modal */
+  --bg-page:                  #F1F5F9;  /* slate-100 — app canvas */
+  --bg-surface:               #FFFFFF;  /* pure white — primary card face */
+  --bg-surface-low:           #F8FAFC;  /* slate-50 — nested sub-surfaces */
+  --bg-surface-mid:           #F1F5F9;
+  --bg-surface-high:          #E2E8F0;  /* slate-200 — elevated/active row */
+  --bg-surface-highest:       #CBD5E1;  /* slate-300 — pressed/disabled */
+  --bg-surface-lowest:        #F8FAFC;
+  --bg-input:                 #FFFFFF;
+  /* Sidebar was slate-900 (dark) in light mode which made every
+     --text-primary/--text-muted label inside the nav render as
+     dark-on-dark and effectively illegible. Flipping to pure white
+     so the sidebar reads as a card-style surface against the
+     slate-100 page canvas. Dark mode keeps its deep sidebar (see
+     first block of this file). */
+  --bg-sidebar:               #FFFFFF;
+  --bg-card:                  #FFFFFF;
+  --bg-base:                  #F1F5F9;
+  --bg-elevated:              #FFFFFF;
+  --bg-surface-secondary:     #F8FAFC;
+
+  /* Legacy NC tokens */
+  --nc-bg-primary:            #F1F5F9;
+  --nc-bg-secondary:          #F8FAFC;
+  --nc-bg-tertiary:           #E2E8F0;
+  --nc-bg-panel:              #F8FAFC;
+  --nc-accent-cyan:           #B8860B;
+  --nc-accent-orange:         #B8860B;
+  --nc-accent-blue:           #1D4ED8;
+  --nc-accent-green:          #15803D;
+  --nc-accent-red:            #B91C1C;
+  --nc-text-primary:          #020617;
+  --nc-text-muted:            #475569;
+  --nc-text-cyan:             #B8860B;
+  --nc-text-orange:           #B8860B;
+  --nc-border-default:        #CBD5E1;
+  --nc-border-cyan:           rgba(184,134,11,0.45);
+  --nc-border-orange:         rgba(184,134,11,0.50);
+
+  /* Borders — every border now at slate-300 or deeper for HD feel */
+  --border-default:           #CBD5E1;  /* was #E2E8F0 — too soft */
+  --border-strong:            #94A3B8;  /* slate-400 */
+  --border:                   #CBD5E1;
+  --divider:                  #E2E8F0;  /* was rgba(148,163,184,0.25) invisible */
+  --outline:                  rgba(2,6,23,0.18);
+
+  /* Accent — executive gold, industrial */
+  --accent:                   #B8860B;
+  --accent-light:             #D4A017;
+  --accent-hover:             #8F6809;
+  --accent-muted:             rgba(184,134,11,0.12);
+  --accent-border:            rgba(184,134,11,0.45);
+  --accent-text:              #FFFFFF;
+  --on-accent:                #FFFFFF;
+
+  --secondary:                #B8860B;
+  --secondary-muted:          rgba(184,134,11,0.10);
+  --secondary-border:         rgba(184,134,11,0.35);
+  --accent-orange:            #B8860B;
+  --accent-orange-light:      #D4A017;
+  --accent-orange-hover:      #8F6809;
+  --accent-orange-muted:      rgba(184,134,11,0.12);
+  --accent-orange-border:     rgba(184,134,11,0.30);
+
+  /* Text — deeper blacks, darker mutes for real contrast on white */
+  --text-primary:             #020617;  /* slate-950 — was #0F172A */
+  --text-secondary:           #1E293B;  /* slate-800 — was #334155 */
+  --text-muted:               #475569;  /* slate-600 — was #64748B */
+  --text-disabled:            rgba(71,85,105,0.50);
+
+  /* Status colors — 100 points deeper for punch on near-white surfaces */
+  --status-success:           #15803D;  /* green-700 */
+  --status-warning:           #B45309;  /* amber-700 */
+  --status-error:             #B91C1C;  /* red-700 */
+  --status-info:              #1D4ED8;  /* blue-700 */
+  --status-review:            #C2410C;  /* orange-700 */
+  --status-review-muted:      rgba(194,65,12,0.10);
+  --status-review-border:     rgba(194,65,12,0.40);
+  --status-success-bright:    #047857;  /* emerald-700 */
+  --status-warning-bright:    #B45309;
+  --status-error-bright:      #B91C1C;
+
+  --success:                  #15803D;
+  --success-muted:            rgba(21,128,61,0.10);
+  --success-border:           rgba(21,128,61,0.35);
+  --warning:                  #B45309;
+  --warning-muted:            rgba(180,83,9,0.10);
+  --warning-border:           rgba(180,83,9,0.35);
+  --danger:                   #B91C1C;
+  --danger-muted:             rgba(185,28,28,0.09);
+  --danger-border:            rgba(185,28,28,0.35);
+  --info:                     #1D4ED8;
+  --info-muted:               rgba(29,78,216,0.09);
+  --info-border:              rgba(29,78,216,0.30);
+
+  /* Phase colors */
+  --phase-detailing:          #B8860B;
+  --phase-fab:                #1D4ED8;
+  --phase-delivery:           #0F766E;  /* teal-700 — logistics */
+  --phase-erection:           #15803D;
+  --phase-closeout:           #475569;
+
+  /* Shadows — noticeable, layered umbra for real depth */
+  --shadow-sm:                0 1px 2px rgba(2,6,23,0.06), 0 1px 1px rgba(2,6,23,0.04);
+  --shadow-card:              0 1px 3px rgba(2,6,23,0.08), 0 4px 10px rgba(2,6,23,0.04);
+  --shadow-lg:                0 4px 12px rgba(2,6,23,0.10), 0 16px 32px rgba(2,6,23,0.08);
+  --shadow-orange-glow:       0 0 16px rgba(184,134,11,0.20);
+  --shadow-cyan-glow:         0 0 16px rgba(184,134,11,0.20);
+  --shadow-glow-gold:         0 0 16px rgba(184,134,11,0.22), 0 0 36px rgba(184,134,11,0.10);
+  --shadow-glow-red:          0 0 14px rgba(185,28,28,0.20), 0 0 28px rgba(185,28,28,0.08);
+  --shadow-glow-green:        0 0 14px rgba(21,128,61,0.20), 0 0 28px rgba(21,128,61,0.08);
+  --shadow-glow-blue:         0 0 14px rgba(29,78,216,0.20), 0 0 28px rgba(29,78,216,0.08);
+
+  /* Interaction — stronger hovers so rows have tactile feedback */
+  --hover-bg:                 rgba(2,6,23,0.05);
+  --bg-hover:                 rgba(2,6,23,0.05);
+  --bg-row-hover:             rgba(2,6,23,0.03);
+  --nav-bg:                   rgba(255,255,255,0.98);
+  --nav-hover-bg:             rgba(184,134,11,0.12);
+
+  /* Glass — more opaque on white so type doesn't wash through */
+  --glass-bg:                 rgba(255,255,255,0.92);
+  --glass-border:             #CBD5E1;
+  --glass-blur:               22px;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   STEELBUILD DARK theme — token-mapping overlay
+   ───────────────────────────────────────────────────────────────────
+   When the body is wrapped with class="steelbuild-dark", every existing
+   inline style that uses our legacy tokens (var(--accent), var(--bg-surface),
+   var(--text-primary), etc.) automatically picks up the SteelBuild Dark
+   palette. This gives us ~70% theme coverage with zero per-component
+   refactors. Per-page sweeps then add `.sbd-*` utility classes for full
+   glass-morphism + KPI tiles + badges.
+
+   The .sbd-* tokens are defined in steelbuild-dark.css; we just point our
+   legacy tokens at them here.
+   ─────────────────────────────────────────────────────────────────── */
+/* SBD overlay must win unconditionally. We hit it from html (where
+ * ThemeContext puts the class), from any data-theme combo, from any
+ * data-accent combo, and bare. Plus !important on critical surface +
+ * accent + text tokens so any inline hex / rgb in component styles
+ * that DOESN'T read tokens still gets dragged into the dark world via
+ * cascading inheritance on its parent. */
+html.steelbuild-dark,
+[data-theme] .steelbuild-dark,
+[data-theme] html.steelbuild-dark,
+[data-accent] html.steelbuild-dark,
+html .steelbuild-dark,
+.steelbuild-dark {
+  /* Surfaces — translucent over dark base */
+  --bg-page:                  var(--sbd-bg-base) !important;
+  --bg-base:                  var(--sbd-bg-base) !important;
+  --bg-surface:               var(--sbd-bg-surface) !important;
+  --bg-surface-low:           rgba(255,255,255,0.020) !important;
+  --bg-surface-high:          var(--sbd-bg-surface-hi) !important;
+  --bg-elevated:              var(--sbd-bg-elevated) !important;
+  --bg-input:                 var(--sbd-bg-input) !important;
+  --bg-card:                  var(--sbd-bg-surface) !important;
+  --bg-secondary:             var(--sbd-bg-surface) !important;
+  --bg-sidebar:               rgba(13,17,23,0.70) !important;
+  --bg-row-hover:             var(--sbd-bg-row-hover) !important;
+  --hover-bg:                 var(--sbd-bg-row-hover) !important;
+  --nav-bg:                   rgba(15,22,38,0.65) !important;
+  --glass-bg:                 rgba(15,22,38,0.65) !important;
+
+  /* Borders / dividers */
+  --border-default:           var(--sbd-border) !important;
+  --border-strong:            var(--sbd-border-strong) !important;
+  --divider:                  var(--sbd-divider) !important;
+  --glass-border:             var(--sbd-border) !important;
+
+  /* Text */
+  --text-primary:             var(--sbd-text) !important;
+  --text-secondary:           var(--sbd-text-secondary) !important;
+  --text-muted:               var(--sbd-text-muted) !important;
+
+  /* Accents — steel-blue primary, gold secondary (executive tier) */
+  --accent:                   var(--sbd-accent) !important;
+  --accent-light:             var(--sbd-accent-light) !important;
+  --accent-hover:             var(--sbd-accent-light) !important;
+  --accent-muted:             var(--sbd-accent-muted) !important;
+  --accent-border:            var(--sbd-accent-border) !important;
+  --secondary:                var(--sbd-gold) !important;
+  --secondary-light:          var(--sbd-gold-light) !important;
+
+  /* Status (matches SBD palette: emerald/amber/red/steel-blue) */
+  --status-success:           var(--sbd-success);
+  --status-warning:           var(--sbd-warning);
+  --status-error:             var(--sbd-error);
+  --status-error-bright:      var(--sbd-error);
+  --status-info:              var(--sbd-info);
+  --status-review:            var(--sbd-review);
+
+  --success-muted:            rgba(52,211,153,0.12);
+  --success-border:           rgba(52,211,153,0.35);
+  --warning-muted:            rgba(245,158,11,0.12);
+  --warning-border:           rgba(245,158,11,0.35);
+  --danger-muted:             rgba(239,68,68,0.12);
+  --danger-border:            rgba(239,68,68,0.35);
+  --info-muted:               var(--sbd-accent-muted);
+  --info-border:              var(--sbd-accent-border);
+
+  /* Phases — match SBD construction-workflow palette */
+  --phase-detailing:          var(--sbd-phase-detailing);
+  --phase-fab:                var(--sbd-phase-fabrication);
+  --phase-delivery:           var(--sbd-phase-delivery);
+  --phase-erection:           var(--sbd-phase-erection);
+
+  /* Glass — translucent panels with backdrop-blur */
+  --glass-bg:                 rgba(15,22,38,0.65);
+  --glass-border:             var(--sbd-border);
+  --glass-blur:               20px;
+
+  /* Fonts — keep SBD's display+mono pairing */
+  --font-body:                var(--sbd-font-body);
+  --font-display:             var(--sbd-font-display);
+  --font-mono:                var(--sbd-font-mono);
+}

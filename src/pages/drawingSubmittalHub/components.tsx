@@ -23,6 +23,8 @@ import {
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
 import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
+import SectionCardRaw from "@/pages/dashboard/sections/SectionCard";
+import StatusPillRaw from "@/components/design-system/StatusPill";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { DRAFTING_STATES, effectiveDetailingState } from "@/lib/detailingPackageState";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
@@ -75,6 +77,8 @@ const DialogTitle = DialogTitleRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 const CycleTimeCard = CycleTimeCardRaw as unknown as ComponentType<AnyProps>;
 const AgingReportTable = AgingReportTableRaw as unknown as ComponentType<AnyProps>;
+const SectionCard = SectionCardRaw as unknown as ComponentType<AnyProps>;
+const StatusPill = StatusPillRaw as unknown as ComponentType<AnyProps>;
 // Lazy so the heavy revision/PDF modals only load when a row action fires —
 // they never weigh down the hub chunk on tab open.
 const RevisionUploadModal = lazy(() => import("@/components/drawings/RevisionUploadModal")) as unknown as ComponentType<AnyProps>;
@@ -1962,9 +1966,7 @@ function RevisionGridCells({ r, onCompareRevision }: { r: any; onCompareRevision
       </GridCell>
       <GridCell style={{ color: textMuted }}>{r.revisionCode}</GridCell>
       <GridCell>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 10, fontWeight: 700, color: dm.color }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: dm.color, flexShrink: 0 }} />{dm.label}
-        </span>
+        <StatusPill label={dm.label} color={dm.color} />
       </GridCell>
       <GridCell style={{ color: r.wpNames?.length ? textPrimary : textMuted }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{r.wpNames?.length ? r.wpNames.join(", ") : "—"}</span>
@@ -1975,9 +1977,7 @@ function RevisionGridCells({ r, onCompareRevision }: { r: any; onCompareRevision
         ) : <span style={{ color: textMuted }}>—</span>}
       </GridCell>
       <GridCell>
-        {r.fabBlocked
-          ? <span style={{ fontFamily: mono, fontSize: 9.5, fontWeight: 800, color: "#F85149", background: "rgba(248,81,73,0.12)", border: "1px solid rgba(248,81,73,0.4)", borderRadius: 4, padding: "1px 6px", textTransform: "uppercase" }}>Yes</span>
-          : <span style={{ fontFamily: mono, fontSize: 9.5, color: textMuted }}>No</span>}
+        <StatusPill label={r.fabBlocked ? "Blocked" : "Clear"} color={r.fabBlocked ? "#F85149" : textMuted} />
       </GridCell>
       <GridCell align="right" style={{ color: r.affectedPieces != null ? textPrimary : textMuted }}>{r.affectedPieces != null ? r.affectedPieces : "—"}</GridCell>
       <GridCell align="right">
@@ -2074,91 +2074,89 @@ export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }:
   if (isLoading) return <LoadingSkeleton />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <GitCompareArrows size={15} color={accent} />
-        <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: textPrimary, textTransform: "uppercase" }}>Revision Impact</span>
-        <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{rows.length} changed sheet{rows.length === 1 ? "" : "s"}</span>
-        <div style={{ flex: 1 }} />
-        <div style={{ position: "relative", flex: "0 1 320px", minWidth: 180 }}>
-          <Search size={14} color={textMuted} style={{ position: "absolute", left: 10, top: 9 }} />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search sheet / set / WP…" style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 8, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }} />
+    <SectionCard title="Revision impact">
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <GitCompareArrows size={15} color={accent} />
+          <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: textPrimary, textTransform: "uppercase" }}>Revision Impact</span>
+          <span style={{ fontFamily: mono, fontSize: 10, color: textMuted }}>{rows.length} changed sheet{rows.length === 1 ? "" : "s"}</span>
+          <div style={{ flex: 1 }} />
+          <div style={{ position: "relative", flex: "0 1 320px", minWidth: 180 }}>
+            <Search size={14} color={textMuted} style={{ position: "absolute", left: 10, top: 9 }} />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search sheet / set / WP…" style={{ width: "100%", padding: "7px 10px 7px 30px", borderRadius: 8, border: `1px solid ${border}`, background: surface1, color: textPrimary, fontFamily: mono, fontSize: 12, outline: "none" }} />
+          </div>
+        </div>
+
+        {shouldVirtualize ? (
+          <RevisionVirtualList rows={filtered} onCompareRevision={onCompareRevision} />
+        ) : (
+        <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <Th>Changed Sheet</Th>
+                <Th>Rev</Th>
+                <Th>Downstream</Th>
+                <Th>Linked Work Package</Th>
+                <Th style={{ textAlign: "right" }}>RFIs (open/all)</Th>
+                <Th>Fab Blocked?</Th>
+                <Th style={{ textAlign: "right" }}>
+                  <span title="Pieces tied to this set — exact when the roster links pieces to the set, otherwise estimated via the linked work-package sequence. '—' when neither resolves.">Pieces ≈</span>
+                </Th>
+                <Th style={{ textAlign: "right" }}>{""}</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><Td colSpan={8} style={{ textAlign: "center", color: textMuted, padding: 28 }}>
+                  No changed sheets {search ? "match your search" : "yet — the board lights up when a new revision is uploaded for an existing sheet"}.
+                </Td></tr>
+              ) : filtered.map((r) => {
+                const dm = REV_DOWNSTREAM[r.severity] || REV_DOWNSTREAM.low;
+                return (
+                  <tr key={r.revisionId || `${r.drawingId}-${r.revisionCode}`} style={{
+                    borderTop: `1px solid ${border}`,
+                    borderLeft: r.severity === "critical" ? "3px solid #F85149" : r.severity === "high" ? "3px solid #F0883E" : "3px solid transparent",
+                  }}>
+                    {/* ⚠ MIRROR of RevisionGridCells (virtualized branch) — edit both when changing columns. */}
+                    <Td style={{ color: textPrimary, fontWeight: 600 }}>
+                      {r.sheetNumber || "Sheet"}
+                      <span style={{ display: "block", fontFamily: mono, fontSize: 9.5, color: textMuted, fontWeight: 400 }}>{r.setName}</span>
+                    </Td>
+                    <Td style={{ color: textMuted }}>{r.revisionCode}</Td>
+                    <Td>
+                      <StatusPill label={dm.label} color={dm.color} />
+                    </Td>
+                    <Td style={{ color: r.wpNames?.length ? textPrimary : textMuted }}>{r.wpNames?.length ? r.wpNames.join(", ") : "—"}</Td>
+                    <Td style={{ textAlign: "right" }}>
+                      {r.rfiCount ? (
+                        <span style={{ fontFamily: mono, fontSize: 11, color: r.openRfiCount ? "#F0883E" : textMuted }}>{r.openRfiCount}<span style={{ color: textMuted }}> / {r.rfiCount}</span></span>
+                      ) : <span style={{ color: textMuted }}>—</span>}
+                    </Td>
+                    <Td>
+                      <StatusPill label={r.fabBlocked ? "Blocked" : "Clear"} color={r.fabBlocked ? "#F85149" : textMuted} />
+                    </Td>
+                    <Td style={{ textAlign: "right", color: r.affectedPieces != null ? textPrimary : textMuted }}>{r.affectedPieces != null ? r.affectedPieces : "—"}</Td>
+                    <Td style={{ textAlign: "right" }}>
+                      {onCompareRevision && r.drawingId && (
+                        <button type="button" title="Open the revision overlay compare" onClick={() => onCompareRevision(r.drawingId)}
+                          style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer", background: "transparent", border: `1px solid ${border}`, color: accent }}>
+                          Compare
+                        </button>
+                      )}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        )}
+        <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, lineHeight: 1.5 }}>
+          Downstream severity: <span style={{ color: "#F85149" }}>in field</span> &gt; <span style={{ color: "#F0883E" }}>delivered</span> &gt; <span style={{ color: "#D29922" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
         </div>
       </div>
-
-      {shouldVirtualize ? (
-        <RevisionVirtualList rows={filtered} onCompareRevision={onCompareRevision} />
-      ) : (
-      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: surface1 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <Th>Changed Sheet</Th>
-              <Th>Rev</Th>
-              <Th>Downstream</Th>
-              <Th>Linked Work Package</Th>
-              <Th style={{ textAlign: "right" }}>RFIs (open/all)</Th>
-              <Th>Fab Blocked?</Th>
-              <Th style={{ textAlign: "right" }}>
-                <span title="Pieces tied to this set — exact when the roster links pieces to the set, otherwise estimated via the linked work-package sequence. '—' when neither resolves.">Pieces ≈</span>
-              </Th>
-              <Th style={{ textAlign: "right" }}>{""}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><Td colSpan={8} style={{ textAlign: "center", color: textMuted, padding: 28 }}>
-                No changed sheets {search ? "match your search" : "yet — the board lights up when a new revision is uploaded for an existing sheet"}.
-              </Td></tr>
-            ) : filtered.map((r) => {
-              const dm = REV_DOWNSTREAM[r.severity] || REV_DOWNSTREAM.low;
-              return (
-                <tr key={r.revisionId || `${r.drawingId}-${r.revisionCode}`} style={{
-                  borderTop: `1px solid ${border}`,
-                  borderLeft: r.severity === "critical" ? "3px solid #F85149" : r.severity === "high" ? "3px solid #F0883E" : "3px solid transparent",
-                }}>
-                  {/* ⚠ MIRROR of RevisionGridCells (virtualized branch) — edit both when changing columns. */}
-                  <Td style={{ color: textPrimary, fontWeight: 600 }}>
-                    {r.sheetNumber || "Sheet"}
-                    <span style={{ display: "block", fontFamily: mono, fontSize: 9.5, color: textMuted, fontWeight: 400 }}>{r.setName}</span>
-                  </Td>
-                  <Td style={{ color: textMuted }}>{r.revisionCode}</Td>
-                  <Td>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 10, fontWeight: 700, color: dm.color }}>
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: dm.color, flexShrink: 0 }} />{dm.label}
-                    </span>
-                  </Td>
-                  <Td style={{ color: r.wpNames?.length ? textPrimary : textMuted }}>{r.wpNames?.length ? r.wpNames.join(", ") : "—"}</Td>
-                  <Td style={{ textAlign: "right" }}>
-                    {r.rfiCount ? (
-                      <span style={{ fontFamily: mono, fontSize: 11, color: r.openRfiCount ? "#F0883E" : textMuted }}>{r.openRfiCount}<span style={{ color: textMuted }}> / {r.rfiCount}</span></span>
-                    ) : <span style={{ color: textMuted }}>—</span>}
-                  </Td>
-                  <Td>
-                    {r.fabBlocked
-                      ? <span style={{ fontFamily: mono, fontSize: 9.5, fontWeight: 800, color: "#F85149", background: "rgba(248,81,73,0.12)", border: "1px solid rgba(248,81,73,0.4)", borderRadius: 4, padding: "1px 6px", textTransform: "uppercase" }}>Yes</span>
-                      : <span style={{ fontFamily: mono, fontSize: 9.5, color: textMuted }}>No</span>}
-                  </Td>
-                  <Td style={{ textAlign: "right", color: r.affectedPieces != null ? textPrimary : textMuted }}>{r.affectedPieces != null ? r.affectedPieces : "—"}</Td>
-                  <Td style={{ textAlign: "right" }}>
-                    {onCompareRevision && r.drawingId && (
-                      <button type="button" title="Open the revision overlay compare" onClick={() => onCompareRevision(r.drawingId)}
-                        style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 6, cursor: "pointer", background: "transparent", border: `1px solid ${border}`, color: accent }}>
-                        Compare
-                      </button>
-                    )}
-                  </Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      )}
-      <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, lineHeight: 1.5 }}>
-        Downstream severity: <span style={{ color: "#F85149" }}>in field</span> &gt; <span style={{ color: "#F0883E" }}>delivered</span> &gt; <span style={{ color: "#D29922" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
-      </div>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -2175,117 +2173,119 @@ export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isL
   if (isLoading) return <LoadingSkeleton />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* ── Analytics (cycle-time + aging) ───────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: 16 }}>
-        <CycleTimeCard submittals={submittals} isLoading={isLoading} />
-        <AgingReportTable submittals={submittals} isLoading={isLoading} />
-      </div>
-
-      {/* ── Summary Bar ──────────────────────────────────────────── */}
-      <div style={{
-        display: "flex", gap: 10, flexWrap: "wrap",
-        alignItems: "center",
-        padding: 14,
-        borderRadius: 16,
-        border: `1px solid ${border}`,
-        background: surface1,
-      }}>
-        <div style={{ flex: "1 1 320px", minWidth: 220 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <Layers3 size={15} color={accent} />
-            <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: accent }}>
-              Approval Matrix
-            </div>
-          </div>
-          <label style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            maxWidth: 520,
-            padding: "8px 11px",
-            borderRadius: 10,
-            border: `1px solid ${border}`,
-            background: surface2,
-            color: textMuted,
-          }}>
-          <Search size={15} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search sets, submittals..."
-            style={{
-              width: "100%",
-              background: "transparent",
-              color: textPrimary,
-              border: 0,
-              fontFamily: mono, fontSize: 12,
-              outline: "none",
-            }}
-          />
-          </label>
+    <SectionCard title="Approval matrix">
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* ── Analytics (cycle-time + aging) ───────────────────────── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: 16 }}>
+          <CycleTimeCard submittals={submittals} isLoading={isLoading} />
+          <AgingReportTable submittals={submittals} isLoading={isLoading} />
         </div>
-        <SummaryChip icon={Layers3} label="Sets" value={summary.total} color={accent} />
-        <SummaryChip icon={Link2} label="No Submittal" value={summary.noSubmittal} color={textMuted} />
-        <SummaryChip icon={AlertTriangle} label="Overdue" value={summary.overdue} color={error} />
-        <SummaryChip icon={Clock3} label="Due Soon" value={summary.dueSoon} color={warning} />
-        <SummaryChip icon={ClipboardList} label="Pending" value={summary.pending} color={warning} />
-        <SummaryChip icon={ShieldCheck} label="Approved" value={summary.approved} color={success} />
-        <SummaryChip icon={AlertTriangle} label="Needs Action" value={summary.rejected} color={review} />
-      </div>
 
-      {/* ── Matrix Table ─────────────────────────────────────────── */}
-      <div className="sbd-card" style={{
-        borderRadius: 16, border: `1px solid ${border}`,
-        overflowX: "auto",
-        padding: 0,
-      }}>
-        <table className="sbd-table" style={{
-          width: "100%", minWidth: 980, borderCollapse: "collapse",
-          fontFamily: mono, fontSize: 12,
+        {/* ── Summary Bar ──────────────────────────────────────────── */}
+        <div style={{
+          display: "flex", gap: 10, flexWrap: "wrap",
+          alignItems: "center",
+          padding: 14,
+          borderRadius: 16,
+          border: `1px solid ${border}`,
+          background: surface1,
         }}>
-          <thead>
-            <tr style={{ background: surface2 }}>
-              <Th>Drawing Set Package</Th>
-              <Th>Set #</Th>
-              <Th>Discipline</Th>
-              <Th style={{ textAlign: "center" }}>Sheets</Th>
-              <Th>Linked Submittal</Th>
-              <Th>Status</Th>
-              <Th>Due Status</Th>
-              <Th style={{ textAlign: "center" }}>Round</Th>
-              <Th>Ball In Court</Th>
-              <Th>Submitted</Th>
-              <Th>Required</Th>
-              <Th>Returned</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {matrixRows.length === 0 ? (
-              <tr>
-                <td colSpan={12} style={{
-                  padding: 40, textAlign: "center", color: textMuted,
-                }}>
-                  {search ? "No matching drawing sets." : "No drawing sets yet."}
-                </td>
+          <div style={{ flex: "1 1 320px", minWidth: 220 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <Layers3 size={15} color={accent} />
+              <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: accent }}>
+                Approval Matrix
+              </div>
+            </div>
+            <label style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              maxWidth: 520,
+              padding: "8px 11px",
+              borderRadius: 10,
+              border: `1px solid ${border}`,
+              background: surface2,
+              color: textMuted,
+            }}>
+            <Search size={15} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search sets, submittals..."
+              style={{
+                width: "100%",
+                background: "transparent",
+                color: textPrimary,
+                border: 0,
+                fontFamily: mono, fontSize: 12,
+                outline: "none",
+              }}
+            />
+            </label>
+          </div>
+          <SummaryChip icon={Layers3} label="Sets" value={summary.total} color={accent} />
+          <SummaryChip icon={Link2} label="No Submittal" value={summary.noSubmittal} color={textMuted} />
+          <SummaryChip icon={AlertTriangle} label="Overdue" value={summary.overdue} color={error} />
+          <SummaryChip icon={Clock3} label="Due Soon" value={summary.dueSoon} color={warning} />
+          <SummaryChip icon={ClipboardList} label="Pending" value={summary.pending} color={warning} />
+          <SummaryChip icon={ShieldCheck} label="Approved" value={summary.approved} color={success} />
+          <SummaryChip icon={AlertTriangle} label="Needs Action" value={summary.rejected} color={review} />
+        </div>
+
+        {/* ── Matrix Table ─────────────────────────────────────────── */}
+        <div className="sbd-card" style={{
+          borderRadius: 16, border: `1px solid ${border}`,
+          overflowX: "auto",
+          padding: 0,
+        }}>
+          <table className="sbd-table" style={{
+            width: "100%", minWidth: 980, borderCollapse: "collapse",
+            fontFamily: mono, fontSize: 12,
+          }}>
+            <thead>
+              <tr style={{ background: surface2 }}>
+                <Th>Drawing Set Package</Th>
+                <Th>Set #</Th>
+                <Th>Discipline</Th>
+                <Th style={{ textAlign: "center" }}>Sheets</Th>
+                <Th>Linked Submittal</Th>
+                <Th>Status</Th>
+                <Th>Due Status</Th>
+                <Th style={{ textAlign: "center" }}>Round</Th>
+                <Th>Ball In Court</Th>
+                <Th>Submitted</Th>
+                <Th>Required</Th>
+                <Th>Returned</Th>
               </tr>
-            ) : (
-              matrixRows.map((row) => (
-                <MatrixRow
-                  key={row.id}
-                  drawingSet={row}
-                  sub={row.latestSubmittal}
-                  due={row.due}
-                  allSubmittals={row.submittals}
-                  roundsBySubmittal={roundsBySubmittal}
-                />
-              ))
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {matrixRows.length === 0 ? (
+                <tr>
+                  <td colSpan={12} style={{
+                    padding: 40, textAlign: "center", color: textMuted,
+                  }}>
+                    {search ? "No matching drawing sets." : "No drawing sets yet."}
+                  </td>
+                </tr>
+              ) : (
+                matrixRows.map((row) => (
+                  <MatrixRow
+                    key={row.id}
+                    drawingSet={row}
+                    sub={row.latestSubmittal}
+                    due={row.due}
+                    allSubmittals={row.submittals}
+                    roundsBySubmittal={roundsBySubmittal}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </SectionCard>
   );
 }
 

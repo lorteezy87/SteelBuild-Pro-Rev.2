@@ -4,15 +4,18 @@
  * weight, crane pick, and decimal/fraction calculators were five separate
  * sidebar slots; this puts them side-by-side as tabs.
  *
- * Thin tab shell (the ScheduleHub / FieldHub pattern): each tab lazy-loads the
- * existing page unchanged; all stay independently routable. `?calc_tab=` drives
- * the active tab.
+ * Device shell (2026-06-27 calculator redesign): the bespoke tab bar is replaced
+ * by the shared <CalculatorShell> — a tactile device frame + segmented tool rail
+ * (with arrow-key navigation). Each tool still lazy-loads its existing page
+ * unchanged and stays independently routable; `?calc_tab=` drives the active
+ * tool. The active tool renders inside the shell body.
  */
 import { Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import CalculatorShell from "@/components/calculators/CalculatorShell";
 
 const RegularCalc = lazyWithRetry(() => import("@/pages/RegularCalculator"));
 const FeetInchesCalc = lazyWithRetry(() => import("@/pages/FeetInchesCalculator"));
@@ -27,6 +30,10 @@ const TABS = [
   { key: "cranepick", label: "Crane Pick", Component: CranePickCalc },
   { key: "decimalfraction", label: "Decimal / Fraction", Component: DecimalFractionConv },
 ];
+
+// The tool rail wants {id, label}; our canonical key IS the id (preserve the
+// exact ?calc_tab= deep-link keys).
+const RAIL_TOOLS = TABS.map((t) => ({ id: t.key, label: t.label }));
 
 export default function CalculatorsHub() {
   const [params, setParams] = useSearchParams();
@@ -44,57 +51,12 @@ export default function CalculatorsHub() {
     );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <div
-        role="tablist"
-        aria-label="Calculators"
-        style={{
-          display: "flex",
-          gap: 6,
-          alignItems: "center",
-          padding: "10px 24px 0",
-          flexWrap: "wrap",
-        }}
-      >
-        {TABS.map((tab) => {
-          const isActive = tab.key === activeKey;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setTab(tab.key)}
-              style={{
-                minHeight: 34,
-                padding: "7px 14px",
-                borderRadius: 9,
-                border: `1px solid ${isActive ? "var(--accent)" : "var(--border-default)"}`,
-                background: isActive
-                  ? "color-mix(in srgb, var(--accent) 14%, var(--bg-surface-high))"
-                  : "var(--bg-surface-low)",
-                color: isActive ? "var(--accent)" : "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div style={{ minHeight: 0, position: "relative" }}>
-        <ErrorBoundary label="Calculators">
-          <Suspense fallback={<LoadingSkeleton variant="page" />}>
-            <Active />
-          </Suspense>
-        </ErrorBoundary>
-      </div>
-    </div>
+    <CalculatorShell tools={RAIL_TOOLS} activeTool={activeKey} onSelect={setTab}>
+      <ErrorBoundary label="Calculators">
+        <Suspense fallback={<LoadingSkeleton variant="page" />}>
+          <Active />
+        </Suspense>
+      </ErrorBoundary>
+    </CalculatorShell>
   );
 }

@@ -11,12 +11,13 @@
  * same way they do in the sister calculator.
  *
  * Calculations are local (no Supabase round-trips). The running total
- * is React-state-only — session-scoped and cleared on page leave.
+ * + cost rate are persisted to localStorage so a reload doesn't lose a
+ * takeoff in progress.
  *
  * Shape data lives in src/data/aiscShapes.js (AISC Manual 15th Ed.).
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   SHAPE_FAMILIES,
@@ -27,10 +28,26 @@ import {
   parseLength,
   ticksToDecimalFeet,
   formatLength,
-} from "./FeetInchesCalculator";
+} from "@/utils/lengthMath";
+import { pieceCost, rollupCost, COST_UNITS } from "@/utils/steelCost";
+import CalcKey from "@/components/calculators/CalcKey";
+import CalcDisplay from "@/components/calculators/CalcDisplay";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const body = { fontFamily: "var(--font-body)" };
+
+// ── localStorage keys ──────────────────────────────────────────────
+const LS_RATE = "calc:steelweight:rate";
+const LS_UNIT = "calc:steelweight:unit";
+const LS_ROWS = "calc:steelweight:rows";
+
+// USD formatter for cost cells / result card.
+const usd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 // Card + input style tokens mirror FeetInchesCalculator so both tools
 // feel visually identical.
@@ -88,6 +105,40 @@ function parseLengthFeet(raw, mode) {
   return ticksToDecimalFeet(ticks);
 }
 
+// ── localStorage helpers (SSR/quota safe) ───────────────────────────
+function readLS(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw == null ? fallback : raw;
+  } catch {
+    return fallback;
+  }
+}
+function writeLS(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* quota / private-mode — ignore */
+  }
+}
+function readRows() {
+  try {
+    const raw = window.localStorage.getItem(LS_ROWS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// CSV-cell escaping: wrap in quotes + double any embedded quotes when
+// the value contains a comma, quote, or newline.
+function csvCell(value) {
+  const s = String(value ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 export default function SteelWeightCalculator() {
   const [familyKey, setFamilyKey] = useState(SHAPE_FAMILIES[0].key);
   const [designation, setDesignation] = useState(
@@ -107,12 +158,35 @@ export default function SteelWeightCalculator() {
   const [lengthRaw, setLengthRaw] = useState("");
   const [qty, setQty] = useState("1");
 
+  // Cost — rate + unit, rehydrated from localStorage.
+  const [rate, setRate] = useState(() => readLS(LS_RATE, ""));
+  const [costUnit, setCostUnit] = useState(() => {
+    const saved = readLS(LS_UNIT, COST_UNITS[0]);
+    return COST_UNITS.includes(saved) ? saved : COST_UNITS[0];
+  });
+
   // Results state — populated on Calculate, cleared when inputs change.
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  // Running-total list for the session.
-  const [runningTotal, setRunningTotal] = useState([]);
+  // Running-total list for the session, rehydrated from localStorage.
+  const [runningTotal, setRunningTotal] = useState(() => readRows());
+
+  // ── Persistence side-effects ───────────────────────────────────
+  useEffect(() => { writeLS(LS_RATE, rate); }, [rate]);
+  useEffect(() => { writeLS(LS_UNIT, costUnit); }, [costUnit]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LS_ROWS, JSON.stringify(runningTotal));
+    } catch {
+      /* quota / private-mode — ignore */
+    }
+  }, [runningTotal]);
+
+  const rateNum = useMemo(() => {
+    const n = parseFloat(rate);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }, [rate]);
 
   // ── Derived helpers ────────────────────────────────────────────
   const family = useMemo(
@@ -227,6 +301,9 @@ export default function SteelWeightCalculator() {
 
     const piece = lbPerFt * lengthFt;
     const total = piece * qtyN;
+    // Cost is computed off the TOTAL weight (piece × qty) at the
+    // current rate/unit; 0 when no rate has been entered.
+    const totalCost = pieceCost(total, rateNum, costUnit);
 
     setResult({
       shape:     currentShapeLabel,
@@ -240,6 +317,7 @@ export default function SteelWeightCalculator() {
       pieceWeight: piece,
       totalWeight: total,
       totalTons:   total / 2000,
+      cost:        totalCost,
     });
   };
 
@@ -256,6 +334,7 @@ export default function SteelWeightCalculator() {
         lengthDisplay: result.lengthDisplay,
         pieceWeight:  result.pieceWeight,
         totalWeight:  result.totalWeight,
+        cost:         result.cost,
       },
     ]);
     toast.success("Added to running total");
@@ -273,10 +352,40 @@ export default function SteelWeightCalculator() {
     [runningTotal]
   );
 
+  const grandCost = useMemo(
+    () => rollupCost(runningTotal),
+    [runningTotal]
+  );
+
   const copyGrandTotal = async () => {
     try {
       await navigator.clipboard.writeText(`${grandTotal.toFixed(2)} lb`);
       toast.success("Copied");
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+
+  // Build a CSV takeoff of every running-total row + copy to clipboard.
+  // Columns: shape, qty, length, lb_per_ft, weight_lb, cost.
+  const copyTakeoffCsv = async () => {
+    if (!runningTotal.length) return;
+    const header = ["shape", "qty", "length", "lb_per_ft", "weight_lb", "cost"];
+    const lines = [header.join(",")];
+    for (const r of runningTotal) {
+      lines.push([
+        csvCell(r.shape),
+        csvCell(r.qty),
+        csvCell(r.lengthDisplay),
+        csvCell((r.lbPerFt ?? 0).toFixed(3)),
+        csvCell(r.totalWeight.toFixed(2)),
+        csvCell((Number(r.cost) || 0).toFixed(2)),
+      ].join(","));
+    }
+    const csv = lines.join("\n");
+    try {
+      await navigator.clipboard.writeText(csv);
+      toast.success("Takeoff copied (CSV)");
     } catch {
       toast.error("Copy failed");
     }
@@ -487,43 +596,72 @@ export default function SteelWeightCalculator() {
                 />
               </div>
 
-              {/* Calculate button */}
-              <div style={{ display: "flex", gap: 10 }}>
-                <button
-                  onClick={handleCalculate}
-                  style={{
-                    ...mono,
-                    fontSize: 11, fontWeight: 700,
-                    letterSpacing: "0.08em",
-                    padding: "10px 18px",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    background: "var(--status-review)",
-                    color: "#FFFFFF",
-                    border: "none",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Calculate
-                </button>
+              {/* Row 5: Cost rate + unit toggle */}
+              <div>
+                <label style={labelStyle}>Material Rate (optional)</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ position: "relative", flex: "0 0 160px", maxWidth: 160 }}>
+                    <span style={{
+                      ...mono, position: "absolute", left: 12, top: "50%",
+                      transform: "translateY(-50%)", fontSize: 13,
+                      color: "var(--text-muted)", pointerEvents: "none",
+                    }}>$</span>
+                    <input
+                      style={{ ...inputStyle, paddingLeft: 22 }}
+                      inputMode="decimal"
+                      value={rate}
+                      onChange={(e) => setRate(e.target.value)}
+                      placeholder="0.85"
+                      aria-label="Material rate"
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {COST_UNITS.map((u) => (
+                      <button
+                        key={u}
+                        onClick={() => setCostUnit(u)}
+                        aria-pressed={costUnit === u}
+                        style={{
+                          ...mono,
+                          fontSize: 9, fontWeight: 700,
+                          letterSpacing: "0.06em",
+                          padding: "6px 10px",
+                          borderRadius: 4,
+                          cursor: "pointer",
+                          background: costUnit === u ? "var(--accent)" : "var(--bg-surface-low)",
+                          color:      costUnit === u ? "var(--accent-text)" : "var(--text-secondary)",
+                          border: `1px solid ${costUnit === u ? "var(--accent)" : "var(--border-default)"}`,
+                        }}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 6 }}>
+                  Persisted locally. /cwt = per 100 lb · /ton = per 2000 lb.
+                </div>
+              </div>
+
+              {/* Action keys — reskinned to tactile keycaps (CalcKey). */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 150 }}>
+                  <CalcKey
+                    label="Calculate"
+                    variant="accent"
+                    onPress={handleCalculate}
+                    ariaLabel="Calculate weight"
+                  />
+                </div>
                 {result && (
-                  <button
-                    onClick={handleAddToRunningTotal}
-                    style={{
-                      ...mono,
-                      fontSize: 11, fontWeight: 700,
-                      letterSpacing: "0.08em",
-                      padding: "10px 18px",
-                      borderRadius: 6,
-                      cursor: "pointer",
-                      background: "var(--bg-surface)",
-                      color: "var(--accent)",
-                      border: "1px solid var(--accent)",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    + Add to Running Total
-                  </button>
+                  <div style={{ minWidth: 200 }}>
+                    <CalcKey
+                      label="+ Add to Running Total"
+                      variant="op"
+                      onPress={handleAddToRunningTotal}
+                      ariaLabel="Add to running total"
+                    />
+                  </div>
                 )}
               </div>
 
@@ -569,6 +707,15 @@ export default function SteelWeightCalculator() {
                     {result.shape}
                   </div>
 
+                  {/* LCD-style headline value — click to copy total lbs. */}
+                  <div style={{ marginBottom: 14 }}>
+                    <CalcDisplay
+                      value={`${result.totalWeight.toFixed(2)} lb`}
+                      aux={`${result.totalTons.toFixed(3)} T · ${result.qty} pc`}
+                      onCopy={copyGrandTotal}
+                    />
+                  </div>
+
                   <ResultRow label="lb/ft (reference)"    value={`${result.lbPerFt.toFixed(3)} lb/ft`} />
                   <ResultRow label="Length"               value={result.lengthDisplay} />
                   <ResultRow label="Quantity"             value={`${result.qty}`} />
@@ -576,6 +723,16 @@ export default function SteelWeightCalculator() {
                   <ResultRow label="Weight per piece"     value={`${result.pieceWeight.toFixed(2)} lb`} emphasize />
                   <ResultRow label="Total weight"         value={`${result.totalWeight.toFixed(2)} lb`} emphasize />
                   <ResultRow label="Total weight (tons)"  value={`${result.totalTons.toFixed(3)} T`} emphasize highlight />
+                  {rateNum > 0 && (
+                    <>
+                      <div style={{ height: 1, background: "var(--divider)", margin: "12px 0" }} />
+                      <ResultRow
+                        label={`Piece cost @ $${rateNum}${costUnit}`}
+                        value={usd.format(result.cost)}
+                        emphasize highlight
+                      />
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -586,13 +743,29 @@ export default function SteelWeightCalculator() {
         <div className="sbd-card" style={{ ...cardStyle, marginTop: 20 }}>
           <div style={{
             padding: "14px 18px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)",
-            display: "flex", alignItems: "center", justifyContent: "space-between",
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap",
           }}>
             <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
               Running Total ({runningTotal.length})
             </div>
             {runningTotal.length > 0 && (
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  onClick={copyTakeoffCsv}
+                  style={{
+                    ...mono, fontSize: 9, fontWeight: 700,
+                    padding: "4px 10px",
+                    borderRadius: 4,
+                    background: "var(--bg-surface)",
+                    color: "var(--accent)",
+                    border: "1px solid var(--accent)",
+                    cursor: "pointer",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Copy takeoff (CSV)
+                </button>
                 <button
                   onClick={copyGrandTotal}
                   style={{
@@ -635,17 +808,17 @@ export default function SteelWeightCalculator() {
                 No entries yet — calculate a piece and hit <b>+ Add to Running Total</b>.
               </div>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
                 <thead>
                   <tr>
-                    {["Shape", "Qty", "Length", "Piece (lb)", "Total (lb)", ""].map((h, i) => (
+                    {["Shape", "Qty", "Length", "Piece (lb)", "Total (lb)", "Cost", ""].map((h, i) => (
                       <th key={i} style={{
                         ...mono,
                         fontSize: 8, fontWeight: 700,
                         color: "var(--text-muted)",
                         letterSpacing: "0.14em",
                         textTransform: "uppercase",
-                        textAlign: i === 0 ? "left" : i === 5 ? "right" : "right",
+                        textAlign: i === 0 ? "left" : "right",
                         padding: "10px 12px",
                         borderBottom: "1px solid var(--divider)",
                       }}>
@@ -662,6 +835,9 @@ export default function SteelWeightCalculator() {
                       <td style={tdRight}>{r.lengthDisplay}</td>
                       <td style={tdRight}>{r.pieceWeight.toFixed(2)}</td>
                       <td style={tdRight}>{r.totalWeight.toFixed(2)}</td>
+                      <td style={tdRight}>
+                        {Number(r.cost) > 0 ? usd.format(Number(r.cost)) : "—"}
+                      </td>
                       <td style={{ ...tdRight, paddingRight: 12 }}>
                         <button
                           onClick={() => removeFromRunningTotal(r.id)}
@@ -703,6 +879,15 @@ export default function SteelWeightCalculator() {
                       textAlign: "right",
                     }}>
                       {grandTotal.toFixed(2)} lb
+                    </td>
+                    <td style={{
+                      ...mono, fontSize: 12, fontWeight: 800,
+                      color: grandCost > 0 ? "var(--accent)" : "var(--text-muted)",
+                      padding: "12px",
+                      borderTop: "2px solid var(--border-default)",
+                      textAlign: "right",
+                    }}>
+                      {grandCost > 0 ? usd.format(grandCost) : "—"}
                     </td>
                     <td style={{
                       ...mono, fontSize: 10, fontWeight: 700,
