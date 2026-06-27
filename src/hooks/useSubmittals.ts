@@ -202,7 +202,11 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   if (isFabRelease && !fabOverride) {
     // `submittal_blocking_rfis` is a SECURITY DEFINER RPC not yet in the
     // generated DB types — cast the call (the result is handled defensively).
-    const callRpc = supabase.rpc as unknown as (
+    // NOTE: bind to the client — extracting `supabase.rpc` unbound loses `this`,
+    // and Supabase's rpc() dereferences `this.rest` → "Cannot read properties of
+    // undefined (reading 'rest')" at runtime (the fab-release gate failed for
+    // every "Released for Fabrication" advance until this bind was added).
+    const callRpc = supabase.rpc.bind(supabase) as unknown as (
       fn: string,
       args: Record<string, unknown>,
     ) => Promise<{ data: Array<{ rfi_number?: string }> | null; error: { message?: string } | null }>;
