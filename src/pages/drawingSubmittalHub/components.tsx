@@ -1099,19 +1099,18 @@ interface PipelinePanelProps {
 
 function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps) {
   return (
-    <div className="sbd-card" style={{ padding: 16, borderRadius: 16, minWidth: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
-        <div>
-          <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>Open Pipeline</h3>
-          <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
-            Current approval status distribution.
-          </p>
-        </div>
+    <SectionCard
+      title="Open pipeline"
+      headerAction={
         <button type="button" className="sbd-btn-ghost" onClick={() => onOpenTab("matrix")} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           Matrix
           <ArrowRight size={13} />
         </button>
-      </div>
+      }
+    >
+      <p style={{ margin: "0 0 11px", color: textMuted, fontSize: 12 }}>
+        Current approval status distribution.
+      </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
         {topStatuses.length === 0 ? (
           <EmptyState text="No open items to summarize." />
@@ -1121,7 +1120,7 @@ function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps
           ))
         )}
       </div>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -1162,14 +1161,11 @@ interface TriageListProps {
 
 function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false, onEscalate }: TriageListProps) {
   return (
-    <section className="sbd-card" style={{ padding: compact ? 14 : 16, borderRadius: 14, minWidth: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
-        <div>
-          <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>{title}</h3>
-          <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>{subtitle}</p>
-        </div>
-        <span className="sbd-badge-info">{items.length}</span>
-      </div>
+    <SectionCard
+      title={title}
+      headerAction={<span className="sbd-badge-info">{items.length}</span>}
+    >
+      <p style={{ margin: "0 0 12px", color: textMuted, fontSize: 12 }}>{subtitle}</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {items.length === 0 ? (
           <EmptyState text={empty} />
@@ -1179,7 +1175,7 @@ function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false,
           ))
         )}
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
