@@ -20,6 +20,19 @@ function dueCell(rfi: RfiRecord) {
   return <span>{rfi.date_required}</span>;
 }
 
+/** Cost/Schedule impact badge derived from the real impact flags. */
+function impactCell(rfi: RfiRecord) {
+  const parts: string[] = [];
+  if (rfi.cost_impact) parts.push("Cost");
+  if (rfi.schedule_impact) parts.push("Schedule");
+  return parts.length ? <Pill tone="warn">{parts.join(" + ")}</Pill> : <span className="cmd-row__meta">None</span>;
+}
+
+/** Reveal the full table below the summary panels when a panel's "View all" fires. */
+function scrollToTable() {
+  document.querySelector(".rfi-cc .cmd-table-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 export interface RfiControlCenterProps {
   projectName: string;
   rfis: RfiRecord[];
@@ -28,26 +41,28 @@ export interface RfiControlCenterProps {
   onSearch: (v: string) => void;
   disciplineFilter: string;
   onDisciplineChange: (v: string) => void;
+  onFilterChange: (v: string) => void;
   onOpenRfi: (rfi: RfiRecord) => void;
   onExport: () => void;
   onCreate?: (() => void) | null;
+  /** Project-level context for the hero stat cards (real, from the project record). */
+  projectHealth?: string | null;
+  percentComplete?: number | null;
+  /** Wide jobsite photo for the hero band. */
+  photoSrc?: string;
 }
 
 export default function RfiControlCenter(props: RfiControlCenterProps) {
-  const { projectName, rfis, filtered, search, onSearch, disciplineFilter, onDisciplineChange, onOpenRfi, onExport, onCreate } = props;
+  const {
+    projectName, rfis, filtered, search, onSearch, disciplineFilter, onDisciplineChange,
+    onFilterChange, onOpenRfi, onExport, onCreate, projectHealth, percentComplete, photoSrc,
+  } = props;
   useCommandSkin();
   const s = useMemo(() => buildRfiSummary(rfis), [rfis]);
 
-  // Real, in-scope hero stats (project-level Health/% Complete come with the shared shell — deferred).
-  const avgAge = useMemo(() => {
-    const open = rfis.filter((r) => !["Answered", "Closed"].includes(r.status || ""));
-    if (!open.length) return 0;
-    return Math.round(open.reduce((sum, r) => sum + daysOpen(r), 0) / open.length);
-  }, [rfis]);
-
   const heroStats = [
-    { value: s.open, label: "Open RFIs" },
-    { value: `${avgAge}d`, label: "Avg Age" },
+    { value: projectHealth || "—", label: "Project Health" },
+    { value: percentComplete != null ? `${Math.round(percentComplete)}%` : "—", label: "Complete" },
   ];
   const chips = [
     { label: `${s.total} Total` },
@@ -74,6 +89,7 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
     { key: "bic", header: "Ball in Court", render: (r) => r.ball_in_court || "Contractor" },
     { key: "age", header: "Age", align: "right", render: (r) => `${daysOpen(r)}d` },
     { key: "due", header: "Response Due", render: dueCell },
+    { key: "impact", header: "Impact", render: impactCell },
     { key: "cost", header: "Cost Exposure", align: "right", render: (r) => (r.cost_impact && r.cost_impact_amount ? fmtMoney(Number(r.cost_impact_amount)) : "—") },
   ];
 
@@ -86,12 +102,13 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
         projectName={projectName}
         chips={chips}
         stats={heroStats}
+        photoSrc={photoSrc}
       />
 
       <KpiStrip cells={kpiCells} />
 
       <div className="cmd-panels">
-        <DecisionPanel title="RFI Work Queue">
+        <DecisionPanel title="RFI Work Queue" onViewAll={() => { onFilterChange("open"); scrollToTable(); }}>
           {s.workQueue.map((r) => (
             <div className="cmd-row is-clickable" key={r.id} onClick={() => onOpenRfi(r)}>
               <div>
@@ -107,7 +124,7 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
           {s.workQueue.length === 0 ? <div className="cmd-row__meta">Nothing in the queue.</div> : null}
         </DecisionPanel>
 
-        <DecisionPanel title="Ball-in-Court">
+        <DecisionPanel title="Ball-in-Court" onViewAll={scrollToTable}>
           {s.ballInCourt.map((b) => (
             <div className="cmd-row" key={b.company}>
               <div className="cmd-row__num">{b.company}</div>
@@ -117,7 +134,7 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
           {s.ballInCourt.length === 0 ? <div className="cmd-row__meta">No open RFIs.</div> : null}
         </DecisionPanel>
 
-        <DecisionPanel title="Highest-Risk RFIs">
+        <DecisionPanel title="Highest-Risk RFIs" onViewAll={scrollToTable}>
           {s.riskQueue.map((r) => (
             <div className="cmd-row is-clickable" key={r.id} onClick={() => onOpenRfi(r)}>
               <div>

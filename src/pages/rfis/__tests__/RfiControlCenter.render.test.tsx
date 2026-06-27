@@ -52,9 +52,12 @@ it("renders without crashing and shows key landmark text", () => {
       onSearch={() => {}}
       disciplineFilter="All"
       onDisciplineChange={() => {}}
+      onFilterChange={() => {}}
       onOpenRfi={() => {}}
       onExport={() => {}}
       onCreate={null}
+      projectHealth="On Track"
+      percentComplete={42}
     />,
   );
 
@@ -64,4 +67,7 @@ it("renders without crashing and shows key landmark text", () => {
   expect(screen.getByText("Need Action")).toBeTruthy();
   // DecisionPanel title for the work queue
   expect(screen.getByText("RFI Work Queue")).toBeTruthy();
+  // New hero stat card + table column from wave 1
+  expect(screen.getByText("Project Health")).toBeTruthy();
+  expect(screen.getByText("Impact")).toBeTruthy();
 });
