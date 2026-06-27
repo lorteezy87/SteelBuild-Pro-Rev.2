@@ -602,23 +602,21 @@ const REV_SEVERITY_TONE: Record<string, string> = { critical: error, high: warni
 function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onCompare?: (drawingId: string) => void }) {
   const shown = (rows || []).slice(0, 8);
   return (
-    <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
-        <div>
-          <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>Revision Impact</h3>
-          <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
-            Revisions that landed on steel already moving downstream (rework / CO risk).
-          </p>
-        </div>
-        <span className="sbd-badge-info">{rows?.length || 0}</span>
-      </div>
+    <SectionCard
+      title="Revision impact"
+      headerAction={<span className="sbd-badge-info">{rows?.length || 0}</span>}
+    >
+      <p style={{ margin: "0 0 12px", color: textMuted, fontSize: 12 }}>
+        Revisions that landed on steel already moving downstream (rework / CO risk).
+      </p>
       {shown.length === 0 ? (
         <EmptyState text="No change-revisions on tracked sheets, or none with downstream exposure." />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {shown.map((r) => {
-            const tone = REV_SEVERITY_TONE[r.severity] || textMuted;
             const noneReached = !r.fabricated && !r.delivered && !r.inField;
+            const pillTone = r.severity === "critical" || r.severity === "high" ? "danger"
+              : r.severity === "medium" ? "review" : "neutral";
             return (
               <div key={r.revisionId} style={{
                 display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(150px, 1fr) auto", gap: 12, alignItems: "center",
@@ -652,21 +650,14 @@ function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onCompare?: (
                       <GitCompareArrows size={12} /> Compare
                     </button>
                   )}
-                  <span style={{
-                    fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
-                    color: tone, padding: "3px 9px", borderRadius: 999,
-                    background: `color-mix(in srgb, ${tone} 16%, transparent)`,
-                    border: `1px solid color-mix(in srgb, ${tone} 42%, transparent)`,
-                  }}>
-                    {r.severity}
-                  </span>
+                  <StatusPill tone={pillTone}>{r.severity}</StatusPill>
                 </div>
               </div>
             );
           })}
         </div>
       )}
-    </section>
+    </SectionCard>
   );
 }
 
