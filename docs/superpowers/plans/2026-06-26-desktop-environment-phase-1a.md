@@ -14,15 +14,37 @@
 
 ---
 
+## Direction update (2026-06-26): photographic tiles
+
+After Task 1 landed, the owner provided full-grid reference mockups: the launcher is
+**photographic tiles** — a real construction photo per module, darkened with a gradient
+scrim, with a white lucide outline icon + label on top — covering the **full** module
+set (not a curated subset). This supersedes the glossy-3D-emblem icon direction. Deltas
+vs the tasks below:
+- **Task 2:** `iconAssetFor` → `photoFor(page)` (manifest `PHOTO_ASSETS`, empty until the
+  photo pack ships); the full `LAUNCHER_MODULES` is the tile set. Everything else unchanged.
+- **Task 3:** build **`ModuleTile`** (photo background + dark gradient scrim + centered
+  white lucide icon + label; dark steel-gradient fallback when `photoFor` is null)
+  instead of a glossy `ModuleIcon`.
+- **Task 6 (Dock):** dock chips render the white lucide icon via `getPageIcon` on a
+  compact dark-glass chip — no photo at dock size (no tile import needed).
+- **Task 7 (Launcher):** renders the `ModuleTile` grid (full set) + category rail + search.
+- **Asset pack (Plan 1B):** **construction photos** at `public/photos/desktop/<page>.webp`,
+  not 3D icon art. See spec §5.1 (revised).
+
+Where tasks below say `ModuleIcon`/`iconAssetFor`, read `ModuleTile`/`photoFor`.
+
+---
+
 ## File structure
 
 Created:
-- `src/config/pageIcons.jsx` — the page→lucide icon map (extracted from `SidebarNav`) + `getPageIcon()`. One source of truth for fallback icons.
-- `src/config/launcherConfig.js` — launcher/dock config derived from `SIDEBAR_GROUPS`: flat module list with category, dock defaults, `iconAssetFor()`.
-- `src/components/desktop/ModuleIcon.jsx` — renders a module's raster icon (when present) else the lucide fallback.
+- `src/config/pageIcons.jsx` — the page→lucide icon map (extracted from `SidebarNav`) + `getPageIcon()`. One source of truth for the white outline icons. **(DONE — committed 5b5d5ec7)**
+- `src/config/launcherConfig.js` — launcher/dock config derived from `SIDEBAR_GROUPS`: flat module list with category, dock defaults, `photoFor()` + `PHOTO_ASSETS`.
+- `src/components/desktop/ModuleTile.jsx` — photo-backed launcher tile (photo + scrim + white lucide icon + label; dark-gradient fallback).
 - `src/components/desktop/DesktopTopBar.jsx` — Activities bar (Home button, project pill, page title, clock, tray).
-- `src/components/desktop/Dock.jsx` — glossy left dock of `ModuleIcon` buttons + Show Applications.
-- `src/components/desktop/Launcher.jsx` — applications overview grid + category rail + search.
+- `src/components/desktop/Dock.jsx` — compact dark dock chips (white lucide icon via `getPageIcon`) + Show Applications.
+- `src/components/desktop/Launcher.jsx` — applications overview grid (`ModuleTile`) + category rail + search.
 - `src/components/desktop/ModuleSurface.jsx` — window-chrome wrapper around page content.
 - `src/components/desktop/DesktopShell.jsx` — composes the shell; sets `data-skin`; reuses overlays.
 - `src/styles/desktop.css` — `[data-skin="desktop"]` canvas/dock/window/tile tokens + keyframes.
