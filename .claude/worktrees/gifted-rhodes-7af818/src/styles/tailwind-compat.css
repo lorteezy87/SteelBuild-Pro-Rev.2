@@ -1,0 +1,153 @@
+/* ═══════════════════════════════════════════════════════════════
+   TAILWIND COMPATIBILITY — shadcn/ui HSL variables & remaps
+
+   TECH DEBT: The overrides below remap Tailwind utility classes
+   (.bg-white, .text-gray-*) to dark-mode design tokens. This exists
+   because shadcn/ui components ship with light-mode Tailwind classes.
+
+   Long-term fix: Replace with Tailwind's built-in dark: variant
+   or scope shadcn components with a data-theme wrapper.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Dark mode: Tailwind class remaps ── */
+.bg-white { background: var(--bg-surface) !important; }
+.bg-gray-50, .bg-slate-50 { background: var(--bg-surface-low) !important; }
+.bg-gray-100, .bg-slate-100 { background: var(--bg-surface) !important; }
+.text-white { color: var(--text-primary) !important; }
+.text-gray-900, .text-slate-900, .text-black { color: var(--text-primary) !important; }
+.text-gray-600, .text-slate-600 { color: var(--text-secondary) !important; }
+.text-gray-400, .text-slate-400 { color: var(--text-muted) !important; }
+.border-gray-200, .border-slate-200 { border-color: rgba(255,255,255,0.07) !important; }
+.text-slate-50, .text-slate-100 { color: var(--text-primary) !important; }
+.text-slate-300 { color: var(--text-secondary) !important; }
+.text-slate-500 { color: var(--text-muted) !important; }
+.text-rose-300, .text-rose-400, .text-rose-500, .text-rose-600,
+.text-pink-300, .text-pink-400, .text-pink-500, .text-pink-600,
+.text-fuchsia-300, .text-fuchsia-400, .text-fuchsia-500, .text-fuchsia-600 {
+  color: var(--status-error) !important;
+}
+.bg-slate-800 { background: var(--bg-surface) !important; }
+.bg-slate-900, .bg-slate-950 { background: var(--bg-surface-low) !important; }
+.hover\:bg-slate-800:hover { background: var(--bg-surface) !important; }
+.hover\:bg-slate-900:hover { background: var(--bg-surface-low) !important; }
+
+/* ── Light mode: Tailwind class remaps ── */
+[data-theme="light"] .bg-white { background: var(--bg-surface) !important; }
+[data-theme="light"] .bg-gray-50, [data-theme="light"] .bg-slate-50 { background: var(--bg-surface-low) !important; }
+[data-theme="light"] .bg-gray-100, [data-theme="light"] .bg-slate-100 { background: var(--bg-surface) !important; }
+[data-theme="light"] .text-white { color: var(--text-primary) !important; }
+[data-theme="light"] .text-gray-900, [data-theme="light"] .text-slate-900 { color: var(--text-primary) !important; }
+[data-theme="light"] .text-gray-600, [data-theme="light"] .text-slate-600 { color: var(--text-secondary) !important; }
+[data-theme="light"] .text-gray-400, [data-theme="light"] .text-slate-400 { color: var(--text-muted) !important; }
+[data-theme="light"] .text-rose-300, [data-theme="light"] .text-rose-400, [data-theme="light"] .text-rose-500, [data-theme="light"] .text-rose-600,
+[data-theme="light"] .text-pink-300, [data-theme="light"] .text-pink-400, [data-theme="light"] .text-pink-500, [data-theme="light"] .text-pink-600,
+[data-theme="light"] .text-fuchsia-300, [data-theme="light"] .text-fuchsia-400, [data-theme="light"] .text-fuchsia-500, [data-theme="light"] .text-fuchsia-600 {
+  color: var(--status-error) !important;
+}
+[data-theme="light"] .border-gray-200, [data-theme="light"] .border-slate-200 { border-color: var(--border-default) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   shadcn/ui HSL variable bridge
+   Maps Tailwind's hsl() color system to SteelBuild Pro tokens
+   ═══════════════════════════════════════════════════════════════ */
+@layer base {
+  :root {
+    --background: 222 43% 5%;
+    --foreground: 220 20% 91%;
+    --card: 222 35% 7%;
+    --card-foreground: 220 20% 91%;
+    --popover: 222 40% 6%;
+    --popover-foreground: 220 20% 91%;
+    --primary: 43 73% 45%;
+    --primary-foreground: 222 43% 5%;
+    --secondary: 222 30% 10%;
+    --secondary-foreground: 220 20% 91%;
+    --muted: 222 35% 7%;
+    --muted-foreground: 215 17% 44%;
+    --tw-accent: 43 73% 45%;
+    --tw-accent-foreground: 222 43% 5%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 220 20% 91%;
+    --border: 222 30% 13%;
+    --input: 222 35% 8%;
+    --ring: 43 73% 45%;
+    --radius: 0.25rem;
+    --chart-1: 43 73% 45%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 142 71% 45%;
+    --chart-4: 173 80% 32%;  /* was 271 81% 66% violet — now industrial teal */
+    --chart-5: 0 84% 60%;
+    --sidebar-background: 222 43% 5%;
+    --sidebar-foreground: 220 20% 91%;
+    --sidebar-primary: 43 73% 45%;
+    --sidebar-primary-foreground: 222 43% 5%;
+    --sidebar-accent: 43 73% 45% / 0.10;
+    --sidebar-accent-foreground: 43 73% 45%;
+    --sidebar-border: 222 30% 13%;
+    --sidebar-ring: 43 73% 45%;
+  }
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body {
+    background: var(--bg-page) !important;
+    color: var(--text-primary) !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SteelBuild Dark — shadcn HSL bridge override
+   ───────────────────────────────────────────────────────────────
+   shadcn/ui components (Dialog, Select, Input, Button, Toast) read
+   from the HSL variables above. The SBD overlay in tokens.css only
+   touches our legacy --bg-* / --text-* / --accent tokens, NOT the
+   HSL ones — so a shadcn Dialog kept rendering with the OLD gold
+   palette and lighter background. This block remaps every HSL token
+   to the SteelBuild Dark palette so shadcn surfaces look like our
+   custom-styled ones.
+
+   HSL space + Tailwind require space-separated H S% L% values.
+   Steel-blue primary  = #56B0FF ≈ hsl(210 100% 67%)
+   Deep navy base      = #050810 ≈ hsl(222 56%  5%)
+   Translucent surface ≈ hsl(220 35% 10%) — opaque approximation
+                                            (Tailwind's bg utilities
+                                            wrap these in hsl(), so
+                                            we can't use rgba)
+   Executive gold accent = #C89B20 ≈ hsl(43 73% 45%)
+   ═══════════════════════════════════════════════════════════════ */
+html.steelbuild-dark,
+.steelbuild-dark {
+  --background: 222 56% 4% !important;
+  --foreground: 220 20% 95% !important;
+  --card: 220 35% 8% !important;
+  --card-foreground: 220 20% 95% !important;
+  --popover: 220 38% 7% !important;
+  --popover-foreground: 220 20% 95% !important;
+  --primary: 210 100% 67% !important;
+  --primary-foreground: 222 56% 8% !important;
+  --secondary: 220 30% 12% !important;
+  --secondary-foreground: 220 20% 95% !important;
+  --muted: 220 30% 10% !important;
+  --muted-foreground: 220 14% 55% !important;
+  --tw-accent: 210 100% 67% !important;
+  --tw-accent-foreground: 222 56% 8% !important;
+  --destructive: 0 84% 58% !important;
+  --destructive-foreground: 220 20% 95% !important;
+  --border: 220 30% 16% !important;
+  --input: 220 35% 10% !important;
+  --ring: 210 100% 67% !important;
+  --chart-1: 210 100% 67% !important;
+  --chart-2: 43 73% 50% !important;
+  --chart-3: 142 71% 50% !important;
+  --chart-4: 173 80% 40% !important;
+  --chart-5: 0 84% 58% !important;
+  --sidebar-background: 222 56% 5% !important;
+  --sidebar-foreground: 220 20% 95% !important;
+  --sidebar-primary: 210 100% 67% !important;
+  --sidebar-primary-foreground: 222 56% 8% !important;
+  --sidebar-accent: 210 100% 67% / 0.10 !important;
+  --sidebar-accent-foreground: 210 100% 80% !important;
+  --sidebar-border: 220 30% 16% !important;
+  --sidebar-ring: 210 100% 67% !important;
+}

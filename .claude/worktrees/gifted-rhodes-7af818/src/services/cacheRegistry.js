@@ -1,0 +1,462 @@
+/**
+ * cacheRegistry.js — Centralized query key registry and invalidation.
+ *
+ * Problem: Mutations invalidate ["deliveries"] but queries use ["deliveries-all"],
+ *          ["deliveries-nav-count"], ["pcc-deliveries"] etc. Result: stale data.
+ *
+ * Solution: ONE registry that knows every query key family for each entity.
+ *           When you mutate an entity, call invalidateEntity(qc, "delivery", projectId)
+ *           and ALL related caches get invalidated — no silent staleness.
+ *
+ * Usage:
+ *   import { invalidateEntity, getQueryKeys, ENTITY_KEYS } from "@/services/cacheRegistry";
+ *
+ *   // After any delivery mutation:
+ *   invalidateEntity(queryClient, "delivery", projectId);
+ *
+ *   // Get the primary query key for a hook:
+ *   const key = getQueryKeys("delivery", projectId).primary;
+ */
+
+// ─── Entity → query key families ────────────────────────────────────────
+// Each entity lists ALL query keys that read its data, anywhere in the app.
+// "fn" receives projectId and returns the exact key array.
+
+const REGISTRY = {
+
+  // ── Core entities ─────────────────────────────────────────────────────
+
+  project: {
+    primary:  (pid) => ["projects"],
+    families: (pid) => [
+      ["projects"],
+      ["project", pid],           // ProjectDetail.jsx single-project fetch
+    ],
+  },
+
+  drawing: {
+    primary:  (pid) => ["drawings", pid],
+    families: (pid) => [
+      ["drawings", pid],
+      ["drawings"],
+      ["drawings-all"],
+      ["drawings-nav-count", pid], // Layout.jsx nav badge
+      ["draw-detail", pid],        // ProjectDetailView.jsx
+      ["pcc-drawings", pid],       // ProjectControlCenter.jsx
+      ["drawings-for-wp", pid],    // WorkPackageDetailModal.jsx (uses project_id)
+    ],
+  },
+
+  delivery: {
+    primary:  (pid) => ["deliveries", pid],
+    families: (pid) => [
+      ["deliveries", pid],
+      ["deliveries"],
+      ["deliveries-all"],
+      ["deliveries-nav-count", pid], // Layout.jsx nav badge
+      ["deliveries-cost", pid],      // CostDashboard.jsx
+      ["all-deliveries-portfolio"],   // AIInsights.jsx, CostDashboard.jsx
+      ["procurement", pid],           // Procurement.jsx (deliveries are procurement)
+      ["procurement"],
+      ["pcc-deliveries", pid],        // ProjectControlCenter.jsx
+      ["modal-deliveries", pid],      // ProjectDrilldownModal.jsx
+      ["del-detail", pid],            // ProjectDetailView.jsx
+      ["deliveries-for-wp", pid],     // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
+    ],
+  },
+
+  expense: {
+    primary:  (pid) => ["expenses", pid],
+    families: (pid) => [
+      ["expenses", pid],
+      ["expenses"],
+      ["expenses-all"],             // Dashboard.jsx, Reports.jsx
+    ],
+  },
+
+  cost_code: {
+    primary:  (pid) => ["cost-codes", pid],
+    families: (pid) => [
+      ["cost-codes", pid],
+      ["cost-codes"],
+      ["codes-all"],                // Dashboard.jsx
+      ["all-codes-portfolio"],      // AIInsights.jsx, CostDashboard.jsx
+      ["cost-codes-global"],        // ExecutiveView.jsx, Reports.jsx
+      ["cost-codes-dash", pid],     // CostDashboard.jsx
+      ["cc-detail", pid],           // ProjectDetailView.jsx
+      ["modal-codes", pid],         // ProjectDrilldownModal.jsx
+    ],
+  },
+
+  change_order: {
+    primary:  (pid) => ["change-orders", pid],
+    families: (pid) => [
+      ["change-orders", pid],
+      ["change-orders"],
+      ["change-orders-all"],        // Projects.jsx
+      ["change-orders-global"],     // ExecutiveView.jsx, Reports.jsx
+      ["change-orders-dash", pid],  // CostDashboard.jsx
+      ["cos-all"],                  // Dashboard.jsx, ProductionNotes.jsx
+      ["all-cos-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
+      ["co-detail", pid],           // ProjectDetailView.jsx
+      ["pcc-cos", pid],             // ProjectControlCenter.jsx
+      ["modal-cos", pid],           // ProjectDrilldownModal.jsx
+      ["projects"],                 // CO approval modifies revised contract value
+    ],
+  },
+
+  rfi: {
+    primary:  (pid) => ["rfis", pid],
+    families: (pid) => [
+      ["rfis", pid],
+      ["rfis"],
+      ["rfis-all"],
+      ["rfis", "hub"],              // RFIHub.jsx
+      ["rfis-nav-count", pid],      // Layout.jsx nav badge
+      ["rfi-detail", pid],          // ProjectDetailView.jsx
+      ["pcc-rfis", pid],            // ProjectControlCenter.jsx
+      ["pill-rfis-quick"],          // ProjectPillDropdown.jsx
+      ["modal-rfis", pid],          // ProjectDrilldownModal.jsx
+    ],
+  },
+
+  schedule_task: {
+    primary:  (pid) => ["schedule-tasks", pid],
+    families: (pid) => [
+      ["schedule-tasks", pid],
+      ["schedule-tasks"],
+      ["schedule-tasks-global"],    // ExecutiveView.jsx
+      ["sched-detail", pid],        // ProjectDetailView.jsx
+      ["schedule-tasks-wp", pid],   // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
+      ["lookahead", pid],           // LookAheadSchedule.jsx
+      ["lookahead-gantt", pid],     // GanttChart.jsx
+    ],
+  },
+
+  work_package: {
+    primary:  (pid) => ["work-packages", pid],
+    families: (pid) => [
+      ["work-packages", pid],
+      ["work-packages"],
+      ["wps-all"],                  // ProductionNotes.jsx, FabRelease.jsx, ResourceScheduling.jsx, WorkPackages.jsx
+      ["work-packages-all"],        // Projects.jsx
+      ["all-wps-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
+      ["work-packages-global"],     // ExecutiveView.jsx, Reports.jsx
+      ["wps-cost", pid],            // CostDashboard.jsx
+      ["wps-fab", pid],             // FabRelease.jsx
+      ["wp-detail", pid],           // ProjectDetailView.jsx
+      ["pcc-wps", pid],             // ProjectControlCenter.jsx
+      ["modal-wps", pid],           // ProjectDrilldownModal.jsx
+    ],
+  },
+
+  sov_item: {
+    primary:  (pid) => ["sov-items", pid],
+    families: (pid) => [
+      ["sov-items", pid],
+      ["sov-items"],
+      ["sovs-cost", pid],           // CostDashboard.jsx
+    ],
+  },
+
+  alert: {
+    primary:  (pid) => ["alerts", pid],
+    families: (pid) => [
+      ["alerts", pid],
+      ["alerts"],
+      ["alerts-count"],
+      ["alerts-nav", pid],          // Layout.jsx nav badge
+    ],
+  },
+
+  // ── Entities previously missing from registry ─────────────────────────
+
+  action_item: {
+    primary:  (pid) => ["action-items", pid],
+    families: (pid) => [
+      ["action-items", pid],
+      ["action-items"],
+      ["action-items-all"],          // Dashboard.jsx, Reports.jsx
+      ["all-action-items-portfolio"], // AIInsights.jsx, CostDashboard.jsx
+    ],
+  },
+
+  daily_log: {
+    primary:  (pid) => ["daily-logs", pid],
+    families: (pid) => [
+      ["daily-logs", pid],
+      ["daily-logs"],
+      ["all-logs-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
+      ["modal-logs", pid],           // ProjectDrilldownModal.jsx
+    ],
+  },
+
+  contact: {
+    primary:  (pid) => ["contacts", pid],
+    families: (pid) => [
+      ["contacts", pid],
+      ["contacts"],
+    ],
+  },
+
+  meeting: {
+    primary:  (pid) => ["meetings", pid],
+    families: (pid) => [
+      ["meetings", pid],
+      ["meetings"],
+    ],
+  },
+
+  inspection: {
+    primary:  (pid) => ["inspections", pid],
+    families: (pid) => [
+      ["inspections", pid],
+      ["inspections"],
+    ],
+  },
+
+  safety_incident: {
+    primary:  (pid) => ["safety-incidents", pid],
+    families: (pid) => [
+      ["safety-incidents", pid],
+      ["safety-incidents"],
+    ],
+  },
+
+  photo: {
+    primary:  (pid) => ["photos", pid],
+    families: (pid) => [
+      ["photos", pid],
+      ["photos"],
+    ],
+  },
+
+  resource: {
+    primary:  (pid) => ["resources", pid],
+    families: (pid) => [
+      ["resources", pid],
+      ["resources"],
+    ],
+  },
+
+  vendor: {
+    primary:  () => ["vendors"],
+    families: () => [
+      ["vendors"],
+    ],
+  },
+
+  punchlist: {
+    primary:  (pid) => ["punchlist", pid],
+    families: (pid) => [
+      ["punchlist", pid],
+      ["punchlist"],
+    ],
+  },
+
+  qc_record: {
+    primary:  (pid) => ["qc-records", pid],
+    families: (pid) => [
+      ["qc-records", pid],
+      ["qc-records"],
+    ],
+  },
+
+  closeout: {
+    primary:  (pid) => ["closeouts", pid],
+    families: (pid) => [
+      ["closeouts", pid],
+      ["closeouts"],
+    ],
+  },
+
+  scope_item: {
+    primary:  (pid) => ["scope-items", pid],
+    families: (pid) => [
+      ["scope-items", pid],
+      ["scope-items"],
+    ],
+  },
+
+  production_note: {
+    primary:  () => ["production-notes"],
+    families: () => [
+      ["production-notes"],
+    ],
+  },
+
+  warranty: {
+    primary:  (pid) => ["warranties", pid],
+    families: (pid) => [
+      ["warranties", pid],
+      ["warranties"],
+    ],
+  },
+
+  constraint: {
+    primary:  (pid) => ["constraints", pid],
+    families: (pid) => [
+      ["constraints", pid],
+      ["constraints"],
+    ],
+  },
+
+  procurement: {
+    primary:  (pid) => ["procurement", pid],
+    families: (pid) => [
+      ["procurement", pid],
+      ["procurement"],
+    ],
+  },
+
+  user: {
+    primary:  () => ["users"],
+    families: () => [
+      ["users"],
+      ["all-users"],                 // RolesTab.jsx
+      ["user-permissions"],          // permissions.js
+    ],
+  },
+
+  decision: {
+    primary:  (pid) => ["decisions", pid],
+    families: (pid) => [
+      ["decisions", pid],
+      ["decisions"],
+    ],
+  },
+
+  assumption: {
+    primary:  (pid) => ["assumptions", pid],
+    families: (pid) => [
+      ["assumptions", pid],
+      ["assumptions"],
+    ],
+  },
+
+  activity: {
+    primary:  (pid) => ["activities"],
+    families: (pid) => [
+      ["activities"],
+      ["activity-feed", pid],        // Dashboard.jsx
+    ],
+  },
+
+  document: {
+    primary:  (pid) => ["documents", pid],
+    families: (pid) => [
+      ["documents", pid],
+      ["documents"],
+    ],
+  },
+
+  submittal: {
+    primary:  (pid) => ["submittals", pid],
+    families: (pid) => [
+      ["submittals", pid],
+      ["submittals"],
+      ["submittals-all"],
+      ["submittals-nav-count", pid],
+      ["submittal-detail", pid],
+      ["pcc-submittals", pid],
+    ],
+  },
+
+  submittal_round: {
+    primary:  (pid) => ["submittal-rounds", pid],
+    families: (pid) => [
+      ["submittal-rounds", pid],
+      ["submittal-rounds"],
+    ],
+  },
+
+  submittal_activity: {
+    primary:  (pid) => ["submittal-activity", pid],
+    families: (pid) => [
+      ["submittal-activity", pid],
+      ["submittal-activity"],
+    ],
+  },
+
+  change_request: {
+    primary:  (pid) => ["change-requests", pid],
+    families: (pid) => [
+      ["change-requests", pid],
+      ["change-requests"],
+    ],
+  },
+
+  user_settings: {
+    primary:  (uid) => ["user-settings", uid],
+    families: (uid) => [
+      ["user-settings", uid],
+      ["user-settings"],
+    ],
+  },
+};
+
+// ─── Public API ─────────────────────────────────────────────────────────
+
+/**
+ * Invalidate ALL query keys for an entity type.
+ * This is the ONLY function mutations should call after success.
+ *
+ * @param {QueryClient} qc       – React Query client
+ * @param {string}      entity   – key in REGISTRY (e.g., "delivery")
+ * @param {string|null} projectId – current project ID (null for global)
+ */
+export async function invalidateEntity(qc, entity, projectId = null) {
+  const reg = REGISTRY[entity];
+  if (!reg) {
+    console.error(`[cacheRegistry] Unknown entity: "${entity}". Falling back to broad invalidation.`);
+    // Fallback: invalidate everything with the entity name as prefix
+    await qc.invalidateQueries({ queryKey: [entity] });
+    return;
+  }
+
+  const keys = reg.families(projectId);
+  await Promise.all(
+    keys
+      .filter((k) => k.every((part) => part !== null && part !== undefined))
+      .map((key) => qc.invalidateQueries({ queryKey: key }))
+  );
+}
+
+/**
+ * Invalidate multiple entities at once (for cross-entity mutations).
+ *
+ * Example: Drawing creation also creates a ScheduleTask:
+ *   invalidateEntities(qc, ["drawing", "schedule_task"], projectId);
+ */
+export async function invalidateEntities(qc, entities, projectId = null) {
+  await Promise.all(entities.map((e) => invalidateEntity(qc, e, projectId)));
+}
+
+/**
+ * Get the primary query key for an entity.
+ * Use this in useQuery() to keep keys consistent.
+ */
+export function getQueryKey(entity, projectId = null) {
+  const reg = REGISTRY[entity];
+  if (!reg) {
+    console.error(`[cacheRegistry] Unknown entity: "${entity}".`);
+    return [entity, projectId].filter(Boolean);
+  }
+  return reg.primary(projectId);
+}
+
+/**
+ * Get all query key families for an entity (useful for optimistic updates).
+ */
+export function getQueryFamilies(entity, projectId = null) {
+  const reg = REGISTRY[entity];
+  if (!reg) return [[entity, projectId].filter(Boolean)];
+  return reg.families(projectId);
+}
+
+/**
+ * List all registered entity names.
+ */
+export function getRegisteredEntities() {
+  return Object.keys(REGISTRY);
+}

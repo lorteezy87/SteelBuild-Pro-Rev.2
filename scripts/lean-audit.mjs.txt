@@ -1,0 +1,98 @@
+import fs from "fs";
+import path from "path";
+
+const ROOT = process.cwd();
+const SRC = path.join(ROOT, "src");
+
+const exts = [".js", ".jsx", ".ts", ".tsx"];
+const ignoreDirs = ["node_modules", "dist", ".git", ".claude", "archive"];
+
+function walk(dir, files = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (ignoreDirs.includes(entry.name)) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(full, files);
+    else if (exts.includes(path.extname(entry.name))) files.push(full);
+  }
+  return files;
+}
+
+function rel(file) {
+  return path.relative(ROOT, file).replaceAll("\\", "/");
+}
+
+const files = walk(SRC);
+const contents = new Map(files.map(f => [f, fs.readFileSync(f, "utf8")]));
+
+const candidates = [
+  "src/components/dashboard/ExecutiveDashboard.jsx",
+  "src/components/dashboard/KPICard.jsx",
+  "src/components/dashboard/ActivityFeed.jsx",
+  "src/components/dashboard/DrilldownView.jsx",
+  "src/components/dashboard/ProjectPulse.jsx",
+  "src/components/rfis/RFIDashboard.jsx",
+  "src/components/rfis/RFIList.jsx",
+  "src/components/dailylogs/DailyLogFormModal.jsx",
+  "src/components/dailylogs/QuickLogModal.jsx",
+  "src/components/dailylogs/TodayLogCard.jsx",
+  "src/components/dailylogs/WeeklySummary.jsx"
+];
+
+function basenameNoExt(file) {
+  return path.basename(file).replace(/\.(jsx|tsx|js|ts)$/, "");
+}
+
+function findRefs(candidateRel) {
+  const name = basenameNoExt(candidateRel);
+  const refs = [];
+
+  for (const [file, text] of contents) {
+    const fileRel = rel(file);
+    if (fileRel === candidateRel) continue;
+
+    if (
+      text.includes(name) ||
+      text.includes(candidateRel) ||
+      text.includes(candidateRel.replace(/^src\//, "../")) ||
+      text.includes(candidateRel.replace(/^src\//, "./"))
+    ) {
+      refs.push(fileRel);
+    }
+  }
+
+  return refs;
+}
+
+const report = [];
+
+for (const c of candidates) {
+  const full = path.join(ROOT, c);
+  if (!fs.existsSync(full)) {
+    report.push({ file: c, status: "missing", refs: [] });
+    continue;
+  }
+
+  const refs = findRefs(c);
+  report.push({
+    file: c,
+    status: refs.length === 0 ? "likely-unused" : "referenced",
+    refs
+  });
+}
+
+console.log("\nLEAN AUDIT REPORT\n");
+
+for (const item of report) {
+  console.log(`${item.status.toUpperCase()}: ${item.file}`);
+  if (item.refs.length) {
+    for (const r of item.refs) console.log(`  referenced by: ${r}`);
+  }
+}
+
+fs.mkdirSync(path.join(ROOT, "reports"), { recursive: true });
+fs.writeFileSync(
+  path.join(ROOT, "reports", "lean-audit-report.json"),
+  JSON.stringify(report, null, 2)
+);
+
+console.log("\nSaved report to reports/lean-audit-report.json\n");

@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ironframe Planner AI</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1118;
+      --bg-2: #101923;
+      --surface: #162330;
+      --surface-2: #1c2a37;
+      --surface-3: #243442;
+      --line: rgba(255,255,255,0.1);
+      --line-2: rgba(255,255,255,0.18);
+      --text: #f0f4f8;
+      --muted: #9ba8b4;
+      --faint: #6e7d89;
+      --accent: #e8632a;
+      --gold: #e0b030;
+      --blue: #60a5fa;
+      --green: #34d399;
+      --red: #f87171;
+      --cyan: #2dd4bf;
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); letter-spacing: 0; }
+    body {
+      background:
+        linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px),
+        linear-gradient(180deg, #14202c 0%, #0b1118 42%, #070b10 100%);
+      background-size: 48px 48px, 48px 48px, auto;
+    }
+    button, input, select, textarea { font: inherit; letter-spacing: 0; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: 0.52; }
+
+    .app { min-height: 100vh; display: grid; grid-template-columns: 280px minmax(0, 1fr); }
+    .sidebar {
+      border-right: 1px solid var(--line);
+      background: rgba(11, 17, 24, 0.86);
+      padding: 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    .mark {
+      width: 34px; height: 34px; border-radius: 8px;
+      border: 1px solid rgba(232,99,42,0.6);
+      display: grid; place-items: center;
+      color: var(--accent); font-family: var(--mono); font-weight: 900;
+      background: rgba(232,99,42,0.12);
+    }
+    .brand h1 { font-size: 16px; margin: 0; line-height: 1.1; }
+    .brand span { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+
+    .section-label {
+      color: var(--faint); font-family: var(--mono); font-size: 11px;
+      text-transform: uppercase; margin: 16px 0 8px;
+    }
+    .project-list { display: grid; gap: 8px; }
+    .project-btn {
+      width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 8px;
+      background: rgba(255,255,255,0.035); color: var(--muted);
+      padding: 10px; display: grid; gap: 4px;
+    }
+    .project-btn.active { color: var(--text); border-color: var(--accent); background: rgba(232,99,42,0.12); }
+    .project-name { font-size: 13px; font-weight: 800; }
+    .project-meta { font-family: var(--mono); font-size: 10px; color: var(--faint); }
+
+    .side-actions { display: grid; gap: 8px; margin-top: 14px; }
+    .btn {
+      min-height: 34px; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--surface-2); color: var(--text);
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 0 12px; font-family: var(--mono); font-size: 11px; font-weight: 800;
+      text-transform: uppercase;
+    }
+    .btn.primary { background: linear-gradient(180deg, #f1783d, #d8511c); border-color: rgba(232,99,42,0.7); color: #170b05; }
+    .btn.ghost { background: transparent; color: var(--muted); }
+    .btn.danger { color: var(--red); border-color: rgba(248,113,113,0.35); background: rgba(248,113,113,0.08); }
+
+    .main { min-width: 0; padding: 18px 22px 28px; }
+    .topbar {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+      padding: 16px; border: 1px solid var(--line); border-radius: 8px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.035));
+      margin-bottom: 14px;
+    }
+    .eyebrow { color: var(--accent); font-family: var(--mono); font-size: 11px; text-transform: uppercase; margin-bottom: 5px; }
+    .topbar h2 { margin: 0; font-size: 30px; font-weight: 850; line-height: 1; }
+    .topbar p { margin: 8px 0 0; color: var(--muted); font-size: 13px; max-width: 680px; line-height: 1.45; }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .tab {
+      border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,0.035);
+      color: var(--muted); min-height: 34px; padding: 0 12px;
+      font-family: var(--mono); font-size: 11px; font-weight: 800; text-transform: uppercase;
+    }
+    .tab.active { color: var(--accent); border-color: var(--accent); background: rgba(232,99,42,0.12); }
+
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .kpi {
+      border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,0.045);
+      padding: 12px; min-height: 94px;
+    }
+    .kpi .label { color: var(--faint); font-family: var(--mono); font-size: 10px; text-transform: uppercase; }
+    .kpi .value { margin-top: 9px; font-family: var(--mono); font-size: 27px; font-weight: 900; color: var(--gold); }
+    .kpi .sub { margin-top: 4px; color: var(--muted); font-size: 12px; }
+
+    .grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(330px, 0.72fr); gap: 14px; align-items: start; }
+    .panel {
+      border: 1px solid var(--line); border-radius: 8px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.028));
+      padding: 14px;
+    }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .panel-title { color: var(--text); font-size: 14px; font-weight: 850; }
+    .panel-meta { color: var(--faint); font-family: var(--mono); font-size: 10px; text-transform: uppercase; }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .field { display: grid; gap: 5px; }
+    .field label { color: var(--faint); font-family: var(--mono); font-size: 10px; text-transform: uppercase; }
+    input, select, textarea {
+      border: 1px solid var(--line-2); border-radius: 8px; background: rgba(255,255,255,0.045);
+      color: var(--text); min-height: 34px; padding: 8px 10px; outline: none;
+    }
+    textarea { resize: vertical; line-height: 1.45; }
+
+    .timeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .day { border: 1px solid var(--line); border-radius: 8px; background: rgba(16,25,35,0.88); overflow: hidden; }
+    .day-head { padding: 10px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; }
+    .day-title { font-weight: 850; }
+    .day-date { color: var(--faint); font-family: var(--mono); font-size: 10px; margin-top: 3px; }
+    .day-load { color: var(--gold); font-family: var(--mono); font-size: 11px; font-weight: 900; }
+    .slots { padding: 8px; display: grid; gap: 6px; min-height: 150px; }
+    .slot {
+      border: 1px solid var(--line); border-left: 3px solid var(--blue); border-radius: 8px;
+      padding: 8px; background: rgba(255,255,255,0.035);
+    }
+    .slot .time { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-bottom: 4px; }
+    .slot .task { font-size: 12px; font-weight: 800; line-height: 1.3; }
+    .slot .meta { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 6px; color: var(--muted); font-family: var(--mono); font-size: 10px; }
+    .meeting { border-left-color: var(--cyan); }
+    .empty { color: var(--faint); border: 1px dashed var(--line); border-radius: 8px; min-height: 70px; display: grid; place-items: center; font-family: var(--mono); font-size: 10px; text-transform: uppercase; }
+
+    .list { display: grid; gap: 8px; }
+    .row {
+      border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,0.035);
+      padding: 10px; display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: start;
+    }
+    .row-title { font-weight: 850; font-size: 13px; }
+    .row-meta { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 7px; color: var(--muted); font-family: var(--mono); font-size: 10px; }
+    .row-actions { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+    .mini-btn { min-height: 28px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font-family: var(--mono); font-size: 10px; font-weight: 800; }
+
+    .badge { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 7px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+    .critical { color: var(--red); border-color: rgba(248,113,113,0.38); background: rgba(248,113,113,0.08); }
+    .high { color: var(--accent); border-color: rgba(232,99,42,0.42); background: rgba(232,99,42,0.09); }
+    .normal { color: var(--blue); border-color: rgba(96,165,250,0.38); background: rgba(96,165,250,0.08); }
+    .low { color: var(--faint); }
+    .risk { color: var(--red); }
+    .done { opacity: 0.65; text-decoration: line-through; }
+
+    .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .column { border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,0.03); padding: 10px; min-height: 280px; }
+    .column h3 { margin: 0 0 10px; font-size: 13px; display: flex; justify-content: space-between; }
+
+    .chat-log { min-height: 260px; max-height: 380px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; align-content: start; gap: 8px; background: rgba(0,0,0,0.12); }
+    .msg { max-width: 88%; border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; white-space: pre-wrap; line-height: 1.45; font-size: 13px; color: var(--text); background: rgba(255,255,255,0.04); }
+    .msg.user { justify-self: end; border-color: rgba(232,99,42,0.5); background: rgba(232,99,42,0.12); }
+    .composer { display: grid; grid-template-columns: 1fr 44px; gap: 8px; margin-top: 10px; }
+    .proposal { border: 1px solid rgba(224,176,48,0.36); border-radius: 8px; background: rgba(224,176,48,0.07); padding: 10px; display: grid; gap: 8px; margin-top: 10px; }
+
+    .project-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+    .project-card { width: 100%; text-align: left; color: var(--text); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 8px; padding: 12px; background: rgba(255,255,255,0.04); }
+    .project-card.active { border-color: var(--line-2); background: rgba(255,255,255,0.07); }
+    .project-card h3 { margin: 0 0 10px; font-size: 15px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px; text-align: center; background: rgba(0,0,0,0.12); }
+    .stat b { display: block; font-family: var(--mono); color: var(--gold); font-size: 19px; }
+    .stat span { color: var(--faint); font-family: var(--mono); font-size: 10px; text-transform: uppercase; }
+    .project-form { display: grid; gap: 10px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 92px; gap: 8px; align-items: end; }
+    .color-input { width: 92px; min-height: 38px; padding: 4px; }
+    .swatches { display: flex; flex-wrap: wrap; gap: 7px; }
+    .swatch { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--swatch); }
+    .swatch.active { border-color: var(--text); box-shadow: 0 0 0 2px rgba(255,255,255,0.14); }
+    .form-note { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .form-error { color: var(--red); border: 1px solid rgba(248,113,113,0.35); border-radius: 8px; padding: 8px 10px; background: rgba(248,113,113,0.08); font-size: 12px; }
+
+    @media (max-width: 1060px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: relative; height: auto; }
+      .grid { grid-template-columns: 1fr; }
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .board { grid-template-columns: 1fr; }
+      .topbar { flex-direction: column; }
+      .tabs { justify-content: flex-start; }
+    }
+    @media (max-width: 620px) {
+      .main { padding: 14px; }
+      .kpis { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      .color-input { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const STORAGE_KEY = "ironframe_planner_ai_v1";
+    const PRIORITY = {
+      critical: { label: "Critical", weight: 0, color: "var(--red)" },
+      high: { label: "High", weight: 1, color: "var(--accent)" },
+      normal: { label: "Normal", weight: 2, color: "var(--blue)" },
+      low: { label: "Low", weight: 3, color: "var(--faint)" }
+    };
+    const PHASES = ["Preconstruction", "Detailing", "Procurement", "Fabrication", "Delivery", "Erection", "Closeout"];
+    const PHASE_COLOR = {
+      Preconstruction: "var(--gold)",
+      Detailing: "var(--blue)",
+      Procurement: "var(--gold)",
+      Fabrication: "var(--accent)",
+      Delivery: "var(--cyan)",
+      Erection: "var(--green)",
+      Closeout: "var(--faint)"
+    };
+    const STATUSES = ["todo", "doing", "done"];
+    const PROJECT_COLORS = ["#e8632a", "#60a5fa", "#34d399", "#e0b030", "#2dd4bf", "#f87171"];
+
+    const uid = () => Math.random().toString(36).slice(2, 10);
+    const defaultProjectDraft = () => ({ name: "", number: "", color: PROJECT_COLORS[0] });
+    const todayMid = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+    const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const offsetKey = (n) => { const d = todayMid(); d.setDate(d.getDate()+n); return dateKey(d); };
+    const fmtHour = (h) => { const ap = h >= 12 ? "PM" : "AM"; const hr = h % 12 || 12; return `${hr} ${ap}`; };
+    const fmtDate = (iso) => iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "TBD";
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[c]));
+
+    function seedState() {
+      const projects = [
+        { id: "p1", name: "Skyport at Redfield", number: "25531", color: "#e8632a" },
+        { id: "p2", name: "ASM Garage Scottsdale", number: "25395", color: "#60a5fa" },
+        { id: "p3", name: "Academy MS Mesa", number: "25421", color: "#34d399" }
+      ];
+      const mk = (o) => ({ id: uid(), status: "todo", subtasks: [], createdAt: Date.now() + Math.random(), ...o });
+      return {
+        activeProjectId: "p1",
+        view: "plan",
+        projects,
+        meetings: [
+          { id: uid(), projectId: "p1", title: "OAC meeting", date: offsetKey(1), start: 9, end: 10 },
+          { id: uid(), projectId: "p1", title: "Detailer coordination", date: offsetKey(2), start: 13, end: 14 }
+        ],
+        tasks: [
+          mk({ projectId: "p1", title: "Review panel embed submittal - Bldg 1 and 2", phase: "Detailing", priority: "critical", duration: 3, deadline: offsetKey(1), status: "doing", owner: "PM" }),
+          mk({ projectId: "p1", title: "Fab release gate - Shop C milestone", phase: "Fabrication", priority: "critical", duration: 4, deadline: offsetKey(2), owner: "Fab" }),
+          mk({ projectId: "p1", title: "Draft RFI #40 - six items for EOR", phase: "Detailing", priority: "high", duration: 2, deadline: offsetKey(1), status: "doing", owner: "PM" }),
+          mk({ projectId: "p1", title: "Sequence trucking for Level 2 beams", phase: "Delivery", priority: "high", duration: 2, deadline: offsetKey(3), owner: "Logistics" }),
+          mk({ projectId: "p2", title: "Crane lift plan - field verify radius", phase: "Erection", priority: "normal", duration: 2, deadline: offsetKey(4), owner: "Field" }),
+          mk({ projectId: "p3", title: "Shear stud responsibility RFI", phase: "Detailing", priority: "high", duration: 1, deadline: offsetKey(3), owner: "PM" })
+        ],
+        settings: { workStart: 7, workEnd: 16, workdays: [1,2,3,4,5] },
+        draftTask: { title: "", priority: "normal", duration: 2, deadline: "", phase: "Detailing", owner: "" },
+        draftProject: defaultProjectDraft(),
+        projectFormError: "",
+        scopeText: "",
+        proposed: [],
+        chat: []
+      };
+    }
+
+    function normalizeState(next) {
+      next = next && typeof next === "object" ? next : {};
+      const seeded = seedState();
+      const merged = { ...seeded, ...next };
+      merged.settings = { ...seeded.settings, ...(next.settings || {}) };
+      merged.draftTask = { ...seeded.draftTask, ...(next.draftTask || {}) };
+      merged.draftProject = { ...seeded.draftProject, ...(next.draftProject || {}) };
+      merged.projects = Array.isArray(next.projects) && next.projects.length ? next.projects : seeded.projects;
+      merged.tasks = Array.isArray(next.tasks) ? next.tasks : seeded.tasks;
+      merged.meetings = Array.isArray(next.meetings) ? next.meetings : seeded.meetings;
+      merged.proposed = Array.isArray(next.proposed) ? next.proposed : seeded.proposed;
+      merged.chat = Array.isArray(next.chat) ? next.chat : seeded.chat;
+      if (!merged.projects.some((p) => p.id === merged.activeProjectId)) merged.activeProjectId = merged.projects[0].id;
+      return merged;
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? normalizeState(JSON.parse(raw)) : seedState();
+      } catch {
+        return seedState();
+      }
+    }
+
+    let state = loadState();
+    const save = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const activeProject = () => state.projects.find((p) => p.id === state.activeProjectId) || state.projects[0];
+    const projectTasks = () => state.tasks.filter((t) => t.projectId === activeProject().id);
+    const projectMeetings = () => state.meetings.filter((m) => m.projectId === activeProject().id);
+    const isDone = (t) => t.status === "done";
+    const priority = (k) => PRIORITY[k] || PRIORITY.normal;
+
+    function riskReason(task, assignments) {
+      if (isDone(task)) return "";
+      if (!task.deadline) return "TBD deadline";
+      const due = new Date(`${task.deadline}T23:59:59`);
+      if (due < new Date()) return "Past deadline";
+      const assigned = assignments[task.id] || [];
+      if (!assigned.length) return "No room";
+      const last = assigned[assigned.length - 1];
+      const end = new Date(`${last.date}T${String(last.hour + 1).padStart(2,"0")}:00:00`);
+      if (end > due) return "Schedule pressure";
+      return "";
+    }
+
+    function nextWorkdays(count) {
+      const out = [];
+      const d = todayMid();
+      while (out.length < count) {
+        if (state.settings.workdays.includes(d.getDay())) out.push(new Date(d));
+        d.setDate(d.getDate() + 1);
+      }
+      return out;
+    }
+
+    function computePlan() {
+      const meetings = projectMeetings();
+      const busy = new Set();
+      meetings.forEach((m) => {
+        for (let h = Number(m.start); h < Number(m.end); h++) busy.add(`${m.date}-${h}`);
+      });
+
+      const slots = [];
+      nextWorkdays(7).forEach((day) => {
+        const key = dateKey(day);
+        for (let h = state.settings.workStart; h < state.settings.workEnd; h++) {
+          const dt = new Date(day); dt.setHours(h,0,0,0);
+          if (dt < new Date()) continue;
+          if (!busy.has(`${key}-${h}`)) slots.push({ date: key, hour: h });
+        }
+      });
+
+      const tasks = projectTasks().filter((t) => !isDone(t)).sort((a,b) => {
+        const pa = priority(a.priority).weight - priority(b.priority).weight;
+        if (pa !== 0) return pa;
+        const da = a.deadline ? new Date(a.deadline).getTime() : Infinity;
+        const db = b.deadline ? new Date(b.deadline).getTime() : Infinity;
+        if (da !== db) return da - db;
+        return PHASES.indexOf(a.phase) - PHASES.indexOf(b.phase);
+      });
+
+      const assignments = {};
+      const slotMap = {};
+      let slotIndex = 0;
+      tasks.forEach((task) => {
+        let remaining = Math.max(1, Number(task.duration) || 1);
+        assignments[task.id] = [];
+        while (remaining > 0 && slotIndex < slots.length) {
+          const slot = slots[slotIndex++];
+          assignments[task.id].push(slot);
+          slotMap[`${slot.date}-${slot.hour}`] = task.id;
+          remaining--;
+        }
+      });
+      const flags = {};
+      tasks.forEach((task) => {
+        const reason = riskReason(task, assignments);
+        if (reason) flags[task.id] = reason;
+      });
+      return { assignments, slotMap, flags, slots };
+    }
+
+    function classifyPhase(text) {
+      const s = text.toLowerCase();
+      if (/rfi|submittal|drawing|detail|approval|eor|architect/.test(s)) return "Detailing";
+      if (/po|procure|mill|material|vendor|buy/.test(s)) return "Procurement";
+      if (/fab|shop|weld|cut|fit|paint|galv/.test(s)) return "Fabrication";
+      if (/deliver|ship|truck|load/.test(s)) return "Delivery";
+      if (/erect|field|crane|bolt|plumb|deck|stud|beam|column|set /.test(s)) return "Erection";
+      if (/punch|closeout|warranty|as-built/.test(s)) return "Closeout";
+      return "Preconstruction";
+    }
+
+    function generateFromScope(text) {
+      const lines = text.split(/\n|;/).map((x) => x.trim()).filter(Boolean);
+      const source = lines.length ? lines : [text.trim()].filter(Boolean);
+      if (!source.length) return [];
+      const broad = text.toLowerCase();
+      if (/erect|structural steel|building|sequence|deck|bolt/.test(broad) && source.length === 1) {
+        return [
+          "Confirm approved IFC drawings and RFIs",
+          "Release fabrication by sequence",
+          "Coordinate shop completion and load order",
+          "Schedule trucking and laydown plan",
+          "Verify anchor bolts and embeds",
+          "Finalize crane plan and field crew",
+          "Set columns and beams",
+          "Plumb, bolt-up, deck, and punch"
+        ].map((title, i) => makeGeneratedTask(title, i));
+      }
+      return source.slice(0, 12).map((line, i) => makeGeneratedTask(line.replace(/^\d+[a-z]?\.\s*/i, ""), i));
+    }
+
+    function makeGeneratedTask(title, index) {
+      const phase = classifyPhase(title);
+      const priority = /rfi|release|anchor|embed|crane|critical|gate/i.test(title) ? "high" : "normal";
+      const duration = /main steel|erect|fabricat|release/i.test(title) ? 4 : /rfi|verify|confirm/i.test(title) ? 1 : 2;
+      return {
+        id: uid(),
+        projectId: activeProject().id,
+        title,
+        phase,
+        priority,
+        duration,
+        deadline: offsetKey(2 + index),
+        status: "todo",
+        owner: phase === "Erection" ? "Field" : phase === "Fabrication" ? "Shop" : "PM",
+        createdAt: Date.now() + Math.random()
+      };
+    }
+
+    function plannerAnswer(question) {
+      const q = question.toLowerCase();
+      const plan = computePlan();
+      const tasks = projectTasks().filter((t) => !isDone(t));
+      const risky = tasks
+        .map((t) => ({ task: t, reason: plan.flags[t.id] }))
+        .filter((x) => x.reason)
+        .sort((a,b) => priority(a.task.priority).weight - priority(b.task.priority).weight);
+      const next = tasks
+        .sort((a,b) => priority(a.priority).weight - priority(b.priority).weight || String(a.deadline || "9999").localeCompare(String(b.deadline || "9999")))
+        .slice(0, 3);
+      if (q.includes("risk") || q.includes("late") || q.includes("miss")) {
+        if (!risky.length) return "No high-confidence schedule risk is visible from this local plan. Keep confirming dates, owners, and dependency handoffs.";
+        return "Top risks:\n" + risky.slice(0, 4).map((x, i) => `${i + 1}. ${x.task.title} - ${x.reason} (${fmtDate(x.task.deadline)})`).join("\n");
+      }
+      if (q.includes("first") || q.includes("today") || q.includes("priority")) {
+        if (!next.length) return "There is no open work in the selected project.";
+        return "Hit these first:\n" + next.map((t, i) => `${i + 1}. ${t.title} - ${priority(t.priority).label}, due ${fmtDate(t.deadline)}`).join("\n");
+      }
+      if (q.includes("open time") || q.includes("capacity") || q.includes("room")) {
+        const total = plan.slots.length;
+        const used = Object.keys(plan.slotMap).length;
+        return `Capacity this week: ${used}/${total} available work hours are planned. ${Math.max(0, total - used)} hours remain before overtime or resequencing.`;
+      }
+      if (q.includes("recover") || q.includes("recovery") || q.includes("blocked")) {
+        return "Recovery sequence:\n1. Verify actual progress on delayed or overdue tasks.\n2. Clear RFIs, embeds, crane access, and material holds before moving field work.\n3. Re-sequence delivery and fabrication gates around the highest-priority predecessor.\n4. Update the plan only after a PM approves changed dates.";
+      }
+      return "I would prioritize the highest-risk deadline work, then clear blockers that affect fabrication, delivery, or erection. Ask for risks, first priority, recovery, or capacity for a sharper answer.";
+    }
+
+    function setView(view) { state.view = view; save(); render(); }
+    function setProject(id) { state.activeProjectId = id; save(); render(); }
+    function patchDraft(key, value) { state.draftTask[key] = value; save(); }
+    function patchProjectDraft(key, value) {
+      state.draftProject = { ...defaultProjectDraft(), ...(state.draftProject || {}), [key]: value };
+      state.projectFormError = "";
+      save();
+    }
+    function setProjectColor(color) {
+      state.draftProject = { ...defaultProjectDraft(), ...(state.draftProject || {}), color };
+      state.projectFormError = "";
+      save();
+      render();
+    }
+    function patchSettings(key, value) { state.settings[key] = Number(value); save(); render(); }
+    function addProject() {
+      const draft = { ...defaultProjectDraft(), ...(state.draftProject || {}) };
+      const name = draft.name.trim();
+      if (!name) {
+        state.projectFormError = "Project name is required.";
+        save();
+        render();
+        return;
+      }
+      const project = {
+        id: uid(),
+        name,
+        number: draft.number.trim() || `P-${String(Date.now()).slice(-5)}`,
+        color: draft.color || PROJECT_COLORS[0]
+      };
+      state.projects.push(project);
+      state.activeProjectId = project.id;
+      state.draftProject = defaultProjectDraft();
+      state.projectFormError = "";
+      state.view = "projects";
+      save();
+      render();
+    }
+    function addTask() {
+      const d = state.draftTask;
+      if (!d.title.trim()) return;
+      state.tasks.push({ id: uid(), projectId: activeProject().id, status: "todo", createdAt: Date.now(), ...d, title: d.title.trim(), duration: Number(d.duration) || 1, deadline: d.deadline || null });
+      state.draftTask = { title: "", priority: "normal", duration: 2, deadline: "", phase: "Detailing", owner: "" };
+      save(); render();
+    }
+    function deleteTask(id) { state.tasks = state.tasks.filter((t) => t.id !== id); save(); render(); }
+    function cycleStatus(id, dir) {
+      state.tasks = state.tasks.map((t) => {
+        if (t.id !== id) return t;
+        const i = STATUSES.indexOf(t.status);
+        const next = STATUSES[Math.max(0, Math.min(STATUSES.length - 1, i + dir))];
+        return { ...t, status: next };
+      });
+      save(); render();
+    }
+    function setTaskStatus(id, status) { state.tasks = state.tasks.map((t) => t.id === id ? { ...t, status } : t); save(); render(); }
+    function commitGenerated() { state.tasks.push(...state.proposed); state.proposed = []; state.scopeText = ""; save(); render(); }
+    function sendChat() {
+      const input = document.getElementById("chat-input");
+      const text = input ? input.value.trim() : "";
+      if (!text) return;
+      state.chat.push({ role: "user", content: text });
+      state.chat.push({ role: "assistant", content: plannerAnswer(text) });
+      save(); render();
+    }
+    function resetAll() { if (confirm("Reset the standalone planner data?")) { state = seedState(); save(); render(); } }
+
+    window.actions = {
+      setView, setProject, patchDraft, patchSettings, addTask, deleteTask, cycleStatus, setTaskStatus,
+      patchProjectDraft, setProjectColor, addProject,
+      generateScope: () => { state.proposed = generateFromScope(state.scopeText); save(); render(); },
+      setScope: (value) => { state.scopeText = value; save(); },
+      discardGenerated: () => { state.proposed = []; save(); render(); },
+      commitGenerated, sendChat, resetAll,
+      exportJson: () => {
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "ironframe-planner-ai.json";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+    };
+
+    function renderSidebar() {
+      return `
+        <aside class="sidebar">
+          <div class="brand">
+            <div class="mark">IF</div>
+            <div><h1>Ironframe Planner AI</h1><span>Construction schedule autopilot</span></div>
+          </div>
+          <div class="section-label">Projects</div>
+          <div class="project-list">
+            ${state.projects.map((p) => {
+              const tasks = state.tasks.filter((t) => t.projectId === p.id);
+              return `<button class="project-btn ${p.id === activeProject().id ? "active" : ""}" onclick="actions.setProject('${p.id}')">
+                <span class="project-name">${esc(p.name)}</span>
+                <span class="project-meta">#${esc(p.number)} - ${tasks.filter((t) => !isDone(t)).length} open</span>
+              </button>`;
+            }).join("")}
+          </div>
+          <div class="section-label">Work hours</div>
+          <div class="controls">
+            <div class="field"><label>Start</label><select onchange="actions.patchSettings('workStart', this.value)">${hourOptions(state.settings.workStart)}</select></div>
+            <div class="field"><label>End</label><select onchange="actions.patchSettings('workEnd', this.value)">${hourOptions(state.settings.workEnd)}</select></div>
+          </div>
+          <div class="side-actions">
+            <button class="btn" onclick="actions.setView('projects')">+ New Project</button>
+            <button class="btn primary" onclick="actions.setView('ai')">+ Generate Scope</button>
+            <button class="btn" onclick="actions.exportJson()">Export JSON</button>
+            <button class="btn danger" onclick="actions.resetAll()">Reset Demo</button>
+          </div>
+        </aside>`;
+    }
+
+    function hourOptions(selected) {
+      return Array.from({ length: 14 }, (_, i) => i + 5).map((h) => `<option value="${h}" ${h === selected ? "selected" : ""}>${fmtHour(h)}</option>`).join("");
+    }
+
+    function renderTop() {
+      const tabs = [["plan","Plan"],["tasks","Tasks"],["board","Board"],["projects","Projects"],["ai","AI"]];
+      return `<div class="topbar">
+        <div>
+          <div class="eyebrow">Active project - #${esc(activeProject().number)}</div>
+          <h2>${esc(activeProject().name)}</h2>
+          <p>Auto planning translated for construction projects: priorities, durations, due dates, work windows, meetings, and schedule risk stay visible before the plan changes.</p>
+        </div>
+        <div class="tabs">${tabs.map(([k,l]) => `<button class="tab ${state.view === k ? "active" : ""}" onclick="actions.setView('${k}')">${l}</button>`).join("")}</div>
+      </div>`;
+    }
+
+    function renderKpis() {
+      const plan = computePlan();
+      const tasks = projectTasks();
+      const open = tasks.filter((t) => !isDone(t));
+      const risk = open.filter((t) => plan.flags[t.id]).length;
+      const hours = open.reduce((sum, t) => sum + (Number(t.duration) || 0), 0);
+      const done = tasks.length ? Math.round((tasks.filter(isDone).length / tasks.length) * 100) : 0;
+      return `<div class="kpis">
+        ${kpi("Open Work", open.length, "active tasks")}
+        ${kpi("At Risk", risk, "late or no room", "var(--red)")}
+        ${kpi("Planned Hours", Object.keys(plan.slotMap).length, `${hours}h open`, "var(--gold)")}
+        ${kpi("Meetings", projectMeetings().length, "calendar holds", "var(--cyan)")}
+        ${kpi("Complete", `${done}%`, "task progress", "var(--green)")}
+      </div>`;
+    }
+    function kpi(label, value, sub, color = "var(--gold)") { return `<div class="kpi"><div class="label">${label}</div><div class="value" style="color:${color}">${value}</div><div class="sub">${sub}</div></div>`; }
+
+    function renderPlan() {
+      const plan = computePlan();
+      const days = nextWorkdays(7);
+      return `<div class="grid">
+        <section class="panel">
+          <div class="panel-head"><div><div class="panel-title">Auto Planned Workday</div><div class="panel-meta">Tasks fill around meetings and work hours</div></div></div>
+          <div class="timeline">${days.map((day) => renderDay(day, plan)).join("")}</div>
+        </section>
+        <aside class="panel">
+          <div class="panel-head"><div><div class="panel-title">Planner Calls</div><div class="panel-meta">Next PM actions</div></div></div>
+          <div class="list">${renderRecommendations(plan)}</div>
+        </aside>
+      </div>`;
+    }
+
+    function renderDay(day, plan) {
+      const key = dateKey(day);
+      const rows = [];
+      projectMeetings().filter((m) => m.date === key).forEach((m) => rows.push({ type: "meeting", hour: m.start, title: m.title, meta: `${fmtHour(m.start)}-${fmtHour(m.end)}` }));
+      for (let h = state.settings.workStart; h < state.settings.workEnd; h++) {
+        const taskId = plan.slotMap[`${key}-${h}`];
+        if (taskId) {
+          const t = state.tasks.find((x) => x.id === taskId);
+          rows.push({ type: "task", hour: h, task: t, title: t.title, meta: `${fmtHour(h)}-${fmtHour(h+1)}` });
+        }
+      }
+      rows.sort((a,b) => Number(a.hour) - Number(b.hour));
+      return `<div class="day">
+        <div class="day-head"><div><div class="day-title">${day.toLocaleDateString("en-US", { weekday: "short" })}</div><div class="day-date">${fmtDate(key)}</div></div><div class="day-load">${rows.filter((r) => r.type === "task").length}h</div></div>
+        <div class="slots">${rows.length ? rows.map((r) => r.type === "meeting" ? renderMeeting(r) : renderSlot(r.task, r.meta)).join("") : `<div class="empty">Open capacity</div>`}</div>
+      </div>`;
+    }
+
+    function renderSlot(t, time) {
+      return `<div class="slot" style="border-left-color:${PHASE_COLOR[t.phase] || "var(--blue)"}">
+        <div class="time">${time}</div>
+        <div class="task">${esc(t.title)}</div>
+        <div class="meta"><span>${esc(t.phase)}</span><span>${priority(t.priority).label}</span><span>${fmtDate(t.deadline)}</span></div>
+      </div>`;
+    }
+    function renderMeeting(m) { return `<div class="slot meeting"><div class="time">${m.meta}</div><div class="task">${esc(m.title)}</div><div class="meta"><span>Calendar hold</span></div></div>`; }
+
+    function renderRecommendations(plan) {
+      const risky = projectTasks().filter((t) => plan.flags[t.id]);
+      const open = projectTasks().filter((t) => !isDone(t));
+      const lines = [];
+      if (risky.length) lines.push(["Recover risk first", `${risky.length} task${risky.length === 1 ? "" : "s"} need attention before the week is believable.`]);
+      if (open.some((t) => !t.deadline)) lines.push(["Date the TBD work", "Unscheduled work stays visible, but it should not silently disappear from the plan."]);
+      if (Object.keys(plan.slotMap).length < open.reduce((s,t) => s + (Number(t.duration) || 0), 0)) lines.push(["Add capacity or resequence", "The selected work window cannot fit every open task."]);
+      if (!lines.length) lines.push(["Plan is executable", "No major local risk pattern is visible. Keep RFIs, deliveries, and field access current."]);
+      return lines.map(([title, body]) => `<div class="row"><div><div class="row-title">${title}</div><div class="row-meta">${body}</div></div></div>`).join("");
+    }
+
+    function renderTasks() {
+      const d = state.draftTask;
+      return `<div class="grid">
+        <section class="panel">
+          <div class="panel-head"><div><div class="panel-title">Task Register</div><div class="panel-meta">${projectTasks().length} schedule items</div></div></div>
+          <div class="list">${projectTasks().sort((a,b) => priority(a.priority).weight - priority(b.priority).weight).map(renderTaskRow).join("") || `<div class="empty">No tasks</div>`}</div>
+        </section>
+        <aside class="panel">
+          <div class="panel-head"><div><div class="panel-title">Quick Add</div><div class="panel-meta">Project scoped</div></div></div>
+          <div class="field"><label>Task</label><input value="${esc(d.title)}" oninput="actions.patchDraft('title', this.value)" placeholder="Review RFI response before fab release"></div>
+          <div class="controls" style="margin-top:10px">
+            <div class="field"><label>Phase</label><select onchange="actions.patchDraft('phase', this.value)">${PHASES.map((p) => `<option ${d.phase === p ? "selected" : ""}>${p}</option>`).join("")}</select></div>
+            <div class="field"><label>Priority</label><select onchange="actions.patchDraft('priority', this.value)">${Object.keys(PRIORITY).map((p) => `<option value="${p}" ${d.priority === p ? "selected" : ""}>${PRIORITY[p].label}</option>`).join("")}</select></div>
+            <div class="field"><label>Hours</label><input type="number" min="1" max="16" value="${esc(d.duration)}" oninput="actions.patchDraft('duration', this.value)"></div>
+          </div>
+          <div class="controls">
+            <div class="field"><label>Deadline</label><input type="date" value="${esc(d.deadline)}" oninput="actions.patchDraft('deadline', this.value)"></div>
+            <div class="field"><label>Owner</label><input value="${esc(d.owner)}" oninput="actions.patchDraft('owner', this.value)" placeholder="PM, Shop, Field"></div>
+          </div>
+          <button class="btn primary" onclick="actions.addTask()">+ Add Task</button>
+        </aside>
+      </div>`;
+    }
+
+    function renderTaskRow(t) {
+      const p = priority(t.priority);
+      return `<div class="row">
+        <div>
+          <div class="row-title ${isDone(t) ? "done" : ""}">${esc(t.title)}</div>
+          <div class="row-meta">
+            <span class="badge ${t.priority}">${p.label}</span>
+            <span>${esc(t.phase)}</span>
+            <span>${Number(t.duration) || 1}h</span>
+            <span>${fmtDate(t.deadline)}</span>
+            ${t.owner ? `<span>${esc(t.owner)}</span>` : ""}
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="mini-btn" onclick="actions.cycleStatus('${t.id}', -1)">Back</button>
+          <button class="mini-btn" onclick="actions.cycleStatus('${t.id}', 1)">Next</button>
+          <button class="mini-btn" onclick="actions.deleteTask('${t.id}')">Delete</button>
+        </div>
+      </div>`;
+    }
+
+    function renderBoard() {
+      const cols = [["todo","To Do"],["doing","In Progress"],["done","Done"]];
+      return `<section class="panel"><div class="board">${cols.map(([key,label]) => {
+        const list = projectTasks().filter((t) => t.status === key);
+        return `<div class="column"><h3><span>${label}</span><span>${list.length}</span></h3>${list.map(renderBoardCard).join("") || `<div class="empty">Drop zone</div>`}</div>`;
+      }).join("")}</div></section>`;
+    }
+    function renderBoardCard(t) {
+      return `<div class="row" style="grid-template-columns:1fr;margin-bottom:8px"><div><div class="row-title">${esc(t.title)}</div><div class="row-meta"><span>${esc(t.phase)}</span><span>${priority(t.priority).label}</span></div></div><div class="row-actions"><button class="mini-btn" onclick="actions.cycleStatus('${t.id}', -1)">Back</button><button class="mini-btn" onclick="actions.cycleStatus('${t.id}', 1)">Next</button></div></div>`;
+    }
+
+    function renderProjects() {
+      const draft = { ...defaultProjectDraft(), ...(state.draftProject || {}) };
+      return `<div class="grid">
+        <section class="panel">
+          <div class="panel-head"><div><div class="panel-title">Projects</div><div class="panel-meta">${state.projects.length} active project${state.projects.length === 1 ? "" : "s"}</div></div></div>
+          <div class="project-cards">${state.projects.map((p) => {
+        const tasks = state.tasks.filter((t) => t.projectId === p.id);
+        const open = tasks.filter((t) => !isDone(t));
+        const hours = open.reduce((s,t) => s + (Number(t.duration) || 0), 0);
+        return `<button class="project-card ${p.id === activeProject().id ? "active" : ""}" style="border-top-color:${p.color}" onclick="actions.setProject('${p.id}')"><h3>${esc(p.name)}</h3><div class="project-meta">#${esc(p.number)}</div><div class="stats"><div class="stat"><b>${open.length}</b><span>Open</span></div><div class="stat"><b>${hours}</b><span>Hours</span></div><div class="stat"><b>${tasks.filter(isDone).length}</b><span>Done</span></div></div></button>`;
+      }).join("")}</div>
+        </section>
+        <aside class="panel">
+          <div class="panel-head"><div><div class="panel-title">New Project</div><div class="panel-meta">Creates an empty schedule workspace</div></div></div>
+          <form class="project-form" onsubmit="actions.addProject(); return false;">
+            <div class="field"><label>Project name</label><input value="${esc(draft.name)}" oninput="actions.patchProjectDraft('name', this.value)" placeholder="Gilbert Medical Office Steel"></div>
+            <div class="form-grid">
+              <div class="field"><label>Project #</label><input value="${esc(draft.number)}" oninput="actions.patchProjectDraft('number', this.value)" placeholder="25600"></div>
+              <div class="field"><label>Accent</label><input class="color-input" type="color" value="${esc(draft.color)}" oninput="actions.patchProjectDraft('color', this.value)"></div>
+            </div>
+            <div class="swatches">${PROJECT_COLORS.map((color) => `<button type="button" class="swatch ${draft.color === color ? "active" : ""}" style="--swatch:${color}" aria-label="Use ${color}" onclick="actions.setProjectColor('${color}')"></button>`).join("")}</div>
+            ${state.projectFormError ? `<div class="form-error">${esc(state.projectFormError)}</div>` : ""}
+            <button class="btn primary" type="submit">+ Add Project</button>
+            <div class="form-note">New projects start with no tasks or meetings. Add tasks manually or use AI scope generation after the project is active.</div>
+          </form>
+        </aside>
+      </div>`;
+    }
+
+    function renderAi() {
+      return `<div class="grid">
+        <section class="panel">
+          <div class="panel-head"><div><div class="panel-title">AI Project Breakdown</div><div class="panel-meta">Review before adding</div></div></div>
+          <textarea rows="6" oninput="actions.setScope(this.value)" placeholder="Paste scope: main steel, embeds, stairs, deck, crane plan, RFI cleanup...">${esc(state.scopeText)}</textarea>
+          <div class="controls" style="margin-top:10px"><button class="btn primary" onclick="actions.generateScope()">+ Generate Tasks</button><button class="btn ghost" onclick="actions.discardGenerated()">Clear</button></div>
+          ${state.proposed.length ? `<div class="proposal"><div class="panel-meta">${state.proposed.length} proposed tasks</div>${state.proposed.map(renderTaskRowPreview).join("")}<button class="btn primary" onclick="actions.commitGenerated()">Add Proposed Tasks</button></div>` : ""}
+        </section>
+        <aside class="panel">
+          <div class="panel-head"><div><div class="panel-title">Ask Planner</div><div class="panel-meta">Local schedule context</div></div></div>
+          <div class="chat-log">${state.chat.length ? state.chat.map((m) => `<div class="msg ${m.role === "user" ? "user" : ""}">${esc(m.content)}</div>`).join("") : `<div class="empty">Ask about risk, priority, recovery, or capacity</div>`}</div>
+          <div class="composer"><textarea id="chat-input" rows="2" placeholder="What should I hit first today?"></textarea><button class="btn primary" onclick="actions.sendChat()">Send</button></div>
+        </aside>
+      </div>`;
+    }
+    function renderTaskRowPreview(t) {
+      return `<div class="row"><div><div class="row-title">${esc(t.title)}</div><div class="row-meta"><span>${esc(t.phase)}</span><span>${priority(t.priority).label}</span><span>${Number(t.duration) || 1}h</span><span>${fmtDate(t.deadline)}</span></div></div></div>`;
+    }
+
+    function renderContent() {
+      if (state.view === "tasks") return renderTasks();
+      if (state.view === "board") return renderBoard();
+      if (state.view === "projects") return renderProjects();
+      if (state.view === "ai") return renderAi();
+      return renderPlan();
+    }
+
+    function render() {
+      document.getElementById("app").innerHTML = `<div class="app">${renderSidebar()}<main class="main">${renderTop()}${renderKpis()}${renderContent()}</main></div>`;
+    }
+    render();
+  </script>
+</body>
+</html>
