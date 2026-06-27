@@ -44,18 +44,24 @@ export interface RfiControlCenterProps {
   onFilterChange: (v: string) => void;
   onOpenRfi: (rfi: RfiRecord) => void;
   onExport: () => void;
+  onImport?: (() => void) | null;
   onCreate?: (() => void) | null;
   /** Project-level context for the hero stat cards (real, from the project record). */
   projectHealth?: string | null;
   percentComplete?: number | null;
   /** Wide jobsite photo for the hero band. */
   photoSrc?: string;
+  /** Bulk selection (drives the checkbox column + the parent's bulk action bar). */
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleAll?: (checked: boolean) => void;
 }
 
 export default function RfiControlCenter(props: RfiControlCenterProps) {
   const {
     projectName, rfis, filtered, search, onSearch, disciplineFilter, onDisciplineChange,
-    onFilterChange, onOpenRfi, onExport, onCreate, projectHealth, percentComplete, photoSrc,
+    onFilterChange, onOpenRfi, onExport, onImport, onCreate, projectHealth, percentComplete, photoSrc,
+    selectedIds, onToggleSelect, onToggleAll,
   } = props;
   useCommandSkin();
   const s = useMemo(() => buildRfiSummary(rfis), [rfis]);
@@ -80,7 +86,21 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
     { label: "Schedule Impact", value: `${s.scheduleExposure}d`, sublabel: "active impact", tone: s.scheduleExposure ? "warn" : "info", Icon: CalendarClock },
   ];
 
+  const selectable = !!(selectedIds && onToggleSelect && onToggleAll);
+  const allSelected = selectable && filtered.length > 0 && selectedIds!.size === filtered.length;
+
   const columns: Column<RfiRecord>[] = [
+    ...(selectable
+      ? ([{
+          key: "sel",
+          header: (
+            <input type="checkbox" className="cmd-check" checked={allSelected} onChange={(e) => onToggleAll!(e.target.checked)} aria-label="Select all RFIs" />
+          ),
+          render: (r: RfiRecord) => (
+            <input type="checkbox" className="cmd-check" checked={selectedIds!.has(r.id || "")} onClick={(e) => e.stopPropagation()} onChange={() => onToggleSelect!(r.id || "")} aria-label="Select RFI" />
+          ),
+        }] as Column<RfiRecord>[])
+      : []),
     { key: "num", header: "RFI #", render: (r) => <span className="cmd-row__num">{r.rfi_number || "—"}</span> },
     { key: "subject", header: "Subject", render: (r) => r.title || "Untitled RFI" },
     { key: "discipline", header: "Discipline", render: (r) => r.discipline || "—" },
@@ -152,6 +172,7 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search RFI number, title, drawing, question, or answer"
+        onImport={onImport}
         onExport={onExport}
         primaryLabel="New RFI"
         onPrimary={onCreate || null}
