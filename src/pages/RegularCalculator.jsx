@@ -1,10 +1,16 @@
 /**
  * RegularCalculator.jsx — standard four-function calculator with a
- * fully-typeable keyboard interface and a tape history.
+ * fully-typeable keyboard interface and a persistent tape history.
  *
  * Designed to feel like the Windows / macOS desktop calculator that
  * everyone already knows: every button has a one-key shortcut, every
  * shortcut works whether or not the on-screen keypad has focus.
+ *
+ * The on-screen keypad is now built from the shared tactile device kit
+ * (CalcDisplay + CalcKeypad/CalcKey + CalcTape), so it reads like a real
+ * desk calculator. The history tape is persisted across reloads via
+ * useCalcTape("calc:standard", 30) and any row can be clicked to recall
+ * its result into the current entry.
  *
  *   0–9            type a digit
  *   .              decimal point
@@ -23,12 +29,17 @@
  * Internally the calculator runs as a small state machine with three
  * pieces: `accum` (the running total), `pendingOp` (waiting on a RHS),
  * and `entry` (the digit string the user is currently typing). Tape
- * rows store the formatted line plus the raw numeric value so clicking
- * a row recalls it into entry.
+ * rows store the formatted expression plus the raw numeric value so
+ * clicking a row recalls it into entry.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import CalcDisplay from "@/components/calculators/CalcDisplay";
+import CalcKeypad from "@/components/calculators/CalcKeypad";
+import CalcKey from "@/components/calculators/CalcKey";
+import CalcTape from "@/components/calculators/CalcTape";
+import useCalcTape from "@/components/calculators/useCalcTape";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -65,7 +76,7 @@ export default function RegularCalculator() {
   const [pendingOp, setPendingOp] = useState(null);
   const [entry, setEntry] = useState("");           // string the user is typing
   const [memory, setMemory] = useState(0);
-  const [tape, setTape] = useState([]);             // [{ text, value }]
+  const tape = useCalcTape("calc:standard", 30);     // persistent { expr, value } rows
   const [justEvaluated, setJustEvaluated] = useState(false);
   const rootRef = useRef(null);
 
@@ -76,11 +87,27 @@ export default function RegularCalculator() {
     return formatNumber(accum);
   }, [entry, accum]);
 
+  // Secondary expression line on the LCD: the pending operation when one
+  // is in flight, or an "ANS" marker once a result is committed.
+  const aux = useMemo(() => {
+    if (pendingOp) return `${formatNumber(accum)} ${pendingOp}`;
+    if (entry === "" && accum !== 0) return "ANS";
+    return "";
+  }, [pendingOp, accum, entry]);
+
   const parseEntry = () => {
     const s = entry.trim();
     if (!s) return null;
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
+  };
+
+  // Push a completed calculation onto the persistent tape.
+  const recordTape = (a, op, b, result) => {
+    tape.push({
+      expr: `${formatNumber(a)} ${op} ${formatNumber(b)} =`,
+      value: result,
+    });
   };
 
   const inputDigit = (d) => {
@@ -118,10 +145,7 @@ export default function RegularCalculator() {
         toast.error("Cannot divide by zero");
         return;
       }
-      setTape((t) => [
-        { text: `${formatNumber(accum)} ${pendingOp} ${formatNumber(value)} = ${formatNumber(next)}`, value: next },
-        ...t,
-      ].slice(0, 30));
+      recordTape(accum, pendingOp, value, next);
       setAccum(next);
     } else if (value != null) {
       setAccum(value);
@@ -138,10 +162,7 @@ export default function RegularCalculator() {
         toast.error("Cannot divide by zero");
         return;
       }
-      setTape((t) => [
-        { text: `${formatNumber(accum)} ${pendingOp} ${formatNumber(value)} = ${formatNumber(next)}`, value: next },
-        ...t,
-      ].slice(0, 30));
+      recordTape(accum, pendingOp, value, next);
       setAccum(next);
       setEntry("");
       setPendingOp(null);
@@ -239,6 +260,7 @@ export default function RegularCalculator() {
     setJustEvaluated(false);
   };
   const mClear = () => { setMemory(0); toast.success("MC"); };
+  const mStore = () => { setEntry(formatNumber(memory)); setJustEvaluated(false); };
 
   const copy = async () => {
     try {
@@ -288,8 +310,10 @@ export default function RegularCalculator() {
     if (k === "s")          { e.preventDefault(); sqroot(); return; }
   };
 
-  // Recall a tape row's value into entry.
-  const recallTape = (value) => {
+  // Recall a tape row's value into entry. CalcTape passes the whole row
+  // object back; pull the numeric value off it.
+  const recallTape = (row) => {
+    const value = row && row.value != null ? row.value : row;
     setEntry(String(value));
     setJustEvaluated(false);
     rootRef.current?.focus();
@@ -321,117 +345,65 @@ export default function RegularCalculator() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16 }}>
           {/* ── Calc pad ───────────────────────────── */}
-          <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="sbd-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
             {/* Display */}
-            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", textAlign: "right" }}>
-              <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>
-                {pendingOp
-                  ? `${formatNumber(accum)} ${pendingOp}`
-                  : (entry === "" && accum !== 0 ? "ANS" : " ")}
-              </div>
-              <div
-                onClick={copy}
-                title="Click to copy"
-                style={{
-                  ...mono,
-                  fontSize: 36,
-                  fontWeight: 800,
-                  color: "var(--accent)",
-                  lineHeight: 1.0,
-                  cursor: "pointer",
-                  fontVariantNumeric: "tabular-nums",
-                  wordBreak: "break-all",
-                }}
-              >
-                {display}
-              </div>
-            </div>
+            <CalcDisplay
+              value={display}
+              aux={aux}
+              memoryActive={memory !== 0}
+              onCopy={copy}
+            />
 
-            {/* Function row */}
-            <div style={{ padding: 12, display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
-              <Fn onClick={mClear}  shortcut="⌥C">MC</Fn>
-              <Fn onClick={mRecall} shortcut="⌥R">MR</Fn>
-              <Fn onClick={mPlus}   shortcut="⌥P">M+</Fn>
-              <Fn onClick={mMinus}  shortcut="⌥M">M−</Fn>
-              <Fn onClick={() => { setEntry(formatNumber(memory)); setJustEvaluated(false); }} disabled={memory === 0}>MS</Fn>
-            </div>
+            {/* Function row — memory + unary ops */}
+            <CalcKeypad columns={5}>
+              <CalcKey label="MC" variant="fn" secondary="⌥C" onPress={mClear} ariaLabel="Memory clear" />
+              <CalcKey label="MR" variant="fn" secondary="⌥R" onPress={mRecall} ariaLabel="Memory recall" />
+              <CalcKey label="M+" variant="fn" secondary="⌥P" onPress={mPlus} ariaLabel="Memory add" />
+              <CalcKey label="M−" variant="fn" secondary="⌥M" onPress={mMinus} ariaLabel="Memory subtract" />
+              <CalcKey label="MS" variant="fn" onPress={mStore} disabled={memory === 0} ariaLabel="Memory store to entry" />
+            </CalcKeypad>
 
             {/* Main pad */}
-            <div style={{ padding: "0 12px 12px 12px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-              <PadBtn onClick={percent}       variant="op"   shortcut="%">%</PadBtn>
-              <PadBtn onClick={sqroot}        variant="op"   shortcut="s">√x</PadBtn>
-              <PadBtn onClick={square}        variant="op"   shortcut="q">x²</PadBtn>
-              <PadBtn onClick={reciprocal}    variant="op"   shortcut="r">1/x</PadBtn>
+            <CalcKeypad columns={4}>
+              <CalcKey label="%"   variant="fn" secondary="%" onPress={percent} ariaLabel="Percent" />
+              <CalcKey label="√x"  variant="fn" secondary="s" onPress={sqroot} ariaLabel="Square root" />
+              <CalcKey label="x²"  variant="fn" secondary="q" onPress={square} ariaLabel="Square" />
+              <CalcKey label="1/x" variant="fn" secondary="r" onPress={reciprocal} ariaLabel="Reciprocal" />
 
-              <PadBtn onClick={clearEntry}    variant="ghost" shortcut="Del">CE</PadBtn>
-              <PadBtn onClick={clearAll}      variant="danger" shortcut="Esc">AC</PadBtn>
-              <PadBtn onClick={backspace}     variant="ghost" shortcut="⌫">⌫</PadBtn>
-              <PadBtn onClick={() => setOp(OPS.DIV)} variant="op" active={pendingOp === OPS.DIV} shortcut="/">÷</PadBtn>
+              <CalcKey label="CE" variant="fn"     secondary="Del" onPress={clearEntry} ariaLabel="Clear entry" />
+              <CalcKey label="AC" variant="danger" secondary="Esc" onPress={clearAll} ariaLabel="Clear all" />
+              <CalcKey label="⌫"  variant="fn"     secondary="⌫"   onPress={backspace} ariaLabel="Backspace" />
+              <CalcKey label="÷"  variant="op"     secondary="/"   onPress={() => setOp(OPS.DIV)} ariaLabel="Divide" />
 
-              <PadBtn onClick={() => inputDigit("7")} shortcut="7">7</PadBtn>
-              <PadBtn onClick={() => inputDigit("8")} shortcut="8">8</PadBtn>
-              <PadBtn onClick={() => inputDigit("9")} shortcut="9">9</PadBtn>
-              <PadBtn onClick={() => setOp(OPS.MUL)}  variant="op" active={pendingOp === OPS.MUL} shortcut="*">×</PadBtn>
+              <CalcKey label="7" variant="digit" secondary="7" onPress={() => inputDigit("7")} />
+              <CalcKey label="8" variant="digit" secondary="8" onPress={() => inputDigit("8")} />
+              <CalcKey label="9" variant="digit" secondary="9" onPress={() => inputDigit("9")} />
+              <CalcKey label="×" variant="op"    secondary="*" onPress={() => setOp(OPS.MUL)} ariaLabel="Multiply" />
 
-              <PadBtn onClick={() => inputDigit("4")} shortcut="4">4</PadBtn>
-              <PadBtn onClick={() => inputDigit("5")} shortcut="5">5</PadBtn>
-              <PadBtn onClick={() => inputDigit("6")} shortcut="6">6</PadBtn>
-              <PadBtn onClick={() => setOp(OPS.SUB)}  variant="op" active={pendingOp === OPS.SUB} shortcut="-">−</PadBtn>
+              <CalcKey label="4" variant="digit" secondary="4" onPress={() => inputDigit("4")} />
+              <CalcKey label="5" variant="digit" secondary="5" onPress={() => inputDigit("5")} />
+              <CalcKey label="6" variant="digit" secondary="6" onPress={() => inputDigit("6")} />
+              <CalcKey label="−" variant="op"    secondary="-" onPress={() => setOp(OPS.SUB)} ariaLabel="Subtract" />
 
-              <PadBtn onClick={() => inputDigit("1")} shortcut="1">1</PadBtn>
-              <PadBtn onClick={() => inputDigit("2")} shortcut="2">2</PadBtn>
-              <PadBtn onClick={() => inputDigit("3")} shortcut="3">3</PadBtn>
-              <PadBtn onClick={() => setOp(OPS.ADD)}  variant="op" active={pendingOp === OPS.ADD} shortcut="+">+</PadBtn>
+              <CalcKey label="1" variant="digit" secondary="1" onPress={() => inputDigit("1")} />
+              <CalcKey label="2" variant="digit" secondary="2" onPress={() => inputDigit("2")} />
+              <CalcKey label="3" variant="digit" secondary="3" onPress={() => inputDigit("3")} />
+              <CalcKey label="+" variant="op"    secondary="+" onPress={() => setOp(OPS.ADD)} ariaLabel="Add" />
 
-              <PadBtn onClick={toggleSign}              shortcut="_">±</PadBtn>
-              <PadBtn onClick={() => inputDigit("0")}   shortcut="0">0</PadBtn>
-              <PadBtn onClick={() => inputDigit(".")}   shortcut=".">.</PadBtn>
-              <PadBtn onClick={equals} variant="primary" shortcut="↵">=</PadBtn>
-            </div>
+              <CalcKey label="±" variant="fn"     secondary="_" onPress={toggleSign} ariaLabel="Toggle sign" />
+              <CalcKey label="0" variant="digit"  secondary="0" onPress={() => inputDigit("0")} />
+              <CalcKey label="." variant="digit"  secondary="." onPress={() => inputDigit(".")} ariaLabel="Decimal point" />
+              <CalcKey label="=" variant="accent" secondary="↵" onPress={equals} ariaLabel="Equals" />
+            </CalcKeypad>
           </div>
 
           {/* ── Tape / Help ────────────────────────── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
-              <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                  History
-                </div>
-                {tape.length > 0 && (
-                  <button
-                    onClick={() => setTape([])}
-                    style={{ background: "transparent", border: "none", ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", cursor: "pointer" }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div style={{ maxHeight: 280, overflowY: "auto" }}>
-                {tape.length === 0 ? (
-                  <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "16px 14px", textAlign: "center", fontStyle: "italic" }}>
-                    No history yet
-                  </div>
-                ) : tape.map((row, i) => (
-                  <button
-                    key={i}
-                    onClick={() => recallTape(row.value)}
-                    title="Click to recall this result into entry"
-                    style={{
-                      display: "block", width: "100%", textAlign: "left",
-                      padding: "8px 14px",
-                      borderBottom: "1px solid var(--divider)",
-                      background: "transparent", border: "none",
-                      ...mono, fontSize: 11, color: "var(--text-secondary)",
-                      cursor: "pointer",
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
-                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                  >
-                    {row.text}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <CalcTape
+              rows={tape.rows}
+              onRecall={recallTape}
+              onClear={tape.clear}
+            />
 
             <div className="sbd-card" style={{ padding: "10px 14px" }}>
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>
@@ -458,81 +430,6 @@ export default function RegularCalculator() {
 }
 
 // ── UI primitives ────────────────────────────────────────────────────
-function PadBtn({ onClick, children, variant = "default", active, small, shortcut }) {
-  const base = {
-    border: "1px solid var(--border-default)",
-    borderRadius: 6,
-    padding: small ? "8px 4px" : "14px 4px",
-    cursor: "pointer",
-    ...mono,
-    fontSize: small ? 10 : 16,
-    fontWeight: 700,
-    transition: "all 0.08s",
-    position: "relative",
-  };
-  let style = { ...base, background: "var(--bg-surface-low)", color: "var(--text-primary)" };
-  if (variant === "primary") {
-    style = { ...base, background: "var(--accent)", color: "var(--accent-text, #000)", border: "1px solid var(--accent)" };
-  } else if (variant === "danger") {
-    style = { ...base, background: "var(--danger-muted)", color: "var(--status-error)", border: "1px solid var(--danger-border)" };
-  } else if (variant === "op") {
-    style = active
-      ? { ...base, background: "var(--accent-muted)", color: "var(--accent)", border: "1px solid var(--accent-border)" }
-      : { ...base, background: "var(--bg-surface)", color: "var(--text-secondary)" };
-  } else if (variant === "ghost") {
-    style = { ...base, background: "transparent", color: "var(--text-muted)" };
-  }
-  return (
-    <button onClick={onClick} style={style} title={shortcut ? `Shortcut: ${shortcut}` : undefined}>
-      {children}
-      {shortcut && (
-        <span
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            top: 2, right: 4,
-            ...mono, fontSize: 7, fontWeight: 700,
-            color: "var(--text-muted)",
-            letterSpacing: "0.04em",
-            opacity: 0.55,
-            pointerEvents: "none",
-          }}
-        >
-          {shortcut}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function Fn({ onClick, children, disabled, shortcut }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={shortcut ? `Shortcut: ${shortcut}` : undefined}
-      style={{
-        background: "var(--bg-surface-low)",
-        border: "1px solid var(--border-default)",
-        borderRadius: 6,
-        padding: "8px 4px",
-        cursor: disabled ? "not-allowed" : "pointer",
-        ...mono, fontSize: 10, fontWeight: 700,
-        color: disabled ? "var(--text-muted)" : "var(--text-secondary)",
-        opacity: disabled ? 0.5 : 1,
-        position: "relative",
-      }}
-    >
-      {children}
-      {shortcut && (
-        <span aria-hidden="true" style={{ position: "absolute", top: 2, right: 4, ...mono, fontSize: 7, color: "var(--text-muted)", opacity: 0.55 }}>
-          {shortcut}
-        </span>
-      )}
-    </button>
-  );
-}
-
 function KbRow({ k, label }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", ...mono, fontSize: 10 }}>
