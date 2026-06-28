@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
-export interface HeroChip { label: string; tone?: "neutral" | "good" | "warn" | "danger" }
+export interface HeroChip { label: string; tone?: "neutral" | "good" | "warn" | "danger" | "info" }
 export interface HeroStat { value: ReactNode; label: string }
 
 export function PageHero({
