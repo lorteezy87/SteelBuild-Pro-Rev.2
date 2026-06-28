@@ -30,6 +30,8 @@ import { OperationsPageShell, OpsActionButton } from "@/components/operations/Op
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { PRESET_LIST } from "@/lib/budgetHourPresets";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import BudgetHoursControlCenter from "./budgetHours/BudgetHoursControlCenter";
 
 /* ─────────────────────────────────────────────
    Variance helpers
@@ -486,7 +488,13 @@ export default function BudgetHours() {
   const projectId = useProjectId();
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
+  const commandUi = useFlag("command_ui");
   const [presetOpen, setPresetOpen] = useState(false);
+  // State used by both paths — the command_ui path reads these; the classic
+  // path ignores them. Declared unconditionally (no conditional hooks).
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [overBudgetOnly, setOverBudgetOnly] = useState(false);
 
   /* ── Data ── */
   // The entity wrapper doesn't auto-filter soft-deletes, so the query
@@ -599,6 +607,75 @@ export default function BudgetHours() {
   };
 
   const saveCell = (id, patch) => updateMut.mutate({ id, patch });
+
+  /* ── Command UI branch ── */
+  if (commandUi) {
+    // Apply search + category + over-budget filter for the DataTable.
+    // Misses rows are always excluded from the table (they have their own panel).
+    const commandFiltered = rows
+      .filter((r) => r.category !== "Misses")
+      .filter((r) => {
+        if (categoryFilter === "Standard") return r.category === "Standard" && !r.is_specialty;
+        if (categoryFilter === "Specialty") return r.category === "Specialty" || r.is_specialty;
+        return true;
+      })
+      .filter((r) => {
+        if (!overBudgetOnly) return true;
+        // Quick over-budget check: total actual > total budget (ignoring WP rollup for filter — full math in derive)
+        const tb = (Number(r.shop_hours_budget) || 0) + (Number(r.field_hours_budget) || 0);
+        const ta = (Number(r.shop_hours_actual) || 0) + (Number(r.field_hours_actual) || 0);
+        return ta > tb && tb > 0;
+      })
+      .filter((r) => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        return (
+          (r.scope_item || "").toLowerCase().includes(q) ||
+          (r.notes || "").toLowerCase().includes(q)
+        );
+      });
+
+    const handleExportCsv = () => {
+      const headers = ["Scope Item", "Category", "Shop Budget", "Shop Actual", "Field Budget", "Field Actual", "Notes"];
+      const exportRows = commandFiltered.map((r) => [
+        r.scope_item, r.category,
+        Number(r.shop_hours_budget) || 0,
+        Number(r.shop_hours_actual) || 0,
+        Number(r.field_hours_budget) || 0,
+        Number(r.field_hours_actual) || 0,
+        r.notes || "",
+      ]);
+      const csv = [headers, ...exportRows].map((row) => row.map((c) => `"${c ?? ""}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "budget_hours.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    return (
+      <>
+        <BudgetHoursControlCenter
+          projectName={activeProject?.name || "Project"}
+          rows={rows}
+          wpsById={wpsById}
+          search={search}
+          onSearch={setSearch}
+          categoryFilter={categoryFilter}
+          onCategoryChange={setCategoryFilter}
+          overBudgetOnly={overBudgetOnly}
+          onOverBudgetToggle={() => setOverBudgetOnly((v) => !v)}
+          filteredRows={commandFiltered}
+          onAddItem={addBlankRow}
+          onSetUpTemplate={() => setPresetOpen(true)}
+          onExport={handleExportCsv}
+        />
+        <PresetDialog open={presetOpen} onClose={() => setPresetOpen(false)} onPick={applyPreset} />
+      </>
+    );
+  }
 
   /* ── Empty / loading states ── */
   if (!projectId) {
