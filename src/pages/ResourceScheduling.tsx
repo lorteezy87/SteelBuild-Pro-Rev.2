@@ -791,6 +791,7 @@ export default function ResourceScheduling() {
   }, [todayOffset]);
 
   return (
+    <div className="sb-dashboard-reference-page">
     <OperationsPageShell
       eyebrow={activeProject?.name || "No Project Selected"}
       title="Crew Scheduling"
@@ -969,7 +970,7 @@ export default function ResourceScheduling() {
             <button
               onClick={() => setShowNewResource(true)}
               style={{
-                background: "var(--accent)", color: "#07090E", border: "none",
+                background: "var(--accent)", color: "var(--bg-base)", border: "none",
                 borderRadius: "var(--radius-btn)", padding: "10px 24px",
                 fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700,
                 cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
@@ -1318,5 +1319,6 @@ export default function ResourceScheduling() {
       </>
       )}
     </OperationsPageShell>
+    </div>
   );
 }

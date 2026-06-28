@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { Building2 } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../shared/ProjectContext";
 
-export default function ProjectPillDropdown({ compact = false, align = "right" }) {
+export default function ProjectPillDropdown({ compact = false, align = "right", variant = "default" }) {
   // `activeProjects` excludes on-hold; the switcher never lists paused projects.
   const { activeProjects: projects, activeProject, setActiveProject, loading } = useProjectContext();
   // Pages resolve the project id via useProjectId() which checks the URL
@@ -87,6 +88,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
     [setActiveProject, searchParams, setSearchParams]
   );
 
+  const isDashboardVariant = variant === "dashboard";
   const projectNameLimit = compact ? 14 : 20;
   const label =
     loading
@@ -121,6 +123,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
       ref={ref}
       className="project-pill-dropdown"
       data-compact={compact ? "true" : "false"}
+      data-variant={variant}
       data-name-limit={projectNameLimit}
       style={{ position: "relative", minWidth: 0 }}
     >
@@ -131,31 +134,49 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 5,
-          background: "var(--accent-muted)",
-          border: "1px solid var(--accent-border)",
-          borderRadius: 20,
-          minHeight: compact ? 34 : 28,
-          padding: compact ? "6px 10px" : "5px 13px",
-          fontFamily: "var(--font-mono)",
+          gap: isDashboardVariant ? 10 : 5,
+          background: isDashboardVariant ? "#ffffff" : "var(--accent-muted)",
+          border: isDashboardVariant ? "1px solid #dbe2ec" : "1px solid var(--accent-border)",
+          borderRadius: isDashboardVariant ? 8 : 20,
+          minHeight: isDashboardVariant ? 46 : compact ? 34 : 28,
+          padding: isDashboardVariant ? "0 12px" : compact ? "6px 10px" : "5px 13px",
+          fontFamily: isDashboardVariant ? "var(--font-body)" : "var(--font-mono)",
           // Was 9px warning-orange (hard to read, looked like an alert). Larger,
           // primary-colored, lighter tracking → legible and clearly the project
           // switcher. The health dot (left) still carries the status color.
-          fontSize: 11,
-          fontWeight: 600,
-          color: "var(--text-primary)",
-          letterSpacing: "0.04em",
+          fontSize: isDashboardVariant ? 13 : 11,
+          fontWeight: isDashboardVariant ? 700 : 600,
+          color: isDashboardVariant ? "#162033" : "var(--text-primary)",
+          letterSpacing: isDashboardVariant ? "0" : "0.04em",
           cursor: "pointer",
           whiteSpace: "nowrap",
           transition: "all 0.15s",
           userSelect: "none",
-          maxWidth: compact ? "min(44vw, 190px)" : 280,
+          width: isDashboardVariant ? 230 : undefined,
+          maxWidth: isDashboardVariant ? 230 : compact ? "min(44vw, 190px)" : 280,
           overflow: "hidden",
           textOverflow: "ellipsis",
+          boxShadow: isDashboardVariant ? "0 1px 2px rgba(15, 23, 42, 0.03)" : undefined,
         }}
         title={displayLabel}
       >
-        {activeProject && (
+        {isDashboardVariant ? (
+          <span
+            aria-hidden="true"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 6,
+              border: "1px solid #cfd8e5",
+              display: "grid",
+              placeItems: "center",
+              color: "#5b6678",
+              flexShrink: 0,
+            }}
+          >
+            <Building2 size={15} strokeWidth={1.7} />
+          </span>
+        ) : activeProject && (
           <span
             style={{
               width: 6,
@@ -180,7 +201,16 @@ export default function ProjectPillDropdown({ compact = false, align = "right" }
             minWidth: 0,
           }}
         >
-          {displayLabel}
+          {isDashboardVariant ? (
+            <span style={{ display: "flex", flexDirection: "column", gap: 2, lineHeight: 1.1 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {activeProject?.name || "Select project"}
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 500, color: "#6f7c91" }}>
+                Project ID: {activeProject?.project_number || "Not selected"}
+              </span>
+            </span>
+          ) : displayLabel}
         </span>
         <span
           style={{

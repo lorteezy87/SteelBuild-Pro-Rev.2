@@ -17,17 +17,17 @@ import { deriveOperationalConstraints } from "@/services/constraintEngine";
 import { summarizeBlockingConstraints } from "@/services/scheduleGatekeeper";
 
 const PHASE_COLORS = {
-  Detailing:   { bg: "rgba(99,102,241,0.12)",  color: "rgb(99,102,241)",  border: "rgba(99,102,241,0.3)"  },
-  Fabrication: { bg: "rgba(245,158,11,0.12)",  color: "rgb(245,158,11)",  border: "rgba(245,158,11,0.3)"  },
-  Delivery:    { bg: "rgba(16,185,129,0.12)",  color: "rgb(16,185,129)",  border: "rgba(16,185,129,0.3)"  },
-  Erection:    { bg: "rgba(239,68,68,0.12)",   color: "rgb(239,68,68)",   border: "rgba(239,68,68,0.3)"   },
+  Detailing:   { bg: "color-mix(in srgb, var(--phase-detailing) 12%, transparent)",  color: "var(--phase-detailing)",  border: "color-mix(in srgb, var(--phase-detailing) 30%, transparent)"  },
+  Fabrication: { bg: "color-mix(in srgb, var(--phase-fab) 12%, transparent)",  color: "var(--phase-fab)",  border: "color-mix(in srgb, var(--phase-fab) 30%, transparent)"  },
+  Delivery:    { bg: "color-mix(in srgb, var(--phase-delivery) 12%, transparent)",  color: "var(--phase-delivery)",  border: "color-mix(in srgb, var(--phase-delivery) 30%, transparent)"  },
+  Erection:    { bg: "color-mix(in srgb, var(--phase-erection) 12%, transparent)",   color: "var(--phase-erection)",   border: "color-mix(in srgb, var(--phase-erection) 30%, transparent)"   },
 };
 
 const STATUS_CONFIG = {
-  "Not Started": { bg: "rgba(100,116,139,0.12)", color: "rgb(100,116,139)", border: "rgba(100,116,139,0.3)", icon: "○" },
-  "In Progress":  { bg: "rgba(37,99,235,0.12)",  color: "rgb(37,99,235)",   border: "rgba(37,99,235,0.3)",  icon: "◑" },
-  "Complete":     { bg: "rgba(16,185,129,0.12)", color: "rgb(16,185,129)",  border: "rgba(16,185,129,0.3)", icon: "✓" },
-  "Delayed":      { bg: "rgba(245,158,11,0.15)", color: "rgb(245,158,11)",  border: "rgba(245,158,11,0.4)", icon: "⚠" },
+  "Not Started": { bg: "color-mix(in srgb, var(--text-muted) 12%, transparent)", color: "var(--text-muted)", border: "color-mix(in srgb, var(--text-muted) 30%, transparent)", icon: "○" },
+  "In Progress":  { bg: "color-mix(in srgb, var(--accent) 12%, transparent)",  color: "var(--accent)",   border: "color-mix(in srgb, var(--accent) 30%, transparent)",  icon: "◑" },
+  "Complete":     { bg: "color-mix(in srgb, var(--status-success) 12%, transparent)", color: "var(--status-success)",  border: "color-mix(in srgb, var(--status-success) 30%, transparent)", icon: "✓" },
+  "Delayed":      { bg: "color-mix(in srgb, var(--status-warning) 15%, transparent)", color: "var(--status-warning)",  border: "color-mix(in srgb, var(--status-warning) 40%, transparent)", icon: "⚠" },
 };
 
 const empty = {
@@ -54,12 +54,12 @@ function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = fals
         {hasBlockers && (
           <div style={{
             display: "flex", gap: 10, alignItems: "flex-start",
-            background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.4)",
+            background: "color-mix(in srgb, var(--status-error) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--status-error) 40%, transparent)",
             borderRadius: 8, padding: "10px 12px", marginTop: 4,
           }}>
-            <ShieldAlert size={16} style={{ color: "rgb(239,68,68)", flexShrink: 0, marginTop: 1 }} />
+            <ShieldAlert size={16} style={{ color: "var(--status-error)", flexShrink: 0, marginTop: 1 }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "rgb(239,68,68)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--status-error)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 {blockers.length} critical RFI {blockers.length === 1 ? "constraint" : "constraints"} active on this project
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
@@ -159,7 +159,7 @@ function MiniProgressBar({ value }) {
 }
 
 function ConstraintRow({ blocker, wpLabelById, critical }) {
-  const accent = critical ? "rgb(239,68,68)" : "rgb(245,158,11)";
+  const accent = critical ? "var(--status-error)" : "var(--status-warning)";
   const wpLabel = blocker.workPackageId
     ? (wpLabelById[blocker.workPackageId] || String(blocker.workPackageId).slice(0, 8))
     : null;
@@ -192,7 +192,7 @@ function ConstraintRow({ blocker, wpLabelById, critical }) {
       )}
       <span style={{
         fontFamily: "var(--font-mono)", fontSize: 9, whiteSpace: "nowrap",
-        color: blocker.overdue ? "rgb(239,68,68)" : "var(--text-muted)",
+        color: blocker.overdue ? "var(--status-error)" : "var(--text-muted)",
         fontWeight: blocker.overdue ? 700 : 400,
       }}>
         {blocker.dueDate ? `Due ${blocker.dueDate}${blocker.overdue ? " · OVERDUE" : ""}` : "No due date"}
@@ -204,8 +204,8 @@ function ConstraintRow({ blocker, wpLabelById, critical }) {
 function FabricationShield({ shield, wpLabelById }) {
   if (!shield || shield.state === "clear") return null;
   const blocked = shield.state === "blocked";
-  const accent = blocked ? "rgb(239,68,68)" : "rgb(245,158,11)";
-  const tint = blocked ? "rgba(239,68,68,0.08)" : "rgba(245,158,11,0.08)";
+  const accent = blocked ? "var(--status-error)" : "var(--status-warning)";
+  const tint = blocked ? "color-mix(in srgb, var(--status-error) 8%, transparent)" : "color-mix(in srgb, var(--status-warning) 8%, transparent)";
   return (
     <div style={{ background: tint, border: `1px solid ${accent}`, borderRadius: 10, padding: "12px 16px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -355,7 +355,7 @@ export default function LookAheadSchedule() {
   }, [items]);
 
   if (!activeProject?.id) return (
-    <div style={{ textAlign: "center", padding: "80px 24px" }}>
+    <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Select a Project</div>
       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right to view the 2-week look-ahead.</div>
@@ -363,7 +363,7 @@ export default function LookAheadSchedule() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={activeProject?.project_name || "SCHEDULE"}
         title="2-Week Look-Ahead"
@@ -515,9 +515,9 @@ export default function LookAheadSchedule() {
                       <td colSpan={10} style={{ padding: "7px 12px" }}>
                         <span style={{
                           display: "inline-flex", alignItems: "center", gap: 6,
-                          background: phaseCfg?.bg || "rgba(100,116,139,0.12)",
+                          background: phaseCfg?.bg || "color-mix(in srgb, var(--text-muted) 12%, transparent)",
                           color: phaseCfg?.color || "var(--text-muted)",
-                          border: `1px solid ${phaseCfg?.border || "rgba(100,116,139,0.3)"}`,
+                          border: `1px solid ${phaseCfg?.border || "color-mix(in srgb, var(--text-muted) 30%, transparent)"}`,
                           borderRadius: 6, padding: "2px 10px",
                           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
                           textTransform: "uppercase", letterSpacing: "0.08em",
@@ -536,12 +536,12 @@ export default function LookAheadSchedule() {
                           onClick={() => { setEditing(item); setModalOpen(true); }}
                           style={{
                             cursor: "pointer",
-                            background: isDelayed ? "rgba(245,158,11,0.04)" : idx % 2 === 0 ? "var(--bg-surface)" : "var(--bg-surface-low)",
+                            background: isDelayed ? "color-mix(in srgb, var(--status-warning) 4%, transparent)" : idx % 2 === 0 ? "var(--bg-surface)" : "var(--bg-surface-low)",
                             borderBottom: "1px solid var(--divider)",
                             transition: "background 0.12s",
                           }}
                           onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
-                          onMouseLeave={e => e.currentTarget.style.background = isDelayed ? "rgba(245,158,11,0.04)" : idx % 2 === 0 ? "var(--bg-surface)" : "var(--bg-surface-low)"}
+                          onMouseLeave={e => e.currentTarget.style.background = isDelayed ? "color-mix(in srgb, var(--status-warning) 4%, transparent)" : idx % 2 === 0 ? "var(--bg-surface)" : "var(--bg-surface-low)"}
                         >
                           <td style={{ padding: "10px 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500, color: "var(--text-primary)" }}>
                             {item.activity}
@@ -549,7 +549,7 @@ export default function LookAheadSchedule() {
                           <td style={{ padding: "10px 12px" }}>
                             {item.phase && (
                               <span style={{
-                                background: PHASE_COLORS[item.phase]?.bg || "rgba(100,116,139,0.1)",
+                                background: PHASE_COLORS[item.phase]?.bg || "color-mix(in srgb, var(--text-muted) 10%, transparent)",
                                 color: PHASE_COLORS[item.phase]?.color || "var(--text-muted)",
                                 fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
                                 borderRadius: 4, padding: "2px 6px", textTransform: "uppercase", letterSpacing: "0.06em",
@@ -588,7 +588,7 @@ export default function LookAheadSchedule() {
                               </button>
                               <button
                                 onClick={() => setDeleteTarget(item)}
-                                style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, color: "var(--status-error)", cursor: "pointer" }}
+                                style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "1px solid color-mix(in srgb, var(--status-error) 30%, transparent)", borderRadius: 6, color: "var(--status-error)", cursor: "pointer" }}
                               >
                                 <Trash2 size={12} />
                               </button>

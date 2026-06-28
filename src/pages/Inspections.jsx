@@ -196,7 +196,10 @@ export default function Inspections() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div
+      className="sb-dashboard-reference-page"
+      style={{ display: "flex", flexDirection: "column", gap: 16 }}
+    >
       <CommandBar
         eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
         title="Inspections"

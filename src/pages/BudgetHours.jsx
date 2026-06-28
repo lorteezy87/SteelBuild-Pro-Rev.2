@@ -603,7 +603,7 @@ export default function BudgetHours() {
   /* ── Empty / loading states ── */
   if (!projectId) {
     return (
-      <div style={{
+      <div className="sb-dashboard-reference-page" style={{
         padding: 32, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)",
         textAlign: "center",
       }}>
@@ -613,6 +613,7 @@ export default function BudgetHours() {
   }
 
   return (
+    <div className="sb-dashboard-reference-page">
     <OperationsPageShell
       eyebrow={activeProject?.project_number || "Budget Control"}
       title="Budget Hours"
@@ -751,6 +752,7 @@ export default function BudgetHours() {
 
       <PresetDialog open={presetOpen} onClose={() => setPresetOpen(false)} onPick={applyPreset} />
     </OperationsPageShell>
+    </div>
   );
 }
 

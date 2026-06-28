@@ -271,7 +271,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
       {/* Contract value box */}
       <div style={{
         margin: "0 16px 12px 16px",
-        background: "rgba(0,0,0,0.25)",
+        background: "color-mix(in srgb, var(--text-primary) 25%, transparent)",
         border: "1px solid var(--border-default)",
         borderRadius: 4,
         padding: "10px 14px",
@@ -664,7 +664,7 @@ export default function Projects() {
      Render
   ───────────────────────────────────────────── */
   return (
-    <div style={{
+    <div className="sb-dashboard-reference-page" style={{
       height: "100%",
       display: "flex",
       flexDirection: "column",

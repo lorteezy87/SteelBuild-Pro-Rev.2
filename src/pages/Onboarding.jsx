@@ -385,7 +385,7 @@ export default function Onboarding() {
     || importMutation.isPending;
 
   return (
-    <div className="onboarding-page">
+    <div className="sb-dashboard-reference-page onboarding-page">
       <style>{onboardingStyles}</style>
 
       <header className="onboarding-top">

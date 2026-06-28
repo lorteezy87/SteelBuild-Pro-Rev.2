@@ -59,8 +59,90 @@
   background: var(--sbd-bg-page) !important;
 }
 
+/* Dashboard reference chrome — dark theme overrides for nav surfaces */
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-shell-body,
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-shell-content {
+  background: var(--bg-base) !important;
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-topbar {
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent) !important;
+  border-bottom-color: var(--border-default) !important;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--text-primary) 4%, transparent);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-topbar__icon,
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-topbar__user {
+  color: var(--text-primary);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-topbar__icon:hover,
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-topbar__user:hover {
+  background: var(--hover-bg);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-sidebar {
+  background: var(--bg-sidebar, var(--bg-surface));
+  border-right-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-brand {
+  color: var(--text-primary);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-brand__mark {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-nav__item {
+  color: var(--text-secondary);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-nav__item svg {
+  color: var(--text-muted);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-nav__item:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-nav__item.is-active {
+  background: var(--accent-muted);
+  border-left-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-nav__item.is-active svg {
+  color: var(--accent);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-sidebar__footer,
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-reference-copyright {
+  border-top-color: var(--border-default);
+  color: var(--text-muted);
+}
+
+.steelbuild-dark .dashboard-reference-shell .sb-dashboard-theme {
+  --dash-bg: var(--bg-base);
+  --dash-surface: var(--bg-surface);
+  --dash-border: var(--border-default);
+  --dash-border-strong: var(--border-strong);
+  --dash-text: var(--text-primary);
+  --dash-muted: var(--text-muted);
+  --dash-soft: var(--bg-surface-low);
+  --dash-gold: var(--accent);
+  --dash-green: var(--status-success);
+  --dash-blue: var(--status-info);
+  --dash-red: var(--status-error);
+  --dash-warn: var(--status-warning);
+  --dash-shadow: var(--shadow-card);
+}
+
 .sb-dashboard-shell-body {
-  background: #f5f7fb;
+  background: var(--bg-base, #f5f7fb);
 }
 
 .sb-dashboard-shell-content {
@@ -68,7 +150,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #f5f7fb;
+  background: var(--bg-base, #f5f7fb);
 }
 
 .sb-dashboard-reference-page {
@@ -84,9 +166,9 @@
 }
 
 .dashboard-reference-shell .sb-dashboard-topbar {
-  background: rgba(255, 255, 255, 0.96) !important;
-  border-bottom: 1px solid #e3e8ef !important;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+  background: color-mix(in srgb, var(--bg-surface) 96%, transparent) !important;
+  border-bottom: 1px solid var(--border-default) !important;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--text-primary) 3%, transparent);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
 }
@@ -108,7 +190,7 @@
 .sb-dashboard-topbar__user {
   border: 0;
   background: transparent;
-  color: #172033;
+  color: var(--text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -123,7 +205,7 @@
 
 .sb-dashboard-topbar__icon:hover,
 .sb-dashboard-topbar__user:hover {
-  background: #f3f6fa;
+  background: var(--hover-bg);
 }
 
 .sb-dashboard-topbar__user {
@@ -154,9 +236,9 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  background: #ffffff;
-  border-right: 1px solid #e3e8ef;
-  color: #172033;
+  background: var(--bg-sidebar, var(--bg-surface));
+  border-right: 1px solid var(--border-default);
+  color: var(--text-primary);
   transition: width 180ms ease, min-width 180ms ease;
 }
 
@@ -173,7 +255,7 @@
   gap: 10px;
   border: 0;
   background: transparent;
-  color: #0f172a;
+  color: var(--text-primary);
   cursor: pointer;
   font-size: 18px;
   font-weight: 800;
@@ -187,9 +269,9 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  border: 2px solid #f2a611;
+  border: 2px solid var(--accent);
   border-radius: 9px;
-  color: #f2a611;
+  color: var(--accent);
   font-size: 12px;
   font-weight: 800;
 }
@@ -223,7 +305,7 @@
   border-left: 3px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: #3f4b5f;
+  color: var(--text-secondary);
   cursor: pointer;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 13px;
@@ -234,22 +316,22 @@
 
 .sb-dashboard-reference-nav__item svg {
   flex-shrink: 0;
-  color: #5c687b;
+  color: var(--text-muted);
 }
 
 .sb-dashboard-reference-nav__item:hover {
-  background: #f6f8fb;
-  color: #111827;
+  background: var(--hover-bg);
+  color: var(--text-primary);
 }
 
 .sb-dashboard-reference-nav__item.is-active {
-  background: #fff5df;
-  border-left-color: #f2a611;
-  color: #0f172a;
+  background: var(--accent-muted);
+  border-left-color: var(--accent);
+  color: var(--text-primary);
 }
 
 .sb-dashboard-reference-nav__item.is-active svg {
-  color: #f2a611;
+  color: var(--accent);
 }
 
 .sb-dashboard-reference-sidebar.is-collapsed .sb-dashboard-reference-nav__item {
@@ -260,14 +342,14 @@
 
 .sb-dashboard-reference-sidebar__footer {
   padding: 8px 12px 18px;
-  border-top: 1px solid #edf1f6;
+  border-top: 1px solid var(--border-default);
 }
 
 .sb-dashboard-reference-copyright {
   margin: 18px 4px 0;
   padding-top: 16px;
-  border-top: 1px solid #edf1f6;
-  color: #7b8798;
+  border-top: 1px solid var(--border-default);
+  color: var(--text-muted);
   font-size: 11px;
   line-height: 1.55;
 }

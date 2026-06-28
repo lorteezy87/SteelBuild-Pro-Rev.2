@@ -267,7 +267,7 @@ export default function EmailInbox() {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* KPI strip */}
       <div style={{ padding: "16px 20px 0", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -287,7 +287,7 @@ export default function EmailInbox() {
               background: "var(--accent)", border: "1px solid var(--accent-border)",
               borderRadius: 8, cursor: "pointer",
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600,
-              color: "var(--text-on-accent, #fff)", flexShrink: 0,
+              color: "var(--text-on-accent)", flexShrink: 0,
             }}
           >
             <PenSquare size={12} strokeWidth={2} />
@@ -310,7 +310,7 @@ export default function EmailInbox() {
             active={activeFolder === "inbox"} onClick={() => { setActiveFolder("inbox"); setActiveLabelFilter(null); }} />
           <KpiTile compact label="Unread" value={stats.unread} icon={<Mail size={14} />} color="var(--warning)"
             onClick={() => { setActiveFolder("inbox"); setActiveLabelFilter(null); }} />
-          <KpiTile compact label="Starred" value={stats.starred} icon={<Star size={14} />} color="#F59E0B"
+          <KpiTile compact label="Starred" value={stats.starred} icon={<Star size={14} />} color="var(--status-warning)"
             active={activeFolder === "starred"} onClick={() => { setActiveFolder("starred"); setActiveLabelFilter(null); }} />
           <KpiTile compact label="Sent" value={stats.sent} icon={<Send size={14} />} color="var(--accent)"
             active={activeFolder === "sent"} onClick={() => { setActiveFolder("sent"); setActiveLabelFilter(null); }} />

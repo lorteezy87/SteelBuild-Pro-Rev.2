@@ -36,10 +36,25 @@ describe("LayoutRoute shell selection", () => {
     expect(screen.queryByTestId("desktop-shell")).toBeNull();
   });
 
-  it("renders DesktopShell when desktop_shell is on", () => {
+  it("renders classic Layout when desktop_shell is on for dashboard chrome pages", () => {
     flagOn = true;
     renderAt();
-    expect(screen.getByTestId("desktop-shell")).toBeTruthy();
-    expect(screen.queryByTestId("classic-layout")).toBeNull();
+    expect(screen.getByTestId("classic-layout")).toBeTruthy();
+    expect(screen.queryByTestId("desktop-shell")).toBeNull();
+  });
+
+  it("renders classic Layout when desktop_shell is on for all pages", () => {
+    flagOn = true;
+    render(
+      <MemoryRouter initialEntries={["/ChangeOrders"]}>
+        <Routes>
+          <Route element={<LayoutRoute />}>
+            <Route path="ChangeOrders" element={<div>page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByTestId("classic-layout")).toBeTruthy();
+    expect(screen.queryByTestId("desktop-shell")).toBeNull();
   });
 });

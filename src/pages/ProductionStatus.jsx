@@ -21,8 +21,8 @@ import TeklaEpmImportModal from "@/components/production/TeklaEpmImportModal";
 
 const STAGE_COLOR = {
   "Not Started": "var(--text-muted)",
-  Cut: "var(--status-info, #38bdf8)",
-  Fit: "var(--status-info, #38bdf8)",
+  Cut: "var(--status-info)",
+  Fit: "var(--status-info)",
   Weld: "var(--status-warning)",
   Clean: "var(--status-warning)",
   Paint: "var(--accent)",
@@ -69,7 +69,7 @@ export default function ProductionStatus() {
 
   if (!projectId) {
     return (
-      <div className="page-content" style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page page-content" style={{ padding: 24 }}>
         <CommandBar eyebrow="Production" title="Production Status" />
         <div className="sbd-card" style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>
           Pick a project from the top bar to view fabrication status.
@@ -79,7 +79,7 @@ export default function ProductionStatus() {
   }
 
   return (
-    <div className="page-content" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page page-content" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={activeProject?.name || "Production"}
         title="Production Status"

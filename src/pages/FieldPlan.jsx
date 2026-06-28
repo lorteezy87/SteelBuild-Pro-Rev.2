@@ -201,7 +201,7 @@ export default function FieldPlan() {
 
   // ── Render ─────────────────────────────────────────────────────────
   if (!projectId) return (
-    <div style={{ padding: 40, textAlign: "center" }}>
+    <div className="sb-dashboard-reference-page" style={{ textAlign: "center" }}>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>
         Select a project to view the Field Plan
       </div>
@@ -213,7 +213,7 @@ export default function FieldPlan() {
     : crews;
 
   return (
-    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }} className="fieldplan-root">
+    <div className="sb-dashboard-reference-page fieldplan-root" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <CommandBar
         eyebrow={`${activeProject?.project_name || "PROJECT"} · FIELD PLAN`}
         title={`${horizonDays}-Day Field Plan`}
@@ -332,7 +332,7 @@ export default function FieldPlan() {
           .sidebar, .nav, .command-bar-actions, button { display: none !important; }
           .fieldplan-root { padding: 12px !important; }
           table { font-size: 9px !important; }
-          th, td { border: 1px solid #333 !important; }
+          th, td { border: 1px solid var(--border-strong) !important; }
         }
       `}</style>
     </div>

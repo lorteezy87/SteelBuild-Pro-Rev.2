@@ -86,7 +86,7 @@ const TabButton = ({ label, active, onClick }) => (
     onClick={onClick}
     style={{
       background: active ? "var(--accent)" : "transparent",
-      color: active ? "#fff" : "var(--text-muted)",
+      color: active ? "var(--bg-base)" : "var(--text-muted)",
       border: active ? "1px solid var(--accent)" : "1px solid var(--border-default)",
       borderRadius: "var(--radius-btn)",
       padding: "6px 16px",
@@ -252,7 +252,7 @@ function ContractOverviewPanel({ project, approvedCOTotal, pendingCOTotal, revis
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               letterSpacing: "0.10em", textTransform: "uppercase",
               padding: "6px 16px", background: "var(--accent)",
-              color: "#fff", border: "none",
+              color: "var(--bg-base)", border: "none",
               borderRadius: "var(--radius-btn)", cursor: isSaving ? "wait" : "pointer",
               opacity: isSaving ? 0.6 : 1,
             }}
@@ -803,7 +803,7 @@ export default function ContractManagement() {
 
   // ── No project selected ───────────────────────────────────────────────────
   if (!projectId) return (
-    <div style={{ textAlign: "center", padding: "80px 24px" }}>
+    <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>{"\u{1F4CB}"}</div>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color: "var(--text-disabled)", marginBottom: 6 }}>Select a project</div>
       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
@@ -812,7 +812,7 @@ export default function ContractManagement() {
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (isLoading) return (
-    <div style={{ padding: "24px 28px" }}>
+    <div className="sb-dashboard-reference-page" style={{ padding: "24px 28px" }}>
       <CommandBar
         eyebrow="CONTRACT"
         title="Contract Management"
@@ -830,7 +830,7 @@ export default function ContractManagement() {
   const TABS = ["CHANGE ORDERS", "BILLING & SOV", "CONTRACT SUMMARY"];
 
   return (
-    <div style={{ padding: "24px 28px", background: "var(--bg-page)", minHeight: "100vh" }}>
+    <div className="sb-dashboard-reference-page" style={{ padding: "24px 28px", background: "var(--bg-page)", minHeight: "100vh" }}>
       <CommandBar
         eyebrow={project?.name || activeProject?.name || "PROJECT"}
         title="Contract Management"
@@ -846,7 +846,7 @@ export default function ContractManagement() {
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               letterSpacing: "0.10em", textTransform: "uppercase",
               padding: "6px 16px", background: "var(--accent)",
-              color: "#fff", border: "none",
+              color: "var(--bg-base)", border: "none",
               borderRadius: "var(--radius-btn)", cursor: "pointer",
             }}
           >

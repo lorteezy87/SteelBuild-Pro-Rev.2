@@ -187,7 +187,7 @@ export default function OrgMembers() {
   }
 
   return (
-    <div className="page-content" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 920 }}>
+    <div className="sb-dashboard-reference-page page-content" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 920 }}>
       <CommandBar eyebrow={currentOrg?.name || "Workspace"} title="Team" count={members.length} unit=" members" subtitle="Invite teammates and manage who can access this workspace" />
 
       {!(loadingMembers || loadingInvites) && (

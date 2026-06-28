@@ -244,7 +244,7 @@ export default function Constraints() {
   // -- No-project early return ----------------------------------------------------------------------
   if (!projectId) {
     return (
-      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>—</div>
         <div
           style={{
@@ -268,6 +268,7 @@ export default function Constraints() {
 
   // -- Render ----------------------------------------------------------------------
   return (
+    <div className="sb-dashboard-reference-page">
     <OperationsPageShell
       eyebrow={activeProject?.name || projects.find((p) => p.id === projectId)?.name || "All Projects"}
       title="Constraint Log"
@@ -397,5 +398,6 @@ export default function Constraints() {
         description={`Delete "${deleteTarget?.title || ""}"? This cannot be undone.`}
       />
     </OperationsPageShell>
+    </div>
   );
 }

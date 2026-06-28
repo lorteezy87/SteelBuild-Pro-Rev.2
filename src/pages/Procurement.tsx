@@ -340,7 +340,7 @@ export default function Procurement() {
 
   if (!projectId) {
     return (
-      <div style={{ textAlign: 'center', padding: '80px 24px' }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: 'center', padding: '80px 24px' }}>
         <div style={{ fontSize: 32, marginBottom: 12, fontFamily: "var(--font-mono)", fontWeight: 800 }}>PKG</div>
         <div style={{
           fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700,
@@ -353,6 +353,7 @@ export default function Procurement() {
   }
 
   return (
+    <div className="sb-dashboard-reference-page">
     <OperationsPageShell
       eyebrow={selectedProject?.name || "Procurement"}
       title="Procurement Tracker"
@@ -505,5 +506,6 @@ export default function Procurement() {
         description="The item will be archived (soft-deleted). It can be recovered from the database if needed."
       />
     </OperationsPageShell>
+    </div>
   );
 }

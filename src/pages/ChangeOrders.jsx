@@ -323,7 +323,7 @@ export default function ChangeOrders() {
   /* -- Guards -- */
   if (!projectId) {
     return (
-      <div style={{ padding: 32, textAlign: "center" }}>
+      <div className="sb-dashboard-reference-page" style={{ padding: 32, textAlign: "center" }}>
         <div
           style={{
             fontFamily: "var(--font-body)",
@@ -339,7 +339,7 @@ export default function ChangeOrders() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
@@ -353,6 +353,7 @@ export default function ChangeOrders() {
   const formatMoney = (n) => formatCurrency(n, 0);
 
   return (
+    <div className="sb-dashboard-reference-page">
     <OperationsPageShell
       eyebrow={`Financial · ${projectName || activeProject?.project_number || "Project"}`}
       title="Change Orders"
@@ -599,5 +600,6 @@ export default function ChangeOrders() {
         description={`Delete ${deleteTarget?.co_number}?`}
       />
     </OperationsPageShell>
+    </div>
   );
 }

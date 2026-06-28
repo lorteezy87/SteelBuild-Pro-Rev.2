@@ -424,7 +424,7 @@ export default function Field() {
   ];
 
   return (
-    <div className="field-mobile-console" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page field-mobile-console" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={activeProject ? activeProject.name : "ALL PROJECTS"}
         title="Field"
@@ -1015,8 +1015,8 @@ function PhotoThumb({ photo, onClick }) {
           bottom: 2,
           left: 2,
           right: 2,
-          background: "rgba(7,9,14,0.8)",
-          color: "white",
+          background: "color-mix(in srgb, var(--bg-base) 80%, transparent)",
+          color: "var(--text-on-accent)",
           fontFamily: "var(--font-mono)",
           fontSize: 8,
           fontWeight: 700,

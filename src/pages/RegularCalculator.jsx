@@ -322,6 +322,7 @@ export default function RegularCalculator() {
   // ── Render ───────────────────────────────────────────────────────
   return (
     <div
+      className="sb-dashboard-reference-page"
       ref={rootRef}
       tabIndex={-1}
       onKeyDown={onKey}

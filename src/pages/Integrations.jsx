@@ -184,7 +184,7 @@ export default function Integrations() {
   const selectedCustomerLabel = customerStatusMeta(selectedArea.customerStatus).label;
 
   return (
-    <div className="integrations-page">
+    <div className="sb-dashboard-reference-page integrations-page">
       <style>{integrationsStyles}</style>
 
       <header className="integrations-top">
@@ -506,7 +506,7 @@ const integrationsStyles = `
 .integrations-primary-btn {
   background: var(--accent);
   border-color: var(--accent);
-  color: #061018;
+  color: var(--bg-base);
 }
 
 .integrations-secondary-btn,
@@ -817,7 +817,7 @@ const integrationsStyles = `
   flex: 0 0 auto;
   border-radius: 7px;
   background: var(--accent);
-  color: #061018;
+  color: var(--bg-base);
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 800;

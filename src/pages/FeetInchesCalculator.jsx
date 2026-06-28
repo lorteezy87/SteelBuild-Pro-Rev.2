@@ -203,7 +203,7 @@ export default function FeetInchesCalculator() {
   const auxLine = `${accumDecFt.toFixed(4)} ft · ${accumDecIn.toFixed(3)} in${pendingOp ? `   ·   pending ${pendingOp}` : ""}`;
 
   return (
-    <div style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
+    <div className="sb-dashboard-reference-page" style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
       <div style={{ maxWidth: 880, margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: 16 }}>
