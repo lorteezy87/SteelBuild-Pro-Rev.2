@@ -362,7 +362,7 @@ export default function DataExchange() {
   }
 
   return (
-    <div className="data-exchange-page">
+    <div className="sb-dashboard-reference-page data-exchange-page">
       <style>{dataExchangeStyles}</style>
 
       <header className="de-header">
@@ -767,7 +767,7 @@ const dataExchangeStyles = `
 .de-primary-btn {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--accent-foreground, #fff);
+  color: var(--bg-base);
 }
 
 .de-secondary-btn,

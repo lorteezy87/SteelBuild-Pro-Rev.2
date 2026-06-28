@@ -356,7 +356,7 @@ export default function CostDashboard() {
   };
 
   if (!activeProject?.id) return (
-    <div style={{ textAlign: "center", padding: "80px 24px" }}>
+    <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>💰</div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>Select a project to view Cost Dashboard</div>
       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
@@ -365,14 +365,14 @@ export default function CostDashboard() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
         <LoadingSkeleton variant="page" />
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "6px 24px 24px" }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16, padding: "6px 24px 24px" }}>
       <CommandBar
         eyebrow={project?.name || "COST"}
         title="Cost Dashboard"
@@ -416,8 +416,8 @@ export default function CostDashboard() {
                   <Tooltip content={<CustomTooltip />} />
                   <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }} />
                   <Bar dataKey="budget" name="Budget" fill="var(--accent)" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="actual" name="Actual" fill="#3B82F6" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="committed" name="Committed" fill="#FFB300" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="actual" name="Actual" fill="var(--status-info)" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="committed" name="Committed" fill="var(--status-warning-bright)" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -470,7 +470,7 @@ export default function CostDashboard() {
                 )}
                 <Area type="monotone" dataKey="budget" name="Budget" stroke="var(--accent)" fill="url(#budgetGrad)" strokeWidth={2} />
                 <Area type="monotone" dataKey="actual" name="Actual" stroke="var(--accent)" fill="url(#actualGrad)" strokeWidth={2} />
-                <Line type="monotone" dataKey="committed" name="Committed" stroke="#FFB300" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+                <Line type="monotone" dataKey="committed" name="Committed" stroke="var(--status-warning-bright)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

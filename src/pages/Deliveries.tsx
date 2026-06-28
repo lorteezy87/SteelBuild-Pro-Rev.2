@@ -397,7 +397,7 @@ export default function Deliveries() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page">
         <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
@@ -547,7 +547,7 @@ export default function Deliveries() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="delivery-page">
+    <div className="sb-dashboard-reference-page delivery-page">
       <style>{deliveryStyles}</style>
 
       <section className="delivery-hero">

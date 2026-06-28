@@ -64,7 +64,10 @@ function ClassicRiskHub() {
     );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div
+      className="sb-dashboard-reference-page"
+      style={{ display: "flex", flexDirection: "column", minHeight: 0 }}
+    >
       <div
         role="tablist"
         aria-label="Risk"

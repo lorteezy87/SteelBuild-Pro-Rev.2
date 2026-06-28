@@ -10,7 +10,6 @@ import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import ProjectDashboard from "./dashboard/ProjectDashboard";
 import DashboardHeader from "./dashboard/DashboardHeader";
-import GettingStartedChecklist from "@/components/dashboard/GettingStartedChecklist";
 
 // KPI presentation specs — value is filled per-scope below. Ids match
 // DASHBOARD_KPI_IDS so Settings (visible_kpis / kpi_order) drive this strip.
@@ -61,7 +60,7 @@ const PortfolioView = lazyWithRetry(() => import("../components/dashboard/Portfo
  */
 function FirstProjectWelcome({ onStart }) {
   return (
-    <div style={{ display: "grid", placeItems: "center", minHeight: "62vh", padding: 24 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "grid", placeItems: "center", minHeight: "62vh" }}>
       <div style={{ maxWidth: 480, textAlign: "center" }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--accent)", fontWeight: 800, marginBottom: 14 }}>
           Welcome to SteelBuild Pro
@@ -328,6 +327,7 @@ export default function Dashboard() {
       summary={summary}
       kpis={kpiList}
       density={prefs.dashboard_density}
+      variant="dashboard"
     />
   );
   // Density also drives the gap between the header and the dashboard body.
@@ -335,7 +335,11 @@ export default function Dashboard() {
   const showHeader = prefs.show_welcome || kpiList.length > 0;
 
   if (isLoading) {
-    return <LoadingSkeleton variant="page" />;
+    return (
+      <div className="sb-dashboard-reference-page">
+        <LoadingSkeleton variant="page" />
+      </div>
+    );
   }
 
   if (!pid) {
@@ -347,7 +351,7 @@ export default function Dashboard() {
       return <FirstProjectWelcome onStart={() => navigate("/Onboarding")} />;
     }
     return (
-      <div data-dashboard-density={prefs.dashboard_density} style={{ display: "flex", flexDirection: "column", gap: bodyGap }}>
+      <div className="sb-dashboard-reference-page sb-dashboard-theme" data-dashboard-density={prefs.dashboard_density} style={{ display: "flex", flexDirection: "column", gap: bodyGap }}>
         {showHeader && dashboardHeader}
         <ErrorBoundary label="Portfolio Dashboard">
           <Suspense fallback={<LoadingSkeleton variant="page" />}>
@@ -369,9 +373,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div data-dashboard-density={prefs.dashboard_density} style={{ display: "flex", flexDirection: "column", gap: bodyGap }}>
-      {showHeader && dashboardHeader}
-      <GettingStartedChecklist projectId={pid} />
+    <div className="sb-dashboard-reference-page sb-dashboard-theme" data-dashboard-density={prefs.dashboard_density} style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       <ErrorBoundary label="Project Dashboard">
         <ProjectDashboard
         project={activeProject}

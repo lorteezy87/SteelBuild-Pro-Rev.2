@@ -822,7 +822,7 @@ export default function SOV() {
               <Button
                 size="sm"
                 onClick={() => { setEditing(null); setModalOpen(true); }}
-                style={{ background: "var(--accent)", color: "#fff", border: "none", fontWeight: 700 }}
+                style={{ background: "var(--accent)", color: "var(--bg-base)", border: "none", fontWeight: 700 }}
               >
                 + Add First Line Item
               </Button>
@@ -856,7 +856,7 @@ export default function SOV() {
      No-project guard
      ═══════════════════════════════════════════════════════════════ */
   if (!activeProject?.id) return (
-    <div style={{ textAlign: "center", padding: "80px 24px" }}>
+    <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>&#128202;</div>
       <div style={{
         fontFamily: "var(--font-body)", fontSize: 20, fontWeight: 700,
@@ -968,7 +968,7 @@ export default function SOV() {
      MAIN RENDER — classic skin
      ═══════════════════════════════════════════════════════════════ */
   return (
-    <div>
+    <div className="sb-dashboard-reference-page">
       {/* ── Requirement 10: SOV Mismatch Alert Banner ── */}
       {hasMismatch && (
         <div style={{
@@ -1265,14 +1265,14 @@ function TabButton({ active, onClick, label, count }) {
         fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,
         cursor: "pointer", transition: "all 0.15s",
         background: active ? "var(--accent)" : "var(--bg-surface)",
-        color: active ? "#fff" : "var(--text-secondary)",
+        color: active ? "var(--bg-base)" : "var(--text-secondary)",
       }}
     >
       {label}
       <span style={{
         marginLeft: 6, fontFamily: "var(--font-mono)", fontSize: 9,
         background: active ? "rgba(255,255,255,0.2)" : "var(--accent-muted)",
-        color: active ? "#fff" : "var(--accent)",
+        color: active ? "var(--bg-base)" : "var(--accent)",
         borderRadius: 4, padding: "1px 5px", fontWeight: 700,
       }}>
         {count}

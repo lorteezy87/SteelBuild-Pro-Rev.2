@@ -35,7 +35,10 @@ export default function ResourceHub() {
     );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div
+      className="sb-dashboard-reference-page"
+      style={{ display: "flex", flexDirection: "column", minHeight: 0 }}
+    >
       {/* Slim tab strip — switches between the two resource surfaces */}
       <div
         role="tablist"

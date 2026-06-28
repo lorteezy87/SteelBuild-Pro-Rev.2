@@ -1037,7 +1037,7 @@ export default function Schedule() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* CommandBar */}
       <div
         style={{
@@ -1405,7 +1405,7 @@ export default function Schedule() {
       )}
 
       {showBulkParent && (
-        <div onClick={() => setShowBulkParent(false)} style={{ position: "fixed", inset: 0, background: "rgba(1,4,10,0.6)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div onClick={() => setShowBulkParent(false)} style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 60%, transparent)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg-surface-high)", border: "1px solid var(--accent-border)", borderRadius: 14, padding: 20, width: 420 }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", marginBottom: 12 }}>
               SET PARENT FOR {selectedIds.size} TASK{selectedIds.size !== 1 ? "S" : ""}

@@ -74,7 +74,7 @@ const ENTITY_ROUTES = {
 // ── Empty-project placeholder ───────────────────────────────────────
 function NoProject() {
   return (
-    <div style={{ textAlign: "center", padding: "80px 24px" }}>
+    <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
       <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>--</div>
       <div style={{ ...mono, fontSize: 13, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
         Select a Project
@@ -105,7 +105,7 @@ function SignalCard({ signal, active, onClick }) {
         borderRadius: 8,
         background: active
           ? "color-mix(in srgb, var(--accent-muted) 66%, var(--bg-surface))"
-          : "color-mix(in srgb, var(--bg-surface) 94%, #111827 6%)",
+          : "color-mix(in srgb, var(--bg-surface) 94%, var(--text-primary) 6%)",
         cursor: "pointer",
         textAlign: "left",
         transition: "all 0.12s ease",
@@ -195,7 +195,7 @@ function BreakdownSection({ title, groups, maxExposure, nameMap }) {
     <div style={{
       border: "1px solid color-mix(in srgb, var(--border-default) 82%, transparent)",
       borderRadius: 8,
-      background: "color-mix(in srgb, var(--bg-surface) 94%, #111827 6%)",
+      background: "color-mix(in srgb, var(--bg-surface) 94%, var(--text-primary) 6%)",
       overflow: "hidden",
     }}>
       <div style={{ padding: "10px 12px", borderBottom: "1px solid color-mix(in srgb, var(--border-default) 50%, transparent)" }}>
@@ -303,7 +303,7 @@ export default function MarginRisk() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
         <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
           Calculating margin exposure...
         </div>
@@ -315,6 +315,7 @@ export default function MarginRisk() {
   const maxWpExposure = risk.byWorkPackage.length > 0 ? risk.byWorkPackage[0].exposure : 1;
 
   return (
+    <div className="sb-dashboard-reference-page">
     <OperationsPageShell
       eyebrow={activeProject?.name || "Project"}
       title="Margin at Risk"
@@ -370,7 +371,7 @@ export default function MarginRisk() {
           textAlign: "center", padding: "60px 24px",
           border: "1px solid color-mix(in srgb, var(--border-default) 82%, transparent)",
           borderRadius: 8,
-          background: "color-mix(in srgb, var(--bg-surface) 94%, #111827 6%)",
+          background: "color-mix(in srgb, var(--bg-surface) 94%, var(--text-primary) 6%)",
         }}>
           <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>--</div>
           <div style={{ ...mono, fontSize: 13, fontWeight: 700, color: "var(--status-success)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
@@ -387,7 +388,7 @@ export default function MarginRisk() {
         <div style={{
           border: "1px solid color-mix(in srgb, var(--border-default) 82%, transparent)",
           borderRadius: 8,
-          background: "color-mix(in srgb, var(--bg-surface) 94%, #111827 6%)",
+          background: "color-mix(in srgb, var(--bg-surface) 94%, var(--text-primary) 6%)",
           overflow: "hidden",
         }}>
           <div style={{ padding: "10px 12px", borderBottom: "1px solid color-mix(in srgb, var(--border-default) 50%, transparent)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -431,5 +432,6 @@ export default function MarginRisk() {
         </div>
       )}
     </OperationsPageShell>
+    </div>
   );
 }

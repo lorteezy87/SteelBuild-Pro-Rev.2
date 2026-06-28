@@ -265,7 +265,7 @@ export default function PayApplications() {
   }
 
   return (
-    <div style={{ padding: 20, maxWidth: 1240, margin: "0 auto" }}>
+    <div className="sb-dashboard-reference-page" style={{ padding: 20, maxWidth: 1240, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 20, color: "var(--text-primary)" }}>Pay Applications</h1>

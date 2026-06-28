@@ -311,7 +311,7 @@ export default function WorkPackages() {
 
   if (wpLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
@@ -428,7 +428,7 @@ export default function WorkPackages() {
   }
 
   return (
-    <div style={pageStyle}>
+    <div className="sb-dashboard-reference-page" style={pageStyle}>
       <style>{RESPONSIVE_CSS}</style>
       <Hero
         projectName={projectName}

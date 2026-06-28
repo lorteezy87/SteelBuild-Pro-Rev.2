@@ -73,7 +73,7 @@ export default function Tutorial() {
   }, [search]);
 
   return (
-    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14, height: "100%", overflow: "hidden" }}>
+    <div className="sb-dashboard-reference-page" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14, height: "100%", overflow: "hidden" }}>
       <CommandBar
         eyebrow="HELP"
         title="Tutorial & user guide"
