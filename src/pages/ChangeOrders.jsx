@@ -37,6 +37,8 @@ import {
 } from "@/components/shared/crudFeedback";
 import { usePermissions } from "@/services/permissions";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import CoControlCenter from "./changeOrders/CoControlCenter";
 
 import {
   KpiTile,
@@ -59,6 +61,7 @@ export default function ChangeOrders() {
   const projectId = useProjectId();
   const { activeProject } = useProjectContext();
   const { can } = usePermissions();
+  const commandUi = useFlag("command_ui");
 
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -352,6 +355,134 @@ export default function ChangeOrders() {
   // render as `-$12,345`).
   const formatMoney = (n) => formatCurrency(n, 0);
 
+  // Shared modal block — rendered in both the command_ui branch and the
+  // classic branch so all mutation state is wired identically in both paths.
+  const modals = (
+    <>
+      <COFormModal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditing(null); setPrefill(null); }}
+        onSave={handleSave}
+        isSaving={createMut.isPending || updateMut.isPending}
+        co={editing}
+        prefill={prefill}
+        sovItems={sovItems}
+        sourceRfiLabel={sourceRfiLabel}
+        projects={projects}
+        // Heuristic preview of the auto-assigned number for the modal
+        // placeholder. The real auto-assignment runs in createMut and
+        // uses getNextFormattedNumber against the live project — this
+        // is just a hint shown when the user hasn't typed anything.
+        nextNumber={`CO #${String((cos.length || 0) + 1).padStart(3, "0")}`}
+      />
+      <ChangeOrderImportModal
+        open={importOpen}
+        projectId={projectId}
+        projectName={projectName}
+        projects={projects}
+        onClose={() => setImportOpen(false)}
+      />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        title="Delete Change Order"
+        description={`Delete ${deleteTarget?.co_number}?`}
+      />
+    </>
+  );
+
+  // ── command_ui flag-branch ──────────────────────────────────────────────────
+  if (commandUi) {
+    return (
+      <div className="co-page">
+        <CoControlCenter
+          projectName={projectName}
+          cos={cos}
+          filtered={filtered}
+          search={search}
+          onSearch={setSearch}
+          statusFilter={filter}
+          onFilterChange={setFilter}
+          onOpenCo={(co) => { setEditing(co); setModalOpen(true); }}
+          onExport={() => {
+            // Simple CSV export matching the RFI pattern — filtered rows only.
+            const rows = [
+              ["CO #", "Title", "Status", "Reason Code", "Amount", "Sched Impact (d)", "Submitted", "Approved", "Approved By"].join(","),
+              ...filtered.map((c) =>
+                [
+                  c.co_number || "",
+                  `"${(c.title || "").replace(/"/g, '""')}"`,
+                  c.status || "",
+                  c.reason_code || "",
+                  c.co_amount ?? "",
+                  c.schedule_impact_days ?? "",
+                  c.submitted_date || "",
+                  c.approved_date || "",
+                  `"${(c.approved_by || "").replace(/"/g, '""')}"`,
+                ].join(",")
+              ),
+            ].join("\n");
+            const blob = new Blob([rows], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `change-orders-${projectName.replace(/\s+/g, "-")}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          onCreate={can("create", "change_order") ? () => { setEditing(null); setPrefill(null); setModalOpen(true); } : null}
+          onImport={can("create", "change_order") ? () => setImportOpen(true) : null}
+          baseContract={baseContract}
+          revisedContract={revisedContract}
+          projectHealth={liveProject?.health_status || null}
+          percentComplete={liveProject?.scope_complete_pct_override != null ? Number(liveProject.scope_complete_pct_override) : null}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onToggleAll={toggleAll}
+        />
+        <BulkActionBar
+          count={selectedIds.size}
+          onClear={() => setSelectedIds(new Set())}
+          actions={[
+            {
+              label: "SUBMIT SELECTED",
+              icon: "arrow",
+              onClick: () => {
+                const ids = [...selectedIds];
+                ids.forEach((id) => updateMut.mutate({ id, data: { status: "Submitted", submitted_date: new Date().toISOString().split("T")[0] } }));
+                setSelectedIds(new Set());
+              },
+            },
+            {
+              label: "APPROVE",
+              icon: "check",
+              onClick: () => {
+                const ids = [...selectedIds];
+                ids.forEach((id) => updateMut.mutate({ id, data: { status: "Approved", approved_date: new Date().toISOString().split("T")[0] } }));
+                setSelectedIds(new Set());
+              },
+            },
+            ...(can("delete", "change_order") ? [{
+              label: "DELETE",
+              icon: "x",
+              variant: "danger",
+              onClick: () => {
+                const ids = [...selectedIds];
+                if (window.confirm(`Delete ${ids.length} change order(s)?`)) {
+                  ids.forEach((id) => deleteMut.mutate(id));
+                  setSelectedIds(new Set());
+                }
+              },
+            }] : []),
+          ]}
+        />
+        {modals}
+      </div>
+    );
+  }
+
+  // ── Classic layout ──────────────────────────────────────────────────────────
   return (
     <OperationsPageShell
       eyebrow={`Financial · ${projectName || activeProject?.project_number || "Project"}`}
@@ -567,37 +698,7 @@ export default function ChangeOrders() {
         ]}
       />
 
-      {/* Modals */}
-      <COFormModal
-        open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditing(null); setPrefill(null); }}
-        onSave={handleSave}
-        isSaving={createMut.isPending || updateMut.isPending}
-        co={editing}
-        prefill={prefill}
-        sovItems={sovItems}
-        sourceRfiLabel={sourceRfiLabel}
-        projects={projects}
-        // Heuristic preview of the auto-assigned number for the modal
-        // placeholder. The real auto-assignment runs in createMut and
-        // uses getNextFormattedNumber against the live project — this
-        // is just a hint shown when the user hasn't typed anything.
-        nextNumber={`CO #${String((cos.length || 0) + 1).padStart(3, "0")}`}
-      />
-      <ChangeOrderImportModal
-        open={importOpen}
-        projectId={projectId}
-        projectName={projectName}
-        projects={projects}
-        onClose={() => setImportOpen(false)}
-      />
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
-        title="Delete Change Order"
-        description={`Delete ${deleteTarget?.co_number}?`}
-      />
+      {modals}
     </OperationsPageShell>
   );
 }
