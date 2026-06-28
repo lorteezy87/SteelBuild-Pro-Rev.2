@@ -13,6 +13,8 @@ import { defaultFeedSort } from "@/lib/commandCenter/sortLogic";
 import { buildTodayView } from "@/lib/commandCenter/todayView";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile } from "@/components/design-system";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import CommandCenterControlCenter from "./commandCenter/CommandCenterControlCenter";
 
 /**
  * CommandCenter — today-first personal cockpit.
@@ -91,6 +93,13 @@ function saveRole(id) {
 }
 
 export default function CommandCenter() {
+  // ── Feature flag ────────────────────────────────────────────────────
+  const commandUi = useFlag("command_ui");
+
+  // ── Command UI local state (only used when flag is on) ───────────────
+  const [ccSearch, setCcSearch] = useState("");
+  const [ccTypeFilter, setCcTypeFilter] = useState("All");
+
   // ── State ───────────────────────────────────────────────────────────
   const [snapshotFilter, setSnapshotFilter] = useState(null); // one of snapshot keys
   const [chipFilters, setChipFilters] = useState({
@@ -346,6 +355,43 @@ export default function CommandCenter() {
       <div style={{ padding: 24 }}>
         <LoadingSkeleton variant="page" />
       </div>
+    );
+  }
+
+  // ── Command UI branch ────────────────────────────────────────────────
+  if (commandUi) {
+    const ccSources = {
+      rfis,
+      submittals: [], // MISSING: submittals not queried in CommandCenter.jsx yet
+      changeOrders,
+      deliveries,
+      workPackages,
+      projects,
+      scheduleTasks,
+    };
+    const activeProjectName = projects.length === 1 ? (projects[0].name || projects[0].project_number) : null;
+    return (
+      <>
+        <CommandCenterControlCenter
+          sources={ccSources}
+          projectName={activeProjectName}
+          projectCount={projects.length}
+          search={ccSearch}
+          onSearch={setCcSearch}
+          typeFilter={ccTypeFilter}
+          onTypeChange={setCcTypeFilter}
+          onOpenItem={(item) => setDetailItem(item.raw || item)}
+          onForwardLook={() => setForwardLookOpen(true)}
+        />
+        <ItemDetailDrawer item={detailItem} onClose={() => setDetailItem(null)} />
+        <ForwardLookDrawer
+          open={forwardLookOpen}
+          onClose={() => setForwardLookOpen(false)}
+          workPackages={workPackages}
+          deliveries={deliveries}
+          projectMap={projectMap}
+        />
+      </>
     );
   }
 
