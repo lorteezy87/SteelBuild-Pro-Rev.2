@@ -68,10 +68,11 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   // Settings → Dashboard → "Pinned Modules" merges into the sidebar favorites.
   const { pinned_modules } = useUserPrefs();
   const [collapsed, setCollapsed] = useState(() => {
-    // Default to accordion: every collapsible group collapsed; the group you're
-    // in auto-expands below. Far less to scan than 10 open groups.
+    // Light (the command theme) shows EVERY group expanded so all modules are
+    // visible at once — matches the mockup's full sidebar list. Dark (legacy)
+    // keeps the accordion: all collapsed, the active group auto-expands below.
     const def = {};
-    SIDEBAR_GROUPS.forEach((g) => { if (g.collapsible) def[g.label] = true; });
+    SIDEBAR_GROUPS.forEach((g) => { if (g.collapsible) def[g.label] = !isLightTheme; });
     return def;
   });
   const [railModeState, setRailMode] = useState(loadRailState);
@@ -95,6 +96,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   // so you only ever scan one group's items, not all of them. Manual toggles
   // persist until the next navigation.
   useEffect(() => {
+    if (isLightTheme) return; // light shows every group expanded (mockup parity) — no accordion
     const activeGroup = SIDEBAR_GROUPS.find((g) => g.items.some((it) => it.page === currentPageName));
     if (!activeGroup) return;
     setCollapsed((prev) => {
@@ -109,7 +111,24 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
       saveSidebarState(next);
       return next;
     });
-  }, [currentPageName]);
+  }, [currentPageName, isLightTheme]);
+
+  // Light theme = mockup-style full sidebar: expand every group when light turns
+  // on (handles the dark→light flip after mount). Manual collapses still persist
+  // afterward since this only fires when the theme itself changes.
+  useEffect(() => {
+    if (!isLightTheme) return;
+    setCollapsed((prev) => {
+      const next = {};
+      let changed = false;
+      for (const g of SIDEBAR_GROUPS) {
+        if (!g.collapsible) continue;
+        next[g.label] = false;
+        if (prev[g.label]) changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [isLightTheme]);
 
   const toggleGroup = (label) => {
     setCollapsed((prev) => {
@@ -184,7 +203,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
 
   if (!visible) return null;
 
-  const width = isLightTheme ? 176 : (railMode ? 56 : 240);
+  const width = isLightTheme ? 208 : (railMode ? 56 : 240);
 
   return (
     <aside
