@@ -11,6 +11,37 @@ import { CommandBar, KpiTile, BulkActionBar } from "@/components/design-system";
 import { Plus, Search, ClipboardCheck, ChevronDown, ChevronRight } from "lucide-react";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 import { daysUntil } from "@/lib/dateMath";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import { calcWpProgress } from "@/utils/projectKpis";
+import ActionItemsControlCenter from "./actionItems/ActionItemsControlCenter";
+
+/** Lightweight CSV export for the command_ui path. */
+function exportActionItemsToCSV(items) {
+  const rows = [
+    ["ID", "Title", "Status", "Priority", "Assigned To", "Due Date", "Category", "Project Area", "Meeting Reference"],
+    ...items.map((ai) => [
+      ai.id,
+      ai.title || "",
+      ai.status || "",
+      ai.priority || "",
+      ai.assigned_to || "",
+      ai.due_date || "",
+      ai.category || "",
+      ai.project_area || "",
+      ai.meeting_reference || "",
+    ]),
+  ];
+  const csv = rows
+    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "action-items.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const priorities = [
   PRIORITY.CRITICAL,
@@ -44,6 +75,7 @@ function shiftDate(dateStr, days) {
 export default function ActionItems() {
   const projectId = useProjectId();
   const qc = useQueryClient();
+  const commandUi = useFlag("command_ui");
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
@@ -156,6 +188,13 @@ export default function ActionItems() {
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : null;
 
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work-packages", projectId],
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
+    enabled: !!projectId && commandUi,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // ─── Split SETUP checklist items from regular action items ──────────────
   const [setupCollapsed, setSetupCollapsed] = useState(false);
 
@@ -264,6 +303,97 @@ export default function ActionItems() {
     bulkUpdateMut.mutate(updates);
     setShowAssignDropdown(false);
   };
+
+  // ─── Shared modals (used by both command_ui and classic paths) ────────────
+  const modals = (
+    <>
+      {(showForm || editingItem) && (
+        <ActionItemFormModal
+          projectId={editingItem?.project_id || projectId}
+          actionItem={editingItem}
+          onClose={() => { setShowForm(false); setEditingItem(null); }}
+          onSave={(data) => {
+            if (editingItem) {
+              updateMut.mutate({ id: editingItem.id, data });
+            } else {
+              createMut.mutate(data);
+            }
+          }}
+        />
+      )}
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        title="Delete Action Item"
+        description={`Delete "${deleteTarget?.title}"? This cannot be undone.`}
+      />
+    </>
+  );
+
+  // ─── Command UI path (behind feature flag) ─────────────────────────────────
+  if (commandUi) {
+    const activeProject = projects.find((p) => p.id === projectId);
+    const projectHealth = activeProject?.health_status || null;
+    const percentComplete =
+      activeProject?.scope_complete_pct_override != null
+        ? Number(activeProject.scope_complete_pct_override)
+        : workPackages.length
+        ? calcWpProgress(workPackages).pct
+        : null;
+
+    // command_ui filter state maps "All" → "all" for the classic filter helpers,
+    // and passes display-friendly values (e.g. "Open") through unchanged.
+    const ccStatusFilter = filterStatus === "all" ? "All" : filterStatus;
+    const ccPriorityFilter = filterPriority === "all" ? "All" : filterPriority;
+    const handleCcStatusChange = (v) => setFilterStatus(v === "All" ? "all" : v);
+    const handleCcPriorityChange = (v) => setFilterPriority(v === "All" ? "all" : v);
+
+    return (
+      <div>
+        <ActionItemsControlCenter
+          projectName={activeProject?.name || "All Projects"}
+          actionItems={allItems}
+          filtered={filtered}
+          search={search}
+          onSearch={setSearch}
+          statusFilter={ccStatusFilter}
+          onStatusFilterChange={handleCcStatusChange}
+          priorityFilter={ccPriorityFilter}
+          onPriorityFilterChange={handleCcPriorityChange}
+          onOpenItem={setEditingItem}
+          onExport={() => exportActionItemsToCSV(filtered)}
+          onCreate={() => { setEditingItem(null); setShowForm(true); }}
+          projectHealth={projectHealth}
+          percentComplete={percentComplete}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onToggleAll={(checked) => handleSelectAll(checked, filtered)}
+        />
+        <BulkActionBar
+          count={selectedIds.size}
+          onClear={clearSelection}
+          actions={[
+            {
+              label: "Bump +1 Day",
+              icon: "schedule",
+              variant: "secondary",
+              onClick: handleBulkBumpDay,
+              disabled: bulkUpdateMut.isPending,
+            },
+            {
+              label: "Mark Complete",
+              icon: "check",
+              variant: "primary",
+              onClick: handleBulkComplete,
+              disabled: bulkUpdateMut.isPending,
+            },
+          ]}
+        />
+        {modals}
+      </div>
+    );
+  }
 
   // ─── Stat cards ──────────────────────────────────────────────────────────
   const statCards = [
@@ -605,22 +735,6 @@ export default function ActionItems() {
         )}
       </div>
 
-      {/* Form Modal */}
-      {(showForm || editingItem) && (
-        <ActionItemFormModal
-          projectId={editingItem?.project_id || projectId}
-          actionItem={editingItem}
-          onClose={() => { setShowForm(false); setEditingItem(null); }}
-          onSave={(data) => {
-            if (editingItem) {
-              updateMut.mutate({ id: editingItem.id, data });
-            } else {
-              createMut.mutate(data);
-            }
-          }}
-        />
-      )}
-
       {/* List — with loading, empty, and populated states */}
       {isLoading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "24px 0" }}>
@@ -765,13 +879,7 @@ export default function ActionItems() {
         </div>
       )}
 
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
-        title="Delete Action Item"
-        description={`Delete "${deleteTarget?.title}"? This cannot be undone.`}
-      />
+      {modals}
 
       {/* Spacer so the bulk bar doesn't overlap the last item */}
       {selectedIds.size > 0 && <div style={{ height: 72 }} />}
