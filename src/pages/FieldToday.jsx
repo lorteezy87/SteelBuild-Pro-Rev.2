@@ -23,7 +23,7 @@
 
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities, integrations } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -52,6 +52,7 @@ import {
   clampPercent,
   progressPatch,
 } from "@/lib/field/fieldToday";
+import { useFlag } from "@/hooks/useFeatureFlag";
 import { useFieldOutbox } from "@/hooks/useFieldOutbox";
 import {
   makeProgressOp,
@@ -72,6 +73,7 @@ import {
   deletePendingPhoto,
   reconcilePendingPhotos,
 } from "@/lib/field/blobStore";
+import FieldTodayControlCenter from "./fieldToday/FieldTodayControlCenter";
 
 // ── Urgency presentation (logic-free; buckets come from the helper) ──
 const URGENCY = {
@@ -99,9 +101,31 @@ export default function FieldToday() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const photoInputRef = useRef(null);
+  const commandUi = useFlag("command_ui");
 
   const [showPunch, setShowPunch] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // ── Command UI supplementary queries (photos + punchlist) ──
+  // These are needed only for the Control Center panels; classic path ignores them.
+  const todayIsoForQuery = localToday();
+  const { data: allPhotos = [] } = useQuery({
+    queryKey: ["field-hub-photos", projectId],
+    queryFn: () =>
+      projectId ? entities.Photo.filter({ project_id: projectId }) : [],
+    enabled: !!projectId && !!commandUi,
+    staleTime: 60 * 1000,
+  });
+  const { data: allPunchItems = [] } = useQuery({
+    queryKey: ["field-hub-punchlist", projectId],
+    queryFn: () =>
+      projectId ? entities.PunchlistItem.filter({ project_id: projectId }) : [],
+    enabled: !!projectId && !!commandUi,
+    staleTime: 60 * 1000,
+  });
+
+  const [ccSearch, setCcSearch] = useState("");
+  const [ccStatusFilter, setCcStatusFilter] = useState("all");
 
   const { scheduleTasks, isLoading } = useScheduleTasks(projectId);
 
@@ -303,6 +327,58 @@ export default function FieldToday() {
   useEffect(() => {
     reconcilePendingPhotos(new Set(loadQueue().map((op) => op.id)));
   }, []);
+
+  // ── Command UI flag-branch ──────────────────────────────────────────────────
+  // All existing offline outbox + photo sync logic above is UNTOUCHED.
+  // We pass the real handlers through as props so the Control Center's capture
+  // buttons (Add Punch, Photo, Log Activity) call the exact same mutation paths.
+  if (commandUi) {
+    const todayPhotos = allPhotos.filter((p) => p.taken_date === todayIsoForQuery);
+
+    const modals = showPunch ? (
+      <PunchlistFormModal
+        projectId={projectId}
+        onClose={() => setShowPunch(false)}
+        onSave={(data) => punchMut.mutate({ ...data, client_op_id: newClientOpId() })}
+        isSaving={punchMut.isPending}
+      />
+    ) : null;
+
+    return (
+      <div className="sb-dashboard-reference-page">
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => handlePhotoFiles(e.target.files)}
+        />
+        <FieldTodayControlCenter
+          projectName={activeProject?.name || "Field"}
+          todayIso={todayIsoForQuery}
+          tasks={scheduleTasks || []}
+          photos={todayPhotos}
+          punchItems={allPunchItems}
+          pendingSync={pendingSync}
+          isLoading={isLoading}
+          search={ccSearch}
+          onSearch={setCcSearch}
+          statusFilter={ccStatusFilter}
+          onStatusFilter={setCcStatusFilter}
+          onSetProgress={(task, pct) => setProgress(task, pct)}
+          onAddPunch={() => setShowPunch(true)}
+          onAddPhoto={() => photoInputRef.current?.click()}
+          onDailyLog={() => navigate("/DailyLogs?new=1")}
+          onFlushOutbox={flushOutbox}
+          savingTaskId={progressMut.isPending ? progressMut.variables?.id : null}
+          uploadingPhoto={uploadingPhoto}
+        />
+        {modals}
+      </div>
+    );
+  }
 
   // ── States ──
   if (!projectId) {
