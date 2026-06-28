@@ -27,6 +27,8 @@ import { reparentTasks } from "@/lib/schedule/reparentTasks";
 import { validReparentTargets } from "@/lib/schedule/hierarchy";
 import BulkActionToolbar from "./schedule/BulkActionToolbar";
 import type { ScheduleTask } from "./schedule/types";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import ScheduleCommandCenter from "./schedule/ScheduleCommandCenter";
 
 // The design-system primitives are still .jsx; these casts are removable
 // once the shared layer is typed.
@@ -676,6 +678,363 @@ export default function Schedule() {
     });
     return m;
   }, [scheduleTasks]);
+
+  // ── Command UI flag ──────────────────────────────────────────────────────
+  // Gate: when command_ui is enabled, wrap the existing body inside the
+  // Schedule Command Center shell. All data, state, and mutations are shared
+  // — we only add chrome above the existing body; the body JSX is moved
+  // verbatim into the children slot (see flag-branch below).
+  const commandUi = useFlag("command_ui");
+
+  // Task-name search for the command center filter bar.
+  // Only wired when commandUi is true; unused in the flag-off path.
+  const [ccSearch, setCcSearch] = useState("");
+
+  // ── Command UI flag-branch ───────────────────────────────────────────────
+  // The existing body JSX below is copied verbatim from the original return;
+  // nothing inside it was changed. reparentTasks.js and ScheduleGantt.jsx
+  // are untouched — this branch only adds the ScheduleCommandCenter wrapper.
+  if (commandUi) {
+    const existingBody = (
+      <>
+        {/* Phase Filter — click-to-filter KPI tiles (one per lifecycle phase) */}
+        <div style={{ flexShrink: 0, padding: "0 24px 14px" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              overflowX: "auto",
+              paddingBottom: 4,
+              scrollbarWidth: "thin",
+              scrollbarColor: "var(--border-default) transparent",
+            }}
+          >
+            <div style={{ minWidth: 100, flexShrink: 0 }}>
+              <KpiTile
+                compact
+                label="ALL PHASES"
+                value={phaseCounts.all}
+                color="var(--text-secondary)"
+                active={phaseFilter === "all"}
+                onClick={() => setPhaseFilter("all")}
+              />
+            </div>
+            {PHASES.map((p) => (
+              <div key={p} style={{ minWidth: 100, flexShrink: 0 }}>
+                <KpiTile
+                  compact
+                  label={p.toUpperCase()}
+                  value={phaseCounts[p] || 0}
+                  color="var(--accent)"
+                  active={phaseFilter === p}
+                  onClick={() => setPhaseFilter(p)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* View Tabs */}
+        <div style={{ flexShrink: 0, display: "flex", gap: 0, padding: "0 24px", marginTop: 4 }}>
+          {[
+            { id: "gantt", label: "Gantt Chart" },
+            { id: "lookahead", label: "6-Week Lookahead" },
+            { id: "list", label: "Task List" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setView(tab.id)}
+              style={{
+                background: "transparent",
+                border: "none",
+                borderBottom: view === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
+                padding: "10px 20px",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                color: view === tab.id ? "var(--accent)" : "var(--text-muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                cursor: "pointer",
+                transition: "color 0.15s, border-color 0.15s",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ height: 1, background: "var(--divider)", margin: "0 24px 8px" }} />
+
+        <ScheduleRivetBrief
+          tasks={tasksWithEffective}
+          project={selectedProject}
+          phaseFilter={phaseFilter}
+          onSetPhaseFilter={setPhaseFilter}
+          onSetView={setView}
+          onSetGanttFocus={(request) => {
+            const focusRequest = typeof request === "string" ? { filter: request } : (request || {});
+            setView("gantt");
+            setGanttFocus({ ...focusRequest, requestedAt: Date.now() });
+          }}
+        />
+
+        {/* View Content */}
+        <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
+          {view === "gantt" && (
+            <ErrorBoundary label="Gantt Chart">
+              <Suspense fallback={<LoadingSkeleton variant="page" />}>
+                <ScheduleGantt
+                  tasks={enrichedTasks}
+                  submittals={submittals}
+                  weatherRisk={weatherRisk}
+                  expandedTask={expandedTask}
+                  setExpandedTask={setExpandedTask}
+                  onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
+                  onSave={async (data) => {
+                    const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
+                    try {
+                      if (!id) throw new Error("Cannot update a task without an id");
+                      await entities.ScheduleTask.update(id, fields);
+                      invalidateEntity(qc, "schedule_task", projectId);
+                      toast.success("Task saved");
+                    } catch (err: any) {
+                      toast.error("Save failed: " + (err?.message || "unknown error"));
+                      throw err;
+                    }
+                  }}
+                  onReparent={(p: { ids: string[]; newParentId: string | null; dropIndex?: number | null }) =>
+                    reparentMut.mutate(p)
+                  }
+                  phaseFilter={phaseFilter}
+                  externalFocus={ganttFocus}
+                />
+              </Suspense>
+            </ErrorBoundary>
+          )}
+
+          {view === "lookahead" && (
+            <ErrorBoundary label="Lookahead Planner">
+              {/* Lookahead's week-bucket date predicates run against the
+                  effective dates so cascaded tasks land in the correct
+                  week — previously a Detailing task whose predecessor
+                  slipped two weeks would still appear in the original
+                  week's bucket. */}
+              <LookaheadPlanner tasks={tasksWithEffective} />
+            </ErrorBoundary>
+          )}
+
+          {view === "list" && (
+            <ErrorBoundary label="Task List">
+              <ScheduleTaskList
+                tasks={tasksWithEffective}
+                onEdit={(task) => {
+                  // The Task List receives the effective-date overlay so its
+                  // rows show the cascaded dates. The TaskDetailDrawer must
+                  // edit STORED dates — opening it with overlaid dates would
+                  // let the user "save" effective dates as new stored values
+                  // and silently destroy their original entry. Look the row
+                  // up in the unmodified enrichedTasks list before opening.
+                  const original = enrichedTasks.find((t) => t.id === task.id) || task;
+                  setSelectedTask(original);
+                  setShowDrawer(true);
+                }}
+                onDelete={(task) => setDeleteTarget(task)}
+                onSave={async (data) => {
+                  const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
+                  try {
+                    if (!id) throw new Error("Cannot update a task without an id");
+                    await entities.ScheduleTask.update(id, fields);
+                    invalidateEntity(qc, "schedule_task", projectId);
+                    toast.success("Task saved");
+                  } catch (err: any) {
+                    toast.error("Save failed: " + (err?.message || "unknown error"));
+                    throw err;
+                  }
+                }}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+              />
+            </ErrorBoundary>
+          )}
+        </div>
+
+        {/* Task Detail Drawer */}
+        <TaskDetailDrawer
+          task={selectedTask}
+          open={showDrawer}
+          onClose={() => { setShowDrawer(false); setSelectedTask(null); }}
+          onUpdate={(data) => updateTaskMut.mutate(data)}
+          onReparent={(childId: string, newParentId: string | null) => reparentMut.mutate({ ids: [childId], newParentId })}
+          onDelete={(id) => deleteTaskMut.mutate(id)}
+          allTasks={enrichedTasks}
+          effectiveDates={effectiveDatesMap}
+        />
+
+        {/* Add/bulk/WBS modals are lazy-loaded; gate the mount on the open flag so
+            the chunk only fetches on first open. Each renders null when closed,
+            so this is behavior-preserving. A null Suspense fallback avoids a
+            flash before the (already-overlay) modal paints. */}
+        {showAddTask && (
+          <Suspense fallback={null}>
+            <AddTaskModal
+              open={showAddTask}
+              onClose={() => setShowAddTask(false)}
+              onSubmit={(data) =>
+                createTaskMut.mutate({
+                  ...data,
+                  project_id: projectId,
+                  percent_complete: 0,
+                })
+              }
+              isSaving={createTaskMut.isPending}
+              projectName={selectedProject?.name || ""}
+              prefilledDate={new Date().toISOString().split("T")[0]}
+              existingTasks={enrichedTasks}
+            />
+          </Suspense>
+        )}
+
+        {showBulkAdd && (
+          <Suspense fallback={null}>
+            <BulkAddTaskModal
+              open={showBulkAdd}
+              onClose={() => setShowBulkAdd(false)}
+              onSubmit={handleBulkAdd}
+              projectName={selectedProject?.name || ""}
+              isSaving={bulkSaving}
+              existingTasks={enrichedTasks}
+            />
+          </Suspense>
+        )}
+
+        {showBulkDates && (
+          <Suspense fallback={null}>
+            <BulkDateEditModal
+              open={showBulkDates}
+              count={selectedIds.size}
+              isSaving={bulkDateMut.isPending}
+              onClose={() => setShowBulkDates(false)}
+              onSubmit={bulkUpdateDates}
+            />
+          </Suspense>
+        )}
+
+        {showBulkDuration && (
+          <Suspense fallback={null}>
+            <BulkDurationEditModal
+              open={showBulkDuration}
+              count={selectedIds.size}
+              isSaving={bulkDurationMut.isPending}
+              onClose={() => setShowBulkDuration(false)}
+              onSubmit={bulkUpdateDuration}
+            />
+          </Suspense>
+        )}
+
+        {showBulkParent && (
+          <div onClick={() => setShowBulkParent(false)} style={{ position: "fixed", inset: 0, background: "rgba(1,4,10,0.6)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg-surface-high)", border: "1px solid var(--accent-border)", borderRadius: 14, padding: 20, width: 420 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", marginBottom: 12 }}>
+                SET PARENT FOR {selectedIds.size} TASK{selectedIds.size !== 1 ? "S" : ""}
+              </div>
+              <select
+                className="sbd-select"
+                defaultValue=""
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  bulkSetParent(v === "__root__" ? null : v);
+                }}
+                style={{ width: "100%" }}
+              >
+                <option value="" disabled>— Select a parent… —</option>
+                <option value="__root__">Top level (no parent)</option>
+                {bulkParentOptions.map((t: any) => (
+                  <option key={t.id} value={t.id}>
+                    {t.wbs_code ? `${t.wbs_code} — ` : ""}{t.task_name}
+                  </option>
+                ))}
+              </select>
+              <div style={{ marginTop: 14, textAlign: "right" }}>
+                <button className="sbd-btn sbd-btn-ghost" onClick={() => setShowBulkParent(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showWbsBuilder && (
+          <Suspense fallback={null}>
+            <WbsBuilderModal
+              open={showWbsBuilder}
+              projectId={projectId}
+              onClose={() => setShowWbsBuilder(false)}
+            />
+          </Suspense>
+        )}
+
+        <DeleteDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            if (!deleteTaskMut.isPending && deleteTarget?.id) {
+              deleteTaskMut.mutate(deleteTarget.id);
+            }
+          }}
+          title="Delete task?"
+          description={deleteTarget ? `This will remove "${deleteTarget.task_name}".` : ""}
+        />
+
+        <DeleteDialog
+          open={showBulkDeleteConfirm}
+          onClose={() => setShowBulkDeleteConfirm(false)}
+          onConfirm={confirmBulkDelete}
+          title={`Delete ${selectedIds.size} task${selectedIds.size !== 1 ? "s" : ""}?`}
+          description={`This will permanently remove ${selectedIds.size} selected task${selectedIds.size !== 1 ? "s" : ""}. This cannot be undone.`}
+        />
+
+        {selectedIds.size > 0 && (
+          <BulkActionToolbar
+            selectedCount={selectedIds.size}
+            updatePending={bulkUpdateMut.isPending}
+            deletePending={bulkDeleteMut.isPending}
+            datePending={bulkDateMut.isPending}
+            durationPending={bulkDurationMut.isPending}
+            resourcePending={bulkResourceMut.isPending}
+            showResourceInput={showBulkResource}
+            resourceValue={bulkResourceValue}
+            onStatus={bulkUpdateStatus}
+            onDelete={bulkDelete}
+            onEditDates={() => setShowBulkDates(true)}
+            onEditDurations={() => setShowBulkDuration(true)}
+            parentPending={reparentMut.isPending}
+            onSetParent={() => setShowBulkParent(true)}
+            onShowResourceInput={() => setShowBulkResource(true)}
+            onResourceValueChange={setBulkResourceValue}
+            onApplyResource={() => bulkResourceMut.mutate({ ids: Array.from(selectedIds), resource_names: bulkResourceValue.trim() })}
+            onCancelResource={() => { setShowBulkResource(false); setBulkResourceValue(""); }}
+            onClear={() => setSelectedIds(new Set())}
+          />
+        )}
+      </>
+    );
+
+    return (
+      <ScheduleCommandCenter
+        projectName={selectedProject?.name || ""}
+        tasks={tasksWithEffective as any}
+        search={ccSearch}
+        onSearch={setCcSearch}
+        phaseFilter={phaseFilter}
+        onPhaseFilter={setPhaseFilter}
+        onAddTask={() => setShowAddTask(true)}
+        onOpenTask={(task) => { setSelectedTask(task as ScheduleTask); setShowDrawer(true); }}
+        projectHealth={selectedProject?.health_status ?? null}
+        pctComplete={undefined}
+      >
+        {existingBody}
+      </ScheduleCommandCenter>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
