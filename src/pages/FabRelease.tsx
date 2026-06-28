@@ -56,6 +56,8 @@ import {
   ViewHeader,
 } from "./fabRelease/components";
 import type { EnrichedWorkPackage } from "./fabRelease/types";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import FabReleaseControlCenter from "./fabRelease/FabReleaseControlCenter";
 
 // The design-system primitives and LoadingSkeleton are still .jsx, so TS infers
 // all of their destructured props as required when consumed from .tsx. Until
@@ -76,6 +78,7 @@ export default function FabRelease() {
   const projectId = useProjectId();
   const qc = useQueryClient();
   const { can } = usePermissions();
+  const commandUi = useFlag("command_ui");
 
   const [view, setView] = useState("flow");
   const [stageFilter, setStageFilter] = useState("all");
@@ -391,6 +394,74 @@ export default function FabRelease() {
     );
   }
 
+  // Shared modals — rendered in both the classic and command_ui paths so the
+  // existing DetailPanel / WPFormModal / DeleteDialog handlers are unchanged.
+  const modals = (
+    <>
+      {detailWP && (
+        <DetailPanel
+          wp={detailWP}
+          onClose={() => setDetailWP(null)}
+          onEdit={can("edit", "work_package") ? () => handleEdit(detailWP) : null}
+          onDelete={can("delete", "work_package") ? () => { setDeleteTarget(detailWP); setDetailWP(null); } : null}
+          onComplete={() => completeMut.mutate(detailWP.id)}
+          isCompleting={completeMut.isPending}
+        />
+      )}
+
+      {(wpModalOpen || editingWP) && (
+        <WPFormModal
+          open={wpModalOpen || !!editingWP}
+          onClose={() => {
+            setWPModalOpen(false);
+            setEditingWP(null);
+          }}
+          onSave={handleSave}
+          wp={editingWP}
+          projects={projects}
+          nextNumber={editingWP?.wp_number || ""}
+          allDrawings={drawings}
+          defaultProjectId={projectId || ""}
+        />
+      )}
+
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        title="Delete Fab Package"
+        description={`Delete "${getWorkPackageDisplayName(deleteTarget || {})}"? This action cannot be undone.`}
+      />
+    </>
+  );
+
+  // ── command_ui flag-branch ─────────────────────────────────────────────
+  // Presentation-only re-skin. All mutation handlers, gate logic, and audit
+  // calls are passed through unchanged from the classic path above.
+  if (commandUi) {
+    return (
+      <div className="fab-release-page">
+        <FabReleaseControlCenter
+          projectName={projectName}
+          metrics={metrics}
+          filtered={filtered}
+          search={search}
+          onSearch={setSearch}
+          stageFilter={stageFilter}
+          onStageFilter={handleStageFilter}
+          riskFilter={riskFilter}
+          onRiskFilter={setRiskFilter}
+          onOpenWP={setDetailWP}
+          onExport={() => exportFabReleaseCSV(filtered)}
+          onCreate={can("create", "work_package") ? handleOpenCreate : null}
+          onComplete={(wp) => completeMut.mutate(wp.id)}
+          isCompleting={completeMut.isPending}
+        />
+        {modals}
+      </div>
+    );
+  }
+
   return (
     <div className="fab-release-page">
       <style>{FAB_RELEASE_STYLES}</style>
@@ -501,40 +572,7 @@ export default function FabRelease() {
         </main>
       </section>
 
-      {detailWP && (
-        <DetailPanel
-          wp={detailWP}
-          onClose={() => setDetailWP(null)}
-          onEdit={can("edit", "work_package") ? () => handleEdit(detailWP) : null}
-          onDelete={can("delete", "work_package") ? () => { setDeleteTarget(detailWP); setDetailWP(null); } : null}
-          onComplete={() => completeMut.mutate(detailWP.id)}
-          isCompleting={completeMut.isPending}
-        />
-      )}
-
-      {(wpModalOpen || editingWP) && (
-        <WPFormModal
-          open={wpModalOpen || !!editingWP}
-          onClose={() => {
-            setWPModalOpen(false);
-            setEditingWP(null);
-          }}
-          onSave={handleSave}
-          wp={editingWP}
-          projects={projects}
-          nextNumber={editingWP?.wp_number || ""}
-          allDrawings={drawings}
-          defaultProjectId={projectId || ""}
-        />
-      )}
-
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
-        title="Delete Fab Package"
-        description={`Delete "${getWorkPackageDisplayName(deleteTarget || {})}"? This action cannot be undone.`}
-      />
+      {modals}
     </div>
   );
 }
