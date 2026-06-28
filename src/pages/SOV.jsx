@@ -29,6 +29,8 @@ import {
   SOV_TEMPLATE_COLUMNS,
   SOV_TEMPLATE_SAMPLE,
 } from "../lib/importSovSpreadsheet";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import SovControlCenter from "./sov/SovControlCenter";
 
 /* ═══════════════════════════════════════════════════════════════════
    1. Progress Visualization — slim horizontal bar
@@ -126,10 +128,13 @@ export default function SOV() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
   const { can } = usePermissions();
+  const commandUi = useFlag("command_ui");
 
   /* ── UI state ── */
   const [appFilter, setAppFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  /* command_ui search — used by SovControlCenter's FilterBar */
+  const [ccSearch, setCcSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -449,6 +454,30 @@ export default function SOV() {
       return String(a.sov_id || "").localeCompare(String(b.sov_id || ""), undefined, { numeric: true });
     }),
   [sovs, appFilter, statusFilter]);
+
+  /* command_ui path: status chip + text search filter (no app# tab needed) */
+  const ccFiltered = useMemo(() => {
+    const q = ccSearch.trim().toLowerCase();
+    return sovs
+      .filter(s => {
+        const matchStatus = statusFilter === "all" || statusFilter === "All" || s.status === statusFilter;
+        if (!matchStatus) return false;
+        if (!q) return true;
+        return (
+          String(s.line_item_number || "").toLowerCase().includes(q) ||
+          (s.sov_id || "").toLowerCase().includes(q) ||
+          (s.description || "").toLowerCase().includes(q) ||
+          (s.phase || "").toLowerCase().includes(q) ||
+          (s.cost_code || "").toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        const aNum = Number(a.line_item_number);
+        const bNum = Number(b.line_item_number);
+        if (Number.isFinite(aNum) && Number.isFinite(bNum) && aNum !== bNum) return aNum - bNum;
+        return String(a.sov_id || "").localeCompare(String(b.sov_id || ""), undefined, { numeric: true });
+      });
+  }, [sovs, statusFilter, ccSearch]);
 
   const totals = useMemo(() => {
     // Round AFTER each accumulation so the running totals agree with the
@@ -842,7 +871,101 @@ export default function SOV() {
   );
 
   /* ═══════════════════════════════════════════════════════════════
-     MAIN RENDER
+     command_ui flag branch — behavior-preserving light skin.
+     All data + mutations come from above; modals are shared.
+     ═══════════════════════════════════════════════════════════════ */
+  if (commandUi) {
+    const modals = (
+      <>
+        <SOVFormModal
+          open={modalOpen}
+          onClose={() => { setModalOpen(false); setEditing(null); }}
+          onSave={handleSave}
+          sov={editing}
+          projects={projects}
+          nextId={nextSovId}
+          activeProject={activeProject}
+        />
+        <SovImportReviewModal
+          open={reviewOpen}
+          onClose={() => { setReviewOpen(false); setStagedImport([]); }}
+          staged={stagedImport}
+          onConfirm={handleConfirmImport}
+          importing={importing}
+        />
+        <DeleteDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+          title="Delete SOV Item"
+          description={`Delete ${deleteTarget?.sov_id}?`}
+        />
+        <DeleteDialog
+          open={bulkDeleteOpen}
+          onClose={() => setBulkDeleteOpen(false)}
+          onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+          title="Delete SOV Items"
+          description={`Delete ${selectedIds.size} selected SOV item${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
+        />
+      </>
+    );
+
+    return (
+      <div className="sov-page">
+        <SovControlCenter
+          projectName={activeProject?.name || "All Projects"}
+          lines={sovs}
+          filtered={ccFiltered}
+          search={ccSearch}
+          onSearch={setCcSearch}
+          statusFilter={statusFilter === "all" ? "All" : statusFilter}
+          onStatusFilter={(v) => setStatusFilter(v === "All" ? "all" : v)}
+          effectiveRetainage={effectiveRetainage}
+          onExport={exportCSV}
+          onImport={can("create", "sov_item") ? handleImportClick : null}
+          onCreate={can("create", "sov_item") ? () => { setEditing(null); setModalOpen(true); } : null}
+          onOpenLine={(line) => { setEditing(line); setModalOpen(true); }}
+          canCreate={can("create", "sov_item")}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+          onChange={handleImportFile}
+          style={{ display: "none" }}
+        />
+        <BulkActionBar
+          count={selectedIds.size}
+          onClear={() => setSelectedIds(new Set())}
+          actions={[
+            {
+              label: "Fill to 100%",
+              icon: Check,
+              onClick: () => bulkFillMut.mutate([...selectedIds]),
+            },
+            {
+              label: "Mark Draft",
+              onClick: () => bulkStatusMut.mutate({ ids: [...selectedIds], status: "Draft" }),
+            },
+            {
+              label: "Mark Submitted",
+              onClick: () => bulkStatusMut.mutate({ ids: [...selectedIds], status: "Submitted" }),
+            },
+            {
+              label: "Delete Selected",
+              icon: Trash2,
+              variant: "danger",
+              onClick: () => setBulkDeleteOpen(true),
+            },
+          ]}
+        />
+        {modals}
+      </div>
+    );
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     MAIN RENDER — classic skin
      ═══════════════════════════════════════════════════════════════ */
   return (
     <div>
