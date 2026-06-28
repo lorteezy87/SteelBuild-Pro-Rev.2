@@ -27,6 +27,8 @@ import DocumentDetailPanel from "@/components/dms/DocumentDetailPanel";
 import FolderPicker, { collectFolderAndDescendants } from "@/components/dms/FolderPicker";
 import { batchProcess } from "@/utils/batchProcess";
 import EmptyStateAction from "@/components/shared/EmptyStateAction";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import DocumentsControlCenter from "./documents/DocumentsControlCenter";
 
 import { STATUS_TABS } from "./documents/constants";
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
@@ -62,6 +64,7 @@ const SORT_FNS = {
 export default function Documents() {
   const { activeProject } = useProjectContext();
   const queryClient = useQueryClient();
+  const commandUi = useFlag("command_ui");
 
   const [viewMode, setViewMode]           = useState("grid");
   const [searchQuery, setSearchQuery]     = useState("");
@@ -86,6 +89,10 @@ export default function Documents() {
   // instance that handles both cases.
   const [pickerFor, setPickerFor]                 = useState(null);
   const dragCounter = useRef(0);
+  // Command UI: category chip filter for DocumentsControlCenter.
+  // "All" = no category restriction. Updated by the chip bar in the
+  // control center without touching the classic activeFilters path.
+  const [ccCategoryFilter, setCcCategoryFilter] = useState("All");
 
   // Reset folder navigation when the user switches projects so we never
   // accidentally show a folder from a different project.
@@ -333,6 +340,35 @@ export default function Documents() {
     [allDocuments]
   );
 
+  // Command UI filtered list: search + category chip + status tab.
+  // Intentionally ignores folder navigation (the control center is a flat
+  // table; folder browsing lives in the classic path).
+  const ccFilteredDocs = useMemo(() => {
+    let result = [...allDocuments];
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (d) =>
+          d.displayName?.toLowerCase().includes(q) ||
+          d.documentNumber?.toLowerCase().includes(q) ||
+          d.fileName?.toLowerCase().includes(q) ||
+          d.description?.toLowerCase().includes(q) ||
+          d.tags?.some((t) => t.toLowerCase().includes(q))
+      );
+    }
+    if (ccCategoryFilter !== "All") {
+      result = result.filter(
+        (d) => (d.category || "Uncategorized") === ccCategoryFilter
+      );
+    }
+    if (statusTab !== "all") {
+      result = result.filter((d) => d.status === statusTab);
+    }
+    return result.sort((a, b) =>
+      new Date(b.uploadedDate || b.created_at || 0) - new Date(a.uploadedDate || a.created_at || 0)
+    );
+  }, [allDocuments, searchQuery, ccCategoryFilter, statusTab]);
+
   /* ── Mutations ── */
   const bulkStatusMut = useMutation({
     mutationFn: async (newStatus) => {
@@ -457,6 +493,68 @@ export default function Documents() {
           Select a project to view documents
         </div>
       </div>
+    );
+  }
+
+  /* ── Command UI branch ── */
+  // All modals (detail panel, edit modal, upload modal) reuse the same state
+  // so modal behavior is identical between the two skins.
+  if (commandUi) {
+    const modals = (
+      <>
+        {selectedDoc && (
+          <DocumentDetailPanel
+            doc={selectedDoc}
+            allDocuments={allDocuments}
+            onClose={() => setSelectedDoc(null)}
+            onEdit={handleEditDoc}
+            onDelete={handleDeleteDoc}
+          />
+        )}
+        {editingDoc && (
+          <Suspense fallback={null}>
+            <DocumentEditModal
+              projectId={activeProject?.id}
+              doc={editingDoc}
+              onClose={() => setEditingDoc(null)}
+            />
+          </Suspense>
+        )}
+        {uploadOpen && (
+          <Suspense fallback={null}>
+            <UploadModal
+              projectId={activeProject.id}
+              folderId={currentFolderId}
+              onClose={() => setUploadOpen(false)}
+            />
+          </Suspense>
+        )}
+      </>
+    );
+    return (
+      <>
+        <DocumentsControlCenter
+          projectName={activeProject?.name || ""}
+          allDocuments={allDocuments}
+          filteredDocs={ccFilteredDocs}
+          search={searchQuery}
+          onSearch={setSearchQuery}
+          categoryFilter={ccCategoryFilter}
+          onCategoryChange={setCcCategoryFilter}
+          onStatusTabChange={setStatusTab}
+          onOpenDoc={setSelectedDoc}
+          onExport={handleExportCsv}
+          onUpload={() => setUploadOpen(true)}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onToggleAll={(checked) =>
+            checked
+              ? setSelectedIds(new Set(ccFilteredDocs.map((d) => d.id)))
+              : deselectAll()
+          }
+        />
+        {modals}
+      </>
     );
   }
 
