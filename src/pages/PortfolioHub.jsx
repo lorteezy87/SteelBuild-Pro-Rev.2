@@ -8,12 +8,21 @@
  * Thin tab shell (the DrawingSubmittalHub / ResourceHub / FieldHub pattern):
  * each tab lazy-loads the existing page unchanged; both stay independently
  * routable. `?pf_tab=` drives the active tab.
+ *
+ * Flag-branch: when `command_ui` is enabled, the "overview" tab renders
+ * PortfolioControlCenter (light Command UI skin) instead of the classic
+ * AIInsights page. Data is fetched here so the classic path is untouched.
  */
-import { Suspense } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Suspense, useState, useMemo } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import { entities } from "@/api/supabaseClient";
+import { createPageUrl } from "@/utils";
+import PortfolioControlCenter from "./portfolio/PortfolioControlCenter";
 
 const PortfolioOverview = lazyWithRetry(() => import("@/pages/AIInsights"));
 const ExecutiveView = lazyWithRetry(() => import("@/pages/ExecutiveView"));
@@ -25,6 +34,9 @@ const TABS = [
 
 export default function PortfolioHub() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const commandUi = useFlag("command_ui");
+
   const param = params.get("pf_tab");
   const activeKey = TABS.some((t) => t.key === param) ? param : "overview";
   const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
@@ -38,6 +50,78 @@ export default function PortfolioHub() {
       { replace: true },
     );
 
+  // ── command_ui data (fetched only when flag is on and overview tab is active) ──
+  const [search, setSearch] = useState("");
+  const [healthFilter, setHealthFilter] = useState("All");
+
+  const fetchForCC = commandUi && activeKey === "overview";
+
+  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => entities.Project.listAll(),
+    staleTime: 5 * 60 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: changeOrders = [] } = useQuery({
+    queryKey: ["portfolio-cos"],
+    queryFn: () => entities.ChangeOrder.listAll(),
+    staleTime: 60 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["portfolio-wps"],
+    queryFn: () => entities.WorkPackage.listAll(),
+    staleTime: 30 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: costCodes = [] } = useQuery({
+    queryKey: ["portfolio-codes"],
+    queryFn: () => entities.CostCode.listAll(),
+    staleTime: 60 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["portfolio-rfis"],
+    queryFn: () => entities.RFI.listAll(),
+    staleTime: 30 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: deliveries = [] } = useQuery({
+    queryKey: ["portfolio-deliveries"],
+    queryFn: () => entities.Delivery.listAll(),
+    staleTime: 30 * 1000,
+    enabled: fetchForCC,
+  });
+
+  const related = useMemo(
+    () => ({ changeOrders, workPackages, costCodes, rfis, deliveries }),
+    [changeOrders, workPackages, costCodes, rfis, deliveries],
+  );
+
+  // Navigate to the project dashboard when a row is clicked
+  const handleOpenProject = (project) => {
+    navigate(`${createPageUrl("Dashboard")}?project=${project.id}`);
+  };
+
+  // ── command_ui overview branch ──
+  if (commandUi && activeKey === "overview") {
+    if (projectsLoading) {
+      return <LoadingSkeleton variant="page" />;
+    }
+    return (
+      <PortfolioControlCenter
+        projects={projects}
+        related={related}
+        search={search}
+        onSearch={setSearch}
+        healthFilter={healthFilter}
+        onHealthFilter={setHealthFilter}
+        onOpenProject={handleOpenProject}
+      />
+    );
+  }
+
+  // ── Classic tab shell (unchanged) ──
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div
