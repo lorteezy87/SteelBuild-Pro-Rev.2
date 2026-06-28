@@ -45,6 +45,9 @@ import {
   SummaryStrip,
 } from "./workPackages/components";
 import type { WorkPackage } from "./workPackages/types";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import WpControlCenter from "./workPackages/WpControlCenter";
+import { calcWpProgress } from "@/utils/projectKpis";
 
 // The design-system primitives, LoadingSkeleton, and the workpackages
 // modals/filter are still .jsx; their destructured `= []` prop defaults make
@@ -62,6 +65,7 @@ export default function WorkPackages() {
   const projectId = useProjectId();
   const qc = useQueryClient();
   const { can } = usePermissions();
+  const commandUi = useFlag("command_ui");
 
   const [view, setView] = useState("flow");
   const [phaseFilter, setPhaseFilter] = useState("all");
@@ -265,6 +269,13 @@ export default function WorkPackages() {
 
   const projectName = selectedProject?.name || (projectId ? "No active project" : "All Projects");
 
+  // Project-level context for the Command UI hero (mirrors RFIs.jsx pattern).
+  const projectHealth = (selectedProject as unknown as { health_status?: string | null })?.health_status ?? null;
+  const percentComplete =
+    (selectedProject as unknown as { scope_complete_pct_override?: number | null })?.scope_complete_pct_override != null
+      ? Number((selectedProject as unknown as { scope_complete_pct_override: number }).scope_complete_pct_override)
+      : (workPackages.length ? calcWpProgress(workPackages).pct : null);
+
   const toggleSelect = (id: string) =>
     setSelectedWPs((prev) => {
       const next = new Set(prev);
@@ -302,6 +313,116 @@ export default function WorkPackages() {
     return (
       <div style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Command UI skin (flag: command_ui)
+  // Passes all pre-computed state + handlers down to the presentation layer.
+  // Modals (WPFormModal, WPBulkAddModal, DeleteDialog, WorkPackageDetailModal)
+  // remain here so they stay in the container's mutation scope.
+  // ---------------------------------------------------------------------------
+  if (commandUi) {
+    const wpModals = (
+      <>
+        <WPBulkAddModal
+          open={bulkAddOpen}
+          onClose={() => setBulkAddOpen(false)}
+          onCommit={(rows: unknown[]) => bulkCreateMut.mutate(rows)}
+          projectId={effectiveProjectId}
+          projectName={projectName}
+          existingWPs={workPackages}
+          isSaving={bulkCreateMut.isPending}
+        />
+
+        {(wpModalOpen || editingWP) && (
+          <WPFormModal
+            open={wpModalOpen || !!editingWP}
+            onClose={() => { setWPModalOpen(false); setEditingWP(null); }}
+            onSave={(data: unknown) => {
+              if (editingWP?.id) updateWPMut.mutate({ id: editingWP.id, data });
+              else createWPMut.mutate(data);
+            }}
+            wp={editingWP}
+            projects={projects}
+            nextNumber={editingWP?.wp_number || ""}
+            allDrawings={drawings}
+            defaultProjectId={effectiveProjectId || ""}
+          />
+        )}
+
+        {detailWP && (
+          <WorkPackageDetailModal
+            wp={detailWP}
+            drawings={drawings}
+            onClose={() => setDetailWP(null)}
+            onEdit={(wp: WorkPackage) => { setDetailWP(null); handleWPEdit(wp); }}
+          />
+        )}
+
+        <DeleteDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => { if (deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }}
+          title="Delete Work Package"
+          description={`Delete "${deleteTarget?.name}" (${deleteTarget?.wp_number})? This cannot be undone.`}
+        />
+      </>
+    );
+
+    return (
+      <div className="wp-page">
+        <WpControlCenter
+          projectName={projectName}
+          workPackages={workPackages as unknown as Parameters<typeof WpControlCenter>[0]["workPackages"]}
+          filtered={filtered as unknown as Parameters<typeof WpControlCenter>[0]["filtered"]}
+          metrics={metrics as unknown as Parameters<typeof WpControlCenter>[0]["metrics"]}
+          search={search}
+          onSearch={setSearch}
+          phaseFilter={phaseFilter}
+          onPhaseFilter={setPhaseFilter}
+          statusFilter={statusFilter}
+          onStatusFilter={setStatusFilter}
+          riskFilter={riskFilter}
+          onRiskFilter={setRiskFilter}
+          onOpenWp={setDetailWP as unknown as Parameters<typeof WpControlCenter>[0]["onOpenWp"]}
+          onExport={() => exportWorkPackagesCSV(filtered)}
+          onCreate={can("create", "work_package") ? handleWPCreate : null}
+          selectedIds={selectedWPs}
+          onToggleSelect={toggleSelect}
+          onToggleAll={(checked) =>
+            setSelectedWPs(checked ? new Set(filtered.map((w) => w.id)) : new Set())
+          }
+          projectHealth={projectHealth}
+          percentComplete={percentComplete}
+        />
+
+        <BulkActionBar
+          count={selectedWPs.size}
+          onClear={() => setSelectedWPs(new Set())}
+          actions={[
+            {
+              label: "SET COMPLETE",
+              icon: "check",
+              onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "Complete" }),
+              disabled: bulkStatusMut.isPending,
+            },
+            {
+              label: "SET IN PROGRESS",
+              icon: "arrow",
+              onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "In Progress" }),
+              disabled: bulkStatusMut.isPending,
+            },
+            {
+              label: "EXPORT",
+              icon: "download",
+              onClick: () => exportWorkPackagesCSV(selectedRows),
+            },
+          ]}
+        />
+
+        {wpModals}
       </div>
     );
   }
