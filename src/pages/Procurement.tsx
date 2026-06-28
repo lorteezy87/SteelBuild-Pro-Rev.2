@@ -34,6 +34,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import DeleteDialog from '@/components/shared/DeleteDialog';
+import type { ProcurementItem } from "./procurement/procurementControlCenter.derive";
 import { KpiTile as KpiTileRaw } from '@/components/design-system';
 import {
   OperationsPageShell as OperationsPageShellRaw,
@@ -50,6 +51,8 @@ import { PROCUREMENT_CATEGORIES, ALL_STATUSES, iStyle, addWeeks } from './procur
 import {
   PipelineView, ListView, BoardView, ProcurementFormModal,
 } from './procurement/components';
+import { useFlag } from '@/hooks/useFeatureFlag';
+import ProcurementControlCenter from './procurement/ProcurementControlCenter';
 
 // KpiTile is a still-.jsx primitive; cast at the boundary.
 const KpiTile = KpiTileRaw as any;
@@ -82,6 +85,7 @@ export default function Procurement() {
   const [searchParams, setSearchParams] = useSearchParams();
   const projectId = useProjectId();
   const qc = useQueryClient();
+  const commandUi = useFlag('command_ui');
 
   const [view, setView] = useState('pipeline');
   const [showForm, setShowForm] = useState(false);
@@ -349,6 +353,60 @@ export default function Procurement() {
           Select a project
         </div>
       </div>
+    );
+  }
+
+  // ── Command-UI skin (behind feature flag) ────────────────────────────────
+  // The classic path below is untouched. The modals and mutations remain owned
+  // here; ProcurementControlCenter is a pure presentation layer that receives
+  // already-computed data and event handlers.
+  if (commandUi) {
+    return (
+      <>
+        <ProcurementControlCenter
+          projectName={selectedProject?.name || 'Procurement'}
+          items={enriched as unknown as ProcurementItem[]}
+          filtered={filtered as unknown as ProcurementItem[]}
+          search={search}
+          onSearch={setSearch}
+          categoryFilter={filterCat}
+          onCategoryChange={setFilterCat}
+          statusFilter={filterStatus}
+          onStatusChange={handleSetFilterStatus}
+          onOpenItem={(item) => { setEditing(item as unknown as Parameters<typeof setEditing>[0]); setShowForm(true); }}
+          onExport={handleExportCSV}
+          onCreate={() => { setEditing(null); setShowForm(true); }}
+        />
+        {/* Reuse the same modals as the classic path */}
+        {showForm && (
+          <ProcurementFormModal
+            projectId={projectId}
+            item={editing}
+            vendors={vendors}
+            workPackages={workPackages}
+            onClose={() => { setShowForm(false); setEditing(null); }}
+            onSave={(data) => {
+              if (editing) {
+                updateMut.mutate({ id: editing.id, data });
+              } else {
+                createMut.mutate(data);
+              }
+            }}
+            isSaving={createMut.isPending || updateMut.isPending}
+          />
+        )}
+        <DeleteDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            if (!deleteMut.isPending && deleteTarget?.id) {
+              deleteMut.mutate(deleteTarget.id);
+            }
+          }}
+          title="Remove Procurement Item"
+          description="The item will be archived (soft-deleted). It can be recovered from the database if needed."
+        />
+      </>
     );
   }
 
