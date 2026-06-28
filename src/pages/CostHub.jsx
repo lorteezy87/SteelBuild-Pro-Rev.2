@@ -11,12 +11,19 @@
  * keep their distinct per-row models (Budget Control derives actual/committed
  * from expenses; Cost Dashboard reads the denormalized columns), so this is a
  * navigation merge, not a math merge.
+ *
+ * command_ui flag: when enabled, replaces the tab shell entirely with the new
+ * CostControlCenter (single-surface command UI). The classic tab shell is
+ * preserved for flag-off — behavior-preserving fallback.
  */
 import { Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import { useProjectContext } from "@/components/shared/ProjectContext";
+import CostControlCenter from "./costHub/CostControlCenter";
 
 const BudgetControl = lazyWithRetry(() => import("@/pages/Financials"));
 const CostDashboard = lazyWithRetry(() => import("@/pages/CostDashboard"));
@@ -27,6 +34,8 @@ const TABS = [
 ];
 
 export default function CostHub() {
+  const commandUi = useFlag("command_ui");
+  const { activeProject } = useProjectContext();
   const [params, setParams] = useSearchParams();
   const param = params.get("cost_tab");
   const activeKey = TABS.some((t) => t.key === param) ? param : "budget";
@@ -40,6 +49,16 @@ export default function CostHub() {
       },
       { replace: true },
     );
+
+  // command_ui flag: render the new Cost Control Center instead of the tab shell
+  if (commandUi && activeProject?.id) {
+    return (
+      <CostControlCenter
+        projectId={activeProject.id}
+        project={activeProject}
+      />
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
