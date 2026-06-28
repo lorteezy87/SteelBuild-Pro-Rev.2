@@ -38,6 +38,8 @@ import {
   BACKCHARGE_STATUS_LABELS,
   RESPONSIBLE_PARTY_TYPES,
 } from "@/lib/backcharge/types";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import BackchargeControlCenter from "./backcharges/BackchargeControlCenter";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 const usd = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -172,9 +174,13 @@ export default function Backcharges() {
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
   const qc = useQueryClient();
+  const commandUi = useFlag("command_ui");
   const [selectedId, setSelectedId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  // Command UI filter/search state (unused in classic path)
+  const [ccSearch, setCcSearch] = useState("");
+  const [ccStatusFilter, setCcStatusFilter] = useState("all");
 
   const { data: backcharges = [], isLoading } = useQuery({
     queryKey: ["backcharges", projectId],
@@ -241,6 +247,67 @@ export default function Backcharges() {
   };
 
   if (!projectId) return <div style={{ ...mono, padding: 24, color: "var(--text-muted)" }}>Select a project to manage backcharges.</div>;
+
+  // ── Command UI branch (command_ui flag) ──────────────────────────────────
+  if (commandUi) {
+    const activeProjectName = activeProject?.name || "Project";
+
+    // Filter the backcharges list for the DataTable (search + status chip).
+    const q = ccSearch.trim().toLowerCase();
+    const ccFiltered = backcharges.filter((b) => {
+      if (ccStatusFilter !== "all" && b.status !== ccStatusFilter) return false;
+      if (!q) return true;
+      return (
+        (b.title || "").toLowerCase().includes(q) ||
+        (b.responsible_party || "").toLowerCase().includes(q) ||
+        (b.backcharge_number || "").toLowerCase().includes(q) ||
+        (b.description || "").toLowerCase().includes(q)
+      );
+    });
+
+    const handleExport = () =>
+      downloadTextFile(
+        buildBackchargeRegisterCsv(backcharges),
+        "backcharge_register.csv",
+        "text/csv;charset=utf-8",
+      );
+
+    return (
+      <>
+        <BackchargeControlCenter
+          projectName={activeProjectName}
+          backcharges={backcharges}
+          filtered={ccFiltered}
+          search={ccSearch}
+          onSearch={setCcSearch}
+          statusFilter={ccStatusFilter}
+          onStatusFilter={setCcStatusFilter}
+          onOpen={(b) => { setSelectedId(b.id); setEditing(b); setFormOpen(true); }}
+          onExport={handleExport}
+          onCreate={() => { setEditing(null); setFormOpen(true); }}
+        />
+        {/* Reuse the same form modal as the classic path */}
+        <BackchargeFormModal
+          key={editing?.id || "new"}
+          open={formOpen}
+          initial={editing}
+          changeOrders={changeOrders}
+          rfis={rfis}
+          busy={createMut.isPending || updateMut.isPending}
+          onClose={() => { setFormOpen(false); setEditing(null); setSelectedId(null); }}
+          onSubmit={(form) => {
+            if (editing?.id) {
+              const { id: _id, ...patch } = form;
+              updateMut.mutate({ id: editing.id, patch, prev: editing });
+            } else {
+              createMut.mutate(form);
+            }
+          }}
+        />
+      </>
+    );
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ padding: 20, maxWidth: 1180, margin: "0 auto" }}>
