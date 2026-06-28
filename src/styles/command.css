@@ -20,8 +20,8 @@
 }
 /* Self-contained light island: fills the content area + sets the default text
    color for everything inside, so no dark-app color bleeds through the gaps. */
-[data-skin="command"] .rfi-cc { display: flex; flex-direction: column; gap: 14px; padding: 16px; background: var(--cmd-bg); color: var(--cmd-text); min-height: 100%; }
-[data-skin="command"] .rfi-cc * { border-color: var(--cmd-border); }
+[data-skin="command"] [class$="-cc"] { display: flex; flex-direction: column; gap: 14px; padding: 16px; background: var(--cmd-bg); color: var(--cmd-text); min-height: 100%; }
+[data-skin="command"] [class$="-cc"] * { border-color: var(--cmd-border); }
 
 /* Hero — light, dark text, optional faint photo from the right */
 [data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 14px; background: var(--cmd-surface); overflow: hidden; }
