@@ -14,6 +14,8 @@ import { formatLocalDate } from "@/utils/dates";
 import { useNavigate } from "react-router-dom";
 import { usePlan } from "@/hooks/usePlan";
 import { withinLimit } from "@/lib/billing/plans";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import ProjectsControlCenter from "./projects/ProjectsControlCenter";
 
 /* ─────────────────────────────────────────────
    Phase + Health configs
@@ -599,6 +601,7 @@ export default function Projects() {
   const { plan } = usePlan();
   const projectLimit = plan.limits.projects;
   const atProjectLimit = !withinLimit(projectLimit, projects.length);
+  const commandUi = useFlag("command_ui");
 
   /* ── Mutations ── */
   const createMut = useMutation({
@@ -659,6 +662,47 @@ export default function Projects() {
   }), [projects, search, phaseFilter, healthFilter, jobTypeFilter]);
 
   const hasFilters = search || phaseFilter !== "all" || healthFilter !== "all" || jobTypeFilter !== "all";
+
+  /* ── Command UI branch ──
+     Thin shell: reuse all data + mutations from above; hand off rendering
+     to ProjectsControlCenter. Modals stay here so they keep access to the
+     full mutation state. */
+  if (commandUi) {
+    const canCreate = !atProjectLimit;
+    return (
+      <>
+        <ProjectsControlCenter
+          projects={projects}
+          workPackages={workPackages}
+          rfis={rfis}
+          changeOrders={changeOrders}
+          search={search}
+          onSearch={setSearch}
+          phaseFilter={phaseFilter}
+          onPhaseFilter={setPhaseFilter}
+          healthFilter={healthFilter}
+          onHealthFilter={setHealthFilter}
+          filtered={filtered}
+          onCreate={canCreate ? () => { setEditing(null); setModalOpen(true); } : null}
+          onOpenProject={(p) => setDetailProject(p)}
+        />
+        {modalOpen && (
+          <ProjectFormModal
+            open={modalOpen}
+            onClose={() => { setModalOpen(false); setEditing(null); }}
+            onSave={handleSave}
+            project={editing}
+          />
+        )}
+        {detailProject && (
+          <ProjectDetailView
+            project={detailProject}
+            onClose={() => setDetailProject(null)}
+          />
+        )}
+      </>
+    );
+  }
 
   /* ─────────────────────────────────────────────
      Render
