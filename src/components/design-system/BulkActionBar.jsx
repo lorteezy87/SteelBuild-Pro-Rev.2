@@ -35,7 +35,7 @@ export default function BulkActionBar({ count, onClear, actions = [] }) {
         border: "1px solid var(--accent-border)",
         borderRadius: "var(--radius-card)",
         boxShadow:
-          "0 12px 40px rgba(0,0,0,0.55), 0 0 28px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 1px 0 rgba(255,255,255,0.08)",
+          "var(--shadow-lg), 0 0 28px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 1px 0 var(--glass-border)",
         zIndex: 200,
       }}
     >

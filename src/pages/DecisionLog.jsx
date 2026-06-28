@@ -123,7 +123,7 @@ export default function DecisionLog() {
 
   if (!projectId) {
     return (
-      <div style={{ textAlign: 'center', padding: '80px 24px' }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: 'center', padding: '80px 24px' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           Select a project
@@ -133,7 +133,7 @@ export default function DecisionLog() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
       <CommandBar
         eyebrow={selectedProject?.name || "PROJECT"}

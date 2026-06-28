@@ -555,7 +555,13 @@ export default function RFIs() {
 
   if (commandUi) {
     return (
-      <div className="rfi-page" style={{ "--density-row-height": `${densityPreset.rowHeight}px`, "--rfi-row-grid": RFI_ROW_GRID }}>
+      <div
+        className="sb-dashboard-reference-page rfi-page"
+        style={{
+          "--density-row-height": `${densityPreset.rowHeight}px`,
+          "--rfi-row-grid": RFI_ROW_GRID,
+        }}
+      >
         <RfiControlCenter
           projectName={activeProjectName}
           rfis={rfis}
@@ -599,7 +605,7 @@ export default function RFIs() {
 
   return (
     <div
-      className="rfi-page"
+      className="sb-dashboard-reference-page rfi-page"
       style={{
         "--density-row-height": `${densityPreset.rowHeight}px`,
         "--rfi-row-grid": RFI_ROW_GRID,

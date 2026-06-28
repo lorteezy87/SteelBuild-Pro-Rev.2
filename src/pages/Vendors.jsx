@@ -358,7 +358,7 @@ export default function Vendors() {
 
   // ── Classic branch (flag off — unchanged behavior) ──
   return (
-    <div>
+    <div className="sb-dashboard-reference-page">
       <CommandBar
         eyebrow="SUPPLY CHAIN"
         title="Vendors & Suppliers"

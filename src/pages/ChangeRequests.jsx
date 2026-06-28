@@ -100,7 +100,7 @@ export default function ChangeRequests() {
   const priorities = Object.values(PRIORITY);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page">
       <CommandBar
         eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
         title="Change Requests"

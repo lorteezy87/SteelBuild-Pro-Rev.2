@@ -108,6 +108,7 @@ export default function Contacts() {
   if (isLoading) {
     return (
       <div
+        className="sb-dashboard-reference-page"
         style={{
           textAlign: "center",
           padding: "48px 24px",
@@ -123,7 +124,7 @@ export default function Contacts() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
         title="Contacts"
@@ -280,3 +281,4 @@ export default function Contacts() {
     </div>
   );
 }
+

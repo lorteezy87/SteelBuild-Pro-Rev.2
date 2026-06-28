@@ -48,7 +48,7 @@ function AgentMemoryPage() {
   };
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto' }}>
+    <div className="sb-dashboard-reference-page" style={{ maxWidth: 800, margin: '0 auto' }}>
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, color: 'var(--text-primary)', marginBottom: 4 }}>Agent Memory</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
@@ -64,7 +64,7 @@ function AgentMemoryPage() {
         padding: 16,
         marginBottom: 20
       }}>
-        <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: '#FF9A60', letterSpacing: '0.08em', marginBottom: 8, display: 'block', textTransform: 'uppercase' }}>
+        <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--status-review)', letterSpacing: '0.08em', marginBottom: 8, display: 'block', textTransform: 'uppercase' }}>
           Add Memory Item
         </label>
         <textarea

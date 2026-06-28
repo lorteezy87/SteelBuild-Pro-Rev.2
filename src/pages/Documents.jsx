@@ -488,7 +488,7 @@ export default function Documents() {
   /* ── Render guards ── */
   if (!activeProject) {
     return (
-      <div style={{ padding: 32, textAlign: "center" }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center" }}>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-secondary)" }}>
           Select a project to view documents
         </div>
@@ -560,6 +560,7 @@ export default function Documents() {
 
   return (
     <div
+      className="sb-dashboard-reference-page"
       style={{ display: "flex", flexDirection: "column", height: "100%", gap: 16, position: "relative" }}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
