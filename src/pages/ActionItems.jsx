@@ -276,7 +276,7 @@ export default function ActionItems() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page">
       <CommandBar
         eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
         title="Action Items"

@@ -681,12 +681,11 @@ export default function DrawingSubmittalHub() {
   // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div
-      className="drawing-submittal-hub"
+      className="sb-dashboard-reference-page drawing-submittal-hub"
       style={{
         minHeight: "100vh",
         background: "var(--bg-page)",
-        color: textPrimary,
-        padding: "24px 28px",
+        color: "var(--text-primary)",
       }}
     >
       {/* ── Command Bar / Module Header (flag-branched) ──────────────── */}

@@ -15,25 +15,26 @@ import { useTheme } from "@/components/shared/ThemeContext";
  *
  * Extracted from Layout.jsx (see git history).
  */
-export default function TopBarSearchButton({ onClick, compact = false }) {
+export default function TopBarSearchButton({ onClick, compact = false, variant = "default" }) {
   const { theme } = useTheme();
-  const isLightSearch = theme === "light" && !compact;
+  const isDashboardSearch = variant === "dashboard";
+  const isLightSearch = (theme === "light" && !compact) || isDashboardSearch;
 
   return (
     <button
       onClick={onClick}
       title={`Search (${shortcutKeyLabel("K")})`}
       aria-label="Open global search"
-      className={`sbd-btn-ghost topbar-search-button${isLightSearch ? " is-light-search" : ""}`}
+      className={`sbd-btn-ghost topbar-search-button${isLightSearch ? " is-light-search" : ""}${isDashboardSearch ? " is-dashboard-search" : ""}`}
       style={{
-        height: 32,
-        width: isLightSearch ? 312 : 32,
-        borderRadius: isLightSearch ? 2 : 8,
+        height: isDashboardSearch ? 40 : 32,
+        width: isDashboardSearch ? "min(680px, 44vw)" : isLightSearch ? 312 : 32,
+        borderRadius: isDashboardSearch ? 8 : isLightSearch ? 2 : 8,
         background: "var(--hover-bg)", border: "1px solid var(--border-default)",
         display: "flex", alignItems: "center", justifyContent: isLightSearch ? "flex-start" : "center",
         gap: isLightSearch ? 8 : 0,
         cursor: "pointer", color: "var(--text-muted)", transition: "all 0.15s",
-        padding: isLightSearch ? "0 10px" : 0,
+        padding: isDashboardSearch ? "0 14px" : isLightSearch ? "0 10px" : 0,
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-muted)"; e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.color = "var(--accent)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
@@ -50,7 +51,19 @@ export default function TopBarSearchButton({ onClick, compact = false }) {
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
         }}>
-          Search projects, submittals, RFIs, drawings...
+          {isDashboardSearch
+            ? "Search drawings, submittals, RFIs, or documents..."
+            : "Search projects, submittals, RFIs, drawings..."}
+        </span>
+      )}
+      {isDashboardSearch && (
+        <span style={{
+          marginLeft: "auto",
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          color: "var(--text-muted)",
+        }}>
+          /
         </span>
       )}
     </button>

@@ -139,6 +139,41 @@
                                             we can't use rgba)
    Executive gold accent = #C89B20 ≈ hsl(43 73% 45%)
    ═══════════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 38 92% 50%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --tw-accent: 38 92% 50%;
+  --tw-accent-foreground: 222 47% 11%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 214 32% 84%;
+  --input: 214 32% 91%;
+  --ring: 38 92% 50%;
+  --chart-1: 38 92% 50%;
+  --chart-2: 217 91% 60%;
+  --chart-3: 142 71% 45%;
+  --chart-4: 173 80% 32%;
+  --chart-5: 0 72% 51%;
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-primary: 38 92% 50%;
+  --sidebar-primary-foreground: 222 47% 11%;
+  --sidebar-accent: 38 92% 50% / 0.12;
+  --sidebar-accent-foreground: 38 92% 40%;
+  --sidebar-border: 214 32% 88%;
+  --sidebar-ring: 38 92% 50%;
+}
+
 html.steelbuild-dark,
 .steelbuild-dark {
   --background: 222 56% 4% !important;

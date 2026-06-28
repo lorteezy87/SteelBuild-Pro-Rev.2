@@ -243,7 +243,7 @@ export default function Backcharges() {
   if (!projectId) return <div style={{ ...mono, padding: 24, color: "var(--text-muted)" }}>Select a project to manage backcharges.</div>;
 
   return (
-    <div style={{ padding: 20, maxWidth: 1180, margin: "0 auto" }}>
+    <div className="sb-dashboard-reference-page" style={{ padding: 20, maxWidth: 1180, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 20, color: "var(--text-primary)" }}>Backcharge Defense</h1>

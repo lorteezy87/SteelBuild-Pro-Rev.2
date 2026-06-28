@@ -372,7 +372,7 @@ export default function FabRelease() {
 
   if (!projectId) {
     return (
-      <div className="fab-release-page">
+      <div className="sb-dashboard-reference-page fab-release-page">
         <style>{FAB_RELEASE_STYLES}</style>
         <EmptyState
           icon="wp"
@@ -385,14 +385,14 @@ export default function FabRelease() {
 
   if (wpLoading || drawingLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
   }
 
   return (
-    <div className="fab-release-page">
+    <div className="sb-dashboard-reference-page fab-release-page">
       <style>{FAB_RELEASE_STYLES}</style>
 
       <Hero

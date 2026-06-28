@@ -393,7 +393,7 @@ export default function SteelWeightCalculator() {
 
   // ── Render ────────────────────────────────────────────────────
   return (
-    <div style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
+    <div className="sb-dashboard-reference-page" style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
       <div style={{ maxWidth: 1040, margin: "0 auto" }}>
 
         {/* Header */}

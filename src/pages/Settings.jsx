@@ -120,7 +120,7 @@ export default function Settings() {
   const activeTabMeta = ALL_TABS.find(t => t.id === activeTab);
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="sb-dashboard-reference-page">
       <CommandBar
         eyebrow={isAdmin ? "PERSONAL · WORKSPACE" : "PERSONAL"}
         title="Settings"

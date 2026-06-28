@@ -343,7 +343,7 @@ export default function CommandCenter() {
   // ── Render ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className="sb-dashboard-reference-page">
         <LoadingSkeleton variant="page" />
       </div>
     );
@@ -368,7 +368,7 @@ export default function CommandCenter() {
   const toggleFilter = (key) => setSnapshotFilter((p) => (p === key ? null : key));
 
   return (
-    <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <CommandBar
         eyebrow={`${greeting} · ${dateLabel.toUpperCase()}`}
         title="Command Center"

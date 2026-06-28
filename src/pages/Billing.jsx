@@ -66,7 +66,7 @@ export default function Billing() {
   };
 
   return (
-    <div className="page-content" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 18, maxWidth: 1000 }}>
+    <div className="sb-dashboard-reference-page page-content" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 18, maxWidth: 1000 }}>
       <CommandBar eyebrow={currentOrg?.name || "Workspace"} title="Billing & plan" subtitle="Your subscription powers this workspace" />
 
       {/* Current plan banner */}
@@ -102,7 +102,7 @@ export default function Billing() {
             <div key={p.key} className={p.highlight ? "sbd-card-strong" : "sbd-card"}
               style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12, border: current ? "1px solid var(--accent)" : undefined, position: "relative" }}>
               {p.highlight && !current && (
-                <span style={{ position: "absolute", top: -9, right: 14, background: "var(--accent)", color: "#fff", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", padding: "3px 9px", borderRadius: 999 }}>
+                <span style={{ position: "absolute", top: -9, right: 14, background: "var(--accent)", color: "var(--bg-base)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", padding: "3px 9px", borderRadius: 999 }}>
                   <Sparkles size={10} style={{ verticalAlign: "-1px", marginRight: 3 }} />POPULAR
                 </span>
               )}

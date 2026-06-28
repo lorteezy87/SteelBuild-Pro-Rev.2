@@ -51,6 +51,7 @@ export default function CalculatorsHub() {
     );
 
   return (
+    <div className="sb-dashboard-reference-page">
     <CalculatorShell tools={RAIL_TOOLS} activeTool={activeKey} onSelect={setTab}>
       <ErrorBoundary label="Calculators">
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
@@ -58,5 +59,6 @@ export default function CalculatorsHub() {
         </Suspense>
       </ErrorBoundary>
     </CalculatorShell>
+    </div>
   );
 }

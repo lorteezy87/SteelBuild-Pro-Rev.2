@@ -599,7 +599,7 @@ export default function JobStatusReport() {
   const hasSelection = selectedCount > 0;
 
   return (
-    <div style={{ maxWidth: 1280, margin: "0 auto", paddingBottom: 40 }}>
+    <div className="sb-dashboard-reference-page" style={{ maxWidth: 1280, margin: "0 auto", paddingBottom: 40 }}>
       <style>{`
         .spin-icon { animation: spin 0.9s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

@@ -727,7 +727,7 @@ export default function Drawings({ embedded = false } = {}) {
 
   if (!projectId) {
     return (
-      <div style={{ padding: 48, textAlign: "center" }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center" }}>
         <p style={{ ...mono, fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.15em" }}>
           SELECT A PROJECT TO VIEW DRAWINGS
         </p>
@@ -737,9 +737,10 @@ export default function Drawings({ embedded = false } = {}) {
 
   return (
     <div
+      className={embedded ? undefined : "sb-dashboard-reference-page"}
       style={embedded
         ? { padding: 0, background: "transparent" }
-        : { padding: "24px 28px", minHeight: "100vh", background: "var(--bg-page)" }}
+        : { minHeight: "100vh", background: "var(--bg-page)" }}
       onClick={() => { setContextMenu(null); }}
     >
       {/* ── Secondary-view banner: this is the full editor; the Hub is the command center ── */}
@@ -749,7 +750,7 @@ export default function Drawings({ embedded = false } = {}) {
             display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
             padding: "8px 14px", marginBottom: 14, borderRadius: 8,
             border: "1px solid var(--border-default)",
-            background: "var(--bg-surface-low, rgba(255,255,255,0.02))",
+            background: "var(--bg-surface-low)",
           }}
         >
           <span style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", flexShrink: 0 }}>

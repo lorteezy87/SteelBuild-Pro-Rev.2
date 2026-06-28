@@ -12,13 +12,21 @@
 import React, { useState } from "react";
 import { getPageIcon } from "@/config/pageIcons";
 import { photoFor } from "@/config/launcherConfig";
+import { useTheme } from "@/components/shared/ThemeContext";
+
+const FALLBACK_GRADIENT = {
+  dark: "linear-gradient(150deg, #222b3a 0%, #141c26 55%, #0a0e15 100%)",
+  light: "linear-gradient(150deg, #e8edf3 0%, #d4dce6 55%, #c5ced9 100%)",
+};
 
 function ModuleTile({ page, label, onSelect, photoSrc }) {
+  const { theme } = useTheme();
   const name = label || page || "";
   const photo = photoSrc ?? photoFor(page);
   const Icon = getPageIcon(page);
   const [imgFailed, setImgFailed] = useState(false);
   const showPhoto = !!photo && !imgFailed;
+  const fallbackGradient = FALLBACK_GRADIENT[theme] ?? FALLBACK_GRADIENT.dark;
 
   return (
     <button
@@ -37,7 +45,7 @@ function ModuleTile({ page, label, onSelect, photoSrc }) {
         cursor: "pointer",
         padding: 0,
         color: "#fff",
-        background: "linear-gradient(150deg, #222b3a 0%, #141c26 55%, #0a0e15 100%)",
+        background: fallbackGradient,
         boxShadow: "0 6px 16px rgba(0,0,0,0.45)",
       }}
     >

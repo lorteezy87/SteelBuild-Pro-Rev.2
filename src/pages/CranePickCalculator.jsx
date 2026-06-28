@@ -230,7 +230,7 @@ export default function CranePickCalculator() {
 
   // ── Render ────────────────────────────────────────────────
   return (
-    <div style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
+    <div className="sb-dashboard-reference-page" style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
       <div style={{ maxWidth: 1080, margin: "0 auto" }}>
 
         {/* Header */}
@@ -259,7 +259,7 @@ export default function CranePickCalculator() {
           fontSize: 12,
           lineHeight: 1.5,
         }}>
-          <span style={{ ...mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.12em", color: "#22D3EE", marginRight: 6 }}>
+          <span style={{ ...mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.12em", color: "var(--status-info)", marginRight: 6 }}>
             PLANNING TOOL ONLY
           </span>
           This calculator does not replace an engineered lift plan. Verify all values against the crane load chart and rigging capacity ratings before any pick.
@@ -650,7 +650,7 @@ function PickSummaryModal({ onClose, data }) {
             border: "1px solid rgba(34,211,238,0.35)",
             padding: "8px 12px", borderRadius: 4, marginBottom: 14,
           }}>
-            <strong style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", color: "#22D3EE" }}>PLANNING TOOL ONLY —</strong>
+            <strong style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", color: "var(--status-info)" }}>PLANNING TOOL ONLY —</strong>
             {" "}Does not replace an engineered lift plan. Verify all values against the crane load chart and rigging capacity ratings.
           </div>
 
@@ -796,7 +796,7 @@ function keycapButtonStyle(variant, opts = {}) {
     return {
       ...base,
       background: "var(--accent)",
-      color: "var(--accent-text, #04121f)",
+      color: "var(--bg-base)",
       border: "1px solid var(--accent)",
       opacity: disabled ? 0.55 : 1,
       cursor: disabled ? "not-allowed" : "pointer",

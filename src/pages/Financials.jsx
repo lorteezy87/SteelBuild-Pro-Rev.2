@@ -304,7 +304,7 @@ export default function Financials() {
 
   if (!projectId) {
     return (
-      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>$</div>
         <div style={{ ...body, fontSize: 20, fontWeight: 700, color: "var(--text-disabled)", marginBottom: 6 }}>
           Select a project to view financial control
@@ -317,7 +317,7 @@ export default function Financials() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <CommandBar
         eyebrow={selectedProject?.name || "FINANCIALS"}
         title="Budget Control"

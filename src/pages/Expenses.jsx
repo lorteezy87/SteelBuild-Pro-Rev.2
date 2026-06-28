@@ -366,7 +366,7 @@ export default function ExpensesPage() {
   /* ── No active project: early return ── */
   if (!activeProject?.id) {
     return (
-      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>📌</div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 20, fontWeight: 700, color: "var(--text-disabled)", marginBottom: 6 }}>
           Select a project to view Expenses
@@ -379,7 +379,7 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div style={{ paddingBottom: selected.length > 0 ? 72 : 0 }}>
+    <div className="sb-dashboard-reference-page" style={{ paddingBottom: selected.length > 0 ? 72 : 0 }}>
       <CommandBar
         eyebrow={activeProject?.name || "COST"}
         title="Expenses"

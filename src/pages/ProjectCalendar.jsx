@@ -331,7 +331,7 @@ export default function ProjectCalendar() {
   if (!projectId) {
     return (
       <ErrorBoundary label="Project Calendar">
-        <div style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
+        <div className="sb-dashboard-reference-page" style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
           <CommandBar
             eyebrow="SteelBuild Pro · Calendar"
             title="Project Calendar"
@@ -351,7 +351,7 @@ export default function ProjectCalendar() {
   return (
     <ErrorBoundary label="Project Calendar">
       <div
-        className="calendar-print-root"
+        className="sb-dashboard-reference-page calendar-print-root"
         style={{
           padding: "20px 24px 24px",
           height: "100%",
@@ -561,7 +561,7 @@ function ViewToggle({ value, onChange }) {
               fontWeight: 700,
               letterSpacing: "0.12em",
               textTransform: "uppercase",
-              color: active ? "var(--accent-on, #ffffff)" : "var(--text-secondary)",
+              color: active ? "var(--bg-base)" : "var(--text-secondary)",
               transition: "all 120ms",
             }}
           >
