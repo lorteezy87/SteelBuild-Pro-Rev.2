@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
-export interface HeroChip { label: string; tone?: "neutral" | "good" }
+export interface HeroChip { label: string; tone?: "neutral" | "good" | "warn" | "danger" }
 export interface HeroStat { value: ReactNode; label: string }
 
 export function PageHero({
@@ -16,7 +16,7 @@ export function PageHero({
   Icon: ComponentType<{ size?: number | string }>;
   title: string;
   subtitle: string;
-  projectName: string;
+  projectName?: string;
   chips?: HeroChip[];
   stats?: HeroStat[];
   photoSrc?: string;
@@ -30,9 +30,9 @@ export function PageHero({
           <h1 className="cmd-hero__title">{title}</h1>
           <p className="cmd-hero__subtitle">{subtitle}</p>
           <div className="cmd-hero__chips">
-            <span className="cmd-hero__project">{projectName}</span>
+            {projectName ? <span className="cmd-hero__project">{projectName}</span> : null}
             {chips.map((c, i) => (
-              <span className={`cmd-chip${c.tone === "good" ? " cmd-chip--good" : ""}`} key={i}>{c.label}</span>
+              <span className={`cmd-chip${c.tone && c.tone !== "neutral" ? ` cmd-chip--${c.tone}` : ""}`} key={i}>{c.label}</span>
             ))}
           </div>
         </div>
