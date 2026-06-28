@@ -5,12 +5,18 @@
  * Phase 2). This is a thin tab shell: it lazy-loads the existing pages as tab
  * panels (the DrawingSubmittalHub pattern) and changes neither page's logic.
  * Both remain independently routable for deep-links.
+ *
+ * command_ui flag: when enabled, renders ResourcesControlCenter instead of
+ * the tab shell. The Control Center loads its own resource data (the shell
+ * does not) and preserves full access to the same underlying entity.
  */
 import { Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import ResourcesControlCenter from "@/pages/resources/ResourcesControlCenter";
 
 const ResourceRegister = lazyWithRetry(() => import("@/pages/ResourceManagement"));
 const CrewSchedule = lazyWithRetry(() => import("@/pages/ResourceScheduling"));
@@ -21,6 +27,7 @@ const TABS = [
 ];
 
 export default function ResourceHub() {
+  const commandUi = useFlag("command_ui");
   const [params, setParams] = useSearchParams();
   const param = params.get("res_tab");
   const activeTab = TABS.some((t) => t.key === param) ? param : "register";
@@ -34,6 +41,8 @@ export default function ResourceHub() {
       { replace: true },
     );
 
+  // command_ui: the Resource-Register tab renders the new Control Center, but the
+  // tab strip stays so the Crew-Schedule grid (only reachable via this hub) isn't lost.
   return (
     <div
       className="sb-dashboard-reference-page"
@@ -86,7 +95,9 @@ export default function ResourceHub() {
       <div style={{ minHeight: 0, position: "relative" }}>
         <ErrorBoundary label="Resources">
           <Suspense fallback={<LoadingSkeleton variant="page" />}>
-            {activeTab === "register" ? <ResourceRegister /> : <CrewSchedule />}
+            {activeTab === "register"
+              ? (commandUi ? <ResourcesControlCenter /> : <ResourceRegister />)
+              : <CrewSchedule />}
           </Suspense>
         </ErrorBoundary>
       </div>
