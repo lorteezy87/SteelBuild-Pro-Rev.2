@@ -37,10 +37,13 @@ import AlertChips    from "./expenses/AlertChips";
 import FilterBar     from "./expenses/FilterBar";
 import ExpenseTable  from "./expenses/ExpenseTable";
 import BulkActionBar from "./expenses/BulkActionBar";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import ExpensesControlCenter from "./expenses/ExpensesControlCenter";
 
 export default function ExpensesPage() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
+  const commandUi = useFlag("command_ui");
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -363,6 +366,44 @@ export default function ExpensesPage() {
   const toggleAll = () => setSelected(selected.length === filtered.length ? [] : filtered.map((e) => e.id));
   const handleExportCSV = () => exportExpensesCSV(filtered, activeProject?.name);
 
+  /* ── Shared modals rendered in both classic and command_ui paths ── */
+  const modals = (
+    <>
+      <ExpenseFormModal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditing(null); }}
+        onSave={handleSave}
+        isSaving={createMut.isPending || updateMut.isPending}
+        expense={editing}
+        projects={projects}
+        workPackages={workPackages}
+        sovItems={sovItems}
+        expenses={expenses}
+        costCodes={costCodes}
+        nextNumber={`EXP-${String((expenses.length || 0) + 1).padStart(3, "0")}`}
+        defaultProjectId={activeProject?.id}
+      />
+      <ExpenseImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        activeProject={activeProject}
+        workPackages={workPackages}
+        onImported={() => qc.invalidateQueries({ queryKey: ["expenses"] })}
+      />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteMut.isPending && deleteTarget?.id) {
+            deleteMut.mutate(deleteTarget.id);
+          }
+        }}
+        title="Delete Expense"
+        description={`Delete ${deleteTarget?.expense_number}? This cannot be undone.`}
+      />
+    </>
+  );
+
   /* ── No active project: early return ── */
   if (!activeProject?.id) {
     return (
@@ -374,6 +415,28 @@ export default function ExpensesPage() {
         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>
           Use the project selector in the top right.
         </div>
+      </div>
+    );
+  }
+
+  /* ── command_ui flag: render the light Control Center skin ── */
+  if (commandUi) {
+    return (
+      <div className="exp-page">
+        <ExpensesControlCenter
+          projectName={activeProject?.name || "Project"}
+          expenses={expenses}
+          filtered={filtered}
+          search={search}
+          onSearch={setSearch}
+          statusFilter={statusFilter}
+          onStatusFilter={(v) => { setStatusFilter(v); setActiveKPI(null); }}
+          onExport={handleExportCSV}
+          onImport={() => setImportOpen(true)}
+          onCreate={() => { setEditing(null); setModalOpen(true); }}
+          onOpenExpense={(e) => { setEditing(e); setModalOpen(true); }}
+        />
+        {modals}
       </div>
     );
   }
@@ -479,40 +542,7 @@ export default function ExpensesPage() {
         onClear={() => setSelected([])}
       />
 
-      <ExpenseFormModal
-        open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditing(null); }}
-        onSave={handleSave}
-        isSaving={createMut.isPending || updateMut.isPending}
-        expense={editing}
-        projects={projects}
-        workPackages={workPackages}
-        sovItems={sovItems}
-        expenses={expenses}
-        costCodes={costCodes}
-        nextNumber={`EXP-${String((expenses.length || 0) + 1).padStart(3, "0")}`}
-        defaultProjectId={activeProject?.id}
-      />
-
-      <ExpenseImportModal
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        activeProject={activeProject}
-        workPackages={workPackages}
-        onImported={() => qc.invalidateQueries({ queryKey: ["expenses"] })}
-      />
-
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (!deleteMut.isPending && deleteTarget?.id) {
-            deleteMut.mutate(deleteTarget.id);
-          }
-        }}
-        title="Delete Expense"
-        description={`Delete ${deleteTarget?.expense_number}? This cannot be undone.`}
-      />
+      {modals}
     </div>
   );
 }
