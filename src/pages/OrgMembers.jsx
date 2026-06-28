@@ -24,10 +24,13 @@ import {
   updateMemberRole, removeMember, inviteLink,
 } from "@/lib/org/repository";
 import { prepareOnboardingInvites, clampOrgRole } from "@/lib/org/onboardingInvites";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import TeamControlCenter from "./team/TeamControlCenter";
 
 const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "Member" };
 
 export default function OrgMembers() {
+  const commandUi = useFlag("command_ui");
   const { user } = useAuth();
   const { currentOrg, currentRole } = useOrg();
   const qc = useQueryClient();
@@ -38,6 +41,8 @@ export default function OrgMembers() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [busy, setBusy] = useState(false);
+  // Search state for the Command UI reskin only (classic path doesn't use it)
+  const [ccSearch, setCcSearch] = useState("");
 
   const { data: members = [], isLoading: loadingMembers } = useQuery({
     queryKey: ["org-members", orgId], queryFn: () => listOrgMembers(orgId), enabled: !!orgId,
@@ -184,6 +189,58 @@ export default function OrgMembers() {
 
   if (!orgId) {
     return <div className="page-content" style={{ padding: 24 }}><CommandBar eyebrow="Workspace" title="Team" /></div>;
+  }
+
+  // ── Command UI reskin (flag: command_ui) ────────────────────────────────────
+  // Presentation-only branch — all state/handlers below are the exact same
+  // variables used by the classic path. No RBAC logic is duplicated or changed.
+  if (commandUi) {
+    return (
+      <TeamControlCenter
+        // Data
+        orgName={currentOrg?.name || "Workspace"}
+        members={members}
+        invites={invites}
+        selfUserId={user?.id || ""}
+        ownerCount={ownerCount}
+        seatsUsed={cap.used}
+        seatsLimit={cap.limit}
+        seatsPct={cap.pct}
+        seatsAtLimit={cap.atLimit}
+        seatsNear={cap.near}
+        planName={plan.name}
+        // RBAC gates (pass-through, not recomputed)
+        canManage={canManage}
+        isOwner={isOwner}
+        // Onboarding staged batch
+        staged={staged}
+        stagedSkippedNote={stagedSkippedNote}
+        sendingStaged={sendingStaged}
+        seatsLeft={seatsLeft}
+        // Single-invite form state
+        inviteEmail={email}
+        inviteRole={role}
+        inviteBusy={busy}
+        atMemberLimit={atMemberLimit}
+        // Search/filter (CC-local state; classic path ignores it)
+        search={ccSearch}
+        onSearch={setCcSearch}
+        // Mutation handlers — exact same functions, zero modification
+        onSendInvite={sendInvite}
+        onSetInviteEmail={setEmail}
+        onSetInviteRole={setRole}
+        onChangeRole={onChangeRole}
+        onRemove={onRemove}
+        onRevoke={(id) => onRevoke(id)}
+        onCopyLink={copyLink}
+        onNavigateToBilling={() => navigate("/Billing")}
+        // Staged batch handlers
+        onSendStaged={sendStaged}
+        onSetStagedRole={setStagedRole}
+        onRemoveStaged={removeStaged}
+        onDismissStaged={() => setStaged([])}
+      />
+    );
   }
 
   return (
