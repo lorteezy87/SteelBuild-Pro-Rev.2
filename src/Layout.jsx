@@ -15,6 +15,7 @@
 import React, { Suspense, useState, useEffect, useContext } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useNavigate } from "react-router-dom";
+import { ChevronDown, Search } from "lucide-react";
 import { createPageUrl } from "@/utils";
 
 // Nav components (extracted from Layout)
@@ -59,6 +60,8 @@ import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 import { useProjectContext } from "./components/shared/ProjectContext";
 import { AuthContext } from "@/lib/AuthContext";
 import { useTheme } from "@/components/shared/ThemeContext";
+import { REFERENCE_CHROME_PAGES } from "@/config/dashboardChromePages";
+import "./pages/dashboard/dashboardTheme.css";
 
 // ─────────────────────────────────────────────────────────────────────
 function sidebarFallbackWidth() {
@@ -85,7 +88,8 @@ export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const isDarkTheme = theme === "dark";
-  const appShellClassName = `app-shell ${isDarkTheme ? "steelbuild-dark " : ""}sbd-mesh-bg`;
+  const isDashboardPage = REFERENCE_CHROME_PAGES.has(currentPageName);
+  const appShellClassName = `app-shell ${isDashboardPage ? "dashboard-reference-shell " : ""}sbd-mesh-bg`;
 
   // Auth
   const authCtx = useContext(AuthContext);
@@ -97,6 +101,7 @@ export default function Layout({ children, currentPageName }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const isMobile = useResponsiveBreakpoint();
+  const useDashboardChrome = isDashboardPage && !isMobile;
 
   // Density preference
   useDensityRestore();
@@ -133,6 +138,13 @@ export default function Layout({ children, currentPageName }) {
 
   // ── Navigation handlers ──────────────────────────────────────────
   const handleNavigate = (page) => navigate(createPageUrl(page));
+  const userName = user?.full_name || user?.email || "User";
+  const userInitials = String(userName)
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
 
   // ── Render ───────────────────────────────────────────────────────
   // The theme class is scoped here so light mode can use the reference
@@ -172,6 +184,78 @@ export default function Layout({ children, currentPageName }) {
           zIndex: 200, opacity: isDarkTheme ? 0.6 : 0, display: isDarkTheme ? "block" : "none",
         }} />
 
+        {useDashboardChrome ? (
+          <div className="app-body sb-dashboard-shell-body" style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <Suspense fallback={<SidebarNavFallback />}>
+              <SidebarNav
+                currentPageName={currentPageName}
+                onNavigate={handleNavigate}
+                visible
+                variant="dashboard"
+              />
+            </Suspense>
+
+            <div className="sb-dashboard-shell-content">
+              <nav aria-label="Primary" className="app-topbar nav-glass sbd-topbar sb-dashboard-topbar" style={{
+                height: 68,
+                minHeight: 68,
+                padding: "0 22px",
+                display: "grid",
+                gridTemplateColumns: "260px minmax(320px, 1fr) auto",
+                alignItems: "center",
+                gap: 22,
+                flexShrink: 0,
+                position: "relative",
+                zIndex: 100,
+              }}>
+                <ProjectPillDropdown align="left" variant="dashboard" />
+
+                <div className="sb-dashboard-topbar__search">
+                  <TopBarSearchButton onClick={() => setSearchOpen(true)} variant="dashboard" />
+                </div>
+
+                <div className="sb-dashboard-topbar__actions">
+                  <ThemeToggleButton />
+                  <HighContrastToggleButton />
+                  <button
+                    type="button"
+                    className="sb-dashboard-topbar__icon"
+                    aria-label="Open search"
+                    onClick={() => setSearchOpen(true)}
+                  >
+                    <Search size={18} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
+                  <BellDropdown
+                    alerts={unreadAlerts}
+                    unreadCount={unreadCount}
+                    onMarkAllRead={markAllRead}
+                    onViewAll={() => handleNavigate("AlertsCenter")}
+                  />
+                  <button
+                    type="button"
+                    className="sb-dashboard-topbar__user"
+                    title={`${userName} · sign out`}
+                    onClick={logout}
+                  >
+                    <span className="sb-dashboard-topbar__avatar">{userInitials.slice(0, 2)}</span>
+                    <span>{userInitials.slice(0, 2)}</span>
+                    <ChevronDown size={15} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
+                </div>
+              </nav>
+
+              <main id="main-content" className="app-main-content sb-dashboard-main-content" aria-label="Main content" tabIndex={-1} style={{
+                flex: 1, overflowY: "auto", padding: 0,
+                background: "var(--bg-base)", color: "var(--text-primary)",
+                display: "flex", flexDirection: "column",
+              }}>
+                <ProjectErrorBanner />
+                {children}
+              </main>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* ── TOP UTILITY BAR ─────────────────────────────────────── */}
         <nav aria-label="Primary" className="app-topbar nav-glass sbd-topbar" style={{
           height: isMobile ? 52 : 36,
@@ -291,6 +375,8 @@ export default function Layout({ children, currentPageName }) {
             </main>
           </div>
         </div>
+          </>
+        )}
 
         {/* ── OVERLAYS ────────────────────────────────────────────── */}
         {searchOpen && (

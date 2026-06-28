@@ -50,6 +50,20 @@ function saveRecents(pages) {
 
 // ── Favorites persistence ───────────────────────────────────────────
 const FAVORITES_LS_KEY = "sbp-sidebar-favorites";
+const DASHBOARD_REFERENCE_ITEMS = [
+  { label: "Dashboard", page: "Dashboard" },
+  { label: "Command Center", page: "CommandCenter" },
+  { label: "Drawings & Submittals", page: "DrawingSubmittalHub" },
+  { label: "RFIs", page: "RFIs" },
+  { label: "Schedule", page: "ScheduleHub" },
+  { label: "Change Orders", page: "ChangeOrders" },
+  { label: "Field Hub", page: "FieldHub" },
+  { label: "Budget Control", page: "CostHub" },
+  { label: "Documents", page: "Documents" },
+  { label: "Reports", page: "ReportsHub" },
+  { label: "Inspections", page: "Inspections" },
+  { label: "Team", page: "OrgMembers" },
+];
 
 function loadFavorites() {
   try {
@@ -62,7 +76,7 @@ function saveFavorites(pages) {
 }
 
 // ── Component ───────────────────────────────────────────────────────
-export default function SidebarNav({ currentPageName, onNavigate, visible }) {
+export default function SidebarNav({ currentPageName, onNavigate, visible, variant = "default" }) {
   const { theme } = useTheme();
   const isLightTheme = theme === "light";
   // Settings → Dashboard → "Pinned Modules" merges into the sidebar favorites.
@@ -183,6 +197,14 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   };
 
   if (!visible) return null;
+  if (variant === "dashboard") {
+    return (
+      <DashboardReferenceSidebar
+        currentPageName={currentPageName}
+        onNavigate={onNavigate}
+      />
+    );
+  }
 
   const width = isLightTheme ? 176 : (railMode ? 56 : 240);
 
@@ -522,6 +544,69 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
           </div>
         </div>
       )}
+    </aside>
+  );
+}
+
+function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <aside aria-label="Dashboard navigation" className={`sb-dashboard-reference-sidebar${collapsed ? " is-collapsed" : ""}`}>
+      <button
+        type="button"
+        className="sb-dashboard-reference-brand"
+        onClick={() => onNavigate("Dashboard")}
+      >
+        <span className="sb-dashboard-reference-brand__mark">SB</span>
+        <span>SteelBuild Pro</span>
+      </button>
+
+      <nav className="sb-dashboard-reference-nav">
+        {DASHBOARD_REFERENCE_ITEMS.map((item) => {
+          const Icon = PAGE_ICON[item.page] || FallbackIcon;
+          const active = currentPageName === item.page
+            || (item.page === "DrawingSubmittalHub" && ["Drawings", "Submittals"].includes(currentPageName));
+          return (
+            <button
+              key={item.page}
+              type="button"
+              className={`sb-dashboard-reference-nav__item${active ? " is-active" : ""}`}
+              aria-current={active ? "page" : undefined}
+              onClick={() => onNavigate(item.page)}
+              onMouseEnter={() => prefetchRoute(item.page)}
+              onFocus={() => prefetchRoute(item.page)}
+            >
+              <Icon size={17} strokeWidth={1.85} />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="sb-dashboard-reference-sidebar__footer">
+        <button
+          type="button"
+          className="sb-dashboard-reference-nav__item"
+          onClick={() => onNavigate("Settings")}
+        >
+          {React.createElement(PAGE_ICON.Settings || FallbackIcon, { size: 17, strokeWidth: 1.85 })}
+          <span>Settings</span>
+        </button>
+        <button
+          type="button"
+          className="sb-dashboard-reference-nav__item"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => setCollapsed((value) => !value)}
+        >
+          {collapsed ? <ChevronsRight size={17} strokeWidth={1.85} /> : <ChevronsLeft size={17} strokeWidth={1.85} />}
+          <span>{collapsed ? "Expand" : "Collapse"}</span>
+        </button>
+        <div className="sb-dashboard-reference-copyright">
+          © {new Date().getFullYear()} SteelBuild Pro, Inc.<br />
+          All rights reserved.
+        </div>
+      </div>
     </aside>
   );
 }

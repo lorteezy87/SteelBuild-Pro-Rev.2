@@ -555,7 +555,7 @@ export default function DrawingViewer() {
   };
 
   return (
-    <div className="drawing-viewer-redesign">
+    <div className="sb-dashboard-reference-page drawing-viewer-redesign" style={{ padding: 0 }}>
       <style>{drawingViewerStyles}</style>
 
       {/* ── Sheet List Sidebar (collapsible) ──────────────────────────────── */}

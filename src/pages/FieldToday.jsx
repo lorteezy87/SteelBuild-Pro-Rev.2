@@ -307,7 +307,7 @@ export default function FieldToday() {
   // ── States ──
   if (!projectId) {
     return (
-      <div className="page-content field-mobile-console" style={{ padding: 16 }}>
+      <div className="sb-dashboard-reference-page field-mobile-console" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <CommandBar eyebrow="Field" title="Field Today" />
         <div className="sbd-card" style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>
           Pick a project from the top bar to capture today's field progress.
@@ -317,7 +317,7 @@ export default function FieldToday() {
   }
 
   return (
-    <div className="page-content field-mobile-console" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+    <div className="sb-dashboard-reference-page field-mobile-console" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <CommandBar
         eyebrow={activeProject?.name || "Field"}
         title="Field Today"

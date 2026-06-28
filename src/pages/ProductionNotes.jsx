@@ -232,7 +232,7 @@ export default function ProductionNotes() {
   const highlightedCount = notes.filter((n) => n.is_high_priority).length;
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-page)" }}>
+    <div className="sb-dashboard-reference-page" style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-page)" }}>
       <style>{`
         .bullet-row:hover .bullet-actions { opacity: 1 !important; }
         @media print {
@@ -615,7 +615,7 @@ function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, 
       style={{
         display: "flex", alignItems: "flex-start", gap: 8, padding: "4px 6px",
         borderRadius: 4,
-        background: highlighted ? "rgba(234,179,8,0.18)" : "transparent",
+        background: highlighted ? "color-mix(in srgb, var(--status-warning) 18%, transparent)" : "transparent",
         borderLeft: highlighted ? "3px solid var(--status-warning)" : "3px solid transparent",
         transition: "background 0.15s",
       }}
@@ -635,7 +635,7 @@ function BulletRow({ note, projectId, isLast, onCreateNext, onUpdateBulletText, 
         style={{ flex: 1, background: "transparent", border: "none", outline: "none", resize: "none", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.55, padding: "1px 0", fontWeight: highlighted ? 600 : 400 }}
       />
       <div className="bullet-actions" style={{ display: "flex", gap: 4, opacity: 0.65, transition: "opacity 0.15s" }}>
-        <button title="Highlight (Ctrl+H)" onClick={() => onToggleHighlight(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: highlighted ? "rgba(234,179,8,0.25)" : "transparent", color: highlighted ? "var(--status-warning)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <button title="Highlight (Ctrl+H)" onClick={() => onToggleHighlight(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: highlighted ? "color-mix(in srgb, var(--status-warning) 25%, transparent)" : "transparent", color: highlighted ? "var(--status-warning)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Highlighter size={12} />
         </button>
         <button title="Delete bullet" onClick={() => onDeleteBullet(note)} style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid transparent", background: "transparent", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--status-error)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>

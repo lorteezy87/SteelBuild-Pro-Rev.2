@@ -119,7 +119,7 @@ export default function Warranty() {
   const types = ["Material", "Structural Steel", "Connections", "Coating", "Welds", "Installation", "Equipment", "Other"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>

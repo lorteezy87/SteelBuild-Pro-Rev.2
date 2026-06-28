@@ -162,7 +162,7 @@ export default function ExecutiveView() {
   }).filter(r => r.open > 0).sort((a, b) => b.overdue - a.overdue || b.open - a.open);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow="C-SUITE"
         title="Executive Roll-Up"

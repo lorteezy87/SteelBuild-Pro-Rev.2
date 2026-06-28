@@ -27,6 +27,24 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
 
+    <!-- Apply persisted theme before first paint to avoid FOUC -->
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem("sbp-theme");
+          if (theme !== "light" && theme !== "dark") theme = "dark";
+          var root = document.documentElement;
+          root.setAttribute("data-theme", theme);
+          if (theme === "dark") root.classList.add("steelbuild-dark");
+          else root.classList.remove("steelbuild-dark");
+          var accent = localStorage.getItem("sbp-accent");
+          if (accent) root.setAttribute("data-accent", accent);
+          var contrast = localStorage.getItem("sbp-contrast");
+          if (contrast) root.setAttribute("data-contrast", contrast);
+        } catch (e) { /* private browsing */ }
+      })();
+    </script>
+
     <!-- Preconnect for web fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
