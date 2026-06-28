@@ -480,6 +480,10 @@ export default function Deliveries() {
   if (commandUi) {
     return (
       <div className="delivery-page">
+        {/* The Dispatch board + Schedule views are styled by this CSS string; the
+            classic path injects it below, so the command path must too or those
+            embedded views render unstyled. */}
+        <style>{deliveryStyles}</style>
         <DeliveryControlCenter
           projectName={projectName}
           deliveries={activeDeliveries}
