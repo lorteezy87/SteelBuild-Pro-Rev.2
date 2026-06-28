@@ -46,7 +46,7 @@ export default function AlertsCenter() {
   const btnInactive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--bg-surface-low)", color: "var(--text-muted)" };
 
   return (
-    <div>
+    <div className="sb-dashboard-reference-page">
       <CommandBar
         eyebrow="NOTIFICATIONS"
         title="Alerts & Notifications"

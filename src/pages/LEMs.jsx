@@ -59,7 +59,7 @@ const TabBar = ({ tabs, active, onSelect }) => (
           cursor: "pointer",
           transition: "all 0.15s",
           background: active === t ? "var(--accent)" : "transparent",
-          color: active === t ? "#000" : "var(--text-muted)",
+          color: active === t ? "var(--bg-base)" : "var(--text-muted)",
         }}
       >
         {t}
@@ -457,7 +457,7 @@ export default function LEMs() {
 
   if (!projectId) {
     return (
-      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>&#9881;</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color: "var(--text-disabled)", marginBottom: 6 }}>Select a project</div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
@@ -467,7 +467,7 @@ export default function LEMs() {
 
   if (isLoading) {
     return (
-      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" }}>Loading LEM data...</div>
       </div>
     );
@@ -476,7 +476,7 @@ export default function LEMs() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={activeProject?.name || "PROJECT"}
         title="Labor, Equipment & Materials"

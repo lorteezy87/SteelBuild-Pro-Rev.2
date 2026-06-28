@@ -217,6 +217,7 @@ export default function ResourceManagement() {
   const isEmpty = resources.length === 0;
 
   return (
+    <div className="sb-dashboard-reference-page">
     <OperationsPageShell
       eyebrow={selectedProject ? selectedProject.name : "All Projects"}
       title="Resource Management"
@@ -309,7 +310,7 @@ export default function ResourceManagement() {
               onClick={() => setFilterType(type)}
               style={{
                 background: filterType === type ? "var(--accent)" : "var(--bg-surface)",
-                color: filterType === type ? "#07090E" : "var(--text-secondary)",
+                color: filterType === type ? "var(--bg-base)" : "var(--text-secondary)",
                 border: `1px solid ${filterType === type ? "var(--accent)" : "var(--border-default)"}`,
                 borderRadius: "var(--radius-badge)",
                 padding: "6px 12px",
@@ -347,7 +348,7 @@ export default function ResourceManagement() {
               onClick={() => setFilterStatus(status)}
               style={{
                 background: filterStatus === status ? "var(--accent)" : "var(--bg-surface)",
-                color: filterStatus === status ? "#07090E" : "var(--text-secondary)",
+                color: filterStatus === status ? "var(--bg-base)" : "var(--text-secondary)",
                 border: `1px solid ${filterStatus === status ? "var(--accent)" : "var(--border-default)"}`,
                 borderRadius: "var(--radius-badge)",
                 padding: "6px 12px",
@@ -457,7 +458,7 @@ export default function ResourceManagement() {
             onClick={() => { setEditing(null); setShowForm(true); }}
             style={{
               background: "var(--accent)",
-              color: "#07090E",
+              color: "var(--bg-base)",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "10px 24px",
@@ -492,5 +493,6 @@ export default function ResourceManagement() {
         description="Delete this resource? This cannot be undone."
       />
     </OperationsPageShell>
+    </div>
   );
 }

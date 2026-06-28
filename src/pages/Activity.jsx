@@ -112,7 +112,7 @@ export default function ActivityPage() {
   const selectTriggerClass = "bg-transparent text-slate-50 px-3 py-2 text-sm rounded-md flex h-9 w-full items-center justify-between whitespace-nowrap border border-input shadow-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
         <div>
@@ -436,3 +436,4 @@ export default function ActivityPage() {
     </div>
   );
 }
+

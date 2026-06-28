@@ -63,8 +63,8 @@ export default function ProjectDetail() {
   if (!project) {
     return (
       <div
+        className="sb-dashboard-reference-page"
         style={{
-          padding: "40px",
           textAlign: "center",
           fontFamily: "var(--font-mono)",
           fontSize: "12px",
@@ -88,7 +88,7 @@ export default function ProjectDetail() {
   const healthColor = HEALTH_COLORS[project.health_status] || "var(--text-muted)";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ marginBottom: -8 }}>
         <button
           onClick={() => navigate(createPageUrl("Projects"))}

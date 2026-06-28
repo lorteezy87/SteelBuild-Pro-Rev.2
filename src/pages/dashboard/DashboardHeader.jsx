@@ -26,58 +26,88 @@ export default function DashboardHeader({
   summary,
   kpis = [],
   density = "normal",
+  variant = "default",
 }) {
   const d = DENSITY[density] || DENSITY.normal;
   if (!showWelcome && kpis.length === 0) return null;
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: d.gap }}>
-      {showWelcome && (
-        <div
-          className="sbd-card"
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-            padding: density === "comfortable" ? "14px 18px" : "9px 14px",
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-default)",
-            borderLeft: "3px solid var(--accent)",
-            borderRadius: "var(--radius-card)",
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: density === "comfortable" ? 20 : 16, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.1 }}>
-              {greeting}
+  const isDashboardTheme = variant === "dashboard";
+  if (!isDashboardTheme) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: d.gap }}>
+        {showWelcome && (
+          <div
+            className="sbd-card"
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+              padding: density === "comfortable" ? "14px 18px" : "9px 14px",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderLeft: "3px solid var(--accent)",
+              borderRadius: "var(--radius-card)",
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: density === "comfortable" ? 20 : 16, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.1 }}>
+                {greeting}
+              </div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginTop: 3 }}>
+                {dateLabel}
+              </div>
             </div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginTop: 3 }}>
-              {dateLabel}
-            </div>
+            {summary && (
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", textAlign: "right", maxWidth: 460 }}>
+                {summary}
+              </div>
+            )}
           </div>
-          {summary && (
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", textAlign: "right", maxWidth: 460 }}>
-              {summary}
-            </div>
-          )}
+        )}
+
+        {kpis.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${d.minW}px, 1fr))`, gap: d.gap }}>
+            {kpis.map((k) => (
+              <KpiTile
+                key={k.id}
+                compact={d.compact}
+                label={k.label}
+                value={k.value}
+                sub={k.sub}
+                color={k.color}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <section className="sb-dashboard-header" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {showWelcome && (
+        <div className="sb-dashboard-welcome-card">
+          <div className="sb-dashboard-welcome-copy">
+            <p>{greeting}</p>
+            <span>{dateLabel}</span>
+          </div>
+          <p>{summary}</p>
         </div>
       )}
 
       {kpis.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${d.minW}px, 1fr))`, gap: d.gap }}>
-          {kpis.map((k) => (
-            <KpiTile
-              key={k.id}
-              compact={d.compact}
-              label={k.label}
-              value={k.value}
-              sub={k.sub}
-              color={k.color}
-            />
+        <div className="sb-dashboard-kpi-grid">
+          {kpis.map((kpi) => (
+            <article key={kpi.id} className="sb-dashboard-kpi-card">
+              <div className="sb-dashboard-kpi-card__label">{kpi.label}</div>
+              <div className="sb-dashboard-kpi-card__value">{kpi.value}</div>
+              {kpi.sub && <div className="sb-dashboard-kpi-card__sub">{kpi.sub}</div>}
+            </article>
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }

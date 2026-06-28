@@ -520,7 +520,7 @@ export default function Submittals() {
   }, [filtered]);
 
   if (!projectId) return (
-    <div style={{ padding: 40, textAlign: "center" }}>
+    <div className="sb-dashboard-reference-page" style={{ textAlign: "center" }}>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>
         Select a project to view Submittals
       </div>
@@ -528,7 +528,7 @@ export default function Submittals() {
   );
 
   return (
-    <div style={{ padding: "10px 24px 24px", display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" }}>
+    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" }}>
       <CommandBar
         eyebrow={`${activeProject?.project_name || "PROJECT"} · SUBMITTALS`}
         title="Submittal Register"

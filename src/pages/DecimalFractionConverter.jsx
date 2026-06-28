@@ -103,7 +103,7 @@ export default function DecimalFractionConverter() {
   const [subMode, setSubMode] = useState(SUB_MODES.DEC_FRAC);
 
   return (
-    <div style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
+    <div className="sb-dashboard-reference-page" style={{ padding: 24, background: "var(--bg-page)", minHeight: "calc(100vh - 92px)" }}>
       <div style={{ maxWidth: 1080, margin: "0 auto" }}>
 
         {/* Header */}
