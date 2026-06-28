@@ -66,6 +66,8 @@ import {
   ScheduleView,
 } from "./deliveries/components";
 import type { DeliveryMetrics, DeliveryRecord } from "./deliveries/types";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import DeliveryControlCenter from "./deliveries/DeliveryControlCenter";
 
 // The design-system primitives and LoadingSkeleton are still .jsx, so TS infers
 // permissive types. These casts are removable once the shared layer is typed.
@@ -91,6 +93,7 @@ export default function Deliveries() {
   const qc = useQueryClient();
   const { can } = usePermissions();
   const receiveMode = searchParams.get("receive") === "1";
+  const commandUi = useFlag("command_ui");
 
   const [view, setView] = useState("dispatch");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -403,6 +406,146 @@ export default function Deliveries() {
   const projectName = projectMap[projectId ?? ""] || activeProject?.name || "All Projects";
   const selectedDeliveries = filtered.filter((delivery) => selectedIds.has(delivery.id));
 
+  // Modals are shared between the command_ui branch and the classic branch.
+  const modals = (
+    <>
+      <DeliveryDetailModal
+        delivery={detail}
+        projectMap={projectMap}
+        workPackageMap={workPackageMap}
+        onClose={() => setDetail(null)}
+        onEdit={can("edit", "delivery") ? (delivery: DeliveryRecord) => {
+          setEditing(delivery);
+          setDetail(null);
+        } : null}
+        onDelete={can("delete", "delivery") ? (delivery: DeliveryRecord) => {
+          setDeleteTarget(delivery);
+          setDetail(null);
+        } : null}
+        onSetStatus={setDeliveryStatus}
+      />
+      {showForm && (
+        <DeliveryFormModal
+          projectId={projectId}
+          onClose={() => {
+            setShowForm(false);
+            invalidateDeliveries();
+          }}
+        />
+      )}
+      {editing && (
+        <DeliveryFormModal
+          projectId={editing.project_id || projectId}
+          delivery={editing}
+          onClose={() => {
+            setEditing(null);
+            invalidateDeliveries();
+          }}
+        />
+      )}
+      <ShippingTicketImportModal
+        open={showImport}
+        projectId={projectId}
+        projectName={activeProject?.name}
+        projects={projects}
+        onCreated={() => invalidateDeliveries()}
+        onClose={() => {
+          setShowImport(false);
+          invalidateDeliveries();
+        }}
+      />
+      <ShippingListImportModal
+        open={showListImport}
+        projectId={projectId}
+        projectName={activeProject?.name}
+        onImported={() => invalidateDeliveries()}
+        onClose={() => {
+          setShowListImport(false);
+          invalidateDeliveries();
+        }}
+      />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget?.id && deleteMut.mutate(deleteTarget.id)}
+        title="Delete delivery?"
+        description="This delivery will be removed."
+      />
+    </>
+  );
+
+  // ---------------------------------------------------------------------------
+  // command_ui flag-branch — Deliveries Control Center
+  // ---------------------------------------------------------------------------
+  if (commandUi) {
+    return (
+      <div className="delivery-page">
+        <DeliveryControlCenter
+          projectName={projectName}
+          deliveries={activeDeliveries}
+          filtered={filtered}
+          metrics={metricsTyped}
+          search={search}
+          onSearch={setSearch}
+          scheduleFilter={scheduleFilter}
+          onScheduleFilterChange={setScheduleFilter}
+          riskFilter={riskFilter}
+          onRiskFilterChange={setRiskFilter}
+          view={view}
+          onViewChange={setView}
+          onOpenDelivery={setDetail}
+          onExport={() => exportDeliveriesCSV(filtered, projectMap, wpLabelMap)}
+          onImport={can("create", "delivery") ? () => setShowImport(true) : null}
+          onCreate={can("create", "delivery") ? () => { setEditing(null); setDetail(null); setShowForm(true); } : null}
+          projectHealth={undefined}
+          percentComplete={undefined}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onToggleAll={toggleAll}
+          dispatchBoard={
+            <DispatchBoard
+              laneGroups={laneGroups}
+              projectMap={projectMap}
+              workPackageMap={workPackageMap}
+              selectedIds={selectedIds}
+              onToggle={toggleSelect}
+              onOpen={setDetail}
+              onSetStatus={setDeliveryStatus}
+            />
+          }
+          scheduleView={
+            <ScheduleView
+              metrics={metricsTyped}
+              filtered={filtered}
+              projectMap={projectMap}
+              workPackageMap={workPackageMap}
+              onOpen={setDetail}
+            />
+          }
+        />
+        <BulkActionBar
+          count={selectedIds.size}
+          onClear={() => setSelectedIds(new Set())}
+          actions={[
+            { label: "In Transit", icon: "arrow", onClick: () => bulkUpdate("In Transit") },
+            { label: "Delivered", icon: "check", variant: "primary", onClick: () => bulkUpdate("Delivered") },
+            { label: "Partial", icon: "alert", onClick: () => bulkUpdate("Partial") },
+            {
+              label: "Export",
+              icon: "download",
+              onClick: () => exportDeliveriesCSV(selectedDeliveries, projectMap, wpLabelMap, "deliveries-selected.csv"),
+            },
+          ]}
+        />
+        {modals}
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Classic layout (flag off)
+  // ---------------------------------------------------------------------------
+
   return (
     <div className="delivery-page">
       <style>{deliveryStyles}</style>
@@ -680,69 +823,7 @@ export default function Deliveries() {
         ]}
       />
 
-      <DeliveryDetailModal
-        delivery={detail}
-        projectMap={projectMap}
-        workPackageMap={workPackageMap}
-        onClose={() => setDetail(null)}
-        onEdit={can("edit", "delivery") ? (delivery) => {
-          setEditing(delivery);
-          setDetail(null);
-        } : null}
-        onDelete={can("delete", "delivery") ? (delivery) => {
-          setDeleteTarget(delivery);
-          setDetail(null);
-        } : null}
-        onSetStatus={setDeliveryStatus}
-      />
-
-      {showForm && (
-        <DeliveryFormModal
-          projectId={projectId}
-          onClose={() => {
-            setShowForm(false);
-            invalidateDeliveries();
-          }}
-        />
-      )}
-      {editing && (
-        <DeliveryFormModal
-          projectId={editing.project_id || projectId}
-          delivery={editing}
-          onClose={() => {
-            setEditing(null);
-            invalidateDeliveries();
-          }}
-        />
-      )}
-      <ShippingTicketImportModal
-        open={showImport}
-        projectId={projectId}
-        projectName={activeProject?.name}
-        projects={projects}
-        onCreated={() => invalidateDeliveries()}
-        onClose={() => {
-          setShowImport(false);
-          invalidateDeliveries();
-        }}
-      />
-      <ShippingListImportModal
-        open={showListImport}
-        projectId={projectId}
-        projectName={activeProject?.name}
-        onImported={() => invalidateDeliveries()}
-        onClose={() => {
-          setShowListImport(false);
-          invalidateDeliveries();
-        }}
-      />
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget?.id && deleteMut.mutate(deleteTarget.id)}
-        title="Delete delivery?"
-        description="This delivery will be removed."
-      />
+      {modals}
     </div>
   );
 }
