@@ -42,6 +42,8 @@
 [data-skin="command"] .cmd-hero__project { font-weight: 600; font-size: 13px; color: var(--cmd-text); }
 [data-skin="command"] .cmd-chip { padding: 3px 10px; border-radius: 999px; background: #eef1f5; color: var(--cmd-text-muted); font-size: 12px; }
 [data-skin="command"] .cmd-chip--good { background: #e3f5ea; color: var(--cmd-good); }
+[data-skin="command"] .cmd-chip--warn { background: #fdf1dc; color: var(--cmd-warn); }
+[data-skin="command"] .cmd-chip--danger { background: #fae4e3; color: var(--cmd-danger); }
 [data-skin="command"] .cmd-hero__right { display: flex; gap: 12px; }
 [data-skin="command"] .cmd-statcard { min-width: 96px; padding: 10px 14px; border: 1px solid var(--cmd-border); border-radius: 10px; background: var(--cmd-surface); text-align: center; }
 [data-skin="command"] .cmd-statcard__value { font-size: 24px; font-weight: 700; color: var(--cmd-text); }
