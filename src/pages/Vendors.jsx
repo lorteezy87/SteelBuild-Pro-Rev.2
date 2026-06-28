@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import VendorFormModal from "@/components/vendors/VendorFormModal";
 import VendorList from "@/components/vendors/VendorList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar, Button as DSButton } from "@/components/design-system";
+import { CommandBar, Button as DSButton, BulkActionBar } from "@/components/design-system";
 import KPIStrip from "../components/shared/KPIStrip";
 import SearchFilter from "../components/shared/SearchFilter";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
@@ -16,16 +16,25 @@ import { formatCurrency } from "../components/shared/formatters";
 import { RefreshCw } from "lucide-react";
 import { VENDOR_STATUS } from "@/lib/enums";
 import { exportToCSV } from "@/lib/csv";
+import { batchProcess } from "@/utils/batchProcess";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import VendorControlCenter from "./vendors/VendorControlCenter";
 
 export default function Vendors() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
+  const commandUi = useFlag("command_ui");
+
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+
+  // Bulk selection state (new — no Vendor bulk existed before)
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   // ── Queries ──
   const { data: vendors = [], refetch } = useQuery({
@@ -153,10 +162,64 @@ export default function Vendors() {
     onError: () => toast.error("Delete failed"),
   });
 
+  // Bulk mutations (new — mirrors RFIs.jsx pattern)
+  const bulkUpdateMut = useMutation({
+    mutationFn: async ({ ids, data }) => {
+      const results = await batchProcess(ids, (id) => entities.Vendor.update(id, data));
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} updates failed.`);
+      }
+      return results;
+    },
+    onSuccess: async (results) => {
+      setSelectedIds(new Set());
+      await qc.invalidateQueries({ queryKey: ["vendors"] });
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
+      } else {
+        toast.success("Vendors updated");
+      }
+    },
+    onError: (err) => toast.error(`Bulk update failed: ${err?.message || "unknown error"}`),
+  });
+
+  const bulkDeleteMut = useMutation({
+    mutationFn: async (ids) => {
+      const results = await batchProcess(ids, (id) => entities.Vendor.delete(id));
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} deletes failed.`);
+      }
+      return results;
+    },
+    onSuccess: async (results) => {
+      const count = results.succeeded.length;
+      setSelectedIds(new Set());
+      setShowBulkDelete(false);
+      await qc.invalidateQueries({ queryKey: ["vendors"] });
+      if (results.failed.length > 0) {
+        toast.warning(`${count} deleted, ${results.failed.length} failed`);
+      } else {
+        toast.success(`${count} vendor${count === 1 ? "" : "s"} deleted`);
+      }
+    },
+    onError: (err) => toast.error(`Bulk delete failed: ${err?.message || "unknown error"}`),
+  });
+
   const handleSave = (data) => {
     if (editing) updateMut.mutate({ ...data, id: editing.id });
     else createMut.mutate(data);
   };
+
+  // ── Selection helpers (new) ──
+  const toggleSelect = (id) =>
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+
+  const toggleAll = (checked) =>
+    setSelectedIds(checked ? new Set(filtered.map((v) => v.id)) : new Set());
 
   // ── Filters ──
   const filtered = useMemo(() => vendors.filter(v => {
@@ -211,6 +274,89 @@ export default function Vendors() {
     exportToCSV({ filename: "vendors.csv", headers, rows });
   };
 
+  // Shared modals (reused in both branches)
+  const modals = (
+    <>
+      <VendorFormModal
+        open={showForm}
+        onClose={() => { setShowForm(false); setEditing(null); }}
+        onSave={handleSave}
+        vendor={editing}
+      />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        title="Delete Vendor"
+        description={`Delete ${deleteTarget?.company_name}? This cannot be undone.`}
+      />
+      <DeleteDialog
+        open={showBulkDelete}
+        onClose={() => setShowBulkDelete(false)}
+        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+        title={`Delete ${selectedIds.size} Vendor${selectedIds.size === 1 ? "" : "s"}`}
+        description={`Permanently delete ${selectedIds.size} selected vendor${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
+      />
+    </>
+  );
+
+  // ── Command UI branch ──
+  if (commandUi) {
+    return (
+      <div className="vendor-page">
+        <VendorControlCenter
+          vendors={vendors}
+          filtered={filtered}
+          vendorStats={vendorStats}
+          search={search}
+          onSearch={setSearch}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          vendorTypes={types}
+          onExport={exportCSV}
+          onCreate={() => { setEditing(null); setShowForm(true); }}
+          onOpenVendor={(v) => { setEditing(v); setShowForm(true); }}
+          projectHealth={activeProject?.health_status || null}
+          percentComplete={activeProject?.scope_complete_pct_override != null ? Number(activeProject.scope_complete_pct_override) : null}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onToggleAll={toggleAll}
+        />
+        <BulkActionBar
+          count={selectedIds.size}
+          onClear={() => setSelectedIds(new Set())}
+          actions={[
+            {
+              label: "MARK ACTIVE",
+              icon: "check",
+              onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Active" } }),
+            },
+            {
+              label: "MARK INACTIVE",
+              icon: "more",
+              onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Inactive" } }),
+            },
+            {
+              label: "MARK PREFERRED",
+              icon: "action",
+              onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { is_preferred: true } }),
+            },
+            {
+              label: "DELETE",
+              icon: "x",
+              variant: "danger",
+              onClick: () => setShowBulkDelete(true),
+            },
+          ]}
+        />
+        {modals}
+      </div>
+    );
+  }
+
+  // ── Classic branch (flag off — unchanged behavior) ──
   return (
     <div>
       <CommandBar
@@ -263,7 +409,7 @@ export default function Vendors() {
                     {v.company_name}
                   </span>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", fontWeight: 600 }}>
-                    {reasons.join(" \u00B7 ")}
+                    {reasons.join(" · ")}
                   </span>
                   <Button variant="ghost" size="sm" style={{ fontFamily: "var(--font-mono)", fontSize: 9, padding: "4px 8px", height: "auto" }}
                     onClick={() => { setEditing(v); setShowForm(true); }}>
@@ -302,20 +448,7 @@ export default function Vendors() {
         vendorStats={vendorStats}
       />
 
-      {/* ── Modals ── */}
-      <VendorFormModal
-        open={showForm}
-        onClose={() => { setShowForm(false); setEditing(null); }}
-        onSave={handleSave}
-        vendor={editing}
-      />
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
-        title="Delete Vendor"
-        description={`Delete ${deleteTarget?.company_name}? This cannot be undone.`}
-      />
+      {modals}
     </div>
   );
 }
