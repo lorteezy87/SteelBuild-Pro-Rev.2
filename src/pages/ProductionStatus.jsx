@@ -5,6 +5,9 @@
  *
  * Read view + the staged CSV import. Pure rollup over piece_production; writes
  * go through ProductionStatusImportModal → the typed repository (RLS: field+).
+ *
+ * command_ui flag: mounts ProductionStatusControlCenter (light command-kit skin)
+ * instead of the classic dark layout. Data, modals, and mutations are shared.
  */
 
 import React, { useMemo, useState } from "react";
@@ -18,6 +21,35 @@ import { listPieceProduction } from "@/lib/production/repository";
 import { PRODUCTION_STAGES } from "@/lib/importProductionStatus";
 import ProductionStatusImportModal from "@/components/production/ProductionStatusImportModal";
 import TeklaEpmImportModal from "@/components/production/TeklaEpmImportModal";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import ProductionStatusControlCenter from "./productionStatus/ProductionStatusControlCenter";
+
+/** CSV export — reuses the same field order as the DataTable columns. */
+function exportProductionCSV(rows) {
+  const headers = ["Piece Mark", "Assembly", "Seq", "Area", "Stage", "% Complete", "Qty", "Ship Date", "Weight", "External Ref"];
+  const data = rows.map((p) => [
+    p.piece_mark,
+    p.assembly_mark || "",
+    p.sequence_number || "",
+    p.erection_area || "",
+    p.status || "",
+    p.percent_complete ?? "",
+    p.quantity ?? "",
+    p.ship_date || "",
+    p.weight ?? "",
+    p.external_ref || "",
+  ]);
+  const csv = [headers, ...data]
+    .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "production-status.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const STAGE_COLOR = {
   "Not Started": "var(--text-muted)",
@@ -37,8 +69,13 @@ export default function ProductionStatus() {
   const projectId = useProjectId();
   const { activeProject } = useProjectContext();
   const queryClient = useQueryClient();
+  const commandUi = useFlag("command_ui");
   const [showImport, setShowImport] = useState(false);
   const [showEpmImport, setShowEpmImport] = useState(false);
+
+  // command_ui filter state — not used by the classic path
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("All");
 
   const { data: pieces = [], isLoading } = useQuery({
     queryKey: ["piece-production", projectId],
@@ -46,6 +83,21 @@ export default function ProductionStatus() {
     enabled: !!projectId,
     staleTime: 30_000,
   });
+
+  // Filtered list for the command_ui DataTable
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return pieces.filter((p) => {
+      if (stageFilter !== "All" && p.status !== stageFilter) return false;
+      if (!q) return true;
+      return (
+        (p.piece_mark || "").toLowerCase().includes(q) ||
+        (p.assembly_mark || "").toLowerCase().includes(q) ||
+        (p.erection_area || "").toLowerCase().includes(q) ||
+        (p.sequence_number || "").toLowerCase().includes(q)
+      );
+    });
+  }, [pieces, search, stageFilter]);
 
   const rollup = useMemo(() => {
     const byStage = Object.fromEntries(PRODUCTION_STAGES.map((s) => [s, 0]));
@@ -74,6 +126,56 @@ export default function ProductionStatus() {
         <div className="sbd-card" style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>
           Pick a project from the top bar to view fabrication status.
         </div>
+      </div>
+    );
+  }
+
+  /* ── Shared modals — reused by both classic and command_ui paths ─────────── */
+  const modals = (
+    <>
+      <ProductionStatusImportModal
+        open={showImport}
+        projectId={projectId}
+        projectName={activeProject?.name}
+        existing={pieces}
+        onClose={() => setShowImport(false)}
+        onImported={() => queryClient.invalidateQueries({ queryKey: ["piece-production", projectId] })}
+      />
+      <TeklaEpmImportModal
+        open={showEpmImport}
+        projectId={projectId}
+        projectName={activeProject?.name}
+        onClose={() => setShowEpmImport(false)}
+      />
+    </>
+  );
+
+  /* ── Command UI skin (light, command-kit) ────────────────────────────────── */
+  if (commandUi) {
+    if (isLoading) {
+      return (
+        <div style={{ padding: 24 }}>
+          <LoadingSkeleton variant="table" rows={8} />
+        </div>
+      );
+    }
+    return (
+      <div className="production-page">
+        <ProductionStatusControlCenter
+          projectName={activeProject?.name || "All Projects"}
+          pieces={pieces}
+          filtered={filtered}
+          search={search}
+          onSearch={setSearch}
+          stageFilter={stageFilter}
+          onStageFilterChange={setStageFilter}
+          onExport={() => exportProductionCSV(filtered)}
+          onImport={() => setShowImport(true)}
+          onImportEpm={() => setShowEpmImport(true)}
+          projectHealth={activeProject?.health_status || null}
+          percentComplete={activeProject?.scope_complete_pct_override != null ? Number(activeProject.scope_complete_pct_override) : null}
+        />
+        {modals}
       </div>
     );
   }
@@ -189,21 +291,7 @@ export default function ProductionStatus() {
         </>
       )}
 
-      <ProductionStatusImportModal
-        open={showImport}
-        projectId={projectId}
-        projectName={activeProject?.name}
-        existing={pieces}
-        onClose={() => setShowImport(false)}
-        onImported={() => queryClient.invalidateQueries({ queryKey: ["piece-production", projectId] })}
-      />
-
-      <TeklaEpmImportModal
-        open={showEpmImport}
-        projectId={projectId}
-        projectName={activeProject?.name}
-        onClose={() => setShowEpmImport(false)}
-      />
+      {modals}
     </div>
   );
 }
