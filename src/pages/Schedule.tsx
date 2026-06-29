@@ -1027,6 +1027,8 @@ export default function Schedule() {
         phaseFilter={phaseFilter}
         onPhaseFilter={setPhaseFilter}
         onAddTask={() => setShowAddTask(true)}
+        onBulkAdd={() => setShowBulkAdd(true)}
+        onWbsBuilder={() => setShowWbsBuilder(true)}
         onOpenTask={(task) => { setSelectedTask(task as ScheduleTask); setShowDrawer(true); }}
         projectHealth={selectedProject?.health_status ?? null}
         pctComplete={undefined}
