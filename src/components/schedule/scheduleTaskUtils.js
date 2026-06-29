@@ -39,13 +39,24 @@ export function displayPct(task) {
   return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
 }
 
-// Only treat a task as a milestone if the user explicitly flagged it.
-// Auto-detection (duration === 0 or same start/end) was incorrectly marking
-// every newly-created task as a milestone because AddTaskModal defaults both
-// dates to today.
+// Only treat a task as a milestone if the user explicitly flagged it, using
+// the SAME signals the rest of the app writes/reads. Auto-detection
+// (duration === 0 or same start/end) was deliberately removed because
+// AddTaskModal defaults both dates to today, which falsely flagged every new
+// task.
+//
+// Canonical signals (must match the writers):
+//   - task_type === "Milestone"  → AddTaskModal's milestone option
+//   - is_milestone === true       → calendar/reports/PCC/margin consumers
+//   - milestone === true          → legacy / MS-Project XML import column
+// Previously this only checked `milestone`, which is set ONLY by the MPP
+// importer — so the Milestone Tracker was always empty for normally-authored
+// schedules.
 export function isMilestoneTask(task) {
   if (!task) return false;
-  if (task.milestone) return true;
+  if (task.task_type === "Milestone") return true;
+  if (task.is_milestone === true) return true;
+  if (task.milestone === true) return true;
   return false;
 }
 

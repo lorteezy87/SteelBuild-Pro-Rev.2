@@ -131,6 +131,22 @@ export default function ItemDetailDrawer({ item, onClose }) {
   const barColor = URGENCY_COLORS[item.urgency] || "var(--border-default)";
   const details = extractDetails(item);
 
+  // Resolve a navigation target for the "Go to item" button. Prefer the feed
+  // item's own quickAction.route (the legacy command-center path supplies it),
+  // else derive one from the item's type + project — the command_ui path's
+  // ActionItems don't carry quickAction, which is why the button used to be a
+  // permanent no-op there. Routes map to the page registry (src/config/routes.js).
+  const PAGE_FOR_TYPE = {
+    RFI: "RFIs", SUB: "Submittals", DWG: "Drawings", CO: "ChangeOrders",
+    DEL: "Deliveries", WP: "WorkPackages", PAY: "SOV", NOTE: "ProductionNotes", TASK: "Schedule",
+  };
+  const targetRoute = (() => {
+    if (item.quickAction?.route) return item.quickAction.route;
+    const page = PAGE_FOR_TYPE[item.itemType];
+    const pid = item.projectId || item.raw?.project_id || item.project_id;
+    return page && pid ? `/${page}?project=${pid}` : null;
+  })();
+
   return (
     <>
       {/* Backdrop */}
@@ -253,9 +269,8 @@ export default function ItemDetailDrawer({ item, onClose }) {
         >
           <button
             className="sbd-btn-primary"
-            onClick={() => {
-              if (item.quickAction?.route) navigate(item.quickAction.route);
-            }}
+            onClick={() => { if (targetRoute) navigate(targetRoute); }}
+            disabled={!targetRoute}
             style={{
               flex: 1,
               background: "var(--accent)",
@@ -268,7 +283,8 @@ export default function ItemDetailDrawer({ item, onClose }) {
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "0.06em",
-              cursor: "pointer",
+              cursor: targetRoute ? "pointer" : "not-allowed",
+              opacity: targetRoute ? 1 : 0.5,
             }}
           >
             {item.quickAction?.label || "Go to Item"}

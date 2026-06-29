@@ -380,7 +380,7 @@ export default function CommandCenter() {
           onSearch={setCcSearch}
           typeFilter={ccTypeFilter}
           onTypeChange={setCcTypeFilter}
-          onOpenItem={(item) => setDetailItem(item.raw || item)}
+          onOpenItem={(item) => setDetailItem(item)}
           onForwardLook={() => setForwardLookOpen(true)}
         />
         <ItemDetailDrawer item={detailItem} onClose={() => setDetailItem(null)} />

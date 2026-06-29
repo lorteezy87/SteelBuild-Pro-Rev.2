@@ -28,6 +28,9 @@ import { formatCurrencyShort, roundCurrency } from "../components/shared/formatt
 import { COST_CODES } from "../components/shared/costCodes";
 import { toast } from "sonner";
 import { getNextNumber } from "../components/shared/numberSequencing";
+// Invalidate the FULL expense family (project list + ["expenses-all"] used by
+// Dashboard/Reports + cost rollups), not just the unscoped ["expenses"] prefix.
+import { invalidateEntity } from "@/services/cacheRegistry";
 
 import { safeNum, buildRedFlagAlerts, exportExpensesCSV } from "./expenses/utils";
 import { computeCostCodeTotals } from "@/services/costRollup";
@@ -116,7 +119,7 @@ export default function ExpensesPage() {
       return entities.Expense.create({ ...d, expense_number: expenseNumber, project_id: d.project_id || activeProject?.id });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setModalOpen(false);
       setEditing(null);
       toast.success("Expense created");
@@ -127,7 +130,7 @@ export default function ExpensesPage() {
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.Expense.update(id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setModalOpen(false);
       setEditing(null);
       toast.success("Expense updated");
@@ -138,7 +141,7 @@ export default function ExpensesPage() {
   const deleteMut = useMutation({
     mutationFn: (id) => entities.Expense.delete(id),
     onSuccess: (_, deletedId) => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       if (editing?.id === deletedId) {
         setEditing(null);
         setModalOpen(false);
@@ -159,12 +162,12 @@ export default function ExpensesPage() {
       return { succeeded };
     },
     onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
       toast.success(`${result.succeeded} expense(s) updated`);
     },
     onError: (err) => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
       toast.error(err.message);
     },
@@ -180,12 +183,12 @@ export default function ExpensesPage() {
       return { succeeded };
     },
     onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
       toast.success(`${result.succeeded} expense(s) deleted`);
     },
     onError: (err) => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
       toast.error(err.message);
     },
@@ -294,7 +297,7 @@ export default function ExpensesPage() {
     const items = [];
     const seen = new Set();
     costCodes.forEach((cc) => {
-      const code = cc.code || cc.cost_code;
+      const code = cc.cost_code_number || cc.code;
       if (!code || seen.has(code)) return;
       seen.add(code);
       const meta = COST_CODES.find((c) => c.code === code) || {};
@@ -388,7 +391,7 @@ export default function ExpensesPage() {
         onClose={() => setImportOpen(false)}
         activeProject={activeProject}
         workPackages={workPackages}
-        onImported={() => qc.invalidateQueries({ queryKey: ["expenses"] })}
+        onImported={() => invalidateEntity(qc, "expense", activeProject?.id)}
       />
       <DeleteDialog
         open={!!deleteTarget}

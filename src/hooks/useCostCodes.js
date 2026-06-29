@@ -19,9 +19,13 @@ import {
   appendRecordToCaches,
   replaceRecordInCaches,
   removeRecordFromCaches,
-  invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+// Invalidate through the central registry so ALL cost-code surfaces refresh
+// together (Budget Control, Cost Dashboard, Cost Control Center, Expenses).
+// Previously this hook only invalidated its own ["cost-codes", pid] keys, so
+// edits here left the other surfaces (and their divergent keys) stale.
+import { invalidateEntity } from "@/services/cacheRegistry";
 
 /**
  * Sort cost codes by their number using natural/numeric ordering
@@ -51,7 +55,7 @@ export function useCostCodes(projectId) {
     mutationFn: (data) => entities.CostCode.create(data),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, queryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
-      await invalidateCrudQueries(qc, queryKeys);
+      await invalidateEntity(qc, "cost_code", projectId);
     },
     onError: (error) => toastCrudError(error, "Failed to create cost code"),
   });
@@ -60,7 +64,7 @@ export function useCostCodes(projectId) {
     mutationFn: ({ id, data }) => entities.CostCode.update(id, data),
     onSuccess: async (updated) => {
       replaceRecordInCaches(qc, queryKeys, updated);
-      await invalidateCrudQueries(qc, queryKeys);
+      await invalidateEntity(qc, "cost_code", projectId);
     },
     onError: (error) => toastCrudError(error, "Failed to update cost code"),
   });
@@ -69,20 +73,20 @@ export function useCostCodes(projectId) {
     mutationFn: (id) => entities.CostCode.delete(id),
     onSuccess: async (_, deletedId) => {
       removeRecordFromCaches(qc, queryKeys, deletedId);
-      await invalidateCrudQueries(qc, queryKeys);
+      await invalidateEntity(qc, "cost_code", projectId);
     },
     onError: (error) => toastCrudError(error, "Failed to delete cost code"),
   });
 
   const bulkDeleteCostCodes = useMutation({
     mutationFn: (ids) => Promise.allSettled(ids.map((id) => entities.CostCode.delete(id))),
-    onSuccess: async () => { await invalidateCrudQueries(qc, queryKeys); },
+    onSuccess: async () => { await invalidateEntity(qc, "cost_code", projectId); },
     onError: (error) => toastCrudError(error, "Bulk delete failed"),
   });
 
   const bulkUpdateCostCodes = useMutation({
     mutationFn: ({ ids, data }) => Promise.allSettled(ids.map((id) => entities.CostCode.update(id, data))),
-    onSuccess: async () => { await invalidateCrudQueries(qc, queryKeys); },
+    onSuccess: async () => { await invalidateEntity(qc, "cost_code", projectId); },
     onError: (error) => toastCrudError(error, "Bulk update failed"),
   });
 

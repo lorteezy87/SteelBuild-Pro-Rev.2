@@ -20,6 +20,9 @@ import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { Button as IconButton } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+// Fan cost-code mutations out to ALL cost-code surfaces (Budget Control, Cost
+// Control Center, Expenses), not just this dashboard's own ["cost-codes-dash"] key.
+import { invalidateEntity } from "@/services/cacheRegistry";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -100,6 +103,7 @@ export default function CostDashboard() {
     onSuccess: (created) => {
       appendRecordToCaches(qc, costCodeQueryKeys, created);
       invalidateCrudQueries(qc, costCodeQueryKeys);
+      invalidateEntity(qc, "cost_code", activeProject?.id);
       toast.success("Cost code created");
       setCodeModalOpen(false);
       setEditingCode(null);
@@ -111,6 +115,7 @@ export default function CostDashboard() {
     onSuccess: (updated) => {
       replaceRecordInCaches(qc, costCodeQueryKeys, updated);
       invalidateCrudQueries(qc, costCodeQueryKeys);
+      invalidateEntity(qc, "cost_code", activeProject?.id);
       toast.success("Cost code updated");
       setCodeModalOpen(false);
       setEditingCode(null);
@@ -122,6 +127,7 @@ export default function CostDashboard() {
     onSuccess: (_, deletedId) => {
       removeRecordFromCaches(qc, costCodeQueryKeys, deletedId);
       invalidateCrudQueries(qc, costCodeQueryKeys);
+      invalidateEntity(qc, "cost_code", activeProject?.id);
       toast.success("Cost code deleted");
       setDeleteCodeTarget(null);
     },
