@@ -248,6 +248,20 @@ describe("computePortfolioKPIs", () => {
     expect(k.forecastAtCompletion).toBe(60000);
     expect(k.forecastVariance).toBe(10000); // FAC - budget
   });
+  it("counts cost-code overspend in cashAtRisk (matches expenses.cost_code -> cost_code_number)", () => {
+    const k = computePortfolioKPIs(
+      [],
+      [],
+      [{ status: "Submitted", co_amount: 1000 }],
+      [{ cost_code_number: "06", budget_amount: 5000 }],
+      [],
+      [{ payment_status: "Paid", cost_code: "06", amount: 8000 }],
+      [],
+      [],
+    );
+    expect(k.overBudgetExposure).toBe(3000); // 8000 paid - 5000 budget on code 06
+    expect(k.cashAtRisk).toBe(4000); // 1000 pending CO + 3000 overspend
+  });
   it("handles empty input", () => {
     const k = computePortfolioKPIs();
     expect(k.portfolioValue).toBe(0);
