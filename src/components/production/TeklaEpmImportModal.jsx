@@ -21,6 +21,7 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { X, Upload, FileText, CheckCircle2, Boxes, FileStack } from "lucide-react";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
+import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { parseFabSuiteXml, stageModelElements, teklaRowToModelElement } from "@/lib/importFabSuiteXml";
 
@@ -41,9 +42,14 @@ export default function TeklaEpmImportModal({ open, projectId, projectName, onCl
   const [lastResult, setLastResult] = useState(null);
   const [err, setErr] = useState(null);
 
+  // Page the FULL roster (fetchAllModelElements): a single capped read truncates
+  // at Supabase's 1000-row server cap, so on a big project (Capstone ≈ 16.8k
+  // pieces) stageModelElements would only "see" the first 1000 existing GUIDs and
+  // re-create every piece past 1000 as a DUPLICATE. Same query as the Hub's
+  // ["model-elements", projectId] key, so the cache stays consistent.
   const { data: existingElements = [] } = useQuery({
     queryKey: ["model-elements", projectId],
-    queryFn: () => entities.ModelElement.filter({ project_id: projectId }),
+    queryFn: () => fetchAllModelElements(projectId),
     enabled: !!open && !!projectId,
   });
 

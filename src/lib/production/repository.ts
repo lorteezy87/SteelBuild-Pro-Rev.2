@@ -12,8 +12,11 @@ import { supabase } from "@/lib/supabase";
 const TABLE = "piece_production";
 
 // piece_production isn't in the generated Database types — own the cast here.
+// The optional client arg lets listPieceProduction page against an injected
+// mock in tests; every other caller uses the real client by default.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const from = (table: string): any => (supabase.from as unknown as (t: string) => any)(table);
+const from = (table: string, client: typeof supabase = supabase): any =>
+  (client.from as unknown as (t: string) => any)(table);
 
 export interface PieceProductionRow {
   id: string;
@@ -52,15 +55,40 @@ export interface StagedProductionRow {
   external_ref: string | null;
 }
 
-export async function listPieceProduction(projectId: string): Promise<PieceProductionRow[]> {
+// Supabase caps a single PostgREST request at 1000 rows server-side
+// (db-max-rows), so a plain `.select()` silently truncates a big shop roster at
+// 1000. That under-counts the Production Status page AND makes a re-import
+// mis-classify every piece past row 1000 as NEW (the import stages the CSV
+// against this list), duplicating it. So page with `.range()` to completeness —
+// the same fix fetchAllModelElements applies to the 3D model roster. A stable
+// (piece_mark, id) order keeps pages from overlapping/skipping rows.
+const PAGE = 1000;
+const SAFETY_MAX_ROWS = 200_000;
+
+export async function listPieceProduction(
+  projectId: string,
+  opts: { client?: typeof supabase; page?: number } = {},
+): Promise<PieceProductionRow[]> {
   if (!projectId) return [];
-  const { data, error } = await from(TABLE)
-    .select("*")
-    .eq("project_id", projectId)
-    .eq("is_deleted", false)
-    .order("piece_mark", { ascending: true });
-  if (error) throw error;
-  return (data || []) as PieceProductionRow[];
+  const { client = supabase, page = PAGE } = opts;
+  const all: PieceProductionRow[] = [];
+  for (let offset = 0; offset < SAFETY_MAX_ROWS; offset += page) {
+    const { data, error } = await from(TABLE, client)
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("is_deleted", false)
+      .order("piece_mark", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + page - 1);
+    if (error) throw error;
+    const batch = (data || []) as PieceProductionRow[];
+    all.push(...batch);
+    if (batch.length < page) return all;
+  }
+  // Hit the safety ceiling — surface it rather than silently returning partial.
+  // eslint-disable-next-line no-console
+  console.warn(`[piece_production] listPieceProduction stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
+  return all;
 }
 
 function toFields(row: StagedProductionRow, projectId: string, importedAt: string) {
