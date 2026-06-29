@@ -11,6 +11,13 @@ import "@/styles/desktop.css"
 
 installDateOnlyShim()
 
+// Build fingerprint. Bumping this changes the ENTRY bundle hash on release, so a
+// chunk-only fix (e.g. a lazy component) still produces a new index.html and can
+// never be masked by a stale CDN/browser copy of the old asset graph.
+if (typeof window !== 'undefined') {
+  window.__SBP_BUILD__ = '2026-06-29-launcher-labels'
+}
+
 function installWebManifest() {
   if (typeof document === 'undefined' || typeof window === 'undefined') return
   const { hostname } = window.location
