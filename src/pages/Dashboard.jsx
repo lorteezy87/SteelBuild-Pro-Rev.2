@@ -6,10 +6,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { useUserPrefs, refetchIntervalFromPref, DASHBOARD_KPI_IDS } from "@/hooks/useUserPrefs";
 import { findBlockingRfis } from "@/lib/fabReleaseGate";
+import { useFlag } from "@/hooks/useFeatureFlag";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import ProjectDashboard from "./dashboard/ProjectDashboard";
 import DashboardHeader from "./dashboard/DashboardHeader";
+// command_ui flag — lazy-loaded so the CC bundle is not in the classic path
+const DashboardControlCenter = lazyWithRetry(() => import("./dashboardCC/DashboardControlCenter"));
 
 // KPI presentation specs — value is filled per-scope below. Ids match
 // DASHBOARD_KPI_IDS so Settings (visible_kpis / kpi_order) drive this strip.
@@ -84,6 +87,8 @@ export default function Dashboard() {
   const { activeProject, setActiveProject } = useProjectContext();
   const pid = activeProject?.id;
   const projectScope = pid || "portfolio";
+  // command_ui flag — must be called unconditionally (Rules of Hooks)
+  const commandUi = useFlag("command_ui");
   const listForDashboard = (entity, sortBy) =>
     pid ? entity.filter({ project_id: pid }, sortBy) : entity.list(sortBy);
 
@@ -339,6 +344,57 @@ export default function Dashboard() {
       <div className="sb-dashboard-reference-page">
         <LoadingSkeleton variant="page" />
       </div>
+    );
+  }
+
+  // ── command_ui flag-branch — single-project Dashboard Control Center ───────
+  // Placed here so all hooks above always execute (Rules of Hooks compliance).
+  // Only activates for the single-project view; portfolio + empty-workspace
+  // guards are handled in the classic path below.
+  if (commandUi && pid) {
+    const onNavigateDash = (target, opts = {}) => {
+      const paths = {
+        rfis: "/RFIs", submittals: "/Submittals", "work-packages": "/WorkPackages",
+        deliveries: "/Deliveries", "change-orders": "/ChangeOrders",
+        "field-reports": "/DailyLogs", schedule: "/Schedule",
+        "fab-release": "/FabRelease", "budget-hours": "/BudgetHours",
+        procurement: "/Procurement", field: "/Field", "daily-logs": "/DailyLogs",
+        photos: "/Photos", punchlist: "/Punchlist", inspections: "/Inspections",
+        safety: "/Safety", "quality-control": "/QualityControl",
+      };
+      const path = paths[target];
+      if (!path) return;
+      const params = [];
+      if (opts.create) params.push("new=1");
+      if (opts.stage) params.push(`stage=${encodeURIComponent(opts.stage)}`);
+      if (opts.status) params.push(`status=${encodeURIComponent(opts.status)}`);
+      navigate(params.length ? `${path}?${params.join("&")}` : path);
+    };
+    return (
+      <ErrorBoundary label="Dashboard Control Center">
+        <Suspense fallback={<LoadingSkeleton variant="page" />}>
+          <DashboardControlCenter
+            project={activeProject}
+            rfis={rfis}
+            cos={cos}
+            codes={codes}
+            wps={wps}
+            deliveries={deliveries}
+            actionItems={actionItems}
+            expenses={expenses}
+            submittals={submittals}
+            drawings={drawings}
+            sovItems={sovItems}
+            scheduleTasks={scheduleTasks}
+            drawingActivity={drawingActivity}
+            punchlistItems={punchlistItems}
+            inspections={inspections}
+            safetyIncidents={safetyIncidents}
+            qualityRecords={qualityRecords}
+            onNavigate={onNavigateDash}
+          />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
