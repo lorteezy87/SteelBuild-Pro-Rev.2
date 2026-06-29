@@ -9,6 +9,7 @@
  * Mounted behind the `command_ui` feature flag in ProductionStatus.jsx.
  */
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { Factory, CheckCircle2, AlertTriangle, Clock, TrendingUp, Layers, Boxes } from "lucide-react";
 import "@/styles/command.css";
 import {
@@ -22,6 +23,8 @@ import {
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
 import type { PieceProductionRow } from "@/lib/production/repository";
+import type { PieceDrawingLink } from "@/lib/production/pieceDrawingLinks";
+import { normalizePieceMark } from "@/services/modelElementStatus";
 import { buildProductionSummary, stageTone, PRODUCTION_STAGES } from "./productionStatusControlCenter.derive";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -51,12 +54,41 @@ function stagePill(stage: string | null | undefined) {
   return <Pill tone={stageTone(stage)}>{stage}</Pill>;
 }
 
+/**
+ * Shop-drawing cell. A drawing_id → a real DrawingViewer link; a drawing_no with
+ * no id → plain info text (shop/detail numbers don't reliably match erection
+ * sheets, so we never fabricate a link); nothing → em-dash.
+ */
+function shopDrawingCell(link: PieceDrawingLink | undefined) {
+  if (link?.drawingId) {
+    return (
+      <Link
+        to={`/DrawingViewer?id=${encodeURIComponent(link.drawingId)}`}
+        style={{ color: "var(--cmd-accent, var(--accent))", fontFamily: "var(--font-mono)", fontSize: 11 }}
+      >
+        {link.drawingNo || "View sheet"}
+      </Link>
+    );
+  }
+  if (link?.drawingNo) {
+    return <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{link.drawingNo}</span>;
+  }
+  return <span style={{ color: "var(--cmd-meta)" }}>—</span>;
+}
+
 /** Scroll the data table into view. */
 function scrollToTable() {
   document.querySelector(".prod-cc .cmd-table-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
+
+/** Drawing-link coverage over the displayed pieces. */
+export interface DrawingCoverage {
+  total: number;
+  linked: number;
+  pct: number;
+}
 
 export interface ProductionStatusControlCenterProps {
   projectName: string;
@@ -69,6 +101,10 @@ export interface ProductionStatusControlCenterProps {
   onExport: () => void;
   onImport: (() => void) | null;
   onImportEpm?: (() => void) | null;
+  /** Normalized piece mark → drawing reference (from buildPieceDrawingMap). */
+  pieceDrawingMap?: Map<string, PieceDrawingLink>;
+  /** Share of displayed pieces whose mark resolves to a model-roster entry. */
+  drawingCoverage?: DrawingCoverage;
   projectHealth?: string | null;
   percentComplete?: number | null;
   photoSrc?: string;
@@ -88,6 +124,8 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
     onExport,
     onImport,
     onImportEpm,
+    pieceDrawingMap,
+    drawingCoverage,
     projectHealth,
     percentComplete,
     photoSrc,
@@ -169,6 +207,11 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
       key: "assembly_mark",
       header: "Assembly",
       render: (p) => p.assembly_mark || <span style={{ color: "var(--cmd-meta)" }}>—</span>,
+    },
+    {
+      key: "shop_dwg",
+      header: "Shop Dwg",
+      render: (p) => shopDrawingCell(pieceDrawingMap?.get(normalizePieceMark(p.piece_mark))),
     },
     {
       key: "sequence_number",
@@ -315,6 +358,17 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
           </>
         }
       />
+
+      {drawingCoverage && drawingCoverage.total > 0 ? (
+        <div
+          className="cmd-row__meta"
+          style={{ display: "flex", justifyContent: "flex-end", padding: "4px 2px" }}
+          title="Share of shown pieces whose mark resolves to a shop drawing in the model roster. Shop/detail numbers rarely match erection sheets, so most pieces have no sheet link yet."
+        >
+          Drawing coverage <strong style={{ margin: "0 4px" }}>{drawingCoverage.pct}%</strong>
+          ({drawingCoverage.linked}/{drawingCoverage.total} linked)
+        </div>
+      ) : null}
 
       <DataTable
         columns={columns}
