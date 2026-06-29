@@ -8,6 +8,7 @@ export function FilterBar({
   filters,
   onImport,
   onExport,
+  secondaryActions,
   primaryLabel,
   onPrimary,
 }: {
@@ -17,6 +18,9 @@ export function FilterBar({
   filters?: ReactNode;
   onImport?: (() => void) | null;
   onExport?: () => void;
+  /** Extra action buttons rendered in the actions cluster, just left of the
+   *  primary button — e.g. secondary "WBS Builder" / "Bulk Add" controls. */
+  secondaryActions?: ReactNode;
   primaryLabel?: string;
   onPrimary?: (() => void) | null;
 }) {
@@ -34,6 +38,7 @@ export function FilterBar({
         {onExport ? (
           <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}><Download size={14} /> Export</button>
         ) : null}
+        {secondaryActions}
         {primaryLabel && onPrimary ? (
           <button type="button" className="cmd-btn cmd-btn--primary" onClick={onPrimary}><Plus size={14} /> {primaryLabel}</button>
         ) : null}
