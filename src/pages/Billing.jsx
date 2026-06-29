@@ -5,22 +5,32 @@
  * a "Manage billing" link to the Stripe customer portal once subscribed. Plan
  * changes are applied by the webhook (organizations.plan), so after returning
  * from Checkout we refetch the org. Owner/admin only for the actions.
+ *
+ * command_ui flag: wraps the classic plan/cards UI in BillingControlCenter
+ * (PageHero + KpiStrip) without changing any Stripe handler logic.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check, CreditCard, ExternalLink, Sparkles } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useOrg } from "@/components/shared/OrgContext";
 import { usePlan } from "@/hooks/usePlan";
 import { PLANS } from "@/lib/billing/plans";
 import { startCheckout, openBillingPortal } from "@/lib/billing/billingService";
 import { CommandBar } from "@/components/design-system";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import BillingControlCenter from "./billing/BillingControlCenter";
+import { listOrgMembers, listInvitations } from "@/lib/org/repository";
+import { entities } from "@/api/supabaseClient";
 
 export default function Billing() {
   const { currentOrg, currentRole, refetchOrgs } = useOrg();
   const { plan, planKey, status, isActive } = usePlan();
   const [busy, setBusy] = useState(null);
   const canManage = currentRole === "owner" || currentRole === "admin";
+  const commandUi = useFlag("command_ui");
+  const orgId = currentOrg?.id;
 
   // Returning from Checkout — the webhook flips the plan async, so refetch.
   useEffect(() => {
@@ -65,10 +75,39 @@ export default function Billing() {
     }
   };
 
-  return (
-    <div className="sb-dashboard-reference-page page-content" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 18, maxWidth: 1000 }}>
-      <CommandBar eyebrow={currentOrg?.name || "Workspace"} title="Billing & plan" subtitle="Your subscription powers this workspace" />
+  // ── command_ui: fetch member + invite counts for the seat KPI ──────────────
+  // Only fire when the flag is on to avoid unnecessary requests on the classic path.
+  const { data: orgMembers = [] } = useQuery({
+    queryKey: ["org-members", orgId],
+    queryFn: () => listOrgMembers(orgId),
+    enabled: commandUi && !!orgId,
+    staleTime: 60_000,
+  });
+  const { data: orgInvites = [] } = useQuery({
+    queryKey: ["org-invites", orgId],
+    queryFn: () => listInvitations(orgId),
+    enabled: commandUi && !!orgId,
+    staleTime: 60_000,
+  });
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => entities.Project.list(),
+    enabled: commandUi,
+    staleTime: 5 * 60_000,
+  });
 
+  const memberCount = orgMembers.length;
+  const pendingCount = useMemo(
+    () => orgInvites.filter((i) => i.status === "pending").length,
+    [orgInvites],
+  );
+  const projectCount = projects.length;
+
+  // ── Classic plan UI (plan banner + cards + footer) ─────────────────────────
+  // Extracted so it can be passed as children into BillingControlCenter without
+  // duplicating any handler or hook logic.
+  const classicContent = (
+    <>
       {/* Current plan banner */}
       <div className="sbd-card" style={{ padding: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
@@ -140,6 +179,32 @@ export default function Billing() {
       <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
         Secure payments by Stripe. Cancel anytime from Manage billing.
       </div>
+    </>
+  );
+
+  // ── command_ui branch ──────────────────────────────────────────────────────
+  if (commandUi) {
+    return (
+      <BillingControlCenter
+        orgName={currentOrg?.name || "Workspace"}
+        planKey={planKey}
+        subscriptionStatus={status}
+        currentPeriodEnd={currentOrg?.current_period_end ?? null}
+        stripeCustomerId={currentOrg?.stripe_customer_id ?? null}
+        memberCount={memberCount}
+        pendingCount={pendingCount}
+        projectCount={projectCount}
+      >
+        {classicContent}
+      </BillingControlCenter>
+    );
+  }
+
+  // ── Classic path (flag off) ────────────────────────────────────────────────
+  return (
+    <div className="sb-dashboard-reference-page page-content" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 18, maxWidth: 1000 }}>
+      <CommandBar eyebrow={currentOrg?.name || "Workspace"} title="Billing & plan" subtitle="Your subscription powers this workspace" />
+      {classicContent}
     </div>
   );
 }
