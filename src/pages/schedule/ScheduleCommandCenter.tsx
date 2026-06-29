@@ -9,7 +9,7 @@
  * schedule data logic. All data/state/mutations stay in Schedule.tsx.
  */
 import { useMemo, type ReactNode } from "react";
-import { CalendarRange } from "lucide-react";
+import { CalendarRange, Sparkles, ListPlus } from "lucide-react";
 import "@/styles/command.css";
 import {
   PageHero,
@@ -73,6 +73,10 @@ export interface ScheduleCommandCenterProps {
   onPhaseFilter: (phase: string) => void;
   /** Open the add-task modal. */
   onAddTask: () => void;
+  /** Open the bulk add-tasks modal. Omitted → the Bulk Add button is hidden. */
+  onBulkAdd?: () => void;
+  /** Open the WBS Builder modal. Omitted → the WBS Builder button is hidden. */
+  onWbsBuilder?: () => void;
   /** Open/select a task for detail (used by decision panel rows). */
   onOpenTask: (task: TaskRecord) => void;
   /** Scroll the existing schedule body into view. */
@@ -99,6 +103,8 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
     phaseFilter,
     onPhaseFilter,
     onAddTask,
+    onBulkAdd,
+    onWbsBuilder,
     onOpenTask,
     onViewAll,
     projectHealth,
@@ -305,6 +311,30 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search tasks, phases, WBS, resources…"
+        secondaryActions={
+          <>
+            {onWbsBuilder ? (
+              <button
+                type="button"
+                className="cmd-btn cmd-btn--ghost"
+                onClick={onWbsBuilder}
+                title="WBS Builder — generate a work breakdown structure from a short scope-of-work description"
+              >
+                <Sparkles size={14} /> WBS Builder
+              </button>
+            ) : null}
+            {onBulkAdd ? (
+              <button
+                type="button"
+                className="cmd-btn cmd-btn--ghost"
+                onClick={onBulkAdd}
+                title="Bulk Add — paste or enter many tasks at once"
+              >
+                <ListPlus size={14} /> Bulk Add
+              </button>
+            ) : null}
+          </>
+        }
         primaryLabel="Add Task"
         onPrimary={onAddTask}
         filters={

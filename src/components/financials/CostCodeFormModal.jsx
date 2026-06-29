@@ -48,8 +48,17 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
     }
 
     const selectedCostCodeMeta = COST_CODES.find((c) => c.code === selectedCode);
+    // Emit ONLY real, user-editable cost_codes columns — never spread ...form.
+    // Callers seed this modal with whatever record they have; CostControlCenter
+    // passes an enriched useFinancials CostCodeRow that carries derived display
+    // fields (expense_count, revised_budget, signed_extras, used_pct, is_over, …)
+    // which are NOT columns. Spreading those into the payload makes PostgREST
+    // reject the write ("Could not find the 'expense_count' column of
+    // 'cost_codes' in the schema cache"). Whitelisting here protects every caller
+    // and also keeps DB-managed columns (id/created_at) out of the PATCH body.
     const data = {
-      ...form,
+      project_id: form.project_id,
+      project_name: form.project_name || "",
       cost_code_number: selectedCode,
       description: selectedCostCodeMeta?.name || form.description || "",
       phase: selectedCostCodeMeta?.category || form.phase || "Materials",
@@ -57,6 +66,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
       actual_cost: Number(form.actual_cost) || 0,
       committed_cost: Number(form.committed_cost) || 0,
       forecast_to_complete: Number(form.forecast_to_complete) || 0,
+      notes: form.notes || "",
     };
     const proj = projects.find((p) => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
