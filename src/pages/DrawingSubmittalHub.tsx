@@ -38,6 +38,7 @@ import { ModuleHeader } from "@/components/desktop/module";
 import Model3DTab from "@/components/viewer3d/Model3DTab";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
+import { DetailingCommandShell } from "./drawingSubmittalHub/DetailingCommandShell";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   ACTION_STATUSES,
@@ -130,6 +131,9 @@ export default function DrawingSubmittalHub() {
   const show3d = useFlag("viewer_3d");
   // Desktop shell skin — ModuleHeader replaces CommandBar when on.
   const desktopShell = useFlag("desktop_shell");
+  // Command UI re-skin — wraps the hub in the light command chrome when on.
+  // The classic + desktop_shell paths remain intact for !commandUi.
+  const commandUi = useFlag("command_ui");
   const tabs = useMemo(
     () => (show3d ? [...TABS, { key: "model3d", label: "3D Model", icon: Box }] : TABS),
     [show3d],
@@ -678,7 +682,189 @@ export default function DrawingSubmittalHub() {
     onError: (err) => toast.error("Failed to save lead times: " + (err?.message || "Unknown")),
   });
 
-  // ── Render ─────────────────────────────────────────────────────────────
+  // ── Shared tab-panel renderer ─────────────────────────────────────────
+  // Used by BOTH the classic shell and the command-UI shell. The content is
+  // identical — only the chrome around it changes. Nothing inside is touched.
+  const activeTabPanel = (
+    <ErrorBoundary>
+      <Suspense fallback={<LoadingSkeleton />}>
+        {activeTab === "overview" && (
+          <>
+          <FleetHealthStrip fleet={fleetHealth} onOpenRegister={() => setActiveTab("drawings")} />
+          <TriageBoard
+            triage={triage}
+            kpis={kpis}
+            drawingKpis={drawingKpis}
+            isLoading={isLoading}
+            onOpenTab={setActiveTab}
+            onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
+            onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
+            onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
+            onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
+            sequenceReadiness={sequenceReadiness}
+            revisionImpact={revisionImpact}
+            isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
+            onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
+            onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
+            modelMapping={modelMappingSummary}
+            modelElementRows={modelElements as any[]}
+            onImportModelElements={() => setImportModelOpen(true)}
+          />
+          </>
+        )}
+        {activeTab === "process" && (
+          <SubmittalVisualBoard
+            setPackages={setPackages}
+            submittals={submittals}
+            isLoading={isLoading}
+            onOpenTab={setActiveTab}
+          />
+        )}
+        {activeTab === "drawings" && (
+          <DrawingRegisterTable
+            setPackages={setPackages}
+            projectId={projectId}
+            activeProject={activeProject}
+            drawingSets={drawingSets}
+            isLoading={isLoading}
+            healthByKey={healthByKey}
+            currentRevByDrawingId={currentRevByDrawingId}
+            summariesBySet={summariesBySet}
+            onRevisionUploaded={handleRevisionUploaded}
+            onOpenSummary={setSummaryCard}
+          />
+        )}
+        {activeTab === "submittals" && <SubmittalsPage />}
+        {activeTab === "matrix" && (
+          <ApprovalMatrix
+            drawingSets={drawingSets}
+            submittals={submittals as unknown as HubSubmittal[]}
+            roundsBySubmittal={roundsBySubmittal}
+            isLoading={isLoading}
+          />
+        )}
+        {activeTab === "revimpact" && (
+          <RevisionImpactBoard
+            rows={revisionImpactRows}
+            onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
+            isLoading={isLoading}
+          />
+        )}
+        {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
+        {activeTab === "model3d" && (
+          <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} />
+        )}
+      </Suspense>
+    </ErrorBoundary>
+  );
+
+  // ── Shared modals ─────────────────────────────────────────────────────
+  // Rendered by BOTH paths — command-UI and classic. Zero change to any modal,
+  // escalation handler, revision-compare logic, or unlock/audit flow.
+  const sharedModals = (
+    <>
+      {leadModalOpen && (
+        <LeadTimesModal
+          leadDays={resolveLeadDays(activeProject, null)}
+          defaults={DEFAULT_LEAD_DAYS}
+          saving={saveLeadsMut.isPending}
+          onSave={(leads) => saveLeadsMut.mutate(leads)}
+          onClose={() => setLeadModalOpen(false)}
+        />
+      )}
+      {escalateItem && (
+        <EscalateModal
+          item={escalateItem}
+          initialKind={escalateKind}
+          projectId={projectId}
+          projectName={projectName}
+          onClose={() => setEscalateItem(null)}
+        />
+      )}
+      {compareDrawing && (
+        <Suspense fallback={null}>
+          <RevisionCompareModalLazy
+            open
+            onClose={() => setCompareDrawingId(null)}
+            drawing={compareDrawing}
+          />
+        </Suspense>
+      )}
+      {importModelOpen && (
+        <ModelElementImportModal
+          open
+          projectId={projectId}
+          projectName={projectName}
+          drawings={drawings}
+          existingElements={modelElements}
+          onClose={() => setImportModelOpen(false)}
+        />
+      )}
+      {summaryCard && (
+        <RevisionSummaryCard
+          summary={summaryCard}
+          onClose={() => setSummaryCard(null)}
+          onRunDeepDive={aiDiff ? openDeepDive : undefined}
+          onCreateRfi={can("create", "rfi") ? openRfiFromSummary : undefined}
+        />
+      )}
+      {rfiDraft && (
+        <RFIFormModal
+          projectId={projectId}
+          rfi={null}
+          prefill={rfiDraft.prefill}
+          saving={savingRfi}
+          onClose={() => setRfiDraft(null)}
+          onSave={saveRfiFromSummary}
+        />
+      )}
+      {deepDiveSet && (
+        <Suspense fallback={null}>
+          <RevisionDeepDiveModal open onClose={() => setDeepDiveSet(null)} set={deepDiveSet} projectId={projectId} />
+        </Suspense>
+      )}
+    </>
+  );
+
+  // ── Command-UI path (flag: command_ui) ────────────────────────────────
+  // The hub's data, mutations, and tab panels are 100% unchanged.
+  // Only the chrome — hero, KPI strip, tab bar — is swapped to the command kit.
+  if (commandUi) {
+    return (
+      <>
+        <DetailingCommandShell
+          tabs={tabs}
+          activeTab={activeTab}
+          onTab={setActiveTab}
+          kpis={{
+            totalSets: drawingKpis.totalSets,
+            totalSheets: drawingKpis.totalSheets,
+            released: drawingKpis.released,
+            inReview: drawingKpis.inReview,
+            submittalsTotal: kpis.total,
+            submittalsPending: kpis.pending,
+            needsAction: kpis.rejected,
+            overdue: triage.overdue.length,
+            atRisk: triage.atRiskCount,
+            overdueDrawingSets: triage.overdueDrawingSets,
+            overdueUnlinkedSubmittals: triage.overdueUnlinkedSubmittals,
+            fabReadyNumerator: fabReady.numerator,
+            fabReadyDenominator: fabReady.denominator,
+            fabReadyPercent: fabReady.percent,
+            openItems: triage.openItems.length,
+            fleetAverageScore: fleetHealth.count > 0 ? fleetHealth.averageScore : null,
+          }}
+          projectName={projectName}
+          tabCounts={tabCounts}
+        >
+          {activeTabPanel}
+        </DetailingCommandShell>
+        {sharedModals}
+      </>
+    );
+  }
+
+  // ── Classic / desktop-shell path (unchanged) ──────────────────────────
   return (
     <div
       className="sb-dashboard-reference-page drawing-submittal-hub"
@@ -882,146 +1068,10 @@ export default function DrawingSubmittalHub() {
 
       {/* ── Tab Content ──────────────────────────────────────────────── */}
       <div style={{ minHeight: 0, position: "relative" }}>
-        <ErrorBoundary>
-          <Suspense fallback={<LoadingSkeleton />}>
-            {activeTab === "overview" && (
-              <>
-              <FleetHealthStrip fleet={fleetHealth} onOpenRegister={() => setActiveTab("drawings")} />
-              <TriageBoard
-                triage={triage}
-                kpis={kpis}
-                drawingKpis={drawingKpis}
-                isLoading={isLoading}
-                onOpenTab={setActiveTab}
-                onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
-                onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
-                onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
-                onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
-                sequenceReadiness={sequenceReadiness}
-                revisionImpact={revisionImpact}
-                isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
-                onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
-                onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
-                modelMapping={modelMappingSummary}
-                modelElementRows={modelElements as any[]}
-                onImportModelElements={() => setImportModelOpen(true)}
-              />
-              </>
-            )}
-            {activeTab === "process" && (
-              <SubmittalVisualBoard
-                setPackages={setPackages}
-                submittals={submittals}
-                isLoading={isLoading}
-                onOpenTab={setActiveTab}
-              />
-            )}
-            {activeTab === "drawings" && (
-              <DrawingRegisterTable
-                setPackages={setPackages}
-                projectId={projectId}
-                activeProject={activeProject}
-                drawingSets={drawingSets}
-                isLoading={isLoading}
-                healthByKey={healthByKey}
-                currentRevByDrawingId={currentRevByDrawingId}
-                summariesBySet={summariesBySet}
-                onRevisionUploaded={handleRevisionUploaded}
-                onOpenSummary={setSummaryCard}
-              />
-            )}
-            {activeTab === "submittals" && <SubmittalsPage />}
-            {activeTab === "matrix" && (
-              <ApprovalMatrix
-                drawingSets={drawingSets}
-                submittals={submittals as unknown as HubSubmittal[]}
-                roundsBySubmittal={roundsBySubmittal}
-                isLoading={isLoading}
-              />
-            )}
-            {activeTab === "revimpact" && (
-              <RevisionImpactBoard
-                rows={revisionImpactRows}
-                onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
-                isLoading={isLoading}
-              />
-            )}
-            {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
-            {activeTab === "model3d" && (
-              <Model3DTab modelMapping={modelMappingSummary} modelElementRows={modelElements as any[]} projectId={projectId} rosterLoading={modelElementsLoading} />
-            )}
-          </Suspense>
-        </ErrorBoundary>
+        {activeTabPanel}
       </div>
 
-      {leadModalOpen && (
-        <LeadTimesModal
-          leadDays={resolveLeadDays(activeProject, null)}
-          defaults={DEFAULT_LEAD_DAYS}
-          saving={saveLeadsMut.isPending}
-          onSave={(leads) => saveLeadsMut.mutate(leads)}
-          onClose={() => setLeadModalOpen(false)}
-        />
-      )}
-
-      {/* Contextual escalation: queue item → draft RFI / potential CO. */}
-      {escalateItem && (
-        <EscalateModal
-          item={escalateItem}
-          initialKind={escalateKind}
-          projectId={projectId}
-          projectName={projectName}
-          onClose={() => setEscalateItem(null)}
-        />
-      )}
-
-      {/* Revision overlay compare (old=red / new=blue). */}
-      {compareDrawing && (
-        <Suspense fallback={null}>
-          <RevisionCompareModalLazy
-            open
-            onClose={() => setCompareDrawingId(null)}
-            drawing={compareDrawing}
-          />
-        </Suspense>
-      )}
-
-      {/* Tekla/SDS2 member CSV import (BIM integration Phase 0). */}
-      {importModelOpen && (
-        <ModelElementImportModal
-          open
-          projectId={projectId}
-          projectName={projectName}
-          drawings={drawings}
-          existingElements={modelElements}
-          onClose={() => setImportModelOpen(false)}
-        />
-      )}
-
-      {/* Revision Summary digest (slice 3) — instant on upload, re-openable from the badge. */}
-      {summaryCard && (
-        <RevisionSummaryCard
-          summary={summaryCard}
-          onClose={() => setSummaryCard(null)}
-          onRunDeepDive={aiDiff ? openDeepDive : undefined}
-          onCreateRfi={can("create", "rfi") ? openRfiFromSummary : undefined}
-        />
-      )}
-      {rfiDraft && (
-        <RFIFormModal
-          projectId={projectId}
-          rfi={null}
-          prefill={rfiDraft.prefill}
-          saving={savingRfi}
-          onClose={() => setRfiDraft(null)}
-          onSave={saveRfiFromSummary}
-        />
-      )}
-      {deepDiveSet && (
-        <Suspense fallback={null}>
-          <RevisionDeepDiveModal open onClose={() => setDeepDiveSet(null)} set={deepDiveSet} projectId={projectId} />
-        </Suspense>
-      )}
+      {sharedModals}
     </div>
   );
 }
