@@ -7,12 +7,20 @@
  * Thin tab shell (the DrawingSubmittalHub / FieldHub / CostHub / ScheduleHub /
  * RiskHub pattern): each tab lazy-loads the existing page unchanged; all stay
  * independently routable. `?report_tab=` drives the active tab.
+ *
+ * command_ui flag: when enabled, replaces the tab shell with the light-theme
+ * ReportsHubControlCenter. Navigating to a specific report still deep-links
+ * into the existing /Reports/:slug route so individual report pages are
+ * unaffected.
  */
-import { Suspense } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Suspense, useState, useMemo } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import { REPORTS } from "@/pages/reports/registry";
+import ReportsHubControlCenter from "./reportsHub/ReportsHubControlCenter";
 
 const ReportsLibrary = lazyWithRetry(() => import("@/pages/Reports"));
 const JobStatusReport = lazyWithRetry(() => import("@/pages/JobStatusReport"));
@@ -28,6 +36,52 @@ const TABS = [
 
 export default function ReportsHub() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const commandUi = useFlag("command_ui");
+
+  // ── command_ui state (only used on the CC path) ───────────────────────────
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+
+  const filteredReports = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return REPORTS.filter((r) => {
+      const matchesCat =
+        categoryFilter === "All" || r.category === categoryFilter;
+      const matchesSearch =
+        !q ||
+        r.title.toLowerCase().includes(q) ||
+        r.summary.toLowerCase().includes(q) ||
+        r.category.toLowerCase().includes(q);
+      return matchesCat && matchesSearch;
+    });
+  }, [search, categoryFilter]);
+
+  const handleOpenReport = (entry) => {
+    navigate(`/Reports/${entry.slug}`);
+  };
+
+  const handleCategoryChange = (cat) => {
+    setCategoryFilter(cat);
+  };
+
+  // ── command_ui path ───────────────────────────────────────────────────────
+  if (commandUi) {
+    return (
+      <ReportsHubControlCenter
+        catalog={REPORTS}
+        filtered={filteredReports}
+        search={search}
+        onSearch={setSearch}
+        categoryFilter={categoryFilter}
+        onCategoryChange={handleCategoryChange}
+        onOpenReport={handleOpenReport}
+        favorites={[]}
+      />
+    );
+  }
+
+  // ── Classic tab-shell path (unchanged) ────────────────────────────────────
   const param = params.get("report_tab");
   const activeKey = TABS.some((t) => t.key === param) ? param : "library";
   const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
