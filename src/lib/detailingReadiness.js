@@ -79,7 +79,12 @@ export function computeDetailingReadiness({
 
   const materialImpacted = !!pkg?.material_impacted;
   const longLeadImpact = !!pkg?.long_lead_impact;
-  const sequenceNumber = workPackage?.sequence_number || null;
+  // Sequence comes from a linked work package when present, but most sets are
+  // never reverse-linked, so fall back to drawing_sets.area_sequence — a real
+  // column many projects already fill. A set with only area_sequence reports
+  // the same value for both `area` and `sequenceNumber` (intended): that value
+  // IS its known erection sequence, which flips prioritySequence true below.
+  const sequenceNumber = workPackage?.sequence_number || pkg?.area_sequence || null;
   const area = workPackage?.area || pkg?.area_sequence || null;
   const prioritySequence = !!sequenceNumber;
 
