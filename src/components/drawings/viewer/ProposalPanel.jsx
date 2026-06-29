@@ -32,6 +32,7 @@ import {
   ZONE_TYPES,
   listZones,
 } from "@/lib/drawingHub";
+import { invalidateEntity } from "@/services/cacheRegistry";
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -156,9 +157,12 @@ export default function ProposalPanel({
   const acceptMutation = useMutation({
     mutationFn: ({ proposalId, label, zoneType, reason }) =>
       acceptZoneProposal(proposalId, { overrides: { label, zoneType, reason, userId } }),
-    onSuccess: ({ zone }) => {
+    onSuccess: ({ zone, provisionedRevision }) => {
       toast.success(`Zone ${zone.zone_key} created from proposal`);
       setAcceptingFor(null);
+      // Accepting a proposal can provision a current revision on demand —
+      // refresh the register/hub revision caches only when that happened.
+      if (provisionedRevision && projectId) invalidateEntity(qc, "drawing_revision", projectId);
       invalidateAll();
     },
     onError: (err) => toast.error(`Couldn't accept: ${err?.message || "unknown error"}`),
