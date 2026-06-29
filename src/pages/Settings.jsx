@@ -15,6 +15,8 @@ import RolesTab from "@/components/settings/RolesTab.jsx";
 import SystemTab from "@/components/settings/SystemTab.jsx";
 import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
 import SetupAdminTab from "@/components/settings/SetupAdminTab.jsx";
+import { useFlag } from "@/hooks/useFeatureFlag";
+import SettingsControlCenter from "./settings/SettingsControlCenter";
 
 // Settings are grouped into three levels: personal, workspace, admin.
 const TAB_GROUPS = [
@@ -70,6 +72,7 @@ export default function Settings() {
   const [hoveredTab, setHoveredTab] = useState(null);
   const qc = useQueryClient();
   const isMobile = useIsMobile();
+  const commandUi = useFlag("command_ui");
 
   const { data: userSettings } = useQuery({
     queryKey: ['user-settings', user?.id],
@@ -119,14 +122,10 @@ export default function Settings() {
 
   const activeTabMeta = ALL_TABS.find(t => t.id === activeTab);
 
-  return (
-    <div className="sb-dashboard-reference-page">
-      <CommandBar
-        eyebrow={isAdmin ? "PERSONAL · WORKSPACE" : "PERSONAL"}
-        title="Settings"
-        subtitle={`${user?.full_name || user?.email || "Signed in"} · ${activeTabMeta?.label || "Profile"}${activeTabMeta?.desc ? ` · ${activeTabMeta.desc}` : ""}`}
-      />
-
+  // Shared settings body (sidebar tabs + content card) — rendered in both paths.
+  // Extracted here so the command_ui branch can pass it as children without
+  // duplicating any of the form wiring or mutation logic.
+  const settingsBody = (
     <div style={{
       display: 'grid',
       gridTemplateColumns: isMobile ? '1fr' : '220px 1fr',
@@ -255,6 +254,32 @@ export default function Settings() {
         {activeTab === 'setup' && <SetupAdminTab isAdmin={isAdmin} />}
       </div>
     </div>
+  );
+
+  // command_ui flag-branch: wrap the same body in the light Command UI shell.
+  // All form saves, tab navigation, and mutations are unchanged — the body is
+  // identical; only the page chrome differs.
+  if (commandUi) {
+    return (
+      <SettingsControlCenter
+        user={user}
+        prefs={userPrefs}
+        visibleSectionCount={visibleGroups.reduce((n, g) => n + g.tabs.length, 0)}
+      >
+        {settingsBody}
+      </SettingsControlCenter>
+    );
+  }
+
+  // Classic (non-flag) path — unchanged chrome, same body.
+  return (
+    <div className="sb-dashboard-reference-page">
+      <CommandBar
+        eyebrow={isAdmin ? "PERSONAL · WORKSPACE" : "PERSONAL"}
+        title="Settings"
+        subtitle={`${user?.full_name || user?.email || "Signed in"} · ${activeTabMeta?.label || "Profile"}${activeTabMeta?.desc ? ` · ${activeTabMeta.desc}` : ""}`}
+      />
+      {settingsBody}
     </div>
   );
 }
