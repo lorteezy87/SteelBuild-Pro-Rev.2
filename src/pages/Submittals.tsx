@@ -31,6 +31,7 @@ import {
 import { forecastPortfolio } from "@/lib/submittalForecast";
 import { batchProcess } from "@/utils/batchProcess";
 import { usePermissions } from "@/services/permissions";
+import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submittals/format";
 import { Dialog, DialogContent, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./submittals/uiCompat";
 import { SubmittalDetail, SubmittalVirtualList } from "./submittals/components";
@@ -274,9 +275,15 @@ export default function Submittals() {
       const cached = (qc.getQueryData(["submittals", projectId]) || []) as any[];
       const byId = new Map(cached.map((r) => [r.id, r]));
       const patchHasStatus = typeof patch.status === "string";
+      // A bulk move to a COMPLETED status (Released for Fabrication / Void)
+      // clears the ball-in-court, matching the audited round path (§20). The
+      // UI then renders "Closed" instead of a stale reviewer.
+      const patchClosesCycle =
+        patchHasStatus && CLOSED_SUBMITTAL_STATUSES.has(patch.status);
       return batchProcess(ids, async (id) => {
         const existing = byId.get(id);
         const rowPatch: Record<string, any> = { ...patch };
+        if (patchClosesCycle) rowPatch.ball_in_court = null;
         if (notesAppend) {
           const prior = (existing?.notes || "").trimEnd();
           rowPatch.notes = prior ? `${prior}\n\n${notesAppend}` : notesAppend;
@@ -671,7 +678,12 @@ export default function Submittals() {
                   returned_date: isVerdict ? today : undefined,
                 });
               } else {
-                updateMut.mutate({ id: selected.id, status });
+                // Void is a plain status edit (no round), so the centralized
+                // BIC-clear in addSubmittalRound doesn't fire — null it here so
+                // a voided submittal shows "Closed", not a stale reviewer (§20).
+                const patch: { id: string; [key: string]: any } = { id: selected.id, status };
+                if (CLOSED_SUBMITTAL_STATUSES.has(status)) patch.ball_in_court = null;
+                updateMut.mutate(patch);
               }
             }}
             onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}

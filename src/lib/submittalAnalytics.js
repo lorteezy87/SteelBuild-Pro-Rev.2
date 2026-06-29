@@ -81,13 +81,47 @@ export function latestTimestamp(...candidates) {
 // ── cycle time ─────────────────────────────────────────────────────
 
 /**
+ * Pick the terminal-time reviewer for a submittal. The submittal's own
+ * `ball_in_court` is now CLEARED (→ null) when the cycle closes
+ * (Released for Fabrication / Void) — see useSubmittals.addSubmittalRound —
+ * so reading it directly would collapse every released submittal to
+ * "Unassigned". The durable source is the latest `submittal_rounds` row's
+ * ball_in_court (the reviewer who closed the cycle).
+ *
+ * Order: latest round's ball_in_court → submittal.ball_in_court (legacy /
+ * mid-flow rows that still carry a BIC) → "Unassigned".
+ *
+ * @param {object}   submittal
+ * @param {object[]} [rounds] — this submittal's rounds (any order)
+ */
+function terminalReviewer(submittal, rounds) {
+  if (Array.isArray(rounds) && rounds.length > 0) {
+    // Latest round by round_number desc; ties keep array order (stable).
+    let latest = null;
+    let latestNum = -Infinity;
+    for (const r of rounds) {
+      const n = Number(r?.round_number);
+      const num = Number.isFinite(n) ? n : 0;
+      if (num >= latestNum) { latest = r; latestNum = num; }
+    }
+    if (latest?.ball_in_court) return latest.ball_in_court;
+  }
+  return submittal.ball_in_court || "Unassigned";
+}
+
+/**
  * Compute submitted→terminal cycle time for a single submittal.
  * Returns { days, reviewer } or null if the submittal is not terminal
  * or is missing a usable submitted_date.
  *
- * `reviewer` is the BIC at terminal time, falling back to "Unassigned".
+ * `reviewer` is the BIC at terminal time. Because the submittal's BIC is
+ * cleared on close, the reviewer is read from the latest round (passed in)
+ * when available, falling back to the submittal's BIC then "Unassigned".
+ *
+ * @param {object}   submittal
+ * @param {object[]} [rounds] — this submittal's rounds (for reviewer attribution)
  */
-export function computeOneCycleTime(submittal) {
+export function computeOneCycleTime(submittal, rounds) {
   if (!submittal) return null;
   if (!TERMINAL_STATUSES.has(submittal.status)) return null;
   const start = toEpochMs(submittal.submitted_date);
@@ -96,7 +130,7 @@ export function computeOneCycleTime(submittal) {
   const end = latestTimestamp(submittal.returned_date, submittal.updated_at);
   if (end === null || end < start) return null;
   const days = Math.round((end - start) / DAY_MS);
-  const reviewer = submittal.ball_in_court || "Unassigned";
+  const reviewer = terminalReviewer(submittal, rounds);
   return { days: Math.max(0, days), reviewer };
 }
 
@@ -111,14 +145,20 @@ export function computeOneCycleTime(submittal) {
  *
  * Submittals that are still open or missing a submitted_date are
  * silently dropped (they have no cycle time yet).
+ *
+ * Pass `roundsBySubmittal` (a `{ [submittal_id]: round[] }` map) so the
+ * per-reviewer grouping reads the closing reviewer from the latest round —
+ * the submittal's own ball_in_court is cleared on close. Omit it and the
+ * grouping falls back to the submittal BIC / "Unassigned" (legacy behaviour).
  */
-export function computeCycleTime(submittals, { now = Date.now() } = {}) {
+export function computeCycleTime(submittals, { now = Date.now(), roundsBySubmittal = null } = {}) {
   if (!Array.isArray(submittals)) submittals = [];
   const samples = [];
   const grouped = new Map();
   for (const s of submittals) {
     if (s?.is_deleted) continue;
-    const out = computeOneCycleTime(s);
+    const rounds = roundsBySubmittal && s?.id ? roundsBySubmittal[s.id] : undefined;
+    const out = computeOneCycleTime(s, rounds);
     if (!out) continue;
     samples.push(out.days);
     if (!grouped.has(out.reviewer)) grouped.set(out.reviewer, []);

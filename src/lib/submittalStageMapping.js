@@ -68,6 +68,23 @@ const TERMINAL_STATUSES = new Set([
 const RR_STATUSES = new Set(["Revise and Resubmit", "Rejected"]);
 
 /**
+ * COMPLETED ("closed") submittal statuses — the NARROW set where the workflow
+ * is truly done and the ball-in-court should be cleared (→ shown as "Closed").
+ *
+ * Deliberately NARROWER than the terminal/approved set: "Approved" and
+ * "Approved as Noted" are MID-FLOW outcomes (the package still routes onward
+ * to OFS/IFC/fab), so they KEEP their reviewer. Only a final fab release or a
+ * void closes the cycle.
+ *
+ * Canonical source for the page; drawingSubmittalHub/format.ts keeps its own
+ * register-display copy intentionally.
+ */
+export const CLOSED_SUBMITTAL_STATUSES = new Set([
+  "Released for Fabrication",
+  "Void",
+]);
+
+/**
  * Map a single submittal's (status, ball_in_court, approved_date) to a
  * canonical drawing stage. Returns one of STAGE_ORDER, or null when the
  * submittal carries no usable signal (e.g. status === "Void" or an

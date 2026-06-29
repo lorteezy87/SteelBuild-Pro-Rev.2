@@ -371,3 +371,65 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
     expect(createRound).toHaveBeenCalled();
   });
 });
+
+describe("addSubmittalRound — ball-in-court clear on completion (§20)", () => {
+  beforeEach(() => {
+    mockLockSet.mockClear();
+    createRound.mockClear();
+    updateRound.mockClear();
+    filterRound.mockClear();
+    updateSubmittal.mockClear();
+    rpcMock.mockReset();
+    rpcMock.mockResolvedValue({ data: [], error: null });
+  });
+
+  // Helper: read the ball_in_court applied to the SUBMITTAL patch (2nd arg of
+  // entities.Submittal.update) — NOT the round row's ball_in_court.
+  const lastSubmittalBic = () =>
+    updateSubmittal.mock.calls[updateSubmittal.mock.calls.length - 1][1].ball_in_court;
+
+  it("nulls the submittal patch's ball_in_court on 'Released for Fabrication'", async () => {
+    await addSubmittalRound({
+      submittal: { id: "c1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1 },
+      status: "Released for Fabrication",
+      ball_in_court: "GC",
+    });
+    expect(lastSubmittalBic()).toBeNull();
+    // The round row still records the reviewer (cycle-time attribution).
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ ball_in_court: "GC" }),
+    );
+  });
+
+  it("nulls the submittal patch's ball_in_court on 'Void'", async () => {
+    await addSubmittalRound({
+      submittal: { id: "c2", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1 },
+      status: "Void",
+      ball_in_court: "EOR",
+    });
+    expect(lastSubmittalBic()).toBeNull();
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ ball_in_court: "EOR" }),
+    );
+  });
+
+  it("PRESERVES input.ball_in_court on mid-flow / open statuses", async () => {
+    // Approved / Approved as Noted are mid-flow (route onward) and must keep BIC.
+    for (const status of [
+      "Approved",
+      "Approved as Noted",
+      "Submitted",
+      "Under Review",
+      "Draft",
+      "Revise and Resubmit",
+    ]) {
+      updateSubmittal.mockClear();
+      await addSubmittalRound({
+        submittal: { id: "c3", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0 },
+        status,
+        ball_in_court: "EOR",
+      });
+      expect(lastSubmittalBic()).toBe("EOR");
+    }
+  });
+});
