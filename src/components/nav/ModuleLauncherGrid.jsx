@@ -130,24 +130,36 @@ function LauncherTile({ module, onNavigate, onClose }) {
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
         />
       )}
-      {/* Readability scrim over the photo — the construction art alone is
-          unlabelled/illegible at this tile size, so darken it and ALWAYS draw
-          the icon + label on top (previously only the no-photo fallback tiles
-          showed a name, leaving the rest a guessing game). */}
+      {/* The construction photos carry no legible label at this tile size, so
+          render the module name on a SOLID caption bar (readable on any photo)
+          plus the icon floated over the art. Previously only the no-photo
+          fallback tiles showed a name, leaving the rest a guessing game. */}
       {showPhoto && (
         <span
           aria-hidden="true"
           style={{
             position: "absolute",
             inset: 0,
-            background:
-              "linear-gradient(180deg, rgba(8,12,18,0.42) 0%, rgba(8,12,18,0.56) 45%, rgba(8,12,18,0.86) 100%)",
+            background: "linear-gradient(180deg, rgba(8,12,18,0.12) 0%, rgba(8,12,18,0.45) 100%)",
           }}
         />
       )}
-      <span style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: 6 }}>
-        <Icon size={22} strokeWidth={1.6} color="#fff" aria-hidden="true" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.9))" }} />
-        <span style={{ fontSize: 9.5, fontWeight: 600, color: "#fff", textAlign: "center", lineHeight: 1.15, textShadow: "0 1px 3px rgba(0,0,0,0.95)" }}>{module.label}</span>
+      <span style={{ position: "absolute", top: 6, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
+        <Icon size={20} strokeWidth={1.7} color="#fff" aria-hidden="true" style={{ filter: "drop-shadow(0 1px 4px rgba(0,0,0,1))" }} />
+      </span>
+      <span
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(9,13,19,0.92)",
+          borderTop: "1px solid rgba(255,255,255,0.14)",
+          padding: "4px 5px 5px",
+          textAlign: "center",
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", lineHeight: 1.15 }}>{module.label}</span>
       </span>
     </button>
   );
