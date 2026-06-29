@@ -11,6 +11,7 @@
  */
 
 import React, { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Factory, Upload, Boxes } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -18,6 +19,9 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { listPieceProduction } from "@/lib/production/repository";
+import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
+import { buildPieceDrawingMap } from "@/lib/production/pieceDrawingLinks";
+import { normalizePieceMark } from "@/services/modelElementStatus";
 import { PRODUCTION_STAGES } from "@/lib/importProductionStatus";
 import ProductionStatusImportModal from "@/components/production/ProductionStatusImportModal";
 import TeklaEpmImportModal from "@/components/production/TeklaEpmImportModal";
@@ -84,6 +88,27 @@ export default function ProductionStatus() {
     staleTime: 30_000,
   });
 
+  // Piece → drawing reference lookup. piece_production has no drawing column;
+  // the mark→sheet relationship lives only in model_elements (keyed by
+  // piece_mark, with a text drawing_no + a rarely-populated drawing_id FK).
+  // We load the FULL project roster (fetchAllModelElements pages past Supabase's
+  // 1000-row server cap — a plain entities.filter would silently truncate big
+  // models like a ~16.8k-piece Capstone roster) and reduce it to a pure map.
+  // Project-scoped + RLS-enforced (model_elements is project-scoped); generous
+  // staleTime because this rarely changes; memoized so the ~52k-row reduce runs
+  // once per fetch, not per render.
+  const { data: modelElements = [] } = useQuery({
+    queryKey: ["production-model-elements", projectId],
+    queryFn: () => fetchAllModelElements(projectId),
+    enabled: !!projectId,
+    staleTime: 5 * 60_000,
+  });
+
+  const pieceDrawingMap = useMemo(
+    () => buildPieceDrawingMap(modelElements),
+    [modelElements],
+  );
+
   // Filtered list for the command_ui DataTable
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -98,6 +123,21 @@ export default function ProductionStatus() {
       );
     });
   }, [pieces, search, stageFilter]);
+
+  // Drawing-link coverage over the DISPLAYED pieces: the share whose mark has a
+  // model_elements entry (i.e. resolves to at least a shop-drawing number). This
+  // makes the data gap visible — most pieces show an em-dash because shop/detail
+  // numbers don't match erection-sheet numbers and drawing_id is rarely set, so
+  // surfacing the real coverage is more honest than a column of dashes.
+  const drawingCoverage = useMemo(() => {
+    const total = filtered.length;
+    if (!total) return { total: 0, linked: 0, pct: 0 };
+    let linked = 0;
+    for (const p of filtered) {
+      if (pieceDrawingMap.has(normalizePieceMark(p.piece_mark))) linked += 1;
+    }
+    return { total, linked, pct: Math.round((linked / total) * 100) };
+  }, [filtered, pieceDrawingMap]);
 
   const rollup = useMemo(() => {
     const byStage = Object.fromEntries(PRODUCTION_STAGES.map((s) => [s, 0]));
@@ -172,6 +212,8 @@ export default function ProductionStatus() {
           onExport={() => exportProductionCSV(filtered)}
           onImport={() => setShowImport(true)}
           onImportEpm={() => setShowEpmImport(true)}
+          pieceDrawingMap={pieceDrawingMap}
+          drawingCoverage={drawingCoverage}
           projectHealth={activeProject?.health_status || null}
           percentComplete={activeProject?.scope_complete_pct_override != null ? Number(activeProject.scope_complete_pct_override) : null}
         />
@@ -189,6 +231,15 @@ export default function ProductionStatus() {
         unit=" pieces"
         subtitle="Per-piece fab status from Tekla EPM / FabSuite"
       >
+        <input
+          className="sbd-input"
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search mark, assembly, area, seq…"
+          aria-label="Search pieces"
+          style={{ minWidth: 220 }}
+        />
         <button className="sbd-btn sbd-btn-ghost" onClick={() => setShowEpmImport(true)}>
           <Boxes size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
           Import Tekla EPM File
@@ -252,12 +303,25 @@ export default function ProductionStatus() {
 
           {/* Piece table */}
           <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderBottom: "1px solid var(--divider)" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                {filtered.length === pieces.length ? `${pieces.length} pieces` : `${filtered.length} of ${pieces.length} pieces`}
+              </span>
+              <span
+                style={{ fontSize: 11, color: "var(--text-muted)" }}
+                title="Share of shown pieces whose mark resolves to a shop drawing in the model roster. Shop/detail numbers rarely match erection sheets, so most pieces have no link yet."
+              >
+                Drawing coverage <strong style={{ color: "var(--text-secondary)" }}>{drawingCoverage.pct}%</strong>
+                {" "}<span style={{ color: "var(--text-muted)" }}>({drawingCoverage.linked}/{drawingCoverage.total} linked)</span>
+              </span>
+            </div>
             <div style={{ overflowX: "auto" }}>
               <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr>
                     <th style={th}>Mark</th>
                     <th style={th}>Assembly</th>
+                    <th style={th}>Shop Dwg</th>
                     <th style={th}>Stage</th>
                     <th style={{ ...th, textAlign: "right" }}>%</th>
                     <th style={th}>Ship date</th>
@@ -267,10 +331,11 @@ export default function ProductionStatus() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pieces.map((p) => (
+                  {filtered.map((p) => (
                     <tr key={p.id}>
                       <td style={{ ...td, fontWeight: 700, color: "var(--text-primary)" }}>{p.piece_mark}</td>
                       <td style={td}>{p.assembly_mark || "—"}</td>
+                      <td style={td}>{drawingLinkCell(pieceDrawingMap.get(normalizePieceMark(p.piece_mark)))}</td>
                       <td style={td}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <span style={{ width: 8, height: 8, borderRadius: 999, background: STAGE_COLOR[p.status] || "var(--text-muted)" }} />
@@ -303,6 +368,28 @@ const th = {
   position: "sticky", top: 0, background: "var(--bg-surface)",
 };
 const td = { padding: "8px 12px", borderBottom: "1px solid var(--divider)", color: "var(--text-secondary)" };
+
+/**
+ * Shop-drawing cell for the classic table. A drawing_id → a real DrawingViewer
+ * link; a drawing_no without an id → plain info text (shop numbers don't reliably
+ * match erection sheets, so we never fake a link); nothing → em-dash.
+ */
+function drawingLinkCell(link) {
+  if (link?.drawingId) {
+    return (
+      <Link
+        to={`/DrawingViewer?id=${encodeURIComponent(link.drawingId)}`}
+        style={{ color: "var(--accent)", textDecoration: "none", fontFamily: "var(--font-mono)", fontSize: 11 }}
+      >
+        {link.drawingNo || "View sheet"}
+      </Link>
+    );
+  }
+  if (link?.drawingNo) {
+    return <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{link.drawingNo}</span>;
+  }
+  return "—";
+}
 
 function Kpi({ label, value, tone = "var(--text-primary)", sub }) {
   return (
