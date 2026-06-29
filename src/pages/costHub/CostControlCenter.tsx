@@ -109,11 +109,16 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
     });
   }, [costCodeRows, phaseFilter, overBudgetOnly, search]);
 
-  // chart data — derived from raw costCodes (denormalized columns like CostDashboard)
-  const barData = useMemo(() => buildBarChartData(costCodes), [costCodes]);
-  const cumData = useMemo(() => buildCumulativeData(costCodes), [costCodes]);
-  const pieData = useMemo(() => buildCategoryPieData(costCodes), [costCodes]);
-  const varianceAlerts = useMemo(() => buildVarianceAlerts(costCodes), [costCodes]);
+  // Chart data uses costCodeRows (the expense-rolled rows from useFinancials —
+  // actual_cost/committed_cost = sum of Paid expenses matched by cost_code_number),
+  // NOT the raw costCodes' denormalized actual_cost/committed_cost columns, which
+  // expenses never write to. This keeps the bars / spend curve / category donut /
+  // variance consistent with the "Actual"/"Committed" KPI cards (which already use
+  // summary.actual/committed from the same rollup).
+  const barData = useMemo(() => buildBarChartData(costCodeRows), [costCodeRows]);
+  const cumData = useMemo(() => buildCumulativeData(costCodeRows), [costCodeRows]);
+  const pieData = useMemo(() => buildCategoryPieData(costCodeRows), [costCodeRows]);
+  const varianceAlerts = useMemo(() => buildVarianceAlerts(costCodeRows), [costCodeRows]);
   const coAging = useMemo(() => buildCoAging(changeOrders), [changeOrders]);
 
   // CO pipeline counts
@@ -124,14 +129,15 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
   const coStale = coAging.filter((co) => co.isStale).length;
   const topStaleCOs = coAging.filter((co) => co.isStale).slice(0, 5);
 
-  // EAC from costCodes column rollup (CostDashboard model)
+  // Budget from cost-code budgets; EAC from the expense-rolled actuals
+  // (costCodeRows) + forecast-to-complete, consistent with the Actual/Committed KPIs.
   const totalBudget = useMemo(
     () => costCodes.reduce((s, c) => s + Number(c.budget_amount || 0), 0),
     [costCodes],
   );
   const totalEAC = useMemo(
-    () => costCodes.reduce((s, c) => s + Number(c.actual_cost || 0) + Number(c.forecast_to_complete || 0), 0),
-    [costCodes],
+    () => costCodeRows.reduce((s, c) => s + Number(c.actual_cost || 0) + Number(c.forecast_to_complete || 0), 0),
+    [costCodeRows],
   );
 
   // Budget Used %
@@ -142,7 +148,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
 
   // Contingency left: total budget + project contingency - consumed overages
   const contingency = Number((project as Record<string, unknown>)?.contingency_amount ?? 0);
-  const consumedContingency = costCodes.reduce((s, c) => {
+  const consumedContingency = costCodeRows.reduce((s, c) => {
     const v = Number(c.actual_cost || 0) - Number(c.budget_amount || 0);
     return s + Math.max(0, v);
   }, 0);

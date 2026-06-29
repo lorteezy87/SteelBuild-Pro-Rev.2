@@ -11,6 +11,7 @@ import ProgressBar from "../components/shared/ProgressBar";
 import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent, formatDateShort } from "../components/shared/formatters";
 import { computeCostCodeTotals, computeRevisedContractValue } from "@/services/costRollup";
+import { useFinancials } from "@/hooks/useFinancials";
 import { COST_CODES, CATEGORY_COLORS, CATEGORY_ORDER } from "../components/shared/costCodes";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -181,8 +182,33 @@ export default function CostDashboard() {
   const contingency = Number(project?.contingency_amount) || 0;
   const contractVal = project ? computeRevisedContractValue(project, cos) : 0;
 
+  // Per-code actual/committed must come from the EXPENSE rollup (sum of Paid
+  // expenses matched by expenses.cost_code === cost_codes.cost_code_number),
+  // NOT the denormalized cost_codes.actual_cost/committed_cost columns — those
+  // are stale (the expenses table never writes back to them). useFinancials
+  // computes the authoritative rollup into costCodeRows[].actual_cost/
+  // committed_cost (same source the KPI cards use). Overlay those onto each
+  // raw code; everything downstream (charts, totals, EAC, contingency, alerts,
+  // breakdown table, CSV) reads `enrichedCodes` so it reflects real spend.
+  const { costCodeRows } = useFinancials(activeProject?.id, project);
+
+  const enrichedCodes = useMemo(() => {
+    const rowByNumber = new Map(
+      (costCodeRows || []).map(r => [r.cost_code_number, r])
+    );
+    return codes.map(c => {
+      const row = rowByNumber.get(c.cost_code_number);
+      return {
+        ...c,
+        actual_cost: Number(row?.actual_cost) || 0,
+        committed_cost: Number(row?.committed_cost) || 0,
+      };
+    });
+  }, [codes, costCodeRows]);
+
   // Cost-code column rollup — centralized in src/services/costRollup.ts so this
-  // page, ExecutiveView, and the report scorecards all sum identically.
+  // page, ExecutiveView, and the report scorecards all sum identically. Fed the
+  // expense-enriched codes so actual/committed/EAC/variance reflect real spend.
   const {
     budget: totalBudget,
     actual: totalActual,
@@ -190,10 +216,10 @@ export default function CostDashboard() {
     forecast: totalForecast,
     variance: totalVariance,
     eac,
-  } = computeCostCodeTotals(codes);
+  } = computeCostCodeTotals(enrichedCodes);
 
   const barChartData = useMemo(() => {
-    return codes.map(c => {
+    return enrichedCodes.map(c => {
       const cc = COST_CODES.find(x => x.code === c.cost_code_number);
       return {
         code: c.cost_code_number,
@@ -206,18 +232,18 @@ export default function CostDashboard() {
       };
     }).filter(d => d.budget > 0 || d.actual > 0 || d.committed > 0)
       .sort((a, b) => a.code.localeCompare(b.code));
-  }, [codes]);
+  }, [enrichedCodes]);
 
   const categoryPieData = useMemo(() => {
     return CATEGORY_ORDER.map(cat => {
-      const catCodes = codes.filter(c => c.phase === cat);
+      const catCodes = enrichedCodes.filter(c => c.phase === cat);
       const total = catCodes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
       return { name: cat, value: total };
     }).filter(d => d.value > 0);
-  }, [codes]);
+  }, [enrichedCodes]);
 
   const varianceAlerts = useMemo(() => {
-    return codes
+    return enrichedCodes
       .filter(c => {
         const budget = Number(c.budget_amount) || 0;
         const actual = Number(c.actual_cost) || 0;
@@ -235,10 +261,10 @@ export default function CostDashboard() {
         };
       })
       .sort((a, b) => b.variance - a.variance);
-  }, [codes, contingency]);
+  }, [enrichedCodes, contingency]);
 
   const marginAtRisk = useMemo(() => {
-    return codes.map(c => {
+    return enrichedCodes.map(c => {
       const budget = Number(c.budget_amount) || 0;
       const actual = Number(c.actual_cost) || 0;
       const committed = Number(c.committed_cost) || 0;
@@ -248,7 +274,7 @@ export default function CostDashboard() {
       const marginRisk = budget > 0 ? (exposure / budget) * 100 : 0;
       return { id: c.id, code: c.cost_code_number, description: c.description, phase: c.phase, budget, actual, committed, forecast, eac, exposure, marginRisk, atRisk: exposure > 0 };
     }).filter(c => c.budget > 0).sort((a, b) => b.exposure - a.exposure);
-  }, [codes]);
+  }, [enrichedCodes]);
 
   const coAging = useMemo(() => {
     const today = new Date();
@@ -321,7 +347,7 @@ export default function CostDashboard() {
   }, [deliveries]);
 
   const cumulativeData = useMemo(() => {
-    const sorted = [...codes].sort((a, b) => {
+    const sorted = [...enrichedCodes].sort((a, b) => {
       return (Number(b.budget_amount) || 0) - (Number(a.budget_amount) || 0);
     });
     let cumBudget = 0, cumActual = 0, cumCommitted = 0;
@@ -331,9 +357,9 @@ export default function CostDashboard() {
       cumCommitted += Number(c.committed_cost) || 0;
       return { name: c.cost_code_number, budget: cumBudget, actual: cumActual, committed: cumCommitted };
     });
-  }, [codes]);
+  }, [enrichedCodes]);
 
-  const consumedContingency = codes.reduce((s, c) => {
+  const consumedContingency = enrichedCodes.reduce((s, c) => {
     const v = (Number(c.actual_cost) || 0) - (Number(c.budget_amount) || 0);
     return s + Math.max(0, v);
   }, 0);
@@ -350,7 +376,7 @@ export default function CostDashboard() {
 
   const exportCSV = () => {
     const headers = ["Code", "Description", "Phase", "Budget", "Actual", "Committed", "Forecast", "Variance", "% Used"];
-    const rows = codes.map(c => {
+    const rows = enrichedCodes.map(c => {
       const budget = Number(c.budget_amount) || 0;
       const actual = Number(c.actual_cost) || 0;
       return [c.cost_code_number, c.description, c.phase, budget, actual, Number(c.committed_cost) || 0, Number(c.forecast_to_complete) || 0, actual - budget, budget > 0 ? ((actual / budget) * 100).toFixed(1) + "%" : "0%"];
@@ -494,7 +520,7 @@ export default function CostDashboard() {
           loading={isLoading}
           empty="NO COST CODES"
         >
-          {codes
+          {enrichedCodes
             .filter(c => (Number(c.budget_amount) || 0) > 0 || (Number(c.actual_cost) || 0) > 0)
             .sort((a, b) => (a.cost_code_number || "").localeCompare(b.cost_code_number || ""))
             .map(c => {
