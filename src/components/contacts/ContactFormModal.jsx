@@ -112,13 +112,17 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
       }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* Project */}
+        {/* Project — locked to the active project when one is in context, so a
+            contact added from a project's Contacts page always saves to (and
+            shows up in) THAT project. The free picker only appears in
+            portfolio mode (no active project) where the list isn't scoped. */}
         <div>
           <label style={labelStyle}>Project</label>
           <select
             value={formData.project_id}
             onChange={(e) => handleChange("project_id", e.target.value)}
-            style={inputStyle}
+            style={projectId ? { ...inputStyle, opacity: 0.7, cursor: "not-allowed" } : inputStyle}
+            disabled={!!projectId}
           >
             <option value="">Select a project</option>
             {projects.map((p) => (
@@ -127,6 +131,11 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
               </option>
             ))}
           </select>
+          {projectId ? (
+            <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+              Adding to the current project. Switch projects to add a contact elsewhere.
+            </div>
+          ) : null}
         </div>
 
         {/* Name */}

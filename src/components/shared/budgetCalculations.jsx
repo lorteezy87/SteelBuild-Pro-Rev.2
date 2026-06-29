@@ -2,7 +2,10 @@
 import { roundCurrency } from './formatters';
 
 export function getCostCodeSummary(costCode, sovItems = [], expenses = [], costCodes = []) {
-  const matchingCostCodes = costCodes.filter(c => c.cost_code === costCode);
+  // Cost-code rows store the number in `cost_code_number` (NOT `cost_code`,
+  // which is the field on EXPENSE rows). Matching on the wrong field here made
+  // matchingCostCodes always empty → budget silently fell back to SOV / $0.
+  const matchingCostCodes = costCodes.filter(c => c.cost_code_number === costCode);
   const budgetFromCostCodes = roundCurrency(matchingCostCodes
     .reduce((sum, c) => sum + (Number(c.budget_amount) || 0), 0));
 

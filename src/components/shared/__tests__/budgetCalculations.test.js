@@ -7,7 +7,7 @@ import {
 } from "../budgetCalculations";
 
 describe("getCostCodeSummary", () => {
-  const costCodes = [{ cost_code: "01", budget_amount: 10000 }];
+  const costCodes = [{ cost_code_number: "01", budget_amount: 10000 }];
   const sov = [{ cost_code: "01", scheduled_value: 8000 }];
   const expenses = [
     { cost_code: "01", amount: 3000, payment_status: "Paid" },
@@ -33,7 +33,7 @@ describe("getCostCodeSummary", () => {
   });
 
   it("uses a $0 matched cost-code budget rather than falling back to SOV", () => {
-    const s = getCostCodeSummary("01", sov, [], [{ cost_code: "01", budget_amount: 0 }]);
+    const s = getCostCodeSummary("01", sov, [], [{ cost_code_number: "01", budget_amount: 0 }]);
     expect(s.budget).toBe(0); // a matched code (even $0) wins over SOV
     expect(s.usedPct).toBe(0); // no divide-by-zero
   });
@@ -52,7 +52,7 @@ describe("getCostCodeSummary", () => {
       "01",
       [],
       [{ cost_code: "01", amount: "2500.50", payment_status: "Paid" }],
-      [{ cost_code: "01", budget_amount: "10000" }],
+      [{ cost_code_number: "01", budget_amount: "10000" }],
     );
     expect(s.budget).toBe(10000);
     expect(s.committed).toBe(2500.5);
