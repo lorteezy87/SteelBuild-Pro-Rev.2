@@ -77,6 +77,93 @@ function alertPriorityTone(priority: "high" | "medium" | "low"): PillTone {
 
 // ── Module Tile grid ──────────────────────────────────────────────────────────
 
+// Restored photographic launcher tile: the complete SteelBuild photo (icon +
+// title baked in) is the FULL tile face — vivid, not a 10%-opacity wash — with
+// the live KPI metric in a small badge (top-right, clear of the baked-in label).
+// Falls back to a dark gradient + icon + title when a photo is missing.
+function DashModuleTile({ module, onNavigate }: {
+  module: ModuleTile;
+  onNavigate?: (target: string) => void;
+}) {
+  const Icon = getPageIcon(module.page);
+  const [imgFailed, setImgFailed] = useState(false);
+  const showPhoto = !!module.photo && !imgFailed;
+  const metricColor =
+    module.tone === "good" ? "#86efac" : module.tone === "danger" ? "#fca5a5" : "#f4f7fa";
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate?.(module.target)}
+      aria-label={`Open ${module.title} — ${module.metric}`}
+      className="dash-module-tile"
+      style={{
+        position: "relative",
+        display: "block",
+        width: "100%",
+        aspectRatio: "1 / 1",
+        borderRadius: 14,
+        overflow: "hidden",
+        border: "1px solid rgba(255,255,255,0.12)",
+        cursor: "pointer",
+        padding: 0,
+        color: "#fff",
+        background: "linear-gradient(150deg, #2a3548 0%, #141c26 55%, #0a0e15 100%)",
+        boxShadow: "0 6px 16px rgba(0,0,0,0.40)",
+        transition: "transform 0.15s ease, box-shadow 0.15s ease",
+      }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget as HTMLButtonElement;
+        el.style.transform = "translateY(-2px)";
+        el.style.boxShadow = "0 12px 28px rgba(0,0,0,0.50)";
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget as HTMLButtonElement;
+        el.style.transform = "";
+        el.style.boxShadow = "0 6px 16px rgba(0,0,0,0.40)";
+      }}
+    >
+      {showPhoto ? (
+        <img
+          src={module.photo}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          loading="lazy"
+          decoding="async"
+          onError={() => setImgFailed(true)}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        <span style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 12 }}>
+          <Icon size={34} strokeWidth={1.5} color="#fff" aria-hidden="true" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.7))" }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#fff", textAlign: "center", lineHeight: 1.2, textShadow: "0 1px 3px rgba(0,0,0,0.85)" }}>{module.title}</span>
+        </span>
+      )}
+      {/* Live KPI metric badge — top-right, clear of the baked-in label + icon */}
+      <span
+        style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          maxWidth: "82%",
+          padding: "3px 9px",
+          borderRadius: 8,
+          background: "rgba(8,12,18,0.74)",
+          fontSize: 11.5,
+          fontWeight: 700,
+          color: metricColor,
+          textShadow: "0 1px 2px rgba(0,0,0,0.9)",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {module.metric}
+      </span>
+    </button>
+  );
+}
+
 function ModuleTileGrid({ modules, onNavigate }: {
   modules: ModuleTile[];
   onNavigate?: (target: string) => void;
@@ -85,93 +172,14 @@ function ModuleTileGrid({ modules, onNavigate }: {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-        gap: 10,
+        gridTemplateColumns: "repeat(auto-fill, minmax(148px, 1fr))",
+        gap: 14,
         padding: "4px 0",
       }}
     >
-      {modules.map((module) => {
-        const Icon = getPageIcon(module.page);
-        return (
-          <button
-            key={module.page}
-            type="button"
-            onClick={() => onNavigate?.(module.target)}
-            aria-label={`Open ${module.title}`}
-            style={{
-              position: "relative",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              justifyContent: "flex-end",
-              minHeight: 100,
-              borderRadius: 8,
-              border: "1.5px solid var(--cmd-border, #e5e7eb)",
-              background: "var(--cmd-surface, #fff)",
-              overflow: "hidden",
-              cursor: "pointer",
-              padding: "10px 12px 10px",
-              textAlign: "left",
-              transition: "box-shadow 0.15s ease, border-color 0.15s ease",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.10)";
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--cmd-accent, #F2A706)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.boxShadow = "";
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--cmd-border, #e5e7eb)";
-            }}
-          >
-            {/* Background photo (faded) */}
-            <img
-              src={module.photo}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                opacity: 0.10,
-                pointerEvents: "none",
-              }}
-            />
-            {/* Icon */}
-            <span style={{ marginBottom: 6, color: "var(--cmd-accent, #F2A706)" }}>
-              <Icon size={20} strokeWidth={1.7} aria-hidden="true" />
-            </span>
-            {/* Labels */}
-            <strong
-              style={{
-                display: "block",
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--cmd-text-primary, #111)",
-                lineHeight: 1.2,
-                marginBottom: 2,
-              }}
-            >
-              {module.title}
-            </strong>
-            <span
-              style={{
-                display: "block",
-                fontSize: 11,
-                color: module.tone === "good"
-                  ? "var(--cmd-tone-good, #16a34a)"
-                  : "var(--cmd-text-muted, #6b7280)",
-                fontWeight: 500,
-              }}
-            >
-              {module.metric}
-            </span>
-          </button>
-        );
-      })}
+      {modules.map((module) => (
+        <DashModuleTile key={module.page} module={module} onNavigate={onNavigate} />
+      ))}
     </div>
   );
 }
@@ -296,7 +304,12 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
 
       <KpiStrip cells={kpiCells} />
 
-      <div className="cmd-panels">
+      {/* SteelBuild Modules — photographic launcher, restored + front-and-center */}
+      <DecisionPanel title="SteelBuild Modules" onViewAll={() => onNavigate?.("rfis")}>
+        <ModuleTileGrid modules={s.modules} onNavigate={(target) => onNavigate?.(target)} />
+      </DecisionPanel>
+
+      <div className="cmd-panels" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 14 }}>
         {/* Critical Alerts */}
         <DecisionPanel title="Critical Alerts">
           {s.alerts.length === 0 ? (
@@ -348,14 +361,6 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
               </strong>
             </div>
           ))}
-        </DecisionPanel>
-
-        {/* SteelBuild Modules — lifted from buildDashboardModel; same tile data */}
-        <DecisionPanel
-          title="SteelBuild Modules"
-          onViewAll={() => onNavigate?.("rfis")}
-        >
-          <ModuleTileGrid modules={s.modules} onNavigate={(target) => onNavigate?.(target)} />
         </DecisionPanel>
       </div>
 
