@@ -13,6 +13,7 @@ import { Plus, RefreshCw, Trash2, Tag } from "lucide-react";
 import PhoenixTable, { PTR, PTD } from "@/components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent, formatBudgetPercent } from "@/components/shared/formatters";
 import { invalidateCrudQueries } from "@/components/shared/crudFeedback";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import {
   mono,
   body,
@@ -328,7 +329,11 @@ export default function Financials() {
         <button
           onClick={() => {
             invalidateCrudQueries(qc, costCodeQueryKeys);
-            qc.invalidateQueries({ queryKey: ["expenses", projectId] });
+            // Fan out through the registry so sibling cost-code/expense surfaces
+            // (Cost Dashboard's cost-codes-dash, Cost Control Center) refresh too,
+            // not just this page's local keys.
+            invalidateEntity(qc, "cost_code", projectId);
+            invalidateEntity(qc, "expense", projectId);
             qc.invalidateQueries({ queryKey: ["sov-items", projectId] });
             qc.invalidateQueries({ queryKey: ["change-orders", projectId] });
           }}
