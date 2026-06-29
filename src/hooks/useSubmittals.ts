@@ -24,6 +24,7 @@ import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { logTransition } from "@/services/auditLogger";
 import { lockSet } from "@/lib/drawingHub";
+import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { supabase } from "@/lib/supabase";
 import {
@@ -259,9 +260,16 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
     } as Insert<"submittal_rounds">);
   }
 
+  // On a COMPLETED status (Released for Fabrication / Void) the cycle is done,
+  // so clear the submittal's ball-in-court (the UI shows "Closed"). The round
+  // row's ball_in_court (the reviewer who closed it) is left untouched above so
+  // cycle-time reviewer attribution survives — see submittalAnalytics. NARROW
+  // set on purpose: Approved / Approved as Noted are mid-flow and keep their BIC.
   const patch: Record<string, unknown> = {
     status: input.status,
-    ball_in_court: input.ball_in_court ?? null,
+    ball_in_court: CLOSED_SUBMITTAL_STATUSES.has(input.status)
+      ? null
+      : (input.ball_in_court ?? null),
     current_round_id: round?.id,
     total_rounds: plan.roundNumber,
     ...(input.extraPatch || {}),

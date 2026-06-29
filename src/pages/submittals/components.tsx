@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { daysUntil } from "@/lib/dateMath";
 import { formatDate } from "@/components/shared/formatters";
-import { submittalStatusToStage, isRRStatus } from "@/lib/submittalStageMapping";
+import { submittalStatusToStage, isRRStatus, CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import { nextSubmittalAction } from "@/lib/submittalActionEngine";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
@@ -276,6 +278,26 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
         : { forecastable: false },
     [submittal, rounds, cycleStats, today],
   );
+  const navigate = useNavigate();
+  // Related RFIs surfaced via the drawing-set link (NOT the manual
+  // submittal.linked_rfi_ids list). The real submittal↔RFI link is the
+  // scalar `rfis.drawing_set_id` matched against the submittal's
+  // drawing_set_ids[] — this is read-only and DISTINCT from "Linked RFIs"
+  // so set-assigned RFIs show up in the register. Computed before any early
+  // return to keep hook order stable.
+  const relatedSetRfis = useMemo(() => {
+    const setIds = Array.isArray(submittal?.drawing_set_ids) ? submittal!.drawing_set_ids : [];
+    if (!setIds.length || !Array.isArray(allRfis)) return [];
+    const linkedManual = new Set(
+      Array.isArray(submittal?.linked_rfi_ids) ? submittal!.linked_rfi_ids : [],
+    );
+    return allRfis.filter(
+      (rfi: any) =>
+        rfi?.drawing_set_id &&
+        setIds.includes(rfi.drawing_set_id) &&
+        !linkedManual.has(rfi.id),
+    );
+  }, [submittal, allRfis]);
   // Wrap onFieldChange so a no-op edit (typing the same value back)
   // doesn't fire a network update — small UX nicety, also stops
   // accidental "Updated" toasts when the user just tabs through.
@@ -319,9 +341,12 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 3, color: cfg.color, background: cfg.bg }}>
                 {submittal.status}
               </span>
-              {submittal.ball_in_court && (
+              {/* BIC chip — a completed submittal (Released for Fabrication /
+                  Void) has its ball cleared, so show "Closed" rather than a
+                  stale reviewer or nothing. */}
+              {(CLOSED_SUBMITTAL_STATUSES.has(submittal.status ?? "") || submittal.ball_in_court) && (
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 3, color: "var(--text-secondary)", background: "var(--bg-surface-high)" }}>
-                  BIC · {submittal.ball_in_court}
+                  BIC · {CLOSED_SUBMITTAL_STATUSES.has(submittal.status ?? "") ? "Closed" : submittal.ball_in_court}
                 </span>
               )}
               {overdue && (
@@ -602,6 +627,43 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
             onChange={(next: string[]) => onFieldChange && onFieldChange({ linked_rfi_ids: next })}
           />
         </DetailSection>
+
+        {/* Related RFIs (via drawing set) — read-only. RFIs assigned to one of
+            this submittal's drawing sets, surfaced so set-assigned RFIs aren't
+            invisible in the register. DISTINCT from the manual "Linked RFIs"
+            list above; click a chip to open the RFI. Renders nothing when none. */}
+        {relatedSetRfis.length > 0 && (
+          <DetailSection title="Related RFIs (via drawing set)">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {relatedSetRfis.map((rfi: any) => {
+                const num = rfi.rfi_number || rfi.number || "";
+                const title = rfi.title || rfi.subject || "";
+                const label = num && title ? `${num} — ${title}` : num || title || "(untitled RFI)";
+                return (
+                  <button
+                    key={rfi.id}
+                    type="button"
+                    onClick={() => navigate(`${createPageUrl("RFIs")}?id=${rfi.id}`)}
+                    title={`Open ${label}`}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "3px 10px", borderRadius: 999,
+                      background: "var(--bg-surface-high)",
+                      color: "var(--accent)",
+                      border: "1px solid var(--accent)",
+                      fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                      letterSpacing: "0.05em", maxWidth: 360, cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </DetailSection>
+        )}
 
         {/* Linked Tasks */}
         <DetailSection title="Linked Tasks">

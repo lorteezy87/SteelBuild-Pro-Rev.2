@@ -80,11 +80,18 @@ export function runIntake(submittal, allSubmittals, drawingSets, rfis) {
     .map((id) => drawingSets.find((ds) => ds.id === id))
     .filter(Boolean);
 
-  // Related RFIs: match by spec_section OR by shared drawing_set_ids
+  // Related RFIs: match by spec_section OR by shared drawing set. The real
+  // link is the scalar `rfis.drawing_set_id` — the old `rfi.drawing_ids` /
+  // `rfi.drawing_set_ids` columns don't exist, so set-assigned RFIs never
+  // surfaced. Keep the (defensive) array reads for any future multi-link.
   const relatedRFIs = rfis.filter((rfi) => {
     if (submittal.spec_section && rfi.spec_section === submittal.spec_section) return true;
-    const rfiDrawingIds = rfi.drawing_ids || rfi.drawing_set_ids || [];
-    return (submittal.drawing_set_ids || []).some((id) => rfiDrawingIds.includes(id));
+    const rfiSetIds = [
+      ...(rfi.drawing_set_id ? [rfi.drawing_set_id] : []),
+      ...(Array.isArray(rfi.drawing_set_ids) ? rfi.drawing_set_ids : []),
+      ...(Array.isArray(rfi.drawing_ids) ? rfi.drawing_ids : []),
+    ];
+    return (submittal.drawing_set_ids || []).some((id) => rfiSetIds.includes(id));
   });
 
   // Related submittals: same spec_section, different submittal
