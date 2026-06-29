@@ -2,17 +2,21 @@
  * Unit tests for buildFieldHubSummary pure derivation.
  * No React, no network — pure function.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import { buildFieldHubSummary } from "../fieldHubControlCenter.derive";
 import type { DailyLogRecord, InspectionRecord, SafetyIncidentRecord, PunchlistItemRecord } from "../fieldHubControlCenter.derive";
 
 // Pin today to a known date so date-sensitive KPIs are deterministic.
+// MUST be frozen at module scope: this file builds summaries at describe-body
+// scope (line below), which runs at COLLECTION time — before any beforeAll —
+// so a beforeAll clock would be set too late and the summary would use the
+// runner's real date, breaking the "today" KPIs in CI's UTC timezone. The
+// local-time literal (T08:00, no Z) keeps the local calendar date == FROZEN_TODAY
+// in every timezone.
 const FROZEN_TODAY = "2026-06-28";
 
-beforeAll(() => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date(`${FROZEN_TODAY}T08:00:00`));
-});
+vi.useFakeTimers();
+vi.setSystemTime(new Date(`${FROZEN_TODAY}T08:00:00`));
 
 afterAll(() => {
   vi.useRealTimers();
