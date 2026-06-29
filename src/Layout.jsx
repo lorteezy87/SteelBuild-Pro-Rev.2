@@ -38,7 +38,7 @@ import { useDocumentTitleForRoute } from "./components/nav/useDocumentTitleForRo
 
 // Shared components — use lazyWithRetry so stale-chunk 404s after a deploy
 // trigger a single page reload instead of a hard "LOAD ERROR" crash.
-const ModulesDropdown = lazyWithRetry(() => import("./components/nav/ModulesDropdown"));
+const ModuleLauncherGrid = lazyWithRetry(() => import("./components/nav/ModuleLauncherGrid"));
 const GlobalSearchModal = lazyWithRetry(() => import("./components/search/GlobalSearchModal"));
 const MobileDrawer = lazyWithRetry(() => import("./components/nav/MobileDrawer"));
 const Toaster = lazyWithRetry(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
@@ -119,9 +119,8 @@ export default function Layout({ children, currentPageName }) {
   const {
     unreadAlerts,
     unreadCount,
-    alertCounts,
     markAllRead,
-  } = useLayoutNavData(activeProjectId, { includeModuleCounts: gridOpen });
+  } = useLayoutNavData(activeProjectId, { includeModuleCounts: false });
 
   // Page tracking (non-critical)
   useEffect(() => {
@@ -225,6 +224,31 @@ export default function Layout({ children, currentPageName }) {
                   >
                     <Search size={18} strokeWidth={1.8} aria-hidden="true" />
                   </button>
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="sb-dashboard-topbar__icon"
+                      aria-label="All modules"
+                      title="All Modules"
+                      onClick={() => setGridOpen((o) => !o)}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+                        <rect x="0" y="0" width="6" height="6" rx="1.5" />
+                        <rect x="8" y="0" width="6" height="6" rx="1.5" />
+                        <rect x="0" y="8" width="6" height="6" rx="1.5" />
+                        <rect x="8" y="8" width="6" height="6" rx="1.5" />
+                      </svg>
+                    </button>
+                    {gridOpen && (
+                      <Suspense fallback={null}>
+                        <ModuleLauncherGrid
+                          open={gridOpen}
+                          onClose={() => setGridOpen(false)}
+                          onNavigate={handleNavigate}
+                        />
+                      </Suspense>
+                    )}
+                  </div>
                   <BellDropdown
                     alerts={unreadAlerts}
                     unreadCount={unreadCount}
@@ -319,12 +343,10 @@ export default function Layout({ children, currentPageName }) {
 
                 {gridOpen && (
                   <Suspense fallback={null}>
-                    <ModulesDropdown
+                    <ModuleLauncherGrid
                       open={gridOpen}
                       onClose={() => setGridOpen(false)}
                       onNavigate={handleNavigate}
-                      userRole={user?.role}
-                      alertCounts={alertCounts}
                     />
                   </Suspense>
                 )}
