@@ -51,6 +51,7 @@ import {
   unlockSet as unlockSetSvc,
 } from "@/lib/drawingHub";
 import { logActivity } from "@/services/auditLogger";
+import { invalidateEntity } from "@/services/cacheRegistry";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -356,6 +357,10 @@ export default function DrawingViewer() {
       qc.invalidateQueries({ queryKey: ["drawing-revision-current"] });
       qc.invalidateQueries({ queryKey: ["drawing-zones"] });
       qc.invalidateQueries({ queryKey: ["drawing-zones-summaries"] });
+      // createNewRevisionAndCarryZones flipped is_current, so the register +
+      // hub "Rev" column must refresh too (drawing_revision fans out to
+      // ["drawing-revisions"] + ["drawing-register"]).
+      invalidateEntity(qc, "drawing_revision", activeDrawing.project_id);
     } catch (err) {
       toast.error(`Couldn't create revision: ${err?.message || "unknown error"}`);
     }
