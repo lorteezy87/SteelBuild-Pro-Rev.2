@@ -25,12 +25,14 @@ import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
 import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import { DRAFTING_STATES, effectiveDetailingState } from "@/lib/detailingPackageState";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import type { ElementStatusKey, ElementStatusSummary } from "@/services/modelElementStatus";
 import { FAB_STATUS_META, FAB_STATUS_ORDER, summarizeFabStatus } from "@/lib/fabStatus";
 import {
   BIC_CHOICES,
+  CLOSED_SUBMITTAL_STATUSES,
   STATUS_COLORS,
   accent,
   border,
@@ -77,11 +79,13 @@ const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>
 const CycleTimeCard = CycleTimeCardRaw as unknown as ComponentType<AnyProps>;
 const AgingReportTable = AgingReportTableRaw as unknown as ComponentType<AnyProps>;
 // Lazy so the heavy revision/PDF modals only load when a row action fires —
-// they never weigh down the hub chunk on tab open.
-const RevisionUploadModal = lazy(() => import("@/components/drawings/RevisionUploadModal")) as unknown as ComponentType<AnyProps>;
+// they never weigh down the hub chunk on tab open. The upload modals use
+// lazyWithRetry so a stale-chunk 404 after a deploy triggers ONE reload for
+// fresh assets instead of silently failing to open the modal.
+const RevisionUploadModal = lazyWithRetry(() => import("@/components/drawings/RevisionUploadModal")) as unknown as ComponentType<AnyProps>;
 const RevisionImpactReportModal = lazy(() => import("@/components/drawings/RevisionImpactReportModal")) as unknown as ComponentType<AnyProps>;
-const DrawingSetUploadModal = lazy(() => import("@/components/drawings/DrawingSetUploadModal")) as unknown as ComponentType<AnyProps>;
-const DrawingLogImportModal = lazy(() => import("@/components/drawings/DrawingLogImportModal")) as unknown as ComponentType<AnyProps>;
+const DrawingSetUploadModal = lazyWithRetry(() => import("@/components/drawings/DrawingSetUploadModal")) as unknown as ComponentType<AnyProps>;
+const DrawingLogImportModal = lazyWithRetry(() => import("@/components/drawings/DrawingLogImportModal")) as unknown as ComponentType<AnyProps>;
 
 type IconType = ComponentType<{ size?: number | string; color?: string }>;
 
@@ -359,19 +363,41 @@ const ELEMENT_BUCKET_ORDER = [
 
 const DRILLDOWN_ROW_CAP = 100;
 
+// The drill-down can open from EITHER chip row: a detailing-status bucket
+// (resolved via the summary's id sets) or a fabrication-status bucket (resolved
+// by filtering elements on fab_status). The discriminated union keeps the two
+// member-resolution paths + header metas unambiguous.
+type FabStatusKey = keyof typeof FAB_STATUS_META;
+type OpenBucket =
+  | { kind: "detail"; key: ElementStatusKey }
+  | { kind: "fab"; key: FabStatusKey }
+  | null;
+
 function ModelMappingSection({ summary, elements, onImport }: { summary?: ElementStatusSummary | null; elements?: any[]; onImport: () => void }) {
   const total = summary?.total ?? 0;
-  const [openBucket, setOpenBucket] = useState<ElementStatusKey | null>(null);
+  const [openBucket, setOpenBucket] = useState<OpenBucket>(null);
 
-  // Members in the open bucket, resolved via the summary's id sets so the
-  // list always agrees with the chip counts (same engine, same truth).
+  // Members in the open bucket. Detailing buckets resolve via the summary's id
+  // sets so the list always agrees with the chip counts (same engine, same
+  // truth); fab buckets filter elements by fab_status directly (the query layer
+  // already excludes deleted rows; the !is_deleted guard is belt-and-suspenders).
   const bucketMembers = useMemo(() => {
-    if (!openBucket || !summary) return [];
-    const ids = new Set(summary.idsByStatus?.[openBucket] || []);
+    if (!openBucket) return [];
+    if (openBucket.kind === "fab") {
+      const key = openBucket.key;
+      return (elements || []).filter((el) => el?.id && !el.is_deleted && el.fab_status === key);
+    }
+    if (!summary) return [];
+    const ids = new Set(summary.idsByStatus?.[openBucket.key] || []);
     return (elements || []).filter((el) => el?.id && ids.has(String(el.id)));
   }, [openBucket, summary, elements]);
 
-  const openMeta = openBucket ? ELEMENT_STATUS_META[openBucket] : null;
+  // Header meta for the open drill-down: fab buckets use FAB_STATUS_META,
+  // detailing buckets use ELEMENT_STATUS_META. The member table columns are
+  // status-agnostic, so only the header label/color differs.
+  const openMeta = openBucket
+    ? (openBucket.kind === "fab" ? FAB_STATUS_META[openBucket.key] : ELEMENT_STATUS_META[openBucket.key])
+    : null;
   const fab = useMemo(() => summarizeFabStatus(elements || []), [elements]);
 
   return (
@@ -409,13 +435,13 @@ function ModelMappingSection({ summary, elements, onImport }: { summary?: Elemen
               const count = summary?.counts?.[bucket] ?? 0;
               if (!count) return null;
               const meta = ELEMENT_STATUS_META[bucket];
-              const active = openBucket === bucket;
+              const active = openBucket?.kind === "detail" && openBucket.key === bucket;
               return (
                 <button
                   key={bucket}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => setOpenBucket(active ? null : bucket)}
+                  onClick={() => setOpenBucket(active ? null : { kind: "detail", key: bucket })}
                   style={{
                     display: "inline-flex", alignItems: "center", gap: 6,
                     padding: "5px 10px", borderRadius: 999, cursor: "pointer",
@@ -443,12 +469,27 @@ function ModelMappingSection({ summary, elements, onImport }: { summary?: Elemen
                 {FAB_STATUS_ORDER.map((s) => {
                   const count = fab.counts[s] || 0;
                   if (!count) return null;
-                  const meta = FAB_STATUS_META[s as keyof typeof FAB_STATUS_META];
+                  const key = s as FabStatusKey;
+                  const meta = FAB_STATUS_META[key];
+                  const active = openBucket?.kind === "fab" && openBucket.key === key;
                   return (
-                    <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 8px", borderRadius: 999, background: surface2, border: `1px solid ${border}`, fontFamily: mono, fontSize: 10, color: textPrimary }}>
-                      <span style={{ width: 9, height: 9, borderRadius: 2, background: meta.color }} />
-                      {meta.label} <span aria-hidden="true">·</span> <span className="sbd-num">{count}</span>
-                    </span>
+                    <button
+                      key={s}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setOpenBucket(active ? null : { kind: "fab", key })}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "5px 10px", borderRadius: 999, cursor: "pointer",
+                        border: `1px solid color-mix(in srgb, ${meta.color} ${active ? 85 : 45}%, transparent)`,
+                        background: `color-mix(in srgb, ${meta.color} ${active ? 24 : 12}%, transparent)`,
+                        fontFamily: mono, fontSize: 10, color: textPrimary,
+                        outlineOffset: 2,
+                      }}
+                    >
+                      <span style={{ width: 9, height: 9, borderRadius: 2, background: meta.color, flexShrink: 0 }} />
+                      {meta.label} <span aria-hidden="true">·</span> <strong className="sbd-num" style={{ fontSize: 12 }}>{count}</strong>
+                    </button>
                   );
                 })}
               </div>
@@ -546,8 +587,12 @@ function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
       <p style={{ margin: "0 0 12px", color: textMuted, fontSize: 12 }}>
         Detailing progress + fab/erection readiness by erection sequence.
       </p>
-      {rows.length === 0 ? (
-        <EmptyState text="No packages linked to an erection sequence yet — link work packages to drawing sets to populate this." />
+      {rows.length === 0 || rows.every((r) => r.sequence === "Unsequenced") ? (
+        // No REAL sequence exists yet — a lone "Unsequenced" bucket is just a dead
+        // row, so show the actionable hint instead. Once at least one real
+        // sequence exists the trailing Unsequenced bucket stays visible as an
+        // exception (sorted last by computeSequenceReadiness).
+        <EmptyState text="No packages linked to an erection sequence yet — set an Area / Sequence on the drawing set (or link a work package) to populate this." />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {rows.map((row) => (
@@ -1327,6 +1372,36 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
+// Visible fallback for the lazy upload modals. Replaces fallback={null} so a
+// slow or failed chunk load surfaces (the spinner stays up until the chunk
+// loads; a stale-chunk 404 is then caught by lazyWithRetry → one reload)
+// instead of the button appearing to silently do nothing.
+function ModalLoadingFallback() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        gap: 10, background: "color-mix(in srgb, #000 55%, transparent)",
+        fontFamily: mono, fontSize: 12, color: "#fff", letterSpacing: "0.06em",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 16, height: 16, borderRadius: "50%",
+          border: "2px solid rgba(255,255,255,0.35)", borderTopColor: "#fff",
+          animation: "sbp-spin 0.7s linear infinite",
+        }}
+      />
+      Loading…
+      <style>{"@keyframes sbp-spin{to{transform:rotate(360deg)}}"}</style>
+    </div>
+  );
+}
+
 function DueChip({ info: chipInfo, compact = false }: { info: DueInfo; compact?: boolean }) {
   return (
     <span style={{
@@ -1679,7 +1754,7 @@ export function DrawingRegisterTable({
         </div>
         <div style={{ flex: 1 }} />
         {canEdit && (
-          <button type="button" className="sbd-btn sbd-btn-primary" onClick={() => setUploadOpen(true)}>+ Upload Drawings</button>
+          <button type="button" className="sbd-btn sbd-btn-primary cmd-btn cmd-btn--primary" onClick={() => setUploadOpen(true)}>+ Upload Drawings</button>
         )}
         {canEdit && (
           <button type="button" className="sbd-btn" onClick={() => setLogImportOpen(true)}>Import Log</button>
@@ -1790,7 +1865,7 @@ export function DrawingRegisterTable({
       {healthDetail && <HealthBreakdownDialog health={healthDetail} onClose={() => setHealthDetail(null)} />}
 
       {revisionSet && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={() => { onRevisionUploaded?.(revisionSet?.key); setRevisionSet(null); }} activeProject={activeProject} preSelectedSet={revisionSet?.parent || revisionSet} drawingSets={drawingSets} />
         </Suspense>
       )}
@@ -1800,12 +1875,12 @@ export function DrawingRegisterTable({
         </Suspense>
       )}
       {uploadOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <DrawingSetUploadModal open onClose={() => setUploadOpen(false)} onComplete={refetchDrawings} activeProject={activeProject} existingDrawings={allSheets} existingSetNames={existingSetNames} />
         </Suspense>
       )}
       {logImportOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <DrawingLogImportModal open projectId={projectId} projectName={activeProject?.name} onClose={() => setLogImportOpen(false)} onImported={refetchDrawings} />
         </Suspense>
       )}
@@ -2179,7 +2254,7 @@ export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isL
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* ── Analytics (cycle-time + aging) ───────────────────────── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: 16 }}>
-          <CycleTimeCard submittals={submittals} isLoading={isLoading} />
+          <CycleTimeCard submittals={submittals} roundsBySubmittal={roundsBySubmittal} isLoading={isLoading} />
           <AgingReportTable submittals={submittals} isLoading={isLoading} />
         </div>
 
@@ -2351,7 +2426,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }: M
               )}
               {sub.round_number <= 1 && "1"}
             </Td>
-            <Td>{sub.ball_in_court || "—"}</Td>
+            <Td>{CLOSED_SUBMITTAL_STATUSES.has(sub.status ?? "") ? "Closed" : (sub.ball_in_court || "—")}</Td>
             <Td>{fmtDate(sub.submitted_date)}</Td>
             <Td style={overdueStyle}>{fmtDate(getSubmittalDueDate(sub))}</Td>
             <Td>{fmtDate(sub.returned_date)}</Td>
@@ -2378,7 +2453,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }: M
             <Td><StatusChip status={s.status} /></Td>
             <Td><DueChip info={dueInfo(getSubmittalDueDate(s), isClosedSubmittal(s))} /></Td>
             <Td style={{ textAlign: "center" }}>{s.round_number || 1}</Td>
-            <Td>{s.ball_in_court || "—"}</Td>
+            <Td>{CLOSED_SUBMITTAL_STATUSES.has(s.status ?? "") ? "Closed" : (s.ball_in_court || "—")}</Td>
             <Td>{fmtDate(s.submitted_date)}</Td>
             <Td>{fmtDate(getSubmittalDueDate(s))}</Td>
             <Td>{fmtDate(s.returned_date)}</Td>

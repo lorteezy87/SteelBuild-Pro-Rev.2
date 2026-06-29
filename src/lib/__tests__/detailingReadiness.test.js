@@ -60,6 +60,17 @@ describe("computeDetailingReadiness", () => {
     expect(r.scheduleRisk.atRisk).toBe(false); // today (Jan) is well before any milestone
   });
 
+  it("derives sequenceNumber from drawing_sets.area_sequence when there is no work package", () => {
+    const r = computeDetailingReadiness({
+      pkg: { area_sequence: "A-3" },
+      submittals: [],
+      sheets: [],
+    });
+    expect(r.sequenceNumber).toBe("A-3");
+    expect(r.area).toBe("A-3");
+    expect(r.prioritySequence).toBe(true);
+  });
+
   it("flags schedule risk when milestones are overdue and the package is behind", () => {
     const r = computeDetailingReadiness({
       pkg: {}, submittals: [], sheets: [{ stage: "Not Started" }],
