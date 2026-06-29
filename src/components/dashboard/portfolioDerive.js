@@ -428,11 +428,10 @@ export function computePortfolioKPIs(projects, allRFIs, allCOs, allCodes, allWPs
   for (const code of allCodes || []) {
     const budget = Number(code.budget_amount) || 0;
     if (budget <= 0) continue;
-    // NOTE: code.code is undefined on the cost_codes row shape (the column
-    // is cost_code_number) — this lookup currently always misses, so
-    // overBudgetExposure is effectively pinned at 0. Fix is out-of-scope
-    // for this dead-branch cleanup and tracked as a separate task.
-    const actual = spendByCode.get(code.code) || 0;
+    // The cost_codes row identifies its code via cost_code_number (the legacy
+    // `code` column is always NULL on real rows); expenses join by that same
+    // number in expenses.cost_code, which is how spendByCode is keyed above.
+    const actual = spendByCode.get(code.cost_code_number) || 0;
     if (actual > budget) overBudgetExposure += (actual - budget);
   }
 

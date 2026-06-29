@@ -35,7 +35,7 @@ function extractDetails(item) {
 
   details.push({ label: "Type", value: item.itemType });
   details.push({ label: "Urgency", value: item.urgency });
-  details.push({ label: "Status", value: item.displayStatus });
+  details.push({ label: "Status", value: item.displayStatus || item.status });
 
   if (item.owner) details.push({ label: "Owner / Ball-in-Court", value: item.owner });
   if (item.projectNumber || item.projectName) {
@@ -228,7 +228,7 @@ export default function ItemDetailDrawer({ item, onClose }) {
                 marginTop: 2,
               }}
             >
-              {item.urgency} — {item.displayStatus}
+              {item.urgency} — {item.displayStatus || item.status}
             </div>
           </div>
           <button
