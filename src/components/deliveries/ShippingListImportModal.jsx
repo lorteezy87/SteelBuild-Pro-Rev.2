@@ -95,7 +95,12 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
   const commitLoad = async (load) => {
     const weightLbs = load.total_weight_lbs;
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const isHistorical = load.ship_date && new Date(load.ship_date).getTime() <= today.getTime();
+    // Parse the date-only ship_date as a LOCAL date (not UTC): new Date("YYYY-MM-DD")
+    // parses as UTC midnight, so behind UTC a load shipping on the local "today"
+    // would be mis-flagged historical.
+    const sp = load.ship_date ? String(load.ship_date).slice(0, 10).split("-") : null;
+    const shipLocalMs = sp && sp.length === 3 ? new Date(Number(sp[0]), Number(sp[1]) - 1, Number(sp[2])).getTime() : null;
+    const isHistorical = shipLocalMs != null && shipLocalMs <= today.getTime();
     const deliveryPayload = {
       project_id: projectId,
       project_name: projectName || null,
