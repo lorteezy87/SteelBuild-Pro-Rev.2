@@ -121,3 +121,152 @@
   [data-skin="command"] .cmd-kpi-strip { grid-template-columns: repeat(2, 1fr); }
   [data-skin="command"] .cmd-hero { flex-direction: column; align-items: flex-start; }
 }
+
+/* ===========================================================================
+   Detailing Control Center — panel light-palette port
+   ---------------------------------------------------------------------------
+   The Detailing hub's command shell (DetailingCommandShell.tsx) renders the
+   light kit hero/KPI/tabs, then drops the EXISTING tab panels into
+   `.detailing-cc`. Those panels are built on the desktop kit (`desk-*` classes,
+   which are scoped to [data-skin="desktop"]) plus inline `var(--theme)` tokens.
+   Under the command shell ([data-skin="command"], NOT "desktop") the desk-*
+   rules never match — so cards/pills/tables render UNSTYLED — and the inline
+   theme tokens resolve to the global dark/light theme, so text is dark-on-light
+   or invisible. This block makes the panels read as one finished light surface:
+     (a) alias every theme var the panels consume to the kit's light palette;
+     (b) re-declare the desk-*/sbd-* chrome for the command scope.
+   Everything is scoped to `.detailing-cc` so it never touches the sidebar/topbar
+   chrome or any other Control Center. The kit is always-light by design, so we
+   force the light palette regardless of the active data-theme.
+   =========================================================================== */
+
+/* (a) Token alias — theme vars the panels consume → kit light palette. */
+[data-skin="command"] .detailing-cc {
+  --bg-page: var(--cmd-bg);
+  --bg-surface: var(--cmd-surface);
+  --bg-surface-low: #f7f9fc;
+  --bg-surface-high: var(--cmd-surface);
+  --bg-surface-mid: #f1f4f8;
+  --bg-surface-secondary: #f7f9fc;
+  --bg-input: var(--cmd-surface);
+  --bg-hover: #f1f4f8;
+  --nav-hover-bg: #f1f4f8;
+
+  --text-primary: var(--cmd-text);
+  --text-secondary: #3f4a57;
+  --text-muted: var(--cmd-text-muted);
+  --text-disabled: #9aa3af;
+
+  --border: var(--cmd-border);
+  --border-default: var(--cmd-border);
+  --border-strong: #d3d9e1;
+  --divider: var(--cmd-border);
+
+  --accent: var(--cmd-gold);
+  --accent-hover: #d9920a;
+  --accent-muted: #fdf3da;
+  --accent-border: #f0d79a;
+
+  --status-success: var(--cmd-good);
+  --status-warning: var(--cmd-warn);
+  --status-error: var(--cmd-danger);
+  --status-info: var(--cmd-info);
+  --status-review: var(--cmd-review);
+  --success: var(--cmd-good);
+  --warning: var(--cmd-warn);
+  --danger: var(--cmd-danger);
+  --info: var(--cmd-info);
+  --success-muted: #e3f5ea;
+  --warning-muted: #fdf1dc;
+  --danger-muted: #fae4e3;
+  --info-muted: #e6effb;
+  --success-border: #bce6cc;
+  --warning-border: #f5dca6;
+  --danger-border: #f3c6c2;
+  --info-border: #cfe0f8;
+
+  --shadow-card: 0 4px 18px rgba(15, 23, 42, 0.08);
+}
+
+/* (b) desk-* chrome — re-declared for the command scope (the [data-skin="desktop"]
+   rules don't apply here). Layout mirrors desktop.css; colors → kit light. */
+[data-skin="command"] .detailing-cc .desk-section-card {
+  border-radius: 14px;
+  border: 1px solid var(--cmd-border);
+  background: var(--cmd-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+[data-skin="command"] .detailing-cc .desk-section-card__head {
+  display: flex; align-items: center; gap: 7px; padding: 11px 14px;
+  border-bottom: 1px solid var(--cmd-border); color: #3f4a57;
+  font-size: 12px; font-weight: 600;
+}
+[data-skin="command"] .detailing-cc .desk-section-card__title { flex: 0 1 auto; }
+[data-skin="command"] .detailing-cc .desk-section-card__action { margin-left: auto; font-size: 11px; color: var(--cmd-text-muted); }
+[data-skin="command"] .detailing-cc .desk-section-card__body { padding: 14px; }
+
+/* Status pills — 12 desktop tones collapsed onto the kit's 4 semantic chips. */
+[data-skin="command"] .detailing-cc .desk-status-pill {
+  font-size: 10px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
+  display: inline-block; background: #eef1f5; color: #4a5560;
+}
+[data-skin="command"] .detailing-cc .desk-status-pill--open,
+[data-skin="command"] .detailing-cc .desk-status-pill--atrisk,
+[data-skin="command"] .detailing-cc .desk-status-pill--needsaction { background: #fdf1dc; color: var(--cmd-warn); }
+[data-skin="command"] .detailing-cc .desk-status-pill--review,
+[data-skin="command"] .detailing-cc .desk-status-pill--inreview,
+[data-skin="command"] .detailing-cc .desk-status-pill--fieldready { background: #e6effb; color: var(--cmd-info); }
+[data-skin="command"] .detailing-cc .desk-status-pill--done,
+[data-skin="command"] .detailing-cc .desk-status-pill--approved,
+[data-skin="command"] .detailing-cc .desk-status-pill--fabready { background: #e3f5ea; color: var(--cmd-good); }
+[data-skin="command"] .detailing-cc .desk-status-pill--danger,
+[data-skin="command"] .detailing-cc .desk-status-pill--overdue,
+[data-skin="command"] .detailing-cc .desk-status-pill--blocked { background: #fae4e3; color: var(--cmd-danger); }
+
+/* Tables (both the desk-table and sbd-table codepaths in the register). */
+[data-skin="command"] .detailing-cc .desk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+[data-skin="command"] .detailing-cc .desk-table th {
+  text-align: left; font-size: 9px; letter-spacing: .5px; text-transform: uppercase;
+  color: var(--cmd-text-muted); font-weight: 700; padding: 8px 10px;
+  border-bottom: 1px solid var(--cmd-border); background: #f7f9fc;
+}
+[data-skin="command"] .detailing-cc .desk-table td { padding: 9px 10px; border-bottom: 1px solid var(--cmd-border); color: #3f4a57; }
+[data-skin="command"] .detailing-cc .desk-table tbody tr:hover td { background: #f7f9fc; }
+[data-skin="command"] .detailing-cc .desk-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+[data-skin="command"] .detailing-cc .sbd-table tbody tr:hover { background: #f7f9fc; }
+
+/* Buttons used inside panels. */
+[data-skin="command"] .detailing-cc .desk-btn-primary,
+[data-skin="command"] .detailing-cc .sbd-btn-primary {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--cmd-gold);
+  color: #20160a; border: 1px solid var(--cmd-gold); border-radius: 8px;
+  font-weight: 600; font-size: 12px; padding: 8px 14px; cursor: pointer;
+}
+[data-skin="command"] .detailing-cc .desk-btn-secondary,
+[data-skin="command"] .detailing-cc .sbd-btn,
+[data-skin="command"] .detailing-cc .sbd-btn-ghost {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--cmd-surface);
+  color: var(--cmd-text); border: 1px solid var(--cmd-border); border-radius: 8px;
+  font-size: 12px; padding: 8px 14px; cursor: pointer;
+}
+[data-skin="command"] .detailing-cc .desk-btn-danger {
+  display: inline-flex; align-items: center; gap: 6px; background: #fae4e3;
+  color: var(--cmd-danger); border: 1px solid #f3c6c2; border-radius: 8px;
+  font-size: 12px; padding: 8px 14px; cursor: pointer;
+}
+
+/* Empty / loading states + badges. */
+[data-skin="command"] .detailing-cc .desk-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 36px 20px; color: var(--cmd-text-muted); }
+[data-skin="command"] .detailing-cc .desk-state__title { font-size: 14px; font-weight: 600; color: #3f4a57; }
+[data-skin="command"] .detailing-cc .desk-state__msg { font-size: 12px; color: var(--cmd-text-muted); max-width: 360px; }
+[data-skin="command"] .detailing-cc .desk-skeleton { background: linear-gradient(90deg, rgba(30,41,59,.06), rgba(30,41,59,.12), rgba(30,41,59,.06)); background-size: 200% 100%; border-radius: 6px; animation: desk-shimmer 1.3s ease-in-out infinite; }
+[data-skin="command"] .detailing-cc .sbd-badge-info { background: #e6effb; color: var(--cmd-info); border: 1px solid #cfe0f8; }
+
+/* sbd-* cards — replace the dark white-alpha inset shadows with light ones. */
+[data-skin="command"] .detailing-cc .sbd-card,
+[data-skin="command"] .detailing-cc .sbd-card-strong {
+  background: var(--cmd-surface);
+  border: 1px solid var(--cmd-border);
+  box-shadow: inset 0 1px 0 rgba(30, 41, 59, 0.04), 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+}
