@@ -14,7 +14,7 @@
  * Rendering is local pdfjs — the PDFs never leave the browser.
  */
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertTriangle, ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
@@ -29,6 +29,7 @@ import { buildRfiPrefillFromDelta, createRfiAndLink } from "@/lib/rfiFromDelta";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useAppSecurity } from "@/components/shared/useAppSecurity";
 import { ensureCurrentRevision } from "@/lib/drawingHub";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import { daysBetween, todayLocalISO } from "@/lib/dateMath";
 import {
   generateRevisionDiff,
@@ -371,14 +372,18 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
     return null;
   }, [drawing]);
 
+  const qc = useQueryClient();
   const resolveRevisionId = useCallback(async (cand) => {
     if (!cand) return null;
     if (cand.key !== "current") return cand.key; // already a drawing_revisions id
     const cur = revisionRows.find((r) => r.is_current);
     if (cur?.id) return cur.id;
     const minted = await ensureCurrentRevision({ drawing, userId: user?.id || null });
+    // Provisioned a current revision on demand — refresh the register/hub
+    // revision caches so the new row shows without a manual reload.
+    if (minted?.__provisioned && drawing?.project_id) invalidateEntity(qc, "drawing_revision", drawing.project_id);
     return minted?.id || null;
-  }, [revisionRows, drawing, user]);
+  }, [revisionRows, drawing, user, qc]);
 
   const runAiDiff = async (force = false) => {
     if (!oldSel || !newSel) return;

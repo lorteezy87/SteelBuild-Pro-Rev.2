@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
+import { AuthContext } from "@/lib/AuthContext";
+import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
 
 // Comment-resolution status (migration 073). Cycle matches the markup
 // status (3a) palette so resolution semantics read the same across
@@ -64,6 +66,16 @@ export default function CommentThread({
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const scrollerRef = useRef(null);
+
+  // Author-or-PM write boundary. Mirrors the server RLS (comments_update /
+  // comments_delete: author OR project pm+). We read the context optionally so
+  // the thread still renders in tests / trees without an AuthProvider. UI gating
+  // only — RLS stays the authoritative guard; this just hides affordances that
+  // would otherwise fail with a confusing error toast.
+  const auth = useContext(AuthContext);
+  const currentUserId = auth?.user?.id || null;
+  const { role: projectRole } = useProjectRole(projectId);
+  const canModerate = roleAtLeast(projectRole, "pm");
 
   // Fetch
   const { data: comments = [], isLoading } = useQuery({
@@ -215,7 +227,13 @@ export default function CommentThread({
           </div>
         )}
         {comments.map((c) => (
-          <CommentRow key={c.id} c={c} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
+          <CommentRow
+            key={c.id}
+            c={c}
+            canModify={canModerate || (!!currentUserId && c.author_id === currentUserId)}
+            onDelete={handleDelete}
+            onCycleStatus={handleCycleStatus}
+          />
         ))}
       </div>
 
@@ -271,12 +289,29 @@ export default function CommentThread({
 
 // ── Private ────────────────────────────────────────────────────────────────
 
-function CommentRow({ c, onDelete, onCycleStatus }) {
+function CommentRow({ c, canModify = false, onDelete, onCycleStatus }) {
   const [hovering, setHovering] = useState(false);
   const when = useMemo(() => formatRelative(c.created_at), [c.created_at]);
   const statusKey = c.status || "open";
   const statusColor = COMMENT_STATUS_COLOR[statusKey] || COMMENT_STATUS_COLOR.open;
   const statusLabel = COMMENT_STATUS_LABEL[statusKey] || statusKey.toUpperCase();
+  const statusIcon = statusKey === "addressed" ? "✓" : statusKey === "rejected" ? "✗" : statusKey === "clarification" ? "?" : "○";
+  // Shared badge style; only the cursor + element type differ between the
+  // interactive (author/pm) and read-only (everyone else) variants.
+  const statusBadgeStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    padding: "1px 7px",
+    borderRadius: 8,
+    background: statusColor,
+    color: "#fff",
+    border: "none",
+    fontFamily: "var(--font-mono)",
+    fontSize: 8,
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+  };
   return (
     <div
       onMouseEnter={() => setHovering(true)}
@@ -309,31 +344,28 @@ function CommentRow({ c, onDelete, onCycleStatus }) {
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: "auto" }}>
           {when}
         </span>
-        <button
-          type="button"
-          onClick={() => onCycleStatus?.(c)}
-          title={`Status: ${statusLabel.toLowerCase()} — click to cycle`}
-          aria-label={`Comment status: ${statusKey} — click to cycle`}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 3,
-            padding: "1px 7px",
-            borderRadius: 8,
-            background: statusColor,
-            color: "#fff",
-            border: "none",
-            cursor: "pointer",
-            fontFamily: "var(--font-mono)",
-            fontSize: 8,
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-          }}
-        >
-          <span aria-hidden="true">{statusKey === "addressed" ? "✓" : statusKey === "rejected" ? "✗" : statusKey === "clarification" ? "?" : "○"}</span>
-          {statusLabel}
-        </button>
-        {hovering && (
+        {canModify ? (
+          <button
+            type="button"
+            onClick={() => onCycleStatus?.(c)}
+            title={`Status: ${statusLabel.toLowerCase()} — click to cycle`}
+            aria-label={`Comment status: ${statusKey} — click to cycle`}
+            style={{ ...statusBadgeStyle, cursor: "pointer" }}
+          >
+            <span aria-hidden="true">{statusIcon}</span>
+            {statusLabel}
+          </button>
+        ) : (
+          <span
+            title={`Status: ${statusLabel.toLowerCase()}`}
+            aria-label={`Comment status: ${statusKey}`}
+            style={{ ...statusBadgeStyle, cursor: "default" }}
+          >
+            <span aria-hidden="true">{statusIcon}</span>
+            {statusLabel}
+          </span>
+        )}
+        {hovering && canModify && (
           <button
             onClick={() => onDelete(c.id)}
             title="Delete comment"
