@@ -12,6 +12,7 @@ import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -131,6 +132,9 @@ export default function WorkPackages() {
   const invalidateWps = () => {
     qc.invalidateQueries({ queryKey: ["work-packages"] });
     qc.invalidateQueries({ queryKey: ["wps-all"] });
+    // Fan out the full work_package family (incl. ["wps-fab", projectId] read by
+    // FabRelease) so a WP mutation doesn't leave sibling pages stale.
+    void invalidateEntity(qc, "work_package", projectId);
   };
 
   const updateWPMut = useMutation({
