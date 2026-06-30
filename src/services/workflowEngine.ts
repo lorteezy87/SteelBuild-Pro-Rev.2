@@ -74,7 +74,8 @@ export interface TransitionAudit {
 
 // ─── Role hierarchy (lower = more privileged) ──────────────────────────
 const ROLE_RANK: Record<WorkflowRole, number> & Record<string, number> = {
-  admin: 0,
+  owner: 0, // owner == admin (highest privilege); was missing, so owners resolved to
+  admin: 0, // rank 99 and failed every role-gated transition.
   pm: 1,
   field: 2,
   viewer: 3,
