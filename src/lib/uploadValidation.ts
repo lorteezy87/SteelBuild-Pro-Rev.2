@@ -63,7 +63,7 @@ export const DANGEROUS_EXTENSIONS: ReadonlySet<string> = new Set([
   "sh", "bash", "zsh", "ksh", "csh", "run", "bin", "out", "elf",
   "app", "dmg", "pkg", "deb", "rpm", "apk", "jar", "jnlp",
   // Server/web script payloads
-  "js", "mjs", "cjs", "jse", "php", "phar", "phtml", "php3", "php4", "php5",
+  "js", "mjs", "cjs", "mts", "cts", "jse", "wasm", "php", "phar", "phtml", "php3", "php4", "php5",
   "asp", "aspx", "jsp", "jspx", "cgi", "pl", "py", "pyc", "rb",
   "html", "htm", "xhtml", "shtml", "swf",
 ]);

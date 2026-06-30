@@ -105,6 +105,14 @@ describe("validateUpload — dangerous extensions blocked everywhere", () => {
     }
   });
 
+  it("blocks the TS module + wasm variants that bypass the js/mjs/cjs entries", () => {
+    for (const ext of ["mts", "cts", "wasm"]) {
+      const r = validateUpload(f(`payload.${ext}`), "default");
+      expect(r.ok).toBe(false);
+      expect(r.error).toMatch(/security/i);
+    }
+  });
+
   it("blocks dangerous extensions even inside a broad workflow", () => {
     expect(validateUpload(f("payload.exe"), "documents").ok).toBe(false);
     expect(validateUpload(f("payload.js"), "attachment").ok).toBe(false);
@@ -115,7 +123,7 @@ describe("validateUpload — dangerous extensions blocked everywhere", () => {
   });
 
   it("the dangerous set covers the obvious offenders", () => {
-    ["exe", "bat", "sh", "js", "vbs", "ps1", "jar", "php", "html"].forEach((e) =>
+    ["exe", "bat", "sh", "js", "vbs", "ps1", "jar", "php", "html", "mts", "cts", "wasm"].forEach((e) =>
       expect(DANGEROUS_EXTENSIONS.has(e)).toBe(true),
     );
   });
