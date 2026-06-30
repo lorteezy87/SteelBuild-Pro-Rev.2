@@ -675,7 +675,6 @@ function GroupRow({
               a.aggregateStatus === "approved"       ? "var(--status-success)"
             : a.aggregateStatus === "rejected"       ? "var(--status-error)"
             : a.aggregateStatus === "pending_review" ? "var(--status-warning)"
-            : a.aggregateStatus === "superseded"     ? "var(--text-muted)"
             :                                          "var(--text-muted)",
             background:
               a.aggregateStatus === "approved"       ? "rgba(16,185,129,0.12)"

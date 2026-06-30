@@ -284,7 +284,7 @@ export function parseRfiCsv(csvText, { fileName = "" } = {}) {
     const dSub = pick("date_submitted");
     const dReq = pick("date_required");
     const dAns = pick("date_answered");
-    const job  = pick("job_number" in idx ? "job_number" : "job_number");
+    const job  = pick("job_number");
 
     if (job) jobNumbers.add(job.replace(/\D+/g, ""));
 

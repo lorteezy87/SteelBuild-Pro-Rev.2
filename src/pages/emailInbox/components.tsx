@@ -169,7 +169,7 @@ export function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, on
           lineHeight: 1.35,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           marginTop: 2,
-          fontStyle: aiSummary ? "normal" : "normal",
+          fontStyle: "normal",
         }}>
           {aiSummary || bodyPreview || "No content"}
         </div>

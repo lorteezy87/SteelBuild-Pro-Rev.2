@@ -368,11 +368,7 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
           : "var(--text-muted)";
 
   const statusLabel =
-    project.phase === "Closeout"
-      ? "Complete"
-      : project.phase
-        ? "Active"
-        : "Active";
+    project.phase === "Closeout" ? "Complete" : "Active";
 
   const statusColor =
     statusLabel === "Complete"

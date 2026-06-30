@@ -139,7 +139,7 @@ export default function InlineEditField({
           padding: "2px 6px",
           textAlign: "left",
           width: "100%",
-          justifyContent: display === "value" ? "flex-start" : "flex-start",
+          justifyContent: "flex-start",
         }}
         onMouseEnter={(e) => {
           if (!project?.id) return;
