@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { computeCostCodeTotals, computeRevisedContractValue } from "../costRollup";
+import { computeCostCodeTotals, computeRevisedContractValue, preferManualActual } from "../costRollup";
+
+describe("preferManualActual", () => {
+  it("uses the typed-in manual figure when it is set (> 0)", () => {
+    expect(preferManualActual(7755, 1208)).toBe(7755); // manual wins over expenses
+    expect(preferManualActual("5000", 200)).toBe(5000); // string column coerced
+  });
+  it("falls back to the expense rollup when the manual figure is unset / 0 / invalid", () => {
+    expect(preferManualActual(0, 5291)).toBe(5291);
+    expect(preferManualActual(null, 5291)).toBe(5291);
+    expect(preferManualActual(undefined, 714)).toBe(714);
+    expect(preferManualActual("", 714)).toBe(714);
+    expect(preferManualActual(-100, 714)).toBe(714); // negative is not a valid manual actual
+  });
+  it("never sums the two paths (no double-counting)", () => {
+    // manual 7755 + expense 1208 must NOT produce 8963
+    expect(preferManualActual(7755, 1208)).toBe(7755);
+  });
+});
 
 describe("computeCostCodeTotals", () => {
   it("sums the cost-code columns and derives variance + eac", () => {

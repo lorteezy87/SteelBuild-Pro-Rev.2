@@ -424,7 +424,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
       <CostCodeForm
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditingCode(null); }}
-        costCode={editingCode}
+        costCode={editingCode ? (costCodes.find((c) => c.id === editingCode.id) ?? editingCode) : null}
         projects={project ? [project] : []}
         existingCodes={costCodes}
         onSave={(data: Record<string, unknown>) => {

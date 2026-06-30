@@ -8,10 +8,11 @@
  * financial math). This centralizes that exact arithmetic so every surface
  * shows the same totals from one tested implementation.
  *
- * NOTE: this is the COLUMN rollup (trusts the denormalized cost_code columns).
- * The Budget Control page (Financials.jsx) deliberately uses a *different*,
- * expense-derived model for per-row actual/committed — that is intentional and
- * is NOT replaced here.
+ * NOTE: computeCostCodeTotals here is the COLUMN rollup (sums the denormalized
+ * cost_code columns). Per-row actual/committed on the cost pages instead use
+ * preferManualActual() (below) — a typed-in column figure wins, else the
+ * expense rollup — shared by Cost Control Center, Cost Dashboard, and Budget
+ * Control so all three agree.
  */
 
 export interface CostCodeLike {
@@ -36,6 +37,19 @@ export interface CostCodeTotals {
 function num(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Resolve a cost code's effective actual (or committed): a manually-entered
+ * figure typed onto the cost code (the column) WINS when set (> 0); otherwise
+ * the value rolled up from its expenses is used. Never sums the two — no
+ * double-counting. User-chosen model 2026-06-30 ("typed-in number wins, fall
+ * back to expenses"). Shared so Cost Control Center, Cost Dashboard, and Budget
+ * Control all resolve per-code actual/committed identically.
+ */
+export function preferManualActual(manualColumn: unknown, expenseRollup: number): number {
+  const manual = num(manualColumn);
+  return manual > 0 ? manual : expenseRollup;
 }
 
 export interface ProjectContractLike {

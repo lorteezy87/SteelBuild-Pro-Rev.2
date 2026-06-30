@@ -20,7 +20,7 @@ import { entities } from "@/api/supabaseClient";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
-import { computeRevisedContractValue } from "@/services/costRollup";
+import { computeRevisedContractValue, preferManualActual } from "@/services/costRollup";
 import { COST_CODES } from "@/components/shared/costCodes";
 import { calcEVM } from "@/utils/projectKpis";
 
@@ -177,11 +177,20 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
         (e) => e.cost_code === cc.cost_code_number
       );
 
-      const actualCost = relatedExpenses
+      // Actual/Committed prefer a MANUALLY-entered figure typed onto the cost
+      // code (cc.actual_cost / cc.committed_cost columns) when the user set one
+      // (> 0); otherwise they roll up from this code's expenses. This lets a PM
+      // either type a summary actual directly OR let logged expenses drive it,
+      // without double-counting. (User-chosen model 2026-06-30: "typed-in number
+      // wins, fall back to expenses." Previously expenses always won, so a typed
+      // actual saved to the column but never displayed → looked like it "didn't save".)
+      const expenseActual = relatedExpenses
         .filter((e) => e.payment_status === "Paid")
         .reduce((s, e) => s + safeNumber(e.amount), 0);
+      const expenseCommitted = relatedExpenses.reduce((s, e) => s + safeNumber(e.amount), 0);
 
-      const committedCost = relatedExpenses.reduce((s, e) => s + safeNumber(e.amount), 0);
+      const actualCost = preferManualActual(cc.actual_cost, expenseActual);
+      const committedCost = preferManualActual(cc.committed_cost, expenseCommitted);
 
       const signedExtras = coByCostCodeId[cc.id] || 0;
       const revisedBudget = safeNumber(cc.budget_amount) + signedExtras;
