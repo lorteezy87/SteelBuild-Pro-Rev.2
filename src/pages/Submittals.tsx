@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { lockLinkedSetsIfApproved, addSubmittalRound } from "@/hooks/useSubmittals";
 import { logActivity, logTransition } from "@/services/auditLogger";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { localToday } from "@/utils/dates";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -194,6 +195,10 @@ export default function Submittals() {
     // Status moves can auto-queue a detailing task (submittalSmartTriggers).
     qc.invalidateQueries({ queryKey: ["action-items", projectId] });
     qc.invalidateQueries({ queryKey: ["action-items"] });
+    // Approving/releasing a submittal auto-locks its linked drawing sets
+    // (lockLinkedSetsIfApproved). Fan out the drawingSet family so the Doc Control
+    // grid + Hub register (drawing_register_view) reflect the lock immediately.
+    void invalidateEntity(qc, "drawingSet", projectId);
   }, [qc, projectId]);
 
   const createMut = useMutation({
