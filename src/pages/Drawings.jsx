@@ -58,6 +58,7 @@ import RevisionCompareModal from "@/components/drawings/RevisionCompareModal";
 import RevisionImpactReportModal from "@/components/drawings/RevisionImpactReportModal";
 import ExportFabReleaseModal from "@/components/drawings/ExportFabReleaseModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 // ── Design-system chrome (Claude Design redesign) ─────────────────────────
 import {
@@ -918,6 +919,9 @@ export default function Drawings({ embedded = false } = {}) {
         </div>
       </ErrorBoundary>
       )}
+
+      {/* Surface the silent 2000-row read cap on entities.Drawing.filter (raw `drawings`). */}
+      <ListTruncationNotice count={drawings.length} label="drawings" />
 
       {/* ── Filters ────────────────────────────────────────────────────────── */}
       <DisciplineChips discipline={discipline} setDiscipline={setDiscipline} disciplineCounts={disciplineCounts} />
