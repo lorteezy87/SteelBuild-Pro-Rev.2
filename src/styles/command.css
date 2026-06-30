@@ -10,11 +10,11 @@
   --cmd-text: #1b2430;
   --cmd-text-muted: #6b7585;
   --cmd-gold: #f2a706;
-  --cmd-good: #1f9d57;
-  --cmd-warn: #c9810b;
-  --cmd-danger: #d8463d;
-  --cmd-info: #2f6fd0;
-  --cmd-review: #6b54c8;
+  --cmd-good: #178a4b;
+  --cmd-warn: #b0730a;
+  --cmd-danger: #c4231d;
+  --cmd-info: #2160c4;
+  --cmd-review: #5a44c2;
   background: var(--cmd-bg);
   color: var(--cmd-text);
 }
@@ -40,11 +40,11 @@
 [data-skin="command"] .cmd-hero__subtitle { margin: 3px 0 11px; max-width: 520px; color: var(--cmd-text-muted); font-size: 13px; }
 [data-skin="command"] .cmd-hero__chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 [data-skin="command"] .cmd-hero__project { font-weight: 600; font-size: 13px; color: var(--cmd-text); }
-[data-skin="command"] .cmd-chip { padding: 3px 10px; border-radius: 999px; background: #eef1f5; color: var(--cmd-text-muted); font-size: 12px; }
-[data-skin="command"] .cmd-chip--good { background: #e3f5ea; color: var(--cmd-good); }
-[data-skin="command"] .cmd-chip--warn { background: #fdf1dc; color: var(--cmd-warn); }
-[data-skin="command"] .cmd-chip--danger { background: #fae4e3; color: var(--cmd-danger); }
-[data-skin="command"] .cmd-chip--info { background: #e6effb; color: var(--cmd-info); }
+[data-skin="command"] .cmd-chip { padding: 3px 10px; border-radius: 999px; background: #e9edf2; color: var(--cmd-text-muted); font-size: 12px; }
+[data-skin="command"] .cmd-chip--good { background: #d6f0de; color: var(--cmd-good); }
+[data-skin="command"] .cmd-chip--warn { background: #fbe5c0; color: var(--cmd-warn); }
+[data-skin="command"] .cmd-chip--danger { background: #f9d2ce; color: var(--cmd-danger); }
+[data-skin="command"] .cmd-chip--info { background: #d7e5fb; color: var(--cmd-info); }
 [data-skin="command"] .cmd-hero__right { display: flex; gap: 12px; }
 [data-skin="command"] .cmd-statcard { min-width: 96px; padding: 10px 14px; border: 1px solid var(--cmd-border); border-radius: 10px; background: var(--cmd-surface); text-align: center; }
 [data-skin="command"] .cmd-statcard__value { font-size: 24px; font-weight: 700; color: var(--cmd-text); }
@@ -58,13 +58,13 @@
 [data-skin="command"] .cmd-kpi__label { font-size: 12px; color: var(--cmd-text); margin-top: 2px; }
 [data-skin="command"] .cmd-kpi__sub { font-size: 11px; color: var(--cmd-text-muted); }
 [data-skin="command"] .cmd-kpi--good .cmd-kpi__value { color: var(--cmd-good); }
-[data-skin="command"] .cmd-kpi--good .cmd-kpi__icon { background: #e3f5ea; color: var(--cmd-good); }
+[data-skin="command"] .cmd-kpi--good .cmd-kpi__icon { background: #d6f0de; color: var(--cmd-good); }
 [data-skin="command"] .cmd-kpi--warn .cmd-kpi__value { color: var(--cmd-warn); }
-[data-skin="command"] .cmd-kpi--warn .cmd-kpi__icon { background: #fdf1dc; color: var(--cmd-warn); }
+[data-skin="command"] .cmd-kpi--warn .cmd-kpi__icon { background: #fbe5c0; color: var(--cmd-warn); }
 [data-skin="command"] .cmd-kpi--danger .cmd-kpi__value { color: var(--cmd-danger); }
-[data-skin="command"] .cmd-kpi--danger .cmd-kpi__icon { background: #fae4e3; color: var(--cmd-danger); }
+[data-skin="command"] .cmd-kpi--danger .cmd-kpi__icon { background: #f9d2ce; color: var(--cmd-danger); }
 [data-skin="command"] .cmd-kpi--info .cmd-kpi__value { color: var(--cmd-info); }
-[data-skin="command"] .cmd-kpi--info .cmd-kpi__icon { background: #e6effb; color: var(--cmd-info); }
+[data-skin="command"] .cmd-kpi--info .cmd-kpi__icon { background: #d7e5fb; color: var(--cmd-info); }
 
 /* Decision panels */
 [data-skin="command"] .cmd-panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
@@ -81,12 +81,12 @@
 
 /* Pills */
 [data-skin="command"] .cmd-pill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-[data-skin="command"] .cmd-pill--neutral { background: #eef1f5; color: #4a5560; }
-[data-skin="command"] .cmd-pill--good { background: #e3f5ea; color: var(--cmd-good); }
-[data-skin="command"] .cmd-pill--warn { background: #fdf1dc; color: var(--cmd-warn); }
-[data-skin="command"] .cmd-pill--danger { background: #fae4e3; color: var(--cmd-danger); }
-[data-skin="command"] .cmd-pill--info { background: #e6effb; color: var(--cmd-info); }
-[data-skin="command"] .cmd-pill--review { background: #ece8fb; color: var(--cmd-review); }
+[data-skin="command"] .cmd-pill--neutral { background: #e9edf2; color: #3d4753; }
+[data-skin="command"] .cmd-pill--good { background: #d6f0de; color: var(--cmd-good); }
+[data-skin="command"] .cmd-pill--warn { background: #fbe5c0; color: var(--cmd-warn); }
+[data-skin="command"] .cmd-pill--danger { background: #f9d2ce; color: var(--cmd-danger); }
+[data-skin="command"] .cmd-pill--info { background: #d7e5fb; color: var(--cmd-info); }
+[data-skin="command"] .cmd-pill--review { background: #e3dcfa; color: var(--cmd-review); }
 
 /* Filter bar + buttons */
 [data-skin="command"] .cmd-filterbar { display: flex; gap: 10px; align-items: center; background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; padding: 10px 12px; }
@@ -176,10 +176,10 @@
   --warning: var(--cmd-warn);
   --danger: var(--cmd-danger);
   --info: var(--cmd-info);
-  --success-muted: #e3f5ea;
-  --warning-muted: #fdf1dc;
-  --danger-muted: #fae4e3;
-  --info-muted: #e6effb;
+  --success-muted: #d6f0de;
+  --warning-muted: #fbe5c0;
+  --danger-muted: #f9d2ce;
+  --info-muted: #d7e5fb;
   --success-border: #bce6cc;
   --warning-border: #f5dca6;
   --danger-border: #f3c6c2;
@@ -209,20 +209,20 @@
 /* Status pills — 12 desktop tones collapsed onto the kit's 4 semantic chips. */
 [data-skin="command"] .detailing-cc .desk-status-pill {
   font-size: 10px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
-  display: inline-block; background: #eef1f5; color: #4a5560;
+  display: inline-block; background: #e9edf2; color: #3d4753;
 }
 [data-skin="command"] .detailing-cc .desk-status-pill--open,
 [data-skin="command"] .detailing-cc .desk-status-pill--atrisk,
-[data-skin="command"] .detailing-cc .desk-status-pill--needsaction { background: #fdf1dc; color: var(--cmd-warn); }
+[data-skin="command"] .detailing-cc .desk-status-pill--needsaction { background: #fbe5c0; color: var(--cmd-warn); }
 [data-skin="command"] .detailing-cc .desk-status-pill--review,
 [data-skin="command"] .detailing-cc .desk-status-pill--inreview,
-[data-skin="command"] .detailing-cc .desk-status-pill--fieldready { background: #e6effb; color: var(--cmd-info); }
+[data-skin="command"] .detailing-cc .desk-status-pill--fieldready { background: #d7e5fb; color: var(--cmd-info); }
 [data-skin="command"] .detailing-cc .desk-status-pill--done,
 [data-skin="command"] .detailing-cc .desk-status-pill--approved,
-[data-skin="command"] .detailing-cc .desk-status-pill--fabready { background: #e3f5ea; color: var(--cmd-good); }
+[data-skin="command"] .detailing-cc .desk-status-pill--fabready { background: #d6f0de; color: var(--cmd-good); }
 [data-skin="command"] .detailing-cc .desk-status-pill--danger,
 [data-skin="command"] .detailing-cc .desk-status-pill--overdue,
-[data-skin="command"] .detailing-cc .desk-status-pill--blocked { background: #fae4e3; color: var(--cmd-danger); }
+[data-skin="command"] .detailing-cc .desk-status-pill--blocked { background: #f9d2ce; color: var(--cmd-danger); }
 
 /* Tables (both the desk-table and sbd-table codepaths in the register). */
 [data-skin="command"] .detailing-cc .desk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -251,7 +251,7 @@
   font-size: 12px; padding: 8px 14px; cursor: pointer;
 }
 [data-skin="command"] .detailing-cc .desk-btn-danger {
-  display: inline-flex; align-items: center; gap: 6px; background: #fae4e3;
+  display: inline-flex; align-items: center; gap: 6px; background: #f9d2ce;
   color: var(--cmd-danger); border: 1px solid #f3c6c2; border-radius: 8px;
   font-size: 12px; padding: 8px 14px; cursor: pointer;
 }
@@ -261,7 +261,7 @@
 [data-skin="command"] .detailing-cc .desk-state__title { font-size: 14px; font-weight: 600; color: #3f4a57; }
 [data-skin="command"] .detailing-cc .desk-state__msg { font-size: 12px; color: var(--cmd-text-muted); max-width: 360px; }
 [data-skin="command"] .detailing-cc .desk-skeleton { background: linear-gradient(90deg, rgba(30,41,59,.06), rgba(30,41,59,.12), rgba(30,41,59,.06)); background-size: 200% 100%; border-radius: 6px; animation: desk-shimmer 1.3s ease-in-out infinite; }
-[data-skin="command"] .detailing-cc .sbd-badge-info { background: #e6effb; color: var(--cmd-info); border: 1px solid #cfe0f8; }
+[data-skin="command"] .detailing-cc .sbd-badge-info { background: #d7e5fb; color: var(--cmd-info); border: 1px solid #cfe0f8; }
 
 /* sbd-* cards — replace the dark white-alpha inset shadows with light ones. */
 [data-skin="command"] .detailing-cc .sbd-card,
