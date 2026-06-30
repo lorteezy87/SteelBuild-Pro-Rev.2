@@ -21,7 +21,7 @@ import {
   Star,
 } from "lucide-react";
 import { PAGE_ICON, FallbackIcon } from "@/config/pageIcons";
-import { SIDEBAR_GROUPS, saveSidebarState } from "@/config/moduleRegistry";
+import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTheme } from "@/components/shared/ThemeContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
@@ -50,14 +50,6 @@ function saveRecents(pages) {
 
 // ── Favorites persistence ───────────────────────────────────────────
 const FAVORITES_LS_KEY = "sbp-sidebar-favorites";
-// The dashboard-reference sidebar now mirrors the full sidebar registry so every
-// module stays reachable from the rail (previously a hardcoded 12-item list that
-// dropped Expenses, Work Packages, Fab Release, SOV, Pay Applications, Backcharge
-// Defense, Procurement, Production Status, Vendors, Integrations, Data Exchange…).
-// Settings stays in the footer shortcut below, so skip it here to avoid a dupe row.
-const DASHBOARD_REFERENCE_ITEMS = SIDEBAR_GROUPS.flatMap((group) => group.items).filter(
-  (item) => item.page !== "Settings",
-);
 
 function loadFavorites() {
   try {
@@ -563,6 +555,37 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
 
 function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
   const [collapsed, setCollapsed] = useState(false);
+  // Per-category collapse, persisted in the shared sidebar group state
+  // (localStorage "sbp-nav-groups"). A missing/falsy entry means expanded.
+  const [groupCollapsed, setGroupCollapsed] = useState(loadSidebarState);
+
+  const toggleGroup = useCallback((label) => {
+    setGroupCollapsed((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      saveSidebarState(next);
+      return next;
+    });
+  }, []);
+
+  const renderItem = (item) => {
+    const Icon = PAGE_ICON[item.page] || FallbackIcon;
+    const active = currentPageName === item.page
+      || (item.page === "DrawingSubmittalHub" && ["Drawings", "Submittals"].includes(currentPageName));
+    return (
+      <button
+        key={item.page}
+        type="button"
+        className={`sb-dashboard-reference-nav__item${active ? " is-active" : ""}`}
+        aria-current={active ? "page" : undefined}
+        onClick={() => onNavigate(item.page)}
+        onMouseEnter={() => prefetchRoute(item.page)}
+        onFocus={() => prefetchRoute(item.page)}
+      >
+        <Icon size={15} strokeWidth={1.85} />
+        <span>{item.label}</span>
+      </button>
+    );
+  };
 
   return (
     <aside aria-label="Dashboard navigation" className={`sb-dashboard-reference-sidebar${collapsed ? " is-collapsed" : ""}`}>
@@ -576,23 +599,29 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
       </button>
 
       <nav className="sb-dashboard-reference-nav">
-        {DASHBOARD_REFERENCE_ITEMS.map((item) => {
-          const Icon = PAGE_ICON[item.page] || FallbackIcon;
-          const active = currentPageName === item.page
-            || (item.page === "DrawingSubmittalHub" && ["Drawings", "Submittals"].includes(currentPageName));
+        {SIDEBAR_GROUPS.map((group) => {
+          const isGroupCollapsed = group.collapsible && !!groupCollapsed[group.label];
+          // In rail (icon-only) mode show every item; headers are hidden via CSS.
+          const showItems = collapsed || !isGroupCollapsed;
           return (
-            <button
-              key={item.page}
-              type="button"
-              className={`sb-dashboard-reference-nav__item${active ? " is-active" : ""}`}
-              aria-current={active ? "page" : undefined}
-              onClick={() => onNavigate(item.page)}
-              onMouseEnter={() => prefetchRoute(item.page)}
-              onFocus={() => prefetchRoute(item.page)}
-            >
-              <Icon size={15} strokeWidth={1.85} />
-              <span>{item.label}</span>
-            </button>
+            <div key={group.label} className="sb-dashboard-reference-group">
+              {group.collapsible ? (
+                <button
+                  type="button"
+                  className={`sb-dashboard-reference-group__header${isGroupCollapsed ? " is-collapsed" : ""}`}
+                  aria-expanded={!isGroupCollapsed}
+                  onClick={() => toggleGroup(group.label)}
+                >
+                  <span>{group.label}</span>
+                  <ChevronRightIcon size={13} strokeWidth={2.25} className="sb-dashboard-reference-group__chevron" />
+                </button>
+              ) : (
+                <div className="sb-dashboard-reference-group__header sb-dashboard-reference-group__header--static">
+                  <span>{group.label}</span>
+                </div>
+              )}
+              {showItems && group.items.map(renderItem)}
+            </div>
           );
         })}
       </nav>

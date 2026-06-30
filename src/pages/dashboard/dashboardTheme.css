@@ -293,6 +293,55 @@
   overflow-y: auto;
 }
 
+.sb-dashboard-reference-group {
+  margin-bottom: 2px;
+}
+
+.sb-dashboard-reference-group__header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 11px 12px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-align: left;
+  transition: color 140ms ease;
+}
+
+.sb-dashboard-reference-group__header--static {
+  cursor: default;
+}
+
+.sb-dashboard-reference-group__header:not(.sb-dashboard-reference-group__header--static):hover {
+  color: var(--text-secondary);
+}
+
+.sb-dashboard-reference-group__chevron {
+  flex-shrink: 0;
+  opacity: 0.65;
+  transform: rotate(90deg);
+  transition: transform 150ms ease;
+}
+
+.sb-dashboard-reference-group__header.is-collapsed .sb-dashboard-reference-group__chevron {
+  transform: rotate(0deg);
+}
+
+/* Icon-rail (fully collapsed) mode: hide category headers; item icons remain. */
+.sb-dashboard-reference-sidebar.is-collapsed .sb-dashboard-reference-group__header {
+  display: none;
+}
+
 .sb-dashboard-reference-nav__item {
   width: 100%;
   min-height: 32px;
