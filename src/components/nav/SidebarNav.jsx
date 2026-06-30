@@ -50,20 +50,14 @@ function saveRecents(pages) {
 
 // ── Favorites persistence ───────────────────────────────────────────
 const FAVORITES_LS_KEY = "sbp-sidebar-favorites";
-const DASHBOARD_REFERENCE_ITEMS = [
-  { label: "Dashboard", page: "Dashboard" },
-  { label: "Command Center", page: "CommandCenter" },
-  { label: "Drawings & Submittals", page: "DrawingSubmittalHub" },
-  { label: "RFIs", page: "RFIs" },
-  { label: "Schedule", page: "ScheduleHub" },
-  { label: "Change Orders", page: "ChangeOrders" },
-  { label: "Field Hub", page: "FieldHub" },
-  { label: "Budget Control", page: "CostHub" },
-  { label: "Documents", page: "Documents" },
-  { label: "Reports", page: "ReportsHub" },
-  { label: "Inspections", page: "Inspections" },
-  { label: "Team", page: "OrgMembers" },
-];
+// The dashboard-reference sidebar now mirrors the full sidebar registry so every
+// module stays reachable from the rail (previously a hardcoded 12-item list that
+// dropped Expenses, Work Packages, Fab Release, SOV, Pay Applications, Backcharge
+// Defense, Procurement, Production Status, Vendors, Integrations, Data Exchange…).
+// Settings stays in the footer shortcut below, so skip it here to avoid a dupe row.
+const DASHBOARD_REFERENCE_ITEMS = SIDEBAR_GROUPS.flatMap((group) => group.items).filter(
+  (item) => item.page !== "Settings",
+);
 
 function loadFavorites() {
   try {
