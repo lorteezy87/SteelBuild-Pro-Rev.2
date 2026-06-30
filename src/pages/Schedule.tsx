@@ -542,8 +542,9 @@ export default function Schedule() {
           task_name: t.name,
           task_type: inferTaskType(t.name, t.isSummary, t.milestone),
           phase: PHASES.includes(phase) ? phase : "Fabrication",
-          start_date: t.start ?? new Date().toISOString().split("T")[0],
-          end_date: t.finish ?? t.start ?? new Date().toISOString().split("T")[0],
+          // Unknown imported dates stay null (rendered as TBD) — never invent today.
+          start_date: t.start ?? null,
+          end_date: t.finish ?? t.start ?? null,
           status: t.pct >= 100 ? "Complete" : t.pct > 0 ? "In Progress" : "Not Started",
           percent_complete: t.pct,
           priority: "Normal",
