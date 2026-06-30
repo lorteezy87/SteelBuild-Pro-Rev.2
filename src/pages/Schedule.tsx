@@ -29,6 +29,7 @@ import BulkActionToolbar from "./schedule/BulkActionToolbar";
 import type { ScheduleTask } from "./schedule/types";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import ScheduleCommandCenter from "./schedule/ScheduleCommandCenter";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 // The design-system primitives are still .jsx; these casts are removable
 // once the shared layer is typed.
@@ -778,6 +779,9 @@ export default function Schedule() {
           }}
         />
 
+        {/* Surface the silent 2000-row read cap on useScheduleTasks (raw `scheduleTasksRaw`). */}
+        <ListTruncationNotice count={scheduleTasksRaw.length} label="schedule tasks" />
+
         {/* View Content */}
         <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
           {view === "gantt" && (
@@ -1252,6 +1256,9 @@ export default function Schedule() {
           setGanttFocus({ ...focusRequest, requestedAt: Date.now() });
         }}
       />
+
+      {/* Surface the silent 2000-row read cap on useScheduleTasks (raw `scheduleTasksRaw`). */}
+      <ListTruncationNotice count={scheduleTasksRaw.length} label="schedule tasks" />
 
       {/* View Content */}
       <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>

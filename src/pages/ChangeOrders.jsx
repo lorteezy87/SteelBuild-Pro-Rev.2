@@ -39,6 +39,7 @@ import { usePermissions } from "@/services/permissions";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import CoControlCenter from "./changeOrders/CoControlCenter";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 import {
   KpiTile,
@@ -396,6 +397,7 @@ export default function ChangeOrders() {
   if (commandUi) {
     return (
       <div className="co-page">
+        <ListTruncationNotice count={cos.length} label="change orders" />
         <CoControlCenter
           projectName={projectName}
           cos={cos}
@@ -485,6 +487,7 @@ export default function ChangeOrders() {
   // ── Classic layout ──────────────────────────────────────────────────────────
   return (
     <div className="sb-dashboard-reference-page">
+    <ListTruncationNotice count={cos.length} label="change orders" />
     <OperationsPageShell
       eyebrow={`Financial · ${projectName || activeProject?.project_number || "Project"}`}
       title="Change Orders"

@@ -48,6 +48,7 @@ import type { WorkPackage } from "./workPackages/types";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import WpControlCenter from "./workPackages/WpControlCenter";
 import { calcWpProgress } from "@/utils/projectKpis";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 // The design-system primitives, LoadingSkeleton, and the workpackages
 // modals/filter are still .jsx; their destructured `= []` prop defaults make
@@ -373,6 +374,7 @@ export default function WorkPackages() {
 
     return (
       <div className="wp-page">
+        <ListTruncationNotice count={rawWorkPackages.length} label="work packages" />
         <WpControlCenter
           projectName={projectName}
           workPackages={workPackages as unknown as Parameters<typeof WpControlCenter>[0]["workPackages"]}
@@ -430,6 +432,7 @@ export default function WorkPackages() {
   return (
     <div className="sb-dashboard-reference-page" style={pageStyle}>
       <style>{RESPONSIVE_CSS}</style>
+      <ListTruncationNotice count={rawWorkPackages.length} label="work packages" />
       <Hero
         projectName={projectName}
         metrics={metrics}

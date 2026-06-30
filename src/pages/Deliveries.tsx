@@ -26,6 +26,7 @@ import DeliveryFormModalRaw from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModalRaw from "@/components/deliveries/ShippingTicketImportModal";
 import ShippingListImportModal from "@/components/deliveries/ShippingListImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { batchProcess } from "@/utils/batchProcess";
 import {
@@ -714,6 +715,9 @@ export default function Deliveries() {
           })}
         </div>
       </section>
+
+      {/* Surface the silent 2000-row read cap on entities.Delivery.filter (raw `deliveries`). */}
+      <ListTruncationNotice count={deliveries.length} label="deliveries" />
 
       <SequenceFilter items={activeDeliveries} value={seqFilter} onChange={setSeqFilter} />
 
