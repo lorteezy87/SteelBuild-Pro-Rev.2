@@ -59,7 +59,10 @@ export async function ensureCurrentRevision({ drawing, userId }) {
     .select()
     .single();
   if (insErr) throw insErr;
-  return created;
+  // Flag freshly-minted revisions so callers can invalidate the register / hub
+  // revision caches ONLY when a row was actually created. The found-existing
+  // path above returns the row without this flag → no needless invalidation.
+  return { ...created, __provisioned: true };
 }
 
 // ────────────────────────────────────────────────────────────────────

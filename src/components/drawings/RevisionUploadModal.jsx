@@ -798,6 +798,11 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       // grid served a stale current revision until a manual page reload.
       await invalidateEntity(qc, "drawing", activeProject?.id);
       await invalidateEntity(qc, "drawing_revision", activeProject?.id);
+      // When a real drawing_sets row was updated above (revision label, sheet
+      // count, set_approval_status), invalidate the drawingSet family too so
+      // set-list surfaces (hub, FabRelease, CommandCenter) reflect the new
+      // revision/count instead of serving the old values until a manual reload.
+      if (selectedSet.id) await invalidateEntity(qc, "drawingSet", activeProject?.id);
       if (failed > 0) {
         setFlowError(`${failed} sheet(s) failed to process. ${updated + added + removed} succeeded.`);
       } else if (historyFailed > 0) {
