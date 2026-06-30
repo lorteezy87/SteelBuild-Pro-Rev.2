@@ -757,7 +757,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             // the new one BEFORE the drawings row is overwritten in place.
             // Idempotent on the revision code; failure → warn, never block.
             try {
-              await recordSheetSlipSheet({
+              const slip = await recordSheetSlipSheet({
                 drawing: existing,
                 newCode: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
                 newFileUrl,
@@ -766,6 +766,13 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
                 notes: revMeta.notes || null,
                 userId: null,
               });
+              // When the new revision code already existed, recordSheetSlipSheet
+              // skips minting AND skips updating that current revision row — point the
+              // authoritative current drawing_revisions row at the new PDF/page, else
+              // the register/viewer keep rendering the OLD file while drawings shows new.
+              if (slip?.skipped && slip.revisionId) {
+                await entities.DrawingRevision.update(slip.revisionId, { file_url: newFileUrl, pdf_page: updatedPage ?? 1 });
+              }
             } catch (histErr) {
               historyFailed++;
               console.warn(`[RevisionUploadModal] Slip-sheet history failed for "${match.sheetNumber}":`, histErr);
