@@ -233,7 +233,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                 height: 38,
                 background: selectedCode ? 'var(--accent-muted)' : 'var(--bg-surface-low)',
                 border: '1px solid',
-                borderColor: selectedCode ? 'var(--accent-border)' : 'var(--accent-border)',
+                borderColor: 'var(--accent-border)',
                 borderRadius: 8,
                 display: 'flex',
                 alignItems: 'center',

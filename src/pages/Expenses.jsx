@@ -42,6 +42,7 @@ import ExpenseTable  from "./expenses/ExpenseTable";
 import BulkActionBar from "./expenses/BulkActionBar";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import ExpensesControlCenter from "./expenses/ExpensesControlCenter";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 export default function ExpensesPage() {
   const qc = useQueryClient();
@@ -426,6 +427,7 @@ export default function ExpensesPage() {
   if (commandUi) {
     return (
       <div className="exp-page">
+        <ListTruncationNotice count={expenses.length} label="expenses" />
         <ExpensesControlCenter
           projectName={activeProject?.name || "Project"}
           expenses={expenses}
@@ -446,6 +448,7 @@ export default function ExpensesPage() {
 
   return (
     <div className="sb-dashboard-reference-page" style={{ paddingBottom: selected.length > 0 ? 72 : 0 }}>
+      <ListTruncationNotice count={expenses.length} label="expenses" />
       <CommandBar
         eyebrow={activeProject?.name || "COST"}
         title="Expenses"

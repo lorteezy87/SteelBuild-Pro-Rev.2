@@ -46,8 +46,13 @@ export async function createPayApplication(
   ctx: { sovItems: SovLineLike[]; contract: ContractContext },
 ): Promise<PayApplication> {
   const existing = await listPayApplications(input.projectId); // desc by app #
-  const prior = existing[0] || null;
-  const applicationNumber = (prior?.application_number || 0) + 1;
+  // App numbers are never reused (continue past the highest existing, incl. void),
+  // but the financial carry-forward basis must come from the last NON-VOID app: a
+  // voided app certified nothing, so seeding G703 previous-work / G702 line 7 from
+  // it would overstate the new certificate's "less previous certificates".
+  const highest = existing[0] || null;
+  const prior = existing.find((a) => a.status !== "void") || null;
+  const applicationNumber = (highest?.application_number || 0) + 1;
   const priorLines = prior ? await listLines(prior.id) : [];
   // G702 line 7: cumulative earned-less-retainage certified through the prior app
   // (total completed & stored − retainage; the column isn't stored, so derive it).

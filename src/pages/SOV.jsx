@@ -31,6 +31,7 @@ import {
 } from "../lib/importSovSpreadsheet";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import SovControlCenter from "./sov/SovControlCenter";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 /* ═══════════════════════════════════════════════════════════════════
    1. Progress Visualization — slim horizontal bar
@@ -912,6 +913,7 @@ export default function SOV() {
 
     return (
       <div className="sov-page">
+        <ListTruncationNotice count={sovs.length} label="SOV line items" />
         <SovControlCenter
           projectName={activeProject?.name || "All Projects"}
           lines={sovs}
@@ -969,6 +971,7 @@ export default function SOV() {
      ═══════════════════════════════════════════════════════════════ */
   return (
     <div className="sb-dashboard-reference-page">
+      <ListTruncationNotice count={sovs.length} label="SOV line items" />
       {/* ── Requirement 10: SOV Mismatch Alert Banner ── */}
       {hasMismatch && (
         <div style={{

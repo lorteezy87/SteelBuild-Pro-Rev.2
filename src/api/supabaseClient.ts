@@ -350,7 +350,10 @@ export type EntityClient<T extends TableName> = {
 // makes the bound intentional, consistent with the centralized hooks
 // (useDrawings/useSubmittals pass 2000), and lets us warn on likely truncation
 // in dev. Callers needing more must paginate or filter server-side.
-const DEFAULT_LIST_LIMIT = 2000;
+// Exported so the UI (e.g. ListTruncationNotice) can surface the SAME number it
+// caps at — single source of truth for "showing the first N" messaging.
+export const LIST_ROW_CAP = 2000;
+const DEFAULT_LIST_LIMIT = LIST_ROW_CAP;
 
 // Dev-only: warn when a read comes back at the cap (likely truncated) so the
 // silent-1000-row failure mode surfaces during development.

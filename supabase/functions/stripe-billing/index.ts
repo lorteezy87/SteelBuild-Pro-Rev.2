@@ -78,14 +78,24 @@ async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
     if (!res) return;
     await admin.from("organizations").update(res.update).eq("id", res.orgId);
   } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
-    const sub = event.data.object;
-    let orgId = sub.metadata?.org_id;
+    const evtSub = event.data.object;
+    let orgId = evtSub.metadata?.org_id;
     if (!orgId) {
-      const { data: org } = await admin.from("organizations").select("id").eq("stripe_customer_id", sub.customer).maybeSingle();
+      const { data: org } = await admin.from("organizations").select("id").eq("stripe_customer_id", evtSub.customer).maybeSingle();
       orgId = org?.id;
     }
     if (!orgId) return;
-    const update = subscriptionOrgUpdate(sub, cfg, { deleted: event.type === "customer.subscription.deleted" });
+    // Out-of-order guard: re-fetch the LIVE subscription and apply its CURRENT
+    // state instead of trusting the (possibly stale / out-of-order) event payload.
+    // Without this, a late customer.subscription.updated arriving AFTER a .deleted
+    // would re-grant a canceled paid plan. On re-fetch a canceled sub reports
+    // status="canceled", so we still downgrade. Fall back to the event payload if
+    // the retrieve fails (e.g. transient API error).
+    let sub = evtSub;
+    try { sub = await stripe.subscriptions.retrieve(evtSub.id); } catch (_e) { /* keep event payload */ }
+    const TERMINAL = ["canceled", "incomplete_expired", "unpaid"];
+    const deleted = event.type === "customer.subscription.deleted" || TERMINAL.includes(sub.status);
+    const update = subscriptionOrgUpdate(sub, cfg, { deleted });
     await admin.from("organizations").update(update).eq("id", orgId);
   }
 }

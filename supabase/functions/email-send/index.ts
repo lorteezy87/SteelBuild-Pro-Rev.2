@@ -105,22 +105,11 @@ async function checkProjectAccess(
   supabaseUrl: string,
   serviceKey: string,
 ): Promise<boolean> {
-  try {
-    const resp = await fetch(
-      `${supabaseUrl}/rest/v1/user_projects?user_id=eq.${userId}&project_id=eq.${projectId}&select=id&limit=1`,
-      {
-        headers: {
-          "apikey": serviceKey,
-          "Authorization": `Bearer ${serviceKey}`,
-        },
-      },
-    );
-    if (!resp.ok) return false;
-    const rows = await resp.json();
-    return Array.isArray(rows) && rows.length > 0;
-  } catch {
-    return false;
-  }
+  // Mirrors the RLS helper user_has_project_access: a user_projects row OR org
+  // owner/admin standing both grant access. getProjectRole() resolves both, so a
+  // non-null effective role means the user has access — this fixes org owners/admins
+  // who manage a project without a user_projects row being wrongly 403'd.
+  return (await getProjectRole(userId, projectId, supabaseUrl, serviceKey)) !== null;
 }
 
 // ── Project Role Check ──────────────────────────────────────────────────────────
@@ -136,21 +125,37 @@ async function getProjectRole(
   supabaseUrl: string,
   serviceKey: string,
 ): Promise<string | null> {
+  const headers = { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` };
   try {
+    // 1. Direct project membership role.
     const resp = await fetch(
       `${supabaseUrl}/rest/v1/user_projects?user_id=eq.${userId}&project_id=eq.${projectId}&select=role&limit=1`,
-      {
-        headers: {
-          "apikey": serviceKey,
-          "Authorization": `Bearer ${serviceKey}`,
-        },
-      },
+      { headers },
     );
-    if (!resp.ok) return null;
-    const rows = await resp.json();
-    if (!Array.isArray(rows) || rows.length === 0) return null;
-    const role = rows[0]?.role;
-    return typeof role === "string" ? role.toLowerCase() : null;
+    if (resp.ok) {
+      const rows = await resp.json();
+      const role = Array.isArray(rows) && rows.length ? rows[0]?.role : null;
+      if (typeof role === "string" && role) return role.toLowerCase();
+    }
+    // 2. Org owner/admin fallback — mirrors get_my_project_role: an org owner or
+    //    admin has an effective project role even without a user_projects row.
+    const projResp = await fetch(
+      `${supabaseUrl}/rest/v1/projects?id=eq.${projectId}&select=org_id&limit=1`,
+      { headers },
+    );
+    if (!projResp.ok) return null;
+    const projRows = await projResp.json();
+    const orgId = Array.isArray(projRows) && projRows.length ? projRows[0]?.org_id : null;
+    if (!orgId) return null;
+    const omResp = await fetch(
+      `${supabaseUrl}/rest/v1/organization_members?org_id=eq.${orgId}&user_id=eq.${userId}&select=role&limit=1`,
+      { headers },
+    );
+    if (!omResp.ok) return null;
+    const omRows = await omResp.json();
+    const orgRole = Array.isArray(omRows) && omRows.length ? String(omRows[0]?.role || "").toLowerCase() : null;
+    if (orgRole === "owner" || orgRole === "admin") return orgRole;
+    return null;
   } catch {
     return null;
   }

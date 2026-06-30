@@ -118,7 +118,6 @@ export default function QualityControl() {
     filterStatus === "Pending" ? "pending"
     : filterResult === "Pass" && filterStatus === null ? "passed"
     : filterResult === "Fail" && filterStatus === null ? "failed"
-    : filterType === "all" && filterResult === "all" && filterStatus === null ? null
     : null;
 
   return (

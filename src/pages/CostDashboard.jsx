@@ -287,25 +287,36 @@ export default function CostDashboard() {
 
   const billingMetrics = useMemo(() => {
     const totalScheduled = sovs.reduce((s, sv) => s + (Number(sv.scheduled_value) || 0), 0);
-    const earnedValue = sovs.reduce((s, sv) => {
-      const scheduled = Number(sv.scheduled_value) || 0;
-      const pct = Number(sv.current_percent_complete) || 0;
-      return s + scheduled * (pct / 100);
-    }, 0);
-    // billedToDate = cumulative billed (current_percent_complete reflects total billed %)
-    // The period draw (currPct - prevPct) is only for the current invoice, not cumulative.
+    // billedToDate = cumulative billed/certified via the SOV current_percent_complete
+    // (what's been INVOICED). The period draw (currPct - prevPct) is only for the
+    // current invoice, not cumulative.
     const billedToDate = sovs.reduce((s, sv) => {
       const scheduled = Number(sv.scheduled_value) || 0;
       const currPct = Number(sv.current_percent_complete) || 0;
       return s + scheduled * (currPct / 100);
     }, 0);
+    // earnedValue = PHYSICAL work in place (what's actually been BUILT), distinct from
+    // what's been billed. Derive it from work-package completion: tonnage-weighted %
+    // when tonnage is present (heaviest steel dominates), else a simple average of WP
+    // percent_complete — that physical % is applied to the contract's scheduled value.
+    // With no work packages we fall back to billedToDate so the efficiency KPI reads
+    // 100% rather than implying unbilled work that can't be measured.
+    const totalTonnage = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+    let physicalPct = null;
+    if (totalTonnage > 0) {
+      const earnedTonnage = wps.reduce((s, w) => s + (Number(w.tonnage) || 0) * ((Number(w.percent_complete) || 0) / 100), 0);
+      physicalPct = earnedTonnage / totalTonnage;
+    } else if (wps.length > 0) {
+      physicalPct = wps.reduce((s, w) => s + ((Number(w.percent_complete) || 0) / 100), 0) / wps.length;
+    }
+    const earnedValue = physicalPct != null ? totalScheduled * physicalPct : billedToDate;
     const unbilledEV = earnedValue - billedToDate;
     const billingLag = earnedValue > 0 ? ((earnedValue - billedToDate) / earnedValue) * 100 : 0;
     return {
       totalScheduled, earnedValue, billedToDate, unbilledEV, billingLag,
       billingEfficiency: earnedValue > 0 ? (billedToDate / earnedValue) * 100 : 0,
     };
-  }, [sovs]);
+  }, [sovs, wps]);
 
   const productivity = useMemo(() => {
     const shopWPs = wps.filter(w => w.shop_hours_budget > 0);

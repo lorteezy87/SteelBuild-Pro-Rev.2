@@ -277,11 +277,11 @@ export function CreateRecordModal({ message, attachments, projectId, onClose, on
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {att.filename}
                   </span>
-                  {att.size_bytes && (
+                  {att.size_bytes ? (
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
                       {formatBytes(att.size_bytes)}
                     </span>
-                  )}
+                  ) : null}
                 </label>
               ))}
             </div>

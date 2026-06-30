@@ -169,7 +169,7 @@ export function EmailRow({ message, isSelected, isChecked, onSelect, onCheck, on
           lineHeight: 1.35,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           marginTop: 2,
-          fontStyle: aiSummary ? "normal" : "normal",
+          fontStyle: "normal",
         }}>
           {aiSummary || bodyPreview || "No content"}
         </div>
@@ -619,11 +619,11 @@ export function EmailBodyContent({ message, attachments }: EmailBodyContentProps
                 }}>
                   {att.filename}
                 </span>
-                {att.size_bytes && (
+                {att.size_bytes ? (
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
                     {formatBytes(att.size_bytes)}
                   </span>
-                )}
+                ) : null}
               </div>
             ))}
           </div>
