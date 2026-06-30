@@ -568,7 +568,7 @@ export default function FinancialScorecard() {
           label="Retainage Held"
           value={kpis.retainagePct != null ? kpis.retainagePct.toFixed(1) : "—"}
           unit="%"
-          health={kpis.retainagePct != null ? "neutral" : "neutral"}
+          health="neutral"
           gradeLabel={kpis.retainagePct != null ? `${formatCurrency(kpis.retention)}` : "No Data"}
           description={`${formatCurrency(kpis.collected)} collected of ${formatCurrency(kpis.billed)} billed`}
           benchmark="5-10% typical"

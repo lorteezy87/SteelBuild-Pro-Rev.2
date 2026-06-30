@@ -76,7 +76,7 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
           display: "grid",
           gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr",
           alignItems: "start", gap: 0,
-          padding: isMobile ? "6px 0 12px" : "6px 0 12px",
+          padding: "6px 0 12px",
           overflowY: isMobile ? "auto" : "visible",
           maxHeight: isMobile ? "calc(100vh - 140px)" : "none",
         }}>

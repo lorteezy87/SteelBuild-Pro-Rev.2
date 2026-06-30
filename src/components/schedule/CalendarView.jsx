@@ -223,7 +223,7 @@ export default function CalendarView({ tasks = [], onSelectTask, selectedDate, o
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         cursor: 'pointer',
-                        display: isFirstDay || !isMultiDay ? 'block' : 'block',
+                        display: 'block',
                       }}
                     >
                       {isFirstDay || !isMultiDay ? task.task_name : ''}

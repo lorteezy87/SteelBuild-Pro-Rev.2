@@ -379,7 +379,7 @@ export default function AnnotationLayer({
         // Select mode passes clicks through to things below (nothing below
         // needs them right now, but the existing callout + link layers
         // already capture their own hotspots before we get here).
-        pointerEvents: isDrawingTool || editingNoteId ? "auto" : "auto",
+        pointerEvents: "auto",
         cursor,
         touchAction: "none",
       }}

@@ -98,7 +98,7 @@ export function buildDefensePdf({ backcharge, tickets = [], events = [], project
   const drawRow = (cells, opts = {}) => {
     brk(18);
     if (opts.fillRow) { fill(opts.fillRow); pdf.rect(M, y - 11, CW, 16, "F"); }
-    font(opts.bold ? 8 : 8, opts.bold ? "bold" : "normal"); color(opts.tone || C.black);
+    font(8, opts.bold ? "bold" : "normal"); color(opts.tone || C.black);
     let x = M;
     for (const c of cols) {
       const txt = String(cells[c.k] ?? "");

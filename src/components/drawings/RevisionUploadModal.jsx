@@ -422,7 +422,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
           const changeColor = keptNotRemoved ? "var(--text-muted)" : cs.color;
           return (
             <div key={m.sheetNumber} style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "5px 12px", borderBottom: "1px solid var(--divider)", background: cs.bg, gap: 8 }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: m.oldSheet ? "var(--text-muted)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {m.oldSheet?.sheetNumber || "—"}
               </span>
               <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
