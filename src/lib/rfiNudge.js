@@ -10,12 +10,19 @@
 
 import { daysSince, daysUntil } from "@/lib/dateMath";
 
-const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+// Domain written as discrete dot-separated labels — `(?:[A-Z0-9-]+\.)+` — so the
+// domain run and the TLD never overlap on the "." character. The older
+// `[A-Z0-9.-]+\.[A-Z]{2,}` form let both sides match dots, giving quadratic
+// backtracking on long crafted input (distribution_list is untrusted free text).
+const EMAIL_RE = /[A-Z0-9._%+-]+@(?:[A-Z0-9-]+\.)+[A-Z]{2,}/gi;
 
 /** Extract email addresses from a free-text field (e.g. distribution_list). */
 export function parseEmails(raw) {
   if (!raw) return [];
-  const matches = String(raw).match(EMAIL_RE);
+  // distribution_list is untrusted free text. Cap the length before scanning so a
+  // crafted multi-KB string can't drive the email regex into heavy (quadratic)
+  // backtracking — a real recipient list is at most a few hundred chars.
+  const matches = String(raw).slice(0, 8192).match(EMAIL_RE);
   if (!matches) return [];
   // de-dupe, preserve order
   const seen = new Set();
