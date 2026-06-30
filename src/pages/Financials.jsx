@@ -3,7 +3,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useFinancials } from "@/hooks/useFinancials";
-import { computeRevisedContractValue } from "@/services/costRollup";
+import { computeRevisedContractValue, preferManualActual } from "@/services/costRollup";
 import { useCostCodes } from "@/hooks/useCostCodes";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -120,10 +120,14 @@ export default function Financials() {
       // only path. (change_orders / sov_items DO have cost_code_id — that is
       // why byCostCodeId on line above is correct for COs.)
       const relatedExpenses = activeExpenses.filter((expense) => expense.cost_code === costCode.cost_code_number);
-      const actual = relatedExpenses
+      const expensePaid = relatedExpenses
         .filter((expense) => expense.payment_status === "Paid")
         .reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
-      const committed = relatedExpenses.reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
+      const expenseAll = relatedExpenses.reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
+      // Typed-in actual/committed on the cost code wins; else the expense rollup
+      // — shared rule keeps Budget Control consistent with the Cost pages.
+      const actual = preferManualActual(costCode.actual_cost, expensePaid);
+      const committed = preferManualActual(costCode.committed_cost, expenseAll);
       const signedExtras = safeNumber(byCostCodeId[costCode.id]);
       const originalBudget = safeNumber(costCode.budget_amount);
       const revisedBudget = originalBudget + signedExtras;

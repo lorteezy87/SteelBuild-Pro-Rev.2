@@ -783,7 +783,7 @@ export default function CostDashboard() {
       <CostCodeFormModal
         open={codeModalOpen}
         onClose={() => { setCodeModalOpen(false); setEditingCode(null); }}
-        costCode={editingCode}
+        costCode={editingCode ? (codes.find((rc) => rc.id === editingCode.id) ?? editingCode) : null}
         projects={projects}
         existingCodes={codes}
         onSave={(data) => {
