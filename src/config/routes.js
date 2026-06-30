@@ -22,6 +22,12 @@
 
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { registerRoutePrefetcher } from "@/lib/routePrefetch";
+// Static import: moduleRegistry has no imports of its own (no cycle), and it is
+// already in the main chunk via the nav (SidebarNav/MobileDrawer/launcherConfig),
+// so the previous `await import()` in validateRoutes couldn't code-split it —
+// it only produced a Rollup "dynamically + statically imported" warning. Importing
+// it statically here removes that warning at no bundle cost.
+import { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } from "./moduleRegistry";
 
 // ── Helper: build a registry entry ───────────────────────────────────
 /**
@@ -256,7 +262,6 @@ export function routeLabel(pageName) {
  * an empty result.
  */
 export async function validateRoutes() {
-  const { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } = await import("./moduleRegistry");
   const registered = new Set(Object.keys(ROUTE_REGISTRY));
   const referenced = new Set();
 
