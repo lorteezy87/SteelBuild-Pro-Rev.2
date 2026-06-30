@@ -12,6 +12,7 @@ import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -48,6 +49,7 @@ import type { WorkPackage } from "./workPackages/types";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import WpControlCenter from "./workPackages/WpControlCenter";
 import { calcWpProgress } from "@/utils/projectKpis";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 // The design-system primitives, LoadingSkeleton, and the workpackages
 // modals/filter are still .jsx; their destructured `= []` prop defaults make
@@ -130,6 +132,9 @@ export default function WorkPackages() {
   const invalidateWps = () => {
     qc.invalidateQueries({ queryKey: ["work-packages"] });
     qc.invalidateQueries({ queryKey: ["wps-all"] });
+    // Fan out the full work_package family (incl. ["wps-fab", projectId] read by
+    // FabRelease) so a WP mutation doesn't leave sibling pages stale.
+    void invalidateEntity(qc, "work_package", projectId);
   };
 
   const updateWPMut = useMutation({
@@ -373,6 +378,7 @@ export default function WorkPackages() {
 
     return (
       <div className="wp-page">
+        <ListTruncationNotice count={rawWorkPackages.length} label="work packages" />
         <WpControlCenter
           projectName={projectName}
           workPackages={workPackages as unknown as Parameters<typeof WpControlCenter>[0]["workPackages"]}
@@ -430,6 +436,7 @@ export default function WorkPackages() {
   return (
     <div className="sb-dashboard-reference-page" style={pageStyle}>
       <style>{RESPONSIVE_CSS}</style>
+      <ListTruncationNotice count={rawWorkPackages.length} label="work packages" />
       <Hero
         projectName={projectName}
         metrics={metrics}

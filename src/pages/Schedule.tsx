@@ -29,6 +29,7 @@ import BulkActionToolbar from "./schedule/BulkActionToolbar";
 import type { ScheduleTask } from "./schedule/types";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import ScheduleCommandCenter from "./schedule/ScheduleCommandCenter";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 // The design-system primitives are still .jsx; these casts are removable
 // once the shared layer is typed.
@@ -541,8 +542,9 @@ export default function Schedule() {
           task_name: t.name,
           task_type: inferTaskType(t.name, t.isSummary, t.milestone),
           phase: PHASES.includes(phase) ? phase : "Fabrication",
-          start_date: t.start ?? new Date().toISOString().split("T")[0],
-          end_date: t.finish ?? t.start ?? new Date().toISOString().split("T")[0],
+          // Unknown imported dates stay null (rendered as TBD) — never invent today.
+          start_date: t.start ?? null,
+          end_date: t.finish ?? t.start ?? null,
           status: t.pct >= 100 ? "Complete" : t.pct > 0 ? "In Progress" : "Not Started",
           percent_complete: t.pct,
           priority: "Normal",
@@ -777,6 +779,9 @@ export default function Schedule() {
             setGanttFocus({ ...focusRequest, requestedAt: Date.now() });
           }}
         />
+
+        {/* Surface the silent 2000-row read cap on useScheduleTasks (raw `scheduleTasksRaw`). */}
+        <ListTruncationNotice count={scheduleTasksRaw.length} label="schedule tasks" />
 
         {/* View Content */}
         <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
@@ -1252,6 +1257,9 @@ export default function Schedule() {
           setGanttFocus({ ...focusRequest, requestedAt: Date.now() });
         }}
       />
+
+      {/* Surface the silent 2000-row read cap on useScheduleTasks (raw `scheduleTasksRaw`). */}
+      <ListTruncationNotice count={scheduleTasksRaw.length} label="schedule tasks" />
 
       {/* View Content */}
       <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>

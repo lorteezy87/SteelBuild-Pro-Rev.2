@@ -349,7 +349,7 @@ export default function ZoneLayer({
         width:  canvasWidth,
         height: canvasHeight,
         pointerEvents: svgPointerEvents,
-        cursor: mode === "draw" ? (drawShape === "polygon" ? "crosshair" : "crosshair") : "default",
+        cursor: mode === "draw" ? "crosshair" : "default",
         zIndex: mode === "draw" ? 25 : 15,
       }}
       onMouseDown={onMouseDown}
