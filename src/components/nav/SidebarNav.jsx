@@ -590,7 +590,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
               onMouseEnter={() => prefetchRoute(item.page)}
               onFocus={() => prefetchRoute(item.page)}
             >
-              <Icon size={17} strokeWidth={1.85} />
+              <Icon size={15} strokeWidth={1.85} />
               <span>{item.label}</span>
             </button>
           );
