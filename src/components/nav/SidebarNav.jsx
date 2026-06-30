@@ -600,26 +600,22 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
 
       <nav className="sb-dashboard-reference-nav">
         {SIDEBAR_GROUPS.map((group) => {
-          const isGroupCollapsed = group.collapsible && !!groupCollapsed[group.label];
+          // Every category is collapsible here (incl. OVERVIEW), unlike the default
+          // sidebar which pins OVERVIEW open — so ignore group.collapsible.
+          const isGroupCollapsed = !!groupCollapsed[group.label];
           // In rail (icon-only) mode show every item; headers are hidden via CSS.
           const showItems = collapsed || !isGroupCollapsed;
           return (
             <div key={group.label} className="sb-dashboard-reference-group">
-              {group.collapsible ? (
-                <button
-                  type="button"
-                  className={`sb-dashboard-reference-group__header${isGroupCollapsed ? " is-collapsed" : ""}`}
-                  aria-expanded={!isGroupCollapsed}
-                  onClick={() => toggleGroup(group.label)}
-                >
-                  <span>{group.label}</span>
-                  <ChevronRightIcon size={13} strokeWidth={2.25} className="sb-dashboard-reference-group__chevron" />
-                </button>
-              ) : (
-                <div className="sb-dashboard-reference-group__header sb-dashboard-reference-group__header--static">
-                  <span>{group.label}</span>
-                </div>
-              )}
+              <button
+                type="button"
+                className={`sb-dashboard-reference-group__header${isGroupCollapsed ? " is-collapsed" : ""}`}
+                aria-expanded={!isGroupCollapsed}
+                onClick={() => toggleGroup(group.label)}
+              >
+                <span>{group.label}</span>
+                <ChevronRightIcon size={13} strokeWidth={2.25} className="sb-dashboard-reference-group__chevron" />
+              </button>
               {showItems && group.items.map(renderItem)}
             </div>
           );
