@@ -13,6 +13,7 @@ import { LayoutGrid } from "lucide-react";
 import "@/styles/command.css";
 import { PageHero, KpiStrip, useCommandSkin } from "@/components/command";
 import type { KpiCellDef, HeroChip, KpiTone } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { AlertTriangle, CalendarClock, CheckCircle, Gauge, FileStack, ClipboardList } from "lucide-react";
 
 // ── Prop types ─────────────────────────────────────────────────────────────
@@ -167,6 +168,7 @@ export function DetailingCommandShell({
         projectName={projectName}
         chips={chips}
         stats={heroStats}
+        photoSrc={photoFor("DrawingSubmittalHub") ?? undefined}
       />
 
       {/* KPI strip */}
