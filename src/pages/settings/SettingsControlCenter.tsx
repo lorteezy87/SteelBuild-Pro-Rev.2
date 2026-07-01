@@ -18,6 +18,7 @@ import { Settings, ShieldCheck, LayoutDashboard, Palette } from "lucide-react";
 import "@/styles/command.css";
 import { PageHero, KpiStrip, useCommandSkin } from "@/components/command";
 import type { KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   buildSettingsSummary,
 } from "./settingsControlCenter.derive";
@@ -104,6 +105,7 @@ export default function SettingsControlCenter({
         title="Settings"
         subtitle="Configure system preferences, project settings, notifications, and access."
         chips={chips}
+        photoSrc={photoFor("Settings") ?? undefined}
         stats={[
           { value: displayName, label: "Account" },
         ]}

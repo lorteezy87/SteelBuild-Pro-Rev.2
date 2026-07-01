@@ -25,6 +25,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { buildFieldHubSummary } from "./fieldHubControlCenter.derive";
 import type {
   DailyLogRecord,
@@ -276,6 +277,7 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
         subtitle="Real-time field visibility across crews, issues, inspections, and site activities."
         projectName={projectName}
         chips={chips}
+        photoSrc={photoFor("FieldHub") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />

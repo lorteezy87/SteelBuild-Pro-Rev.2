@@ -22,6 +22,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   buildFabReleaseSummary,
   riskTone,
@@ -202,6 +203,7 @@ export default function FabReleaseControlCenter(props: FabReleaseControlCenterPr
         subtitle="Track shop release readiness, clear blockers, and move steel packages through fabrication."
         projectName={projectName}
         chips={heroChips}
+        photoSrc={photoFor("FabRelease") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />

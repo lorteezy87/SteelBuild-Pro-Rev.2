@@ -26,6 +26,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { buildDocumentsSummary, fmtSizeKb } from "./documentsControlCenter.derive";
 import type { DocumentRecord } from "./documentsControlCenter.derive";
 import { LIST_FILETYPE_STYLES, FILETYPE_FALLBACK } from "./utils";
@@ -238,6 +239,7 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
         subtitle="Upload, organize, and track project documents — shop drawings, specs, and submittals in one place."
         projectName={projectName}
         chips={heroChips}
+        photoSrc={photoFor("Documents") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />

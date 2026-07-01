@@ -30,6 +30,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { buildCoSummary, coStatusTone } from "./coControlCenter.derive";
 import type { CoRecord } from "./coControlCenter.derive";
 import { formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
@@ -228,6 +229,7 @@ export default function CoControlCenter(props: CoControlCenterProps) {
         subtitle="Manage contract exposure from draft pricing through approval with cost, schedule impact, and review status visible at a glance."
         projectName={projectName}
         chips={chips}
+        photoSrc={photoFor("ChangeOrders") ?? undefined}
         stats={heroStats}
       />
 
