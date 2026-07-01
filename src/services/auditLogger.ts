@@ -37,6 +37,7 @@ const ENTITY_LABELS: Record<string, string> = {
   work_package:   "WorkPackage",
   schedule_task:  "ScheduleTask",
   sov_item:       "SOVItem",
+  budget_hour_item: "BudgetHourItem",
   alert:          "Alert",
   project:        "Project",
   daily_log:      "DailyLog",
@@ -51,6 +52,7 @@ function getEntityName(entityType: string, record: EntityRecord | null | undefin
   return (
     record.name ||
     record.title ||
+    record.scope_item ||
     record.sheet_number ||
     record.rfi_number ||
     record.submittal_number ||
