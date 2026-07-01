@@ -24,11 +24,13 @@
 [data-skin="command"] [class$="-cc"] * { border-color: var(--cmd-border); }
 
 /* Hero — light, dark text, optional faint photo from the right */
-[data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 14px; background: var(--cmd-surface); overflow: hidden; }
+[data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 14px; background-color: var(--cmd-surface); background-image: linear-gradient(90deg, var(--cmd-surface) 24%, rgba(255,255,255,0.55) 60%, rgba(255,255,255,0.30) 100%), url("/photos/command-hero.jpg"); background-size: cover; background-position: center, right center; background-repeat: no-repeat; overflow: hidden; }
 /* Photo + scrim in ONE background shorthand (gradient layer first = on top) so
    the jobsite image shows on the right while the title stays readable on the left. */
+/* Single consistent command hero image (mockup replicated) — overrides the
+   per-page --cmd-hero-photo so every command hero shows the same steel band. */
 [data-skin="command"] .cmd-hero--photo {
-  background-image: linear-gradient(90deg, var(--cmd-surface) 26%, rgba(255,255,255,0.55) 62%, rgba(255,255,255,0.32) 100%), var(--cmd-hero-photo);
+  background-image: linear-gradient(90deg, var(--cmd-surface) 24%, rgba(255,255,255,0.55) 60%, rgba(255,255,255,0.30) 100%), url("/photos/command-hero.jpg");
   background-size: cover;
   background-position: center, right center;
   background-repeat: no-repeat;
