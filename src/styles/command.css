@@ -198,9 +198,9 @@
   overflow: hidden;
 }
 [data-skin="command"] .detailing-cc .desk-section-card__head {
-  display: flex; align-items: center; gap: 7px; padding: 11px 14px;
-  border-bottom: 1px solid var(--cmd-border); color: #3f4a57;
-  font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px; padding: 13px 16px;
+  border-bottom: 1px solid var(--cmd-border); color: var(--cmd-text);
+  font-size: 14px; font-weight: 700;
 }
 [data-skin="command"] .detailing-cc .desk-section-card__title { flex: 0 1 auto; }
 [data-skin="command"] .detailing-cc .desk-section-card__action { margin-left: auto; font-size: 11px; color: var(--cmd-text-muted); }

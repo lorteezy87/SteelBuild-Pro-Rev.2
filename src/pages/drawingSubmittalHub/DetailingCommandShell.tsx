@@ -183,12 +183,9 @@ export function DetailingCommandShell({
           display: "flex",
           gap: 4,
           flexWrap: "wrap",
-          alignItems: "center",
-          padding: "4px 6px",
+          alignItems: "stretch",
           marginBottom: 16,
-          background: "var(--cmd-surface, var(--bg-surface-high))",
-          border: "1px solid var(--cmd-border, var(--border-default))",
-          borderRadius: 10,
+          borderBottom: "1px solid var(--cmd-border, var(--border-default))",
         }}
       >
         {tabs.map((tab) => {
@@ -206,49 +203,35 @@ export function DetailingCommandShell({
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 6,
-                minHeight: 38,
-                padding: "6px 12px",
-                borderRadius: 8,
-                border: isActive
-                  ? "1px solid var(--cmd-accent, var(--accent))"
-                  : "1px solid transparent",
-                background: isActive
-                  ? "color-mix(in srgb, var(--cmd-accent, var(--accent)) 14%, var(--cmd-surface, var(--bg-surface-high)) 86%)"
-                  : "transparent",
+                gap: 7,
+                padding: "11px 2px",
+                marginRight: 22,
+                marginBottom: -1,
+                background: "transparent",
+                border: "none",
+                borderBottom: isActive
+                  ? "2px solid var(--cmd-gold, var(--accent))"
+                  : "2px solid transparent",
                 color: isActive
                   ? "var(--cmd-text, var(--text-primary))"
                   : "var(--cmd-text-muted, var(--text-muted))",
                 font: "inherit",
-                fontSize: 11,
-                fontWeight: 800,
-                fontFamily: "var(--cmd-font-mono, var(--font-mono))",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
+                fontSize: 13,
+                fontWeight: 600,
                 cursor: "pointer",
-                transition: "background 120ms, border-color 120ms, color 120ms",
+                transition: "color 120ms, border-color 120ms",
               }}
             >
-              <TabIcon size={13} />
+              <TabIcon size={14} />
               <span>{tab.label}</span>
               {count > 0 && (
                 <span
                   style={{
-                    padding: "1px 6px",
-                    borderRadius: 999,
-                    background: isActive
-                      ? "color-mix(in srgb, var(--cmd-accent, var(--accent)) 20%, transparent)"
-                      : "var(--bg-surface-low)",
-                    border: isActive
-                      ? "1px solid color-mix(in srgb, var(--cmd-accent, var(--accent)) 36%, transparent)"
-                      : "1px solid var(--border-default)",
-                    color: isActive
-                      ? "var(--cmd-accent, var(--accent))"
-                      : "var(--text-muted)",
-                    fontSize: 10,
-                    lineHeight: 1.3,
-                    fontFamily: "var(--cmd-font-mono, var(--font-mono))",
+                    fontSize: 11,
                     fontWeight: 700,
+                    color: isActive
+                      ? "var(--cmd-gold, var(--accent))"
+                      : "var(--cmd-text-muted, var(--text-muted))",
                   }}
                 >
                   {count}
