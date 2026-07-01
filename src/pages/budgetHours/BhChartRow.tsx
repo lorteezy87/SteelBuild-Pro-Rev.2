@@ -131,10 +131,10 @@ export default function BhChartRow({ barData, pieData }: BhChartRowProps) {
         {!hasBar ? (
           <div style={EMPTY_STYLE}>No scope items to display</div>
         ) : (
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={288}>
             <BarChart
               data={barData}
-              margin={{ top: 10, right: 10, left: 10, bottom: 40 }}
+              margin={{ top: 8, right: 10, left: 10, bottom: 58 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="var(--divider)" />
               <XAxis
@@ -144,6 +144,8 @@ export default function BhChartRow({ barData, pieData }: BhChartRowProps) {
                 angle={-35}
                 textAnchor="end"
                 interval={0}
+                height={64}
+                tickFormatter={(v: string) => (v && v.length > 16 ? `${v.slice(0, 15)}…` : v)}
               />
               <YAxis
                 tick={AXIS_TICK}
@@ -151,7 +153,7 @@ export default function BhChartRow({ barData, pieData }: BhChartRowProps) {
                 tickFormatter={(v: number) => `${v}h`}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Legend iconSize={8} wrapperStyle={LEGEND_STYLE} />
+              <Legend verticalAlign="top" align="center" iconSize={8} height={24} wrapperStyle={{ ...LEGEND_STYLE, paddingBottom: 8 }} />
               <Bar dataKey="shopBudget" name="Shop Budget" fill="var(--accent)" radius={[3, 3, 0, 0]} />
               <Bar dataKey="shopActual" name="Shop Actual" fill="var(--accent-muted, #5ab0ff)" radius={[3, 3, 0, 0]} />
               <Bar dataKey="fieldBudget" name="Field Budget" fill="#3B82F6" radius={[3, 3, 0, 0]} />
