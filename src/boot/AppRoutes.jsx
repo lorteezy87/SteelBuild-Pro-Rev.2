@@ -11,7 +11,6 @@ import { useUserPrefs } from "@/hooks/useUserPrefs";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectRole } from "@/hooks/useProjectRole";
 import { landingForRole } from "@/lib/landingForRole";
-import { useFlag } from "@/hooks/useFeatureFlag";
 
 // Two pages keep dedicated lazy bindings here (rather than going through the
 // PAGES registry) because they're mounted at non-canonical URLs:
@@ -19,7 +18,6 @@ import { useFlag } from "@/hooks/useFeatureFlag";
 //   - Landing  at "/Landing"
 const Dashboard = lazyWithRetry(() => import("@/pages/Dashboard"));
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
-const LauncherPage = lazyWithRetry(() => import("@/pages/LauncherPage"));
 
 /**
  * Wrap each lazy page in Suspense + per-page error boundary. Keyed by `label`
@@ -75,15 +73,6 @@ export function IndexRoute() {
   // An explicit, non-default pref always wins — unchanged legacy behavior.
   const explicitTarget =
     default_landing && default_landing !== "Dashboard" ? default_landing : null;
-
-  // Desktop shell: the launcher is the home. When the flag is on and the user
-  // has no explicit landing pref, land on the launcher (role-agnostic, so no
-  // need to wait for the per-project role). Honors the once-per-session guard.
-  const desktopShell = useFlag("desktop_shell");
-  if (desktopShell && !explicitTarget && !alreadyRedirected) {
-    try { sessionStorage.setItem(LANDING_REDIRECT_KEY, "1"); } catch { /* ignore */ }
-    return <Navigate to="/Launcher" replace />;
-  }
 
   // Will an active project (and thus a per-project role) resolve this load?
   // A saved localStorage pick or the Settings "Default Project" pref both
@@ -157,15 +146,6 @@ export default function AppRoutes() {
             }
           />
         ))}
-
-        <Route
-          path="Launcher"
-          element={
-            <LazyRoute label="Launcher">
-              <LauncherPage />
-            </LazyRoute>
-          }
-        />
 
         <Route
           path="Landing"

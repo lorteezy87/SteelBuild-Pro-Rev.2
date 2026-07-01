@@ -2,12 +2,20 @@
  * Tests for expensesControlCenter.derive.ts
  * Pure logic — no DOM, no network.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterAll } from "vitest";
 import {
   buildExpensesSummary,
   expenseStatusTone,
   type ExpenseRecord,
 } from "../expensesControlCenter.derive";
+
+// Freeze the clock at module scope so NOW_MONTH (below) and the derive's
+// "this month" computation always agree on one fixed month, regardless of when
+// or in which timezone the suite runs. Previously both read the real clock and
+// drifted apart at month/day/UTC boundaries (this test flaked on month rollover).
+vi.useFakeTimers();
+vi.setSystemTime(new Date("2026-06-15T12:00:00Z"));
+afterAll(() => { vi.useRealTimers(); });
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 const NOW_MONTH = new Date().toISOString().slice(0, 7); // "YYYY-MM"

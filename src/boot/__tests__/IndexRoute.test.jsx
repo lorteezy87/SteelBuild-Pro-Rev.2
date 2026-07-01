@@ -10,7 +10,6 @@
 //   - role → target mapping (pm/admin/owner → hub, field → Field Today, viewer → Dashboard)
 //   - a brand-new zero-project user lands on Dashboard immediately (no spinner)
 //   - the once-per-session guard makes a later visit show Dashboard, not the role target
-//   - desktop_shell flag on → redirects to /Launcher (role-agnostic, respects guard)
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import "@testing-library/jest-dom";
@@ -29,9 +28,6 @@ vi.mock("@/components/shared/ProjectContext", () => ({
 vi.mock("@/hooks/useProjectRole", () => ({ useProjectRole: () => roleState }));
 vi.mock("@/pages/Dashboard", () => ({ default: () => <div>DASHBOARD</div> }));
 vi.mock("@/boot/PageLoader", () => ({ default: () => <div>LOADER</div> }));
-vi.mock("@/hooks/useFeatureFlag", () => ({
-  useFlag: () => globalThis.__deskShellFlag === true,
-}));
 
 import { IndexRoute, LANDING_REDIRECT_KEY } from "@/boot/AppRoutes";
 
@@ -43,7 +39,6 @@ function renderIndex() {
         <Route path="DrawingSubmittalHub" element={<div>HUB</div>} />
         <Route path="FieldToday" element={<div>FIELD</div>} />
         <Route path="RFIs" element={<div>RFISPAGE</div>} />
-        <Route path="Launcher" element={<div>LAUNCHER</div>} />
       </Routes>
     </MemoryRouter>
   );
@@ -56,7 +51,6 @@ describe("IndexRoute — default landing precedence (boot invariants)", () => {
   beforeEach(() => {
     sessionStorage.clear();
     localStorage.clear();
-    globalThis.__deskShellFlag = false;
     prefsState = { default_landing: "Dashboard", default_project_id: null };
     projState = proj();
     roleState = roleResolved("viewer");
@@ -120,16 +114,5 @@ describe("IndexRoute — default landing precedence (boot invariants)", () => {
     renderIndex();
     expect(await screen.findByText("DASHBOARD")).toBeInTheDocument();
     expect(screen.queryByText("HUB")).not.toBeInTheDocument();
-  });
-
-  it("redirects to /Launcher when desktop_shell is on and no explicit pref", async () => {
-    globalThis.__deskShellFlag = true;
-    // Default pref (Dashboard = no explicit target), fresh session, no active project needed.
-    prefsState = { default_landing: "Dashboard", default_project_id: null };
-    projState = proj();
-    roleState = roleResolved("viewer");
-    renderIndex();
-    expect(await screen.findByText("LAUNCHER")).toBeInTheDocument();
-    expect(sessionStorage.getItem(LANDING_REDIRECT_KEY)).toBe("1");
   });
 });
