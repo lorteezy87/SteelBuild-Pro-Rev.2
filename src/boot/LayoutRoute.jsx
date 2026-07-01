@@ -3,8 +3,6 @@ import { useEffect } from "react";
 import PageErrorBoundary from "@/components/shared/ErrorBoundary";
 import Layout from "@/Layout";
 import { PAGES } from "@/config/routes";
-import { isReferenceChromePage } from "@/config/dashboardChromePages";
-import DesktopShell from "@/components/desktop/DesktopShell";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useTheme } from "@/components/shared/ThemeContext";
 
@@ -20,11 +18,8 @@ export default function LayoutRoute() {
   const canonicalPageName =
     Object.keys(PAGES).find((pageName) => pageName.toLowerCase() === segment.toLowerCase()) || segment;
   const currentPageName = canonicalPageName || "Dashboard";
-  const desktopShell = useFlag("desktop_shell");
   const commandUi = useFlag("command_ui");
   const { setTheme } = useTheme();
-  const useReferenceChrome = isReferenceChromePage(currentPageName);
-  const useDesktopShell = desktopShell && !useReferenceChrome;
 
   // The command_ui redesign is light-first. Default the whole shell to the light
   // theme once when the flag turns on (the user can still toggle dark afterward —
@@ -34,13 +29,11 @@ export default function LayoutRoute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commandUi]);
 
-  const Shell = useDesktopShell ? DesktopShell : Layout;
-
   return (
     <PageErrorBoundary label="Layout" key="layout-boundary">
-      <Shell currentPageName={currentPageName}>
+      <Layout currentPageName={currentPageName}>
         <Outlet />
-      </Shell>
+      </Layout>
     </PageErrorBoundary>
   );
 }
