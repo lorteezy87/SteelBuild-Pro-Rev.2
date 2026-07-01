@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import { SectionCard, StatusPill } from "@/components/desktop/module";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -14,16 +14,12 @@ import {
   Clock3,
   FileQuestion,
   GitCompareArrows,
-  Layers3,
-  Link2,
   Lock,
   Search,
   ShieldCheck,
   User,
 } from "lucide-react";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
-import CycleTimeCardRaw from "@/components/submittals/CycleTimeCard";
-import AgingReportTableRaw from "@/components/submittals/AgingReportTable";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { DRAFTING_STATES, effectiveDetailingState } from "@/lib/detailingPackageState";
@@ -32,23 +28,17 @@ import type { ElementStatusKey, ElementStatusSummary } from "@/services/modelEle
 import { FAB_STATUS_META, FAB_STATUS_ORDER, summarizeFabStatus } from "@/lib/fabStatus";
 import {
   BIC_CHOICES,
-  CLOSED_SUBMITTAL_STATUSES,
-  STATUS_COLORS,
   accent,
   border,
-  buildApprovalMatrixRows,
   currentRevisionForPackage,
-  summarizeApprovalMatrix,
   dueInfo,
   error,
   fmtDate,
   getActionTone,
   getOperationalStateColor,
-  getStatusColor,
   getSubmittalDueDate,
   info,
   isClosedPackage,
-  isClosedSubmittal,
   itemUrgency,
   mono,
   pluralize,
@@ -61,7 +51,7 @@ import {
   toDateInputValue,
   warning,
 } from "./format";
-import type { CurrentRevisionInfo, DueInfo, Submittal } from "./types";
+import type { CurrentRevisionInfo } from "./types";
 import {
   DueChip,
   EmptyState,
@@ -77,12 +67,12 @@ import {
   ReadyChip,
   RiskPill,
   SeqMetric,
-  StatusChip,
-  SummaryChip,
   Td,
   Th,
   TriageMetric,
 } from "./primitives";
+export { ApprovalMatrix } from "./approvalMatrix";
+export { LeadTimesModal } from "./leadTimesModal";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -97,8 +87,6 @@ const DialogContent = DialogContentRaw as unknown as ComponentType<AnyProps>;
 const DialogHeader = DialogHeaderRaw as unknown as ComponentType<AnyProps>;
 const DialogTitle = DialogTitleRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
-const CycleTimeCard = CycleTimeCardRaw as unknown as ComponentType<AnyProps>;
-const AgingReportTable = AgingReportTableRaw as unknown as ComponentType<AnyProps>;
 // Lazy so the heavy revision/PDF modals only load when a row action fires —
 // they never weigh down the hub chunk on tab open. The upload modals use
 // lazyWithRetry so a stale-chunk 404 after a deploy triggers ONE reload for
@@ -1189,13 +1177,6 @@ function TriageItemRow({ item, onOpen, onEscalate }: { item: any; onOpen: () => 
   );
 }
 
-interface ApprovalMatrixProps {
-  drawingSets: any[];
-  submittals: Submittal[];
-  roundsBySubmittal: Record<string, any[]>;
-  isLoading: boolean;
-}
-
 // Per-row action/state handlers shared by the table and virtualized branches of
 // the Drawing Register. The cell content is identical in both; only the wrapping
 // element differs (<td> in the table, grid <div> in the virtual list).
@@ -1945,407 +1926,5 @@ export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }:
         </div>
       </div>
     </SectionCard>
-  );
-}
-
-export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading }: ApprovalMatrixProps) {
-  const [search, setSearch] = useState("");
-
-  // Build matrix + summary (pure logic in format.ts; testable).
-  const matrixRows = useMemo(
-    () => buildApprovalMatrixRows(drawingSets, submittals, search),
-    [drawingSets, submittals, search],
-  );
-  const summary = useMemo(() => summarizeApprovalMatrix(matrixRows), [matrixRows]);
-
-  if (isLoading) return <LoadingSkeleton />;
-
-  return (
-    <SectionCard title="Approval matrix">
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* ── Analytics (cycle-time + aging) ───────────────────────── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: 16 }}>
-          <CycleTimeCard submittals={submittals} roundsBySubmittal={roundsBySubmittal} isLoading={isLoading} />
-          <AgingReportTable submittals={submittals} isLoading={isLoading} />
-        </div>
-
-        {/* ── Summary Bar ──────────────────────────────────────────── */}
-        <div style={{
-          display: "flex", gap: 10, flexWrap: "wrap",
-          alignItems: "center",
-          padding: 14,
-          borderRadius: 16,
-          border: `1px solid ${border}`,
-          background: surface1,
-        }}>
-          <div style={{ flex: "1 1 320px", minWidth: 220 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <Layers3 size={15} color={accent} />
-              <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: accent }}>
-                Approval Matrix
-              </div>
-            </div>
-            <label style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              maxWidth: 520,
-              padding: "8px 11px",
-              borderRadius: 10,
-              border: `1px solid ${border}`,
-              background: surface2,
-              color: textMuted,
-            }}>
-            <Search size={15} />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search sets, submittals..."
-              style={{
-                width: "100%",
-                background: "transparent",
-                color: textPrimary,
-                border: 0,
-                fontFamily: mono, fontSize: 12,
-                outline: "none",
-              }}
-            />
-            </label>
-          </div>
-          <SummaryChip icon={Layers3} label="Sets" value={summary.total} color={accent} />
-          <SummaryChip icon={Link2} label="No Submittal" value={summary.noSubmittal} color={textMuted} />
-          <SummaryChip icon={AlertTriangle} label="Overdue" value={summary.overdue} color={error} />
-          <SummaryChip icon={Clock3} label="Due Soon" value={summary.dueSoon} color={warning} />
-          <SummaryChip icon={ClipboardList} label="Pending" value={summary.pending} color={warning} />
-          <SummaryChip icon={ShieldCheck} label="Approved" value={summary.approved} color={success} />
-          <SummaryChip icon={AlertTriangle} label="Needs Action" value={summary.rejected} color={review} />
-        </div>
-
-        {/* ── Matrix Table ─────────────────────────────────────────── */}
-        <div className="sbd-card" style={{
-          borderRadius: 16, border: `1px solid ${border}`,
-          overflowX: "auto",
-          padding: 0,
-        }}>
-          <table className="sbd-table" style={{
-            width: "100%", minWidth: 980, borderCollapse: "collapse",
-            fontFamily: mono, fontSize: 12,
-          }}>
-            <thead>
-              <tr style={{ background: surface2 }}>
-                <Th>Drawing Set Package</Th>
-                <Th>Set #</Th>
-                <Th>Discipline</Th>
-                <Th style={{ textAlign: "center" }}>Sheets</Th>
-                <Th>Linked Submittal</Th>
-                <Th>Status</Th>
-                <Th>Due Status</Th>
-                <Th style={{ textAlign: "center" }}>Round</Th>
-                <Th>Ball In Court</Th>
-                <Th>Submitted</Th>
-                <Th>Required</Th>
-                <Th>Returned</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {matrixRows.length === 0 ? (
-                <tr>
-                  <td colSpan={12} style={{
-                    padding: 40, textAlign: "center", color: textMuted,
-                  }}>
-                    {search ? "No matching drawing sets." : "No drawing sets yet."}
-                  </td>
-                </tr>
-              ) : (
-                matrixRows.map((row) => (
-                  <MatrixRow
-                    key={row.id}
-                    drawingSet={row}
-                    sub={row.latestSubmittal}
-                    due={row.due}
-                    allSubmittals={row.submittals}
-                    roundsBySubmittal={roundsBySubmittal}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </SectionCard>
-  );
-}
-
-// ── Matrix table row ──────────────────────────────────────────────────────
-
-interface MatrixRowProps {
-  drawingSet: any;
-  sub: any;
-  due: DueInfo;
-  allSubmittals: any[];
-  roundsBySubmittal: Record<string, any[]>;
-}
-
-function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }: MatrixRowProps) {
-  const [expanded, setExpanded] = useState(false);
-  const hasMultiple = allSubmittals.length > 1;
-  const overdueStyle: CSSProperties = due?.overdue ? { color: error, fontWeight: 700 } : {};
-  const rowStatusColor = getStatusColor(sub?.status);
-
-  return (
-    <>
-      <tr
-        onClick={hasMultiple ? () => setExpanded(!expanded) : undefined}
-        style={{
-          borderBottom: `1px solid ${border}`,
-          borderLeft: `3px solid ${sub ? rowStatusColor : warning}`,
-          cursor: hasMultiple ? "pointer" : "default",
-          transition: "background 0.1s",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = surface2)}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-      >
-        <Td style={{ fontWeight: 600 }}>
-          {hasMultiple && (
-            <span style={{ marginRight: 6, fontSize: 10, opacity: 0.6 }}>
-              {expanded ? "▾" : "▸"}
-            </span>
-          )}
-          {drawingSet.set_name || "—"}
-        </Td>
-        <Td style={{ color: accent, fontWeight: 800 }}>{formatDrawingSetNumber(drawingSet)}</Td>
-        <Td style={{ color: textMuted }}>{drawingSet.discipline || "—"}</Td>
-        <Td style={{ textAlign: "center" }}>{drawingSet.sheet_count || 0}</Td>
-        {sub ? (
-          <>
-            <Td style={{ color: accent }}>{sub.submittal_number}</Td>
-            <Td>
-              <StatusChip status={sub.status} />
-            </Td>
-            <Td>
-              <DueChip info={due} />
-            </Td>
-            <Td style={{ textAlign: "center" }}>
-              {sub.round_number > 1 && (
-                <span style={{
-                  background: warning, color: "#000",
-                  padding: "1px 6px", borderRadius: 3, fontSize: 10, fontWeight: 700,
-                }}>
-                  R{sub.round_number}
-                </span>
-              )}
-              {sub.round_number <= 1 && "1"}
-            </Td>
-            <Td>{CLOSED_SUBMITTAL_STATUSES.has(sub.status ?? "") ? "Closed" : (sub.ball_in_court || "—")}</Td>
-            <Td>{fmtDate(sub.submitted_date)}</Td>
-            <Td style={overdueStyle}>{fmtDate(getSubmittalDueDate(sub))}</Td>
-            <Td>{fmtDate(sub.returned_date)}</Td>
-          </>
-        ) : (
-          <>
-            <Td style={{ color: warning, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }} colSpan={8}>
-              No submittal linked - not tracked in approval pipeline
-            </Td>
-          </>
-        )}
-      </tr>
-
-      {/* Expanded: show all submittals for this set */}
-      {expanded && allSubmittals
-        .filter((s) => s.id !== sub?.id)
-        .map((s) => (
-          <tr key={s.id} style={{ borderBottom: `1px solid ${border}`, background: surface1 }}>
-            <Td style={{ paddingLeft: 32, color: textMuted }}>↳</Td>
-            <Td />
-            <Td />
-            <Td />
-            <Td style={{ color: accent }}>{s.submittal_number}</Td>
-            <Td><StatusChip status={s.status} /></Td>
-            <Td><DueChip info={dueInfo(getSubmittalDueDate(s), isClosedSubmittal(s))} /></Td>
-            <Td style={{ textAlign: "center" }}>{s.round_number || 1}</Td>
-            <Td>{CLOSED_SUBMITTAL_STATUSES.has(s.status ?? "") ? "Closed" : (s.ball_in_court || "—")}</Td>
-            <Td>{fmtDate(s.submitted_date)}</Td>
-            <Td>{fmtDate(getSubmittalDueDate(s))}</Td>
-            <Td>{fmtDate(s.returned_date)}</Td>
-          </tr>
-        ))}
-
-      {/* Expanded: show round history for the latest submittal */}
-      {expanded && sub && roundsBySubmittal[sub.id]?.length > 0 && (
-        <tr style={{ background: surface1 }}>
-          <td colSpan={12} style={{ padding: "8px 32px 12px" }}>
-            <RoundTimeline rounds={roundsBySubmittal[sub.id]} />
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
-// ── Round Timeline (compact inline version) ────────────────────────────────
-
-function RoundTimeline({ rounds }: { rounds: any[] }) {
-  if (!rounds || rounds.length === 0) return null;
-
-  return (
-    <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
-      <span style={{
-        fontFamily: mono, fontSize: 10, color: textMuted,
-        textTransform: "uppercase", letterSpacing: "0.08em",
-        marginRight: 8,
-      }}>
-        Round History:
-      </span>
-      {rounds.map((r, i) => {
-        const isLast = i === rounds.length - 1;
-        const statusColor = STATUS_COLORS[r.status] || textMuted;
-        const days = r.submitted_date && r.returned_date
-          ? Math.ceil((new Date(r.returned_date).getTime() - new Date(r.submitted_date).getTime()) / 86400000)
-          : null;
-
-        return (
-          <Fragment key={r.id}>
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "3px 10px", borderRadius: 4,
-              background: isLast ? `${statusColor}18` : surface2,
-              border: `1px solid ${isLast ? statusColor : border}`,
-            }}>
-              <span style={{ fontFamily: mono, fontSize: 10, fontWeight: 700, color: textPrimary }}>
-                R{r.round_number}
-              </span>
-              <span style={{
-                fontSize: 9, padding: "1px 5px", borderRadius: 3,
-                background: `${statusColor}30`, color: statusColor, fontWeight: 600,
-              }}>
-                {r.status}
-              </span>
-              {days !== null && (
-                <span style={{ fontSize: 9, color: textMuted }}>
-                  {days}d
-                </span>
-              )}
-            </div>
-            {!isLast && (
-              <span style={{ color: textMuted, fontSize: 10 }}>→</span>
-            )}
-          </Fragment>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Shared micro-components ────────────────────────────────────────────────
-
-// ── Lead-times settings modal ───────────────────────────────────────────────
-// Edits the per-project backward-schedule lead times (projects.metadata.
-// detailing_lead_days). Opaque panel bg per the dark-theme modal rule (a
-// translucent --bg-surface/--bg-card would render see-through over the scrim).
-
-const LEAD_FIELDS: Array<{ key: string; label: string; hint: string }> = [
-  { key: "detailing",      label: "Detailing duration", hint: "Detailing start → internal review" },
-  { key: "internalReview", label: "Internal review",    hint: "Internal review → submit" },
-  { key: "approval",       label: "Approval cycle",     hint: "Submit → approval (EOR)" },
-  { key: "fabRelease",     label: "Release buffer",     hint: "Approval → fab release" },
-  { key: "fab",            label: "Fab + ship",         hint: "Fab release → erection release" },
-  { key: "erectionPrep",   label: "Field prep",         hint: "Erection release → erection start" },
-];
-
-interface LeadTimesModalProps {
-  leadDays: Record<string, number>;
-  defaults: Record<string, number>;
-  saving: boolean;
-  onSave: (leads: Record<string, number>) => void;
-  onClose: () => void;
-}
-
-export function LeadTimesModal({ leadDays, defaults, saving, onSave, onClose }: LeadTimesModalProps) {
-  const [draft, setDraft] = useState<Record<string, number>>(() => ({ ...defaults, ...leadDays }));
-
-  // Escape closes the modal (keyboard accessibility — §25). Guarded by `saving`
-  // so a mid-save Escape can't drop the dialog before the mutation settles.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !saving) onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [saving, onClose]);
-
-  const setField = (key: string, value: string) => {
-    const n = Math.max(0, Math.round(Number(value) || 0));
-    setDraft((d) => ({ ...d, [key]: n }));
-  };
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 1000,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "min(480px, 100%)", maxHeight: "85vh", overflowY: "auto",
-          background: "var(--bg-surface-secondary)",
-          border: `1px solid ${border}`, borderRadius: 16,
-          boxShadow: "var(--shadow-card)", padding: 20,
-        }}
-      >
-        <div style={{ marginBottom: 4, fontFamily: mono, fontSize: 9, color: textMuted, letterSpacing: "0.14em", textTransform: "uppercase" }}>
-          Detailing Control Center
-        </div>
-        <h2 style={{ margin: "0 0 6px", color: textPrimary, fontSize: 20 }}>Lead Times</h2>
-        <p style={{ margin: "0 0 16px", color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.5 }}>
-          Calendar-day gaps used to schedule each package <strong>backward</strong> from its linked
-          erection date. Saved as this project&apos;s defaults; an individual package can still
-          override them in its metadata.
-        </p>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {LEAD_FIELDS.map((f) => (
-            <label key={f.key} style={{ display: "grid", gridTemplateColumns: "1fr 92px", gap: 10, alignItems: "center" }}>
-              <span style={{ minWidth: 0 }}>
-                <span style={{ display: "block", color: textPrimary, fontSize: 13, fontWeight: 700 }}>{f.label}</span>
-                <span style={{ display: "block", color: textMuted, fontSize: 11 }}>{f.hint}</span>
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6, justifySelf: "end" }}>
-                <input
-                  type="number" min={0} inputMode="numeric"
-                  value={draft[f.key] ?? 0}
-                  disabled={saving}
-                  onChange={(e) => setField(f.key, e.target.value)}
-                  style={{
-                    width: 56, background: "var(--bg-input, var(--bg-surface-low))",
-                    border: `1px solid ${border}`, borderRadius: 8, padding: "6px 8px",
-                    color: textPrimary, fontFamily: mono, fontSize: 13, textAlign: "right", outline: "none",
-                  }}
-                />
-                <span style={{ color: textMuted, fontFamily: mono, fontSize: 11 }}>d</span>
-              </span>
-            </label>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 20 }}>
-          <button type="button" className="sbd-btn-ghost" disabled={saving} onClick={() => setDraft({ ...defaults })}>
-            Reset to defaults
-          </button>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="sbd-btn-ghost" disabled={saving} onClick={onClose}>Cancel</button>
-            <button type="button" className="sbd-btn-primary" disabled={saving} onClick={() => onSave(draft)}>
-              {saving ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
