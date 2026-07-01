@@ -34,7 +34,6 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
 import { AlertTriangle, Box, CalendarClock, Gauge, Link2 } from "lucide-react";
 import { useFlag } from "@/hooks/useFeatureFlag";
-import { ModuleHeader } from "@/components/desktop/module";
 import Model3DTab from "@/components/viewer3d/Model3DTab";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
@@ -129,10 +128,7 @@ export default function DrawingSubmittalHub() {
 
   // The 3D model viewer is flag-gated until verified against real models in prod.
   const show3d = useFlag("viewer_3d");
-  // Desktop shell skin — ModuleHeader replaces CommandBar when on.
-  const desktopShell = useFlag("desktop_shell");
   // Command UI re-skin — wraps the hub in the light command chrome when on.
-  // The classic + desktop_shell paths remain intact for !commandUi.
   const commandUi = useFlag("command_ui");
   const tabs = useMemo(
     () => (show3d ? [...TABS, { key: "model3d", label: "3D Model", icon: Box }] : TABS),
@@ -874,27 +870,7 @@ export default function DrawingSubmittalHub() {
         color: "var(--text-primary)",
       }}
     >
-      {/* ── Command Bar / Module Header (flag-branched) ──────────────── */}
-      {desktopShell ? (
-        <ModuleHeader
-          page="DrawingSubmittalHub"
-          title="Drawing & Submittal Control"
-          subtitle={projectName ? `Detailing control · ${projectName}` : "Detailing control"}
-          stats={[
-            { label: "Overdue", value: triage.overdue.length, tone: triage.overdue.length ? "danger" : "neutral" },
-            { label: "At Risk", value: triage.atRiskCount, tone: triage.atRiskCount ? "amber" : "neutral" },
-            { label: "In Review", value: drawingKpis.inReview, tone: drawingKpis.inReview ? "blue" : "neutral" },
-            { label: "Unlinked", value: triage.unlinkedSubmittalItems.length, tone: triage.unlinkedSubmittalItems.length ? "amber" : "neutral" },
-          ]}
-          actions={
-            <button type="button" className="sbd-btn-ghost" onClick={() => setLeadModalOpen(true)}
-              title="Edit the project's detailing lead times (drives the backward schedule)"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 32 }}>
-              <CalendarClock size={14} /> Lead Times
-            </button>
-          }
-        />
-      ) : (
+      {/* ── Command Bar ─────────────────────────────────────────────── */}
         <CommandBar
           eyebrow={projectName ? `Detailing control - ${projectName}` : "Detailing control"}
           title="Drawing & Submittal Control"
@@ -937,7 +913,6 @@ export default function DrawingSubmittalHub() {
             Lead Times
           </button>
         </CommandBar>
-      )}
 
       {/* ── KPI Strip ────────────────────────────────────────────────── */}
       <div className="sbp-hub-kpi-strip" style={{
@@ -1009,7 +984,7 @@ export default function DrawingSubmittalHub() {
         alignItems: "center",
         padding: 6,
         marginBottom: 16,
-        marginTop: desktopShell ? 14 : 0,
+        marginTop: 0,
         background: "color-mix(in srgb, var(--bg-surface) 82%, transparent)",
         border: `1px solid ${border}`,
         borderRadius: 14,
