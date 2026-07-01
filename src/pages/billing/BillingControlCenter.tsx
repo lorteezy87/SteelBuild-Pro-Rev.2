@@ -25,6 +25,7 @@ import { CreditCard } from "lucide-react";
 import "@/styles/command.css";
 import { PageHero, KpiStrip, useCommandSkin } from "@/components/command";
 import type { KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { buildBillingSummary } from "./billingControlCenter.derive";
 
 // Icon imports matched to the KPI meaning — lucide-react (already a dep).
@@ -121,6 +122,7 @@ export default function BillingControlCenter(props: BillingControlCenterProps) {
         subtitle="Manage your workspace subscription, seats, and plan limits."
         projectName={orgName}
         chips={heroChips}
+        photoSrc={photoFor("Billing") ?? undefined}
         stats={[]}
       />
 

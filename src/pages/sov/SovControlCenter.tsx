@@ -15,6 +15,7 @@ import {
   PageHero, KpiStrip, DecisionPanel, Pill, FilterBar, DataTable, useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { buildSovSummary, calcRow } from "./sovControlCenter.derive";
 import type { SovLineItem, SovSummary } from "./sovControlCenter.derive";
 // Note: formatCurrency/formatPercent from formatters.jsx are available if needed
@@ -255,6 +256,7 @@ export default function SovControlCenter(props: SovControlCenterProps) {
         subtitle="Track billing progress, retainage, and pay application status for every line item."
         projectName={projectName}
         chips={heroChips}
+        photoSrc={photoFor("SOV") ?? undefined}
         stats={[
           { value: fmtMoney(s.contractValue), label: "Contract Value" },
           { value: `${s.pctComplete}%`, label: "Billed to Date" },

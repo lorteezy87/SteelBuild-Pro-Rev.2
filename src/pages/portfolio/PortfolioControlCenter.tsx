@@ -23,6 +23,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   buildPortfolioSummary,
   healthTone,
@@ -306,6 +307,7 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
         subtitle="Org-wide project health, contract value, schedule pressure, and steel-production progress."
         // No projectName — this is org-wide, not project-scoped
         chips={heroChips}
+        photoSrc={photoFor("PortfolioHub") ?? undefined}
         stats={[
           { value: fmtMoney(summary.kpis.totalContractValue), label: "Portfolio Value" },
           { value: `${summary.kpis.avgPctComplete}%`, label: "Avg Complete" },

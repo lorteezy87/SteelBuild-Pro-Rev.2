@@ -26,6 +26,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef, PillTone } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   buildProjectsSummary,
   type ProjectRecord,
@@ -286,6 +287,7 @@ export default function ProjectsControlCenter(props: ProjectsControlCenterProps)
         title="Projects Control Center"
         subtitle="Portfolio overview — all projects in your organization."
         chips={chips}
+        photoSrc={photoFor("ProjectsHub") ?? undefined}
         stats={[
           { value: fmtMoney(s.kpis.totalContractValue), label: "Portfolio Value" },
           { value: `${s.kpis.avgPctComplete}%`, label: "Avg Complete" },

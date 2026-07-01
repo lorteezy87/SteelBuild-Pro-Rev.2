@@ -37,6 +37,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   buildBudgetHoursSummary,
   fmtHours,
@@ -379,6 +380,7 @@ export default function BudgetHoursControlCenter({
         subtitle="Shop and field labor-hour budget vs actuals — by scope item, with work package rollup and miss tracking."
         projectName={projectName}
         chips={heroChips}
+        photoSrc={photoFor("BudgetHours") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />

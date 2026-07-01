@@ -31,6 +31,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef, PillTone } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { buildCommandCenterSummary } from "./commandCenterControlCenter.derive";
 import type {
   CommandCenterSources,
@@ -273,6 +274,7 @@ export default function CommandCenterControlCenter(props: CommandCenterControlCe
         subtitle="Daily command for aligned decisions, issue resolution, and proactive project control."
         projectName={projectName}
         chips={chips}
+        photoSrc={photoFor("CommandCenter") ?? undefined}
         stats={[]}
       />
 

@@ -20,6 +20,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { buildExpensesSummary, expenseStatusTone } from "./expensesControlCenter.derive";
 import type { ExpenseRecord } from "./expensesControlCenter.derive";
 import { formatMoney } from "@/lib/money";
@@ -192,6 +193,7 @@ export default function ExpensesControlCenter(props: ExpensesControlCenterProps)
         subtitle="Track committed costs, approvals, and vendor spend across this project."
         projectName={projectName}
         chips={chips}
+        photoSrc={photoFor("Expenses") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />
