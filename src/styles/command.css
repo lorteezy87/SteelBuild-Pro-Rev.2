@@ -10,11 +10,11 @@
   --cmd-text: #1b2430;
   --cmd-text-muted: #6b7585;
   --cmd-gold: #f2a706;
-  --cmd-good: #178a4b;
-  --cmd-warn: #b0730a;
-  --cmd-danger: #c4231d;
-  --cmd-info: #2160c4;
-  --cmd-review: #5a44c2;
+  --cmd-good: #12b76a;
+  --cmd-warn: #f59e0b;
+  --cmd-danger: #ef4444;
+  --cmd-info: #2e90e0;
+  --cmd-review: #8b5cf6;
   background: var(--cmd-bg);
   color: var(--cmd-text);
 }
@@ -82,11 +82,11 @@
 /* Pills */
 [data-skin="command"] .cmd-pill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
 [data-skin="command"] .cmd-pill--neutral { background: #e9edf2; color: #3d4753; }
-[data-skin="command"] .cmd-pill--good { background: #d6f0de; color: var(--cmd-good); }
-[data-skin="command"] .cmd-pill--warn { background: #fbe5c0; color: var(--cmd-warn); }
-[data-skin="command"] .cmd-pill--danger { background: #f9d2ce; color: var(--cmd-danger); }
-[data-skin="command"] .cmd-pill--info { background: #d7e5fb; color: var(--cmd-info); }
-[data-skin="command"] .cmd-pill--review { background: #e3dcfa; color: var(--cmd-review); }
+[data-skin="command"] .cmd-pill--good { background: var(--cmd-good); color: #04331d; }
+[data-skin="command"] .cmd-pill--warn { background: var(--cmd-warn); color: #422c00; }
+[data-skin="command"] .cmd-pill--danger { background: var(--cmd-danger); color: #fff; }
+[data-skin="command"] .cmd-pill--info { background: var(--cmd-info); color: #fff; }
+[data-skin="command"] .cmd-pill--review { background: var(--cmd-review); color: #fff; }
 
 /* Filter bar + buttons */
 [data-skin="command"] .cmd-filterbar { display: flex; gap: 10px; align-items: center; background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; padding: 10px 12px; }
@@ -213,16 +213,16 @@
 }
 [data-skin="command"] .detailing-cc .desk-status-pill--open,
 [data-skin="command"] .detailing-cc .desk-status-pill--atrisk,
-[data-skin="command"] .detailing-cc .desk-status-pill--needsaction { background: #fbe5c0; color: var(--cmd-warn); }
+[data-skin="command"] .detailing-cc .desk-status-pill--needsaction { background: var(--cmd-warn); color: #422c00; }
 [data-skin="command"] .detailing-cc .desk-status-pill--review,
 [data-skin="command"] .detailing-cc .desk-status-pill--inreview,
-[data-skin="command"] .detailing-cc .desk-status-pill--fieldready { background: #d7e5fb; color: var(--cmd-info); }
+[data-skin="command"] .detailing-cc .desk-status-pill--fieldready { background: var(--cmd-info); color: #fff; }
 [data-skin="command"] .detailing-cc .desk-status-pill--done,
 [data-skin="command"] .detailing-cc .desk-status-pill--approved,
-[data-skin="command"] .detailing-cc .desk-status-pill--fabready { background: #d6f0de; color: var(--cmd-good); }
+[data-skin="command"] .detailing-cc .desk-status-pill--fabready { background: var(--cmd-good); color: #04331d; }
 [data-skin="command"] .detailing-cc .desk-status-pill--danger,
 [data-skin="command"] .detailing-cc .desk-status-pill--overdue,
-[data-skin="command"] .detailing-cc .desk-status-pill--blocked { background: #f9d2ce; color: var(--cmd-danger); }
+[data-skin="command"] .detailing-cc .desk-status-pill--blocked { background: var(--cmd-danger); color: #fff; }
 
 /* Tables (both the desk-table and sbd-table codepaths in the register). */
 [data-skin="command"] .detailing-cc .desk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
