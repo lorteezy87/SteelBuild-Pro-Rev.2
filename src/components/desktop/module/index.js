@@ -1,10 +1,5 @@
-export { default as ModuleHeader } from "./ModuleHeader";
+// Only the primitives the live command_ui pages consume remain (the desktop
+// shell + ModuleHeader/StatTile/DataTable/ModuleTabs/states were removed when
+// the desktop_shell subsystem was retired).
 export { default as SectionCard } from "./SectionCard";
-export { default as StatTile } from "./StatTile";
 export { default as StatusPill } from "./StatusPill";
-export { default as DataTable } from "./DataTable";
-export { default as ModuleTabs } from "./ModuleTabs";
-export { default as EmptyState } from "./states/EmptyState";
-export { default as ErrorState } from "./states/ErrorState";
-export { default as PermissionDenied } from "./states/PermissionDenied";
-export { default as LoadingSkeleton } from "./states/LoadingSkeleton";

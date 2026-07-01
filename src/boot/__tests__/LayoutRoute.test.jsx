@@ -6,10 +6,6 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 vi.mock("@/Layout", () => ({
   default: ({ children }) => <div data-testid="classic-layout">{children}</div>,
 }));
-vi.mock("@/components/desktop/DesktopShell", () => ({
-  default: ({ children }) => <div data-testid="desktop-shell">{children}</div>,
-}));
-
 let flagOn = false;
 vi.mock("@/hooks/useFeatureFlag", () => ({ useFlag: () => flagOn }));
 
