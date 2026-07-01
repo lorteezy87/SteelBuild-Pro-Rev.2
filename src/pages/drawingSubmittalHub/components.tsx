@@ -62,6 +62,27 @@ import {
   warning,
 } from "./format";
 import type { CurrentRevisionInfo, DueInfo, Submittal } from "./types";
+import {
+  DueChip,
+  EmptyState,
+  EscalateIconButton,
+  FlagToggle,
+  GridCell,
+  GridHeaderCell,
+  HealthChip,
+  ModalLoadingFallback,
+  OperationalStateChip,
+  PipelineBar,
+  RRChip,
+  ReadyChip,
+  RiskPill,
+  SeqMetric,
+  StatusChip,
+  SummaryChip,
+  Td,
+  Th,
+  TriageMetric,
+} from "./primitives";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -629,15 +650,6 @@ function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
   );
 }
 
-function SeqMetric({ label, value, tone }: { label: string; value: ReactNode; tone: string }) {
-  return (
-    <div style={{ textAlign: "center" }}>
-      <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</div>
-      <div className="sbd-num" style={{ color: tone, fontFamily: mono, fontSize: 15, fontWeight: 800, marginTop: 2 }}>{value}</div>
-    </div>
-  );
-}
-
 // ── Revision Impact Tracker ─────────────────────────────────────────────────
 // Revisions that landed on sheets already moving downstream (fabricated /
 // delivered / in field) — the rework / change-order exposure (design doc §7).
@@ -887,57 +899,6 @@ function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: Inli
 
 // ── Operational-state chip + drafting-state advance control ─────────────────
 
-function OperationalStateChip({ state }: { state: string }) {
-  const color = getOperationalStateColor(state);
-  return (
-    <span style={{
-      display: "inline-block",
-      padding: "2px 8px",
-      borderRadius: 999,
-      fontFamily: mono,
-      fontSize: 9,
-      fontWeight: 800,
-      letterSpacing: "0.06em",
-      textTransform: "uppercase",
-      color,
-      background: `color-mix(in srgb, ${color} 16%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`,
-      whiteSpace: "nowrap",
-    }}>
-      {state}
-    </span>
-  );
-}
-
-// R&R loop-back badge, shown next to the stage chip when the governing submittal
-// is Revise-and-Resubmit / Rejected. The stage rolls up to IFA for counts, so
-// this keeps an R&R rejection from reading as a fresh IFA on the board (and
-// matches the register's literal "Revise and Resubmit").
-function RRChip() {
-  const color = "#f59e0b"; // matches "Revise and Resubmit" in format.ts
-  return (
-    <span
-      title="Revise & Resubmit — the review sent this package back; the cycle restarts at IFA"
-      style={{
-        display: "inline-block",
-        padding: "2px 8px",
-        borderRadius: 999,
-        fontFamily: mono,
-        fontSize: 9,
-        fontWeight: 800,
-        letterSpacing: "0.06em",
-        textTransform: "uppercase",
-        color,
-        background: `color-mix(in srgb, ${color} 16%, transparent)`,
-        border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`,
-        whiteSpace: "nowrap",
-      }}
-    >
-      R&amp;R
-    </span>
-  );
-}
-
 interface InlineDetailingControlProps {
   current: string | null | undefined;
   onAdvance: (next: string) => void;
@@ -1069,73 +1030,6 @@ function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanelProps) 
   );
 }
 
-function ReadyChip({ ok, label, bad = false, neutral = false }: { ok: boolean; label: string; bad?: boolean; neutral?: boolean }) {
-  const color = neutral ? info : bad ? error : ok ? success : textMuted;
-  return (
-    <span style={{
-      fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase",
-      color, padding: "2px 7px", borderRadius: 999,
-      background: `color-mix(in srgb, ${color} 14%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
-    }}>
-      {label}
-    </span>
-  );
-}
-
-function FlagToggle({ label, active, disabled, onClick }: { label: string; active: boolean; disabled: boolean; onClick: () => void }) {
-  const color = active ? warning : textMuted;
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      title={active ? `Clear: ${label}` : `Flag: ${label}`}
-      style={{
-        fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase",
-        color: active ? "#0b0e14" : color, cursor: disabled ? "default" : "pointer",
-        padding: "4px 9px", borderRadius: 8,
-        background: active ? warning : `color-mix(in srgb, ${textMuted} 10%, transparent)`,
-        border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
-        opacity: disabled ? 0.6 : 1,
-      }}
-    >
-      {active ? "● " : "○ "}{label}
-    </button>
-  );
-}
-
-interface RiskPillProps {
-  icon: IconType;
-  label: string;
-  value: ReactNode;
-  color: string;
-}
-
-function RiskPill({ icon: Icon, label, value, color }: RiskPillProps) {
-  return (
-    <div style={{
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 8,
-      padding: "7px 10px",
-      borderRadius: 999,
-      background: `color-mix(in srgb, ${color} 11%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
-      color,
-      fontFamily: mono,
-      fontSize: 10,
-      fontWeight: 800,
-      letterSpacing: "0.08em",
-      textTransform: "uppercase",
-    }}>
-      <Icon size={13} />
-      <span>{label}</span>
-      <span className="sbd-num" style={{ color: textPrimary }}>{value}</span>
-    </div>
-  );
-}
-
 interface PipelinePanelProps {
   topStatuses: Array<[string, unknown]>;
   openCount: number;
@@ -1166,31 +1060,6 @@ function PipelinePanel({ topStatuses, openCount, onOpenTab }: PipelinePanelProps
         )}
       </div>
     </SectionCard>
-  );
-}
-
-interface TriageMetricProps {
-  icon: IconType;
-  label: string;
-  value: ReactNode;
-  sub: ReactNode;
-  color: string;
-}
-
-function TriageMetric({ icon: Icon, label, value, sub, color }: TriageMetricProps) {
-  return (
-    <div className="sbd-card" style={{ padding: "14px 16px", borderRadius: 14, borderTop: `2px solid ${color}`, minWidth: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-        <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: textMuted, fontWeight: 800 }}>
-          {label}
-        </div>
-        {Icon && <Icon size={15} color={color} />}
-      </div>
-      <div className="sbd-num" style={{ color, fontFamily: mono, fontSize: 30, lineHeight: 1, fontWeight: 800, marginTop: 10 }}>
-        {value}
-      </div>
-      <div style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 8 }}>{sub}</div>
-    </div>
   );
 }
 
@@ -1320,110 +1189,6 @@ function TriageItemRow({ item, onOpen, onEscalate }: { item: any; onOpen: () => 
   );
 }
 
-function EscalateIconButton({ icon: Icon, label, title, onClick }: { icon: IconType; label: string; title: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 4,
-        minHeight: 30, padding: "4px 8px", borderRadius: 7, cursor: "pointer",
-        background: "transparent", border: `1px solid ${border}`,
-        color: textMuted, fontFamily: mono, fontSize: 9, fontWeight: 800,
-        letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "var(--accent)";
-        e.currentTarget.style.color = "var(--accent)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = border;
-        e.currentTarget.style.color = textMuted;
-      }}
-    >
-      <Icon size={11} />
-      {label}
-    </button>
-  );
-}
-
-function PipelineBar({ status, count, total }: { status: string; count: number; total: number }) {
-  const color = STATUS_COLORS[status] || accent;
-  const pct = total > 0 ? Math.max(4, Math.round((count / total) * 100)) : 0;
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontFamily: mono, fontSize: 11, color: textPrimary, marginBottom: 5 }}>
-        <span>{status}</span>
-        <span className="sbd-num">{count}</span>
-      </div>
-      <div style={{ height: 7, borderRadius: 999, background: surface2, overflow: "hidden", border: `1px solid ${border}` }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: color, boxShadow: `0 0 12px ${color}` }} />
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div style={{ padding: 14, color: textMuted, border: `1px dashed ${border}`, borderRadius: 10, fontSize: 13 }}>
-      {text}
-    </div>
-  );
-}
-
-// Visible fallback for the lazy upload modals. Replaces fallback={null} so a
-// slow or failed chunk load surfaces (the spinner stays up until the chunk
-// loads; a stale-chunk 404 is then caught by lazyWithRetry → one reload)
-// instead of the button appearing to silently do nothing.
-function ModalLoadingFallback() {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      style={{
-        position: "fixed", inset: 0, zIndex: 1000,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        gap: 10, background: "color-mix(in srgb, #000 55%, transparent)",
-        fontFamily: mono, fontSize: 12, color: "#fff", letterSpacing: "0.06em",
-      }}
-    >
-      <span
-        aria-hidden="true"
-        style={{
-          width: 16, height: 16, borderRadius: "50%",
-          border: "2px solid rgba(255,255,255,0.35)", borderTopColor: "#fff",
-          animation: "sbp-spin 0.7s linear infinite",
-        }}
-      />
-      Loading…
-      <style>{"@keyframes sbp-spin{to{transform:rotate(360deg)}}"}</style>
-    </div>
-  );
-}
-
-function DueChip({ info: chipInfo, compact = false }: { info: DueInfo; compact?: boolean }) {
-  return (
-    <span style={{
-      display: "inline-block",
-      marginTop: compact ? 0 : 6,
-      padding: compact ? "3px 7px" : "2px 6px",
-      borderRadius: 999,
-      fontFamily: mono,
-      fontSize: 9,
-      fontWeight: 800,
-      letterSpacing: "0.08em",
-      textTransform: "uppercase",
-      color: chipInfo.tone,
-      background: `color-mix(in srgb, ${chipInfo.tone} 16%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${chipInfo.tone} 44%, transparent)`,
-      whiteSpace: "nowrap",
-    }}>
-      {chipInfo.label}
-    </span>
-  );
-}
-
 interface ApprovalMatrixProps {
   drawingSets: any[];
   submittals: Submittal[];
@@ -1449,23 +1214,6 @@ interface RegisterRowHandlers {
 // right-aligned numeric / action columns.
 const REGISTER_GRID_COLS =
   "minmax(220px, 2.4fr) minmax(64px, 0.8fr) minmax(80px, 0.9fr) 64px minmax(120px, 1.1fr) minmax(96px, 1fr) minmax(80px, 0.8fr) minmax(96px, 1fr) 56px minmax(150px, 1fr)";
-
-// One grid cell mirroring a <Td>: same padding / typography, alignment-aware.
-function GridCell({ children, align = "left", style = {} }: { children?: ReactNode; align?: "left" | "right"; style?: CSSProperties }) {
-  return (
-    <div className="sbd-num" style={{
-      padding: "8px 12px",
-      fontFamily: mono, fontSize: 12,
-      color: textPrimary,
-      display: "flex", alignItems: "center",
-      justifyContent: align === "right" ? "flex-end" : "flex-start",
-      minWidth: 0,
-      ...style,
-    }}>
-      {children}
-    </div>
-  );
-}
 
 // ⚠ MIRROR of the table-branch <Td> cells in DrawingRegisterTable (the
 // !shouldVirtualize branch). Any column add/edit MUST be made in BOTH places.
@@ -1516,23 +1264,6 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
         )}
       </GridCell>
     </>
-  );
-}
-
-// Grid header cell — mirrors <Th> typography for the virtualized register.
-function GridHeaderCell({ children, align = "left", style = {} }: { children?: ReactNode; align?: "left" | "right"; style?: CSSProperties }) {
-  return (
-    <div style={{
-      padding: "10px 12px",
-      fontFamily: mono, fontSize: 10, fontWeight: 600,
-      textTransform: "uppercase", letterSpacing: "0.08em",
-      color: textMuted, display: "flex", alignItems: "center",
-      justifyContent: align === "right" ? "flex-end" : "flex-start",
-      minWidth: 0,
-      ...style,
-    }}>
-      {children}
-    </div>
   );
 }
 
@@ -1890,26 +1621,6 @@ export function DrawingRegisterTable({
 }
 
 // ── Drawing health (slice 2 of the Hub Command Center) ─────────────────────
-function HealthChip({ health, onClick }: { health: any; onClick?: () => void }) {
-  const c = health.band.color;
-  const n = health.issues.length;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={`${health.band.label} · ${n} issue${n === 1 ? "" : "s"} — click for the breakdown`}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 6, padding: "2px 8px", borderRadius: 999, cursor: "pointer",
-        background: `color-mix(in srgb, ${c} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${c} 45%, transparent)`,
-      }}
-    >
-      <span style={{ width: 8, height: 8, borderRadius: "50%", background: c, flexShrink: 0 }} />
-      <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 800, color: c }}>{health.grade}</span>
-      <span className="sbd-num" style={{ fontFamily: mono, fontSize: 11, color: textPrimary }}>{health.score}</span>
-    </button>
-  );
-}
-
 function HealthBreakdownDialog({ health, onClose }: { health: any; onClose: () => void }) {
   return (
     <Dialog open onOpenChange={(o: boolean) => !o && onClose()}>
@@ -2527,75 +2238,6 @@ function RoundTimeline({ rounds }: { rounds: any[] }) {
 }
 
 // ── Shared micro-components ────────────────────────────────────────────────
-
-function Th({ children, style = {} }: { children?: ReactNode; style?: CSSProperties }) {
-  return (
-    <th style={{
-      padding: "10px 12px", textAlign: "left",
-      fontFamily: mono, fontSize: 10, fontWeight: 600,
-      textTransform: "uppercase", letterSpacing: "0.08em",
-      color: textMuted, borderBottom: `1px solid ${border}`,
-      ...style,
-    }}>
-      {children}
-    </th>
-  );
-}
-
-function Td({ children, style = {}, colSpan, className }: { children?: ReactNode; style?: CSSProperties; colSpan?: number; className?: string }) {
-  return (
-    <td colSpan={colSpan} className={className ? `sbd-num ${className}` : "sbd-num"} style={{
-      padding: "8px 12px",
-      fontFamily: mono, fontSize: 12,
-      color: textPrimary,
-      ...style,
-    }}>
-      {children}
-    </td>
-  );
-}
-
-function StatusChip({ status }: { status: string }) {
-  const color = STATUS_COLORS[status] || textMuted;
-  return (
-    <span style={{
-      display: "inline-block",
-      padding: "2px 8px", borderRadius: 3,
-      fontSize: 10, fontWeight: 600,
-      fontFamily: mono,
-      background: `${color}20`,
-      color,
-      border: `1px solid ${color}40`,
-    }}>
-      {status}
-    </span>
-  );
-}
-
-interface SummaryChipProps {
-  icon: IconType;
-  label: string;
-  value: ReactNode;
-  color: string;
-}
-
-function SummaryChip({ icon: Icon, label, value, color }: SummaryChipProps) {
-  return (
-    <div className="sbd-pill" style={{
-      display: "flex", alignItems: "center", gap: 6,
-      padding: "6px 10px", borderRadius: 999,
-      background: surface2, border: `1px solid ${border}`,
-    }}>
-      {Icon && <Icon size={13} color={color} />}
-      <span style={{ fontFamily: mono, fontSize: 10, color: textMuted, textTransform: "uppercase" }}>
-        {label}
-      </span>
-      <span className="sbd-num" style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color }}>
-        {value}
-      </span>
-    </div>
-  );
-}
 
 // ── Lead-times settings modal ───────────────────────────────────────────────
 // Edits the per-project backward-schedule lead times (projects.metadata.
