@@ -22,8 +22,12 @@ moat.
 - **Viewers**: a **self-hosted IFC viewer** (`web-ifc` wasm + `three.js`,
   lazy-loaded) for the Detailing Control Center's 3D tab; `pdf.js` for drawings.
 - **Data**: Supabase (Postgres + RLS + Storage + Auth + Edge Functions).
-- **Hosting**: Vercel — auto-deploys from `main` to
-  <https://steelbuild-pro.com> (Vercel project `steelbuildpro-og`).
+- **Hosting**: Vercel. Production deploys are **CI-gated** — a push to `main`
+  runs `.github/workflows/ci.yml` (lint + TS/JS typechecks + strictNullChecks +
+  noImplicitAny + Vitest + production build) and only a green run triggers the
+  gated `deploy` job. Vercel's own git auto-deploy is **OFF**
+  (`vercel.json` → `git.deploymentEnabled.main: false`), so a red push cannot
+  reach <https://steelbuild-pro.com> (Vercel project `steelbuildpro-og`).
 - **LLM**: a provider-agnostic gateway via the `llm-proxy` Edge Function
   (currently OpenAI `gpt-4o` / `gpt-4o-mini`). Never call a provider from the browser.
 - **Billing**: Stripe subscription plans via the `stripe-billing` Edge Function.
@@ -166,17 +170,24 @@ lands in tested helper modules; see `TECH_DEBT.md` → large-component decomposi
 
 ## CI/CD
 
-`.github/workflows/ci.yml` runs on every push / PR: lint, both typechecks
-(TS + JS/JSX), Vitest, and a production build — all blocking. A concurrency
-group cancels redundant runs.
+`.github/workflows/ci.yml` runs on every push / PR: lint, four typecheck gates
+(TS, JS/JSX, the **strictNullChecks** ratchet, and the **noImplicitAny**
+ratchet), Vitest, and a production build — all blocking. Only a green `ci` job
+lets the gated `deploy` job publish to Vercel. A concurrency group cancels
+redundant runs.
 
 ## Deployment
 
 Feature work lands on a `claude/*` branch (or directly on `main` for the
-agent-driven flow); merging/pushing to **`main`** triggers Vercel to build and
-publish. [`CLAUDE.md`](./CLAUDE.md) documents the full auto-deploy workflow and
-git-safety rules. Edge Functions deploy separately (Supabase MCP
-`deploy_edge_function` or `supabase functions deploy`).
+agent-driven flow). A push to **`main`** runs the `ci` job; **only if it passes**
+does the `deploy` job ship the prebuilt output to Vercel
+(`vercel pull/build/deploy --prebuilt --prod`). A red run cannot deploy —
+production stays on the last good build. Vercel's git auto-deploy is disabled
+(`vercel.json`), so the GitHub Action is the sole production path. Remaining gap:
+no branch-protection required check (repo plan), so red/unreviewed commits can
+still land on `main` even though they cannot deploy. [`CLAUDE.md`](./CLAUDE.md)
+documents the full workflow + git-safety rules. Edge Functions deploy separately
+(Supabase MCP `deploy_edge_function` or `supabase functions deploy`).
 
 ## Error monitoring
 

@@ -8,10 +8,12 @@ exactly what's needed.
 
 ## Active items
 
-_Updated 2026-06-16. RLS is enabled everywhere and the **org boundary is wired
+_Updated 2026-07-01. RLS is enabled everywhere and the **org boundary is wired
 into the access layer** (no cross-tenant reads), billing + plan enforcement are
-live, and data export works. These are go-to-market, typing, and
-platform-maturity follow-ups._
+live, and data export works. A 2026-07-01 enterprise-readiness audit
+(`origin/main@642ce154`) is driving a remediation pass — see the entries below
+and `docs/runbooks/`. These are go-to-market, typing, and platform-maturity
+follow-ups._
 
 ### Monetization / go-to-market
 
@@ -69,11 +71,13 @@ platform-maturity follow-ups._
 
 ### Platform maturity (longer-running)
 
-- **TypeScript conversion** — ~85% of `src` is still JS/JSX (155 TS/TSX vs 878
-  JS/JSX, verified 2026-06-17). `src/services/` is fully typed; convert
-  incrementally, shared-infra-first. `strict:false` today. Burn-down metric:
-  ~87 `as any` boundary casts (the JS→TS tax — type the shared infra first to
-  shed them).
+- **TypeScript conversion** — ~77% of `src` is still JS/JSX (≈275 TS/TSX vs ≈945
+  JS/JSX, verified 2026-07-01). `src/services/` is fully typed; convert
+  incrementally, shared-infra-first. Base `strict:false`, but **strictNullChecks
+  + noImplicitAny are CI-enforced ratchets** (shipped 2026-06-22). Burn-down
+  metric: ~96 `as any` boundary casts (the JS→TS tax — type the shared infra
+  first to shed them). Net-new JS is still being authored — a CI check blocking
+  new `.js/.jsx` under `src` is queued.
 - **Large-component decomposition (in progress)** — the biggest components are
   being thinned by extracting their pure logic into named, unit-tested modules
   (behavior-preserving, validated against the full suite at each slice). Done so
@@ -83,6 +87,13 @@ platform-maturity follow-ups._
   modals → shared `lib/drawingUploadUtils.js`; the hub's Approval Matrix builders
   → `drawingSubmittalHub/format.ts`. The thinned containers are still large and
   still JS/JSX — converting them to `.tsx` is the follow-up.
+- **`command_ui` dual-render debt (LARGE, active)** — the `command_ui` flag is
+  globally on, yet ~27 route pages keep BOTH the legacy dark render path and the
+  new Control Center behind an `if (commandUi)` branch (`Deliveries.tsx`,
+  `Dashboard.jsx`, +25). The dead legacy branches still compile/ship/lint, and a
+  fix applied only to a legacy branch silently no-ops. Burn down page-by-page
+  after the owner field-verifies each Control Center, then retire the flag +
+  `LayoutRoute` theme coupling.
 - **alert() — DONE.** No `window.alert()` left in `src` (the last 4 validation/
   save sites use sonner `toast.error`).
 - **Full-browser E2E** — jsdom integration tests gate CI; no signed-in Playwright
@@ -115,19 +126,23 @@ platform-maturity follow-ups._
   `ARCHITECTURE.md` → Migrations (after each MCP `apply_migration`, commit a repo file
   named with the recorded version; or use `migration new` + `db push`).
 
-- **CI is advisory on the deploy path.** `ci.yml` gates
-  lint→typecheck→typecheck:js→test→build on push to `main`/`claude/**` + PRs, but
-  there is no branch-protection required-check, so a **red run on `main` does not
-  stop the direct-push Vercel deploy**. Enable branch protection (owner) or move to
-  a PR-gated deploy flow.
+- **CI gates the production deploy (since 2026-06-19).** `ci.yml` runs
+  lint→typecheck→typecheck:js→typecheck:strict→typecheck:noimplicitany→test→build,
+  and **only a green `ci` job runs the `deploy` job** (`vercel deploy --prebuilt
+  --prod`). Vercel's git auto-deploy is off (`vercel.json`
+  `git.deploymentEnabled.main:false`), so a **red push cannot reach production**.
+  Remaining gap: no **branch-protection required check** (repo plan), so
+  red/unreviewed commits can still land on `main` (they just can't deploy).
+  Enable branch protection (owner) or move to a PR-gated merge flow.
 
-- **Code hygiene (low priority):** `formatCurrency` is redefined in 4 places
-  (`hooks/useFinancials.ts`, `pages/reports/utils.js`,
-  `components/dashboard/ProjectPulse.jsx`, plus the canonical
-  `components/shared/formatters.jsx`) + 5 inline `Intl` currency formatters —
-  consolidate onto `formatters.jsx`. `src/dev/mockData.js` (1,603 lines) ships
-  inside `src/` (move under an excluded dev path). `package.json` has no `engines`
-  pin (Node enforced only in CI) — add `"engines": { "node": ">=20" }`.
+- **Code hygiene (low priority):** `formatCurrency` is still redefined in a few
+  places (`hooks/useFinancials.ts`, `components/dashboard/ProjectPulse.jsx`, plus
+  the canonical `components/shared/formatters.jsx`) — consolidate onto
+  `formatters.jsx`. (`src/dev/mockData.js` was deleted and `package.json` now
+  carries an `engines` pin — both previously listed here are resolved.)
+  **Repo hygiene (2026-07-01):** the committed `.claude/worktrees/` snapshot
+  (~967 files, ~26 MB) + three junk root artifacts were untracked and
+  `.claude/worktrees/` was added to `.gitignore`.
 
 ### From the 2026-05-26 enterprise-readiness audit (still open)
 
@@ -166,10 +181,13 @@ redirect-origin validation) — shipped + deployed 2026-06-20 (commits `4dff88e5
 hotfix `e968f48d`). #5 + #11 are field-verified (a live AI call + CORS preflight).
 Remaining:
 
-- **Dangling `stripe-worker` caller** — the function is deleted (returns 404) but
-  something (likely `cron`/`pg_cron`) still POSTs `…/functions/v1/stripe-worker`
-  every ~60s → a steady 404 stream in the edge logs. Find it (`select * from cron.job`)
-  and remove/repoint it. Harmless but noisy + wasted invocations.
+- **✅ RESOLVED 2026-07-01 — Dangling `stripe-worker` caller.** `pg_cron` job 4
+  `stripe-sync-worker` (`*/1 * * * *`, POSTing `…/functions/v1/stripe-worker`) was
+  the 404 source; unscheduled live via `cron.unschedule(4)`. NOTE: the orphan
+  `stripe-setup`/`stripe-webhook`/`stripe-worker` **edge functions are still
+  deployed** (11 functions live, not the 8 this doc elsewhere claims) alongside the
+  deprecated `sharepoint-proxy`/`bluebeam-proxy`; all five need
+  `supabase functions delete` (owner/CLI) — see `docs/runbooks/owner-checklist.md`.
 - **#10 client protocol bump** — `llm-proxy` returns protocol v8; bump the client
   `EXPECTED_PROTOCOL_VERSION` (currently 3) → 8 in `src/api/supabaseClient.ts`. Safe
   now that the live proxy is v8. Ships via the normal git push (frontend).
