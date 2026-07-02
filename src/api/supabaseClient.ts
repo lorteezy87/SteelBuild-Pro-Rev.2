@@ -992,12 +992,15 @@ export const auth = {
   },
 
   /**
-   * Redirect to login page.
-   * In Supabase apps this is an internal route, not an external auth server.
+   * Redirect to the login surface.
+   * There is no `/login` route — when unauthenticated, the Landing page (`/`)
+   * IS the login surface (AuthenticatedApp renders the sign-in form there), so
+   * navigate to `/` rather than a nonexistent `/login` (which would 404 / fall
+   * through to the catch-all).
    */
   redirectToLogin: (url?: string): void => {
     const redirect = url ? `?redirect=${encodeURIComponent(url)}` : '';
-    window.location.href = `/login${redirect}`;
+    window.location.href = `/${redirect}`;
   },
 
   /**

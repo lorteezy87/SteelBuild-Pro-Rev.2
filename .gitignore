@@ -53,3 +53,6 @@ public/wasm/
 # (scripts/optimize-desktop-photos.mjs). Optimized .webp outputs ARE committed.
 public/photos/desktop/_raw/
 scripts/.imgtools/
+
+# agent session worktrees are local-only state, never source
+.claude/worktrees/

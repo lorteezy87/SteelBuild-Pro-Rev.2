@@ -198,17 +198,18 @@ const res = await fetch(
 const { answer, tool_calls, usage, iterations } = await res.json();
 ```
 
-## Service role escape hatch (cron/internal only)
+## No service-role escape hatch (RLS is always enforced)
 
-For scheduled jobs that need full access (weekly narrative generator, nightly risk scan):
+This function has NO service-role override. It ALWAYS builds its Supabase client
+from the caller's `Authorization` header (anon key + user JWT), so Postgres RLS
+filters every tool query to projects the caller may read. The tool handlers scope
+by a client-supplied `project_id` and rely on RLS to enforce access — a service-role
+client would bypass RLS entirely, turning that client-supplied `project_id` into a
+cross-tenant read backdoor. The former `SERVICE_ROLE_OVERRIDE` env flag was removed
+for exactly this reason.
 
-```bash
-# On the specific function that needs it:
-supabase secrets set SERVICE_ROLE_OVERRIDE=true
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...
-```
-
-The Edge Function logs a `[WARN] SERVICE_ROLE_OVERRIDE active` line whenever this path runs. Audit the logs.
+If a scheduled/internal job needs full-access reads, do it in a dedicated
+service-role function with its own auth boundary — never re-add a bypass here.
 
 ## Tunable thresholds
 
@@ -237,5 +238,5 @@ Before going live:
 1. **Streaming** — add a streaming-compatible gateway path for token-by-token UI
 2. **Write-proposal tool** — `propose_schedule_update` that writes to a `schedule_proposals` table (never to live schedule)
 3. **pgvector layer** — spec/drawing search for grounded document Q&A
-4. **Weekly narrative cron** — scheduled function using `SERVICE_ROLE_OVERRIDE` for Monday status summaries
+4. **Weekly narrative cron** — a SEPARATE dedicated service-role function (with its own auth boundary) for Monday status summaries; do not re-add a bypass to this RLS-scoped function
 5. **Threshold calibration UI** — let PMs adjust float bands and staleness windows per project

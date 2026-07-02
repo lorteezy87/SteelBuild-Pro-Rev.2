@@ -25,7 +25,7 @@
  * for the coordinator to add to command.css.
  */
 import React, { useMemo } from "react";
-import { Clock, BarChart3, TrendingDown, TrendingUp, AlertTriangle, Layers } from "lucide-react";
+import { Clock, BarChart3, TrendingDown, TrendingUp, AlertTriangle, Layers, Pencil, Trash2 } from "lucide-react";
 import "@/styles/command.css";
 import {
   PageHero,
@@ -37,6 +37,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   buildBudgetHoursSummary,
   fmtHours,
@@ -82,6 +83,14 @@ export interface BudgetHoursControlCenterProps {
   onExport: () => void;
   /** Open row edit (same popover/behavior as classic). */
   onRowClick?: (row: BudgetHourRow) => void;
+  /** Open the scope-item modal in edit mode for this row. */
+  onEditRow?: (row: BudgetHourRow) => void;
+  /** Request a (confirmed) soft-delete of this row. */
+  onDeleteRow?: (row: BudgetHourRow) => void;
+  /** RBAC gates (resolved from usePermissions in the parent). */
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 // ─── Derived table row type (for DataTable) ───────────────────────────────────
@@ -116,6 +125,11 @@ export default function BudgetHoursControlCenter({
   onSetUpTemplate,
   onExport,
   onRowClick,
+  onEditRow,
+  onDeleteRow,
+  canCreate = false,
+  canEdit = false,
+  canDelete = false,
 }: BudgetHoursControlCenterProps) {
   useCommandSkin();
 
@@ -319,6 +333,45 @@ export default function BudgetHoursControlCenter({
     },
   ];
 
+  // Row actions (Edit / Delete) — only rendered when the user has the matching
+  // permission. Buttons stopPropagation so they don't also fire onRowClick.
+  const showActions = canEdit || canDelete;
+  if (showActions) {
+    columns.push({
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (r) => (
+        <span style={{ display: "inline-flex", gap: 4, justifyContent: "flex-end" }}>
+          {canEdit && onEditRow && (
+            <button
+              type="button"
+              className="sbd-btn sbd-btn-ghost"
+              title="Edit scope item"
+              aria-label={`Edit ${r.scope_item || "scope item"}`}
+              onClick={(e) => { e.stopPropagation(); onEditRow(r); }}
+              style={{ padding: "4px 8px", fontSize: 12 }}
+            >
+              <Pencil size={13} />
+            </button>
+          )}
+          {canDelete && onDeleteRow && (
+            <button
+              type="button"
+              className="sbd-btn sbd-btn-ghost"
+              title="Delete scope item"
+              aria-label={`Delete ${r.scope_item || "scope item"}`}
+              onClick={(e) => { e.stopPropagation(); onDeleteRow(r); }}
+              style={{ padding: "4px 8px", fontSize: 12, color: "var(--status-error)" }}
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </span>
+      ),
+    });
+  }
+
   return (
     <div className="bh-cc">
       <PageHero
@@ -327,6 +380,7 @@ export default function BudgetHoursControlCenter({
         subtitle="Shop and field labor-hour budget vs actuals — by scope item, with work package rollup and miss tracking."
         projectName={projectName}
         chips={heroChips}
+        photoSrc={photoFor("BudgetHours") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />
@@ -422,8 +476,8 @@ export default function BudgetHoursControlCenter({
         onSearch={onSearch}
         searchPlaceholder="Search scope items or notes"
         onExport={onExport}
-        primaryLabel="Add Item"
-        onPrimary={onAddItem}
+        primaryLabel={canCreate ? "Add Item" : undefined}
+        onPrimary={canCreate ? onAddItem : null}
         filters={
           <>
             {CATEGORY_OPTIONS.map((cat) => (
@@ -444,13 +498,15 @@ export default function BudgetHoursControlCenter({
             >
               Over Budget
             </button>
-            <button
-              type="button"
-              className="cmd-chip-btn"
-              onClick={onSetUpTemplate}
-            >
-              Set Up From Template
-            </button>
+            {canCreate && (
+              <button
+                type="button"
+                className="cmd-chip-btn"
+                onClick={onSetUpTemplate}
+              >
+                Set Up From Template
+              </button>
+            )}
           </>
         }
       />

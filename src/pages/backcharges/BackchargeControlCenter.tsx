@@ -14,6 +14,7 @@ import {
   FilterBar, DataTable, useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { buildBackchargeSummary } from "./backchargeControlCenter.derive";
 import type { Backcharge } from "./backchargeControlCenter.derive";
 import {
@@ -212,6 +213,7 @@ export default function BackchargeControlCenter(props: BackchargeControlCenterPr
         subtitle="Log backcharges, build T&M cost packages, and generate defensible audit trails to recover costs from responsible parties."
         projectName={projectName}
         chips={chips}
+        photoSrc={photoFor("Backcharges") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />

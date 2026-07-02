@@ -27,6 +27,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef, KpiTone } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -276,6 +277,7 @@ export default function ResourcesControlCenter({
         subtitle="Manage crews, equipment, and material resources across project activities."
         projectName={projectName || undefined}
         chips={chips}
+        photoSrc={photoFor("ResourceHub") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />

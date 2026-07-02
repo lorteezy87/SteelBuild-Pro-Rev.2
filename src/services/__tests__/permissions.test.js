@@ -94,6 +94,22 @@ describe("canPerform — entity overrides", () => {
     expect(canPerform("admin", "void", "change_order")).toBe(true);
   });
 
+  it("budget_hour_item lets a pm delete (matches its pm-floor RLS)", () => {
+    // budget_hour_items RLS = user_has_project_role_at_least(project_id,'pm')
+    // for INSERT/UPDATE/DELETE, so a project PM must be able to delete (the
+    // generic delete floor is admin — the override lowers it to pm).
+    expect(canPerform("pm", "create", "budget_hour_item")).toBe(true);
+    expect(canPerform("pm", "edit", "budget_hour_item")).toBe(true);
+    expect(canPerform("pm", "delete", "budget_hour_item")).toBe(true);
+    // field / viewer are still below the pm floor.
+    expect(canPerform("field", "create", "budget_hour_item")).toBe(false);
+    expect(canPerform("field", "delete", "budget_hour_item")).toBe(false);
+    expect(canPerform("viewer", "delete", "budget_hour_item")).toBe(false);
+    // owner/admin remain able to delete.
+    expect(canPerform("admin", "delete", "budget_hour_item")).toBe(true);
+    expect(canPerform("owner", "delete", "budget_hour_item")).toBe(true);
+  });
+
   it("override only applies to its own entity:action, not other entities", () => {
     // field gets delivery:create via override, but not a generic widget:create
     expect(canPerform("field", "create", "widget")).toBe(false);

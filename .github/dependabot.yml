@@ -1,0 +1,14 @@
+# Dependabot (M11). Scoped to GitHub Actions only for now: keeps the CI/deploy
+# workflow's actions patched + SHA-pinnable for supply-chain hygiene, without the
+# npm-version-bump PR noise this repo deliberately avoids (major dependency
+# upgrades are handled as discrete, tested changes — see TECH_DEBT.md, NOT
+# `npm audit fix --force`). Enable a scoped npm ecosystem later if desired.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"

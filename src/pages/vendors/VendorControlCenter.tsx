@@ -14,6 +14,7 @@ import {
   PageHero, KpiStrip, DecisionPanel, Pill, FilterBar, DataTable, useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   buildVendorSummary, vendorStatusTone, daysUntilExpiry,
 } from "./vendorControlCenter.derive";
@@ -220,6 +221,7 @@ export default function VendorControlCenter(props: VendorControlCenterProps) {
         title="Vendor Control Center"
         subtitle="Monitor supply-chain performance, compliance status, and spend across all vendors."
         chips={heroChips}
+        photoSrc={photoFor("Vendors") ?? undefined}
         stats={heroStats}
       />
 

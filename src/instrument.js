@@ -56,6 +56,36 @@ if (DSN) {
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
     enableLogs: true,
+    // Scrub sensitive data before anything leaves the browser (M15). Query
+    // strings can carry projectId / redirect targets / tokens, and Postgres
+    // unique-violation messages echo the conflicting ROW VALUES ("Key
+    // (project_id, name)=(<uuid>, <name>) already exists") — both are stripped
+    // here so they never reach Sentry.
+    beforeSend(event) {
+      // Drop the query string from the request URL.
+      if (event.request?.url) {
+        event.request.url = event.request.url.split("?")[0];
+      }
+      // Redact row values embedded in Postgres unique-violation messages.
+      if (event.exception?.values) {
+        for (const v of event.exception.values) {
+          if (typeof v.value === "string") {
+            v.value = v.value.replace(/Key \(.+?\)=\(.+?\)/g, "Key (…)=(…)");
+          }
+        }
+      }
+      return event;
+    },
+    // Strip query strings from fetch/xhr breadcrumbs for the same reason.
+    beforeBreadcrumb(breadcrumb) {
+      if (
+        (breadcrumb.category === "fetch" || breadcrumb.category === "xhr") &&
+        typeof breadcrumb.data?.url === "string"
+      ) {
+        breadcrumb.data.url = breadcrumb.data.url.split("?")[0];
+      }
+      return breadcrumb;
+    },
   });
 }
 

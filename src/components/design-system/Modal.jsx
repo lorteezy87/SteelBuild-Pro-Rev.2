@@ -120,9 +120,11 @@ export default function Modal({
               {title}
             </div>
           </div>
-          <div
+          <button
+            type="button"
             onClick={onClose}
             title="Close"
+            aria-label="Close"
             style={{
               width: 28,
               height: 28,
@@ -138,7 +140,7 @@ export default function Modal({
             }}
           >
             <Icon name="x" size={12} />
-          </div>
+          </button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px" }}>{children}</div>
         {footer && (

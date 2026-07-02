@@ -133,7 +133,27 @@ export default function Privacy() {
             captured with all text masked and media blocked, so readable project
             or financial content is not collected.
           </li>
+          <li>
+            <strong style={strong}>OpenAI</strong> — AI-assisted document
+            analysis (drawing revision comparison, sheet extraction, email
+            classification, RFI drafting). Data sent via API is not used to train
+            their models and is retained only per each provider's API data-usage
+            policy.
+          </li>
+          <li>
+            <strong style={strong}>Anthropic</strong> — AI-assisted document
+            analysis (drawing revision comparison, sheet extraction, email
+            classification, RFI drafting). Data sent via API is not used to train
+            their models and is retained only per each provider's API data-usage
+            policy.
+          </li>
         </ul>
+        <p>
+          For a full, current list of our sub-processors — including what each
+          one does, where it operates, and the region your data is stored in —
+          see our <Link to="/subprocessors" style={inlineLink}>Subprocessors</Link>
+          {" "}page.
+        </p>
         <p>
           We may also disclose information when required by law, to protect our
           rights or the safety of others, or in connection with a corporate
@@ -160,6 +180,20 @@ export default function Privacy() {
           data. See our <Link to="/security" style={inlineLink}>Security
           overview</Link> for more detail. No method of transmission or storage
           is completely secure, and we cannot guarantee absolute security.
+        </p>
+      </Section>
+
+      <Section title="Where your data lives">
+        <p>
+          Your data is stored and processed in the{" "}
+          <strong style={strong}>United States</strong>. Primary storage —
+          database, authentication, and uploaded files — is hosted on Supabase
+          running on AWS in the <strong style={strong}>us-east-1</strong> region
+          (a single region). Our web frontend is hosted and delivered by Vercel
+          (US), payments are processed by Stripe (US), and error monitoring runs
+          on Sentry (US). AI-assisted processing is performed by US-based
+          providers. We do not store customer data outside the United States, and
+          we do not currently offer an EU or other regional data-residency option.
         </p>
       </Section>
 

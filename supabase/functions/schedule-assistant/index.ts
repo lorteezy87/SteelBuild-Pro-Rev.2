@@ -231,22 +231,16 @@ Deno.serve(async (req: Request) => {
 });
 
 // ---------------------------------------------------------------------------
-// Supabase client factory — JWT-scoped by default
+// Supabase client factory — ALWAYS RLS-scoped from the caller's JWT
 // ---------------------------------------------------------------------------
+// Tool handlers scope every query by a client-supplied project_id and rely on
+// Postgres RLS to filter rows to projects the caller may read. Building this
+// client from the anon key + the caller's Authorization header is what makes
+// that guarantee hold. There is deliberately NO service-role escape hatch: a
+// service-role client would bypass RLS entirely, turning a client-supplied
+// project_id into a cross-tenant read backdoor.
 function createSupabaseClient(authHeader: string): SupabaseClient {
-  const useServiceRole =
-    Deno.env.get("SERVICE_ROLE_OVERRIDE") === "true" &&
-    !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-  if (useServiceRole) {
-    console.warn("[WARN] SERVICE_ROLE_OVERRIDE active — RLS bypassed");
-    return createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-  }
-
-  // Default: anon key + user JWT → RLS enforced per row.
+  // Default and ONLY path: anon key + user JWT → RLS enforced per row.
   return createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY")!,

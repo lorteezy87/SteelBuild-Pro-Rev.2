@@ -25,11 +25,13 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 const Privacy = lazyWithRetry(() => import("@/pages/Privacy"));
 const Terms = lazyWithRetry(() => import("@/pages/Terms"));
 const Security = lazyWithRetry(() => import("@/pages/Security"));
+const Subprocessors = lazyWithRetry(() => import("@/pages/Subprocessors"));
 
 const PUBLIC_PAGES = {
   "/privacy": Privacy,
   "/terms": Terms,
   "/security": Security,
+  "/subprocessors": Subprocessors,
 };
 
 function Root() {

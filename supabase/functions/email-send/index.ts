@@ -26,7 +26,11 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { sanitizeAttachmentName } from "../_shared/attachments.ts";
+import {
+  isDangerousAttachment,
+  MAX_ATTACHMENT_BYTES,
+  sanitizeAttachmentName,
+} from "../_shared/attachments.ts";
 
 // Max combined raw (decoded) size of outbound attachments. base64 inflates
 // the payload ~33%, so the actual request body stays well under typical
@@ -505,14 +509,24 @@ async function handle(req: Request): Promise<Response> {
   if (!body.subject) return errorResponse(400, "subject is required");
   if (!body.body_text) return errorResponse(400, "body_text is required");
 
-  // Validate + size-guard attachments (base64 inflates ~33%; cap on raw bytes)
+  // Validate + size-guard attachments (base64 inflates ~33%; cap on raw bytes).
+  // Mirror the inbound email-ingest guards (_shared/attachments.ts): reject
+  // executable/script extensions and per-file oversize BEFORE sending or storing,
+  // so the outbound path can't push a dangerous or unbounded file into storage.
   const attachments = body.attachments ?? [];
   let attachmentBytes = 0;
   for (const att of attachments) {
     if (!att.filename || !att.content_base64) {
       return errorResponse(400, "Each attachment requires filename and content_base64");
     }
-    attachmentBytes += Math.floor(att.content_base64.length * 0.75);
+    if (isDangerousAttachment(att.filename)) {
+      return errorResponse(400, `Attachment type not allowed: ${att.filename}`);
+    }
+    const fileBytes = Math.floor(att.content_base64.length * 0.75);
+    if (fileBytes > MAX_ATTACHMENT_BYTES) {
+      return errorResponse(413, `Attachment "${att.filename}" exceeds the 25 MB per-file limit`);
+    }
+    attachmentBytes += fileBytes;
   }
   if (attachmentBytes > MAX_ATTACHMENT_TOTAL_BYTES) {
     return errorResponse(413, "Attachments exceed the 20 MB total limit");

@@ -31,7 +31,13 @@ import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { PRESET_LIST } from "@/lib/budgetHourPresets";
 import { useFlag } from "@/hooks/useFeatureFlag";
+import { usePermissions } from "@/services/permissions";
+import { logActivity } from "@/services/auditLogger";
+import { invalidateEntity } from "@/services/cacheRegistry";
+import { toastCrudError } from "@/components/shared/crudFeedback";
+import DeleteDialog from "@/components/shared/DeleteDialog";
 import BudgetHoursControlCenter from "./budgetHours/BudgetHoursControlCenter";
+import ScopeItemFormModal from "./budgetHours/ScopeItemFormModal";
 
 /* ─────────────────────────────────────────────
    Variance helpers
@@ -489,12 +495,21 @@ export default function BudgetHours() {
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
   const commandUi = useFlag("command_ui");
+  const { can } = usePermissions();
   const [presetOpen, setPresetOpen] = useState(false);
   // State used by both paths — the command_ui path reads these; the classic
   // path ignores them. Declared unconditionally (no conditional hooks).
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [overBudgetOnly, setOverBudgetOnly] = useState(false);
+  // Scope-item create/edit modal + delete confirm (command_ui CRUD).
+  const [scopeModalOpen, setScopeModalOpen] = useState(false);
+  const [scopeEditTarget, setScopeEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const canCreateScope = can("create", "budget_hour_item");
+  const canEditScope = can("edit", "budget_hour_item");
+  const canDeleteScope = can("delete", "budget_hour_item");
 
   /* ── Data ── */
   // The entity wrapper doesn't auto-filter soft-deletes, so the query
@@ -519,26 +534,42 @@ export default function BudgetHours() {
     return m;
   }, [wps]);
 
-  /* ── Mutations ── */
+  /* ── Mutations ──
+     Audit + cache invalidation mirror the canonical Deliveries pattern:
+     logActivity (fire-and-forget) + invalidateEntity (fans out every
+     budget-hour-items key) + toastCrudError on failure. deleteMut stays a
+     SOFT delete (is_deleted flag) — recoverable, never a hard delete. */
   const createMut = useMutation({
     mutationFn: (data) => entities.BudgetHourItem.create(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] }),
-    onError: (e) => toast.error(`Create failed: ${e.message || "unknown error"}`),
+    onSuccess: async (created) => {
+      logActivity("budget_hour_item", "created", created, { projectId });
+      await invalidateEntity(qc, "budget_hour_item", projectId);
+    },
+    onError: (e) => toastCrudError(e, "Create failed"),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, patch }) => entities.BudgetHourItem.update(id, patch),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] }),
-    onError: (e) => toast.error(`Save failed: ${e.message || "unknown error"}`),
+    onSuccess: async (updated) => {
+      logActivity("budget_hour_item", "updated", updated, { projectId });
+      await invalidateEntity(qc, "budget_hour_item", projectId);
+    },
+    onError: (e) => toastCrudError(e, "Save failed"),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => entities.BudgetHourItem.update(id, { is_deleted: true, deleted_at: new Date().toISOString() }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] });
+    onSuccess: async (updated, deletedId) => {
+      logActivity(
+        "budget_hour_item",
+        "deleted",
+        updated || { id: deletedId, project_id: projectId, scope_item: deleteTarget?.scope_item },
+        { projectId },
+      );
+      await invalidateEntity(qc, "budget_hour_item", projectId);
       toast.success("Row removed");
     },
-    onError: (e) => toast.error(`Delete failed: ${e.message || "unknown error"}`),
+    onError: (e) => toastCrudError(e, "Delete failed"),
   });
 
   /* ── Buckets ── */
@@ -608,6 +639,40 @@ export default function BudgetHours() {
 
   const saveCell = (id, patch) => updateMut.mutate({ id, patch });
 
+  /* ── Scope-item modal CRUD (command_ui) ── */
+  const openCreateScope = () => {
+    setScopeEditTarget(null);
+    setScopeModalOpen(true);
+  };
+
+  const openEditScope = (row) => {
+    setScopeEditTarget(row);
+    setScopeModalOpen(true);
+  };
+
+  // Save from the modal — create (new row, next sort_order) or update ({id,patch}).
+  const handleScopeSave = (patch) => {
+    if (!projectId) return;
+    if (scopeEditTarget) {
+      updateMut.mutate(
+        { id: scopeEditTarget.id, patch },
+        { onSuccess: () => { setScopeModalOpen(false); setScopeEditTarget(null); } }
+      );
+    } else {
+      const maxSort = Math.max(0, ...rows.map((r) => Number(r.sort_order) || 0));
+      createMut.mutate(
+        { ...patch, project_id: projectId, sort_order: maxSort + 10, metadata: {} },
+        { onSuccess: () => setScopeModalOpen(false) }
+      );
+    }
+  };
+
+  const requestDeleteRow = (row) => setDeleteTarget(row);
+  const confirmDeleteRow = () => {
+    if (!deleteTarget?.id) return;
+    deleteMut.mutate(deleteTarget.id, { onSettled: () => setDeleteTarget(null) });
+  };
+
   /* ── Command UI branch ── */
   if (commandUi) {
     // Apply search + category + over-budget filter for the DataTable.
@@ -668,11 +733,34 @@ export default function BudgetHours() {
           overBudgetOnly={overBudgetOnly}
           onOverBudgetToggle={() => setOverBudgetOnly((v) => !v)}
           filteredRows={commandFiltered}
-          onAddItem={addBlankRow}
+          onAddItem={openCreateScope}
           onSetUpTemplate={() => setPresetOpen(true)}
           onExport={handleExportCsv}
+          onEditRow={openEditScope}
+          onDeleteRow={requestDeleteRow}
+          canCreate={canCreateScope}
+          canEdit={canEditScope}
+          canDelete={canDeleteScope}
         />
         <PresetDialog open={presetOpen} onClose={() => setPresetOpen(false)} onPick={applyPreset} />
+        <ScopeItemFormModal
+          open={scopeModalOpen}
+          editTarget={scopeEditTarget}
+          saving={createMut.isPending || updateMut.isPending}
+          onClose={() => { setScopeModalOpen(false); setScopeEditTarget(null); }}
+          onSave={handleScopeSave}
+        />
+        <DeleteDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDeleteRow}
+          title="Delete scope item?"
+          description={
+            deleteTarget?.scope_item
+              ? `"${deleteTarget.scope_item}" will be removed from Budget Hours.`
+              : "This scope item will be removed from Budget Hours."
+          }
+        />
       </>
     );
   }
@@ -764,7 +852,7 @@ export default function BudgetHours() {
           rows={standardRows}
           wpsById={wpsById}
           onSave={saveCell}
-          onDelete={(id) => deleteMut.mutate(id)}
+          onDelete={requestDeleteRow}
           onMoveToSpecialty={(id) => updateMut.mutate({ id, patch: { is_specialty: true, category: "Specialty" } })}
         />
       )}
@@ -776,7 +864,7 @@ export default function BudgetHours() {
           rows={specialtyRows}
           wpsById={wpsById}
           onSave={saveCell}
-          onDelete={(id) => deleteMut.mutate(id)}
+          onDelete={requestDeleteRow}
           onMoveToStandard={(id) => updateMut.mutate({ id, patch: { is_specialty: false, category: "Standard" } })}
         />
       )}
@@ -828,6 +916,17 @@ export default function BudgetHours() {
       )}
 
       <PresetDialog open={presetOpen} onClose={() => setPresetOpen(false)} onPick={applyPreset} />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDeleteRow}
+        title="Delete scope item?"
+        description={
+          deleteTarget?.scope_item
+            ? `"${deleteTarget.scope_item}" will be removed from Budget Hours.`
+            : "This scope item will be removed from Budget Hours."
+        }
+      />
     </OperationsPageShell>
     </div>
   );
@@ -944,9 +1043,7 @@ function BudgetTable({ title, rows, wpsById, onSave, onDelete, onMoveToSpecialty
                   </button>
                 )}
                 <button
-                  onClick={() => {
-                    if (window.confirm(`Remove "${r.scope_item}"?`)) onDelete(r.id);
-                  }}
+                  onClick={() => onDelete(r)}
                   style={{
                     background: "transparent", border: "none", cursor: "pointer",
                     color: "var(--status-error)", padding: 2,

@@ -90,6 +90,8 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
               </div>
             </div>
             <button
+              type="button"
+              aria-label="Close"
               onClick={onClose}
               style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 22, cursor: "pointer" }}
             >
