@@ -22,6 +22,7 @@ import { entities } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import ErrorBoundaryRaw from "@/components/shared/ErrorBoundary";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components/design-system";
 import { computeFabReady } from "@/lib/submittalAnalytics";
 import { effectiveDetailingState, hasGoverningSubmittal, isPackageRR } from "@/lib/detailingPackageState";
@@ -622,7 +623,9 @@ export default function DrawingSubmittalHub() {
           ? targets.sheetIds
           : item._firstSheetId ? [item._firstSheetId] : [];
         if (!ids.length) throw new Error("No entity available to set due date");
-        await Promise.all(ids.map((id: string) => entities.Drawing.update(id, { due_date: date })));
+        // Identical { due_date } across every sheet in the package → one chunked
+        // .in('id', ids) update instead of N single-row round-trips.
+        await entities.Drawing.bulkUpdate(ids, { due_date: date });
       }
     },
     onSuccess: () => {
@@ -828,6 +831,7 @@ export default function DrawingSubmittalHub() {
   if (commandUi) {
     return (
       <>
+        <ListTruncationNotice count={drawings.length} label="drawing sheets" />
         <DetailingCommandShell
           tabs={tabs}
           activeTab={activeTab}
@@ -870,6 +874,7 @@ export default function DrawingSubmittalHub() {
         color: "var(--text-primary)",
       }}
     >
+      <ListTruncationNotice count={drawings.length} label="drawing sheets" />
       {/* ── Command Bar ─────────────────────────────────────────────── */}
         <CommandBar
           eyebrow={projectName ? `Detailing control - ${projectName}` : "Detailing control"}

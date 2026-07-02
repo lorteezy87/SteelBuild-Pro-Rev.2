@@ -17,6 +17,7 @@ import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import RfiLogImportModal from "@/components/rfis/RfiLogImportModal";
 import RfiBulkEditModal from "@/components/rfis/RfiBulkEditModal";
@@ -562,6 +563,7 @@ export default function RFIs() {
           "--rfi-row-grid": RFI_ROW_GRID,
         }}
       >
+        <ListTruncationNotice count={rfis.length} label="RFIs" />
         <RfiControlCenter
           projectName={activeProjectName}
           rfis={rfis}
@@ -611,6 +613,7 @@ export default function RFIs() {
         "--rfi-row-grid": RFI_ROW_GRID,
       }}
     >
+      <ListTruncationNotice count={rfis.length} label="RFIs" />
       <RfiCommandCenter
         projectName={activeProjectName}
         counts={counts}

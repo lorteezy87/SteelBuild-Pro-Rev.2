@@ -79,13 +79,15 @@ export function useCostCodes(projectId) {
   });
 
   const bulkDeleteCostCodes = useMutation({
-    mutationFn: (ids) => Promise.allSettled(ids.map((id) => entities.CostCode.delete(id))),
+    // One chunked .in('id', ids) delete instead of N single-row round-trips.
+    mutationFn: (ids) => entities.CostCode.bulkDelete(ids),
     onSuccess: async () => { await invalidateEntity(qc, "cost_code", projectId); },
     onError: (error) => toastCrudError(error, "Bulk delete failed"),
   });
 
   const bulkUpdateCostCodes = useMutation({
-    mutationFn: ({ ids, data }) => Promise.allSettled(ids.map((id) => entities.CostCode.update(id, data))),
+    // Identical `data` patch across all ids → one chunked .in('id', ids) update.
+    mutationFn: ({ ids, data }) => entities.CostCode.bulkUpdate(ids, data),
     onSuccess: async () => { await invalidateEntity(qc, "cost_code", projectId); },
     onError: (error) => toastCrudError(error, "Bulk update failed"),
   });

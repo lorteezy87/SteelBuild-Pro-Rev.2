@@ -258,7 +258,8 @@ export default function SOV() {
   });
 
   const bulkDeleteMut = useMutation({
-    mutationFn: (ids) => Promise.allSettled(ids.map((id) => entities.SOVItem.delete(id))),
+    // One chunked .in('id', ids) delete instead of N single-row round-trips.
+    mutationFn: (ids) => entities.SOVItem.bulkDelete(ids),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setSelectedIds(new Set());
@@ -269,7 +270,8 @@ export default function SOV() {
   });
 
   const bulkStatusMut = useMutation({
-    mutationFn: ({ ids, status }) => Promise.allSettled(ids.map((id) => entities.SOVItem.update(id, { status }))),
+    // Identical { status } patch across all ids → one chunked .in('id', ids) update.
+    mutationFn: ({ ids, status }) => entities.SOVItem.bulkUpdate(ids, { status }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setSelectedIds(new Set());
@@ -279,7 +281,8 @@ export default function SOV() {
   });
 
   const bulkFillMut = useMutation({
-    mutationFn: (ids) => Promise.allSettled(ids.map((id) => entities.SOVItem.update(id, { current_percent_complete: 100 }))),
+    // Identical { current_percent_complete: 100 } patch → one chunked .in('id', ids) update.
+    mutationFn: (ids) => entities.SOVItem.bulkUpdate(ids, { current_percent_complete: 100 }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       setSelectedIds(new Set());
