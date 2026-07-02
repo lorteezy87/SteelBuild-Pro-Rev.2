@@ -14,9 +14,14 @@
 #   - e2e-smoke: Playwright smoke AFTER deploy, NON-BLOCKING (it is not in
 #                `deploy.needs`, so it can never gate or roll back prod). Opt-in
 #                via the E2E_ENABLED repo variable. See e2e/README.md.
+#   - dependency-audit: `npm audit` over production deps, ADVISORY (not in
+#                `deploy.needs`, so a newly disclosed CVE alarms the run without
+#                blocking the release train).
 #
 # What does NOT run here:
 #   - E2E as a BLOCKING gate (it's the post-deploy, observe-only job above).
+#   - Secret scanning (gitleaks) / SAST — queued; needs an owner decision on
+#     tooling (see ENTERPRISE_READINESS_AUDIT.md L13).
 #   - Lighthouse / a11y / bundle-size budgets (queued for later).
 
 name: CI
@@ -121,6 +126,29 @@ jobs:
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+
+  # ── Dependency audit (ADVISORY — never blocks a deploy) ──────────────────
+  # `npm audit` over PRODUCTION dependencies, failing on high+ advisories.
+  # Deliberately NOT in `deploy.needs`: a CVE disclosed overnight in a
+  # transitive dep should alarm the run (red job, red run), but must not stop
+  # an unrelated fix from shipping. Works straight off the lockfile — no
+  # `npm ci` needed. Baseline at introduction: 0 vulnerabilities. (Audit L13,
+  # dependency-audit slice; gitleaks/SAST still queued.)
+  dependency-audit:
+    name: Dependency audit (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Audit production dependencies (high+)
+        run: npm audit --omit=dev --audit-level=high
 
   # ── Gated production deploy ──────────────────────────────────────────────
   # Deploys to Vercel ONLY after the `ci` job above passes, on a push to main —
