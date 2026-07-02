@@ -66,6 +66,21 @@
   animation: pulseGlow 2s ease-in-out infinite;
 }
 
+/* ── Reduced motion ──
+   Respect the OS "reduce motion" preference (WCAG 2.3.3 / vestibular safety).
+   Near-zeros every animation, transition, and smooth scroll globally so the
+   entrance effects, spinners, and pulse-glow urgency tiers above stop moving
+   for users who opt out. Kept as a single blanket rule with !important so it
+   overrides inline `style={{ animation: … }}` and per-component transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ── Glow states — status card indicators ── */
 .glow-state-gold {
   box-shadow: var(--shadow-glow-gold);

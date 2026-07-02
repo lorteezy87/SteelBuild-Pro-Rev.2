@@ -25,7 +25,7 @@ h1, h2, h3, h4 {
   letter-spacing: 0.01em;
 }
 
-button { cursor: pointer; outline: none; }
+button { cursor: pointer; }
 
 /* ── Typography utilities ── */
 .tech-label {
@@ -180,12 +180,15 @@ select option:disabled {
 [data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 [data-theme="light"] ::-webkit-scrollbar-corner { background: var(--bg-surface-low); }
 
-/* Focus ring for buttons and other interactive non-input elements in light mode —
-   browsers' blue default outlines look cheap against the industrial gold palette. */
-[data-theme="light"] button:focus-visible,
-[data-theme="light"] a:focus-visible,
-[data-theme="light"] [role="button"]:focus-visible,
-[data-theme="light"] [tabindex]:focus-visible {
+/* Focus ring for buttons and other interactive non-input elements —
+   browsers' blue default outlines look cheap against the industrial gold palette.
+   Applies in BOTH themes (dark is the default): the button reset above no longer
+   kills `outline`, and :focus-visible only fires for keyboard focus, so mouse
+   clicks stay ring-free. This is what makes keyboard focus visible app-wide. */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px !important;
 }

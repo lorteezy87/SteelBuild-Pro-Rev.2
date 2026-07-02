@@ -65,6 +65,8 @@ export default function Icon({ name, size = 14, color = "currentColor", strokeWi
       strokeLinecap="round"
       strokeLinejoin="round"
       style={{ flexShrink: 0 }}
+      aria-hidden="true"
+      focusable="false"
     >
       {path}
     </svg>
