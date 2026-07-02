@@ -3,6 +3,7 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { COST_CODES, COST_CODES_GROUPED } from '../shared/costCodes';
 import { getCostCodeSummary } from '../shared/budgetCalculations';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import FormField from '@/components/shared/FormField';
 
 const EXPENSE_TYPES = ['Labor', 'Materials', 'Equipment', 'Subcontractor', 'Misc.', 'Overhead'];
 const PAYMENT_STATUSES = ['Unpaid', 'Paid', 'Pending Approval', 'Disputed', 'Voided'];
@@ -180,11 +181,11 @@ export default function ExpenseFormModal({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               {/* Left */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <label style={labelStyle}>Description *</label>
-                  <input value={form.description} onChange={e => set('description', e.target.value)} style={iStyle} placeholder="e.g., Anchor bolts — Grid A-D" />
-                  {errors.description && <p style={{ fontSize: 10, color: 'var(--status-error)', marginTop: 3 }}>{errors.description}</p>}
-                </div>
+                <FormField label="Description *" labelStyle={labelStyle} error={errors.description}>
+                  {({ id, 'aria-invalid': ai, 'aria-describedby': ad }) => (
+                    <input id={id} aria-invalid={ai} aria-describedby={ad} value={form.description} onChange={e => set('description', e.target.value)} style={iStyle} placeholder="e.g., Anchor bolts — Grid A-D" />
+                  )}
+                </FormField>
                 <div>
                   <label style={labelStyle}>Type</label>
                   <Select value={form.expense_type} onValueChange={v => set('expense_type', v)}>
@@ -194,36 +195,36 @@ export default function ExpenseFormModal({
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <label style={labelStyle}>Cost Code *</label>
-                  <select value={form.cost_code} onChange={e => set('cost_code', e.target.value)} style={{ ...iStyle, appearance: 'none' }}>
-                    <option value="">Select cost code</option>
-                    {COST_CODES_GROUPED.map(g => (
-                      <optgroup key={g.category} label={g.category}>
-                        {g.codes.map(cc => <option key={cc.code} value={cc.code}>{cc.code} — {cc.name}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
-                  {errors.cost_code && <p style={{ fontSize: 10, color: 'var(--status-error)', marginTop: 3 }}>{errors.cost_code}</p>}
-                </div>
-                <div>
-                  <label style={labelStyle}>Expense Date *</label>
-                  <input type="date" value={form.expense_date} onChange={e => set('expense_date', e.target.value)} style={iStyle} />
-                  {errors.expense_date && <p style={{ fontSize: 10, color: 'var(--status-error)', marginTop: 3 }}>{errors.expense_date}</p>}
-                </div>
+                <FormField label="Cost Code *" labelStyle={labelStyle} error={errors.cost_code}>
+                  {({ id, 'aria-invalid': ai, 'aria-describedby': ad }) => (
+                    <select id={id} aria-invalid={ai} aria-describedby={ad} value={form.cost_code} onChange={e => set('cost_code', e.target.value)} style={{ ...iStyle, appearance: 'none' }}>
+                      <option value="">Select cost code</option>
+                      {COST_CODES_GROUPED.map(g => (
+                        <optgroup key={g.category} label={g.category}>
+                          {g.codes.map(cc => <option key={cc.code} value={cc.code}>{cc.code} — {cc.name}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                  )}
+                </FormField>
+                <FormField label="Expense Date *" labelStyle={labelStyle} error={errors.expense_date}>
+                  {({ id, 'aria-invalid': ai, 'aria-describedby': ad }) => (
+                    <input id={id} aria-invalid={ai} aria-describedby={ad} type="date" value={form.expense_date} onChange={e => set('expense_date', e.target.value)} style={iStyle} />
+                  )}
+                </FormField>
               </div>
               {/* Right */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <label style={labelStyle}>Amount *</label>
-                  <input type="number" step="0.01" min="0" value={form.amount} onChange={e => set('amount', e.target.value)} style={{ ...iStyle, fontFamily: 'var(--font-mono)' }} placeholder="0.00" />
-                  {errors.amount && <p style={{ fontSize: 10, color: 'var(--status-error)', marginTop: 3 }}>{errors.amount}</p>}
-                </div>
-                <div>
-                  <label style={labelStyle}>Quantity</label>
-                  <input type="number" step="0.01" min="0" value={form.quantity} onChange={e => set('quantity', e.target.value)} style={{ ...iStyle, fontFamily: 'var(--font-mono)' }} />
-                  {errors.quantity && <p style={{ fontSize: 10, color: 'var(--status-error)', marginTop: 3 }}>{errors.quantity}</p>}
-                </div>
+                <FormField label="Amount *" labelStyle={labelStyle} error={errors.amount}>
+                  {({ id, 'aria-invalid': ai, 'aria-describedby': ad }) => (
+                    <input id={id} aria-invalid={ai} aria-describedby={ad} type="number" step="0.01" min="0" value={form.amount} onChange={e => set('amount', e.target.value)} style={{ ...iStyle, fontFamily: 'var(--font-mono)' }} placeholder="0.00" />
+                  )}
+                </FormField>
+                <FormField label="Quantity" labelStyle={labelStyle} error={errors.quantity}>
+                  {({ id, 'aria-invalid': ai, 'aria-describedby': ad }) => (
+                    <input id={id} aria-invalid={ai} aria-describedby={ad} type="number" step="0.01" min="0" value={form.quantity} onChange={e => set('quantity', e.target.value)} style={{ ...iStyle, fontFamily: 'var(--font-mono)' }} />
+                  )}
+                </FormField>
                 <div>
                   <label style={labelStyle}>Unit</label>
                   <Select value={form.unit} onValueChange={v => set('unit', v)}>
@@ -297,14 +298,14 @@ export default function ExpenseFormModal({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               {/* Left */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <label style={labelStyle}>Project *</label>
-                  <select value={form.project_id} onChange={e => set('project_id', e.target.value)} style={{ ...iStyle, appearance: 'none' }}>
-                    <option value="">Select project</option>
-                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  {errors.project_id && <p style={{ fontSize: 10, color: 'var(--status-error)', marginTop: 3 }}>{errors.project_id}</p>}
-                </div>
+                <FormField label="Project *" labelStyle={labelStyle} error={errors.project_id}>
+                  {({ id, 'aria-invalid': ai, 'aria-describedby': ad }) => (
+                    <select id={id} aria-invalid={ai} aria-describedby={ad} value={form.project_id} onChange={e => set('project_id', e.target.value)} style={{ ...iStyle, appearance: 'none' }}>
+                      <option value="">Select project</option>
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  )}
+                </FormField>
                 <div>
                   <label style={labelStyle}>Work Package</label>
                   <Select value={form.work_package_id || '__none__'} onValueChange={v => set('work_package_id', v === '__none__' ? '' : v)}>

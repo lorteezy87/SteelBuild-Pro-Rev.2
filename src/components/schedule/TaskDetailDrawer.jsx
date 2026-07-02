@@ -529,6 +529,8 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
               </button>
             )}
             <button
+              type="button"
+              aria-label="Close"
               onClick={onClose}
               style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${drawerMutedBorder}`, borderRadius: 8, cursor: 'pointer', color: drawerMutedText, fontSize: 18, width: 34, height: 34 }}
             >

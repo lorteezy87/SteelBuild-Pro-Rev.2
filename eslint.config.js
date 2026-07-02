@@ -3,7 +3,25 @@ import pluginJs from "@eslint/js";
 import pluginReact from "eslint-plugin-react";
 import pluginReactHooks from "eslint-plugin-react-hooks";
 import pluginUnusedImports from "eslint-plugin-unused-imports";
+import pluginJsxA11y from "eslint-plugin-jsx-a11y";
 import tseslint from "typescript-eslint";
+
+// jsx-a11y as WARNINGS ONLY. The repo has ~180 pre-existing clickable-div /
+// label-association violations and CI runs `eslint . --quiet` (warnings are
+// suppressed, only errors fail). Setting any of these to "error" would break
+// CI immediately, so we take the plugin's recommended ruleset and force EVERY
+// rule to "warn" — new a11y issues surface locally without gating the build.
+// The remediation is incremental: promote individual rules to "error" only
+// after their existing violations are cleaned up.
+const jsxA11yWarnRules = Object.fromEntries(
+  Object.keys(pluginJsxA11y.configs.recommended.rules).map((rule) => {
+    const configured = pluginJsxA11y.configs.recommended.rules[rule];
+    // Preserve any per-rule options the recommended config sets, but force the
+    // severity to "warn" regardless of how the recommended config declared it.
+    const options = Array.isArray(configured) ? configured.slice(1) : [];
+    return [rule, ["warn", ...options]];
+  }),
+);
 
 // Shared pragmatic rule set (JS + TS blocks). Tuned for this app: unused IMPORTS
 // are errors (real dead code), unused vars are warnings, empty catch is an
@@ -24,12 +42,15 @@ const sharedRules = {
   "react/no-unknown-property": ["error", { ignore: ["cmdk-input-wrapper", "toast-close"] }],
   "react-hooks/rules-of-hooks": "error",
   "react-hooks/exhaustive-deps": "warn",
+  // Accessibility lint — warnings only (see jsxA11yWarnRules above).
+  ...jsxA11yWarnRules,
 };
 
 const sharedPlugins = {
   react: pluginReact,
   "react-hooks": pluginReactHooks,
   "unused-imports": pluginUnusedImports,
+  "jsx-a11y": pluginJsxA11y,
 };
 
 export default [

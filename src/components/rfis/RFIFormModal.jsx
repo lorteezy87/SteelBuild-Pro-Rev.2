@@ -8,6 +8,7 @@ import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksC
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import { RFI_TYPES, buildRfiPreflight } from "@/lib/rfiPreflight";
 import { findDuplicateRfis } from "@/lib/rfiDedup";
+import FormField from "@/components/shared/FormField";
 
 /** @type {import('react').CSSProperties} */
 const iStyle = {
@@ -440,9 +441,11 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 options={projects.map((p) => ({ value: p.id, label: p.name || p.project_number || "Unnamed project" }))}
               />
             </Field>
-            <Field label="Title *" span={3}>
-              <input style={iStyle} value={formData.title} onChange={(e) => set("title", e.target.value)} required />
-            </Field>
+            <FormField label="Title *" labelStyle={labelStyle} style={{ gridColumn: "span 3" }}>
+              {({ id }) => (
+                <input id={id} style={iStyle} value={formData.title} onChange={(e) => set("title", e.target.value)} required />
+              )}
+            </FormField>
             <Field label="RFI Type" span={3}>
               <DarkSelect
                 value={formData.rfi_type || ""}
@@ -471,12 +474,16 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                 />
               )}
             </Field>
-            <Field label="Drawing Reference" span={2}>
-              <input style={iStyle} value={formData.drawing_reference} onChange={(e) => set("drawing_reference", e.target.value)} placeholder="e.g. Sheet A-2.3" />
-            </Field>
-            <Field label="Spec Section" span={1}>
-              <input style={iStyle} value={formData.spec_section} onChange={(e) => set("spec_section", e.target.value)} placeholder="e.g. 05120" />
-            </Field>
+            <FormField label="Drawing Reference" labelStyle={labelStyle} style={{ gridColumn: "span 2" }}>
+              {({ id }) => (
+                <input id={id} style={iStyle} value={formData.drawing_reference} onChange={(e) => set("drawing_reference", e.target.value)} placeholder="e.g. Sheet A-2.3" />
+              )}
+            </FormField>
+            <FormField label="Spec Section" labelStyle={labelStyle} style={{ gridColumn: "span 1" }}>
+              {({ id }) => (
+                <input id={id} style={iStyle} value={formData.spec_section} onChange={(e) => set("spec_section", e.target.value)} placeholder="e.g. 05120" />
+              )}
+            </FormField>
             <Field label="Discipline" span={3}>
               <DarkSelect
                 value={formData.discipline || ""}
@@ -560,15 +567,21 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
               <input style={iStyle} value={formData.area_sequence || ""} onChange={(e) => set("area_sequence", e.target.value)} placeholder="e.g. Area A, Seq 3" />
             </Field>
 
-            <Field label="Description" span={3}>
-              <textarea style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.description} onChange={(e) => set("description", e.target.value)} />
-            </Field>
-            <Field label="Question / Issue" span={3}>
-              <textarea style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.question} onChange={(e) => set("question", e.target.value)} />
-            </Field>
-            <Field label="Proposed Resolution" span={3}>
-              <textarea style={{ ...iStyle, minHeight: 56, resize: "vertical" }} value={formData.proposed_solution} onChange={(e) => set("proposed_solution", e.target.value)} placeholder="Your recommended answer — speeds review and documents intent." />
-            </Field>
+            <FormField label="Description" labelStyle={labelStyle} style={{ gridColumn: "span 3" }}>
+              {({ id }) => (
+                <textarea id={id} style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.description} onChange={(e) => set("description", e.target.value)} />
+              )}
+            </FormField>
+            <FormField label="Question / Issue" labelStyle={labelStyle} style={{ gridColumn: "span 3" }}>
+              {({ id }) => (
+                <textarea id={id} style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.question} onChange={(e) => set("question", e.target.value)} />
+              )}
+            </FormField>
+            <FormField label="Proposed Resolution" labelStyle={labelStyle} style={{ gridColumn: "span 3" }}>
+              {({ id }) => (
+                <textarea id={id} style={{ ...iStyle, minHeight: 56, resize: "vertical" }} value={formData.proposed_solution} onChange={(e) => set("proposed_solution", e.target.value)} placeholder="Your recommended answer — speeds review and documents intent." />
+              )}
+            </FormField>
             {duplicateMatches.length > 0 && <DuplicateWarning matches={duplicateMatches} />}
             <PreflightScorecard result={preflight} />
             {!preflight.passed && (
