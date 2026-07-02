@@ -218,12 +218,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     { email, password, fullName }: { email: string; password: string; fullName?: string },
   ): Promise<SignUpResult> => {
     try {
+      // Record provable acceptance of the Terms of Service + Privacy Policy at
+      // sign-up (H12). These land in user_metadata alongside full_name so each
+      // account carries a durable, per-user acceptance timestamp + version.
+      const signUpMeta: Record<string, unknown> = {
+        terms_accepted_at: new Date().toISOString(),
+        terms_version: '2026-07-01',
+      };
+      if (fullName) signUpMeta.full_name = fullName;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
-          data: fullName ? { full_name: fullName } : undefined,
+          data: signUpMeta,
         },
       });
       if (error) throw error;
