@@ -48,6 +48,8 @@ Important repo docs:
 - `.github/workflows/ci.yml` - CI validation behavior
 - `supabase/migrations/` - database history
 - `supabase/functions/` - Supabase Edge Functions
+- `ENTERPRISE_READINESS_AUDIT.md` - full ops/compliance/security/a11y/DR audit (2026-07-01, vs `origin/main@642ce154`): 133 verified findings (0 critical / 27 high / 54 medium / 52 low), 6-wave remediation plan. Most High-severity waves are shipped (see §2.5); remaining owner/infra items live in the runbook below.
+- `docs/runbooks/owner-checklist.md` - owner punch-list from the audit (edge-fn platform-orphan deletes, secrets rotation, Supabase PITR, MFA, Stripe Tax) — actions only a human with dashboard/vendor access can complete.
 
 Always read `ARCHITECTURE.md` and `TECH_DEBT.md` when the task touches architecture, RBAC, RLS, database schema, workflows, LLM behavior, deployment, or major refactors.
 
@@ -118,6 +120,7 @@ Email inbox, advanced financials (beyond basic SOV/cost visibility), safety/QC, 
 - Strengthen audit logging on everything mutable: the `activities` audit trail is fixed and `activities`/`uploaded_files` RLS is hardened (canonical per-command `user_has_project_access` policies; legacy `project_member_access` leftovers removed). **Tier-1 coverage extended 2026-06-19** — submittal (status transitions via the shared `addSubmittalRound` + create/update/delete/bulk on `Submittals.tsx`), delivery (`Deliveries.tsx`), and work-package/fab (`FabRelease.tsx`) mutations now log via `src/services/auditLogger.ts`. **Gotcha:** the "canonical" CRUD hooks (`useSubmittals`, `useDeliveries`) are DEAD for mutations — the live pages roll their own — so audit the *page* `.mutate` handlers (reachability-check the call sites first) + the shared `addSubmittalRound`, not the hook. **Extended again 2026-06-19:** pay-app create/status/delete (`payapp/repository.ts`) and AI drawing-intake create (`DrawingSetUploadModal.handleCreate`) now log too — note `src/lib/importAnalyzedDrawings.js` is DEAD (no call sites; the upload modal is the live intake path, same reachability gotcha). Remaining: drawing-set approval status, project member/role changes.
 - Mobile experience overhaul (section 25): touch-friendly controls, readable drawers/modals, responsive core-workflow screens.
 - Performance on large projects (section 26): pagination, virtualization, server-side filtering, narrow query invalidation.
+- **Enterprise readiness** (audit 2026-07-01 → `ENTERPRISE_READINESS_AUDIT.md`; 0 critical, 27 high). No live data breach — gaps cluster in ops/governance/compliance/a11y, not app logic; tenant isolation, money math, and the fab gate are live-verified sound. **Shipped in remediation waves** (through the enterprise-readiness branch, merged to `main`): the viewer-role RLS write-floor (H1 — `viewer` can no longer INSERT/UPDATE/DELETE ~25 business tables incl. `drawing_revisions`; field-verified), advisor/RLS hardening, `auth.uid()`-bound audit attribution, chunked `bulkUpdate`/`bulkDelete` + `Project.bulkDelete`-via-`soft_delete_project` (M19), `ListTruncationNotice`/`warnIfTruncated`→Sentry on Submittals/RFIs/Hub (M18/H10), a 300ms realtime-invalidation debounce (L20), an advisory `dependency-audit` CI job + `vitest maxWorkers:2` on win32 + `test.env` placeholders so bare `npm test` passes (L13/L31), a11y fixes, and ops runbooks. **Still queued (verify before assuming done):** H9/M17/M2 perf+RLS surgery; the platform edge-fn orphan deletes + PITR/MFA/Stripe-Tax owner items (`docs/runbooks/owner-checklist.md`); secret-gated CI (coverage/gitleaks/E2E); `pg_net`-in-public (not relocatable on Supabase). Password-reset + MFA (H22/H23) and Storage backup/DR (H24/H25) are the top still-open user-facing gaps.
 
 ---
 
@@ -718,7 +721,7 @@ Edge functions live in:
 supabase/functions/
 ```
 
-Current functions (the 8 actually deployed — verify with `list_edge_functions`):
+Current functions (6 live + 2 deprecated in-repo; **11 total still deployed on the platform** as of 2026-07-01 — verify with `list_edge_functions`):
 
 ```text
 llm-proxy           external LLM gateway — ALL model calls route here
@@ -732,10 +735,14 @@ sharepoint-proxy    DEPRECATED — still deployed, no longer client-invoked
 bluebeam-proxy      DEPRECATED — still deployed, no longer client-invoked
 ```
 
-GONE (deleted Stripe Sync Engine orphans — do NOT re-add): `stripe-setup`,
-`stripe-webhook`, `stripe-worker`. The Stripe webhook is a **`/webhook` route inside
-`stripe-billing`**, not a separate function. ⚠ A dangling caller (cron/pg_cron) still
-POSTs `stripe-worker` every ~60s → 404 in the edge logs; trace and stop that caller.
+Deleted from the REPO (do NOT re-add to `supabase/functions/`): the Stripe Sync Engine
+orphans `stripe-setup`, `stripe-webhook`, `stripe-worker`. ⚠ **They are still ACTIVE on
+the platform** (confirmed by the 2026-07-01 enterprise audit) — they were removed from the
+repo but never `functions delete`d. Deleting all 5 platform leftovers (these 3 +
+`sharepoint-proxy` + `bluebeam-proxy`) is an owner action on `docs/runbooks/owner-checklist.md`.
+The Stripe webhook is a **`/webhook` route inside `stripe-billing`**, not a separate function.
+The `stripe-sync-worker` pg_cron job that POSTed `stripe-worker` every ~60s was **KILLED
+2026-07-01** (it was the source of the 404 edge-log noise — no longer firing).
 
 The deprecated integration functions (`sharepoint-proxy`, `bluebeam-proxy`) followed one pattern — OAuth/user tokens stored server-side, the Edge Function proxies every external API call, RLS enforces project membership — and are no longer client-invoked (slated for `functions delete`). The general rule still holds for any new integration: do not move tokens or provider calls into the browser. Outbound email columns live in `20260520002000_email_send_columns.sql` with client logic in `src/services/emailSendService.js`. **Billing:** `stripe-billing` holds the price ids in its env, the client passes only a plan key, and `organizations.plan` is changed only by the webhook (service role) — never weaken that boundary.
 
