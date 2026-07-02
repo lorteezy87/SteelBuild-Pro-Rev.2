@@ -36,7 +36,14 @@ on:
 # Avoids piling up redundant CI for rapid iteration on a feature branch.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel redundant runs on feature branches only — NEVER cancel a main run:
+  # a cancelled green main run would skip its deploy and leave prod stale. (M8)
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Least-privilege default for the ambient GITHUB_TOKEN (M12/H6). The deploy job
+# authenticates to Vercel with its own VERCEL_* secrets, not GITHUB_TOKEN.
+permissions:
+  contents: read
 
 jobs:
   ci:
@@ -127,6 +134,12 @@ jobs:
     needs: ci
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Serialize production deploys and never cancel one mid-flight — an
+    # interrupted `vercel deploy` wastes minutes and can leave a half-deploy. (M8)
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -152,11 +165,32 @@ jobs:
         run: vercel build --prod --token="$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # Stamp the commit as the Sentry release so instrument.js and the vite
+          # plugin share one release name, and upload source maps when the token
+          # is set (the plugin no-ops if SENTRY_AUTH_TOKEN is empty). (M9/H8)
+          VITE_APP_VERSION: ${{ github.sha }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
       - name: Deploy prebuilt output (production)
-        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        # --meta stamps the commit onto the Vercel deployment record so an
+        # on-call engineer can answer "which commit is live?" (M9).
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --meta githubCommitSha=${{ github.sha }} --meta githubCommitRef=${{ github.ref_name }} --meta githubRunId=${{ github.run_id }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Post-deploy health check
+        # Fail the run loudly if the just-deployed app doesn't serve 200 (M10).
+        # -L follows the apex->canonical 308 redirect (bare / returns 308, the
+        # final page is 200). Retries absorb CDN propagation; prod stays on the
+        # last good build if this is red (deploy already promoted at this point).
+        run: |
+          set -e
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sL -o /dev/null -w '%{http_code}' https://steelbuild-pro.com/)
+            if [ "$code" = "200" ]; then echo "healthy ($code)"; exit 0; fi
+            echo "attempt $i: HTTP $code"; sleep 10
+          done
+          echo "::error::production health check failed after deploy"; exit 1
 
   # ── E2E smoke (post-deploy, NON-BLOCKING) ────────────────────────────────
   # The "unit tests pass != it works" layer: signs in with a real session and

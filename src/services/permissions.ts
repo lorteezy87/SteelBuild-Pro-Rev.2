@@ -67,6 +67,12 @@ const ENTITY_OVERRIDES: Record<string, AppRole> = {
   "drawing:delete":       "pm",
   "change_order:approve": "pm",
   "change_order:void":    "admin",
+  // budget_hour_items RLS: INSERT/UPDATE/DELETE = user_has_project_role_at_least(project_id,'pm').
+  // create/edit already floor at pm; delete would default to admin, so the override
+  // lets a project PM delete (soft-delete) a scope item, matching the DB boundary.
+  "budget_hour_item:create": "pm",
+  "budget_hour_item:edit":   "pm",
+  "budget_hour_item:delete": "pm",
 };
 
 // ─── Pure permission check ──────────────────────────────────────────────

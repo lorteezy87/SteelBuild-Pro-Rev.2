@@ -47,6 +47,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef, KpiTone } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   buildFieldTodaySummary,
   URGENCY_DISPLAY,
@@ -428,6 +429,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
         subtitle="Daily field overview — activities, safety, and coordination."
         projectName={projectName}
         chips={chips}
+        photoSrc={photoFor("FieldToday") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />

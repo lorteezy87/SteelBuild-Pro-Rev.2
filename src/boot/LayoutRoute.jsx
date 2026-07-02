@@ -7,9 +7,11 @@ import { useFlag } from "@/hooks/useFeatureFlag";
 import { useTheme } from "@/components/shared/ThemeContext";
 
 /**
- * LayoutRoute — mounts the app chrome ONCE and keeps it across navigations.
- * Chooses DesktopShell (flag: desktop_shell) or the classic Layout. Both render
- * the page <Outlet>, so all routes work identically under either shell.
+ * LayoutRoute — mounts the app chrome (Layout) ONCE and keeps it across
+ * navigations; the page <Outlet> renders inside it. Also defaults the whole
+ * shell to the light theme when the command_ui flag is on (the user can still
+ * toggle dark afterward). (The removed DesktopShell / desktop_shell path is
+ * gone — Layout is the only shell.)
  */
 export default function LayoutRoute() {
   const location = useLocation();

@@ -32,6 +32,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   wpStatusTone,
   riskTone,
@@ -312,6 +313,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
         subtitle="Manage fabrication, delivery, and erection packages — surface exceptions and advance production flow."
         projectName={projectName}
         chips={heroChips}
+        photoSrc={photoFor("WorkPackages") ?? undefined}
         stats={[
           { value: projectHealth || "—", label: "Project Health" },
           {

@@ -22,6 +22,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   Truck,
   PackageCheck,
@@ -327,6 +328,7 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
         subtitle="Plan load-out, spot late trucks, confirm receiving, and keep field-ready steel visible before it turns into a site constraint."
         projectName={projectName}
         chips={heroChips}
+        photoSrc={photoFor("Deliveries") ?? undefined}
         stats={heroStats}
       />
 

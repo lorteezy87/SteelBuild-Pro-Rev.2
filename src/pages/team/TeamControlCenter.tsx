@@ -21,6 +21,7 @@ import {
   PageHero, KpiStrip, DecisionPanel, Pill, FilterBar, DataTable, useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import type { OrgMemberRow, OrgInvitation } from "@/lib/org/repository";
 import { buildTeamSummary, roleTone, inviteExpiryTone } from "./teamControlCenter.derive";
 import type { StagedInvite } from "@/lib/org/onboardingInvites";
@@ -281,6 +282,7 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
         subtitle="Manage workspace members, roles, and invitations."
         projectName={orgName}
         chips={heroChips}
+        photoSrc={photoFor("OrgMembers") ?? undefined}
         stats={[]}
       />
 

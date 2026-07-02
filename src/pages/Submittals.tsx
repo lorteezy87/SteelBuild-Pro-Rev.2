@@ -601,6 +601,7 @@ export default function Submittals() {
           />
           <input
             className="sbd-input"
+            aria-label="Search submittals"
             placeholder="Search # / title / spec section"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

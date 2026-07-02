@@ -19,6 +19,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   buildReportsSummary,
   type ReportCatalogEntry,
@@ -217,6 +218,7 @@ export default function ReportsHubControlCenter(
         title="Reports & Insights"
         subtitle="Analyze project performance and export the data that drives decisions."
         chips={chips}
+        photoSrc={photoFor("ReportsHub") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />

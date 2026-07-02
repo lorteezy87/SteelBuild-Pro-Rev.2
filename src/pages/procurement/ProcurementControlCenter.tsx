@@ -29,6 +29,7 @@ import {
   FilterBar, DataTable, useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { buildProcurementSummary, isOverdue, isLate, daysUntil } from "./procurementControlCenter.derive";
 import type { ProcurementItem } from "./procurementControlCenter.derive";
 import { PROCUREMENT_CATEGORIES, ALL_STATUSES, fmtDate } from "./format";
@@ -240,6 +241,7 @@ export default function ProcurementControlCenter(props: ProcurementControlCenter
         subtitle="Track purchase orders, vendors, long-lead items, and delivery commitments for this steel project."
         projectName={projectName}
         chips={chips}
+        photoSrc={photoFor("Procurement") ?? undefined}
       />
 
       <KpiStrip cells={kpiCells} />

@@ -37,7 +37,7 @@ For the running list of known issues, see [`TECH_DEBT.md`](./TECH_DEBT.md).
                   │  — via Edge Functions  │
                   └────────────────────────┘
 
-         Hosting: Vercel auto-deploys from main → steelbuild-pro.com
+         Hosting: Vercel (CI-gated deploy job) → steelbuild-pro.com
 ```
 
 There is no separate backend service. The app is a SPA that talks
@@ -352,11 +352,16 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
 - `email-send` — outbound email compose/reply pipeline.
 - `project-export` — RLS-scoped, audited per-project data export (powers the
   workspace backup; see Data export).
-- `stripe-billing` / `stripe-setup` / `stripe-webhook` / `stripe-worker` —
-  subscription checkout, portal, and webhook handling.
-- `_shared/` — CORS + helpers.
-- `sharepoint-proxy`, `bluebeam-proxy` — **deprecated** integrations; still
-  deployed but no longer client-invoked (slated for `functions delete`).
+- `stripe-billing` — subscription checkout, portal, and the `/webhook` route
+  (the tamper-proof `org.plan` anchor). Does its own auth (deploy `--no-verify-jwt`).
+- `_shared/` — CORS + attachment helpers (a shared dir, not a deployed function).
+- **Deprecated / orphan — still deployed, pending `supabase functions delete`
+  (owner/CLI):** `sharepoint-proxy`, `bluebeam-proxy` (removed integrations) and
+  the Stripe Sync Engine orphans `stripe-setup` / `stripe-webhook` /
+  `stripe-worker` (these are NOT the real webhook — that lives inside
+  `stripe-billing`). As of 2026-07-01 there are **11 functions live** (6 real + 5
+  orphan/deprecated); the `pg_cron` job that pinged `stripe-worker` every 60s was
+  unscheduled 2026-07-01. See `docs/runbooks/owner-checklist.md`.
 
 ### Storage
 
@@ -507,23 +512,45 @@ The migration that creates `llm_telemetry` is `081_llm_telemetry.sql`.
 branches and every PR:
 
 1. ESLint (errors block, warnings allowed)
-2. TypeScript — both `typecheck` (TS) and `typecheck:js` (JS/JSX), blocking
-3. Vitest (~1,250 tests)
+2. TypeScript — four gates: `typecheck` (TS), `typecheck:js` (JS/JSX), and the
+   `typecheck:strict` (strictNullChecks) + `typecheck:noimplicitany` ratchets,
+   all blocking
+3. Vitest (~1,740 tests)
 4. Production Vite build
 
 Concurrency group cancels redundant runs on rapid iteration.
 
 ### Deployment
 
-Vercel auto-deploys from `main`. Workflow:
+Production deploys are **CI-gated** (since 2026-06-19). Vercel's own git
+auto-deploy is OFF (`vercel.json` `git.deploymentEnabled.main:false`); the
+`deploy` job in `.github/workflows/ci.yml` is the sole path. Workflow:
 
-1. Develop on a `claude/<slug>` feature branch
-2. Push commits + PR if collaborating
-3. Merge into `main` (Vercel builds + deploys)
+1. Develop on a `claude/<slug>` feature branch (or directly on `main`)
+2. Push to `main` → the `ci` job runs (lint + 4 typechecks + Vitest + build)
+3. **Only if `ci` is green** does the `deploy` job publish to Vercel
+   (`vercel pull/build/deploy --prebuilt --prod`). A red run leaves prod on the
+   last good build.
 4. Verify on the live URL
 
-`CLAUDE.md` documents the auto-deploy command sequence used by
-agent-driven development.
+Remaining gap: no branch-protection required check (repo plan), so red/unreviewed
+commits can still land on `main` (they just can't deploy). `CLAUDE.md` documents
+the git-safety rules + agent deploy sequence.
+
+### Availability & data residency
+
+Single-region, all-US vendor chain (an accepted risk at this stage):
+
+- **Database + Auth + Storage:** Supabase (Postgres 17) on AWS **us-east-1**,
+  single region. Daily backups; PITR is an owner dashboard toggle.
+- **Hosting / CDN:** Vercel (US). **Payments:** Stripe (US). **Monitoring:**
+  Sentry (US). **AI:** US-based model providers via `llm-proxy`.
+- No customer data is stored outside the US; there is no EU-residency option.
+
+Degradation stance: auth fails closed with a clear error; AI features degrade to
+deterministic paths (regex email-classify, deterministic revision overlay);
+billing entitlements survive a Stripe outage via the `organizations.plan` DB
+anchor. See `docs/runbooks/backup-dr.md` + `incident-response.md`.
 
 ---
 

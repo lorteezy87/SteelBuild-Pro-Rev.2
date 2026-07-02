@@ -91,6 +91,20 @@ export default function Security() {
         </p>
       </Section>
 
+      <Section title="Where your data lives">
+        <p>
+          Your data is stored and processed in the{" "}
+          <strong style={strong}>United States</strong>. Primary storage —
+          database, authentication, and uploaded files — is hosted on Supabase
+          running on AWS in the <strong style={strong}>us-east-1</strong> region
+          (a single region). Our web frontend is hosted and delivered by Vercel
+          (US), payments are processed by Stripe (US), and error monitoring runs
+          on Sentry (US). AI-assisted processing is performed by US-based
+          providers. We do not store customer data outside the United States, and
+          we do not currently offer an EU or other regional data-residency option.
+        </p>
+      </Section>
+
       <Section title="Authentication">
         <p>
           User authentication is handled by <strong style={strong}>Supabase

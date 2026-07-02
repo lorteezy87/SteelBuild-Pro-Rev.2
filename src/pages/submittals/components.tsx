@@ -140,7 +140,20 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
   // separate visually before the user even reads the chip.
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Open submittal ${row.submittal_number || row.title || ""}`}
       onClick={onClick}
+      onKeyDown={(e) => {
+        // Only Enter/Space that originate on the row itself open the detail —
+        // key events bubbling up from the nested selection checkbox (Space
+        // toggles it) must not also pop the panel.
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       style={{
         padding: "10px 14px",
         borderBottom: "1px solid var(--divider)",
@@ -356,7 +369,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
               )}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, marginLeft: 10 }}>×</button>
+          <button type="button" aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, marginLeft: 10 }}>×</button>
         </div>
 
         {/* Verb-driven next-step CTA — one click advances the canonical

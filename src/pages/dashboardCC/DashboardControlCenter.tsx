@@ -29,6 +29,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { buildDashboardSummary } from "./dashboardControlCenter.derive";
 import type { DashActivityRow, ModuleTile } from "./dashboardControlCenter.derive";
 import { getPageIcon } from "@/config/pageIcons";
@@ -299,6 +300,7 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
         subtitle="Project overview and quick access to all SteelBuild Pro modules"
         projectName={s.projectName}
         chips={chips}
+        photoSrc={photoFor("Dashboard") ?? undefined}
         stats={heroStats}
       />
 

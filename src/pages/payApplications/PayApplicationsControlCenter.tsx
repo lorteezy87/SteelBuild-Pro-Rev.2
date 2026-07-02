@@ -25,6 +25,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import {
   buildPayAppSummary,
   buildPayAppPanelQueues,
@@ -225,6 +226,7 @@ export default function PayApplicationsControlCenter(props: PayApplicationsContr
         subtitle="AIA G702/G703 pay applications — track billing periods, retainage, and payment status."
         projectName={projectName}
         chips={chips}
+        photoSrc={photoFor("PayApplications") ?? undefined}
         stats={heroStats}
       />
 

@@ -29,6 +29,7 @@ import {
   useCommandSkin,
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
+import { photoFor } from "@/config/launcherConfig";
 import { useFinancials } from "@/hooks/useFinancials";
 import type { CostCodeRow } from "@/hooks/useFinancials";
 import { formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
@@ -276,6 +277,7 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
         title="Cost Control Center"
         subtitle="Budget · Actual · Committed · Forecast · Variance"
         chips={heroChips}
+        photoSrc={photoFor("CostHub") ?? undefined}
         stats={heroStats}
       />
 

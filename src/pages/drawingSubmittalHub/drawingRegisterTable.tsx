@@ -154,13 +154,18 @@ function RegisterVirtualList({
         <GridHeaderCell align="right">Sheets</GridHeaderCell>
         <GridHeaderCell>Status</GridHeaderCell>
         <GridHeaderCell>
-          <span
+          {/* Real <button> for keyboard operability (H16); sort direction is
+              announced via the dynamic aria-label since the shared GridHeaderCell
+              primitive doesn't forward an aria-sort attribute. */}
+          <button
+            type="button"
             onClick={() => setSortByHealth((s) => (s === "asc" ? "desc" : s === "desc" ? null : "asc"))}
-            style={{ cursor: "pointer", userSelect: "none" }}
+            aria-label={`Sort by health score${sortByHealth === "asc" ? " (ascending)" : sortByHealth === "desc" ? " (descending)" : ""}`}
             title="Sort by health score"
+            style={{ cursor: "pointer", userSelect: "none", background: "transparent", border: "none", padding: 0, font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit" }}
           >
             Health{sortByHealth === "asc" ? " ▲" : sortByHealth === "desc" ? " ▼" : ""}
-          </span>
+          </button>
         </GridHeaderCell>
         <GridHeaderCell>Released</GridHeaderCell>
         <GridHeaderCell>Due</GridHeaderCell>
@@ -363,13 +368,20 @@ export function DrawingRegisterTable({
               <Th style={{ textAlign: "right" }}>Sheets</Th>
               <Th>Status</Th>
               <Th>
-                <span
+                {/* Sort control is a real <button> for keyboard operability (H16).
+                    aria-sort belongs on the column header, but the shared <Th>
+                    primitive doesn't forward arbitrary attrs, so the current sort
+                    direction is announced via the button's dynamic aria-label
+                    instead. */}
+                <button
+                  type="button"
                   onClick={() => setSortByHealth((s) => (s === "asc" ? "desc" : s === "desc" ? null : "asc"))}
-                  style={{ cursor: "pointer", userSelect: "none" }}
+                  aria-label={`Sort by health score${sortByHealth === "asc" ? " (ascending)" : sortByHealth === "desc" ? " (descending)" : ""}`}
                   title="Sort by health score"
+                  style={{ cursor: "pointer", userSelect: "none", background: "transparent", border: "none", padding: 0, font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit" }}
                 >
                   Health{sortByHealth === "asc" ? " ▲" : sortByHealth === "desc" ? " ▼" : ""}
-                </span>
+                </button>
               </Th>
               <Th>Released</Th>
               <Th>Due</Th>
