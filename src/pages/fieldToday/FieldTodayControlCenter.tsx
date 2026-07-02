@@ -25,7 +25,8 @@
  *   "Deliveries"     → MISSING (deliveries not queried here) → "Photos Today" from entities.Photo
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useResolvedFileUrl } from "@/hooks/useResolvedFileUrl";
 import {
   CalendarCheck,
   Camera,
@@ -57,6 +58,42 @@ import {
   PunchlistItemRecord,
 } from "./fieldTodayControlCenter.derive";
 import { PROGRESS_STEPS, clampPercent } from "@/lib/field/fieldToday";
+
+// ── Photo thumbnail ─────────────────────────────────────────────────────────────
+// Stored photo file_url values are storage PATHS (not fetchable URLs), so an
+// <img src={path}> renders as a broken thumbnail. Resolve each through
+// resolveFileUrl (→ short-lived signed URL) via useResolvedFileUrl, and fall back
+// to the placeholder icon on any resolve/load failure — a photo never shows a
+// broken image, it shows the icon instead.
+function PhotoThumb({ fileUrl, title }: { fileUrl: string | null; title: string | null }) {
+  const { url } = useResolvedFileUrl(fileUrl);
+  const [failed, setFailed] = useState(false);
+  if (fileUrl && url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={title ?? "Field photo"}
+        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: 0.3,
+      }}
+    >
+      <ImageIcon size={16} />
+    </div>
+  );
+}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -704,27 +741,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
                       border: "1px solid var(--cmd-border)",
                     }}
                   >
-                    {p.fileUrl ? (
-                      <img
-                        src={p.fileUrl}
-                        alt={p.title ?? "Field photo"}
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          opacity: 0.3,
-                        }}
-                      >
-                        <ImageIcon size={16} />
-                      </div>
-                    )}
+                    <PhotoThumb fileUrl={p.fileUrl ?? null} title={p.title ?? null} />
                   </div>
                 ))}
               </div>
