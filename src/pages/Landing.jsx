@@ -791,7 +791,7 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
             <div>
               <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: C.goldB, marginBottom: 14 }}>Legal</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {["Privacy", "Terms", "Security"].map((l) => (
+                {["Privacy", "Terms", "Security", "Subprocessors"].map((l) => (
                   <a key={l} href={`/${l}`} className="lp-footlink">{l}</a>
                 ))}
               </div>
@@ -852,6 +852,14 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
                   <button type="submit" disabled={authMode === "signup" ? signupBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", padding: 14, cursor: (authMode === "signup" ? signupBusy : isSubmitting) ? "not-allowed" : "pointer", opacity: (authMode === "signup" ? signupBusy : isSubmitting) ? 0.6 : 1 }}>
                     {authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : (isSubmitting ? "Signing in…" : "Sign in")}
                   </button>
+                  {authMode === "signup" && (
+                    <p style={{ fontSize: 12, color: C.muted, textAlign: "center", lineHeight: 1.5, margin: 0 }}>
+                      By creating an account you agree to the{" "}
+                      <a href="/terms" style={{ color: C.goldB, textDecoration: "none", borderBottom: `1px solid rgba(230,181,60,0.4)` }}>Terms of Service</a>
+                      {" "}and{" "}
+                      <a href="/privacy" style={{ color: C.goldB, textDecoration: "none", borderBottom: `1px solid rgba(230,181,60,0.4)` }}>Privacy Policy</a>.
+                    </p>
+                  )}
                 </form>
                 <div style={{ marginTop: 18, textAlign: "center", fontSize: 13, color: C.muted }}>
                   {authMode === "signup" ? (
