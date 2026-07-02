@@ -180,11 +180,13 @@ jobs:
 
       - name: Post-deploy health check
         # Fail the run loudly if the just-deployed app doesn't serve 200 (M10).
-        # Retries absorb CDN propagation; prod stays on the last good build if red.
+        # -L follows the apex->canonical 308 redirect (bare / returns 308, the
+        # final page is 200). Retries absorb CDN propagation; prod stays on the
+        # last good build if this is red (deploy already promoted at this point).
         run: |
           set -e
-          for i in 1 2 3 4 5; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' https://steelbuild-pro.com/)
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sL -o /dev/null -w '%{http_code}' https://steelbuild-pro.com/)
             if [ "$code" = "200" ]; then echo "healthy ($code)"; exit 0; fi
             echo "attempt $i: HTTP $code"; sleep 10
           done
