@@ -1,149 +1,135 @@
 /**
  * Landing — public marketing page for steelbuild-pro.com.
  *
- * "Industrial Midnight" redesign: a bold, DARK, modern-SaaS landing —
- * Linear/Vercel/Stripe-level polish with structural-steel grit. A near-black
- * steel base (#0B0E11), oversized condensed Barlow headlines, glowing
- * safety-gold accents, and the cinematic brand image featured in a dramatic
- * dark hero. This is intentionally the DARK twin of the in-app "SteelBuild
- * Dark" chrome — the cinematic brand photo finally belongs on a dark page.
- *
- * Sections:
- *   Nav → Hero → Trust/stat bar → Pain Points → Features → Workflow →
- *   Big proof band → Differentiator/quote → Pricing → Demo CTA →
- *   Final CTA → Footer
- *
- * Receives `onLogin`, `onSignUp`, `isSubmitting`, and `loginError` from
- * AuthenticatedApp so the sign-in / sign-up modal works without leaving the page.
- *
- * The page is self-contained: it paints html/body itself with the dark steel
- * base and defines its own palette/fonts. It does NOT import app theme tokens.
+ * Executive Light redesign: a clean, professional SaaS landing page that uses
+ * the light SteelBuild Pro module mockups as visual direction — crisp white
+ * cards, restrained navy typography, amber command accents, product-first
+ * screenshots, and a boardroom-ready narrative for steel contractors.
  */
 
 import React, { useState, useRef, useEffect } from "react";
 import { PLANS } from "@/lib/billing/plans";
 import { supabase } from "@/lib/supabase";
 
-/* ─── Palette + fonts (self-contained, dark) ──────────────────── */
-
 const C = {
-  // surfaces — near-black steel base, layered up to elevated cards
-  base: "#0B0E11", surface: "#0F141A", card: "#161C24", cardHi: "#1B232E",
-  // hairlines
-  line: "rgba(255,255,255,0.07)", line2: "rgba(255,255,255,0.12)",
-  // text
-  ink: "#F2F4F7", body: "#AEB7C2", muted: "#727B86",
-  // accent — brand safety-gold; brighter for glows/hover
-  gold: "#C89B20", goldB: "#E6B53C",
-  // hot secondary (used sparingly)
-  ember: "#FF6A2B",
-};
-const F = {
-  disp: "'Barlow Condensed', system-ui, sans-serif",
-  body: "'Inter', system-ui, sans-serif",
-  mono: "'IBM Plex Mono', monospace",
+  base: "#F5F7FA",
+  surface: "#FFFFFF",
+  surfaceSoft: "#F8FAFC",
+  ink: "#101827",
+  navy: "#172033",
+  body: "#536179",
+  muted: "#8491A6",
+  line: "#E2E8F0",
+  line2: "#CBD5E1",
+  amber: "#F5A800",
+  amberDark: "#C47D00",
+  blue: "#2563EB",
+  green: "#059669",
+  red: "#DC2626",
 };
 
-const HERO_IMG = "/steelbuild-pro-hero-industrial.png";
+const F = {
+  body: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+  display: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+  mono: "'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace",
+};
+
+const HERO_STRIP = "/steelbuild-hero.svg";
 const LOGO_IMG = "/steelbuild-pro-logo.jpg";
 
-/* ─── Data ────────────────────────────────────────────────────── */
-
 const NAV_LINKS = [
-  { label: "Platform", target: "features" },
+  { label: "Platform", target: "platform" },
+  { label: "Modules", target: "modules" },
   { label: "Workflow", target: "workflow" },
-  { label: "Why steel", target: "why" },
   { label: "Pricing", target: "pricing" },
-  { label: "Contact", target: "demo" },
+  { label: "Demo", target: "demo" },
 ];
 
-const PAIN_POINTS = [
-  { tag: "GAP 01", title: "Mill certs buried in an inbox", body: "Your CWI needs the MTR for W14×90 heat 84726 — but it's a forwarded email from three weeks ago, and nobody knows which attachment is current." },
-  { tag: "GAP 02", title: "Field photos with no context", body: "200 bolt-up photos on a foreman's phone. No piece marks, no grid lines, no connection IDs. Useless for the turnover package." },
-  { tag: "GAP 03", title: "RFIs in spreadsheet purgatory", body: "The log is 14 tabs deep. The GC says they answered RFI-047 Tuesday. Your PM never got it. The EOR is waiting on both." },
-  { tag: "GAP 04", title: "Drawings marked up on paper", body: "The detailer sent Rev. C, but the shop floor is fabricating Rev. B. The approval stamp lives in a folder called “FINAL_FINAL_v2.”" },
-  { tag: "GAP 05", title: "NCRs on sticky notes", body: "A flange was welded on the wrong side. The welder knows. The foreman knows. The NCR won't exist until someone writes it up — if ever." },
-  { tag: "GAP 06", title: "Change orders you can't prove", body: "The GC added 47 embed plates outside the original scope. The email's somewhere. Good luck finding it when they dispute the CO." },
+const EXEC_METRICS = [
+  { value: "31", label: "Connected modules" },
+  { value: "1", label: "Source of truth" },
+  { value: "24/7", label: "Project visibility" },
+  { value: "0", label: "Spreadsheet handoffs" },
 ];
 
-const STATS = [
-  { value: "3.2×", label: "Faster RFI cycles", detail: "12-day avg → under 4" },
-  { value: "100%", label: "MTR traceability", detail: "Heat # → piece mark → grid" },
-  { value: "67%", label: "Less admin time", detail: "Manage steel, not spreadsheets" },
-  { value: "0", label: "Lost close-out docs", detail: "Digital turnover, every time" },
+const VALUE_CARDS = [
+  {
+    kicker: "Executive control",
+    title: "Portfolio health without waiting for status meetings.",
+    body: "See open RFIs, schedule exposure, cost pressure, field blockers, and production status in one command view.",
+  },
+  {
+    kicker: "Steel-first execution",
+    title: "Built around the way steel moves.",
+    body: "Detailing, release, fabrication, deliveries, erection, change orders, pay apps, and closeout stay connected by project.",
+  },
+  {
+    kicker: "Commercial confidence",
+    title: "Evidence stays attached to the work.",
+    body: "RFIs, photos, documents, budget hours, backcharges, and change orders stay organized for faster decisions and stronger backup.",
+  },
 ];
 
-const ICONS = {
-  ibeam: ["M4 5h16M4 19h16M12 5v14"],
-  frame: ["M4 20V8M20 20V8M3 8h18M3 20h18"],
-  shield: ["M12 3l7 3v5c0 4-3 7-7 9-4-2-7-5-7-9V6z", "M9 12l2 2 4-4"],
-  sheet: ["M7 3h7l4 4v14H7zM14 3v4h4M10 12h6M10 16h6"],
-  cost: ["M4 20h16M7 20v-6M12 20v-9M17 20v-12"],
-  gantt: ["M4 5v14M6 8h9M6 13h11M6 18h6"],
-};
-
-const FEATURES = [
-  { num: "01", tag: "Shop", icon: ICONS.ibeam, title: "Fabrication tracking", body: "Every piece from detailing through CNC, fit-up, welding, coating, and load-out. Weld maps, NDT, and DFTs linked to piece marks.", details: ["CNC file management & nesting", "Weld procedure tracking (WPS/PQR)", "Coating & DFT inspection logs"] },
-  { num: "02", tag: "Field", icon: ICONS.frame, title: "Erection management", body: "Erection sequences, crane pick plans, and bolt-up logs tied to the model. Know what's shaken out, plumbed, and punched.", details: ["Shake-out & plumb-up tracking", "High-strength bolt inspection", "Crane pick planning"] },
-  { num: "03", tag: "Quality", icon: ICONS.shield, title: "QA/QC & inspections", body: "CWI reports, torque logs, and weld records with geo-tagged photos linked to connection IDs. Turnover builds as you go.", details: ["AWS D1.1 / D1.8 compliance", "Torque & tension logs", "Automated turnover assembly"] },
-  { num: "04", tag: "Documents", icon: ICONS.sheet, title: "Drawing & submittal control", body: "Version-controlled drawing sets with automated approval routing. AI extracts piece marks and quantities from submittals.", details: ["Automatic revision control", "AI drawing data extraction", "Mark-up overlay comparison"] },
-  { num: "05", tag: "Commercial", icon: ICONS.cost, title: "Commercial & cost control", body: "SOV progress tied to actual field completion. Change-order backup assembled from RFIs, drawing deltas, and field directives.", details: ["SOV linked to erection progress", "Change-order evidence packaging", "Cost code by work package"] },
-  { num: "06", tag: "Schedule", icon: ICONS.gantt, title: "Schedule & risk intelligence", body: "Gantt logic built for steel delivery. AI flags when a late approval will cascade into an erection delay — before it happens.", details: ["Steel-specific milestones", "Approval-to-fab lead tracking", "Critical-path risk alerts"] },
+const MODULES = [
+  { name: "Command Center", desc: "Executive workload, risk, and decision queue", stat: "86% clear", tone: "blue" },
+  { name: "Portfolio", desc: "Multi-project performance and exposure", stat: "$58.4M", tone: "green" },
+  { name: "RFIs", desc: "Ownership, aging, and response control", stat: "47 open", tone: "red" },
+  { name: "Detailing", desc: "Drawings, models, approvals, and release", stat: "156 dwgs", tone: "blue" },
+  { name: "Schedule", desc: "Critical path, delivery, and field impacts", stat: "72%", tone: "amber" },
+  { name: "Fab Release", desc: "Shop release readiness and blockers", stat: "142", tone: "green" },
+  { name: "Field Today", desc: "Crew, issues, inspections, and photos", stat: "32 issues", tone: "amber" },
+  { name: "Budget Control", desc: "Cost, hours, COs, and pay applications", stat: "-2.4%", tone: "green" },
 ];
 
 const WORKFLOW = [
-  { n: "1", title: "Award → detailing", body: "Import scope, set up drawing sets, assign detailers. Submittal packages route automatically.", milestone: "Submittals out" },
-  { n: "2", title: "Shop → fab", body: "Approved drawings release to CNC. Track every piece through fit-up, welding, NDT, and coating.", milestone: "Load-out ready" },
-  { n: "3", title: "Delivery → erection", body: "Shipping tickets match to erection sequences. Crews log shake-out, plumb-up, and bolt-up with photos.", milestone: "Topped out" },
-  { n: "4", title: "Punch → close-out", body: "Punch lists, final inspections, and as-builts flow into a sealed turnover package. One deliverable.", milestone: "Turnover complete" },
+  { step: "01", title: "Plan", body: "Set up the project, team, schedule, budgets, and drawing controls." },
+  { step: "02", title: "Coordinate", body: "Move RFIs, detailing, procurement, and work packages through ownership lanes." },
+  { step: "03", title: "Execute", body: "Track fabrication, deliveries, field work, resources, issues, and photos." },
+  { step: "04", title: "Control", body: "Protect margin with budget hours, change orders, SOVs, pay apps, and reports." },
 ];
 
-const DIFFERENTIATORS = [
-  { label: "Piece-mark tracking", sub: "Not generic tasks" },
-  { label: "Connection-based QC", sub: "Not punchlists" },
-  { label: "Heat-number trace", sub: "Not just material logs" },
-  { label: "Erection sequence", sub: "Not Gantt-only" },
+const PROOF_POINTS = [
+  "Project dashboard modeled after real steel PM workflows",
+  "Light, executive interface aligned with the attached module mockups",
+  "Module-by-module visibility without burying users in navigation",
+  "Designed to feel credible in owner, GC, and leadership conversations",
 ];
-
-const STAGE_BARS = [
-  { label: "Detailing", pct: 100 },
-  { label: "Fabrication", pct: 89 },
-  { label: "Erection", pct: 62 },
-  { label: "Close-out", pct: 15 },
-];
-
-/* ─── Small presentational helpers ────────────────────────────── */
 
 const monoLabel = (extra = {}) => ({
-  fontFamily: F.mono, fontSize: 10, fontWeight: 500, letterSpacing: "0.12em",
-  textTransform: "uppercase", color: C.muted, ...extra,
+  fontFamily: F.mono,
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  color: C.muted,
+  ...extra,
 });
 
-function FeatureIcon({ paths }) {
-  return (
-    <svg className="lp-ic" viewBox="0 0 24 24" aria-hidden="true">
-      {paths.map((d, i) => <path key={i} d={d} />)}
-    </svg>
-  );
-}
-
-/* Reveal-on-scroll: IntersectionObserver wrapper. Honors prefers-reduced-motion
-   (when reduced, content is shown immediately with no transform). */
 function Reveal({ children, delay = 0, as: Tag = "div", className = "", style }) {
   const ref = useRef(null);
   const [shown, setShown] = useState(false);
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    if (reduce) { setShown(true); return; }
+    if (reduce) {
+      setShown(true);
+      return undefined;
+    }
     const io = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setShown(true); io.disconnect(); } },
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShown(true);
+          io.disconnect();
+        }
+      },
       { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
     );
     io.observe(el);
     return () => io.disconnect();
   }, []);
+
   return (
     <Tag
       ref={ref}
@@ -155,11 +141,101 @@ function Reveal({ children, delay = 0, as: Tag = "div", className = "", style })
   );
 }
 
-/* ─── Component ───────────────────────────────────────────────── */
+function BrandMark({ size = 38 }) {
+  return (
+    <div
+      className="lp-brand-mark"
+      style={{ width: size, height: size, minWidth: size, borderRadius: Math.max(10, size * 0.26) }}
+    >
+      SB
+    </div>
+  );
+}
+
+function ProductMockup() {
+  const rows = [
+    ["RFI-129", "Beam connection clarification", "In Progress", "Level 2 / Grid B-12", "May 21"],
+    ["SUB-103", "Mechanical sleeve locations", "Waiting", "Mechanical", "May 20"],
+    ["CO-008", "Add steel for rooftop screen", "Under Review", "Structural", "May 19"],
+  ];
+
+  return (
+    <div className="lp-product-shell" aria-label="SteelBuild Pro product preview">
+      <div className="lp-product-sidebar">
+        <div className="lp-product-brand"><BrandMark size={28} /><span>SteelBuild Pro</span></div>
+        {["Dashboard", "Command Center", "Portfolio", "Projects", "Action Items", "RFIs", "Detailing", "Schedule", "Field Today", "Budget Control"].map((item, idx) => (
+          <div key={item} className={`lp-product-nav ${idx === 0 ? "active" : ""}`}>
+            <span />{item}
+          </div>
+        ))}
+      </div>
+      <div className="lp-product-main">
+        <div className="lp-product-topbar">
+          <div className="lp-project-pill">Skyport at Redfield <span>Project ID: SB-2021</span></div>
+          <div className="lp-product-search">Search drawings, submittals, RFIs, or documents...</div>
+          <div className="lp-product-user">JM</div>
+        </div>
+        <div className="lp-product-hero">
+          <div>
+            <div className="lp-product-title">Dashboard</div>
+            <div className="lp-product-subtitle">Project overview and quick access to SteelBuild Pro modules.</div>
+            <div className="lp-product-tags"><span>13 Buildings</span><span>156 Drawings</span><span>123 RFIs Open</span></div>
+          </div>
+          <div className="lp-health-block"><strong>78</strong><span>Project Health</span></div>
+          <div className="lp-health-block"><strong>42%</strong><span>Complete</span></div>
+        </div>
+        <div className="lp-product-kpis">
+          {[
+            ["Project Health", "78", "Good", "amber"],
+            ["Open RFIs", "47", "8 need action", "red"],
+            ["Schedule Health", "72%", "On Track", "green"],
+            ["Cost Health", "-2.4%", "Under Budget", "green"],
+          ].map(([label, value, sub, tone]) => (
+            <div key={label} className="lp-product-kpi">
+              <span className={`lp-kpi-icon ${tone}`} />
+              <div><p>{label}</p><strong>{value}</strong><small>{sub}</small></div>
+            </div>
+          ))}
+        </div>
+        <div className="lp-product-grid">
+          <div className="lp-product-card modules">
+            <div className="lp-product-card-head"><strong>SteelBuild Modules</strong><span>View all</span></div>
+            <div className="lp-mini-modules">
+              {["RFIs", "Detailing", "Schedule", "Field Hub", "Budget", "Change Orders"].map((name, idx) => (
+                <div key={name} className="lp-mini-module" style={{ backgroundImage: `linear-gradient(180deg, rgba(16,24,39,.12), rgba(16,24,39,.78)), url(${HERO_STRIP})` }}>
+                  <strong>{name}</strong>
+                  <span>{idx % 2 ? "Active" : "Open"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="lp-product-card alerts">
+            <div className="lp-product-card-head"><strong>Critical Alerts</strong><span>View all</span></div>
+            {[
+              ["Overdue Drawings", "6 items past due", "High"],
+              ["RFIs Overdue", "3 waiting on response", "High"],
+              ["Activities At Risk", "14 schedule items", "Medium"],
+              ["Field Issues", "5 require attention", "Low"],
+            ].map(([title, sub, sev]) => (
+              <div key={title} className="lp-alert-row"><div><strong>{title}</strong><span>{sub}</span></div><em>{sev}</em></div>
+            ))}
+          </div>
+        </div>
+        <div className="lp-product-table">
+          <div className="lp-table-filter">Search dashboard...</div>
+          <table>
+            <thead><tr><th>ID</th><th>Description</th><th>Status</th><th>Related To</th><th>Updated</th></tr></thead>
+            <tbody>{rows.map((r) => <tr key={r[0]}>{r.map((c, i) => <td key={c} className={i === 2 ? "status" : ""}>{c}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Landing({ onLogin, onSignUp, isSubmitting, loginError }) {
   const [showLogin, setShowLogin] = useState(false);
-  const [authMode, setAuthMode] = useState("signin"); // signin | signup
+  const [authMode, setAuthMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -168,30 +244,25 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
   const [signupNotice, setSignupNotice] = useState(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-
   const [demoForm, setDemoForm] = useState({ name: "", email: "", company: "", tonnage: "", message: "" });
   const [demoSent, setDemoSent] = useState(false);
   const [demoError, setDemoError] = useState(null);
   const [demoSubmitting, setDemoSubmitting] = useState(false);
 
   const sectionRefs = {
-    features: useRef(null),
+    platform: useRef(null),
+    modules: useRef(null),
     workflow: useRef(null),
-    why: useRef(null),
     pricing: useRef(null),
     demo: useRef(null),
   };
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
+    const onScroll = () => setScrolled(window.scrollY > 30);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // The landing is a full-screen dark takeover; paint the page (html/body) with
-  // the near-black steel base while mounted so the scrollbar gutter and any
-  // overscroll match the page. Restored on unmount so the app chrome is
-  // untouched after sign-in.
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -205,17 +276,18 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
     };
   }, []);
 
-  // Close login modal on Escape
   useEffect(() => {
-    if (!showLogin) return;
+    if (!showLogin) return undefined;
     const handler = (e) => { if (e.key === "Escape") setShowLogin(false); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [showLogin]);
 
-  // Reset the sign-up notice/error each time the auth modal opens/closes.
   useEffect(() => {
-    if (showLogin) { setSignupNotice(null); setSignupError(null); }
+    if (showLogin) {
+      setSignupNotice(null);
+      setSignupError(null);
+    }
   }, [showLogin]);
 
   const scrollTo = (key) => {
@@ -223,9 +295,6 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
     setMobileNav(false);
   };
 
-  // Open the auth modal in a specific mode ("signin" | "signup"). The "Start
-  // free" CTAs jump straight to sign-up so self-serve signup isn't hidden behind
-  // the Sign in button.
   const openAuth = (mode) => {
     setAuthMode(mode);
     setSignupError(null);
@@ -244,13 +313,14 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
     e.preventDefault();
     setSignupError(null);
     if (!email.trim() || !password) return;
-    if (password.length < 8) { setSignupError("Use at least 8 characters for your password."); return; }
+    if (password.length < 8) {
+      setSignupError("Use at least 8 characters for your password.");
+      return;
+    }
     setSignupBusy(true);
     const res = await onSignUp?.({ email: email.trim(), password, fullName: fullName.trim() || undefined });
     setSignupBusy(false);
     if (res?.success) {
-      // needsConfirmation: show the check-your-email notice. Otherwise the auth
-      // state change signs them in and this whole screen unmounts.
       if (res.needsConfirmation) {
         setSignupNotice(`We sent a confirmation link to ${email.trim()}. Click it to activate your account, then sign in.`);
       }
@@ -282,362 +352,211 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
   };
 
   return (
-    <div style={{
-      background: C.base,
-      color: C.body, minHeight: "100vh", fontFamily: F.body, overflowX: "hidden",
-      position: "relative",
-    }}>
+    <div className="lp-page">
       <style>{`
-        @keyframes lpFloat { 0%,100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(0,-14px,0); } }
-        @keyframes lpGlow { 0%,100% { opacity: 0.55; } 50% { opacity: 0.9; } }
-        @keyframes lpScan { 0% { transform: translateX(-120%); } 100% { transform: translateX(220%); } }
-
-        .lp-reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.7s cubic-bezier(0.16,1,0.3,1), transform 0.7s cubic-bezier(0.16,1,0.3,1); }
-        .lp-reveal.is-in { opacity: 1; transform: translateY(0); }
-
-        .lp-wrap { max-width: 1160px; margin: 0 auto; padding: 0 32px; position: relative; }
-        .lp-sec { padding: 112px 0; position: relative; }
-
-        .lp-eyebrow { font-family: ${F.mono}; font-size: 11px; font-weight: 500; letter-spacing: 0.24em; text-transform: uppercase; color: ${C.goldB}; display: inline-flex; align-items: center; gap: 11px; }
-        .lp-eyebrow::before { content: ""; width: 26px; height: 1.5px; background: linear-gradient(90deg, transparent, ${C.gold}); display: inline-block; }
-
-        .lp-h2 { font-family: ${F.disp}; font-weight: 700; font-size: clamp(34px, 5vw, 60px); line-height: 1.0; letter-spacing: 0.005em; text-transform: uppercase; color: ${C.ink}; margin: 18px 0 0; }
-        .lp-sub { font-size: 17px; color: ${C.body}; line-height: 1.65; margin-top: 18px; }
-
-        .lp-ic { width: 26px; height: 26px; stroke: ${C.goldB}; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-
-        .lp-card { background: linear-gradient(180deg, ${C.card}, ${C.surface}); border: 1px solid ${C.line}; border-radius: 14px; padding: 28px; transition: transform 0.22s cubic-bezier(0.16,1,0.3,1), border-color 0.22s, box-shadow 0.22s; }
-        .lp-card-hover { position: relative; }
-        .lp-card-hover:hover { transform: translateY(-6px); border-color: rgba(230,181,60,0.45); box-shadow: 0 0 0 1px rgba(230,181,60,0.12), 0 22px 50px -28px rgba(0,0,0,0.9), 0 0 44px -18px rgba(230,181,60,0.35); }
-
-        .lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: ${F.body}; font-size: 14px; font-weight: 600; padding: 13px 24px; border-radius: 9px; cursor: pointer; border: 1px solid transparent; transition: transform 0.16s, background 0.16s, border-color 0.16s, box-shadow 0.16s, opacity 0.16s; letter-spacing: 0.01em; }
-        .lp-btn-primary { background: linear-gradient(180deg, ${C.goldB}, ${C.gold}); color: #1A1306; box-shadow: 0 0 0 1px rgba(230,181,60,0.4), 0 10px 30px -10px rgba(200,155,32,0.6); }
-        .lp-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(230,181,60,0.6), 0 16px 40px -10px rgba(230,181,60,0.7); }
-        .lp-btn-ghost { background: rgba(255,255,255,0.02); color: ${C.ink}; border-color: ${C.line2}; }
-        .lp-btn-ghost:hover { transform: translateY(-2px); border-color: rgba(230,181,60,0.5); background: rgba(230,181,60,0.06); }
-
-        .lp-navlink { background: none; border: none; font-family: ${F.body}; font-size: 14px; color: ${C.body}; font-weight: 500; cursor: pointer; padding: 6px 2px; transition: color 0.15s; }
-        .lp-navlink:hover { color: ${C.ink}; }
-
-        .lp-goldbar { width: 28px; height: 2px; background: linear-gradient(90deg, ${C.goldB}, ${C.gold}); border-radius: 2px; box-shadow: 0 0 10px rgba(230,181,60,0.5); }
-
-        .lp-input { width: 100%; padding: 12px 13px; border: 1px solid ${C.line2}; border-radius: 9px; font-family: ${F.body}; font-size: 14px; color: ${C.ink}; background: rgba(11,14,17,0.6); outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
-        .lp-input:focus { border-color: ${C.goldB}; box-shadow: 0 0 0 3px rgba(230,181,60,0.18); }
-        .lp-input::placeholder { color: ${C.muted}; }
-
-        .lp-cap { display: flex; gap: 10px; align-items: baseline; margin-top: 9px; }
-        .lp-cap::before { content: "▸"; color: ${C.gold}; font-size: 11px; flex-shrink: 0; line-height: 1.5; }
-
-        .lp-track { height: 6px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
-
-        a.lp-link, .lp-footlink { background: none; border: none; padding: 0; text-align: left; cursor: pointer; font-family: ${F.body}; font-size: 13.5px; color: ${C.body}; transition: color 0.15s; }
-        .lp-footlink:hover { color: ${C.goldB}; }
-
-        .lp-overlay { position: fixed; inset: 0; background: rgba(4,6,9,0.74); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; animation: lpFadeIn 0.18s ease; }
+        @keyframes lpFloat { 0%,100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(0,-10px,0); } }
+        @keyframes lpShine { 0% { transform: translateX(-120%); } 100% { transform: translateX(220%); } }
         @keyframes lpFadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .lp-mobile-toggle { display: none; background: none; border: 1px solid ${C.line2}; border-radius: 8px; color: ${C.ink}; font-size: 20px; cursor: pointer; padding: 6px 10px; line-height: 1; }
 
-        /* atmospheric glows */
-        .lp-glow { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; z-index: 0; }
-        .lp-blueprint { position: absolute; inset: 0; pointer-events: none; z-index: 0;
-          background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-          background-size: 46px 46px; mask-image: radial-gradient(120% 80% at 50% 0%, #000 35%, transparent 78%); -webkit-mask-image: radial-gradient(120% 80% at 50% 0%, #000 35%, transparent 78%); }
+        .lp-page { min-height: 100vh; background: ${C.base}; color: ${C.body}; font-family: ${F.body}; overflow-x: hidden; position: relative; }
+        .lp-wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; position: relative; }
+        .lp-sec { padding: 104px 0; position: relative; }
+        .lp-reveal { opacity: 0; transform: translateY(20px); transition: opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1); }
+        .lp-reveal.is-in { opacity: 1; transform: translateY(0); }
+        .lp-brand-mark { display: grid; place-items: center; background: linear-gradient(180deg, #FFF7DE, #FFFFFF); border: 2px solid ${C.amber}; color: ${C.amberDark}; font-weight: 900; font-size: 12px; letter-spacing: .02em; box-shadow: 0 12px 24px rgba(245,168,0,.15); }
+        .lp-kicker { display: inline-flex; align-items: center; gap: 10px; font-family: ${F.mono}; font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: ${C.amberDark}; }
+        .lp-kicker::before { content: ''; width: 28px; height: 2px; border-radius: 999px; background: linear-gradient(90deg, transparent, ${C.amber}); }
+        .lp-h1 { font-family: ${F.display}; font-size: clamp(46px, 6.4vw, 84px); line-height: .96; letter-spacing: -.06em; color: ${C.ink}; margin: 20px 0 0; font-weight: 900; }
+        .lp-h2 { font-family: ${F.display}; font-size: clamp(34px, 4.6vw, 60px); line-height: 1; letter-spacing: -.05em; color: ${C.ink}; margin: 16px 0 0; font-weight: 900; }
+        .lp-sub { font-size: 18px; line-height: 1.68; color: ${C.body}; margin: 18px 0 0; }
+        .lp-btn { appearance: none; border: 1px solid transparent; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 12px 22px; font-size: 14px; font-weight: 800; letter-spacing: -.01em; cursor: pointer; transition: transform .16s, box-shadow .16s, border-color .16s, background .16s, opacity .16s; }
+        .lp-btn:hover { transform: translateY(-2px); }
+        .lp-btn-primary { color: #1F1600; background: linear-gradient(180deg, #FFC94D, ${C.amber}); box-shadow: 0 12px 28px rgba(245,168,0,.28), inset 0 1px 0 rgba(255,255,255,.55); border-color: #E7A116; }
+        .lp-btn-secondary { color: ${C.navy}; background: #FFFFFF; border-color: ${C.line2}; box-shadow: 0 10px 24px rgba(15,23,42,.08); }
+        .lp-btn-secondary:hover { border-color: ${C.amber}; box-shadow: 0 14px 28px rgba(15,23,42,.11); }
+        .lp-card { background: rgba(255,255,255,.86); border: 1px solid ${C.line}; border-radius: 24px; box-shadow: 0 18px 54px rgba(15,23,42,.08); }
+        .lp-navlink { border: none; background: none; padding: 8px 2px; color: ${C.body}; font: inherit; font-size: 14px; font-weight: 750; cursor: pointer; }
+        .lp-navlink:hover { color: ${C.ink}; }
+        .lp-mobile-toggle { display: none; border: 1px solid ${C.line}; background: #FFFFFF; border-radius: 12px; color: ${C.ink}; font-size: 20px; padding: 6px 10px; cursor: pointer; }
+        .lp-input { width: 100%; box-sizing: border-box; padding: 13px 14px; border: 1px solid ${C.line2}; border-radius: 12px; background: #FFFFFF; color: ${C.ink}; font-family: ${F.body}; font-size: 14px; outline: none; transition: border-color .15s, box-shadow .15s; }
+        .lp-input:focus { border-color: ${C.amber}; box-shadow: 0 0 0 4px rgba(245,168,0,.16); }
+        .lp-input::placeholder { color: ${C.muted}; }
+        .lp-grid-bg { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(23,32,51,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(23,32,51,.05) 1px, transparent 1px); background-size: 46px 46px; mask-image: radial-gradient(80% 60% at 50% 0%, #000, transparent 76%); -webkit-mask-image: radial-gradient(80% 60% at 50% 0%, #000, transparent 76%); }
 
-        .lp-hero-frame { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid rgba(230,181,60,0.22);
-          box-shadow: 0 0 0 1px rgba(0,0,0,0.6), 0 40px 90px -40px rgba(0,0,0,0.95), 0 0 80px -30px rgba(230,181,60,0.4); }
-        .lp-hero-scan { position: absolute; top: 0; bottom: 0; width: 38%; pointer-events: none;
-          background: linear-gradient(100deg, transparent, rgba(230,181,60,0.10), transparent); animation: lpScan 6.5s ease-in-out infinite; }
+        .lp-product-shell { width: min(760px, 100%); display: grid; grid-template-columns: 150px minmax(0,1fr); background: #F8FAFC; border: 1px solid ${C.line}; border-radius: 28px; overflow: hidden; box-shadow: 0 30px 80px rgba(15,23,42,.18); animation: lpFloat 9s ease-in-out infinite; position: relative; }
+        .lp-product-shell::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 0%, rgba(255,255,255,.18) 46%, transparent 62%); transform: translateX(-120%); animation: lpShine 8s ease-in-out infinite; }
+        .lp-product-sidebar { background: #FFFFFF; border-right: 1px solid ${C.line}; padding: 16px 12px; }
+        .lp-product-brand { display: flex; align-items: center; gap: 8px; color: ${C.ink}; font-weight: 900; font-size: 13px; margin-bottom: 16px; }
+        .lp-product-nav { display: flex; align-items: center; gap: 8px; min-height: 26px; padding: 0 8px; border-radius: 8px; color: ${C.body}; font-size: 10px; font-weight: 800; margin-bottom: 3px; }
+        .lp-product-nav span { width: 8px; height: 8px; border-radius: 3px; border: 1px solid ${C.line2}; }
+        .lp-product-nav.active { background: #FFF4D5; color: ${C.ink}; }
+        .lp-product-nav.active span { border-color: ${C.amber}; background: ${C.amber}; }
+        .lp-product-main { min-width: 0; padding: 14px; }
+        .lp-product-topbar { display: grid; grid-template-columns: 190px 1fr 34px; gap: 10px; align-items: center; margin-bottom: 12px; }
+        .lp-project-pill, .lp-product-search, .lp-product-user { background: #FFFFFF; border: 1px solid ${C.line}; border-radius: 12px; color: ${C.body}; box-shadow: 0 6px 14px rgba(15,23,42,.04); }
+        .lp-project-pill { padding: 9px 12px; color: ${C.ink}; font-weight: 900; font-size: 12px; }
+        .lp-project-pill span { display: block; color: ${C.muted}; font-weight: 650; font-size: 10px; margin-top: 2px; }
+        .lp-product-search { height: 38px; display: flex; align-items: center; padding: 0 12px; font-size: 11px; }
+        .lp-product-user { height: 34px; width: 34px; display: grid; place-items: center; color: #FFFFFF; background: ${C.navy}; border-radius: 999px; font-weight: 900; font-size: 11px; }
+        .lp-product-hero { display: grid; grid-template-columns: 1fr 72px 72px; gap: 10px; align-items: center; min-height: 104px; border: 1px solid ${C.line}; border-radius: 18px; padding: 18px; background-image: linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.88) 48%, rgba(255,255,255,.66) 100%), url(${HERO_STRIP}); background-size: cover; background-position: center; }
+        .lp-product-title { color: ${C.ink}; font-size: 25px; font-weight: 950; letter-spacing: -.05em; }
+        .lp-product-subtitle { color: ${C.body}; font-size: 12px; margin-top: 2px; }
+        .lp-product-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+        .lp-product-tags span { border: 1px solid ${C.line}; background: #FFFFFF; border-radius: 8px; padding: 5px 8px; font-size: 10px; font-weight: 900; color: ${C.body}; }
+        .lp-health-block { background: rgba(255,255,255,.9); border: 1px solid ${C.line}; border-radius: 14px; padding: 10px; text-align: center; }
+        .lp-health-block strong { display: block; color: ${C.ink}; font-size: 20px; line-height: 1; }
+        .lp-health-block span { display: block; color: ${C.body}; font-size: 9px; margin-top: 5px; }
+        .lp-product-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+        .lp-product-kpi { background: #FFFFFF; border: 1px solid ${C.line}; border-radius: 14px; padding: 12px; display: flex; gap: 10px; align-items: center; }
+        .lp-kpi-icon { width: 24px; height: 24px; border-radius: 999px; background: #FFF4D5; box-shadow: inset 0 0 0 1px rgba(245,168,0,.26); flex: 0 0 24px; }
+        .lp-kpi-icon.green { background: #DCFCE7; box-shadow: inset 0 0 0 1px rgba(5,150,105,.24); }
+        .lp-kpi-icon.red { background: #FEE2E2; box-shadow: inset 0 0 0 1px rgba(220,38,38,.22); }
+        .lp-kpi-icon.blue { background: #DBEAFE; box-shadow: inset 0 0 0 1px rgba(37,99,235,.22); }
+        .lp-product-kpi p { margin: 0 0 2px; color: ${C.body}; font-size: 10px; font-weight: 850; }
+        .lp-product-kpi strong { display: block; color: ${C.ink}; font-size: 20px; line-height: 1; }
+        .lp-product-kpi small { display: block; color: ${C.muted}; font-size: 9px; margin-top: 3px; }
+        .lp-product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .lp-product-card { background: #FFFFFF; border: 1px solid ${C.line}; border-radius: 16px; padding: 12px; min-width: 0; }
+        .lp-product-card-head { display: flex; justify-content: space-between; color: ${C.ink}; font-size: 12px; margin-bottom: 10px; }
+        .lp-product-card-head span { color: ${C.blue}; font-size: 10px; font-weight: 900; }
+        .lp-mini-modules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+        .lp-mini-module { min-height: 70px; border-radius: 12px; padding: 9px; background-size: cover; background-position: center; color: #FFFFFF; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
+        .lp-mini-module strong { font-size: 11px; line-height: 1; }
+        .lp-mini-module span { color: #FFC94D; font-size: 9px; font-weight: 900; margin-top: 4px; }
+        .lp-alert-row { display: flex; justify-content: space-between; gap: 8px; align-items: center; border-top: 1px solid ${C.line}; padding: 8px 0; }
+        .lp-alert-row:first-of-type { border-top: 0; padding-top: 0; }
+        .lp-alert-row strong { display: block; color: ${C.ink}; font-size: 11px; }
+        .lp-alert-row span { display: block; color: ${C.muted}; font-size: 9px; margin-top: 2px; }
+        .lp-alert-row em { font-style: normal; color: ${C.red}; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 4px 6px; font-size: 9px; font-weight: 900; }
+        .lp-product-table { background: #FFFFFF; border: 1px solid ${C.line}; border-radius: 16px; margin-top: 10px; overflow: hidden; }
+        .lp-table-filter { height: 34px; display: flex; align-items: center; border-bottom: 1px solid ${C.line}; color: ${C.muted}; font-size: 11px; padding: 0 12px; }
+        .lp-product-table table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .lp-product-table th { text-align: left; color: ${C.muted}; padding: 8px 12px; background: #F8FAFC; font-weight: 900; }
+        .lp-product-table td { color: ${C.body}; padding: 9px 12px; border-top: 1px solid ${C.line}; white-space: nowrap; }
+        .lp-product-table td:first-child { color: ${C.blue}; font-weight: 900; }
+        .lp-product-table td.status { color: ${C.amberDark}; font-weight: 900; }
+        .lp-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15,23,42,.56); backdrop-filter: blur(10px); animation: lpFadeIn .18s ease; }
+        .lp-footlink { background: none; border: none; padding: 0; text-align: left; color: ${C.body}; font: inherit; font-size: 13.5px; cursor: pointer; text-decoration: none; }
+        .lp-footlink:hover { color: ${C.ink}; }
 
         @media (prefers-reduced-motion: reduce) {
-          .lp-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
-          .lp-hero-scan, .lp-glow-anim { animation: none !important; }
-          .lp-btn:hover, .lp-card-hover:hover { transform: none !important; }
+          .lp-reveal, .lp-product-shell { opacity: 1 !important; transform: none !important; transition: none !important; animation: none !important; }
+          .lp-product-shell::after { animation: none !important; display: none !important; }
+          .lp-btn:hover { transform: none !important; }
         }
-
-        @media (max-width: 940px) {
-          .lp-hero { grid-template-columns: 1fr !important; gap: 40px !important; }
-          .lp-demo { grid-template-columns: 1fr !important; }
+        @media (max-width: 1060px) {
+          .lp-hero-grid { grid-template-columns: 1fr !important; }
+          .lp-product-shell { margin: 0 auto; }
           .lp-c3 { grid-template-columns: 1fr 1fr !important; }
-          .lp-c4 { grid-template-columns: 1fr 1fr !important; }
+          .lp-demo-grid, .lp-proof-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 760px) {
+          .lp-wrap { padding: 0 20px; }
+          .lp-sec { padding: 78px 0; }
           .lp-nav-links { display: none !important; }
           .lp-mobile-toggle { display: inline-flex !important; }
-          .lp-footer { flex-direction: column !important; gap: 28px !important; }
-          .lp-statbar { grid-template-columns: 1fr 1fr !important; }
+          .lp-stat-grid, .lp-c2, .lp-c3, .lp-c4, .lp-module-grid, .lp-plan-grid { grid-template-columns: 1fr !important; }
+          .lp-product-shell { grid-template-columns: 1fr; border-radius: 22px; }
+          .lp-product-sidebar { display: none; }
+          .lp-product-topbar { grid-template-columns: 1fr 34px; }
+          .lp-product-search { display: none; }
+          .lp-product-hero { grid-template-columns: 1fr; }
+          .lp-product-kpis { grid-template-columns: 1fr 1fr; }
+          .lp-product-grid { grid-template-columns: 1fr; }
+          .lp-product-table { display: none; }
+          .lp-footer-main { flex-direction: column !important; }
         }
-        @media (max-width: 620px) {
-          .lp-wrap { padding: 0 20px; }
-          .lp-sec { padding: 72px 0 !important; }
-          .lp-c2, .lp-c3, .lp-c4 { grid-template-columns: 1fr !important; }
-          .lp-statbar { grid-template-columns: 1fr 1fr !important; }
+        @media (max-width: 520px) {
+          .lp-product-kpis, .lp-mini-modules { grid-template-columns: 1fr 1fr; }
+          .lp-h1 { font-size: clamp(40px, 14vw, 58px); }
         }
       `}</style>
 
-      {/* ══ top accent edge ══ */}
-      <div style={{ height: 3, background: `linear-gradient(90deg, ${C.gold}, ${C.goldB}, ${C.ember})`, position: "relative", zIndex: 2 }} />
-
-      {/* ══ NAV ══ */}
-      <nav style={{
-        position: "sticky", top: 0, zIndex: 50,
-        background: scrolled ? "rgba(11,14,17,0.82)" : "rgba(11,14,17,0.4)",
-        backdropFilter: "blur(14px)",
-        borderBottom: `1px solid ${scrolled ? C.line : "transparent"}`,
-        transition: "border-color 0.2s, background 0.2s",
-      }}>
-        <div className="lp-wrap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 8, background: `linear-gradient(150deg, ${C.cardHi}, ${C.surface})`, border: `1px solid ${C.line2}`, display: "grid", placeItems: "center", color: C.goldB, fontFamily: F.disp, fontWeight: 700, fontSize: 15, letterSpacing: "0.04em", boxShadow: "0 0 18px -6px rgba(230,181,60,0.5)" }}>SB</div>
-            <span style={{ fontFamily: F.disp, fontWeight: 700, fontSize: 19, letterSpacing: "0.12em", color: C.ink }}>STEELBUILD&nbsp;PRO</span>
-          </div>
-          <div className="lp-nav-links" style={{ display: "flex", alignItems: "center", gap: 30 }}>
-            {NAV_LINKS.map(({ label, target }) => (
-              <button key={target} className="lp-navlink" onClick={() => scrollTo(target)}>{label}</button>
-            ))}
+      <div style={{ height: 4, background: `linear-gradient(90deg, ${C.amber}, #FFD466, ${C.blue})` }} />
+      <nav style={{ position: "sticky", top: 0, zIndex: 50, background: scrolled ? "rgba(255,255,255,.88)" : "rgba(255,255,255,.68)", backdropFilter: "blur(18px)", borderBottom: `1px solid ${scrolled ? C.line : "transparent"}`, transition: "background .2s, border-color .2s" }}>
+        <div className="lp-wrap" style={{ height: 74, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18 }}>
+          <button type="button" onClick={() => scrollTo("platform")} style={{ display: "flex", alignItems: "center", gap: 12, border: 0, background: "none", padding: 0, cursor: "pointer" }}>
+            <BrandMark />
+            <span style={{ color: C.ink, fontWeight: 950, letterSpacing: "-.04em", fontSize: 20 }}>SteelBuild Pro</span>
+          </button>
+          <div className="lp-nav-links" style={{ display: "flex", alignItems: "center", gap: 28 }}>
+            {NAV_LINKS.map(({ label, target }) => <button key={target} className="lp-navlink" onClick={() => scrollTo(target)}>{label}</button>)}
             <button className="lp-navlink" style={{ color: C.ink }} onClick={() => openAuth("signin")}>Sign in</button>
             <button className="lp-btn lp-btn-primary" onClick={() => openAuth("signup")}>Start free</button>
           </div>
           <button className="lp-mobile-toggle" aria-label={mobileNav ? "Close menu" : "Open menu"} onClick={() => setMobileNav(!mobileNav)}>{mobileNav ? "✕" : "☰"}</button>
         </div>
-
         {mobileNav && (
-          <div className="lp-wrap" style={{ paddingTop: 14, paddingBottom: 20, display: "flex", flexDirection: "column", gap: 14, borderTop: `1px solid ${C.line}`, background: "rgba(11,14,17,0.96)" }}>
-            {NAV_LINKS.map(({ label, target }) => (
-              <button key={target} className="lp-navlink" style={{ textAlign: "left", fontSize: 16 }} onClick={() => scrollTo(target)}>{label}</button>
-            ))}
-            <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
-              <button className="lp-btn lp-btn-ghost" style={{ flex: 1 }} onClick={() => openAuth("signin")}>Sign in</button>
-              <button className="lp-btn lp-btn-primary" style={{ flex: 1 }} onClick={() => openAuth("signup")}>Start free</button>
+          <div className="lp-wrap" style={{ paddingTop: 14, paddingBottom: 20, display: "flex", flexDirection: "column", gap: 12, borderTop: `1px solid ${C.line}`, background: "rgba(255,255,255,.96)" }}>
+            {NAV_LINKS.map(({ label, target }) => <button key={target} className="lp-navlink" style={{ textAlign: "left", fontSize: 16 }} onClick={() => scrollTo(target)}>{label}</button>)}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 4 }}>
+              <button className="lp-btn lp-btn-secondary" onClick={() => openAuth("signin")}>Sign in</button>
+              <button className="lp-btn lp-btn-primary" onClick={() => openAuth("signup")}>Start free</button>
             </div>
           </div>
         )}
       </nav>
 
-      {/* ══ HERO ══ */}
-      <section style={{ padding: "84px 0 92px", position: "relative", overflow: "hidden" }}>
-        <div className="lp-blueprint" />
-        {/* atmospheric gold/ember glows behind the hero */}
-        <div className="lp-glow lp-glow-anim" style={{ top: -120, left: "-6%", width: 520, height: 520, background: "radial-gradient(circle, rgba(200,155,32,0.30), transparent 65%)", animation: "lpGlow 7s ease-in-out infinite" }} />
-        <div className="lp-glow" style={{ top: 80, right: "-8%", width: 460, height: 460, background: "radial-gradient(circle, rgba(255,106,43,0.16), transparent 68%)" }} />
-
-        <div className="lp-wrap lp-hero" style={{ display: "grid", gridTemplateColumns: "1.02fr 0.98fr", gap: 60, alignItems: "center", zIndex: 1 }}>
+      <section ref={sectionRefs.platform} style={{ padding: "84px 0 88px", position: "relative", overflow: "hidden" }}>
+        <div className="lp-grid-bg" />
+        <div style={{ position: "absolute", width: 680, height: 680, borderRadius: "50%", right: "-22%", top: "-22%", background: "radial-gradient(circle, rgba(245,168,0,.20), transparent 68%)", pointerEvents: "none" }} />
+        <div className="lp-wrap lp-hero-grid" style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr", gap: 56, alignItems: "center" }}>
           <Reveal>
-            <span className="lp-eyebrow" style={{ marginBottom: 26 }}>
-              <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 18, height: 18, stroke: C.goldB, fill: "none", strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" }}>
-                <path d="M4 5h16M4 19h16M12 5v14" />
-              </svg>
-              Built for structural steel
-            </span>
-            <h1 style={{ fontFamily: F.disp, fontWeight: 800, fontSize: "clamp(46px, 8vw, 96px)", lineHeight: 0.96, letterSpacing: "0.004em", textTransform: "uppercase", color: C.ink, margin: "18px 0 0" }}>
-              Your steel is only as good as the{" "}
-              <span style={{ background: `linear-gradient(180deg, ${C.goldB}, ${C.gold})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>system behind it.</span>
-            </h1>
-            <p style={{ fontSize: 19, color: C.body, lineHeight: 1.6, margin: "26px 0 14px", maxWidth: 540 }}>
-              From detailing approval to turnover package — every piece mark, every heat number, every weld record, in one system built for fabricators and erectors.
+            <span className="lp-kicker">Executive project control for steel</span>
+            <h1 className="lp-h1">A sharper operating system for structural steel teams.</h1>
+            <p className="lp-sub" style={{ maxWidth: 570, fontSize: 20 }}>
+              SteelBuild Pro gives owners, PMs, detailers, shop leaders, and field teams one polished command layer for project health, RFIs, detailing, schedule, field work, cost, documents, and closeout.
             </p>
-            <p style={{ fontSize: 15, color: C.muted, maxWidth: 520, margin: "0 0 34px", lineHeight: 1.6 }}>
-              No more chasing mill certs through email, tracking bolt-up on paper, or losing RFIs in spreadsheet tabs.
-            </p>
-            <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", marginBottom: 38 }}>
-              <button className="lp-btn lp-btn-primary" style={{ padding: "15px 30px", fontSize: 15 }} onClick={() => openAuth("signup")}>Start free</button>
-              <button className="lp-btn lp-btn-ghost" style={{ padding: "15px 28px", fontSize: 15 }} onClick={() => scrollTo("demo")}>Request a demo</button>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 34 }}>
+              <button className="lp-btn lp-btn-primary" style={{ minHeight: 50, padding: "14px 28px" }} onClick={() => openAuth("signup")}>Start free</button>
+              <button className="lp-btn lp-btn-secondary" style={{ minHeight: 50, padding: "14px 26px" }} onClick={() => scrollTo("demo")}>Request executive demo</button>
             </div>
-            <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted }}>
-              <span>AISC certified</span><span style={{ color: C.line2 }}>/</span>
-              <span>AWS D1.1</span><span style={{ color: C.line2 }}>/</span>
-              <span>OSHA record-ready</span>
-            </div>
-          </Reveal>
-
-          {/* The brand image — the hero's cinematic centerpiece, framed with a
-              gold edge-glow and a slow light-sweep so it reads as premium, not
-              a hard rectangle. Falls back to the logo if the hero asset is
-              missing. */}
-          <Reveal delay={120} style={{ position: "relative" }}>
-            <div className="lp-hero-frame" style={{ animation: "lpFloat 9s ease-in-out infinite" }}>
-              <img
-                src={HERO_IMG}
-                alt="SteelBuild Pro — structural steel fabrication command center"
-                onError={(e) => { if (e.currentTarget.src.indexOf(LOGO_IMG) === -1) e.currentTarget.src = LOGO_IMG; }}
-                style={{ display: "block", width: "100%", height: "auto" }}
-              />
-              {/* gradient bleeds so the photo melts into the dark page on every edge */}
-              <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "linear-gradient(180deg, rgba(11,14,17,0.30) 0%, transparent 22%, transparent 70%, rgba(11,14,17,0.55) 100%)" }} />
-              <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(11,14,17,0.5) 100%)" }} />
-              <div className="lp-hero-scan" />
-            </div>
-
-            {/* floating spec chips overlapping the frame for depth */}
-            <div style={{ position: "absolute", left: -14, bottom: 26, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(15,20,26,0.86)", border: `1px solid ${C.line2}`, borderRadius: 10, padding: "9px 13px", backdropFilter: "blur(8px)", boxShadow: "0 16px 34px -20px rgba(0,0,0,0.9)" }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.goldB, boxShadow: `0 0 10px ${C.goldB}` }} />
-                <span style={{ fontFamily: F.mono, fontSize: 11, color: C.ink, letterSpacing: "0.04em" }}>3,847 tons · 428 pieces</span>
-              </div>
-            </div>
-            <div style={{ position: "absolute", right: -12, top: 22, background: "rgba(15,20,26,0.86)", border: `1px solid ${C.line2}`, borderRadius: 10, padding: "9px 13px", backdropFilter: "blur(8px)", boxShadow: "0 16px 34px -20px rgba(0,0,0,0.9)" }}>
-              <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: C.muted }}>Phase 2 erection</div>
-              <div style={{ fontFamily: F.disp, fontWeight: 700, fontSize: 22, color: C.goldB, lineHeight: 1 }}>62% <span style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>topped out</span></div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ══ TRUST / STAT BAR ══ */}
-      <section style={{ padding: "0 0 8px", position: "relative", zIndex: 1 }}>
-        <div className="lp-wrap">
-          <Reveal className="lp-statbar" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1, background: C.line, border: `1px solid ${C.line}`, borderRadius: 14, overflow: "hidden" }}>
-            {STATS.map((s) => (
-              <div key={s.label} style={{ background: C.surface, padding: "30px 26px" }}>
-                <div style={{ fontFamily: F.disp, fontWeight: 700, fontSize: "clamp(38px, 4.4vw, 54px)", color: C.ink, lineHeight: 1, letterSpacing: "0.01em" }}>{s.value}</div>
-                <div className="lp-goldbar" style={{ margin: "14px 0 12px" }} />
-                <div style={{ fontFamily: F.mono, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.goldB, fontWeight: 500 }}>{s.label}</div>
-                <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>{s.detail}</div>
-              </div>
-            ))}
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ══ PAIN POINTS ══ */}
-      <section className="lp-sec">
-        <div className="lp-wrap">
-          <Reveal style={{ textAlign: "center", maxWidth: 700, margin: "0 auto 56px" }}>
-            <span className="lp-eyebrow" style={{ marginBottom: 18 }}>The cost of gaps</span>
-            <h2 className="lp-h2">Steel projects don't fail all at once.</h2>
-            <p className="lp-sub" style={{ color: C.muted }}>They fail in a thousand small gaps — documents that can't be found, inspections that weren't recorded, evidence that doesn't exist when you need it.</p>
-          </Reveal>
-          <div className="lp-c3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
-            {PAIN_POINTS.map((p, i) => (
-              <Reveal key={p.tag} delay={(i % 3) * 80}>
-                <div className="lp-card lp-card-hover" style={{ height: "100%", borderLeft: `2px solid ${C.ember}` }}>
-                  <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.16em", color: C.ember, marginBottom: 11 }}>{p.tag}</div>
-                  <h3 style={{ fontFamily: F.disp, fontWeight: 600, fontSize: 22, letterSpacing: "0.01em", color: C.ink, margin: "0 0 9px", textTransform: "uppercase" }}>{p.title}</h3>
-                  <p style={{ fontSize: 14, color: C.body, lineHeight: 1.65, margin: 0 }}>{p.body}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══ FEATURES ══ */}
-      <section ref={sectionRefs.features} className="lp-sec" style={{ background: C.surface, borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}` }}>
-        <div className="lp-wrap">
-          <Reveal style={{ textAlign: "center", maxWidth: 700, margin: "0 auto 56px" }}>
-            <span className="lp-eyebrow" style={{ marginBottom: 18 }}>The platform</span>
-            <h2 className="lp-h2">Built for steel, not adapted to it.</h2>
-            <p className="lp-sub" style={{ color: C.muted }}>Every module speaks the language of structural steel — piece marks, heat numbers, connection IDs, grid lines, erection sequences.</p>
-          </Reveal>
-          <div className="lp-c3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22 }}>
-            {FEATURES.map((f, i) => (
-              <Reveal key={f.num} delay={(i % 3) * 80}>
-                <div className="lp-card lp-card-hover" style={{ height: "100%" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ width: 50, height: 50, borderRadius: 12, background: "rgba(230,181,60,0.08)", border: `1px solid rgba(230,181,60,0.2)`, display: "grid", placeItems: "center" }}>
-                      <FeatureIcon paths={f.icon} />
-                    </div>
-                    <span style={{ fontFamily: F.disp, fontWeight: 700, fontSize: 30, color: "rgba(255,255,255,0.08)", lineHeight: 1 }}>{f.num}</span>
-                  </div>
-                  <div style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase", color: C.goldB, margin: "18px 0 8px" }}>{f.tag}</div>
-                  <h3 style={{ fontFamily: F.disp, fontWeight: 600, fontSize: 25, letterSpacing: "0.01em", color: C.ink, margin: "0 0 10px", textTransform: "uppercase" }}>{f.title}</h3>
-                  <p style={{ fontSize: 14, color: C.body, lineHeight: 1.65, margin: 0 }}>{f.body}</p>
-                  <hr style={{ height: 1, background: C.line, border: 0, margin: "18px 0 14px" }} />
-                  {f.details.map((d) => (
-                    <div key={d} className="lp-cap"><span style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.45 }}>{d}</span></div>
-                  ))}
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══ WORKFLOW ══ */}
-      <section ref={sectionRefs.workflow} className="lp-sec" style={{ position: "relative", overflow: "hidden" }}>
-        <div className="lp-glow" style={{ bottom: -160, left: "30%", width: 560, height: 360, background: "radial-gradient(circle, rgba(200,155,32,0.12), transparent 70%)" }} />
-        <div className="lp-wrap" style={{ position: "relative", zIndex: 1 }}>
-          <Reveal style={{ textAlign: "center", maxWidth: 700, margin: "0 auto 56px" }}>
-            <span className="lp-eyebrow" style={{ marginBottom: 18 }}>The lifecycle</span>
-            <h2 className="lp-h2">Detailing → Shop → Field → Turnover.</h2>
-            <p className="lp-sub" style={{ color: C.muted }}>SteelBuild Pro follows the actual lifecycle of a steel project — not a generic plan, build, close framework. Every piece tracked, every stage handed off cleanly.</p>
-          </Reveal>
-          <div style={{ position: "relative" }}>
-            {/* connecting rail with a gold gradient */}
-            <div style={{ position: "absolute", top: 19, left: "11%", right: "11%", height: 2, background: `linear-gradient(90deg, ${C.gold}, rgba(230,181,60,0.25))`, boxShadow: "0 0 14px rgba(230,181,60,0.4)" }} />
-            <div className="lp-c4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 22, position: "relative" }}>
-              {WORKFLOW.map((w, i) => (
-                <Reveal key={w.n} delay={i * 110}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: `linear-gradient(150deg, ${C.cardHi}, ${C.surface})`, border: `1.5px solid ${C.goldB}`, color: C.goldB, display: "grid", placeItems: "center", fontFamily: F.disp, fontSize: 18, fontWeight: 700, marginBottom: 20, boxShadow: "0 0 22px -6px rgba(230,181,60,0.6)" }}>{w.n}</div>
-                  <h3 style={{ fontFamily: F.disp, fontWeight: 600, fontSize: 23, letterSpacing: "0.01em", color: C.ink, margin: "0 0 9px", textTransform: "uppercase" }}>{w.title}</h3>
-                  <p style={{ fontSize: 13.5, color: C.body, lineHeight: 1.6, margin: "0 0 12px" }}>{w.body}</p>
-                  <div style={{ display: "inline-flex", fontFamily: F.mono, fontSize: 10.5, fontWeight: 500, letterSpacing: "0.12em", textTransform: "uppercase", color: C.goldB, border: `1px solid rgba(230,181,60,0.28)`, borderRadius: 6, padding: "5px 10px" }}>{w.milestone}</div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-
-          {/* live stage progress strip — concrete proof of the pipeline */}
-          <Reveal delay={120} style={{ marginTop: 64 }}>
-            <div className="lp-card" style={{ padding: 28 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
-                <div style={{ fontFamily: F.disp, fontWeight: 600, fontSize: 22, color: C.ink, textTransform: "uppercase", letterSpacing: "0.01em" }}>24426 · Capstone Medical Center</div>
-                <span style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: "0.12em", textTransform: "uppercase", color: C.goldB, border: `1px solid rgba(230,181,60,0.3)`, padding: "5px 11px", borderRadius: 6 }}>On track</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {STAGE_BARS.map(({ label, pct }) => (
-                  <div key={label}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7 }}>
-                      <span style={{ fontFamily: F.mono, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: C.body }}>{label}</span>
-                      <span style={{ fontFamily: F.mono, fontSize: 11, color: pct < 30 ? C.muted : C.goldB, fontWeight: 600 }}>{pct}%</span>
-                    </div>
-                    <div className="lp-track"><div style={{ height: "100%", borderRadius: 4, width: `${pct}%`, background: pct < 30 ? "rgba(255,255,255,0.18)" : `linear-gradient(90deg, ${C.gold}, ${C.goldB})`, boxShadow: pct < 30 ? "none" : "0 0 12px rgba(230,181,60,0.5)" }} /></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ══ BIG PROOF BAND ══ */}
-      <section style={{ padding: "96px 0", background: `linear-gradient(180deg, ${C.surface}, ${C.base})`, borderTop: `1px solid ${C.line}`, position: "relative", overflow: "hidden" }}>
-        <div className="lp-glow" style={{ top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 700, height: 300, background: "radial-gradient(circle, rgba(200,155,32,0.14), transparent 70%)" }} />
-        <div className="lp-wrap" style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
-          <Reveal>
-            <span className="lp-eyebrow" style={{ marginBottom: 22, justifyContent: "center" }}>By the numbers</span>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 28, marginTop: 12 }} className="lp-c3">
-              {[
-                { v: "3.2×", l: "Faster RFI resolution" },
-                { v: "100%", l: "Heat-number traceability" },
-                { v: "1", l: "Sealed turnover package" },
-              ].map((s) => (
-                <div key={s.l}>
-                  <div style={{ fontFamily: F.disp, fontWeight: 800, fontSize: "clamp(56px, 9vw, 110px)", lineHeight: 0.92, background: `linear-gradient(180deg, ${C.goldB}, ${C.gold})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", letterSpacing: "0.01em" }}>{s.v}</div>
-                  <div style={{ fontFamily: F.mono, fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: C.body, marginTop: 12 }}>{s.l}</div>
+            <div className="lp-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12, marginTop: 38 }}>
+              {EXEC_METRICS.map((s) => (
+                <div key={s.label} className="lp-card" style={{ padding: "18px 16px", borderRadius: 18, boxShadow: "0 12px 30px rgba(15,23,42,.06)" }}>
+                  <div style={{ color: C.ink, fontWeight: 950, fontSize: 24, letterSpacing: "-.04em" }}>{s.value}</div>
+                  <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.35, marginTop: 4 }}>{s.label}</div>
                 </div>
               ))}
             </div>
           </Reveal>
+          <Reveal delay={120}>
+            <ProductMockup />
+          </Reveal>
         </div>
       </section>
 
-      {/* ══ DIFFERENTIATOR / QUOTE ══ */}
-      <section ref={sectionRefs.why} className="lp-sec" style={{ borderTop: `1px solid ${C.line}` }}>
-        <div className="lp-wrap" style={{ maxWidth: 960, textAlign: "center" }}>
-          <Reveal>
-            <div style={{ fontFamily: F.disp, fontWeight: 800, fontSize: 80, color: C.gold, lineHeight: 0.5, marginBottom: 18, opacity: 0.7 }}>{"“"}</div>
-            <h2 style={{ fontFamily: F.disp, fontWeight: 600, fontSize: "clamp(28px, 4vw, 48px)", lineHeight: 1.05, letterSpacing: "0.005em", color: C.ink, margin: 0, textTransform: "uppercase" }}>
-              We tried Procore. We tried Fieldwire.<br />
-              <span style={{ color: C.goldB }}>Neither one speaks steel.</span>
-            </h2>
-            <p style={{ fontSize: 18, color: C.muted, lineHeight: 1.65, maxWidth: 700, margin: "26px auto 48px" }}>
-              General construction software forces steel contractors into workarounds. SteelBuild Pro was designed from day one for how structural steel actually works.
-            </p>
+      <section className="lp-sec" style={{ paddingTop: 22 }}>
+        <div className="lp-wrap lp-c3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+          {VALUE_CARDS.map((card, i) => (
+            <Reveal key={card.kicker} delay={i * 80}>
+              <div className="lp-card" style={{ height: "100%", padding: 28, borderRadius: 24 }}>
+                <div style={monoLabel({ color: C.amberDark })}>{card.kicker}</div>
+                <h3 style={{ color: C.ink, fontSize: 25, lineHeight: 1.08, letterSpacing: "-.04em", margin: "14px 0 10px", fontWeight: 900 }}>{card.title}</h3>
+                <p style={{ color: C.body, fontSize: 15, lineHeight: 1.62, margin: 0 }}>{card.body}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      <section ref={sectionRefs.modules} className="lp-sec" style={{ background: "#FFFFFF", borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}` }}>
+        <div className="lp-wrap">
+          <Reveal style={{ maxWidth: 760, marginBottom: 42 }}>
+            <span className="lp-kicker">Module suite</span>
+            <h2 className="lp-h2">A complete steel command center, not another generic task app.</h2>
+            <p className="lp-sub">The attached reference mockups show the direction: clean light modules, clear KPIs, fast filters, and decision-ready cards on every page.</p>
           </Reveal>
-          <div className="lp-c4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18, textAlign: "left" }}>
-            {DIFFERENTIATORS.map((d, i) => (
-              <Reveal key={d.label} delay={i * 80}>
-                <div style={{ padding: "20px 20px", borderTop: `2px solid ${C.gold}`, background: C.card, border: `1px solid ${C.line}`, borderTopColor: C.gold, borderTopWidth: 2, borderRadius: "0 0 12px 12px", height: "100%" }}>
-                  <div style={{ fontFamily: F.disp, fontWeight: 600, fontSize: 17, letterSpacing: "0.01em", textTransform: "uppercase", color: C.ink, marginBottom: 6 }}>{d.label}</div>
-                  <div style={{ fontSize: 13, color: C.muted }}>{d.sub}</div>
+          <div className="lp-module-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+            {MODULES.map((m, i) => (
+              <Reveal key={m.name} delay={(i % 4) * 65}>
+                <div className="lp-card" style={{ padding: 20, borderRadius: 20, height: "100%", boxShadow: "0 12px 32px rgba(15,23,42,.06)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 12, background: m.tone === "green" ? "#DCFCE7" : m.tone === "red" ? "#FEE2E2" : m.tone === "blue" ? "#DBEAFE" : "#FFF4D5", border: `1px solid ${C.line}` }} />
+                    <span style={{ color: m.tone === "green" ? C.green : m.tone === "red" ? C.red : m.tone === "blue" ? C.blue : C.amberDark, fontWeight: 950, fontSize: 13 }}>{m.stat}</span>
+                  </div>
+                  <h3 style={{ color: C.ink, fontSize: 18, letterSpacing: "-.03em", margin: "18px 0 8px", fontWeight: 900 }}>{m.name}</h3>
+                  <p style={{ color: C.body, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>{m.desc}</p>
                 </div>
               </Reveal>
             ))}
@@ -645,34 +564,66 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
         </div>
       </section>
 
-      {/* ══ PRICING ══ */}
-      <section ref={sectionRefs.pricing} className="lp-sec" style={{ background: C.surface, borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}` }}>
-        <div className="lp-wrap">
-          <Reveal style={{ textAlign: "center", maxWidth: 700, margin: "0 auto 56px" }}>
-            <span className="lp-eyebrow" style={{ marginBottom: 18 }}>Pricing</span>
-            <h2 className="lp-h2">Start free. Scale when you ship.</h2>
-            <p className="lp-sub" style={{ color: C.muted }}>Create a workspace free in minutes — no credit card. Upgrade to Pro or Business anytime from Billing.</p>
+      <section ref={sectionRefs.workflow} className="lp-sec" style={{ overflow: "hidden" }}>
+        <div className="lp-wrap lp-proof-grid" style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr", gap: 44, alignItems: "start" }}>
+          <Reveal>
+            <span className="lp-kicker">From project kickoff to closeout</span>
+            <h2 className="lp-h2">Keep leadership, shop, and field aligned on the same facts.</h2>
+            <p className="lp-sub">SteelBuild Pro presents operations with the visual clarity executives expect and the workflow detail project teams need.</p>
+            <div style={{ marginTop: 30, display: "grid", gap: 12 }}>
+              {PROOF_POINTS.map((point) => (
+                <div key={point} style={{ display: "flex", gap: 12, alignItems: "flex-start", color: C.body, fontSize: 14.5, lineHeight: 1.45 }}>
+                  <span style={{ width: 18, height: 18, borderRadius: "50%", background: "#FFF4D5", border: `1px solid rgba(245,168,0,.45)`, flex: "0 0 18px", marginTop: 1 }} />
+                  {point}
+                </div>
+              ))}
+            </div>
           </Reveal>
-          <div className="lp-c3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22, alignItems: "stretch" }}>
+          <div style={{ display: "grid", gap: 16 }}>
+            {WORKFLOW.map((item, i) => (
+              <Reveal key={item.step} delay={i * 80}>
+                <div className="lp-card" style={{ display: "grid", gridTemplateColumns: "76px 1fr", gap: 18, alignItems: "center", padding: 22, borderRadius: 22 }}>
+                  <div style={{ fontFamily: F.mono, color: C.amberDark, background: "#FFF4D5", border: `1px solid rgba(245,168,0,.38)`, borderRadius: 16, height: 58, display: "grid", placeItems: "center", fontWeight: 950, fontSize: 16 }}>{item.step}</div>
+                  <div>
+                    <h3 style={{ margin: "0 0 5px", color: C.ink, fontWeight: 950, fontSize: 21, letterSpacing: "-.04em" }}>{item.title}</h3>
+                    <p style={{ margin: 0, color: C.body, lineHeight: 1.55, fontSize: 14.5 }}>{item.body}</p>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section ref={sectionRefs.pricing} className="lp-sec" style={{ background: "linear-gradient(180deg, #FFFFFF, #F8FAFC)", borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}` }}>
+        <div className="lp-wrap">
+          <Reveal style={{ textAlign: "center", maxWidth: 760, margin: "0 auto 44px" }}>
+            <span className="lp-kicker">Pricing</span>
+            <h2 className="lp-h2">Start lean. Scale when the team is ready.</h2>
+            <p className="lp-sub">Create a workspace free in minutes. Upgrade to Pro or Business from Billing when you are ready to roll it out across projects.</p>
+          </Reveal>
+          <div className="lp-plan-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, alignItems: "stretch" }}>
             {PLANS.map((p, i) => {
               const featured = !!p.highlight;
               return (
                 <Reveal key={p.key} delay={i * 90}>
-                  <div className="lp-card" style={{ padding: 32, position: "relative", height: "100%", display: "flex", flexDirection: "column", borderColor: featured ? "rgba(230,181,60,0.5)" : C.line, borderWidth: featured ? 1.5 : 1, background: featured ? `linear-gradient(180deg, ${C.cardHi}, ${C.surface})` : `linear-gradient(180deg, ${C.card}, ${C.surface})`, boxShadow: featured ? "0 0 0 1px rgba(230,181,60,0.18), 0 30px 60px -34px rgba(0,0,0,0.9), 0 0 60px -24px rgba(230,181,60,0.4)" : "none" }}>
-                    {featured && <span style={{ position: "absolute", top: -12, left: 32, fontFamily: F.mono, fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "#1A1306", background: `linear-gradient(180deg, ${C.goldB}, ${C.gold})`, padding: "5px 11px", borderRadius: 6, boxShadow: "0 6px 18px -6px rgba(230,181,60,0.7)" }}>Most popular</span>}
-                    <div style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase", color: C.goldB }}>{p.name}</div>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, margin: "14px 0 4px" }}>
-                      <span style={{ fontFamily: F.disp, fontWeight: 700, fontSize: 52, color: C.ink, letterSpacing: "0.01em", lineHeight: 1 }}>{p.priceMonthly === 0 ? "Free" : `$${p.priceMonthly}`}</span>
-                      {p.priceMonthly > 0 && <span style={{ fontSize: 14, color: C.muted }}>/user · mo</span>}
+                  <div className="lp-card" style={{ height: "100%", padding: 30, borderRadius: 24, display: "flex", flexDirection: "column", borderColor: featured ? "rgba(245,168,0,.65)" : C.line, boxShadow: featured ? "0 24px 62px rgba(245,168,0,.16), 0 18px 54px rgba(15,23,42,.08)" : "0 18px 54px rgba(15,23,42,.07)", position: "relative" }}>
+                    {featured && <span style={{ position: "absolute", top: -12, left: 28, background: C.ink, color: "#FFFFFF", borderRadius: 999, padding: "6px 12px", fontSize: 11, fontWeight: 900 }}>Most popular</span>}
+                    <div style={monoLabel({ color: C.amberDark })}>{p.name}</div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, margin: "16px 0 6px" }}>
+                      <span style={{ color: C.ink, fontWeight: 950, fontSize: 48, letterSpacing: "-.06em", lineHeight: 1 }}>{p.priceMonthly === 0 ? "Free" : `$${p.priceMonthly}`}</span>
+                      {p.priceMonthly > 0 && <span style={{ color: C.muted, fontSize: 14 }}>/user · mo</span>}
                     </div>
-                    <p style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.55, margin: "0 0 6px", minHeight: 40 }}>{p.blurb}</p>
-                    <div className="lp-goldbar" style={{ margin: "0 0 18px" }} />
-                    <div style={{ marginBottom: 24, flex: 1 }}>
+                    <p style={{ color: C.body, fontSize: 14, lineHeight: 1.55, minHeight: 44, margin: "0 0 20px" }}>{p.blurb}</p>
+                    <div style={{ display: "grid", gap: 10, marginBottom: 24, flex: 1 }}>
                       {p.features.map((feat) => (
-                        <div key={feat} className="lp-cap"><span style={{ fontSize: 13.5, color: C.body, lineHeight: 1.5 }}>{feat}</span></div>
+                        <div key={feat} style={{ display: "flex", gap: 10, color: C.body, fontSize: 13.5, lineHeight: 1.45 }}>
+                          <span style={{ width: 16, height: 16, borderRadius: "50%", background: "#DCFCE7", border: "1px solid #BBF7D0", flex: "0 0 16px", marginTop: 1 }} />
+                          {feat}
+                        </div>
                       ))}
                     </div>
-                    <button className={`lp-btn ${featured ? "lp-btn-primary" : "lp-btn-ghost"}`} style={{ width: "100%", padding: 14 }} onClick={() => openAuth("signup")}>Start free</button>
+                    <button className={`lp-btn ${featured ? "lp-btn-primary" : "lp-btn-secondary"}`} onClick={() => openAuth("signup")}>Start free</button>
                   </div>
                 </Reveal>
               );
@@ -681,196 +632,121 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
         </div>
       </section>
 
-      {/* ══ DEMO CTA ══ */}
       <section ref={sectionRefs.demo} className="lp-sec">
-        <div className="lp-wrap lp-demo" style={{ display: "grid", gridTemplateColumns: "0.95fr 1.05fr", gap: 56, alignItems: "center" }}>
+        <div className="lp-wrap lp-demo-grid" style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr", gap: 52, alignItems: "center" }}>
           <Reveal>
-            <span className="lp-eyebrow" style={{ marginBottom: 18 }}>See it with your data</span>
-            <h2 className="lp-h2">Put your worst project in it.</h2>
-            <p className="lp-sub" style={{ color: C.body, margin: "18px 0 26px" }}>
-              Bring the job with the 14-tab RFI log and the missing mill certs. We'll show you what it looks like when every piece, document, and inspection lives in one system.
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-              {["A walkthrough with a steel PM, not a sales rep", "Set up on one of your real projects", "No credit card, no long-term commitment"].map((t) => (
-                <div key={t} style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <span className="lp-goldbar" style={{ width: 16, flexShrink: 0 }} />
-                  <span style={{ fontSize: 14.5, color: C.body }}>{t}</span>
-                </div>
-              ))}
+            <span className="lp-kicker">Executive walkthrough</span>
+            <h2 className="lp-h2">See the light-command interface on a real steel workflow.</h2>
+            <p className="lp-sub">Bring the project that is hardest to control. We will show how the module layout, dashboards, filters, and evidence trail keep the team aligned.</p>
+            <div style={{ marginTop: 28, borderRadius: 24, padding: 24, backgroundImage: `linear-gradient(90deg, rgba(16,24,39,.84), rgba(16,24,39,.48)), url(${HERO_STRIP})`, backgroundSize: "cover", backgroundPosition: "center", color: "#FFFFFF" }}>
+              <div style={monoLabel({ color: "#FFD466" })}>What you will review</div>
+              <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+                {["Dashboard and command center", "Module-by-module execution flow", "Project risk and commercial controls", "User onboarding and rollout plan"].map((item) => (
+                  <div key={item} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 14 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: C.amber }} />{item}</div>
+                ))}
+              </div>
             </div>
           </Reveal>
-
           <Reveal delay={100}>
             {demoSent ? (
-              <div className="lp-card" style={{ padding: 44, textAlign: "center", borderColor: "rgba(230,181,60,0.4)" }}>
-                <div style={{ fontFamily: F.disp, fontWeight: 700, fontSize: 30, color: C.ink, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.01em" }}>Request received.</div>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6, margin: 0 }}>We'll reach out within one business day to schedule your walkthrough.</p>
+              <div className="lp-card" style={{ padding: 44, textAlign: "center" }}>
+                <h3 style={{ color: C.ink, margin: "0 0 10px", fontSize: 30, letterSpacing: "-.04em" }}>Request received.</h3>
+                <p style={{ color: C.body, lineHeight: 1.6, margin: 0 }}>We will reach out within one business day to schedule your walkthrough.</p>
               </div>
             ) : (
-              <form className="lp-card" onSubmit={handleDemoSubmit} style={{ padding: 32 }}>
+              <form className="lp-card" onSubmit={handleDemoSubmit} style={{ padding: 30, borderRadius: 24 }}>
                 <div className="lp-c2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-                  <div>
-                    <label style={monoLabel({ display: "block", marginBottom: 7 })}>Name</label>
-                    <input className="lp-input" type="text" placeholder="Jane Foreman" value={demoForm.name} onChange={(e) => setDemoForm({ ...demoForm, name: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label style={monoLabel({ display: "block", marginBottom: 7 })}>Work email</label>
-                    <input className="lp-input" type="email" placeholder="jane@fabshop.com" value={demoForm.email} onChange={(e) => setDemoForm({ ...demoForm, email: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label style={monoLabel({ display: "block", marginBottom: 7 })}>Company</label>
-                    <input className="lp-input" type="text" placeholder="Acme Steel" value={demoForm.company} onChange={(e) => setDemoForm({ ...demoForm, company: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label style={monoLabel({ display: "block", marginBottom: 7 })}>Annual tonnage</label>
-                    <input className="lp-input" type="text" placeholder="8,000" value={demoForm.tonnage} onChange={(e) => setDemoForm({ ...demoForm, tonnage: e.target.value })} />
-                  </div>
+                  <div><label style={monoLabel({ display: "block", marginBottom: 7 })}>Name</label><input className="lp-input" type="text" placeholder="Jane Smith" value={demoForm.name} onChange={(e) => setDemoForm({ ...demoForm, name: e.target.value })} required /></div>
+                  <div><label style={monoLabel({ display: "block", marginBottom: 7 })}>Work email</label><input className="lp-input" type="email" placeholder="jane@steelco.com" value={demoForm.email} onChange={(e) => setDemoForm({ ...demoForm, email: e.target.value })} required /></div>
+                  <div><label style={monoLabel({ display: "block", marginBottom: 7 })}>Company</label><input className="lp-input" type="text" placeholder="Redfield Steel" value={demoForm.company} onChange={(e) => setDemoForm({ ...demoForm, company: e.target.value })} required /></div>
+                  <div><label style={monoLabel({ display: "block", marginBottom: 7 })}>Annual tonnage</label><input className="lp-input" type="text" placeholder="8,000" value={demoForm.tonnage} onChange={(e) => setDemoForm({ ...demoForm, tonnage: e.target.value })} /></div>
                 </div>
                 <div style={{ marginBottom: 18 }}>
-                  <label style={monoLabel({ display: "block", marginBottom: 7 })}>What's hurting right now?</label>
-                  <textarea className="lp-input" rows={3} placeholder="RFIs, submittals, close-out docs…" value={demoForm.message} onChange={(e) => setDemoForm({ ...demoForm, message: e.target.value })} style={{ resize: "vertical" }} />
+                  <label style={monoLabel({ display: "block", marginBottom: 7 })}>What should the walkthrough focus on?</label>
+                  <textarea className="lp-input" rows={4} placeholder="RFIs, detailing, field issues, change orders, reports..." value={demoForm.message} onChange={(e) => setDemoForm({ ...demoForm, message: e.target.value })} style={{ resize: "vertical" }} />
                 </div>
-                {demoError && (
-                  <p style={{ fontSize: 13, color: "#f87171", lineHeight: 1.5, margin: "0 0 12px" }}>{demoError}</p>
-                )}
-                <button className="lp-btn lp-btn-primary" type="submit" disabled={demoSubmitting} style={{ width: "100%", padding: 15, opacity: demoSubmitting ? 0.7 : 1, cursor: demoSubmitting ? "wait" : "pointer" }}>{demoSubmitting ? "Sending…" : "Request my walkthrough"}</button>
+                {demoError && <p style={{ fontSize: 13, color: C.red, lineHeight: 1.5, margin: "0 0 12px" }}>{demoError}</p>}
+                <button className="lp-btn lp-btn-primary" type="submit" disabled={demoSubmitting} style={{ width: "100%", opacity: demoSubmitting ? .65 : 1, cursor: demoSubmitting ? "wait" : "pointer" }}>{demoSubmitting ? "Sending…" : "Request my walkthrough"}</button>
               </form>
             )}
           </Reveal>
         </div>
       </section>
 
-      {/* ══ FINAL CTA ══ */}
-      <section style={{ position: "relative", overflow: "hidden", padding: "108px 0", borderTop: `1px solid ${C.line}`, background: `linear-gradient(180deg, ${C.base}, ${C.surface})` }}>
-        <div className="lp-glow lp-glow-anim" style={{ top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 760, height: 360, background: "radial-gradient(circle, rgba(200,155,32,0.22), transparent 68%)", animation: "lpGlow 8s ease-in-out infinite" }} />
-        <div className="lp-blueprint" style={{ maskImage: "radial-gradient(100% 100% at 50% 50%, #000 30%, transparent 75%)", WebkitMaskImage: "radial-gradient(100% 100% at 50% 50%, #000 30%, transparent 75%)" }} />
-        <div className="lp-wrap" style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 820 }}>
+      <section style={{ padding: "92px 0", background: C.ink, color: "#FFFFFF", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, opacity: .18, backgroundImage: `url(${HERO_STRIP})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+        <div className="lp-wrap" style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 860 }}>
           <Reveal>
-            <h2 style={{ fontFamily: F.disp, fontWeight: 800, fontSize: "clamp(40px, 7vw, 80px)", lineHeight: 0.98, letterSpacing: "0.005em", textTransform: "uppercase", color: C.ink, margin: 0 }}>
-              Stop managing steel <br />
-              <span style={{ background: `linear-gradient(180deg, ${C.goldB}, ${C.gold})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>in spreadsheets.</span>
-            </h2>
-            <p style={{ fontSize: 18, color: C.body, lineHeight: 1.6, maxWidth: 560, margin: "24px auto 36px" }}>
-              Spin up a free workspace for your shop and put your next project on a system that actually speaks steel.
-            </p>
-            <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
-              <button className="lp-btn lp-btn-primary" style={{ padding: "16px 34px", fontSize: 16 }} onClick={() => openAuth("signup")}>Start free</button>
-              <button className="lp-btn lp-btn-ghost" style={{ padding: "16px 30px", fontSize: 16 }} onClick={() => scrollTo("demo")}>Request a demo</button>
-            </div>
-            <div style={{ fontFamily: F.mono, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, marginTop: 26 }}>
-              No credit card · Set up in minutes
+            <span className="lp-kicker" style={{ color: "#FFD466" }}>Boardroom polish. Jobsite utility.</span>
+            <h2 style={{ color: "#FFFFFF", fontSize: "clamp(38px, 6vw, 72px)", lineHeight: .98, letterSpacing: "-.06em", margin: "18px 0 0", fontWeight: 950 }}>Give your steel operation a page that looks as serious as the work.</h2>
+            <p style={{ color: "rgba(255,255,255,.74)", fontSize: 18, lineHeight: 1.65, maxWidth: 640, margin: "22px auto 34px" }}>Start with a clean workspace, then bring the team into a platform designed around steel project delivery.</p>
+            <div style={{ display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
+              <button className="lp-btn lp-btn-primary" onClick={() => openAuth("signup")}>Start free</button>
+              <button className="lp-btn lp-btn-secondary" onClick={() => scrollTo("demo")}>Request a demo</button>
             </div>
           </Reveal>
         </div>
       </section>
 
-      {/* ══ FOOTER ══ */}
-      <footer style={{ background: "#070A0D", padding: "60px 0 36px", borderTop: `1px solid ${C.line}` }}>
-        <div className="lp-wrap lp-footer" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 32 }}>
-          <div style={{ maxWidth: 300 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 14 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: `linear-gradient(150deg, ${C.cardHi}, ${C.surface})`, border: `1px solid ${C.line2}`, display: "grid", placeItems: "center", color: C.goldB, fontFamily: F.disp, fontWeight: 700, fontSize: 15 }}>SB</div>
-              <span style={{ fontFamily: F.disp, fontWeight: 700, fontSize: 18, letterSpacing: "0.12em", color: C.ink }}>STEELBUILD PRO</span>
-            </div>
-            <p style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, margin: 0 }}>The project delivery platform built for structural steel fabricators and erectors.</p>
+      <footer style={{ background: "#FFFFFF", borderTop: `1px solid ${C.line}`, padding: "54px 0 34px" }}>
+        <div className="lp-wrap lp-footer-main" style={{ display: "flex", justifyContent: "space-between", gap: 34, flexWrap: "wrap" }}>
+          <div style={{ maxWidth: 330 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}><BrandMark /><span style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.04em" }}>SteelBuild Pro</span></div>
+            <p style={{ color: C.body, lineHeight: 1.6, margin: 0, fontSize: 13.5 }}>A professional project delivery platform built for structural steel teams.</p>
           </div>
-          <div style={{ display: "flex", gap: 64, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 58, flexWrap: "wrap" }}>
             {[
-              { head: "Platform", links: [["Modules", "features"], ["Workflow", "workflow"], ["Pricing", "pricing"]] },
-              { head: "Company", links: [["About", "why"], ["Contact", "demo"], ["Request a demo", "demo"]] },
+              { head: "Platform", links: [["Modules", "modules"], ["Workflow", "workflow"], ["Pricing", "pricing"]] },
+              { head: "Company", links: [["Executive demo", "demo"], ["Start free", "platform"]] },
             ].map((col) => (
               <div key={col.head}>
-                <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: C.goldB, marginBottom: 14 }}>{col.head}</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {col.links.map(([label, target]) => (
-                    <button key={label} className="lp-footlink" onClick={() => scrollTo(target)}>{label}</button>
-                  ))}
+                <div style={monoLabel({ color: C.amberDark, marginBottom: 14 })}>{col.head}</div>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {col.links.map(([label, target]) => <button key={label} className="lp-footlink" onClick={() => scrollTo(target)}>{label}</button>)}
                 </div>
               </div>
             ))}
             <div>
-              <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: C.goldB, marginBottom: 14 }}>Legal</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {["Privacy", "Terms", "Security", "Subprocessors"].map((l) => (
-                  <a key={l} href={`/${l}`} className="lp-footlink">{l}</a>
-                ))}
-              </div>
+              <div style={monoLabel({ color: C.amberDark, marginBottom: 14 })}>Legal</div>
+              <div style={{ display: "grid", gap: 10 }}>{["Privacy", "Terms", "Security", "Subprocessors"].map((l) => <a key={l} href={`/${l}`} className="lp-footlink">{l}</a>)}</div>
             </div>
           </div>
         </div>
-        <div className="lp-wrap" style={{ marginTop: 44, paddingTop: 22, borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div className="lp-wrap" style={{ marginTop: 42, paddingTop: 20, borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <span style={{ fontFamily: F.mono, fontSize: 11, color: C.muted }}>© {new Date().getFullYear()} SteelBuild Pro</span>
-          <span style={{ fontFamily: F.mono, fontSize: 11, color: C.muted }}>Built by steel people, for steel people.</span>
+          <span style={{ fontFamily: F.mono, fontSize: 11, color: C.muted }}>Executive-grade project controls for structural steel.</span>
         </div>
       </footer>
 
-      {/* ══ SIGN IN MODAL ══ */}
       {showLogin && (
         <div className="lp-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowLogin(false); }}>
-          <div role="dialog" aria-modal="true" aria-label="Sign in" style={{ width: "100%", maxWidth: 432, padding: 32, background: `linear-gradient(180deg, ${C.cardHi}, ${C.surface})`, border: `1px solid ${C.line2}`, borderRadius: 16, boxShadow: "0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(230,181,60,0.1)", position: "relative" }}>
-            <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: 4, lineHeight: 1 }}>✕</button>
-            <img
-              src={LOGO_IMG}
-              alt="SteelBuild Pro"
-              width={180}
-              style={{ display: "block", width: 180, height: "auto", borderRadius: 12, margin: "0 auto 22px", boxShadow: "0 16px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(230,181,60,0.18)" }}
-            />
+          <div role="dialog" aria-modal="true" aria-label={authMode === "signup" ? "Create account" : "Sign in"} className="lp-card" style={{ width: "100%", maxWidth: 438, padding: 32, borderRadius: 24, position: "relative", boxShadow: "0 34px 90px rgba(15,23,42,.28)" }}>
+            <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: "#F1F5F9", color: C.body, borderRadius: 10, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+              <img src={LOGO_IMG} alt="SteelBuild Pro" onError={(e) => { e.currentTarget.style.display = "none"; }} style={{ width: 54, height: 54, objectFit: "cover", borderRadius: 14, border: `1px solid ${C.line}` }} />
+              <div><div style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.04em" }}>SteelBuild Pro</div><div style={{ color: C.muted, fontSize: 13 }}>Project controls for steel</div></div>
+            </div>
             {signupNotice ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                <div>
-                  <h2 style={{ fontFamily: F.disp, fontWeight: 700, fontSize: 30, letterSpacing: "0.01em", textTransform: "uppercase", color: C.ink, margin: "0 0 8px" }}>Check your email</h2>
-                  <p style={{ fontSize: 13.5, color: C.muted, margin: 0, lineHeight: 1.5 }}>{signupNotice}</p>
-                </div>
-                <button type="button" onClick={() => { setSignupNotice(null); setAuthMode("signin"); setPassword(""); }} className="lp-btn lp-btn-primary" style={{ width: "100%", padding: 13 }}>
-                  Back to sign in
-                </button>
+              <div style={{ display: "grid", gap: 18 }}>
+                <div><h2 style={{ color: C.ink, margin: "0 0 8px", fontSize: 30, letterSpacing: "-.04em" }}>Check your email</h2><p style={{ color: C.body, margin: 0, lineHeight: 1.55, fontSize: 14 }}>{signupNotice}</p></div>
+                <button type="button" onClick={() => { setSignupNotice(null); setAuthMode("signin"); setPassword(""); }} className="lp-btn lp-btn-primary">Back to sign in</button>
               </div>
             ) : (
               <>
-                <div style={{ marginBottom: 24 }}>
-                  <h2 style={{ fontFamily: F.disp, fontWeight: 700, fontSize: 32, letterSpacing: "0.01em", textTransform: "uppercase", color: C.ink, margin: "0 0 6px" }}>{authMode === "signup" ? "Create your account" : "Sign in"}</h2>
-                  <p style={{ fontSize: 13.5, color: C.muted, margin: 0 }}>{authMode === "signup" ? "Start a free workspace for your shop." : "Access your projects and data."}</p>
+                <div style={{ marginBottom: 22 }}>
+                  <h2 style={{ color: C.ink, margin: "0 0 6px", fontSize: 32, letterSpacing: "-.05em", fontWeight: 950 }}>{authMode === "signup" ? "Create your account" : "Sign in"}</h2>
+                  <p style={{ color: C.body, margin: 0, fontSize: 14 }}>{authMode === "signup" ? "Start a free workspace for your team." : "Access your projects and modules."}</p>
                 </div>
-                <form onSubmit={authMode === "signup" ? handleSignUp : handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  {authMode === "signup" && (
-                    <div>
-                      <label style={monoLabel({ display: "block", marginBottom: 6 })}>Full name</label>
-                      <input className="lp-input" type="text" autoComplete="name" placeholder="Jane Smith" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-                    </div>
-                  )}
-                  <div>
-                    <label style={monoLabel({ display: "block", marginBottom: 6 })}>Email</label>
-                    <input className="lp-input" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={monoLabel({ display: "block", marginBottom: 6 })}>Password</label>
-                    <input className="lp-input" type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder={authMode === "signup" ? "At least 8 characters" : "Password"} value={password} onChange={(e) => setPassword(e.target.value)} />
-                  </div>
-                  {(authMode === "signup" ? signupError : loginError) && (
-                    <div style={{ padding: "10px 14px", background: "rgba(255,106,43,0.10)", border: `1px solid rgba(255,106,43,0.45)`, borderRadius: 9, fontSize: 13, color: "#FFB088" }}>{authMode === "signup" ? signupError : loginError}</div>
-                  )}
-                  <button type="submit" disabled={authMode === "signup" ? signupBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", padding: 14, cursor: (authMode === "signup" ? signupBusy : isSubmitting) ? "not-allowed" : "pointer", opacity: (authMode === "signup" ? signupBusy : isSubmitting) ? 0.6 : 1 }}>
-                    {authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : (isSubmitting ? "Signing in…" : "Sign in")}
-                  </button>
-                  {authMode === "signup" && (
-                    <p style={{ fontSize: 12, color: C.muted, textAlign: "center", lineHeight: 1.5, margin: 0 }}>
-                      By creating an account you agree to the{" "}
-                      <a href="/terms" style={{ color: C.goldB, textDecoration: "none", borderBottom: `1px solid rgba(230,181,60,0.4)` }}>Terms of Service</a>
-                      {" "}and{" "}
-                      <a href="/privacy" style={{ color: C.goldB, textDecoration: "none", borderBottom: `1px solid rgba(230,181,60,0.4)` }}>Privacy Policy</a>.
-                    </p>
-                  )}
+                <form onSubmit={authMode === "signup" ? handleSignUp : handleLogin} style={{ display: "grid", gap: 15 }}>
+                  {authMode === "signup" && <div><label style={monoLabel({ display: "block", marginBottom: 6 })}>Full name</label><input className="lp-input" type="text" autoComplete="name" placeholder="Jane Smith" value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>}
+                  <div><label style={monoLabel({ display: "block", marginBottom: 6 })}>Email</label><input className="lp-input" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                  <div><label style={monoLabel({ display: "block", marginBottom: 6 })}>Password</label><input className="lp-input" type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder={authMode === "signup" ? "At least 8 characters" : "Password"} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+                  {(authMode === "signup" ? signupError : loginError) && <div style={{ padding: "10px 13px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, color: C.red, fontSize: 13 }}>{authMode === "signup" ? signupError : loginError}</div>}
+                  <button type="submit" disabled={authMode === "signup" ? signupBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", opacity: (authMode === "signup" ? signupBusy : isSubmitting) ? .65 : 1, cursor: (authMode === "signup" ? signupBusy : isSubmitting) ? "not-allowed" : "pointer" }}>{authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : (isSubmitting ? "Signing in…" : "Sign in")}</button>
+                  {authMode === "signup" && <p style={{ fontSize: 12, color: C.muted, textAlign: "center", lineHeight: 1.5, margin: 0 }}>By creating an account you agree to the <a href="/terms" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Terms</a> and <a href="/privacy" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Privacy Policy</a>.</p>}
                 </form>
-                <div style={{ marginTop: 18, textAlign: "center", fontSize: 13, color: C.muted }}>
-                  {authMode === "signup" ? (
-                    <>Already have an account?{" "}
-                      <button type="button" onClick={() => { setAuthMode("signin"); setSignupError(null); }} style={{ background: "none", border: "none", padding: 0, color: C.goldB, fontWeight: 600, cursor: "pointer", font: "inherit" }}>Sign in</button>
-                    </>
-                  ) : (
-                    <>New to SteelBuild Pro?{" "}
-                      <button type="button" onClick={() => { setAuthMode("signup"); setSignupError(null); }} style={{ background: "none", border: "none", padding: 0, color: C.goldB, fontWeight: 600, cursor: "pointer", font: "inherit" }}>Create an account</button>
-                    </>
-                  )}
+                <div style={{ marginTop: 18, textAlign: "center", fontSize: 13.5, color: C.body }}>
+                  {authMode === "signup" ? <>Already have an account? <button type="button" onClick={() => { setAuthMode("signin"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Sign in</button></> : <>New to SteelBuild Pro? <button type="button" onClick={() => { setAuthMode("signup"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Create an account</button></>}
                 </div>
               </>
             )}
