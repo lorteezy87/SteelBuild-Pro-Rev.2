@@ -89,10 +89,22 @@ async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
     // state instead of trusting the (possibly stale / out-of-order) event payload.
     // Without this, a late customer.subscription.updated arriving AFTER a .deleted
     // would re-grant a canceled paid plan. On re-fetch a canceled sub reports
-    // status="canceled", so we still downgrade. Fall back to the event payload if
-    // the retrieve fails (e.g. transient API error).
-    let sub = evtSub;
-    try { sub = await stripe.subscriptions.retrieve(evtSub.id); } catch (_e) { /* keep event payload */ }
+    // status="canceled", so we still downgrade.
+    //
+    // If the retrieve FAILS we must NOT fall back to the (possibly stale/out-of-
+    // order) event payload — doing so would defeat the guard and could re-grant a
+    // canceled plan. Instead we throw, so the webhook returns 500, Stripe retries
+    // the delivery, and the guard runs again with a fresh live fetch. The event is
+    // NOT marked processed on the throw (handleEvent is called before the marker
+    // insert), so the retry re-runs cleanly.
+    let sub;
+    try {
+      sub = await stripe.subscriptions.retrieve(evtSub.id);
+    } catch (e) {
+      throw new Error(
+        `subscription retrieve failed for out-of-order guard (${evtSub.id}): ${(e as Error).message}`,
+      );
+    }
     const TERMINAL = ["canceled", "incomplete_expired", "unpaid"];
     const deleted = event.type === "customer.subscription.deleted" || TERMINAL.includes(sub.status);
     const update = subscriptionOrgUpdate(sub, cfg, { deleted });
@@ -101,6 +113,22 @@ async function handleEvent(stripe: Stripe, event: any, cfg: BillingConfig) {
 }
 
 Deno.serve(async (req) => {
+  try {
+    return await handleRequest(req);
+  } catch (e) {
+    // Every other browser-facing function wraps its handler so an unhandled error
+    // returns the standard JSON error envelope WITH CORS headers. Without this,
+    // an uncaught throw returned a CORS-less 500 that surfaced in the browser as
+    // an opaque CORS failure rather than a readable error. NOTE: the webhook path
+    // (Stripe, no browser) handles its own errors above and returns before this;
+    // any escape here is an app-action or config failure where CORS matters.
+    console.error("stripe-billing unhandled error", e);
+    const message = e instanceof Error ? e.message : String(e);
+    return json({ error: `Internal error: ${message}` }, 500);
+  }
+});
+
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   const url = new URL(req.url);
   // Load config FIRST so the Stripe client uses the correct key (live vs test) —
@@ -213,4 +241,4 @@ Deno.serve(async (req) => {
   }
 
   return json({ error: "Unknown action" }, 400);
-});
+}
