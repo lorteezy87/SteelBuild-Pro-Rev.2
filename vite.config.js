@@ -159,6 +159,15 @@ export default defineConfig({
     // fast (no jsdom overhead). Component tests opt into jsdom via a
     // `// @vitest-environment jsdom` pragma at the top of the file.
     environment: 'node',
+    // The same non-secret placeholders ci.yml exports: src/lib/env.ts validates
+    // import.meta.env at module load, so without these a bare `npm test` in a
+    // fresh clone/worktree (no .env.local) fails 16 files on import. Tests never
+    // hit a real backend — anything network-shaped mocks the supabase client —
+    // so deterministic placeholders are MORE correct than a dev's real values.
+    env: {
+      VITE_SUPABASE_URL: 'https://ci-placeholder.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'ci-placeholder-anon-key',
+    },
     setupFiles: ['./vitest.setup.js', './src/setupTests.ts'],
     // Use the worker_threads pool. Threads are terminated forcibly at teardown,
     // so a worker whose event loop is briefly busy never produces the forks
@@ -166,5 +175,10 @@ export default defineConfig({
     // contended machines). Component tests here mock all native I/O (supabase,
     // base44) and only use jsdom, which runs cleanly under threads.
     pool: 'threads',
+    // Windows dev machines flake unless the suite runs with at most 2 workers
+    // (previously only tribal knowledge: "vitest needs --maxWorkers=2 on
+    // Windows"). Encode it here so a bare `npm test` is safe everywhere; CI
+    // (Linux) keeps full parallelism. (Audit L31)
+    ...(process.platform === 'win32' ? { maxWorkers: 2, minWorkers: 1 } : {}),
   },
 });
