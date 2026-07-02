@@ -1,0 +1,52 @@
+/* App-wide hero picture for authenticated pages/modules. */
+.app-main-content {
+  --sbp-hero-inline-margin: clamp(12px, 1.8vw, 22px);
+}
+
+.app-main-content > * {
+  order: 2;
+}
+
+.app-main-content > .project-error-banner {
+  order: 0;
+}
+
+.app-main-content::before {
+  content: "";
+  order: 1;
+  display: block;
+  flex: 0 0 auto;
+  min-height: clamp(72px, 8.5vw, 112px);
+  margin: clamp(10px, 1.4vw, 16px) var(--sbp-hero-inline-margin) 0;
+  border-radius: clamp(14px, 1.4vw, 20px);
+  border: 1px solid color-mix(in srgb, var(--accent, #2f80ed) 20%, var(--border-default, rgba(148, 163, 184, 0.22)));
+  background-image:
+    linear-gradient(90deg, rgba(7, 13, 24, 0.84) 0%, rgba(7, 13, 24, 0.62) 44%, rgba(7, 13, 24, 0.28) 100%),
+    radial-gradient(circle at 84% 20%, rgba(255, 184, 92, 0.28), transparent 38%),
+    url("/steelbuild-hero.svg");
+  background-position: center, center, center;
+  background-size: cover, cover, cover;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 30px rgba(0, 0, 0, 0.18);
+  opacity: 0.92;
+  pointer-events: none;
+}
+
+.dashboard-reference-shell .app-main-content::before {
+  min-height: clamp(82px, 7.5vw, 122px);
+  margin-inline: 22px;
+}
+
+.app-shell[data-mobile-shell="true"] .app-main-content::before {
+  min-height: 68px;
+  margin: 10px max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+  border-radius: 14px;
+  background-position: center, center, center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 8px 20px rgba(0, 0, 0, 0.16);
+}
+
+@media (max-width: 640px) {
+  .app-main-content::before {
+    min-height: 62px;
+  }
+}

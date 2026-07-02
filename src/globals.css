@@ -5,6 +5,7 @@
  *  - tokens.css     — CSS custom properties (dark + light themes)
  *  - base.css       — Resets, typography, scrollbars, form elements
  *  - components.css — Class-based UI components (badges, cards, tables, buttons)
+ *  - app-hero.css   — App-wide construction hero strip
  *  - animations.css — Keyframes, urgency tiers, glow states
  *  - responsive.css — Density toggle, breakpoints, mobile overrides
  *  - tailwind-compat.css — shadcn/ui HSL bridge, Tailwind class remaps
@@ -16,6 +17,7 @@
 @import './styles/tokens.css';
 @import './styles/base.css';
 @import './styles/components.css';
+@import './styles/app-hero.css';
 @import './styles/animations.css';
 @import './styles/responsive.css';
 /* SteelBuild Dark — industrial dark theme. Self-contained, scoped under
