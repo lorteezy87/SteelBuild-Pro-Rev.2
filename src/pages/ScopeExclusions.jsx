@@ -102,7 +102,8 @@ export default function ScopeExclusions() {
     if (selectedIds.size === 0) return;
     setBulkActionBusy(true);
     try {
-      await Promise.all([...selectedIds].map(id => entities.ScopeItem.update(id, patch)));
+      // Identical `patch` across every selected id → one chunked .in('id', ids) update.
+      await entities.ScopeItem.bulkUpdate([...selectedIds], patch);
       qc.invalidateQueries({ queryKey: ["scope-items"] });
       toast.success(`Updated ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
       clearSelection();
@@ -118,7 +119,8 @@ export default function ScopeExclusions() {
     if (!window.confirm(`Delete ${selectedIds.size} selected scope item${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`)) return;
     setBulkActionBusy(true);
     try {
-      await Promise.all([...selectedIds].map(id => entities.ScopeItem.delete(id)));
+      // One chunked .in('id', ids) delete instead of N single-row round-trips.
+      await entities.ScopeItem.bulkDelete([...selectedIds]);
       qc.invalidateQueries({ queryKey: ["scope-items"] });
       toast.success(`Deleted ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
       clearSelection();

@@ -144,7 +144,11 @@ export default function ActionItems() {
     onError: (e) => toast.error("Failed: " + (e?.message || "Delete failed")),
   });
 
-  // ─── Bulk mutation — runs parallel updates then invalidates once ─────────
+  // ─── Bulk mutation — per-row heterogeneous updates ───────────────────────
+  // Used ONLY where each row gets a DIFFERENT payload (e.g. "Bump +1 Day",
+  // which shifts each item off its OWN due_date). Identical-patch bulk ops
+  // (Mark Complete / Assign To) go through bulkPatchMut below, which collapses
+  // to one chunked .in('id', ids) request instead of N.
   const bulkUpdateMut = useMutation({
     mutationFn: async (updates) => {
       // updates is an array of { id, data } objects
@@ -156,6 +160,26 @@ export default function ActionItems() {
         throw new Error(`${failed.length} of ${updates.length} updates failed`);
       }
       return results.length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ["action-items"] });
+      qc.invalidateQueries({ queryKey: ["action-items-all"] });
+      toast.success(`${count} item${count === 1 ? "" : "s"} updated`);
+      clearSelection();
+    },
+    onError: (e) => {
+      qc.invalidateQueries({ queryKey: ["action-items"] });
+      toast.error(e?.message || "Bulk update failed");
+    },
+  });
+
+  // ─── Bulk mutation — identical patch across all selected ids ─────────────
+  // One chunked .in('id', ids) UPDATE via the entity client, for the handlers
+  // whose payload is the same for every row.
+  const bulkPatchMut = useMutation({
+    mutationFn: async ({ ids, data }) => {
+      await entities.ActionItem.bulkUpdate(ids, data);
+      return ids.length;
     },
     onSuccess: (count) => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
@@ -288,19 +312,13 @@ export default function ActionItems() {
   };
 
   const handleBulkComplete = () => {
-    const updates = Array.from(selectedIds).map((id) => ({
-      id,
-      data: { status: ACTION_ITEM_STATUS.COMPLETE },
-    }));
-    bulkUpdateMut.mutate(updates);
+    // Identical { status: Complete } patch for every selected id.
+    bulkPatchMut.mutate({ ids: Array.from(selectedIds), data: { status: ACTION_ITEM_STATUS.COMPLETE } });
   };
 
   const handleBulkAssign = (assignee) => {
-    const updates = Array.from(selectedIds).map((id) => ({
-      id,
-      data: { assigned_to: assignee },
-    }));
-    bulkUpdateMut.mutate(updates);
+    // Identical { assigned_to } patch for every selected id.
+    bulkPatchMut.mutate({ ids: Array.from(selectedIds), data: { assigned_to: assignee } });
     setShowAssignDropdown(false);
   };
 
@@ -386,7 +404,7 @@ export default function ActionItems() {
               icon: "check",
               variant: "primary",
               onClick: handleBulkComplete,
-              disabled: bulkUpdateMut.isPending,
+              disabled: bulkPatchMut.isPending,
             },
           ]}
         />
@@ -790,14 +808,14 @@ export default function ActionItems() {
             icon: "crew",
             variant: "secondary",
             onClick: () => setShowAssignDropdown((v) => !v),
-            disabled: bulkUpdateMut.isPending,
+            disabled: bulkPatchMut.isPending,
           },
           {
             label: "Mark Complete",
             icon: "check",
             variant: "primary",
             onClick: handleBulkComplete,
-            disabled: bulkUpdateMut.isPending,
+            disabled: bulkPatchMut.isPending,
           },
         ]}
       />

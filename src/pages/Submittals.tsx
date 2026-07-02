@@ -15,6 +15,7 @@ import {
   BulkActionBar as BulkActionBarRaw,
 } from "@/components/design-system";
 import { PhoenixPanel as PhoenixPanelRaw } from "@/components/shared/PhoenixPanel";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { toast } from "sonner";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { daysUntil } from "@/lib/dateMath";
@@ -578,6 +579,8 @@ export default function Submittals() {
         <KpiTile compact label="Overdue" value={stats.overdue} color="var(--status-error)" />
         <KpiTile compact label="At risk" value={reviewsAtRisk} color="var(--status-warning)" sub="forecast" />
       </div>
+
+      <ListTruncationNotice count={rows.length} label="submittals" />
 
       <PhoenixPanel style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Filter bar */}

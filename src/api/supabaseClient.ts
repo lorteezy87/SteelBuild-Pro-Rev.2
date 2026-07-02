@@ -17,6 +17,7 @@
  *   - Range/comparison query support via operator prefixes
  */
 
+import * as Sentry from '@sentry/react';
 import { supabase } from '@/lib/supabase';
 import { env } from '@/lib/env';
 import type { Database } from '@/types/supabase';
@@ -342,6 +343,35 @@ export type EntityClient<T extends TableName> = {
   update: (id: string, updates: Update<T>) => Promise<RowWithAliases<T>>;
   delete: (id: string) => Promise<{ success: true }>;
   bulkCreate: (records: Insert<T>[]) => Promise<Array<RowWithAliases<T>>>;
+  /**
+   * Apply the SAME `updates` patch to many rows in ONE UPDATE per chunk
+   * (≤500 ids) via `.in('id', chunk)`, instead of N single-row round-trips.
+   * Same cleanRecord + updated_at treatment as update(); returns the aliased
+   * rows across all chunks. RLS still applies per row, so a row the caller
+   * can't touch is silently skipped (not returned) rather than erroring the
+   * batch. Use ONLY when the payload is identical for every id.
+   */
+  bulkUpdate: (ids: string[], updates: Update<T>) => Promise<Array<RowWithAliases<T>>>;
+  /**
+   * Delete many rows honoring the entity's delete() semantics (soft-delete
+   * flag flip for SOFT_DELETE_TABLES, hard DELETE otherwise) in ONE op per
+   * chunk (≤500 ids) via `.in('id', chunk)`. RLS still applies per row.
+   */
+  bulkDelete: (ids: string[]) => Promise<{ success: true }>;
+};
+
+// Max ids per bulk chunk. Keeps the `.in('id', ...)` filter (and the resulting
+// URL / statement) within Postgres/PostgREST limits while still collapsing the
+// old N-request Promise.all into a handful of requests.
+const BULK_CHUNK_SIZE = 500;
+
+const chunkIds = (ids: string[]): string[][] => {
+  const clean = ids.filter((id): id is string => typeof id === 'string' && id.length > 0);
+  const chunks: string[][] = [];
+  for (let i = 0; i < clean.length; i += BULK_CHUNK_SIZE) {
+    chunks.push(clean.slice(i, i + BULK_CHUNK_SIZE));
+  }
+  return chunks;
 };
 
 // Default row cap for list()/filter() when the caller passes no explicit limit.
@@ -355,14 +385,20 @@ export type EntityClient<T extends TableName> = {
 export const LIST_ROW_CAP = 2000;
 const DEFAULT_LIST_LIMIT = LIST_ROW_CAP;
 
-// Dev-only: warn when a read comes back at the cap (likely truncated) so the
-// silent-1000-row failure mode surfaces during development.
+// Warn when a read comes back at the cap (likely truncated) so the silent-
+// 1000-row failure mode surfaces. In DEV this logs to the console; in PROD it
+// reports a Sentry warning message (H10) so silent truncation is observable in
+// production, not just during development. The UI also surfaces this via
+// ListTruncationNotice (M18) — this is the telemetry half.
 const warnIfTruncated = (tableName: string, op: string, count: number, cap: number) => {
-  if (import.meta.env.DEV && count >= cap) {
+  if (count < cap) return;
+  if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.warn(
       `[supabaseClient] ${tableName}.${op}() returned ${count} rows at the ${cap}-row cap — results may be TRUNCATED. Add server-side filtering or pagination.`,
     );
+  } else {
+    Sentry.captureMessage(`list truncation: ${tableName}.${op} hit ${cap}-row cap`, 'warning');
   }
 };
 
@@ -552,6 +588,54 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
     if (error) throw new SupabaseOperationError(tableName as string, 'bulkCreate', error);
     return addAliasesToList<RowWithAliases<T>>(data, tableName as string);
   },
+
+  /**
+   * Apply one identical patch to many rows in a single UPDATE per ≤500-id
+   * chunk. Uses the same cleanRecord + updated_at treatment as update().
+   */
+  bulkUpdate: async (ids, updates) => {
+    const chunks = chunkIds(ids);
+    if (chunks.length === 0) return [];
+    const clean = cleanRecord(updates as Record<string, unknown>);
+    // Never send primary key or created_at in the update body (matches update()).
+    delete clean.id;
+    delete clean.created_at;
+    const body = { ...clean, updated_at: new Date().toISOString() };
+    const out: Array<RowWithAliases<T>> = [];
+    for (const chunk of chunks) {
+      const { data, error } = await (sbFrom(tableName))
+        .update(body)
+        .in('id', chunk)
+        .select();
+      if (error) throw new SupabaseOperationError(tableName as string, 'bulkUpdate', error);
+      out.push(...addAliasesToList<RowWithAliases<T>>(data, tableName as string));
+    }
+    return out;
+  },
+
+  /**
+   * Delete many rows in one op per ≤500-id chunk, mirroring delete()'s
+   * soft-vs-hard semantics.
+   */
+  bulkDelete: async (ids) => {
+    const chunks = chunkIds(ids);
+    if (chunks.length === 0) return { success: true };
+    const soft = SOFT_DELETE_TABLES.has(tableName as string);
+    for (const chunk of chunks) {
+      if (soft) {
+        const { error } = await (sbFrom(tableName))
+          .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+          .in('id', chunk);
+        if (error) throw new SupabaseOperationError(tableName as string, 'bulkDelete', error);
+      } else {
+        const { error } = await (sbFrom(tableName))
+          .delete()
+          .in('id', chunk);
+        if (error) throw new SupabaseOperationError(tableName as string, 'bulkDelete', error);
+      }
+    }
+    return { success: true };
+  },
 });
 
 // ─── Entity registry ──────────────────────────────────────────────────────────
@@ -578,6 +662,16 @@ export const entities = {
       // left half-archived (#13). Replaces the old best-effort multi-step delete.
       const { error } = await supabase.rpc('soft_delete_project', { p_project_id: id });
       if (error) throw new SupabaseOperationError('projects', 'delete', error);
+      return { success: true };
+    },
+    bulkDelete: async (ids: string[]): Promise<{ success: true }> => {
+      // The generic bulkDelete would flip is_deleted on the project ROWS only,
+      // stranding every child record live (the half-archive bug #13). Route
+      // each project through the atomic soft_delete_project RPC instead.
+      for (const id of ids) {
+        const { error } = await supabase.rpc('soft_delete_project', { p_project_id: id });
+        if (error) throw new SupabaseOperationError('projects', 'bulkDelete', error);
+      }
       return { success: true };
     },
   },

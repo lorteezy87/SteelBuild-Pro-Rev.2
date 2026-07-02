@@ -114,7 +114,8 @@ export default function EmailInbox() {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, data }: { ids: string[]; data: any }) => {
-      await Promise.all(ids.map((id) => entities.EmailMessage.update(id, data)));
+      // Identical `data` patch across all ids → one chunked .in('id', ids) update.
+      await entities.EmailMessage.bulkUpdate(ids, data);
     },
     onSuccess: () => {
       invalidateEntity(qc, "email_message", projectId);

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 type QueryCall =
   | { table: string; op: "select"; value: string }
   | { table: string; op: "eq"; column: string; value: unknown }
+  | { table: string; op: "in"; column: string; value: unknown[] }
   | { table: string; op: "order"; column: string; value: unknown }
   | { table: string; op: "update"; value: Record<string, unknown> };
 
@@ -17,6 +18,10 @@ const mocks = vi.hoisted(() => {
       }),
       eq: vi.fn((column: string, value: unknown) => {
         calls.push({ table, op: "eq", column, value });
+        return chain;
+      }),
+      in: vi.fn((column: string, value: unknown[]) => {
+        calls.push({ table, op: "in", column, value });
         return chain;
       }),
       order: vi.fn((column: string, value: unknown) => {
@@ -115,5 +120,48 @@ describe("supabase entity client", () => {
     expect(mocks.calls).not.toContainEqual(
       expect.objectContaining({ table: "projects", op: "update" })
     );
+  });
+
+  it("bulkUpdate applies one patch via a single .in('id', ids) UPDATE", async () => {
+    await entities.SOVItem.bulkUpdate(["a", "b", "c"], { status: "Certified" });
+
+    // Exactly one UPDATE, carrying the patch + a server updated_at stamp.
+    const updates = mocks.calls.filter(
+      (c): c is Extract<QueryCall, { op: "update" }> =>
+        c.table === "sov_items" && c.op === "update"
+    );
+    expect(updates).toHaveLength(1);
+    expect(updates[0].value).toMatchObject({ status: "Certified" });
+    expect(updates[0].value.updated_at).toEqual(expect.any(String));
+
+    // Rows targeted by a single chunked .in('id', [...]) filter, not per-row .eq.
+    const ins = mocks.calls.filter(
+      (c): c is Extract<QueryCall, { op: "in" }> =>
+        c.table === "sov_items" && c.op === "in"
+    );
+    expect(ins).toHaveLength(1);
+    expect(ins[0]).toEqual({ table: "sov_items", op: "in", column: "id", value: ["a", "b", "c"] });
+  });
+
+  it("bulkUpdate chunks large id lists into ≤500-id .in filters", async () => {
+    const ids = Array.from({ length: 1050 }, (_, i) => `id-${i}`);
+    await entities.SOVItem.bulkUpdate(ids, { status: "Paid" });
+
+    const ins = mocks.calls.filter(
+      (c): c is Extract<QueryCall, { op: "in" }> =>
+        c.table === "sov_items" && c.op === "in"
+    );
+    // 1050 ids → 500 + 500 + 50 = three chunks / three UPDATEs.
+    expect(ins.map((c) => c.value.length)).toEqual([500, 500, 50]);
+    const updates = mocks.calls.filter(
+      (c) => c.table === "sov_items" && c.op === "update"
+    );
+    expect(updates).toHaveLength(3);
+  });
+
+  it("bulkUpdate makes no request for an empty id list", async () => {
+    const result = await entities.SOVItem.bulkUpdate([], { status: "Draft" });
+    expect(result).toEqual([]);
+    expect(mocks.fromMock).not.toHaveBeenCalled();
   });
 });
