@@ -1,7 +1,26 @@
-import React, { createContext, useState, useContext, useEffect, type ReactNode } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef, type ReactNode } from 'react';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import * as Sentry from '@sentry/react';
 import { supabase } from '@/lib/supabase';
 import { stripPrivilegeMeta } from '@/lib/authMeta';
+import { queryClientInstance } from '@/lib/query-client';
+
+// Clear every trace of the previous user's tenant data from the browser so it
+// can never render for the next user on a shared device (M38): the React Query
+// cache and any offline field-capture outboxes in localStorage.
+function clearTenantClientState(): void {
+  queryClientInstance.clear();
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sbp:field:outbox:')) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // localStorage may be unavailable (private mode / SSR) — best-effort.
+  }
+}
 
 export type AppUser = {
   id: string;
@@ -85,11 +104,36 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     };
   };
 
+  // Tracks the id of the currently signed-in user across auth events so we can
+  // detect a user CHANGE (a different person signs in on a shared device) and
+  // wipe the previous user's cached tenant data before theirs renders (M38).
+  const currentUserIdRef = useRef<string | null>(null);
+
+  // Attribute Sentry events to an OPAQUE user id (no email / PII — M15) when
+  // signed in, and clear it on sign-out. Also wipes the previous user's client
+  // state whenever the signed-in identity changes or clears (M38).
+  const syncIdentity = (nextUserId: string | null): void => {
+    const prevUserId = currentUserIdRef.current;
+    if (nextUserId) {
+      if (prevUserId && prevUserId !== nextUserId) {
+        // Different user signed in on this device — drop the old tenant's data.
+        clearTenantClientState();
+      }
+      Sentry.setUser({ id: nextUserId });
+    } else if (prevUserId) {
+      // Session ended — clear attribution and cached tenant data.
+      Sentry.setUser(null);
+      clearTenantClientState();
+    }
+    currentUserIdRef.current = nextUserId;
+  };
+
   // Listen for Supabase auth state changes
   useEffect(() => {
-    const handleSession = async (session: Session | null) => {
+    const handleSession = async (session: Session | null, event?: string) => {
       try {
         if (session?.user) {
+          syncIdentity(session.user.id);
           setUser(await mapSupabaseUser(session.user));
           setIsAuthenticated(true);
           setAuthError(null);
@@ -98,6 +142,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           try {
             const { data: refreshData } = await supabase.auth.refreshSession();
             if (refreshData?.session?.user) {
+              syncIdentity(refreshData.session.user.id);
               setUser(await mapSupabaseUser(refreshData.session.user));
               setIsAuthenticated(true);
               setAuthError(null);
@@ -105,6 +150,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             }
           } catch {
             // Refresh failed — fall through to logout
+          }
+          // Real sign-out (explicit SIGNED_OUT event or unrecoverable session):
+          // clear Sentry attribution + the previous user's client state.
+          if (event === 'SIGNED_OUT' || currentUserIdRef.current) {
+            syncIdentity(null);
           }
           setUser(null);
           setIsAuthenticated(false);
@@ -129,8 +179,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       });
 
     // Subscribe to future auth changes (token refresh, sign-out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      handleSession(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      handleSession(session, event);
     });
 
     return () => subscription.unsubscribe();
@@ -142,6 +192,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      syncIdentity(data.user?.id ?? null);
       setUser(await mapSupabaseUser(data.user));
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
@@ -182,6 +233,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (!data.session) {
         return { success: true, needsConfirmation: true };
       }
+      syncIdentity(data.user?.id ?? null);
       setUser(await mapSupabaseUser(data.user));
       setIsAuthenticated(true);
       setAuthError(null);
@@ -200,6 +252,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const logout = async () => {
     await supabase.auth.signOut();
+    // Clear Sentry attribution + wipe the previous user's cached tenant data /
+    // offline outboxes so nothing carries over on a shared device (M38).
+    syncIdentity(null);
     setUser(null);
     setIsAuthenticated(false);
   };
@@ -213,6 +268,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setIsLoadingAuth(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
+      syncIdentity(session.user.id);
       setUser(await mapSupabaseUser(session.user));
       setIsAuthenticated(true);
       setAuthError(null);
@@ -221,6 +277,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       try {
         const { data: refreshData } = await supabase.auth.refreshSession();
         if (refreshData?.session?.user) {
+          syncIdentity(refreshData.session.user.id);
           setUser(await mapSupabaseUser(refreshData.session.user));
           setIsAuthenticated(true);
           setAuthError(null);

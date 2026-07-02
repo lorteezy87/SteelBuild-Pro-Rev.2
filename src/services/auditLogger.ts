@@ -12,6 +12,7 @@
  * mirrors them to the legacy camelCase that legacy feed UI still reads.
  */
 
+import * as Sentry from "@sentry/react";
 import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 
@@ -152,8 +153,17 @@ export async function logActivity(
 
     await entities.Activity.create(activityRecord);
   } catch (err: any) {
-    // Never block the primary operation — audit is best-effort
-    console.warn("[auditLogger] Failed to log activity:", err?.message);
+    // Never block the primary operation — audit is best-effort. But a failed
+    // audit write is invisible otherwise, so surface it to Sentry (L17): a
+    // systemic break (e.g. an RLS regression or schema drift) would silently
+    // gut the audit trail without this signal.
+    const message = err?.message;
+    console.warn("[auditLogger] Failed to log activity:", message);
+    Sentry.captureMessage("audit write failed", {
+      level: "warning",
+      tags: { entity_type: entityType, action },
+      extra: { message },
+    });
   }
 }
 
