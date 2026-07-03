@@ -54,6 +54,10 @@ export type AuthContextValue = {
   logout: () => Promise<void>;
   loginWithPassword: (creds: { email: string; password: string }) => Promise<LoginResult>;
   signUpWithPassword: (creds: { email: string; password: string; fullName?: string }) => Promise<SignUpResult>;
+  // H22 — self-serve credential recovery/rotation.
+  isPasswordRecovery: boolean;
+  sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   navigateToLogin: () => void;
   checkAppState: () => Promise<void>;
 };
@@ -71,6 +75,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [authError, setAuthError] = useState<AuthError | null>(null);
   // Kept for API compatibility; no longer populated
   const [appPublicSettings] = useState<unknown>(null);
+  // True while the user is in a Supabase PASSWORD_RECOVERY session (arrived via
+  // the emailed reset link). AuthenticatedApp renders the set-new-password screen
+  // instead of the normal app so the recovery session is used only to set a new
+  // password, then cleared. (H22)
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   const mapSupabaseUser = async (sbUser: SupabaseUser | null | undefined): Promise<AppUser | null> => {
     if (!sbUser) return null;
@@ -180,6 +189,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     // Subscribe to future auth changes (token refresh, sign-out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // The emailed reset link establishes a recovery session and fires this
+      // event; flag it so the app shows the set-new-password screen (H22).
+      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
       handleSession(session, event);
     });
 
@@ -258,6 +270,39 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  // Send the password-reset email. `redirectTo` must be on the Supabase Auth
+  // "Redirect URLs" allowlist (dashboard) — see docs/runbooks/owner-checklist.md.
+  const sendPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const redirectTo =
+        typeof window !== 'undefined' ? `${window.location.origin}/update-password` : undefined;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw error;
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as { message?: string } | undefined;
+      let message = err?.message || 'Could not send the reset email.';
+      if (error instanceof TypeError && /fetch/i.test(message)) {
+        message = 'Unable to reach the authentication server. Check your connection.';
+      }
+      return { success: false, error: message };
+    }
+  };
+
+  // Set a new password. Used both from the recovery screen (H22) and from
+  // Settings → Profile for a signed-in user rotating their credential.
+  const updatePassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setIsPasswordRecovery(false);
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as { message?: string } | undefined;
+      return { success: false, error: err?.message || 'Could not update your password.' };
+    }
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     // Clear Sentry attribution + wipe the previous user's cached tenant data /
@@ -311,6 +356,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       logout,
       loginWithPassword,
       signUpWithPassword,
+      isPasswordRecovery,
+      sendPasswordReset,
+      updatePassword,
       navigateToLogin,
       checkAppState,
     }}>

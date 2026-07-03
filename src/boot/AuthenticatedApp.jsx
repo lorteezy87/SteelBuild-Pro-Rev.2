@@ -5,6 +5,7 @@ import AppLoader from "@/boot/AppLoader";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
+const UpdatePassword = lazyWithRetry(() => import("@/pages/UpdatePassword"));
 const AppRoutes = lazyWithRetry(() => import("@/boot/AppRoutes"));
 const OrgOnboarding = lazyWithRetry(() => import("@/pages/OrgOnboarding"));
 const ProjectProvider = lazyWithRetry(() =>
@@ -47,7 +48,22 @@ function OrgGate() {
 }
 
 export default function AuthenticatedApp() {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, loginWithPassword, signUpWithPassword } = useAuth();
+  const {
+    isLoadingAuth, isLoadingPublicSettings, authError,
+    loginWithPassword, signUpWithPassword, sendPasswordReset, isPasswordRecovery,
+  } = useAuth();
+
+  // Password recovery takes precedence over every other state: a user who
+  // followed the emailed reset link is technically "authenticated" with a
+  // recovery session, so gate them straight to the set-new-password screen
+  // rather than into the app or org onboarding (H22).
+  if (isPasswordRecovery) {
+    return (
+      <Suspense fallback={<AppLoader />}>
+        <UpdatePassword />
+      </Suspense>
+    );
+  }
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return <AppLoader />;
@@ -59,6 +75,7 @@ export default function AuthenticatedApp() {
         <Landing
           onLogin={loginWithPassword}
           onSignUp={signUpWithPassword}
+          onForgotPassword={sendPasswordReset}
           isSubmitting={isLoadingAuth}
           loginError={authError?.message !== "Authentication required" ? authError?.message : null}
         />

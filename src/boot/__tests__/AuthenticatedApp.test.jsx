@@ -20,6 +20,7 @@ vi.mock("@/components/shared/OrgContext", () => ({
 }));
 vi.mock("@/boot/AppLoader", () => ({ default: () => <div>LOADER</div> }));
 vi.mock("@/pages/Landing", () => ({ default: () => <div>LANDING</div> }));
+vi.mock("@/pages/UpdatePassword", () => ({ default: () => <div>UPDATE_PW</div> }));
 vi.mock("@/boot/AppRoutes", () => ({ default: () => <div>APP_ROUTES</div> }));
 vi.mock("@/pages/OrgOnboarding", () => ({ default: () => <div>ONBOARDING</div> }));
 vi.mock("@/components/shared/ProjectContext", () => ({ ProjectProvider: ({ children }) => <>{children}</> }));
@@ -62,6 +63,16 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     orgState = { isLoadingOrgs: false, hasOrg: true };
     render(<AuthenticatedApp />);
     expect(await screen.findByText("APP_ROUTES")).toBeInTheDocument();
+  });
+
+  it("shows the set-new-password screen during password recovery, above every other state (H22)", async () => {
+    // A recovery session is technically authenticated with a workspace; the gate
+    // must still route straight to UpdatePassword, not into the app.
+    authState = { ...authed, isPasswordRecovery: true };
+    orgState = { isLoadingOrgs: false, hasOrg: true };
+    render(<AuthenticatedApp />);
+    expect(await screen.findByText("UPDATE_PW")).toBeInTheDocument();
+    expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
   });
 
   it("fails open — renders the app when the org gate reports hasOrg despite an error", async () => {
