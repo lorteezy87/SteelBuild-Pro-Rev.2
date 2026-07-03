@@ -54,10 +54,10 @@ Refs:
   - Verify: the E2E workflow runs green on the next push and exercises login → project list → drawing register.
 
 - [ ] **Stand up staging Supabase + staging Vercel** — [H3]
-  - Create a **separate staging Supabase project** (own DB, own keys) so migrations and edge functions can be rehearsed off-prod.
-  - Repurpose the existing second Vercel project **`steel-build-pro-rev-2`** (currently preview-only, slated for retirement) as the **staging deploy target** wired to a `staging` branch and the staging Supabase env.
-  - Why: there is currently no pre-production environment — every schema/edge change is validated against live prod. Staging gives a safe rehearsal surface for DR restores, migrations, and E2E.
-  - Verify: a push to `staging` deploys to the staging Vercel URL against the staging Supabase project; prod is untouched.
+  - **Code half shipped** (2026-07-02): `.github/workflows/ci.yml` has a guarded `deploy-staging` job (reuses the prod `ci` gate; **inert** until `STAGING_ENABLED=true`). Full step-by-step is in **`docs/runbooks/staging-setup.md`**.
+  - Owner steps (summary): (1) create a **staging Supabase project**, `supabase db push` the migrations + deploy edge functions to it; (2) create/repurpose a **staging Vercel project** with git auto-deploy off and `VITE_SUPABASE_*` pointing at staging; (3) add secrets `STAGING_VERCEL_PROJECT_ID` + `STAGING_VERCEL_TOKEN` and variables `STAGING_ENABLED=true` (+ optional `STAGING_BASE_URL`); (4) create the `staging` branch.
+  - Why: there is currently no pre-production environment — every schema/edge change is validated against live prod. Staging gives a safe rehearsal surface for DR restores, migrations, and destructive features (H11).
+  - Verify: a push to `staging` deploys to the staging Vercel URL against the staging Supabase project; the post-deploy health check hits `STAGING_BASE_URL`; prod is untouched.
 
 ---
 
