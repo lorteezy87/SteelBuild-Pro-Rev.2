@@ -58,6 +58,14 @@ export type AuthContextValue = {
   isPasswordRecovery: boolean;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  // H23 — TOTP multi-factor auth. `mfaRequired` gates the app when the session
+  // is aal1 but the user has a verified factor (must step up before entering).
+  mfaRequired: boolean;
+  listMfaFactors: () => Promise<Array<{ id: string; friendlyName: string; status: string }>>;
+  enrollMfa: () => Promise<{ success: boolean; factorId?: string; qrCode?: string; secret?: string; uri?: string; error?: string }>;
+  verifyMfaFactor: (factorId: string, code: string) => Promise<{ success: boolean; error?: string }>;
+  completeMfaChallenge: (code: string) => Promise<{ success: boolean; error?: string }>;
+  unenrollMfa: (factorId: string) => Promise<{ success: boolean; error?: string }>;
   navigateToLogin: () => void;
   checkAppState: () => Promise<void>;
 };
@@ -80,6 +88,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // instead of the normal app so the recovery session is used only to set a new
   // password, then cleared. (H22)
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  // True when the current session is aal1 but the user has a verified TOTP
+  // factor (i.e. must complete an MFA challenge before entering the app). H23.
+  const [mfaRequired, setMfaRequired] = useState(false);
+
+  // Recompute whether the session needs an MFA step-up. Fail-open (never lock a
+  // user out on an AAL lookup error) — the DB/RLS boundary is the real gate.
+  const refreshMfaRequired = async (): Promise<void> => {
+    try {
+      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      setMfaRequired(!!data && data.currentLevel === 'aal1' && data.nextLevel === 'aal2');
+    } catch {
+      setMfaRequired(false);
+    }
+  };
 
   const mapSupabaseUser = async (sbUser: SupabaseUser | null | undefined): Promise<AppUser | null> => {
     if (!sbUser) return null;
@@ -146,6 +168,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(await mapSupabaseUser(session.user));
           setIsAuthenticated(true);
           setAuthError(null);
+          void refreshMfaRequired();
         } else {
           // Session is null/expired — try refreshing before giving up
           try {
@@ -155,6 +178,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
               setUser(await mapSupabaseUser(refreshData.session.user));
               setIsAuthenticated(true);
               setAuthError(null);
+              void refreshMfaRequired();
               return;
             }
           } catch {
@@ -208,6 +232,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setUser(await mapSupabaseUser(data.user));
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
+      // If this account has a verified TOTP factor, the session is still aal1
+      // here — flag the required step-up so the app shows the MFA screen (H23).
+      void refreshMfaRequired();
       return { success: true };
     } catch (error: unknown) {
       setIsLoadingAuth(false);
@@ -303,6 +330,63 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  // ── MFA (TOTP) — H23 ──────────────────────────────────────────────────────
+  const listMfaFactors = async (): Promise<Array<{ id: string; friendlyName: string; status: string }>> => {
+    try {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw error;
+      return (data?.totp ?? []).map((f) => ({ id: f.id, friendlyName: f.friendly_name ?? 'Authenticator', status: f.status }));
+    } catch {
+      return [];
+    }
+  };
+
+  const enrollMfa = async (): Promise<{ success: boolean; factorId?: string; qrCode?: string; secret?: string; uri?: string; error?: string }> => {
+    try {
+      const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
+      if (error) throw error;
+      return { success: true, factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret, uri: data.totp.uri };
+    } catch (error: unknown) {
+      const err = error as { message?: string } | undefined;
+      return { success: false, error: err?.message || 'Could not start MFA enrollment.' };
+    }
+  };
+
+  // Challenge + verify a specific factor. Used both to confirm a freshly enrolled
+  // factor and to satisfy the login step-up. On success the session upgrades to
+  // aal2, so recompute the gate.
+  const verifyMfaFactor = async (factorId: string, code: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
+      if (error) throw error;
+      await refreshMfaRequired();
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as { message?: string } | undefined;
+      return { success: false, error: err?.message || 'That code was not accepted. Try again.' };
+    }
+  };
+
+  const completeMfaChallenge = async (code: string): Promise<{ success: boolean; error?: string }> => {
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error || !data) return { success: false, error: 'Could not load your authenticator. Sign out and try again.' };
+    const factor = data.totp.find((f) => f.status === 'verified') ?? data.totp[0];
+    if (!factor) return { success: false, error: 'No authenticator is enrolled on this account.' };
+    return verifyMfaFactor(factor.id, code);
+  };
+
+  const unenrollMfa = async (factorId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.mfa.unenroll({ factorId });
+      if (error) throw error;
+      await refreshMfaRequired();
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as { message?: string } | undefined;
+      return { success: false, error: err?.message || 'Could not remove that authenticator.' };
+    }
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     // Clear Sentry attribution + wipe the previous user's cached tenant data /
@@ -310,6 +394,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     syncIdentity(null);
     setUser(null);
     setIsAuthenticated(false);
+    setMfaRequired(false);
   };
 
   const navigateToLogin = () => {
@@ -359,6 +444,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       isPasswordRecovery,
       sendPasswordReset,
       updatePassword,
+      mfaRequired,
+      listMfaFactors,
+      enrollMfa,
+      verifyMfaFactor,
+      completeMfaChallenge,
+      unenrollMfa,
       navigateToLogin,
       checkAppState,
     }}>

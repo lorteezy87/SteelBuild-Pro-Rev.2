@@ -3,6 +3,7 @@ import { auth } from "@/api/supabaseClient";
 import { toast } from 'sonner';
 import { formatLocalDate } from "@/utils/dates";
 import { useAuth } from "@/lib/AuthContext";
+import MfaSection from "./MfaSection.jsx";
 
 const S = {
   input: { width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none', boxSizing: 'border-box' },
@@ -135,6 +136,11 @@ export default function UserSettingsTab({ user, onSave }) {
         <button onClick={handleChangePassword} disabled={pwBusy || !pw.next} style={{ marginTop: 14, background: 'var(--bg-surface-low)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: (pwBusy || !pw.next) ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: (pwBusy || !pw.next) ? 0.6 : 1 }}>
           {pwBusy ? 'Updating…' : 'Change Password'}
         </button>
+
+        <div style={{ marginTop: 22, paddingTop: 20, borderTop: '1px solid var(--divider)' }}>
+          <div style={{ ...S.label, marginBottom: 12 }}>Two-Factor Authentication</div>
+          <MfaSection />
+        </div>
       </div>
 
       {/* Bio */}
