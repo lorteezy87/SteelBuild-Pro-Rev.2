@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Users, Mail, Link2, X, Shield } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
+import DangerZone from "@/components/settings/DangerZone.jsx";
 import { useOrg } from "@/components/shared/OrgContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { usePlan } from "@/hooks/usePlan";
@@ -387,6 +388,7 @@ export default function OrgMembers() {
           </table>
         )}
       </div>
+      <DangerZone />
     </div>
   );
 }
