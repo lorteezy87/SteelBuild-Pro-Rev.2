@@ -146,6 +146,13 @@ role), `useProjectRole(projectId)`, `usePermissions().can()`. Member management:
 **OrgMembers** (`/OrgMembers` — workspace team + tokenized invites) and
 **ProjectMembers** (per-project access).
 
+**Account security.** Self-serve **password reset** ("Forgot password?" →
+emailed link → `/update-password`, gated at top precedence for the recovery
+session) and **change password** (Settings → Profile → Security). Optional
+**TOTP MFA** — enroll in Settings → Security; an aal1 session with a verified
+factor is gated to a step-up challenge before entering the app. All via the
+Supabase Auth API in `AuthContext`.
+
 ## Billing & plans
 
 Free / Pro / Business tiers (`src/lib/billing/plans.ts`). `organizations.plan`
@@ -160,9 +167,16 @@ at `/Billing` (`stripe-billing` Edge Function → Stripe Checkout / Portal).
 project the caller can access — fetched through the RLS-scoped, audit-logged
 `project-export` Edge Function and bundled client-side (`src/lib/workspaceExport.ts`).
 
+**Right-to-erasure (GDPR/CCPA).** An owner-only "Danger Zone → Delete workspace"
+action (Team page) permanently erases an organization — DB rows via the
+`hard_delete_organization` RPC (with an append-only `account_deletions` audit that
+survives the wipe), Storage objects, and orphaned auth users via the
+`account-delete` Edge Function. Gated behind the **`account_deletion`** feature
+flag (off by default) and a type-the-name confirmation.
+
 ## Testing
 
-~1,740 Vitest tests: pure-helper suites (default `node` env) + jsdom integration
+~2,450 Vitest tests: pure-helper suites (default `node` env) + jsdom integration
 tests (`// @vitest-environment jsdom`) that drive real components/import flows
 with the Supabase client mocked. No full-browser E2E yet (see `TECH_DEBT.md`).
 (The count keeps climbing as large components are thinned — their extracted logic
@@ -173,8 +187,10 @@ lands in tested helper modules; see `TECH_DEBT.md` → large-component decomposi
 `.github/workflows/ci.yml` runs on every push / PR: lint, four typecheck gates
 (TS, JS/JSX, the **strictNullChecks** ratchet, and the **noImplicitAny**
 ratchet), Vitest, and a production build — all blocking. Only a green `ci` job
-lets the gated `deploy` job publish to Vercel. A concurrency group cancels
-redundant runs.
+lets the gated `deploy` job publish to Vercel, followed by a post-deploy health
+check. An advisory `dependency-audit` job (`npm audit`, non-blocking) and an
+opt-in post-deploy Playwright smoke round it out. A concurrency group cancels
+redundant runs (but never a `main`/`staging` run mid-deploy).
 
 ## Deployment
 
@@ -188,6 +204,18 @@ no branch-protection required check (repo plan), so red/unreviewed commits can
 still land on `main` even though they cannot deploy. [`CLAUDE.md`](./CLAUDE.md)
 documents the full workflow + git-safety rules. Edge Functions deploy separately
 (Supabase MCP `deploy_edge_function` or `supabase functions deploy`).
+
+**Staging.** A pre-production environment (separate Vercel project + separate
+Supabase project) deploys from the **`staging`** branch via the guarded
+`deploy-staging` job, reusing the same `ci` gate as prod. Rehearse migrations,
+edge-function changes, and destructive features (e.g. erasure) here before prod.
+Setup + promotion flow: [`docs/runbooks/staging-setup.md`](./docs/runbooks/staging-setup.md).
+
+**Ops.** A public, DB-aware healthcheck (`GET /functions/v1/health` → 200
+`{status:ok,db:ok}` / 503 when Postgres is unreachable) is the uptime-monitor
+target. Enterprise-readiness remediation status + owner action list live in
+[`ENTERPRISE_READINESS_AUDIT.md`](./ENTERPRISE_READINESS_AUDIT.md) and
+[`docs/runbooks/owner-checklist.md`](./docs/runbooks/owner-checklist.md).
 
 ## Error monitoring
 
