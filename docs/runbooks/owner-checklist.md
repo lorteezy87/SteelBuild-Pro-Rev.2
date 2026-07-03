@@ -159,11 +159,11 @@ Refs:
   - Why: multi-tenant SaaS handling customer project/financial data needs a documented processor chain; enterprise procurement will ask for it.
   - Verify: signed DPAs on file for each vendor; DPA template available to prospects.
 
-- [ ] **Decide and execute the data-erasure path** — [H11]
-  - The scaffolding exists (an **org-delete edge function** and a **`hard_delete_project` RPC**) but is **NOT wired to a live UI button**.
-  - Decide the erasure policy (self-serve vs. support-mediated), then either wire it to a guarded UI action or document the support-executed procedure. Must cover Postgres rows **and** Storage objects (`app-files`, `email-attachments`).
-  - Why: GDPR/CCPA "right to erasure" and enterprise offboarding require a real, auditable delete path.
-  - Verify: run a full org/project erasure on a test tenant and confirm DB rows + storage objects are gone.
+- [ ] **Activate the data-erasure path in production** — [H11]
+  - **Built + rehearsed on staging (2026-07-03).** The full path now exists in code: `hard_delete_project` / `hard_delete_organization` RPCs (dynamic sweep of non-cascading tables + cascade; append-only `account_deletions` audit that survives the erasure), the `account-delete` edge function (owner-verified; erases DB rows via the caller-scoped RPC, purges Storage `app-files/<org_id>/` + `email-attachments/<project_id>/`, and deletes now-orphaned auth users), and a flag-gated owner-only "Danger Zone → Delete workspace" UI (type-the-name confirm) on the Team page. A full org wipe was rehearsed on staging: all 88 project tables + org rows erased, audit row written, no FK errors.
+  - **Inert in production until you do all three:** (1) apply the migration `20260703170000_hard_erasure_rpcs.sql` to prod (MCP `apply_migration` or `supabase db push`); (2) deploy the edge function: `npx supabase functions deploy account-delete --project-ref kjrwqagyeswwoxpjkcko` (JWT verify ON); (3) enable the **`account_deletion`** feature flag (per-owner first, e.g. your account, then broaden). Until the flag is on, the UI renders nothing and no user can reach the flow.
+  - **Field-verify before broad enable:** on prod, enable the flag for your account only, create a throwaway org, and run the full delete end-to-end — confirm DB rows, Storage objects, and the auth user are gone and an `account_deletions` row exists. (The RPC core is staging-verified; the edge function's Storage + auth-user steps still need one real owner-invoked run.)
+  - Why: GDPR/CCPA "right to erasure" and enterprise offboarding require a real, auditable, owner-guarded delete path.
 
 - [ ] **Verify / form the operating legal entity + insurance + continuity** — [M51]
   - Verify or form **`SteelBuild Pro LLC`** with the **AZ Corporation Commission** (operating entity is currently TBD; the app must never name S&H Steel as operator/liable party).
