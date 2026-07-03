@@ -32,16 +32,14 @@ import {
 import { usePermissions } from "@/services/permissions";
 import { batchProcess } from "@/utils/batchProcess";
 
-import {
-  BulkActionBar,
-  EmptyState,
-  Icon,
-} from "@/components/design-system";
+import { BulkActionBar } from "@/components/design-system";
 
-import { exportRFIsToCSV, loadDensity, loadInsightsCollapsed, buildRfiCounts, filterAndSortRfis, buildProjectNameMap } from "./rfis/utils";
-import { DISCIPLINES, DENSITY_LS_KEY, DENSITY_PRESETS, INSIGHTS_LS_KEY } from "./rfis/constants";
-import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
-import RfiRow, { RFI_ROW_GRID } from "./rfis/RfiRow";
+import { exportRFIsToCSV, buildRfiCounts, filterAndSortRfis, buildProjectNameMap } from "./rfis/utils";
+import { useRfiSelection, useRfiDensity, useRfiInsightsCollapsed } from "./rfis/useRfiViewState";
+import { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
+import { RFI_ROW_GRID } from "./rfis/RfiRow";
+import RfiFilterToolbar from "./rfis/RfiFilterToolbar";
+import RfiTable from "./rfis/RfiTable";
 import RfiDetailModal from "./rfis/RfiDetailModal";
 import NudgeDraftModal from "./rfis/NudgeDraftModal";
 import RfiInsightsStrip from "./rfis/RfiInsightsStrip";
@@ -69,25 +67,12 @@ export default function RFIs() {
   const [selectedRFI, setSelectedRFI] = useState(null);
   const [nudgeRFI, setNudgeRFI] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [seqFilter, setSeqFilter] = useState(null);
-  const [density, setDensity] = useState(loadDensity);
-  const [insightsCollapsed, setInsightsCollapsed] = useState(loadInsightsCollapsed);
   const [savingAttachments, setSavingAttachments] = useState(false);
-  const handleDensityChange = (v) => {
-    setDensity(v);
-    try { localStorage.setItem(DENSITY_LS_KEY, v); } catch { /* noop */ }
-  };
-  const handleToggleInsights = () => {
-    setInsightsCollapsed((prev) => {
-      const next = !prev;
-      try { localStorage.setItem(INSIGHTS_LS_KEY, next ? "1" : "0"); } catch { /* noop */ }
-      return next;
-    });
-  };
-  const densityPreset = DENSITY_PRESETS[density] || DENSITY_PRESETS.normal;
+  const { density, densityPreset, setDensity: handleDensityChange } = useRfiDensity();
+  const { insightsCollapsed, toggleInsights: handleToggleInsights } = useRfiInsightsCollapsed();
 
   /* ── Data ── */
   const { data: projects = [] } = useQuery({
@@ -221,6 +206,8 @@ export default function RFIs() {
     [rfis, filter, disciplineFilter, seqFilter, search],
   );
 
+  const { selectedIds, setSelectedIds, toggleSelect, toggleAll } = useRfiSelection(filtered);
+
   /* ── Overdue → Alert background effect ── */
   const projectMap = useMemo(() => buildProjectNameMap(projects), [projects]);
 
@@ -285,17 +272,6 @@ export default function RFIs() {
     },
     onError: (e) => toast.error(`Couldn't notify field: ${e?.message || "unknown error"}`),
   });
-
-  /* ── Selection helpers ── */
-  const toggleSelect = (id) =>
-    setSelectedIds((prev) => {
-      const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
-
-  const toggleAll = (checked) =>
-    setSelectedIds(checked ? new Set(filtered.map((r) => r.id)) : new Set());
 
   const uploadRfiPdfDocuments = async (rfiRecord, files = []) => {
     if (!rfiRecord?.id || !files.length) return;
@@ -568,65 +544,23 @@ export default function RFIs() {
         collapsed={insightsCollapsed}
         onToggleCollapsed={handleToggleInsights}
       />
-      <div className="rfi-filter-toolbar">
-        <div className="rfi-search-box">
-          <div className="rfi-search-icon">
-            <Icon name="search" size={13} />
-          </div>
-          <input
-            className="rfi-search-input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search RFI number, title, drawing, question, or answer"
-          />
-        </div>
-
-        <div className="rfi-filter-group">
-          <span className="rfi-filter-label">Discipline</span>
-          {DISCIPLINES.map((d) => (
-            <button
-              key={d}
-              type="button"
-              className={`rfi-chip${disciplineFilter === d ? " is-active" : ""}`}
-              onClick={() => setDisciplineFilter(d)}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-
-        <div className="rfi-filter-group">
-          <span className="rfi-filter-label">Density</span>
-          {Object.entries(DENSITY_PRESETS).map(([id, preset]) => (
-            <button
-              key={id}
-              type="button"
-              className={`rfi-chip${density === id ? " is-active" : ""}`}
-              onClick={() => handleDensityChange(id)}
-              title={preset.label.toLowerCase()}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-
-        <SequenceFilter items={rfis} value={seqFilter} onChange={setSeqFilter} />
-
-        <button
-          type="button"
-          className={`rfi-agenda-toggle${agendaOpen ? " is-active" : ""}${agendaUrgent > 0 ? " is-urgent" : ""}`}
-          onClick={() => setAgendaOpen((v) => !v)}
-          title="Today's RFI Agenda — overdue, blocking, due-soon, and awaiting RFIs for the production meeting"
-        >
-          <span className="rfi-agenda-toggle__icon" aria-hidden="true">⚑</span>
-          Today's Agenda
-          {agenda.total > 0 ? (
-            <span className="rfi-agenda-toggle__count">{agenda.total}</span>
-          ) : null}
-        </button>
-
-        <span className="rfi-toolbar-count">{filtered.length} of {rfis.length}</span>
-      </div>
+      <RfiFilterToolbar
+        search={search}
+        onSearch={setSearch}
+        disciplineFilter={disciplineFilter}
+        onDisciplineChange={setDisciplineFilter}
+        density={density}
+        onDensityChange={handleDensityChange}
+        rfis={rfis}
+        seqFilter={seqFilter}
+        onSeqFilter={setSeqFilter}
+        agendaOpen={agendaOpen}
+        onToggleAgenda={() => setAgendaOpen((v) => !v)}
+        agenda={agenda}
+        agendaUrgent={agendaUrgent}
+        filteredCount={filtered.length}
+        totalCount={rfis.length}
+      />
 
       {agendaOpen && (
         <AgendaPanel
@@ -637,49 +571,14 @@ export default function RFIs() {
       )}
 
       {/* Table */}
-      <div className="rfi-table-shell">
-        <div className="rfi-table-header">
-          <div>
-            <input
-              type="checkbox"
-              checked={filtered.length > 0 && selectedIds.size === filtered.length}
-              onChange={(e) => toggleAll(e.target.checked)}
-            />
-          </div>
-          <div>RFI</div>
-          <div>Question / Reference</div>
-          <div>Ball in Court</div>
-          <div>Status</div>
-          <div>Due / Age</div>
-          <div>Impact</div>
-          <div></div>
-        </div>
-        {filtered.length > 0 ? (
-          <div className="rfi-table-body">
-            {filtered.map((r) => (
-              <RfiRow
-                key={r.id}
-                rfi={r}
-                selected={selectedIds.has(r.id)}
-                onToggle={() => toggleSelect(r.id)}
-                onOpen={() => setSelectedRFI(r)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="rfi-empty-wrap">
-            <EmptyState
-              icon="rfi"
-              title={rfis.length === 0 ? "No RFIs yet" : "No RFIs match your filters"}
-              body={
-                rfis.length === 0
-                  ? "Create the first RFI or import an existing RFI log from CSV."
-                  : "Try clearing filters or widening the search query."
-              }
-            />
-          </div>
-        )}
-      </div>
+      <RfiTable
+        rows={filtered}
+        totalCount={rfis.length}
+        selectedIds={selectedIds}
+        onToggleAll={toggleAll}
+        onToggleSelect={toggleSelect}
+        onOpen={setSelectedRFI}
+      />
 
       {/* Bulk actions */}
       <BulkActionBar
