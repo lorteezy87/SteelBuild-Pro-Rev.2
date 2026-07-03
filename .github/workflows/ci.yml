@@ -31,19 +31,22 @@ on:
     branches:
       - main
       - master
+      - staging
       - "claude/**"
   pull_request:
     branches:
       - main
       - master
+      - staging
 
 # Cancel any in-progress runs for the same branch when a new push comes in.
 # Avoids piling up redundant CI for rapid iteration on a feature branch.
 concurrency:
   group: ci-${{ github.ref }}
-  # Cancel redundant runs on feature branches only — NEVER cancel a main run:
-  # a cancelled green main run would skip its deploy and leave prod stale. (M8)
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Cancel redundant runs on feature branches only — NEVER cancel a main OR
+  # staging run: a cancelled green run would skip its deploy and leave that
+  # environment stale. (M8, H3)
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/staging' }}
 
 # Least-privilege default for the ambient GITHUB_TOKEN (M12/H6). The deploy job
 # authenticates to Vercel with its own VERCEL_* secrets, not GITHUB_TOKEN.
@@ -219,6 +222,73 @@ jobs:
             echo "attempt $i: HTTP $code"; sleep 10
           done
           echo "::error::production health check failed after deploy"; exit 1
+
+  # ── Gated STAGING deploy (H3) ────────────────────────────────────────────
+  # Deploys the `staging` branch to a SEPARATE Vercel project wired to a separate
+  # staging Supabase project, so schema/edge/RLS changes and DR restores can be
+  # rehearsed off-prod. Reuses the SAME `ci` gate job as production (no drift).
+  #
+  # INERT until you opt in: it only runs when the `STAGING_ENABLED` repo VARIABLE
+  # is "true" (a variable, not a secret — `secrets.*` is unreliable in a job-level
+  # `if`, same pattern as e2e-smoke). Until then this job is skipped, never red.
+  # Provisioning + secret names are in docs/runbooks/staging-setup.md.
+  deploy-staging:
+    name: Deploy to Vercel (staging)
+    needs: ci
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Serialize staging deploys and never cancel one mid-flight (mirrors prod).
+    concurrency:
+      group: staging-deploy
+      cancel-in-progress: false
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.STAGING_VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Pull Vercel project + staging env
+        # Pulls the STAGING Vercel project's env (its VITE_SUPABASE_* point at the
+        # staging Supabase project — never at prod).
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
+
+      - name: Build (staging)
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
+          VITE_APP_VERSION: ${{ github.sha }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
+      - name: Deploy prebuilt output (staging)
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --meta githubCommitSha=${{ github.sha }} --meta githubCommitRef=${{ github.ref_name }} --meta githubRunId=${{ github.run_id }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
+
+      - name: Post-deploy health check (staging)
+        # Only runs when STAGING_BASE_URL is configured; otherwise skipped so the
+        # job stays green while you finish DNS/domain setup.
+        if: ${{ vars.STAGING_BASE_URL != '' }}
+        run: |
+          set -e
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sL -o /dev/null -w '%{http_code}' "${{ vars.STAGING_BASE_URL }}")
+            if [ "$code" = "200" ]; then echo "staging healthy ($code)"; exit 0; fi
+            echo "attempt $i: HTTP $code"; sleep 10
+          done
+          echo "::error::staging health check failed after deploy"; exit 1
 
   # ── E2E smoke (post-deploy, NON-BLOCKING) ────────────────────────────────
   # The "unit tests pass != it works" layer: signs in with a real session and
