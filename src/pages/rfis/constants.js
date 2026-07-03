@@ -52,3 +52,20 @@ export const KPI_ACCENT_MAP = {
 
 export const BIC_PARTIES = ["Contractor", "GC", "Engineer", "Architect", "Owner"];
 export const PRIORITIES  = ["Critical", "High", "Medium", "Low"];
+
+// Discipline filter chips on the RFI page. (A verbatim copy also lives in
+// RfiControlCenter.tsx, which is owner-locked — do not touch that one.)
+export const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
+
+// Density presets persist in localStorage. "Compact" tightens the row
+// height + drops the submitter sub-line; "Comfortable" gives the row
+// 50px of breathing room. Density mutates the CSS variable that
+// RfiRow reads for its row height.
+export const DENSITY_LS_KEY = "sbp-rfi-density";
+export const DENSITY_PRESETS = {
+  compact:     { rowHeight: 56, label: "COMPACT" },
+  normal:      { rowHeight: 72, label: "NORMAL" },
+  comfortable: { rowHeight: 88, label: "COMFORTABLE" },
+};
+
+export const INSIGHTS_LS_KEY = "sbp-rfi-insights-collapsed";

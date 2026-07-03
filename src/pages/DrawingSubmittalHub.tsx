@@ -25,8 +25,7 @@ import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components/design-system";
 import { computeFabReady } from "@/lib/submittalAnalytics";
-import { effectiveDetailingState, hasGoverningSubmittal, isPackageRR } from "@/lib/detailingPackageState";
-import { computeDetailingReadiness, computeSequenceReadiness } from "@/lib/detailingReadiness";
+import { computeDetailingReadiness } from "@/lib/detailingReadiness";
 import { summarizeElementStatuses } from "@/services/modelElementStatus";
 import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
@@ -41,26 +40,19 @@ import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
 import { DetailingCommandShell } from "./drawingSubmittalHub/DetailingCommandShell";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
-  ACTION_STATUSES,
   TABS,
   accent,
   border,
   buildCurrentRevisionMap,
+  buildDrawingKpis,
+  buildSequenceReadiness,
   buildSetPackages,
+  buildTriage,
   dueDateWriteTargets,
-  dueInfo,
-  earliestDate,
   error,
-  getDrawingDueDate,
-  getSubmittalDueDate,
   info,
-  isClosedDrawing,
-  isClosedPackage,
-  isClosedSubmittal,
-  itemUrgency,
   mono,
   review,
-  rollupDrawingStage,
   success,
   surface2,
   textMuted,
@@ -397,36 +389,10 @@ export default function DrawingSubmittalHub() {
   const canEscalate = can("create", "rfi") || can("create", "change_order");
 
   // Sequence-aware readiness rollup (group packages by erection sequence).
-  const sequenceReadiness = useMemo(() => {
-    const entries = Array.from(readinessByKey.values()).map((r: any) => ({
-      sequenceNumber: r.sequenceNumber,
-      effectiveState: r.effectiveState,
-      fabricationReady: r.fabricationReady,
-      erectionReady: r.erectionReady,
-      atRisk: r.scheduleRisk?.atRisk,
-    }));
-    return computeSequenceReadiness(entries);
-  }, [readinessByKey]);
+  const sequenceReadiness = useMemo(() => buildSequenceReadiness(readinessByKey), [readinessByKey]);
 
   // ── Drawing KPIs ───────────────────────────────────────────────────────
-  const drawingKpis = useMemo(() => {
-    const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted);
-    const released = setPackages.filter(isClosedPackage).length;
-    // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
-    const inReview = setPackages.filter((pkg) =>
-      pkg.sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage ?? ""))
-    ).length;
-    const overdueDrawings = setPackages.filter((pkg) =>
-      pkg.sheets.some((d) => dueInfo(getDrawingDueDate(d), isClosedDrawing(d)).overdue)
-    ).length;
-    return {
-      totalSets: setPackages.length,
-      totalSheets: active.length,
-      released,
-      inReview,
-      overdue: overdueDrawings,
-    };
-  }, [drawings, setPackages]);
+  const drawingKpis = useMemo(() => buildDrawingKpis(drawings, setPackages), [drawings, setPackages]);
 
   // ── Fab-Ready KPI ──────────────────────────────────────────────────────
   const fabReady = useMemo(
@@ -436,141 +402,10 @@ export default function DrawingSubmittalHub() {
 
   const isLoading = drawingsLoading || submittalsLoading;
 
-  const triage = useMemo(() => {
-    const activeSubmittals = submittals.filter((s) => !s.is_deleted) as any[];
-
-    const setItems = setPackages.map((pkg) => {
-      const sortedSubmittals = pkg.submittals
-        .slice()
-        .sort((a, b) => (b.round_number || 1) - (a.round_number || 1));
-      const latestSubmittal = sortedSubmittals[0] || null;
-      // Coalesced operational state (drafting → submittal → release). Kept
-      // alongside `status` (additive) so the existing pipeline/row display is
-      // unchanged; surfaced as its own chip + drives the drafting control.
-      const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
-      // R&R loops back to the IFA stage for counts; surface it as its own flag so
-      // the board doesn't read an R&R rejection as a fresh IFA (matches register).
-      const isRR = isPackageRR(pkg.submittals);
-      // CLOSED is satisfied by ANY terminal signal — not only a closed
-      // submittal status. Previous logic prioritised `latestSubmittal` and
-      // ignored the set-level lock + the coalesced detailing state, so a
-      // package that was manually released (e.g. anchor bolts: set locked
-      // and/or detailing_state=Released for Erection) whose submittal was
-      // never rolled to "Released for Fabrication" lingered on the hit list.
-      const closed = isClosedPackage(pkg);
-      const dueDate = getSubmittalDueDate(latestSubmittal) || earliestDate(pkg.sheets.map(getDrawingDueDate));
-      // Only surface "needs action" when the package is OPEN (closed items
-      // never reach the hit list anyway, but guard against stale per-sheet
-      // Rejected/Returned stages on packages that have since been released).
-      const needsAction = !closed && (
-        (latestSubmittal && ACTION_STATUSES.has(latestSubmittal.status ?? "")) ||
-        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage ?? ""))
-      );
-      const status = latestSubmittal?.status || rollupDrawingStage(pkg.sheets);
-      const canDraft = !hasGoverningSubmittal(pkg.submittals);
-      const owner =
-        latestSubmittal?.ball_in_court ||
-        latestSubmittal?.assigned_to ||
-        latestSubmittal?.reviewer ||
-        pkg.sheets.find((drawing) => drawing.ball_in_court || drawing.assigned_to || drawing.reviewer)?.ball_in_court ||
-        pkg.sheets.find((drawing) => drawing.assigned_to)?.assigned_to ||
-        pkg.sheets.find((drawing) => drawing.reviewer)?.reviewer ||
-        "Unassigned";
-      const submittalLabel = latestSubmittal?.submittal_number ? `Submittal ${latestSubmittal.submittal_number}` : "No linked submittal";
-      return {
-        id: `set-${pkg.key}`,
-        kind: "Drawing Set",
-        title: pkg.name,
-        group: `${pkg.sheets.length} sheet${pkg.sheets.length === 1 ? "" : "s"} - ${submittalLabel}`,
-        status,
-        owner,
-        dueDate,
-        due: dueInfo(dueDate, closed),
-        closed,
-        needsAction,
-        routeTab: "drawings",
-        detailingState,
-        isRR,
-        _canDraft: canDraft,
-        _detailingStateRaw: pkg.parent?.detailing_state ?? null,
-        _readiness: readinessByKey.get(pkg.key) || null,
-        // Entity references for inline editing
-        _submittalId: latestSubmittal?.id || null,
-        _drawingSetId: pkg.setId || null,
-        _firstSheetId: pkg.sheets[0]?.id || null,
-        // All sheet ids in the package — the due-date mutation writes every one
-        // of these so earliestDate() always reflects the board-level edit.
-        _sheetIds: (pkg.sheets || []).map((s) => s.id).filter(Boolean) as string[],
-      };
-    });
-
-    const linkedSubmittalIds = new Set(
-      setPackages.flatMap((pkg) => pkg.submittals.map((submittal) => submittal.id).filter(Boolean))
-    );
-    const unlinkedSubmittalItems = activeSubmittals
-      .filter((submittal) => !linkedSubmittalIds.has(submittal.id))
-      .map((submittal) => {
-      const closed = isClosedSubmittal(submittal);
-      const dueDate = getSubmittalDueDate(submittal);
-      const title = [submittal.submittal_number, submittal.title || submittal.description]
-        .filter(Boolean)
-        .join(" - ") || "Untitled submittal";
-      const needsAction = ACTION_STATUSES.has(submittal.status);
-      return {
-        id: `submittal-${submittal.id}`,
-        kind: "Unlinked Submittal",
-        title,
-        group: "No drawing set name linked",
-        status: submittal.status || "Draft",
-        owner: submittal.ball_in_court || submittal.assigned_to || submittal.reviewer || "Unassigned",
-        dueDate,
-        due: dueInfo(dueDate, closed),
-        closed,
-        needsAction,
-        routeTab: "submittals",
-        // Entity references for inline editing
-        _submittalId: submittal.id,
-        _drawingSetId: null as string | null,
-        _firstSheetId: null as string | null,
-        // Unlinked submittals always dispatch through the submittal branch, so [].
-        _sheetIds: [] as string[],
-      };
-    });
-
-    const openItems = [...setItems, ...unlinkedSubmittalItems].filter((item) => !item.closed);
-    const overdue = openItems.filter((item) => item.due.overdue).sort(itemUrgency);
-    const dueSoon = openItems
-      .filter((item) => item.due.dueSoon)
-      .sort(itemUrgency);
-    const needsAction = openItems
-      .filter((item) => item.needsAction)
-      .sort(itemUrgency);
-    const noDate = openItems
-      .filter((item) => !item.dueDate)
-      .sort(itemUrgency);
-
-    const pipelineCounts = openItems.reduce((acc: Record<string, number>, item) => {
-      const key = item.status || "No status";
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-
-    return {
-      setItems,
-      unlinkedSubmittalItems,
-      openItems: openItems.sort(itemUrgency),
-      overdue,
-      dueSoon,
-      needsAction,
-      noDate,
-      pipelineCounts,
-      overdueDrawingSets: overdue.filter((item) => item.kind === "Drawing Set").length,
-      overdueUnlinkedSubmittals: overdue.filter((item) => item.kind === "Unlinked Submittal").length,
-      dueSoonDrawingSets: dueSoon.filter((item) => item.kind === "Drawing Set").length,
-      noDateDrawingSets: noDate.filter((item) => item.kind === "Drawing Set").length,
-      atRiskCount: setItems.filter((item) => item._readiness?.scheduleRisk?.atRisk).length,
-    };
-  }, [submittals, setPackages, readinessByKey]);
+  const triage = useMemo(
+    () => buildTriage(submittals, setPackages, readinessByKey),
+    [submittals, setPackages, readinessByKey],
+  );
 
   const tabCounts = useMemo(() => ({
     overview: triage.openItems.length,

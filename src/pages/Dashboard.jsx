@@ -53,9 +53,8 @@ const PortfolioView = lazyWithRetry(() => import("../components/dashboard/Portfo
  *                    single-project dashboard)
  *
  * `ProjectDashboard` replaced the legacy `DrilldownView` component as
- * part of the Claude Design redesign rollout. The old component still
- * lives at `src/components/dashboard/DrilldownView.jsx` for reference
- * but is no longer rendered.
+ * part of the Claude Design redesign rollout (DrilldownView has since
+ * been removed).
  */
 /**
  * Shown on the dashboard for a brand-new / empty workspace (0 projects) — a

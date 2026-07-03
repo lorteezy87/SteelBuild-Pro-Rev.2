@@ -38,7 +38,8 @@ import {
   Icon,
 } from "@/components/design-system";
 
-import { compareRfisByNumber, isOverdue, exportRFIsToCSV } from "./rfis/utils";
+import { exportRFIsToCSV, loadDensity, loadInsightsCollapsed, buildRfiCounts, filterAndSortRfis, buildProjectNameMap } from "./rfis/utils";
+import { DISCIPLINES, DENSITY_LS_KEY, DENSITY_PRESETS, INSIGHTS_LS_KEY } from "./rfis/constants";
 import SequenceFilter, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import RfiRow, { RFI_ROW_GRID } from "./rfis/RfiRow";
 import RfiDetailModal from "./rfis/RfiDetailModal";
@@ -50,30 +51,6 @@ import { buildRfiAgenda } from "@/lib/commandCenter/rfiAgenda";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import RfiControlCenter from "./rfis/RfiControlCenter";
 import { calcWpProgress } from "@/utils/projectKpis";
-
-const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
-
-// Density presets persist in localStorage. "Compact" tightens the row
-// height + drops the submitter sub-line; "Comfortable" gives the row
-// 50px of breathing room. Density mutates the CSS variable that
-// RfiRow reads for its row height.
-const DENSITY_LS_KEY = "sbp-rfi-density";
-const DENSITY_PRESETS = {
-  compact:     { rowHeight: 56, label: "COMPACT" },
-  normal:      { rowHeight: 72, label: "NORMAL" },
-  comfortable: { rowHeight: 88, label: "COMFORTABLE" },
-};
-function loadDensity() {
-  try {
-    const v = localStorage.getItem(DENSITY_LS_KEY);
-    if (v && DENSITY_PRESETS[v]) return v;
-  } catch { /* noop */ }
-  return "normal";
-}
-const INSIGHTS_LS_KEY = "sbp-rfi-insights-collapsed";
-function loadInsightsCollapsed() {
-  try { return localStorage.getItem(INSIGHTS_LS_KEY) === "1"; } catch { return false; }
-}
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
@@ -237,58 +214,15 @@ export default function RFIs() {
   const agendaUrgent = (agenda.counts?.overdue ?? 0) + (agenda.counts?.blocking ?? 0);
 
   /* ── Counts & filtered list ── */
-  const counts = useMemo(() => {
-    const overdue = rfis.filter((r) => isOverdue(r));
-    return {
-      all:        rfis.length,
-      open:       rfis.filter((r) => r.status === "Open").length,
-      review:     rfis.filter((r) => r.status === "Under Review").length,
-      incomplete: rfis.filter((r) => r.status === "Incomplete Response").length,
-      answered:   rfis.filter((r) => r.status === "Answered").length,
-      closed:     rfis.filter((r) => r.status === "Closed").length,
-      overdue:    overdue.length,
-      critical:   rfis.filter((r) => r.priority === "Critical").length,
-    };
-  }, [rfis]);
+  const counts = useMemo(() => buildRfiCounts(rfis), [rfis]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return rfis
-      .filter((r) => {
-        if (filter === "open")       return r.status === "Open";
-        if (filter === "review")     return r.status === "Under Review";
-        if (filter === "incomplete") return r.status === "Incomplete Response";
-        if (filter === "answered")   return r.status === "Answered";
-        if (filter === "closed")     return r.status === "Closed";
-        if (filter === "overdue")    return isOverdue(r);
-        if (filter === "critical")   return r.priority === "Critical";
-        return true;
-      })
-      .filter((r) => {
-        if (disciplineFilter === "All") return true;
-        return (r.discipline || "").toLowerCase().trim() === disciplineFilter.toLowerCase().trim();
-      })
-      .filter((r) => matchesSequenceFilter(r, seqFilter))
-      .filter((r) => {
-        if (!q) return true;
-        return (
-          (r.rfi_number || "").toLowerCase().includes(q) ||
-          (r.title || "").toLowerCase().includes(q) ||
-          (r.submitted_by || "").toLowerCase().includes(q) ||
-          (r.drawing_reference || "").toLowerCase().includes(q) ||
-          (r.question || "").toLowerCase().includes(q) ||
-          (r.answer || "").toLowerCase().includes(q)
-        );
-      })
-      .sort(compareRfisByNumber);
-  }, [rfis, filter, disciplineFilter, seqFilter, search]);
+  const filtered = useMemo(
+    () => filterAndSortRfis(rfis, { filter, disciplineFilter, seqFilter, search }, matchesSequenceFilter),
+    [rfis, filter, disciplineFilter, seqFilter, search],
+  );
 
   /* ── Overdue → Alert background effect ── */
-  const projectMap = useMemo(() => {
-    const m = {};
-    for (const p of projects) m[p.id] = p.name || "";
-    return m;
-  }, [projects]);
+  const projectMap = useMemo(() => buildProjectNameMap(projects), [projects]);
 
   const alertsCreatedRef = useRef(new Set());
   useEffect(() => {

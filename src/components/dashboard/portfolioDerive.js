@@ -540,3 +540,74 @@ export function computeProductionData(enrichedMetrics, allWPs) {
     return { ...p, inFabCount: inFab.length, completeCount: complete.length, onHoldCount: onHold.length, totalTon, fabTon, fabPct, constraints, erectionReady, wpTotal: pWPs.length };
   });
 }
+
+/**
+ * Apply the KPI filter + sort mode to the enriched project metrics for the
+ * portfolio health table. The "health" default sort is already applied upstream
+ * in computeProjectMetrics; this layers the "rfi" / "deadline" re-sorts and the
+ * KPI-tile filters on top.
+ */
+export function applyMetricsView(enrichedMetrics, { sortMode, kpiFilter, allDeliveries }) {
+  let list = [...enrichedMetrics];
+  // Apply KPI filter
+  if (kpiFilter === "overdueRFIs") {
+    list = list.filter((p) => p.overdueRFIs > 0);
+  } else if (kpiFilter === "openRFIs") {
+    list = list.filter((p) => p.openRFIs > 0);
+  } else if (kpiFilter === "atRisk") {
+    list = list.filter((p) => p.effectiveHealth === "At Risk" || p.effectiveHealth === "Watch");
+  } else if (kpiFilter === "pendingCOs") {
+    list = list.filter((p) => p.pendingCOs.length > 0);
+  } else if (kpiFilter === "lateDeliveries") {
+    list = list.filter((p) => p.lateDeliveries > 0);
+  }
+  // Apply sort
+  if (sortMode === "rfi") {
+    list.sort((a, b) => b.openRFIs - a.openRFIs);
+  } else if (sortMode === "deadline") {
+    const earliest = (pid) =>
+      allDeliveries
+        .filter((d) => d.project_id === pid && !statusIn(d.status, ["Delivered"]))
+        .reduce((min, d) => {
+          const sched = parseUTCDate(d.scheduled_date);
+          const dt = sched ? sched.getTime() : Infinity;
+          return dt < min ? dt : min;
+        }, Infinity);
+    list.sort((a, b) => earliest(a.id) - earliest(b.id));
+  }
+  // default "health" sort is already applied from projectMetrics
+  return list;
+}
+
+/**
+ * The Priority Watchlist: worst-health projects (not On Track, or scoring below
+ * 70), sorted by severity then score, top 3. Distinct from computePccData's
+ * riskWatch (threshold 80, top 5) — do not merge.
+ */
+export function selectWatchlist(enrichedMetrics) {
+  const SEVERITY = { "At Risk": 0, "Watch": 1, "On Track": 2 };
+  return enrichedMetrics
+    .filter((p) => p.effectiveHealth !== "On Track" || p.healthScore < 70)
+    .sort((a, b) => {
+      const sevDiff = (SEVERITY[a.effectiveHealth] ?? 2) - (SEVERITY[b.effectiveHealth] ?? 2);
+      if (sevDiff !== 0) return sevDiff;
+      return (a.healthScore ?? 100) - (b.healthScore ?? 100);
+    })
+    .slice(0, 3);
+}
+
+/**
+ * Sidebar portfolio-health gauge geometry: average health score across projects
+ * (100 when empty) plus the SVG ring circumference/offset and the color + label
+ * bands (>=80 healthy, >=60 watch, else at-risk).
+ */
+export function computePortfolioHealthGauge(enrichedMetrics) {
+  const avgScore = enrichedMetrics.length > 0
+    ? Math.round(enrichedMetrics.reduce((s, p) => s + (p.healthScore || 0), 0) / enrichedMetrics.length)
+    : 100;
+  const circumference = 2 * Math.PI * 38;
+  const offset = circumference * (1 - avgScore / 100);
+  const color = avgScore >= 80 ? "var(--status-success)" : avgScore >= 60 ? "var(--status-warning)" : "var(--status-error)";
+  const label = avgScore >= 80 ? "HEALTHY" : avgScore >= 60 ? "WATCH" : "AT RISK";
+  return { avgScore, circumference, offset, color, label };
+}

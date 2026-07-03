@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { formatCurrency, parseUTCDate, statusIn } from "../shared/formatters";
+import { formatCurrency } from "../shared/formatters";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProgressBar from "../shared/ProgressBar";
@@ -18,6 +18,7 @@ import {
   computeDataIssues, computeFinancials, computeProductionData,
   computeProjectMap, computeProjectMetrics, enrichProjectMetrics, computeBudgetChartData,
   computePortfolioKPIs, computePccData,
+  applyMetricsView, selectWatchlist, computePortfolioHealthGauge,
 } from "./portfolioDerive";
 import { Button } from "@/components/design-system";
 import { MiniSparkline, Card, HeaderBar, KPIBlock } from "./portfolioPrimitives";
@@ -117,37 +118,10 @@ export default function PortfolioView({
 
   const enrichedMetrics = useMemo(() => enrichProjectMetrics(projectMetrics), [projectMetrics]);
 
-  const displayMetrics = useMemo(() => {
-    let list = [...enrichedMetrics];
-    // Apply KPI filter
-    if (kpiFilter === "overdueRFIs") {
-      list = list.filter((p) => p.overdueRFIs > 0);
-    } else if (kpiFilter === "openRFIs") {
-      list = list.filter((p) => p.openRFIs > 0);
-    } else if (kpiFilter === "atRisk") {
-      list = list.filter((p) => p.effectiveHealth === "At Risk" || p.effectiveHealth === "Watch");
-    } else if (kpiFilter === "pendingCOs") {
-      list = list.filter((p) => p.pendingCOs.length > 0);
-    } else if (kpiFilter === "lateDeliveries") {
-      list = list.filter((p) => p.lateDeliveries > 0);
-    }
-    // Apply sort
-    if (sortMode === "rfi") {
-      list.sort((a, b) => b.openRFIs - a.openRFIs);
-    } else if (sortMode === "deadline") {
-      const earliest = (pid) =>
-        allDeliveries
-          .filter((d) => d.project_id === pid && !statusIn(d.status, ["Delivered"]))
-          .reduce((min, d) => {
-            const sched = parseUTCDate(d.scheduled_date);
-            const dt = sched ? sched.getTime() : Infinity;
-            return dt < min ? dt : min;
-          }, Infinity);
-      list.sort((a, b) => earliest(a.id) - earliest(b.id));
-    }
-    // default "health" sort is already applied from projectMetrics
-    return list;
-  }, [enrichedMetrics, sortMode, kpiFilter, allDeliveries]);
+  const displayMetrics = useMemo(
+    () => applyMetricsView(enrichedMetrics, { sortMode, kpiFilter, allDeliveries }),
+    [enrichedMetrics, sortMode, kpiFilter, allDeliveries],
+  );
 
   const portfolioKPIs = useMemo(
     () => computePortfolioKPIs(projects, allRFIs, allCOs, allCodes, allWPs, allExpenses, allDeliveries, enrichedMetrics),
@@ -277,15 +251,7 @@ export default function PortfolioView({
            Consumes enrichedMetrics, which already carries healthScore +
            healthReasons, so zero extra computation. */}
       {(() => {
-        const SEVERITY = { "At Risk": 0, "Watch": 1, "On Track": 2 };
-        const sorted = enrichedMetrics
-          .filter((p) => p.effectiveHealth !== "On Track" || p.healthScore < 70)
-          .sort((a, b) => {
-            const sevDiff = (SEVERITY[a.effectiveHealth] ?? 2) - (SEVERITY[b.effectiveHealth] ?? 2);
-            if (sevDiff !== 0) return sevDiff;
-            return (a.healthScore ?? 100) - (b.healthScore ?? 100);
-          })
-          .slice(0, 3);
+        const sorted = selectWatchlist(enrichedMetrics);
         const hasRisks = sorted.length > 0;
         return (
           <div
@@ -1516,13 +1482,7 @@ export default function PortfolioView({
         {/* Portfolio Health Gauge */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "10px 0" }}>
           {(() => {
-            const avgScore = enrichedMetrics.length > 0
-              ? Math.round(enrichedMetrics.reduce((s, p) => s + (p.healthScore || 0), 0) / enrichedMetrics.length)
-              : 100;
-            const circumference = 2 * Math.PI * 38;
-            const offset = circumference * (1 - avgScore / 100);
-            const color = avgScore >= 80 ? "var(--status-success)" : avgScore >= 60 ? "var(--status-warning)" : "var(--status-error)";
-            const label = avgScore >= 80 ? "HEALTHY" : avgScore >= 60 ? "WATCH" : "AT RISK";
+            const { avgScore, circumference, offset, color, label } = computePortfolioHealthGauge(enrichedMetrics);
             return (
               <>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase" }}>
