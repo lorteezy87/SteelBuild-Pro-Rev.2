@@ -4,45 +4,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
-import { extractSheetsFromPdf, validatePdfPage } from "@/lib/pdfSheetExtractor";
+import { validatePdfPage } from "@/lib/pdfSheetExtractor";
 import { ensureCurrentRevision, recordSheetSlipSheet } from "@/lib/drawingHub";
 import { isPdfFile, normalizeRevisionNumber, getRevisionSuggestions, matchSheets } from "@/lib/drawingUploadUtils";
+import { formatBytes, CHANGE_STYLE, extractRevisionSheets, deriveVirtualSets, buildRevisionSnapshot } from "./revisionUploadHelpers";
 
 const MAX_PDF_SIZE_MB = 32;
-
-function formatBytes(bytes) {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-const CHANGE_STYLE = {
-  revised: { color: "var(--status-warning-bright)", label: "✎ REVISED", bg: "rgba(255,176,32,0.06)" },
-  added:   { color: "var(--status-success-bright)", label: "+ ADDED",   bg: "rgba(0,214,143,0.06)" },
-  removed: { color: "var(--status-error-bright)", label: "— REMOVED", bg: "rgba(255,61,61,0.05)" },
-  same:    { color: "var(--text-muted)", label: "≡ SAME", bg: "transparent" },
-};
-
-// Extract every sheet from a revision PDF using the shared extractor
-// (columnar pdfjs + Anthropic tool-use + post-processing fixup).
-// Returns a flat `sheets` array so the comparison step can match on
-// sheetNumber; swallow `extractFailed` cases so the caller can show an
-// empty diff rather than crashing.
-//
-// `options.titleblockTemplate` (optional) lets the caller pass the
-// drawing-set's saved {titleRect, numberRect} so the extractor does the
-// per-page OCR override before falling back to the LLM. Coordinates are
-// parsed inside the extractor — pass the raw JSON columns straight from
-// the drawing_sets row.
-async function extractRevisionSheets(file, options = {}) {
-  const result = await extractSheetsFromPdf(file, options);
-  if (result?.extractFailed) {
-    // Surface the failure; let the caller decide how to react.
-    const err = new Error(result.error || "AI extraction failed");
-    err.extractFailed = true;
-    throw err;
-  }
-  return Array.isArray(result?.sheets) ? result.sheets : [];
-}
 
 // ── Step A: Select existing drawing set ────────────────────────────
 function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading = false, error = null }) {
@@ -515,27 +482,9 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   useEffect(() => {
     if (!open || !activeProject?.id) return;
     entities.Drawing.filter({ project_id: activeProject.id }).then(drawings => {
-      // Build a map of set_name -> virtual set objects for any set_name not already in drawingSets
+      // Build virtual set objects for any set_name not already in drawingSets
       const existingNames = new Set(drawingSets.map(ds => ds.set_name));
-      const byName = {};
-      drawings.filter(d => d.drawing_set_name && !d.is_superseded).forEach(d => {
-        if (!existingNames.has(d.drawing_set_name)) {
-          if (!byName[d.drawing_set_name]) {
-            byName[d.drawing_set_name] = {
-              id: null,
-              set_name: d.drawing_set_name,
-              revision: d.revision_number != null ? String(d.revision_number) : "—",
-              issued_date: d.issue_date || null,
-              issued_by: d.issued_by || "",
-              file_url: d.file_url || null,
-              sheet_count: 0,
-              revision_history: "[]",
-            };
-          }
-          byName[d.drawing_set_name].sheet_count++;
-        }
-      });
-      setDerivedSets(Object.values(byName));
+      setDerivedSets(deriveVirtualSets(drawings, existingNames));
     }).catch((e) => { console.error("Failed to load drawing sets:", e); });
   }, [open, activeProject?.id, drawingSets]);
   const [step, setStep] = useState("selectSet");
@@ -635,17 +584,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     // Snapshot current revision into history
     let history = [];
     try { history = JSON.parse(selectedSet.revision_history || "[]"); } catch {}
-    const snapshot = {
-      revisionLabel: selectedSet.revision,
-      issueDate: selectedSet.issued_date,
-      issuedBy: selectedSet.issued_by,
-      fileUrl: selectedSet.file_url,
-      sheetCount: selectedSet.sheet_count,
-      notes: selectedSet.notes || "",
-      uploadedAt: new Date().toISOString(),
-      status: revMeta.disposition,
-    };
-    history.push(snapshot);
+    history.push(buildRevisionSnapshot(selectedSet, revMeta.disposition));
 
     const newSheetCount = matchedSheets.filter(m => m.newSheet).length;
     const newFileUrl = matchedSheets.find(m => m.newSheet?.sourceFileUrl)?.newSheet?.sourceFileUrl || selectedSet.file_url;

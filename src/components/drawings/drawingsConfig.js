@@ -144,3 +144,25 @@ export const btnBase = {
 
 export const btnPrimary = { ...btnBase, background: "var(--accent)", color: "#000", borderRadius: "var(--radius-btn)" };
 export const btnGhost = { ...btnBase, background: "none", border: "1px solid var(--border-default)", color: "var(--text-muted)", borderRadius: "var(--radius-btn)" };
+
+// ─── Drawings register table config ─────────────────────────────────────────
+
+// F20: fields the user can click the header to sort on. Keyed by the data
+// field (or a pseudo-field like "overdue") and given a comparator that knows
+// how to handle the type. Keeping this out of the component body so it's a
+// stable reference and doesn't churn the memo on every render.
+export const SORTABLE_FIELDS = {
+  sheet_number:    { label: "SET / SHEET #", cmp: (a, b) => String(a.sheet_number || "").localeCompare(String(b.sheet_number || ""), undefined, { numeric: true, sensitivity: "base" }) },
+  title:           { label: "TITLE",        cmp: (a, b) => String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" }) },
+  discipline:      { label: "DISCIPLINE",   cmp: (a, b) => String(a.discipline || "").localeCompare(String(b.discipline || ""), undefined, { sensitivity: "base" }) },
+  revision_number: { label: "REV",          cmp: (a, b) => (Number(a.revision_number) || 0) - (Number(b.revision_number) || 0) },
+  stage:           { label: "STAGE",        cmp: (a, b) => STAGE_ORDER.indexOf(a.stage || "") - STAGE_ORDER.indexOf(b.stage || "") },
+  submitted_date:  { label: "SUBMITTED",    cmp: (a, b) => String(a.submitted_date || "").localeCompare(String(b.submitted_date || "")) },
+  due_date:        { label: "DUE DATE",     cmp: (a, b) => String(a.due_date || "9999").localeCompare(String(b.due_date || "9999")) },
+  reviewer:        { label: "REVIEWER",     cmp: (a, b) => String(a.reviewer || "").localeCompare(String(b.reviewer || ""), undefined, { sensitivity: "base" }) },
+};
+
+// F23: below this container width (in px) we collapse the less-critical
+// columns so the table still fits on laptops + tablets without a horizontal
+// scrollbar eating the rest of the page.
+export const COMPACT_WIDTH_PX = 1200;

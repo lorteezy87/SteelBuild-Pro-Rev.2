@@ -1,13 +1,13 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { mono } from "./drawingsConfig";
-import { STAGE_MAP, STAGE_ORDER } from "./drawingsConfig";
+import { STAGE_MAP, STAGE_ORDER, SORTABLE_FIELDS, COMPACT_WIDTH_PX } from "./drawingsConfig";
 import StageChip from "./StageChip";
 import PriorityDot from "./PriorityDot";
 import { OverdueBadge, RFILinkBadge, SupersededBadge } from "./DrawingBadges";
-import { isOverdue, daysLate, urgencyClass } from "./drawingsUtils";
+import { isOverdue, daysLate, urgencyClass, groupByDrawingSet } from "./drawingsUtils";
 import { hasTitleblockTemplate } from "@/lib/titleblock";
-import { compareDrawingSetPackages, formatDrawingSetNumber, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { Lock } from "lucide-react";
 
 // ─── AI extraction / upload status badge ───────────────────────────────────
@@ -128,196 +128,10 @@ export function ContextMenuItem({ label, onClick, danger }) {
   );
 }
 
-// ─── Grouping + aggregate helpers ───────────────────────────────────────────
-
-const UNGROUPED_KEY = "__ungrouped__";
-const UNGROUPED_LABEL = "UNGROUPED SHEETS";
 // v2: the default is now all-collapsed (rolled up). Bumping the key discards
 // the old persisted "everything expanded" state so the new default takes effect
 // for existing users; their future expand/collapse choices persist under v2.
 const EXPAND_LS_KEY = "sbp-drawings-expanded-sets-v2";
-
-/**
- * Group drawings into drawing sets. Identity is the FK `drawing_set_id` when
- * present; legacy rows that only carry the text `drawing_set_name` fall back
- * to a synthetic `name:<trimmed>` key. Sheets with neither go to UNGROUPED.
- *
- * Display names come from `drawingSetMap[id].set_name` when we have the
- * parent row; otherwise we use the legacy text column. This is the F8 fix
- * from the audit: source-of-truth is now the parent FK, not the denormalized
- * string on the child row.
- *
- * Set-level-only rows (drawing_sets records with zero child drawings — e.g.
- * BFA submittal round-trips imported from Drive at the set level) are seeded
- * as groups from `drawingSetMap` after the drawings pass, so they appear in
- * the list with parent-derived aggregates (stage_summary, set_approval_status,
- * issued_date, set_approved_date, file_url).
- */
-function groupByDrawingSet(drawings, drawingSetMap = {}) {
-  const buckets = new Map();
-  drawings.forEach((d) => {
-    const setId = d.drawing_set_id || null;
-    const legacyName = (d.drawing_set_name || "").trim();
-    const key = setId ? `id:${setId}` : legacyName ? `name:${legacyName}` : UNGROUPED_KEY;
-    if (!buckets.has(key)) {
-      const parent = setId ? drawingSetMap[setId] : null;
-      const displayName = (parent?.set_name || legacyName || "").trim();
-      buckets.set(key, {
-        key,
-        setId,
-        name: displayName || UNGROUPED_LABEL,
-        parent,
-        sheets: [],
-      });
-    }
-    buckets.get(key).sheets.push(d);
-  });
-
-  // Seed empty buckets for any drawing_sets record with no child drawings.
-  // These are the set-level-only rows imported from the Drive BFA folder
-  // walk — they have no per-sheet rows yet (Phase 2 work), but still need
-  // to appear in the list so the user can see submittal round-trip state
-  // (approved / pending / stage_summary) and jump to the Drive folder.
-  Object.values(drawingSetMap).forEach((parent) => {
-    if (!parent?.id) return;
-    const key = `id:${parent.id}`;
-    if (buckets.has(key)) return;
-    buckets.set(key, {
-      key,
-      setId: parent.id,
-      name: (parent.set_name || "").trim() || UNGROUPED_LABEL,
-      parent,
-      sheets: [],
-    });
-  });
-
-  // Compute aggregates for each group
-  const groups = [];
-  for (const group of buckets.values()) {
-    const sheets = group.sheets.slice().sort((a, b) => {
-      const an = (a.sheet_number || "").toString();
-      const bn = (b.sheet_number || "").toString();
-      return an.localeCompare(bn, undefined, { numeric: true, sensitivity: "base" });
-    });
-
-    const parent = group.parent || null;
-    const setOnly = sheets.length === 0 && !!parent;
-
-    // Stage rollup
-    const stageCounts = {};
-    STAGE_ORDER.forEach((k) => { stageCounts[k] = 0; });
-    sheets.forEach((s) => {
-      const k = s.stage || "Not Started";
-      stageCounts[k] = (stageCounts[k] || 0) + 1;
-    });
-    const releasedCount = stageCounts["Released"] || 0;
-
-    // Date rollups
-    const submittedDates = sheets.map((s) => s.submitted_date).filter(Boolean).sort();
-    const dueDates = sheets.map((s) => s.due_date).filter(Boolean).sort();
-    let earliestSubmitted = submittedDates[0] || null;
-    let earliestDue = dueDates[0] || null;
-
-    // Overdue rollup
-    const overdueCount = sheets.filter((s) => isOverdue(s)).length;
-    const maxLate = sheets.reduce((m, s) => Math.max(m, daysLate(s) || 0), 0);
-
-    // AI extraction rollup — used for "X of Y processed" summary badges.
-    // Rows without the new status column are treated as already processed
-    // (legacy rows) so migration doesn't make the UI look broken.
-    const aiProcessed = sheets.filter((s) => !s.ai_extraction_status || s.ai_extraction_status === "Processed").length;
-    const aiNeedsReview = sheets.filter((s) => s.ai_extraction_status === "NeedsReview").length;
-    const aiExtracting = sheets.filter((s) => s.ai_extraction_status === "Extracting" || s.ai_extraction_status === "Pending").length;
-    const aiFailed = sheets.filter((s) => s.ai_extraction_status === "Failed" || s.upload_status === "Failed").length;
-
-    // Approval rollup — all sheets in the set should share status if bulk-approved
-    const statuses = new Set(sheets.map((s) => s.set_approval_status).filter(Boolean));
-    let aggregateStatus = statuses.size === 1 ? [...statuses][0] : null;
-
-    // Disciplines present
-    const disciplines = new Set(sheets.map((s) => s.discipline).filter(Boolean));
-
-    // Priority
-    const hasPriority = sheets.some((s) => s.priority_flag);
-
-    // Latest revision (numeric max)
-    const revNums = sheets
-      .map((s) => Number(String(s.revision_number || "0").replace(/[^\d]/g, "")))
-      .filter((n) => !isNaN(n));
-    let maxRev = revNums.length ? Math.max(...revNums) : 0;
-
-    // Parent-derived fallbacks for set-level-only rows (no child sheets).
-    // We pull from the drawing_sets row so the group summary shows something
-    // real instead of a row full of em-dashes.
-    let stageSummary = null;
-    let driveUrl = null;
-    let revisionHistory = null;
-    let eventCount = null;
-    if (setOnly) {
-      aggregateStatus = parent.set_approval_status || null;
-      stageSummary = parent.stage_summary || null;
-      driveUrl = parent.file_url || null;
-      revisionHistory = parent.revision_history || null;
-      eventCount = parent.metadata?.event_count ?? null;
-      if (parent.discipline) disciplines.add(parent.discipline);
-      if (!earliestSubmitted && parent.issued_date) earliestSubmitted = parent.issued_date;
-      if (!earliestDue && parent.set_approved_date) earliestDue = parent.set_approved_date;
-    }
-
-    groups.push({
-      key: group.key,
-      setId: group.setId,
-      name: group.name,
-      setNumber: getDrawingSetNumber(parent || group),
-      isUngrouped: group.key === UNGROUPED_KEY,
-      setOnly,
-      parent,
-      sheets,
-      aggregates: {
-        total: sheets.length,
-        stageCounts,
-        releasedCount,
-        percentReleased: sheets.length > 0 ? Math.round((releasedCount / sheets.length) * 100) : 0,
-        earliestSubmitted,
-        earliestDue,
-        overdueCount,
-        maxLate,
-        aggregateStatus,
-        disciplines: [...disciplines],
-        hasPriority,
-        maxRev,
-        aiProcessed,
-        aiNeedsReview,
-        aiExtracting,
-        aiFailed,
-        stageSummary,
-        driveUrl,
-        revisionHistory,
-        eventCount,
-      },
-    });
-  }
-
-  // Action-first default ordering: sets needing attention (overdue, priority,
-  // failed or needs-review AI extraction) float to the top so the register
-  // answers "what needs action?" at a glance. Package order (drawing-set /
-  // package number, then natural name) is preserved WITHIN each partition, and
-  // ungrouped loose sheets always stay last.
-  const setNeedsAction = (g) => {
-    if (g.isUngrouped) return false;
-    const a = g.aggregates;
-    return a.overdueCount > 0 || a.hasPriority || a.aiNeedsReview > 0 || a.aiFailed > 0;
-  };
-  groups.sort((x, y) => {
-    if (x.isUngrouped !== y.isUngrouped) return x.isUngrouped ? 1 : -1;
-    const ax = setNeedsAction(x);
-    const ay = setNeedsAction(y);
-    if (ax !== ay) return ax ? -1 : 1;
-    return compareDrawingSetPackages(x, y);
-  });
-
-  return groups;
-}
 
 // ─── Persistence for expand/collapse ────────────────────────────────────────
 
@@ -1009,26 +823,6 @@ function SheetRow({
  * Each drawing_set_name appears as a collapsible summary row; the individual
  * sheets live underneath as child rows. Sheets without a set go to UNGROUPED.
  */
-// F20: fields the user can click the header to sort on. Keyed by the data
-// field (or a pseudo-field like "overdue") and given a comparator that knows
-// how to handle the type. Keeping this out of the component body so it's a
-// stable reference and doesn't churn the memo on every render.
-const SORTABLE_FIELDS = {
-  sheet_number:    { label: "SET / SHEET #", cmp: (a, b) => String(a.sheet_number || "").localeCompare(String(b.sheet_number || ""), undefined, { numeric: true, sensitivity: "base" }) },
-  title:           { label: "TITLE",        cmp: (a, b) => String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" }) },
-  discipline:      { label: "DISCIPLINE",   cmp: (a, b) => String(a.discipline || "").localeCompare(String(b.discipline || ""), undefined, { sensitivity: "base" }) },
-  revision_number: { label: "REV",          cmp: (a, b) => (Number(a.revision_number) || 0) - (Number(b.revision_number) || 0) },
-  stage:           { label: "STAGE",        cmp: (a, b) => STAGE_ORDER.indexOf(a.stage || "") - STAGE_ORDER.indexOf(b.stage || "") },
-  submitted_date:  { label: "SUBMITTED",    cmp: (a, b) => String(a.submitted_date || "").localeCompare(String(b.submitted_date || "")) },
-  due_date:        { label: "DUE DATE",     cmp: (a, b) => String(a.due_date || "9999").localeCompare(String(b.due_date || "9999")) },
-  reviewer:        { label: "REVIEWER",     cmp: (a, b) => String(a.reviewer || "").localeCompare(String(b.reviewer || ""), undefined, { sensitivity: "base" }) },
-};
-
-// F23: below this container width (in px) we collapse the less-critical
-// columns so the table still fits on laptops + tablets without a horizontal
-// scrollbar eating the rest of the page.
-const COMPACT_WIDTH_PX = 1200;
-
 export default function DrawingsTable({
   drawings, selected, onToggleSelect, onToggleAll,
   onEdit, onDelete, onAdvance, onView,
