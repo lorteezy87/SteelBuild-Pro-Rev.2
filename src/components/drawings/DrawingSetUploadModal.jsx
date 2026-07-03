@@ -7,60 +7,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
-import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename, validatePdfPage } from "@/lib/pdfSheetExtractor";
+import { EMPTY_SET_META, parseFilename } from "@/lib/pdfSheetExtractor";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 import { STAGE_ORDER as CANONICAL_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import { withDrawingSetNumberMetadata } from "@/lib/drawingSetOrdering";
-import { isPdfFile, normalizeRevisionNumber, withTimeout, newUploadBatchId } from "@/lib/drawingUploadUtils";
+import { isPdfFile, withTimeout, newUploadBatchId } from "@/lib/drawingUploadUtils";
 import { sheetReviewFlags } from "@/components/drawings/intakeReview";
 import { logActivity } from "@/services/auditLogger";
+import { MAX_PDF_SIZE_MB, formatBytes, validateAndExtract, buildDrawingRecord } from "./drawingSetUploadHelpers";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 // Canonical 7-stage flow (Not Started → IFA → OFA → BFA → OFS → IFC → Released)
 const STAGES      = CANONICAL_STAGE_ORDER;
-const MAX_PDF_SIZE_MB = 32;
 const UPLOAD_TIMEOUT_MS  = 90_000;   // 90 s
 const EXTRACT_TIMEOUT_MS = 300_000;  // 5 min — includes rate-limit retry backoff time
-
-function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-// ─── PDF → sheets extraction ──────────────────────────────────────────
-//
-// All the heavy lifting (columnar pdfjs text extraction, Anthropic
-// tool-use schema, post-processing fixup, de-dup) lives in the shared
-// `src/lib/pdfSheetExtractor.js` module so this modal and
-// RevisionUploadModal share a single code path.
-
-// Router: short-circuit on oversize files (skip the LLM round-trip);
-// otherwise delegate to the shared extractor.
-async function validateAndExtract(file, options = {}) {
-  const sizeMB = file.size / (1024 * 1024);
-  if (sizeMB > MAX_PDF_SIZE_MB) {
-    console.warn(`PDF too large (${sizeMB.toFixed(1)}MB). Using filename fallback.`);
-    const parsed = parseFilename(file.name);
-    return {
-      setMeta: { ...EMPTY_SET_META },
-      sheets: [{
-        sheetNumber: parsed.sheetNumber,
-        sheetTitle:  parsed.sheetNumber ? "" : file.name.replace(/\.pdf$/i, "").replace(/[-_]/g, " "),
-        discipline:  "Structural",
-        sheetType:   "General",
-        revision:    parsed.revision || "0",
-        scale:       "",
-        date:        "",
-        _note:       "File too large for AI extraction." + (parsed.sheetNumber ? ` Sheet # "${parsed.sheetNumber}" extracted from filename.` : " Please fill in sheet details manually."),
-      }],
-      scanned:  false,
-      tooLarge: true,
-    };
-  }
-  return extractSheetsFromPdf(file, options);
-}
 
 // ─── Step 0: New Set vs New Revision choice ───────────────────────────
 function StepChoice({ onNewSet, onNewRevision, onClose }) {
@@ -1109,54 +1070,12 @@ export default function DrawingSetUploadModal({
       // acceptance criterion.
       // ─────────────────────────────────────────────────────────────
       const now = new Date().toISOString();
-      const buildRecord = (sheet) => {
-        const sourceResult = fileResults.find(r => r.fileName === sheet.sourceFile);
-        // Same signal the review screen shows (intakeReview.sheetReviewFlags) so
-        // the persisted ai_extraction_status never disagrees with the badge — now
-        // also catches an empty sheet number, not just bad-source rows.
-        const needsReview = sheetReviewFlags(sheet, sourceResult).needsReview;
-        // Validate pdf_page — must be a positive integer. Anything else
-        // falls back to 1 with a warning so the user can hand-fix via
-        // SheetFormModal. The extractor's assignPdfPages() should have
-        // populated this correctly; if we're falling back here, something
-        // upstream regressed.
-        const validatedPage = validatePdfPage(sheet.pdfPage);
-        if (validatedPage === null) {
-          console.warn(
-            `[DrawingSetUploadModal] Sheet "${sheet.sheetNumber || "?"}" has invalid pdfPage=${JSON.stringify(sheet.pdfPage)} — defaulting to 1.`,
-          );
-        }
-        return {
-          sheet_number:     sheet.sheetNumber || "",
-          title:            sheet.sheetTitle  || "",
-          project_id:       activeProject?.id,
-          project_name:     activeProject?.name,
-          drawing_set_id:   parentSetId,
-          drawing_set_name: resolvedSetName, // kept for back-compat reads
-          discipline:       sheet.discipline || meta.discipline,
-          revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
-          stage:            meta.defaultStage || "Not Started",
-          file_url:         sheet.sourceFileUrl,
-          pdf_page:         validatedPage ?? 1,
-          callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
-          upload_batch_id:      batchId,
-          upload_status:        "Uploaded",
-          ai_extraction_status: needsReview ? "NeedsReview" : "Processed",
-          ai_extraction_error:  sourceResult?.error || null,
-          extracted_text:       sheet.extractedText || null,
-          hyperlinks:           Array.isArray(sheet.hyperlinks) ? sheet.hyperlinks : [],
-          last_extracted_at:    now,
-          notes: [
-            meta.notes,
-            sheet.scale ? `Scale: ${sheet.scale}` : "",
-            sheet._note || "",
-          ].filter(Boolean).join(" · "),
-        };
-      };
 
       let createdRows = 0;
       let failedRows  = 0;
-      const records = selectedSheets.map(buildRecord);
+      const records = selectedSheets.map((sheet) =>
+        buildDrawingRecord({ sheet, fileResults, meta, activeProject, resolvedSetName, parentSetId, batchId, now }),
+      );
 
       // Sanity check per source PDF: if a multi-page PDF ended up with
       // pdf_page=1 across every one of its sheets, that's the original
