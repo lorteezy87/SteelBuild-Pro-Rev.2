@@ -26,6 +26,8 @@ Refs:
 
 ## Owner steps (one-time)
 
+> ⚠ When creating the staging Supabase project, **do NOT connect the GitHub integration** (the "update schema in code, push to GitHub, Supabase deploys automatically" option). It would auto-apply migrations on push, which breaks the "staging first, then prod" model and diverges from how prod applies migrations (manually). Migrations go to staging via `supabase db push --project-ref <staging-ref>`.
+
 ### 1. Create the staging Supabase project
 - Supabase dashboard → **New project** (same org, same region `us-east-1`). Name it e.g. `SteelBuild-Pro-staging`.
 - Note its **project ref**, **URL**, **anon key**, **service-role key**.
@@ -71,6 +73,14 @@ The push triggers CI → `deploy-staging` → staging site goes live. Confirm `S
 
 ## DR-restore rehearsal target (H24)
 Use the staging **Supabase** project as the restore target for the PITR rehearsal: restore a prod backup into staging, then verify login + project-list + drawing-register + a signed-URL file open. Record measured RTO/RPO in `backup-dr.md`.
+
+## As-built (provisioned 2026-07-03)
+- **Staging Supabase project**: `SteelBuild-Pro Staging` · ref **`abbeavtbifuddtrifvae`** · region `us-east-1` · URL `https://abbeavtbifuddtrifvae.supabase.co`. Schema applied via `supabase db push` (16 migrations; parity-verified vs prod: 103 tables, 103/103 RLS, 52 definer fns). Edge functions NOT yet deployed to staging (deploy per-function when rehearsing an edge/LLM/billing change; needs staging secrets incl. Stripe **test-mode** keys).
+- **Staging Vercel project**: `steelbuild-pro-staging` · project id `prj_W0dhGzRfU3uQPkqxZLhnzwXTMQO8` · URL **https://steelbuild-pro-staging.vercel.app**.
+- **GitHub secrets/vars set**: `STAGING_VERCEL_PROJECT_ID`, `STAGING_VERCEL_TOKEN`, `STAGING_ENABLED=true`, `STAGING_BASE_URL=https://steelbuild-pro-staging.vercel.app`.
+- **`staging` branch** created from `origin/main`; first `deploy-staging` run green.
+- `vercel.json` `git.deploymentEnabled` = `{ main:false, staging:false }` so Vercel git auto-deploy is off for both — the GitHub Action (`--prebuilt`) is the sole deploy path for both environments.
+- ⚠ The `STAGING_VERCEL_TOKEN` was pasted in a chat transcript during setup — rotate it once convenient (`gh secret set STAGING_VERCEL_TOKEN` with a fresh Vercel token).
 
 ## Rollback
 - **Frontend**: Vercel → staging project → Deployments → promote a previous deployment. (Prod identically.)
