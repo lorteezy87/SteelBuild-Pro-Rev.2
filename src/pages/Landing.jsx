@@ -233,15 +233,18 @@ function ProductMockup() {
   );
 }
 
-export default function Landing({ onLogin, onSignUp, isSubmitting, loginError }) {
+export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitting, loginError }) {
   const [showLogin, setShowLogin] = useState(false);
-  const [authMode, setAuthMode] = useState("signin");
+  const [authMode, setAuthMode] = useState("signin"); // "signin" | "signup" | "forgot"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [signupBusy, setSignupBusy] = useState(false);
   const [signupError, setSignupError] = useState(null);
   const [signupNotice, setSignupNotice] = useState(null);
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotError, setForgotError] = useState(null);
+  const [forgotNotice, setForgotNotice] = useState(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [demoForm, setDemoForm] = useState({ name: "", email: "", company: "", tonnage: "", message: "" });
@@ -326,6 +329,22 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
       }
     } else if (res?.error) {
       setSignupError(res.error.message);
+    }
+  };
+
+  const handleForgot = async (e) => {
+    e.preventDefault();
+    setForgotError(null);
+    if (!email.trim()) return;
+    setForgotBusy(true);
+    const res = await onForgotPassword?.(email.trim());
+    setForgotBusy(false);
+    // Neutral confirmation regardless of whether the account exists — never
+    // disclose account existence via this surface.
+    if (!res || res.success) {
+      setForgotNotice(`If an account exists for ${email.trim()}, we've sent a password reset link. Check your email.`);
+    } else {
+      setForgotError(res.error || "Could not send the reset email. Try again.");
     }
   };
 
@@ -726,27 +745,28 @@ export default function Landing({ onLogin, onSignUp, isSubmitting, loginError })
               <img src={LOGO_IMG} alt="SteelBuild Pro" onError={(e) => { e.currentTarget.style.display = "none"; }} style={{ width: 54, height: 54, objectFit: "cover", borderRadius: 14, border: `1px solid ${C.line}` }} />
               <div><div style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.04em" }}>SteelBuild Pro</div><div style={{ color: C.muted, fontSize: 13 }}>Project controls for steel</div></div>
             </div>
-            {signupNotice ? (
+            {(signupNotice || forgotNotice) ? (
               <div style={{ display: "grid", gap: 18 }}>
-                <div><h2 style={{ color: C.ink, margin: "0 0 8px", fontSize: 30, letterSpacing: "-.04em" }}>Check your email</h2><p style={{ color: C.body, margin: 0, lineHeight: 1.55, fontSize: 14 }}>{signupNotice}</p></div>
-                <button type="button" onClick={() => { setSignupNotice(null); setAuthMode("signin"); setPassword(""); }} className="lp-btn lp-btn-primary">Back to sign in</button>
+                <div><h2 style={{ color: C.ink, margin: "0 0 8px", fontSize: 30, letterSpacing: "-.04em" }}>Check your email</h2><p style={{ color: C.body, margin: 0, lineHeight: 1.55, fontSize: 14 }}>{signupNotice || forgotNotice}</p></div>
+                <button type="button" onClick={() => { setSignupNotice(null); setForgotNotice(null); setAuthMode("signin"); setPassword(""); }} className="lp-btn lp-btn-primary">Back to sign in</button>
               </div>
             ) : (
               <>
                 <div style={{ marginBottom: 22 }}>
-                  <h2 style={{ color: C.ink, margin: "0 0 6px", fontSize: 32, letterSpacing: "-.05em", fontWeight: 950 }}>{authMode === "signup" ? "Create your account" : "Sign in"}</h2>
-                  <p style={{ color: C.body, margin: 0, fontSize: 14 }}>{authMode === "signup" ? "Start a free workspace for your team." : "Access your projects and modules."}</p>
+                  <h2 style={{ color: C.ink, margin: "0 0 6px", fontSize: 32, letterSpacing: "-.05em", fontWeight: 950 }}>{authMode === "signup" ? "Create your account" : authMode === "forgot" ? "Reset your password" : "Sign in"}</h2>
+                  <p style={{ color: C.body, margin: 0, fontSize: 14 }}>{authMode === "signup" ? "Start a free workspace for your team." : authMode === "forgot" ? "Enter your account email and we'll send a reset link." : "Access your projects and modules."}</p>
                 </div>
-                <form onSubmit={authMode === "signup" ? handleSignUp : handleLogin} style={{ display: "grid", gap: 15 }}>
-                  {authMode === "signup" && <div><label style={monoLabel({ display: "block", marginBottom: 6 })}>Full name</label><input className="lp-input" type="text" autoComplete="name" placeholder="Jane Smith" value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>}
-                  <div><label style={monoLabel({ display: "block", marginBottom: 6 })}>Email</label><input className="lp-input" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-                  <div><label style={monoLabel({ display: "block", marginBottom: 6 })}>Password</label><input className="lp-input" type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder={authMode === "signup" ? "At least 8 characters" : "Password"} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-                  {(authMode === "signup" ? signupError : loginError) && <div style={{ padding: "10px 13px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, color: C.red, fontSize: 13 }}>{authMode === "signup" ? signupError : loginError}</div>}
-                  <button type="submit" disabled={authMode === "signup" ? signupBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", opacity: (authMode === "signup" ? signupBusy : isSubmitting) ? .65 : 1, cursor: (authMode === "signup" ? signupBusy : isSubmitting) ? "not-allowed" : "pointer" }}>{authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : (isSubmitting ? "Signing in…" : "Sign in")}</button>
+                <form onSubmit={authMode === "signup" ? handleSignUp : authMode === "forgot" ? handleForgot : handleLogin} style={{ display: "grid", gap: 15 }}>
+                  {authMode === "signup" && <div><label htmlFor="auth-fullname" style={monoLabel({ display: "block", marginBottom: 6 })}>Full name</label><input id="auth-fullname" className="lp-input" type="text" autoComplete="name" placeholder="Jane Smith" value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>}
+                  <div><label htmlFor="auth-email" style={monoLabel({ display: "block", marginBottom: 6 })}>Email</label><input id="auth-email" className="lp-input" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                  {authMode !== "forgot" && <div><label htmlFor="auth-password" style={monoLabel({ display: "block", marginBottom: 6 })}>Password</label><input id="auth-password" className="lp-input" type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder={authMode === "signup" ? "At least 8 characters" : "Password"} value={password} onChange={(e) => setPassword(e.target.value)} /></div>}
+                  {authMode === "signin" && <div style={{ textAlign: "right", marginTop: -6 }}><button type="button" onClick={() => { setAuthMode("forgot"); setForgotError(null); setForgotNotice(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 800, cursor: "pointer", font: "inherit", fontSize: 12.5 }}>Forgot password?</button></div>}
+                  {(authMode === "signup" ? signupError : authMode === "forgot" ? forgotError : loginError) && <div style={{ padding: "10px 13px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, color: C.red, fontSize: 13 }} role="alert">{authMode === "signup" ? signupError : authMode === "forgot" ? forgotError : loginError}</div>}
+                  <button type="submit" disabled={authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", opacity: (authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting) ? .65 : 1, cursor: (authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting) ? "not-allowed" : "pointer" }}>{authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : authMode === "forgot" ? (forgotBusy ? "Sending…" : "Send reset link") : (isSubmitting ? "Signing in…" : "Sign in")}</button>
                   {authMode === "signup" && <p style={{ fontSize: 12, color: C.muted, textAlign: "center", lineHeight: 1.5, margin: 0 }}>By creating an account you agree to the <a href="/terms" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Terms</a> and <a href="/privacy" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Privacy Policy</a>.</p>}
                 </form>
                 <div style={{ marginTop: 18, textAlign: "center", fontSize: 13.5, color: C.body }}>
-                  {authMode === "signup" ? <>Already have an account? <button type="button" onClick={() => { setAuthMode("signin"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Sign in</button></> : <>New to SteelBuild Pro? <button type="button" onClick={() => { setAuthMode("signup"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Create an account</button></>}
+                  {authMode === "signup" ? <>Already have an account? <button type="button" onClick={() => { setAuthMode("signin"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Sign in</button></> : authMode === "forgot" ? <>Remembered it? <button type="button" onClick={() => { setAuthMode("signin"); setForgotError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Back to sign in</button></> : <>New to SteelBuild Pro? <button type="button" onClick={() => { setAuthMode("signup"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Create an account</button></>}
                 </div>
               </>
             )}

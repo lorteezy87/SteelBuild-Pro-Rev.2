@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { auth } from "@/api/supabaseClient";
 import { toast } from 'sonner';
 import { formatLocalDate } from "@/utils/dates";
+import { useAuth } from "@/lib/AuthContext";
 
 const S = {
   input: { width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none', boxSizing: 'border-box' },
@@ -26,6 +27,24 @@ export default function UserSettingsTab({ user, onSave }) {
   });
   const [isSaving, setIsSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Change-password (credential rotation) — H22.
+  const { updatePassword } = useAuth();
+  const [pw, setPw] = useState({ next: '', confirm: '' });
+  const [pwBusy, setPwBusy] = useState(false);
+  const handleChangePassword = async () => {
+    if (pw.next.length < 8) { toast.error('Use at least 8 characters.'); return; }
+    if (pw.next !== pw.confirm) { toast.error('The passwords do not match.'); return; }
+    setPwBusy(true);
+    const res = await updatePassword(pw.next);
+    setPwBusy(false);
+    if (res.success) {
+      toast.success('Password updated');
+      setPw({ next: '', confirm: '' });
+    } else {
+      toast.error(res.error || 'Could not update your password');
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -98,6 +117,24 @@ export default function UserSettingsTab({ user, onSave }) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Security */}
+      <div style={S.section}>
+        <div style={S.sectionTitle}>Security</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 520 }}>
+          <div>
+            <label htmlFor="pw-next" style={S.label}>New Password</label>
+            <input id="pw-next" type="password" autoComplete="new-password" style={S.input} value={pw.next} onChange={e => setPw(p => ({ ...p, next: e.target.value }))} placeholder="At least 8 characters" />
+          </div>
+          <div>
+            <label htmlFor="pw-confirm" style={S.label}>Confirm New Password</label>
+            <input id="pw-confirm" type="password" autoComplete="new-password" style={S.input} value={pw.confirm} onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} placeholder="Re-enter new password" />
+          </div>
+        </div>
+        <button onClick={handleChangePassword} disabled={pwBusy || !pw.next} style={{ marginTop: 14, background: 'var(--bg-surface-low)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: (pwBusy || !pw.next) ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: (pwBusy || !pw.next) ? 0.6 : 1 }}>
+          {pwBusy ? 'Updating…' : 'Change Password'}
+        </button>
       </div>
 
       {/* Bio */}
