@@ -85,11 +85,12 @@ Refs:
   - Why: single-factor auth on accounts that can read all org project/financial data is below enterprise bar.
   - Verify: enroll the owner account (`nickl@shsteelaz.com`) in TOTP and complete a full MFA login.
 
-- [ ] **Verify password-reset template + redirect allowlist** — [H22]
-  - Supabase dashboard → `Authentication → Email Templates`: confirm the **password-reset** template exists and renders.
-  - `Authentication → URL Configuration → Redirect URLs`: confirm the allowlist includes the app's **`/reset-password`** route (e.g. `https://steelbuild-pro.com/reset-password`).
-  - Why: a missing/incorrect redirect allowlist entry silently breaks the self-serve reset flow.
-  - Verify: run a full password reset for a test account end-to-end.
+- [ ] **Allowlist the password-reset redirect URL** — [H22]
+  - The in-app flow is **implemented** (2026-07-02): "Forgot password?" on the sign-in card emails a reset link; the link opens the app's **`/update-password`** screen (rendered at top precedence for the recovery session); Settings → Profile → Security also lets a signed-in user rotate their password.
+  - Supabase dashboard → `Authentication → URL Configuration → Redirect URLs`: add **`https://steelbuild-pro.com/update-password`** (and any preview origins you test from). Without it, the emailed link's redirect is rejected and the reset flow silently breaks.
+  - Also confirm the **password-reset email template** exists and renders (`Authentication → Email Templates`).
+  - Why: the reset email link's `redirectTo` must be on the allowlist for the recovery session to land on the set-new-password screen.
+  - Verify: run a full password reset for a test account end-to-end (request link → open email → set new password → sign in with it).
 
 - [ ] **Change Auth DB connection allocation from absolute to percentage** — [L19]
   - Supabase dashboard → `Settings → Database` (connection pooler / auth allocation): change the Auth service connection allocation from an **absolute 10** to a **percentage-based** allocation.
@@ -190,11 +191,12 @@ Refs:
   - Why: errors captured but unwatched don't help; you need to know within minutes of a regression.
   - Verify: trigger a test error and confirm the alert fires to email + SMS.
 
-- [ ] **Add an uptime monitor + status page** — [H27]
-  - Stand up an external uptime monitor (**UptimeRobot** or **Checkly**) checking the **app** (`https://steelbuild-pro.com`) and a **health endpoint**, with a public/private **status page**.
+- [ ] **Add an uptime monitor + status page** — [H27 / H7]
+  - The **health endpoint is deployed and live** (2026-07-02): `GET https://kjrwqagyeswwoxpjkcko.supabase.co/functions/v1/health` returns **200** `{"status":"ok","db":"ok",...}` when the API can reach Postgres and **503** `{"status":"degraded","db":"down"}` when it cannot (no auth required, no data exposed). A static frontend-up target also ships at `https://steelbuild-pro.com/health.json`.
+  - Stand up an external uptime monitor (**UptimeRobot** / **Better Stack** / **Checkly**) with two checks: the **DB-aware health function** above (expect HTTP 200) and the **app** (`https://steelbuild-pro.com`, expect 200). Add a public/private **status page**.
   - Route downtime alerts to email + SMS.
-  - Why: Vercel/Supabase outages and bad deploys need external detection independent of the app itself.
-  - Verify: monitor shows green; simulate a check failure (or read the monitor's test-alert) and confirm notification.
+  - Why: Vercel/Supabase outages and bad deploys need external detection independent of the app itself; the health function distinguishes "frontend up" from "database reachable."
+  - Verify: monitor shows green; `curl` the health endpoint returns 200 ok; simulate a check failure (or read the monitor's test-alert) and confirm notification.
 
 - [ ] **Flip CSP from Report-Only to enforcing** — [M40]
   - After reviewing accumulated **`Content-Security-Policy-Report-Only`** violation reports (confirm no legitimate resources are being flagged), change the header in `vercel.json` from `Content-Security-Policy-Report-Only` to enforcing **`Content-Security-Policy`**.
