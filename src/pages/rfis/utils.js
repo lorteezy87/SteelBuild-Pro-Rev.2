@@ -4,7 +4,7 @@
  */
 
 import { parseUTCDate } from "@/components/shared/formatters";
-import { RFI_NUMBER_PATTERN } from "./constants";
+import { RFI_NUMBER_PATTERN, DENSITY_LS_KEY, DENSITY_PRESETS, INSIGHTS_LS_KEY } from "./constants";
 
 export const extractRfiSequence = (value) => {
   if (!value) return null;
@@ -171,3 +171,79 @@ export const exportRFIsToCSV = (rows, filename = "rfi-log.csv") => {
   a.click();
   URL.revokeObjectURL(url);
 };
+
+// ─── RFI page derivations (extracted from RFIs.jsx) ─────────────────────────
+
+/** Read the persisted density preset key from localStorage (default "normal"). */
+export function loadDensity() {
+  try {
+    const v = localStorage.getItem(DENSITY_LS_KEY);
+    if (v && DENSITY_PRESETS[v]) return v;
+  } catch { /* noop */ }
+  return "normal";
+}
+
+/** Read the persisted "insights strip collapsed" flag from localStorage. */
+export function loadInsightsCollapsed() {
+  try { return localStorage.getItem(INSIGHTS_LS_KEY) === "1"; } catch { return false; }
+}
+
+/** Count RFIs by status / overdue / critical for the filter tiles. */
+export function buildRfiCounts(rfis) {
+  const overdue = rfis.filter((r) => isOverdue(r));
+  return {
+    all:        rfis.length,
+    open:       rfis.filter((r) => r.status === "Open").length,
+    review:     rfis.filter((r) => r.status === "Under Review").length,
+    incomplete: rfis.filter((r) => r.status === "Incomplete Response").length,
+    answered:   rfis.filter((r) => r.status === "Answered").length,
+    closed:     rfis.filter((r) => r.status === "Closed").length,
+    overdue:    overdue.length,
+    critical:   rfis.filter((r) => r.priority === "Critical").length,
+  };
+}
+
+/**
+ * Apply the status filter, discipline filter, sequence filter, and free-text
+ * search, then sort by RFI number. `matchesSeq` is the sequence-filter
+ * predicate (passed in so this stays React-free) — the caller supplies
+ * `matchesSequenceFilter` from the SequenceFilter component.
+ */
+export function filterAndSortRfis(rfis, { filter, disciplineFilter, seqFilter, search }, matchesSeq) {
+  const q = search.trim().toLowerCase();
+  return rfis
+    .filter((r) => {
+      if (filter === "open")       return r.status === "Open";
+      if (filter === "review")     return r.status === "Under Review";
+      if (filter === "incomplete") return r.status === "Incomplete Response";
+      if (filter === "answered")   return r.status === "Answered";
+      if (filter === "closed")     return r.status === "Closed";
+      if (filter === "overdue")    return isOverdue(r);
+      if (filter === "critical")   return r.priority === "Critical";
+      return true;
+    })
+    .filter((r) => {
+      if (disciplineFilter === "All") return true;
+      return (r.discipline || "").toLowerCase().trim() === disciplineFilter.toLowerCase().trim();
+    })
+    .filter((r) => matchesSeq(r, seqFilter))
+    .filter((r) => {
+      if (!q) return true;
+      return (
+        (r.rfi_number || "").toLowerCase().includes(q) ||
+        (r.title || "").toLowerCase().includes(q) ||
+        (r.submitted_by || "").toLowerCase().includes(q) ||
+        (r.drawing_reference || "").toLowerCase().includes(q) ||
+        (r.question || "").toLowerCase().includes(q) ||
+        (r.answer || "").toLowerCase().includes(q)
+      );
+    })
+    .sort(compareRfisByNumber);
+}
+
+/** Build a `project_id -> project name` lookup map. */
+export function buildProjectNameMap(projects) {
+  const m = {};
+  for (const p of projects) m[p.id] = p.name || "";
+  return m;
+}

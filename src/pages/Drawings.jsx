@@ -26,15 +26,16 @@ import { usePermissions } from "@/services/permissions";
 
 // ── Domain config & utils ───────────────────────────────────────────────────
 import {
-  STAGE_ORDER, DISCIPLINES, EMPTY_FORM, IN_REVIEW_STAGES, STAGES,
+  STAGE_ORDER, DISCIPLINES, EMPTY_FORM,
   mono, surface, stageUpdatePatch,
 } from "@/components/drawings/drawingsConfig";
 import {
-  isOverdue, exportTransmittal, computeStatsFromSubmittals, computeDisciplineCounts, buildRevisionAlerts,
-  validateStageTransition,
+  exportTransmittal, computeStatsFromSubmittals, computeDisciplineCounts, buildRevisionAlerts,
+  validateStageTransition, buildRfiMap, buildSubmittalsBySetId, filterDrawings,
+  groupByDrawingSetName, computeExistingSetNames, buildDrawingSetMap, computeSelectedSetName,
+  computeStagePipeline,
 } from "@/components/drawings/drawingsUtils";
-import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
-import { derivedSetStage, stageToSubmittalStatus } from "@/lib/submittalStageMapping";
+import { stageToSubmittalStatus } from "@/lib/submittalStageMapping";
 import { TERMINAL_APPROVED_STATUSES } from "@/hooks/useSubmittals";
 import { useFlag } from "@/hooks/useFeatureFlag";
 
@@ -165,11 +166,7 @@ export default function Drawings({ embedded = false } = {}) {
   }, [searchParams]);
 
   // ── Derived data ──────────────────────────────────────────────────────────
-  const rfiMap = useMemo(() => {
-    const map = {};
-    rfis.forEach(r => { if (r.rfi_number) map[r.rfi_number] = r; });
-    return map;
-  }, [rfis]);
+  const rfiMap = useMemo(() => buildRfiMap(rfis), [rfis]);
 
   // Reverse index: drawing_set_id -> { total, open, latestStatus, latestId }.
   // The submittal table holds the link as a uuid[] column
@@ -180,58 +177,15 @@ export default function Drawings({ embedded = false } = {}) {
   // touched (-submitted_date order in the query) submittal that
   // references the set, so the table badge can show the live workflow
   // state — submittals are workflow source of truth post-Sprint 1.
-  const submittalsBySetId = useMemo(() => {
-    // "Open" = work still in flight. Closed = the canonical terminal-approved
-    // statuses (Approved / Approved as Noted / Released for Fabrication — the
-    // same set that locks linked drawing sets, see useSubmittals) plus Void
-    // (cancelled). Earlier this list hard-coded only the first two + Void and
-    // omitted "Released for Fabrication", so a fully-released set still showed
-    // "1 open". Reuse the single source of truth so the two never drift again.
-    const CLOSED = new Set([...TERMINAL_APPROVED_STATUSES, "Void"]);
-    const map = {};
-    // submittals come pre-sorted by -submitted_date from useSubmittals,
-    // so the FIRST encountered status for a set is the latest.
-    (submittals || []).forEach((s) => {
-      if (s.is_deleted) return;
-      const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
-      const open = !CLOSED.has(s.status);
-      ids.forEach((id) => {
-        if (!id) return;
-        if (!map[id]) {
-          map[id] = {
-            total: 0,
-            open: 0,
-            latestStatus: s.status || null,
-            latestId: s.id || null,
-          };
-        }
-        map[id].total += 1;
-        if (open) map[id].open += 1;
-      });
-    });
-    return map;
-  }, [submittals]);
+  const submittalsBySetId = useMemo(
+    () => buildSubmittalsBySetId(submittals, TERMINAL_APPROVED_STATUSES),
+    [submittals],
+  );
 
-  const filtered = useMemo(() => {
-    let list = [...drawings];
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(d =>
-        d.sheet_number?.toLowerCase().includes(q) ||
-        d.title?.toLowerCase().includes(q) ||
-        d.reviewer?.toLowerCase().includes(q) ||
-        d.spec_section?.toLowerCase().includes(q)
-      );
-    }
-    if (discipline !== "ALL") list = list.filter(d => d.discipline === discipline);
-    if (stageFilter !== "ALL") {
-      if (stageFilter === "_overdue") list = list.filter(d => isOverdue(d));
-      else if (stageFilter === "_inReview") list = list.filter(d => IN_REVIEW_STAGES.includes(d.stage));
-      else if (stageFilter === "_priority") list = list.filter(d => d.priority_flag);
-      else list = list.filter(d => d.stage === stageFilter);
-    }
-    return list;
-  }, [drawings, search, discipline, stageFilter]);
+  const filtered = useMemo(
+    () => filterDrawings(drawings, { search, discipline, stageFilter }),
+    [drawings, search, discipline, stageFilter],
+  );
 
   // Sprint 5: KPI tiles read submittal status (RELEASED, IN REVIEW) where
   // a submittal exists, falling back to dominant sheet.stage for
@@ -245,45 +199,21 @@ export default function Drawings({ embedded = false } = {}) {
   const revisionAlerts = useMemo(() => buildRevisionAlerts(drawings, rfiMap), [drawings, rfiMap]);
 
   // ── Drawing set grouping ──────────────────────────────────────────────────
-  const drawingSets = useMemo(() => {
-    const map = {};
-    drawings.forEach(d => {
-      const name = d.drawing_set_name?.trim();
-      if (!name) return;
-      if (!map[name]) map[name] = [];
-      map[name].push(d);
-    });
-    return map;
-  }, [drawings]);
+  const drawingSets = useMemo(() => groupByDrawingSetName(drawings), [drawings]);
 
   // Names from real drawing_sets parent rows + legacy string column on drawings,
   // deduped. The upload modal uses this for autocomplete + duplicate detection.
-  const existingSetNames = useMemo(() => {
-    const names = new Set(Object.keys(drawingSets));
-    drawingSetRecords.forEach(ds => {
-      if (ds?.set_name?.trim()) names.add(ds.set_name.trim());
-    });
-    return [...names].sort();
-  }, [drawingSets, drawingSetRecords]);
+  const existingSetNames = useMemo(
+    () => computeExistingSetNames(drawingSets, drawingSetRecords),
+    [drawingSets, drawingSetRecords],
+  );
 
   // id → parent set record lookup. DrawingsTable groups by drawing_set_id and
   // pulls display names from this map so the FK is the source of truth for
   // grouping, not the legacy denormalized drawing_set_name string. (F8)
-  const drawingSetMap = useMemo(() => {
-    const map = {};
-    drawingSetRecords.forEach(ds => { if (ds?.id) map[ds.id] = ds; });
-    return map;
-  }, [drawingSetRecords]);
+  const drawingSetMap = useMemo(() => buildDrawingSetMap(drawingSetRecords), [drawingSetRecords]);
 
-  const selectedSetName = useMemo(() => {
-    if (selected.size === 0) return null;
-    const names = new Set();
-    for (const id of selected) {
-      const d = drawings.find(x => x.id === id);
-      if (d?.drawing_set_name?.trim()) names.add(d.drawing_set_name.trim());
-    }
-    return names.size === 1 ? [...names][0] : null;
-  }, [selected, drawings]);
+  const selectedSetName = useMemo(() => computeSelectedSetName(selected, drawings), [selected, drawings]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   // Any drawings mutation must also invalidate the parent drawing_sets query,
@@ -867,53 +797,7 @@ export default function Drawings({ embedded = false } = {}) {
             SUBMITTAL STAGE PIPELINE
           </div>
           {(() => {
-            // Sprint 5: Stage Pipeline counts derive from submittals via
-            // submittalPipelineRollupFromSubmittals (one count per active
-            // submittal, mapped to a stage by status+BIC+approved_date),
-            // plus a Not-Started bucket counting packages with no
-            // submittal yet AND no released sheet — these are the "haven't
-            // entered the workflow" items the chevron should show.
-            const rollup = submittalPipelineRollupFromSubmittals(submittals);
-            // Count packages with no submittal as Not Started — they're
-            // the inverse of every set that's already represented in the
-            // submittal rollup.
-            const packagesWithSubmittal = new Set();
-            (submittals || []).forEach((s) => {
-              if (!s || s.is_deleted) return;
-              if (s.status === "Void") return;
-              const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
-              ids.forEach((id) => packagesWithSubmittal.add(id));
-            });
-            const notStartedCount = drawingSetRecords.filter(
-              (ds) => ds?.id && !packagesWithSubmittal.has(ds.id) &&
-                derivedSetStage([], (drawings || []).filter((d) => d.drawing_set_id === ds.id)) === "Not Started"
-            ).length;
-            const counts = STAGES.reduce((acc, s) => {
-              acc[s.key] = s.key === "Not Started"
-                ? notStartedCount
-                : (rollup.counts[s.key] || 0);
-              return acc;
-            }, {});
-            // Pipeline stages (use only the forward-flow stages; Released is the terminal)
-            const pipeStages = STAGES.map((s) => ({
-              id: s.key,
-              label: s.label,
-              color: s.color,
-              count: counts[s.key] || 0,
-            }));
-            // Active = current stage filter if it's a real stage, else the first
-            // non-empty non-terminal stage (the bottleneck).
-            let activeIdx = 0;
-            const filteredActive = stageFilter !== "ALL" && !stageFilter.startsWith("_")
-              ? STAGES.findIndex((s) => s.key === stageFilter)
-              : -1;
-            if (filteredActive >= 0) {
-              activeIdx = filteredActive;
-            } else {
-              for (let i = STAGES.length - 2; i >= 1; i--) {
-                if (counts[STAGES[i].key] > 0) { activeIdx = i; break; }
-              }
-            }
+            const { pipeStages, activeIdx } = computeStagePipeline({ submittals, drawingSetRecords, drawings, stageFilter });
             return <PhaseChevron stages={pipeStages} activeIdx={activeIdx} showIcons={false} />;
           })()}
         </div>

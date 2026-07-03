@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   CLOSED_SUBMITTAL_STATUSES,
   buildCurrentRevisionMap,
+  buildDrawingKpis,
   buildSetPackages,
+  buildTriage,
   currentRevisionForPackage,
   dueInfo,
   dueDateWriteTargets,
@@ -557,5 +559,33 @@ describe("currentRevisionForPackage (per-set authoritative Rev rollup)", () => {
   it("returns the em dash when there is neither a current rev nor a legacy number", () => {
     expect(currentRevisionForPackage([{ id: "u1" }, { id: "u2", revision_number: "A " }], map)).toBe("—");
     expect(currentRevisionForPackage([], map)).toBe("—");
+  });
+});
+
+// ── Hub container derivations (extracted from DrawingSubmittalHub.tsx) ────────
+
+describe("buildDrawingKpis", () => {
+  it("counts only active (non-superseded, non-deleted) sheets; empty sets → zero rollups", () => {
+    const k = buildDrawingKpis(
+      [{ id: "1", stage: "IFA" }, { id: "2", is_superseded: true }, { id: "3", is_deleted: true }],
+      [],
+    );
+    expect(k).toEqual({ totalSets: 0, totalSheets: 1, released: 0, inReview: 0, overdue: 0 });
+  });
+});
+
+describe("buildTriage", () => {
+  it("returns empty buckets for empty inputs", () => {
+    const t = buildTriage([], [], new Map());
+    expect(t.setItems).toEqual([]);
+    expect(t.unlinkedSubmittalItems).toEqual([]);
+    expect(t.openItems).toEqual([]);
+    expect(t.overdue).toEqual([]);
+    expect(t.dueSoon).toEqual([]);
+    expect(t.needsAction).toEqual([]);
+    expect(t.noDate).toEqual([]);
+    expect(t.pipelineCounts).toEqual({});
+    expect(t.overdueDrawingSets).toBe(0);
+    expect(t.atRiskCount).toBe(0);
   });
 });

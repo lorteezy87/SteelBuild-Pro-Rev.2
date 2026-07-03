@@ -5,6 +5,7 @@ import {
   computeDataIssues, computeFinancials, computeProductionData,
   computeProjectMap, computeProjectMetrics, enrichProjectMetrics, computeBudgetChartData,
   computePortfolioKPIs, computePccData,
+  applyMetricsView, selectWatchlist, computePortfolioHealthGauge,
 } from "../portfolioDerive";
 
 describe("computeCoExposure", () => {
@@ -303,5 +304,58 @@ describe("computeBudgetChartData", () => {
     expect(rows[2].overBudget).toBe(true);
     const many = Array.from({ length: 12 }, (_, i) => ({ project_number: `P${i}`, avgProgress: 0, actual: 0, budget: 0 }));
     expect(computeBudgetChartData(many)).toHaveLength(8);
+  });
+});
+
+// ─── PortfolioView container derivations (extracted from PortfolioView.jsx) ──
+
+describe("applyMetricsView", () => {
+  const metrics = [
+    { id: "a", overdueRFIs: 2, openRFIs: 5, effectiveHealth: "At Risk", pendingCOs: [{}], lateDeliveries: 1 },
+    { id: "b", overdueRFIs: 0, openRFIs: 1, effectiveHealth: "On Track", pendingCOs: [], lateDeliveries: 0 },
+  ];
+  it("filters by the active KPI tile", () => {
+    const view = (kpiFilter) => applyMetricsView(metrics, { sortMode: "health", kpiFilter, allDeliveries: [] }).map((p) => p.id);
+    expect(view("overdueRFIs")).toEqual(["a"]);
+    expect(view("openRFIs")).toEqual(["a", "b"]);
+    expect(view("atRisk")).toEqual(["a"]);
+    expect(view("pendingCOs")).toEqual(["a"]);
+    expect(view("lateDeliveries")).toEqual(["a"]);
+  });
+  it("re-sorts by open RFI count in 'rfi' mode and leaves default order otherwise", () => {
+    expect(applyMetricsView(metrics, { sortMode: "rfi", kpiFilter: null, allDeliveries: [] }).map((p) => p.id)).toEqual(["a", "b"]);
+    expect(applyMetricsView(metrics, { sortMode: "health", kpiFilter: null, allDeliveries: [] }).map((p) => p.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("selectWatchlist", () => {
+  it("keeps not-on-track OR score<70, sorts by severity then score, tops out at 3", () => {
+    const out = selectWatchlist([
+      { id: "ok", effectiveHealth: "On Track", healthScore: 95 },   // excluded
+      { id: "low", effectiveHealth: "On Track", healthScore: 55 },  // included (score < 70)
+      { id: "watch", effectiveHealth: "Watch", healthScore: 80 },
+      { id: "risk", effectiveHealth: "At Risk", healthScore: 30 },
+    ]);
+    expect(out.map((p) => p.id)).toEqual(["risk", "watch", "low"]);
+  });
+  it("caps at 3", () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, effectiveHealth: "At Risk", healthScore: i }));
+    expect(selectWatchlist(many)).toHaveLength(3);
+  });
+});
+
+describe("computePortfolioHealthGauge", () => {
+  it("averages health scores and derives the gauge geometry + band", () => {
+    const g = computePortfolioHealthGauge([{ healthScore: 90 }, { healthScore: 70 }]);
+    expect(g.avgScore).toBe(80);
+    expect(g.color).toBe("var(--status-success)");
+    expect(g.label).toBe("HEALTHY");
+    expect(g.circumference).toBeCloseTo(2 * Math.PI * 38);
+    expect(g.offset).toBeCloseTo(g.circumference * (1 - 80 / 100));
+  });
+  it("defaults to 100 with no projects, and maps mid/low bands", () => {
+    expect(computePortfolioHealthGauge([]).avgScore).toBe(100);
+    expect(computePortfolioHealthGauge([{ healthScore: 65 }]).label).toBe("WATCH");
+    expect(computePortfolioHealthGauge([{ healthScore: 40 }]).label).toBe("AT RISK");
   });
 });

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { isOverdue, daysLate, groupByDrawingSet } from "../drawingsUtils";
+import {
+  isOverdue, daysLate, groupByDrawingSet,
+  buildRfiMap, buildSubmittalsBySetId, filterDrawings, groupByDrawingSetName,
+  computeExistingSetNames, buildDrawingSetMap, computeSelectedSetName, computeStagePipeline,
+} from "../drawingsUtils";
 
 const PAST = "2020-01-01";
 const FUTURE = "2999-01-01";
@@ -120,5 +124,131 @@ describe("groupByDrawingSet", () => {
     ];
     const groups = groupByDrawingSet(drawings, { "set-1": { id: "set-1", set_name: "X" } });
     expect(groups[0].aggregates.maxRev).toBe(5);
+  });
+});
+
+// ─── Drawings page derivations (extracted from Drawings.jsx) ─────────────────
+
+describe("buildRfiMap", () => {
+  it("maps rfi_number → rfi, skipping rows without a number", () => {
+    const map = buildRfiMap([
+      { rfi_number: "RFI-001", id: "a" },
+      { rfi_number: "RFI-002", id: "b" },
+      { id: "c" },
+    ]);
+    expect(Object.keys(map)).toEqual(["RFI-001", "RFI-002"]);
+    expect(map["RFI-001"].id).toBe("a");
+  });
+});
+
+describe("buildSubmittalsBySetId", () => {
+  const TERMINAL = new Set(["Approved", "Approved as Noted", "Released for Fabrication"]);
+  it("tallies total + open per set, fans out across drawing_set_ids, treats terminal+Void as closed, skips deleted", () => {
+    const submittals = [
+      { id: "s1", status: "OFA", drawing_set_ids: ["set-1", "set-2"] },       // open, fans out
+      { id: "s2", status: "Approved", drawing_set_ids: ["set-1"] },           // closed (terminal)
+      { id: "s3", status: "Void", drawing_set_ids: ["set-2"] },               // closed (void)
+      { id: "s4", status: "OFA", drawing_set_ids: ["set-3"], is_deleted: true }, // skipped
+    ];
+    const map = buildSubmittalsBySetId(submittals, TERMINAL);
+    expect(map["set-1"]).toEqual({ total: 2, open: 1, latestStatus: "OFA", latestId: "s1" });
+    expect(map["set-2"]).toEqual({ total: 2, open: 1, latestStatus: "OFA", latestId: "s1" });
+    expect(map["set-3"]).toBeUndefined();
+  });
+  it("keeps the FIRST encountered status as latest (submittals arrive pre-sorted by -submitted_date)", () => {
+    const map = buildSubmittalsBySetId([
+      { id: "new", status: "BFA", drawing_set_ids: ["s"] },
+      { id: "old", status: "OFA", drawing_set_ids: ["s"] },
+    ], TERMINAL);
+    expect(map["s"]).toEqual({ total: 2, open: 2, latestStatus: "BFA", latestId: "new" });
+  });
+});
+
+describe("filterDrawings", () => {
+  const rows = [
+    { id: "1", sheet_number: "S-101", title: "Framing", reviewer: "Alice", spec_section: "05 12 00", discipline: "Structural", stage: "IFA", priority_flag: false, due_date: PAST },
+    { id: "2", sheet_number: "A-201", title: "Plan", reviewer: "Bob", spec_section: "09 00 00", discipline: "Architectural", stage: "Released", priority_flag: true },
+    { id: "3", sheet_number: "S-102", title: "Details", reviewer: "Carol", discipline: "Structural", stage: "OFA", priority_flag: false, due_date: FUTURE },
+  ];
+  const all = { search: "", discipline: "ALL", stageFilter: "ALL" };
+  it("returns all rows with no active filters", () => {
+    expect(filterDrawings(rows, all)).toHaveLength(3);
+  });
+  it("searches sheet #, title, reviewer, spec section case-insensitively", () => {
+    expect(filterDrawings(rows, { ...all, search: "framing" }).map(r => r.id)).toEqual(["1"]);
+    expect(filterDrawings(rows, { ...all, search: "bob" }).map(r => r.id)).toEqual(["2"]);
+    expect(filterDrawings(rows, { ...all, search: "05 12" }).map(r => r.id)).toEqual(["1"]);
+  });
+  it("filters by exact discipline", () => {
+    expect(filterDrawings(rows, { ...all, discipline: "Structural" }).map(r => r.id)).toEqual(["1", "3"]);
+  });
+  it("handles _overdue / _priority / _inReview pseudo-stages and an exact stage", () => {
+    expect(filterDrawings(rows, { ...all, stageFilter: "_overdue" }).map(r => r.id)).toEqual(["1"]);
+    expect(filterDrawings(rows, { ...all, stageFilter: "_priority" }).map(r => r.id)).toEqual(["2"]);
+    expect(filterDrawings(rows, { ...all, stageFilter: "_inReview" }).map(r => r.id)).toEqual(["1", "3"]);
+    expect(filterDrawings(rows, { ...all, stageFilter: "OFA" }).map(r => r.id)).toEqual(["3"]);
+  });
+});
+
+describe("groupByDrawingSetName", () => {
+  it("groups by trimmed drawing_set_name, skipping blank/absent names", () => {
+    const map = groupByDrawingSetName([
+      { id: "1", drawing_set_name: "Set A" },
+      { id: "2", drawing_set_name: " Set A " },
+      { id: "3", drawing_set_name: "" },
+      { id: "4" },
+    ]);
+    expect(Object.keys(map)).toEqual(["Set A"]);
+    expect(map["Set A"].map(d => d.id)).toEqual(["1", "2"]);
+  });
+});
+
+describe("computeExistingSetNames", () => {
+  it("merges legacy grouping keys + parent set_names, deduped + sorted", () => {
+    const names = computeExistingSetNames(
+      { Beta: [], Alpha: [] },
+      [{ set_name: "Gamma" }, { set_name: " Alpha " }, { set_name: "" }],
+    );
+    expect(names).toEqual(["Alpha", "Beta", "Gamma"]);
+  });
+});
+
+describe("buildDrawingSetMap", () => {
+  it("maps id → row, skipping rows without an id", () => {
+    const map = buildDrawingSetMap([{ id: "a", set_name: "A" }, { set_name: "no id" }]);
+    expect(Object.keys(map)).toEqual(["a"]);
+    expect(map.a.set_name).toBe("A");
+  });
+});
+
+describe("computeSelectedSetName", () => {
+  const drawings = [
+    { id: "1", drawing_set_name: "Set A" },
+    { id: "2", drawing_set_name: "Set A" },
+    { id: "3", drawing_set_name: "Set B" },
+  ];
+  it("returns the shared name when the whole selection is one set", () => {
+    expect(computeSelectedSetName(new Set(["1", "2"]), drawings)).toBe("Set A");
+  });
+  it("returns null for an empty selection or one spanning multiple sets", () => {
+    expect(computeSelectedSetName(new Set(), drawings)).toBeNull();
+    expect(computeSelectedSetName(new Set(["1", "3"]), drawings)).toBeNull();
+  });
+});
+
+describe("computeStagePipeline", () => {
+  it("builds the 7 canonical stages and picks activeIdx from an explicit real-stage filter", () => {
+    const r = computeStagePipeline({ submittals: [], drawingSetRecords: [], drawings: [], stageFilter: "OFA" });
+    expect(r.pipeStages.map(s => s.id)).toEqual(["Not Started", "IFA", "OFA", "BFA", "OFS", "IFC", "Released"]);
+    expect(r.activeIdx).toBe(2); // OFA
+  });
+  it("counts a package with no submittal (and no released sheet) in the Not Started bucket", () => {
+    const r = computeStagePipeline({
+      submittals: [],
+      drawingSetRecords: [{ id: "s1" }],
+      drawings: [],
+      stageFilter: "ALL",
+    });
+    expect(r.pipeStages.find(s => s.id === "Not Started").count).toBe(1);
   });
 });

@@ -5,9 +5,10 @@
  * overdue detection, CSV export, and filter/stat computation.
  */
 
-import { IN_REVIEW_STAGES, STAGE_ORDER } from "./drawingsConfig";
+import { IN_REVIEW_STAGES, STAGE_ORDER, STAGES } from "./drawingsConfig";
 import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
 import { compareDrawingSetPackages, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
 
 /**
  * Decide whether a stage transition is legal.
@@ -538,4 +539,172 @@ export function groupByDrawingSet(drawings, drawingSetMap = {}) {
   });
 
   return groups;
+}
+
+// ─── Drawings page derivations ──────────────────────────────────────────────
+//
+// Pure derivation helpers extracted from the Drawings page container so its
+// useMemo wrappers stay thin and these are unit-testable. The memo wrappers in
+// Drawings.jsx keep their exact dependency arrays and just call these.
+
+/** Build a `rfi_number -> rfi` lookup map. */
+export function buildRfiMap(rfis) {
+  const map = {};
+  rfis.forEach(r => { if (r.rfi_number) map[r.rfi_number] = r; });
+  return map;
+}
+
+/**
+ * Reverse-index submittals by drawing_set_id → { total, open, latestStatus,
+ * latestId }. A submittal links a uuid[] of sets, so each fans out. "Open" =
+ * not in the terminal-approved set (passed in as `terminalApprovedStatuses`,
+ * the single source of truth) nor "Void". Submittals arrive pre-sorted by
+ * -submitted_date, so the FIRST encountered status for a set is the latest.
+ */
+export function buildSubmittalsBySetId(submittals, terminalApprovedStatuses) {
+  const CLOSED = new Set([...terminalApprovedStatuses, "Void"]);
+  const map = {};
+  (submittals || []).forEach((s) => {
+    if (s.is_deleted) return;
+    const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
+    const open = !CLOSED.has(s.status);
+    ids.forEach((id) => {
+      if (!id) return;
+      if (!map[id]) {
+        map[id] = {
+          total: 0,
+          open: 0,
+          latestStatus: s.status || null,
+          latestId: s.id || null,
+        };
+      }
+      map[id].total += 1;
+      if (open) map[id].open += 1;
+    });
+  });
+  return map;
+}
+
+/**
+ * Filter drawings by free-text search (sheet #, title, reviewer, spec section),
+ * discipline, and the stage filter (real stage keys plus the `_overdue`,
+ * `_inReview`, `_priority` pseudo-stages).
+ */
+export function filterDrawings(drawings, { search, discipline, stageFilter }) {
+  let list = [...drawings];
+  if (search.trim()) {
+    const q = search.toLowerCase();
+    list = list.filter(d =>
+      d.sheet_number?.toLowerCase().includes(q) ||
+      d.title?.toLowerCase().includes(q) ||
+      d.reviewer?.toLowerCase().includes(q) ||
+      d.spec_section?.toLowerCase().includes(q)
+    );
+  }
+  if (discipline !== "ALL") list = list.filter(d => d.discipline === discipline);
+  if (stageFilter !== "ALL") {
+    if (stageFilter === "_overdue") list = list.filter(d => isOverdue(d));
+    else if (stageFilter === "_inReview") list = list.filter(d => IN_REVIEW_STAGES.includes(d.stage));
+    else if (stageFilter === "_priority") list = list.filter(d => d.priority_flag);
+    else list = list.filter(d => d.stage === stageFilter);
+  }
+  return list;
+}
+
+/** Group drawings by their legacy `drawing_set_name` string → { name: sheets[] }. */
+export function groupByDrawingSetName(drawings) {
+  const map = {};
+  drawings.forEach(d => {
+    const name = d.drawing_set_name?.trim();
+    if (!name) return;
+    if (!map[name]) map[name] = [];
+    map[name].push(d);
+  });
+  return map;
+}
+
+/**
+ * Deduped, sorted set-name list from the legacy name grouping + real
+ * drawing_sets parent rows. Powers the upload modal autocomplete + duplicate
+ * detection.
+ */
+export function computeExistingSetNames(drawingSets, drawingSetRecords) {
+  const names = new Set(Object.keys(drawingSets));
+  drawingSetRecords.forEach(ds => {
+    if (ds?.set_name?.trim()) names.add(ds.set_name.trim());
+  });
+  return [...names].sort();
+}
+
+/** Build an `id -> parent drawing_sets row` lookup map. */
+export function buildDrawingSetMap(drawingSetRecords) {
+  const map = {};
+  drawingSetRecords.forEach(ds => { if (ds?.id) map[ds.id] = ds; });
+  return map;
+}
+
+/**
+ * The single drawing-set name shared across the current selection, or null
+ * when the selection is empty or spans multiple sets.
+ */
+export function computeSelectedSetName(selected, drawings) {
+  if (selected.size === 0) return null;
+  const names = new Set();
+  for (const id of selected) {
+    const d = drawings.find(x => x.id === id);
+    if (d?.drawing_set_name?.trim()) names.add(d.drawing_set_name.trim());
+  }
+  return names.size === 1 ? [...names][0] : null;
+}
+
+/**
+ * Submittal Stage Pipeline counts + active index. Counts derive from submittals
+ * via submittalPipelineRollupFromSubmittals (one count per active submittal,
+ * mapped to a stage by status+BIC+approved_date), plus a Not-Started bucket
+ * counting packages with no submittal yet AND no released sheet. Returns
+ * `{ pipeStages, activeIdx }` for the caller to render.
+ */
+export function computeStagePipeline({ submittals, drawingSetRecords, drawings, stageFilter }) {
+  const rollup = submittalPipelineRollupFromSubmittals(submittals);
+  // Count packages with no submittal as Not Started — they're
+  // the inverse of every set that's already represented in the
+  // submittal rollup.
+  const packagesWithSubmittal = new Set();
+  (submittals || []).forEach((s) => {
+    if (!s || s.is_deleted) return;
+    if (s.status === "Void") return;
+    const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
+    ids.forEach((id) => packagesWithSubmittal.add(id));
+  });
+  const notStartedCount = drawingSetRecords.filter(
+    (ds) => ds?.id && !packagesWithSubmittal.has(ds.id) &&
+      derivedSetStage([], (drawings || []).filter((d) => d.drawing_set_id === ds.id)) === "Not Started"
+  ).length;
+  const counts = STAGES.reduce((acc, s) => {
+    acc[s.key] = s.key === "Not Started"
+      ? notStartedCount
+      : (rollup.counts[s.key] || 0);
+    return acc;
+  }, {});
+  // Pipeline stages (use only the forward-flow stages; Released is the terminal)
+  const pipeStages = STAGES.map((s) => ({
+    id: s.key,
+    label: s.label,
+    color: s.color,
+    count: counts[s.key] || 0,
+  }));
+  // Active = current stage filter if it's a real stage, else the first
+  // non-empty non-terminal stage (the bottleneck).
+  let activeIdx = 0;
+  const filteredActive = stageFilter !== "ALL" && !stageFilter.startsWith("_")
+    ? STAGES.findIndex((s) => s.key === stageFilter)
+    : -1;
+  if (filteredActive >= 0) {
+    activeIdx = filteredActive;
+  } else {
+    for (let i = STAGES.length - 2; i >= 1; i--) {
+      if (counts[STAGES[i].key] > 0) { activeIdx = i; break; }
+    }
+  }
+  return { pipeStages, activeIdx };
 }
