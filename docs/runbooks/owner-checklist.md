@@ -79,11 +79,12 @@ Refs:
   - Why: default auth policy is too permissive for a multi-tenant SaaS holding customer financial/contract data.
   - Verify: attempt a sign-up with a known-breached password → rejected; short password → rejected.
 
-- [ ] **Enable MFA / TOTP** — [H23]
-  - Supabase dashboard → `Authentication`: enable **TOTP MFA**.
-  - Encourage/require owner + admin accounts to enroll.
-  - Why: single-factor auth on accounts that can read all org project/financial data is below enterprise bar.
-  - Verify: enroll the owner account (`nickl@shsteelaz.com`) in TOTP and complete a full MFA login.
+- [ ] **Enable MFA / TOTP + field-verify the shipped flow** — [H23]
+  - The **in-app MFA UI is implemented** (2026-07-02): Settings → Profile → Security → "Enable two-factor" (QR enroll + code confirm + remove), and a login **step-up challenge** screen (aal1→aal2) gated at top precedence in `AuthenticatedApp`. Users without MFA are unaffected.
+  - Supabase dashboard → `Authentication → Multi-Factor`: confirm **TOTP** is **enabled** at the project level (if the enroll button errors with an MFA-disabled message, this is why).
+  - Field-verify: enroll the owner account (`nickl@shsteelaz.com`) via Settings → Security, then sign out and complete a full **password + TOTP** login. (This is the field-verification the shipped code still needs — it was code/build-verified only.)
+  - Optional / follow-up: **DB-level enforcement.** The current gate is client-side (UX). To make MFA a hard data boundary, add RLS policies requiring `((auth.jwt()->>'aal') = 'aal2')` on sensitive tables, or require aal2 org-wide. Decide scope before enforcing (it locks out un-enrolled users).
+  - Why: single-factor auth on accounts that can read all org project/financial data is below the enterprise bar.
 
 - [ ] **Allowlist the password-reset redirect URL** — [H22]
   - The in-app flow is **implemented** (2026-07-02): "Forgot password?" on the sign-in card emails a reset link; the link opens the app's **`/update-password`** screen (rendered at top precedence for the recovery session); Settings → Profile → Security also lets a signed-in user rotate their password.

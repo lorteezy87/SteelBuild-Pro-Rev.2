@@ -6,6 +6,7 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
 const UpdatePassword = lazyWithRetry(() => import("@/pages/UpdatePassword"));
+const MfaChallenge = lazyWithRetry(() => import("@/pages/MfaChallenge"));
 const AppRoutes = lazyWithRetry(() => import("@/boot/AppRoutes"));
 const OrgOnboarding = lazyWithRetry(() => import("@/pages/OrgOnboarding"));
 const ProjectProvider = lazyWithRetry(() =>
@@ -50,7 +51,7 @@ function OrgGate() {
 export default function AuthenticatedApp() {
   const {
     isLoadingAuth, isLoadingPublicSettings, authError,
-    loginWithPassword, signUpWithPassword, sendPasswordReset, isPasswordRecovery,
+    loginWithPassword, signUpWithPassword, sendPasswordReset, isPasswordRecovery, mfaRequired,
   } = useAuth();
 
   // Password recovery takes precedence over every other state: a user who
@@ -61,6 +62,16 @@ export default function AuthenticatedApp() {
     return (
       <Suspense fallback={<AppLoader />}>
         <UpdatePassword />
+      </Suspense>
+    );
+  }
+
+  // MFA step-up: an aal1 session on an account with a verified TOTP factor must
+  // complete the challenge before entering the app or org onboarding (H23).
+  if (mfaRequired) {
+    return (
+      <Suspense fallback={<AppLoader />}>
+        <MfaChallenge />
       </Suspense>
     );
   }

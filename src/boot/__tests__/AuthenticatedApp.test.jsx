@@ -21,6 +21,7 @@ vi.mock("@/components/shared/OrgContext", () => ({
 vi.mock("@/boot/AppLoader", () => ({ default: () => <div>LOADER</div> }));
 vi.mock("@/pages/Landing", () => ({ default: () => <div>LANDING</div> }));
 vi.mock("@/pages/UpdatePassword", () => ({ default: () => <div>UPDATE_PW</div> }));
+vi.mock("@/pages/MfaChallenge", () => ({ default: () => <div>MFA_CHALLENGE</div> }));
 vi.mock("@/boot/AppRoutes", () => ({ default: () => <div>APP_ROUTES</div> }));
 vi.mock("@/pages/OrgOnboarding", () => ({ default: () => <div>ONBOARDING</div> }));
 vi.mock("@/components/shared/ProjectContext", () => ({ ProjectProvider: ({ children }) => <>{children}</> }));
@@ -73,6 +74,21 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     render(<AuthenticatedApp />);
     expect(await screen.findByText("UPDATE_PW")).toBeInTheDocument();
     expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
+  });
+
+  it("shows the MFA challenge when a step-up is required, above the app/org gate (H23)", async () => {
+    authState = { ...authed, mfaRequired: true };
+    orgState = { isLoadingOrgs: false, hasOrg: true };
+    render(<AuthenticatedApp />);
+    expect(await screen.findByText("MFA_CHALLENGE")).toBeInTheDocument();
+    expect(screen.queryByText("APP_ROUTES")).not.toBeInTheDocument();
+  });
+
+  it("password recovery outranks an MFA step-up (H22 > H23)", async () => {
+    authState = { ...authed, isPasswordRecovery: true, mfaRequired: true };
+    render(<AuthenticatedApp />);
+    expect(await screen.findByText("UPDATE_PW")).toBeInTheDocument();
+    expect(screen.queryByText("MFA_CHALLENGE")).not.toBeInTheDocument();
   });
 
   it("fails open — renders the app when the org gate reports hasOrg despite an error", async () => {
