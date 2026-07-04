@@ -43,6 +43,68 @@ export function generateWBS(phase: string | undefined, existingTasks: ScheduleTa
   return `${phaseNum}.${maxIdx + 1}`;
 }
 
+/**
+ * Result of {@link computePhaseWbs}: the task list with WBS codes filled in,
+ * and the subset of persisted rows whose generated code should be written back
+ * to the DB (background backfill).
+ */
+export interface PhaseWbsResult {
+  tasks: ScheduleTask[];
+  toBackfill: Array<{ id: string; wbs: string }>;
+}
+
+/**
+ * Pure two-pass WBS backfill. Assigns "<phase>.<n>" codes to tasks that don't
+ * have one, where <phase> is the numeric phase id (PHASE_NUMBER 1-7) and <n>
+ * is the next sequence within that phase.
+ *
+ * First pass finds the highest n seen per phase, accepting both new-format
+ * (2.3 / 2.3.1) and legacy-format (DET-003) codes so new codes pick up from
+ * there without colliding. Second pass assigns codes to tasks missing one.
+ *
+ * Only persisted rows (those with a DB id) are added to `toBackfill`; a row
+ * without an id can't be UPDATE-targeted anyway, so skipping it is
+ * behavior-preserving. The caller is responsible for persisting `toBackfill`.
+ */
+export function computePhaseWbs(scheduleTasks: ScheduleTask[]): PhaseWbsResult {
+  const phaseCounts: Record<string, number> = {};
+  const result: ScheduleTask[] = [];
+  // First pass: find the highest n seen per phase, accepting both
+  // new-format (2.3 / 2.3.1) and legacy-format (DET-003) codes.
+  scheduleTasks.forEach((t) => {
+    if (!t.wbs_code) return;
+    const ph = t.phase || "Other";
+    let idx = 0;
+    const mNew = /^(\d+)\.(\d+)(?:\.\d+)?$/.exec(t.wbs_code);
+    if (mNew) idx = parseInt(mNew[2], 10);
+    else {
+      const mLeg = /(\d+)$/.exec(t.wbs_code);
+      if (mLeg) idx = parseInt(mLeg[1], 10);
+    }
+    if (Number.isFinite(idx)) {
+      phaseCounts[ph] = Math.max(phaseCounts[ph] || 0, idx);
+    }
+  });
+  // Second pass: assign WBS to tasks missing it
+  const toBackfill: Array<{ id: string; wbs: string }> = [];
+  scheduleTasks.forEach((t) => {
+    if (t.wbs_code) {
+      result.push(t);
+    } else {
+      const ph = t.phase || "Other";
+      const phaseNum = PHASE_NUMBER[ph as keyof typeof PHASE_NUMBER] ?? 0;
+      phaseCounts[ph] = (phaseCounts[ph] || 0) + 1;
+      const wbs = `${phaseNum}.${phaseCounts[ph]}`;
+      result.push({ ...t, wbs_code: wbs });
+      // Only persisted rows (those with a DB id) can be backfilled; a row
+      // without an id can't be UPDATE-targeted anyway, so skipping it is
+      // behavior-preserving.
+      if (t.id) toBackfill.push({ id: t.id, wbs });
+    }
+  });
+  return { tasks: result, toBackfill };
+}
+
 export function sanitizeScheduleTaskUpdatePayload(data: ScheduleTask): SanitizedTaskUpdate {
   const {
     id,

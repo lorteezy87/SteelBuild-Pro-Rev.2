@@ -1,74 +1,34 @@
-import { Suspense, useRef, useMemo, useState } from "react";
+import { useRef, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import ErrorBoundary from "@/components/shared/ErrorBoundary";
-import DeleteDialog from "@/components/shared/DeleteDialog";
-import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
-import { lazyWithRetry } from "@/lib/lazyRetry";
-import ScheduleRivetBriefRaw from "@/components/schedule/ScheduleRivetBrief";
-import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
-import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
-import TaskDetailDrawerRaw from "@/components/schedule/TaskDetailDrawer";
-import { PHASES, PHASE_NUMBER } from "@/utils/phases";
+import { PHASES } from "@/utils/phases";
 import { batchProcess } from "@/utils/batchProcess";
-import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw, Button as ButtonRaw } from "@/components/design-system";
+import { CommandBar as CommandBarRaw, Button as ButtonRaw } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
-import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "./schedule/wbs";
-import { PHASE_NAME_MAP, derivePhaseFromHierarchy, inferTaskType, parseMsProjectXml } from "./schedule/mppImport";
+import { computePhaseWbs, generateWBS, sanitizeScheduleTaskUpdatePayload } from "./schedule/wbs";
+import { PHASE_NAME_MAP, derivePhaseFromHierarchy, deriveMppDependencies, inferTaskType, parseMsProjectXml } from "./schedule/mppImport";
 import { reparentTasks } from "@/lib/schedule/reparentTasks";
-import { validReparentTargets } from "@/lib/schedule/hierarchy";
-import BulkActionToolbar from "./schedule/BulkActionToolbar";
+import { computeBulkParentOptions, filterEditableTasks } from "./schedule/scheduleTaskHelpers";
 import type { ScheduleTask } from "./schedule/types";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import ScheduleCommandCenter from "./schedule/ScheduleCommandCenter";
-import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
+import ScheduleBody from "./schedule/ScheduleBody";
+import { useScheduleModals } from "./schedule/useScheduleModals";
+import { useTaskSelection } from "./schedule/useTaskSelection";
 
 // The design-system primitives are still .jsx; these casts are removable
 // once the shared layer is typed.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
-const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
-const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
-// These two schedule children are still .jsx and default their list props to
-// `[]`, which TS infers as `never[]` — too narrow to accept ScheduleTask[].
-// Wrap them at the import boundary like the primitives above; removable once
-// the components are typed.
-const ScheduleRivetBrief = ScheduleRivetBriefRaw as unknown as ComponentType<AnyProps>;
-const TaskDetailDrawer = TaskDetailDrawerRaw as unknown as ComponentType<AnyProps>;
-// Code-split the heaviest, view-/modal-gated schedule screens out of the
-// Schedule route chunk. ScheduleGantt is by far the largest child (only renders
-// on the Gantt tab) and the add/bulk/WBS modals only matter once opened, so
-// deferring their fetch keeps the initial Schedule payload lean. Each is gated
-// in JSX (view tab / open flag) so the chunk fetches lazily on first use, and a
-// Suspense boundary at each render site shows a skeleton while it streams in.
-// Casts at the boundary remain removable once these .jsx components are typed.
-const ScheduleGantt = lazyWithRetry(
-  () => import("@/components/schedule/ScheduleGantt"),
-) as unknown as ComponentType<AnyProps>;
-const AddTaskModal = lazyWithRetry(
-  () => import("@/components/schedule/AddTaskModal"),
-) as unknown as ComponentType<AnyProps>;
-const BulkAddTaskModal = lazyWithRetry(
-  () => import("@/components/schedule/BulkAddTaskModal"),
-) as unknown as ComponentType<AnyProps>;
-const BulkDateEditModal = lazyWithRetry(
-  () => import("@/components/schedule/BulkDateEditModal"),
-) as unknown as ComponentType<AnyProps>;
-const BulkDurationEditModal = lazyWithRetry(
-  () => import("@/components/schedule/BulkDurationEditModal"),
-) as unknown as ComponentType<AnyProps>;
-const WbsBuilderModal = lazyWithRetry(
-  () => import("@/components/schedule/WbsBuilderModal"),
-) as unknown as ComponentType<AnyProps>;
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
@@ -86,23 +46,31 @@ export default function Schedule() {
   })();
   const [phaseFilter, setPhaseFilter] = useState(initialPhase);
   const [selectedTask, setSelectedTask] = useState<ScheduleTask | null>(null);
-  const [showDrawer, setShowDrawer] = useState(false);
-  const [showAddTask, setShowAddTask] = useState(false);
-  const [showBulkAdd, setShowBulkAdd] = useState(false);
-  const [showWbsBuilder, setShowWbsBuilder] = useState(false);
   const [ganttFocus, setGanttFocus] = useState<any>(null);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ScheduleTask | null>(null);
-  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [showBulkResource, setShowBulkResource] = useState(false);
   const [bulkResourceValue, setBulkResourceValue] = useState("");
-  const [showBulkDates, setShowBulkDates] = useState(false);
-  const [showBulkDuration, setShowBulkDuration] = useState(false);
-  const [showBulkParent, setShowBulkParent] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  // Consolidated modal/drawer open flags + bulk-selection state (see hooks).
+  // The whole `modals` / `selection` objects are threaded into ScheduleBody;
+  // here we destructure only the setters/values the mutations, handlers, and
+  // header reference directly.
+  const modals = useScheduleModals();
+  const {
+    setShowDrawer,
+    setShowAddTask,
+    setShowBulkAdd,
+    setShowWbsBuilder,
+    setShowBulkResource,
+    setShowBulkDates,
+    setShowBulkDuration,
+    setShowBulkParent,
+    setShowBulkDeleteConfirm,
+  } = modals;
+  const selection = useTaskSelection();
+  const { selectedIds, setSelectedIds } = selection;
   const qc = useQueryClient();
 
   // useScheduleTasks is still .js and yields DB rows (RowWithAliases<"schedule_tasks">,
@@ -160,41 +128,7 @@ export default function Schedule() {
      up from there without colliding. */
   const enrichedTasks = useMemo(() => {
     if (!scheduleTasks.length) return scheduleTasks;
-    const phaseCounts: Record<string, number> = {};
-    const result: ScheduleTask[] = [];
-    // First pass: find the highest n seen per phase, accepting both
-    // new-format (2.3 / 2.3.1) and legacy-format (DET-003) codes.
-    scheduleTasks.forEach((t) => {
-      if (!t.wbs_code) return;
-      const ph = t.phase || "Other";
-      let idx = 0;
-      const mNew = /^(\d+)\.(\d+)(?:\.\d+)?$/.exec(t.wbs_code);
-      if (mNew) idx = parseInt(mNew[2], 10);
-      else {
-        const mLeg = /(\d+)$/.exec(t.wbs_code);
-        if (mLeg) idx = parseInt(mLeg[1], 10);
-      }
-      if (Number.isFinite(idx)) {
-        phaseCounts[ph] = Math.max(phaseCounts[ph] || 0, idx);
-      }
-    });
-    // Second pass: assign WBS to tasks missing it
-    const toBackfill: Array<{ id: string; wbs: string }> = [];
-    scheduleTasks.forEach((t) => {
-      if (t.wbs_code) {
-        result.push(t);
-      } else {
-        const ph = t.phase || "Other";
-        const phaseNum = PHASE_NUMBER[ph] ?? 0;
-        phaseCounts[ph] = (phaseCounts[ph] || 0) + 1;
-        const wbs = `${phaseNum}.${phaseCounts[ph]}`;
-        result.push({ ...t, wbs_code: wbs });
-        // Only persisted rows (those with a DB id) can be backfilled; a row
-        // without an id can't be UPDATE-targeted anyway, so skipping it is
-        // behavior-preserving.
-        if (t.id) toBackfill.push({ id: t.id, wbs });
-      }
-    });
+    const { tasks: result, toBackfill } = computePhaseWbs(scheduleTasks);
     // Background-persist generated WBS codes to DB
     if (toBackfill.length > 0) {
       batchProcess(
@@ -376,7 +310,7 @@ export default function Schedule() {
   const bulkDateMut = useMutation({
     mutationFn: async ({ ids, fields }: { ids: string[]; fields: Record<string, any> }) => {
       const selected = tasksWithEffective.filter((task) => ids.includes(task.id));
-      const editable = selected.filter((task) => !task._hasChildren && !task._isRolledUpSummary && !task.is_summary);
+      const editable = filterEditableTasks(selected);
       const skipped = selected.length - editable.length;
 
       if (editable.length === 0) {
@@ -414,7 +348,7 @@ export default function Schedule() {
   const bulkDurationMut = useMutation({
     mutationFn: async ({ ids, mode, days }: { ids: string[]; mode: string; days: number }) => {
       const selected = tasksWithEffective.filter((task) => ids.includes(task.id));
-      const editable = selected.filter((task) => !task._hasChildren && !task._isRolledUpSummary && !task.is_summary);
+      const editable = filterEditableTasks(selected);
       const skipped = selected.length - editable.length;
 
       if (editable.length === 0) {
@@ -567,31 +501,7 @@ export default function Schedule() {
       // We now persist the full link object — { id, type, lag_days } —
       // so the cascade picks up the right semantics on first render
       // instead of assuming FS+1 for everything imported.
-      const MS_LINK_TYPE: Record<string, string> = { "0": "FF", "1": "FS", "2": "SF", "3": "SS" };
-      const TENTHS_PER_DAY = 10 * 60 * 8; // tenths of minutes in an 8h workday
-      const depItems: Array<{ dbId: string; predLinks: Array<{ id: string; type: string; lag_days: number }> }> = [];
-      allParsed.forEach((t) => {
-        if (t.preds && t.preds.length > 0) {
-          const dbId = uidToDbId[t.uid];
-          const predLinks = t.preds
-            .map((p) => {
-              // predUid may be null/undefined; an absent/empty key misses the
-              // map and is discarded by the !id guard below — same as before.
-              const id = uidToDbId[p.predUid ?? ""];
-              if (!id) return null;
-              const type = MS_LINK_TYPE[p.linkType] || "FS";
-              // Convert tenths-of-minutes to whole days; round so a
-              // typical 1-day lag (4800 tenths) lands on lag_days=1.
-              const lagTenths = Number(p.lagDuration) || 0;
-              const lag_days = Math.round(lagTenths / TENTHS_PER_DAY);
-              return { id, type, lag_days };
-            })
-            .filter(Boolean) as Array<{ id: string; type: string; lag_days: number }>;
-          if (dbId && predLinks.length > 0) {
-            depItems.push({ dbId, predLinks });
-          }
-        }
-      });
+      const depItems = deriveMppDependencies(allParsed, uidToDbId);
       if (depItems.length > 0) {
         await batchProcess(
           depItems,
@@ -609,14 +519,6 @@ export default function Schedule() {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
   };
 
   const bulkUpdateStatus = (status: string) => {
@@ -659,18 +561,10 @@ export default function Schedule() {
   // Legal parent options for the bulk "Set Parent" picker — intersection of
   // valid reparent targets across every selected task, minus the selected tasks
   // themselves. A parent must be valid for ALL selected children.
-  const bulkParentOptions = useMemo(() => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return [];
-    let allowed: Set<string> | null = null;
-    for (const childId of ids) {
-      const v = validReparentTargets(enrichedTasks, childId);
-      allowed = allowed ? new Set([...allowed].filter((x) => v.has(x))) : v;
-    }
-    const allowedSet = allowed || new Set<string>();
-    ids.forEach((id) => allowedSet.delete(id));
-    return enrichedTasks.filter((t: any) => allowedSet.has(t.id));
-  }, [selectedIds, enrichedTasks]);
+  const bulkParentOptions = useMemo(
+    () => computeBulkParentOptions(enrichedTasks, selectedIds),
+    [selectedIds, enrichedTasks],
+  );
 
   // Phase counts for KPI row
   const phaseCounts = useMemo(() => {
@@ -692,337 +586,63 @@ export default function Schedule() {
   // Only wired when commandUi is true; unused in the flag-off path.
   const [ccSearch, setCcSearch] = useState("");
 
+  // Shared props for the schedule body. The body JSX (phase-filter tiles →
+  // bulk action toolbar) is identical between the command_ui path and the
+  // legacy path except for the bulk "Set Parent" modal backdrop, which each
+  // path supplies via `bulkParentBackdrop`. Everything else — data, state,
+  // mutations, handlers — is threaded through unchanged.
+  const bodyProps = {
+    phaseCounts,
+    tasksWithEffective,
+    enrichedTasks,
+    scheduleTasksRaw,
+    submittals,
+    weatherRisk,
+    effectiveDatesMap,
+    selectedProject,
+    projectId,
+    qc,
+    bulkParentOptions,
+    view,
+    setView,
+    phaseFilter,
+    setPhaseFilter,
+    setGanttFocus,
+    ganttFocus,
+    expandedTask,
+    setExpandedTask,
+    selectedTask,
+    setSelectedTask,
+    deleteTarget,
+    setDeleteTarget,
+    modals,
+    selection,
+    bulkResourceValue,
+    setBulkResourceValue,
+    bulkSaving,
+    updateTaskMut,
+    reparentMut,
+    createTaskMut,
+    deleteTaskMut,
+    bulkUpdateMut,
+    bulkDeleteMut,
+    bulkResourceMut,
+    bulkDateMut,
+    bulkDurationMut,
+    handleBulkAdd,
+    bulkUpdateStatus,
+    bulkDelete,
+    bulkUpdateDates,
+    bulkUpdateDuration,
+    bulkSetParent,
+    confirmBulkDelete,
+  };
+
   // ── Command UI flag-branch ───────────────────────────────────────────────
-  // The existing body JSX below is copied verbatim from the original return;
-  // nothing inside it was changed. reparentTasks.js and ScheduleGantt.jsx
-  // are untouched — this branch only adds the ScheduleCommandCenter wrapper.
+  // When command_ui is enabled, the shared body renders inside the
+  // ScheduleCommandCenter shell. reparentTasks.js and ScheduleGantt.jsx are
+  // untouched — this branch only adds the ScheduleCommandCenter wrapper.
   if (commandUi) {
-    const existingBody = (
-      <>
-        {/* Phase Filter — click-to-filter KPI tiles (one per lifecycle phase) */}
-        <div style={{ flexShrink: 0, padding: "0 24px 14px" }}>
-          <div
-            style={{
-              display: "flex",
-              gap: 6,
-              overflowX: "auto",
-              paddingBottom: 4,
-              scrollbarWidth: "thin",
-              scrollbarColor: "var(--border-default) transparent",
-            }}
-          >
-            <div style={{ minWidth: 100, flexShrink: 0 }}>
-              <KpiTile
-                compact
-                label="ALL PHASES"
-                value={phaseCounts.all}
-                color="var(--text-secondary)"
-                active={phaseFilter === "all"}
-                onClick={() => setPhaseFilter("all")}
-              />
-            </div>
-            {PHASES.map((p) => (
-              <div key={p} style={{ minWidth: 100, flexShrink: 0 }}>
-                <KpiTile
-                  compact
-                  label={p.toUpperCase()}
-                  value={phaseCounts[p] || 0}
-                  color="var(--accent)"
-                  active={phaseFilter === p}
-                  onClick={() => setPhaseFilter(p)}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* View Tabs */}
-        <div style={{ flexShrink: 0, display: "flex", gap: 0, padding: "0 24px", marginTop: 4 }}>
-          {[
-            { id: "gantt", label: "Gantt Chart" },
-            { id: "lookahead", label: "6-Week Lookahead" },
-            { id: "list", label: "Task List" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setView(tab.id)}
-              style={{
-                background: "transparent",
-                border: "none",
-                borderBottom: view === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
-                padding: "10px 20px",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                fontWeight: 700,
-                color: view === tab.id ? "var(--accent)" : "var(--text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                cursor: "pointer",
-                transition: "color 0.15s, border-color 0.15s",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <div style={{ height: 1, background: "var(--divider)", margin: "0 24px 8px" }} />
-
-        <ScheduleRivetBrief
-          tasks={tasksWithEffective}
-          project={selectedProject}
-          phaseFilter={phaseFilter}
-          onSetPhaseFilter={setPhaseFilter}
-          onSetView={setView}
-          onSetGanttFocus={(request) => {
-            const focusRequest = typeof request === "string" ? { filter: request } : (request || {});
-            setView("gantt");
-            setGanttFocus({ ...focusRequest, requestedAt: Date.now() });
-          }}
-        />
-
-        {/* Surface the silent 2000-row read cap on useScheduleTasks (raw `scheduleTasksRaw`). */}
-        <ListTruncationNotice count={scheduleTasksRaw.length} label="schedule tasks" />
-
-        {/* View Content */}
-        <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
-          {view === "gantt" && (
-            <ErrorBoundary label="Gantt Chart">
-              <Suspense fallback={<LoadingSkeleton variant="page" />}>
-                <ScheduleGantt
-                  tasks={enrichedTasks}
-                  submittals={submittals}
-                  weatherRisk={weatherRisk}
-                  expandedTask={expandedTask}
-                  setExpandedTask={setExpandedTask}
-                  onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
-                  onSave={async (data) => {
-                    const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-                    try {
-                      if (!id) throw new Error("Cannot update a task without an id");
-                      await entities.ScheduleTask.update(id, fields);
-                      invalidateEntity(qc, "schedule_task", projectId);
-                      toast.success("Task saved");
-                    } catch (err: any) {
-                      toast.error("Save failed: " + (err?.message || "unknown error"));
-                      throw err;
-                    }
-                  }}
-                  onReparent={(p: { ids: string[]; newParentId: string | null; dropIndex?: number | null }) =>
-                    reparentMut.mutate(p)
-                  }
-                  phaseFilter={phaseFilter}
-                  externalFocus={ganttFocus}
-                />
-              </Suspense>
-            </ErrorBoundary>
-          )}
-
-          {view === "lookahead" && (
-            <ErrorBoundary label="Lookahead Planner">
-              {/* Lookahead's week-bucket date predicates run against the
-                  effective dates so cascaded tasks land in the correct
-                  week — previously a Detailing task whose predecessor
-                  slipped two weeks would still appear in the original
-                  week's bucket. */}
-              <LookaheadPlanner tasks={tasksWithEffective} />
-            </ErrorBoundary>
-          )}
-
-          {view === "list" && (
-            <ErrorBoundary label="Task List">
-              <ScheduleTaskList
-                tasks={tasksWithEffective}
-                onEdit={(task) => {
-                  // The Task List receives the effective-date overlay so its
-                  // rows show the cascaded dates. The TaskDetailDrawer must
-                  // edit STORED dates — opening it with overlaid dates would
-                  // let the user "save" effective dates as new stored values
-                  // and silently destroy their original entry. Look the row
-                  // up in the unmodified enrichedTasks list before opening.
-                  const original = enrichedTasks.find((t) => t.id === task.id) || task;
-                  setSelectedTask(original);
-                  setShowDrawer(true);
-                }}
-                onDelete={(task) => setDeleteTarget(task)}
-                onSave={async (data) => {
-                  const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-                  try {
-                    if (!id) throw new Error("Cannot update a task without an id");
-                    await entities.ScheduleTask.update(id, fields);
-                    invalidateEntity(qc, "schedule_task", projectId);
-                    toast.success("Task saved");
-                  } catch (err: any) {
-                    toast.error("Save failed: " + (err?.message || "unknown error"));
-                    throw err;
-                  }
-                }}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelect}
-              />
-            </ErrorBoundary>
-          )}
-        </div>
-
-        {/* Task Detail Drawer */}
-        <TaskDetailDrawer
-          task={selectedTask}
-          open={showDrawer}
-          onClose={() => { setShowDrawer(false); setSelectedTask(null); }}
-          onUpdate={(data) => updateTaskMut.mutate(data)}
-          onReparent={(childId: string, newParentId: string | null) => reparentMut.mutate({ ids: [childId], newParentId })}
-          onDelete={(id) => deleteTaskMut.mutate(id)}
-          allTasks={enrichedTasks}
-          effectiveDates={effectiveDatesMap}
-        />
-
-        {/* Add/bulk/WBS modals are lazy-loaded; gate the mount on the open flag so
-            the chunk only fetches on first open. Each renders null when closed,
-            so this is behavior-preserving. A null Suspense fallback avoids a
-            flash before the (already-overlay) modal paints. */}
-        {showAddTask && (
-          <Suspense fallback={null}>
-            <AddTaskModal
-              open={showAddTask}
-              onClose={() => setShowAddTask(false)}
-              onSubmit={(data) =>
-                createTaskMut.mutate({
-                  ...data,
-                  project_id: projectId,
-                  percent_complete: 0,
-                })
-              }
-              isSaving={createTaskMut.isPending}
-              projectName={selectedProject?.name || ""}
-              prefilledDate={new Date().toISOString().split("T")[0]}
-              existingTasks={enrichedTasks}
-            />
-          </Suspense>
-        )}
-
-        {showBulkAdd && (
-          <Suspense fallback={null}>
-            <BulkAddTaskModal
-              open={showBulkAdd}
-              onClose={() => setShowBulkAdd(false)}
-              onSubmit={handleBulkAdd}
-              projectName={selectedProject?.name || ""}
-              isSaving={bulkSaving}
-              existingTasks={enrichedTasks}
-            />
-          </Suspense>
-        )}
-
-        {showBulkDates && (
-          <Suspense fallback={null}>
-            <BulkDateEditModal
-              open={showBulkDates}
-              count={selectedIds.size}
-              isSaving={bulkDateMut.isPending}
-              onClose={() => setShowBulkDates(false)}
-              onSubmit={bulkUpdateDates}
-            />
-          </Suspense>
-        )}
-
-        {showBulkDuration && (
-          <Suspense fallback={null}>
-            <BulkDurationEditModal
-              open={showBulkDuration}
-              count={selectedIds.size}
-              isSaving={bulkDurationMut.isPending}
-              onClose={() => setShowBulkDuration(false)}
-              onSubmit={bulkUpdateDuration}
-            />
-          </Suspense>
-        )}
-
-        {showBulkParent && (
-          <div onClick={() => setShowBulkParent(false)} style={{ position: "fixed", inset: 0, background: "rgba(1,4,10,0.6)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg-surface-high)", border: "1px solid var(--accent-border)", borderRadius: 14, padding: 20, width: 420 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", marginBottom: 12 }}>
-                SET PARENT FOR {selectedIds.size} TASK{selectedIds.size !== 1 ? "S" : ""}
-              </div>
-              <select
-                className="sbd-select"
-                defaultValue=""
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (!v) return;
-                  bulkSetParent(v === "__root__" ? null : v);
-                }}
-                style={{ width: "100%" }}
-              >
-                <option value="" disabled>— Select a parent… —</option>
-                <option value="__root__">Top level (no parent)</option>
-                {bulkParentOptions.map((t: any) => (
-                  <option key={t.id} value={t.id}>
-                    {t.wbs_code ? `${t.wbs_code} — ` : ""}{t.task_name}
-                  </option>
-                ))}
-              </select>
-              <div style={{ marginTop: 14, textAlign: "right" }}>
-                <button className="sbd-btn sbd-btn-ghost" onClick={() => setShowBulkParent(false)}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showWbsBuilder && (
-          <Suspense fallback={null}>
-            <WbsBuilderModal
-              open={showWbsBuilder}
-              projectId={projectId}
-              onClose={() => setShowWbsBuilder(false)}
-            />
-          </Suspense>
-        )}
-
-        <DeleteDialog
-          open={!!deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-          onConfirm={() => {
-            if (!deleteTaskMut.isPending && deleteTarget?.id) {
-              deleteTaskMut.mutate(deleteTarget.id);
-            }
-          }}
-          title="Delete task?"
-          description={deleteTarget ? `This will remove "${deleteTarget.task_name}".` : ""}
-        />
-
-        <DeleteDialog
-          open={showBulkDeleteConfirm}
-          onClose={() => setShowBulkDeleteConfirm(false)}
-          onConfirm={confirmBulkDelete}
-          title={`Delete ${selectedIds.size} task${selectedIds.size !== 1 ? "s" : ""}?`}
-          description={`This will permanently remove ${selectedIds.size} selected task${selectedIds.size !== 1 ? "s" : ""}. This cannot be undone.`}
-        />
-
-        {selectedIds.size > 0 && (
-          <BulkActionToolbar
-            selectedCount={selectedIds.size}
-            updatePending={bulkUpdateMut.isPending}
-            deletePending={bulkDeleteMut.isPending}
-            datePending={bulkDateMut.isPending}
-            durationPending={bulkDurationMut.isPending}
-            resourcePending={bulkResourceMut.isPending}
-            showResourceInput={showBulkResource}
-            resourceValue={bulkResourceValue}
-            onStatus={bulkUpdateStatus}
-            onDelete={bulkDelete}
-            onEditDates={() => setShowBulkDates(true)}
-            onEditDurations={() => setShowBulkDuration(true)}
-            parentPending={reparentMut.isPending}
-            onSetParent={() => setShowBulkParent(true)}
-            onShowResourceInput={() => setShowBulkResource(true)}
-            onResourceValueChange={setBulkResourceValue}
-            onApplyResource={() => bulkResourceMut.mutate({ ids: Array.from(selectedIds), resource_names: bulkResourceValue.trim() })}
-            onCancelResource={() => { setShowBulkResource(false); setBulkResourceValue(""); }}
-            onClear={() => setSelectedIds(new Set())}
-          />
-        )}
-      </>
-    );
-
     return (
       <ScheduleCommandCenter
         projectName={selectedProject?.name || ""}
@@ -1038,7 +658,7 @@ export default function Schedule() {
         projectHealth={selectedProject?.health_status ?? null}
         pctComplete={undefined}
       >
-        {existingBody}
+        <ScheduleBody {...bodyProps} bulkParentBackdrop="rgba(1,4,10,0.6)" />
       </ScheduleCommandCenter>
     );
   }
@@ -1177,327 +797,7 @@ export default function Schedule() {
         </CommandBar>
       </div>
 
-      {/* Phase Filter — click-to-filter KPI tiles (one per lifecycle phase) */}
-      <div style={{ flexShrink: 0, padding: "0 24px 14px" }}>
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            overflowX: "auto",
-            paddingBottom: 4,
-            scrollbarWidth: "thin",
-            scrollbarColor: "var(--border-default) transparent",
-          }}
-        >
-          <div style={{ minWidth: 100, flexShrink: 0 }}>
-            <KpiTile
-              compact
-              label="ALL PHASES"
-              value={phaseCounts.all}
-              color="var(--text-secondary)"
-              active={phaseFilter === "all"}
-              onClick={() => setPhaseFilter("all")}
-            />
-          </div>
-          {PHASES.map((p) => (
-            <div key={p} style={{ minWidth: 100, flexShrink: 0 }}>
-              <KpiTile
-                compact
-                label={p.toUpperCase()}
-                value={phaseCounts[p] || 0}
-                color="var(--accent)"
-                active={phaseFilter === p}
-                onClick={() => setPhaseFilter(p)}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* View Tabs */}
-      <div style={{ flexShrink: 0, display: "flex", gap: 0, padding: "0 24px", marginTop: 4 }}>
-        {[
-          { id: "gantt", label: "Gantt Chart" },
-          { id: "lookahead", label: "6-Week Lookahead" },
-          { id: "list", label: "Task List" },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setView(tab.id)}
-            style={{
-              background: "transparent",
-              border: "none",
-              borderBottom: view === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
-              padding: "10px 20px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              color: view === tab.id ? "var(--accent)" : "var(--text-muted)",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              cursor: "pointer",
-              transition: "color 0.15s, border-color 0.15s",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-      <div style={{ height: 1, background: "var(--divider)", margin: "0 24px 8px" }} />
-
-      <ScheduleRivetBrief
-        tasks={tasksWithEffective}
-        project={selectedProject}
-        phaseFilter={phaseFilter}
-        onSetPhaseFilter={setPhaseFilter}
-        onSetView={setView}
-        onSetGanttFocus={(request) => {
-          const focusRequest = typeof request === "string" ? { filter: request } : (request || {});
-          setView("gantt");
-          setGanttFocus({ ...focusRequest, requestedAt: Date.now() });
-        }}
-      />
-
-      {/* Surface the silent 2000-row read cap on useScheduleTasks (raw `scheduleTasksRaw`). */}
-      <ListTruncationNotice count={scheduleTasksRaw.length} label="schedule tasks" />
-
-      {/* View Content */}
-      <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
-        {view === "gantt" && (
-          <ErrorBoundary label="Gantt Chart">
-            <Suspense fallback={<LoadingSkeleton variant="page" />}>
-              <ScheduleGantt
-                tasks={enrichedTasks}
-                submittals={submittals}
-                weatherRisk={weatherRisk}
-                expandedTask={expandedTask}
-                setExpandedTask={setExpandedTask}
-                onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
-                onSave={async (data) => {
-                  const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-                  try {
-                    if (!id) throw new Error("Cannot update a task without an id");
-                    await entities.ScheduleTask.update(id, fields);
-                    invalidateEntity(qc, "schedule_task", projectId);
-                    toast.success("Task saved");
-                  } catch (err: any) {
-                    toast.error("Save failed: " + (err?.message || "unknown error"));
-                    throw err;
-                  }
-                }}
-                onReparent={(p: { ids: string[]; newParentId: string | null; dropIndex?: number | null }) =>
-                  reparentMut.mutate(p)
-                }
-                phaseFilter={phaseFilter}
-                externalFocus={ganttFocus}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        )}
-
-        {view === "lookahead" && (
-          <ErrorBoundary label="Lookahead Planner">
-            {/* Lookahead's week-bucket date predicates run against the
-                effective dates so cascaded tasks land in the correct
-                week — previously a Detailing task whose predecessor
-                slipped two weeks would still appear in the original
-                week's bucket. */}
-            <LookaheadPlanner tasks={tasksWithEffective} />
-          </ErrorBoundary>
-        )}
-
-        {view === "list" && (
-          <ErrorBoundary label="Task List">
-            <ScheduleTaskList
-              tasks={tasksWithEffective}
-              onEdit={(task) => {
-                // The Task List receives the effective-date overlay so its
-                // rows show the cascaded dates. The TaskDetailDrawer must
-                // edit STORED dates — opening it with overlaid dates would
-                // let the user "save" effective dates as new stored values
-                // and silently destroy their original entry. Look the row
-                // up in the unmodified enrichedTasks list before opening.
-                const original = enrichedTasks.find((t) => t.id === task.id) || task;
-                setSelectedTask(original);
-                setShowDrawer(true);
-              }}
-              onDelete={(task) => setDeleteTarget(task)}
-              onSave={async (data) => {
-                const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
-                try {
-                  if (!id) throw new Error("Cannot update a task without an id");
-                  await entities.ScheduleTask.update(id, fields);
-                  invalidateEntity(qc, "schedule_task", projectId);
-                  toast.success("Task saved");
-                } catch (err: any) {
-                  toast.error("Save failed: " + (err?.message || "unknown error"));
-                  throw err;
-                }
-              }}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-            />
-          </ErrorBoundary>
-        )}
-      </div>
-
-      {/* Task Detail Drawer */}
-      <TaskDetailDrawer
-        task={selectedTask}
-        open={showDrawer}
-        onClose={() => { setShowDrawer(false); setSelectedTask(null); }}
-        onUpdate={(data) => updateTaskMut.mutate(data)}
-        onReparent={(childId: string, newParentId: string | null) => reparentMut.mutate({ ids: [childId], newParentId })}
-        onDelete={(id) => deleteTaskMut.mutate(id)}
-        allTasks={enrichedTasks}
-        effectiveDates={effectiveDatesMap}
-      />
-
-      {/* Add/bulk/WBS modals are lazy-loaded; gate the mount on the open flag so
-          the chunk only fetches on first open. Each renders null when closed,
-          so this is behavior-preserving. A null Suspense fallback avoids a
-          flash before the (already-overlay) modal paints. */}
-      {showAddTask && (
-        <Suspense fallback={null}>
-          <AddTaskModal
-            open={showAddTask}
-            onClose={() => setShowAddTask(false)}
-            onSubmit={(data) =>
-              createTaskMut.mutate({
-                ...data,
-                project_id: projectId,
-                percent_complete: 0,
-              })
-            }
-            isSaving={createTaskMut.isPending}
-            projectName={selectedProject?.name || ""}
-            prefilledDate={new Date().toISOString().split("T")[0]}
-            existingTasks={enrichedTasks}
-          />
-        </Suspense>
-      )}
-
-      {showBulkAdd && (
-        <Suspense fallback={null}>
-          <BulkAddTaskModal
-            open={showBulkAdd}
-            onClose={() => setShowBulkAdd(false)}
-            onSubmit={handleBulkAdd}
-            projectName={selectedProject?.name || ""}
-            isSaving={bulkSaving}
-            existingTasks={enrichedTasks}
-          />
-        </Suspense>
-      )}
-
-      {showBulkDates && (
-        <Suspense fallback={null}>
-          <BulkDateEditModal
-            open={showBulkDates}
-            count={selectedIds.size}
-            isSaving={bulkDateMut.isPending}
-            onClose={() => setShowBulkDates(false)}
-            onSubmit={bulkUpdateDates}
-          />
-        </Suspense>
-      )}
-
-      {showBulkDuration && (
-        <Suspense fallback={null}>
-          <BulkDurationEditModal
-            open={showBulkDuration}
-            count={selectedIds.size}
-            isSaving={bulkDurationMut.isPending}
-            onClose={() => setShowBulkDuration(false)}
-            onSubmit={bulkUpdateDuration}
-          />
-        </Suspense>
-      )}
-
-      {showBulkParent && (
-        <div onClick={() => setShowBulkParent(false)} style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 60%, transparent)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg-surface-high)", border: "1px solid var(--accent-border)", borderRadius: 14, padding: 20, width: 420 }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", marginBottom: 12 }}>
-              SET PARENT FOR {selectedIds.size} TASK{selectedIds.size !== 1 ? "S" : ""}
-            </div>
-            <select
-              className="sbd-select"
-              defaultValue=""
-              onChange={(e) => {
-                const v = e.target.value;
-                if (!v) return;
-                bulkSetParent(v === "__root__" ? null : v);
-              }}
-              style={{ width: "100%" }}
-            >
-              <option value="" disabled>— Select a parent… —</option>
-              <option value="__root__">Top level (no parent)</option>
-              {bulkParentOptions.map((t: any) => (
-                <option key={t.id} value={t.id}>
-                  {t.wbs_code ? `${t.wbs_code} — ` : ""}{t.task_name}
-                </option>
-              ))}
-            </select>
-            <div style={{ marginTop: 14, textAlign: "right" }}>
-              <button className="sbd-btn sbd-btn-ghost" onClick={() => setShowBulkParent(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showWbsBuilder && (
-        <Suspense fallback={null}>
-          <WbsBuilderModal
-            open={showWbsBuilder}
-            projectId={projectId}
-            onClose={() => setShowWbsBuilder(false)}
-          />
-        </Suspense>
-      )}
-
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (!deleteTaskMut.isPending && deleteTarget?.id) {
-            deleteTaskMut.mutate(deleteTarget.id);
-          }
-        }}
-        title="Delete task?"
-        description={deleteTarget ? `This will remove "${deleteTarget.task_name}".` : ""}
-      />
-
-      <DeleteDialog
-        open={showBulkDeleteConfirm}
-        onClose={() => setShowBulkDeleteConfirm(false)}
-        onConfirm={confirmBulkDelete}
-        title={`Delete ${selectedIds.size} task${selectedIds.size !== 1 ? "s" : ""}?`}
-        description={`This will permanently remove ${selectedIds.size} selected task${selectedIds.size !== 1 ? "s" : ""}. This cannot be undone.`}
-      />
-
-      {selectedIds.size > 0 && (
-        <BulkActionToolbar
-          selectedCount={selectedIds.size}
-          updatePending={bulkUpdateMut.isPending}
-          deletePending={bulkDeleteMut.isPending}
-          datePending={bulkDateMut.isPending}
-          durationPending={bulkDurationMut.isPending}
-          resourcePending={bulkResourceMut.isPending}
-          showResourceInput={showBulkResource}
-          resourceValue={bulkResourceValue}
-          onStatus={bulkUpdateStatus}
-          onDelete={bulkDelete}
-          onEditDates={() => setShowBulkDates(true)}
-          onEditDurations={() => setShowBulkDuration(true)}
-          parentPending={reparentMut.isPending}
-          onSetParent={() => setShowBulkParent(true)}
-          onShowResourceInput={() => setShowBulkResource(true)}
-          onResourceValueChange={setBulkResourceValue}
-          onApplyResource={() => bulkResourceMut.mutate({ ids: Array.from(selectedIds), resource_names: bulkResourceValue.trim() })}
-          onCancelResource={() => { setShowBulkResource(false); setBulkResourceValue(""); }}
-          onClear={() => setSelectedIds(new Set())}
-        />
-      )}
+      <ScheduleBody {...bodyProps} bulkParentBackdrop="color-mix(in srgb, var(--bg-base) 60%, transparent)" />
     </div>
   );
 }

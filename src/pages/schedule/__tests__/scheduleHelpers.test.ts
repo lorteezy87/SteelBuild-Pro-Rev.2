@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "../wbs";
-import { derivePhaseFromHierarchy, inferTaskType, parseMsProjectXml } from "../mppImport";
-import type { ParsedMppTask } from "../types";
+import { computePhaseWbs, generateWBS, sanitizeScheduleTaskUpdatePayload } from "../wbs";
+import { derivePhaseFromHierarchy, deriveMppDependencies, inferTaskType, parseMsProjectXml } from "../mppImport";
+import type { ParsedMppTask, ScheduleTask } from "../types";
 
 describe("generateWBS", () => {
   it("starts a phase at <phaseNum>.1 when there are no existing tasks", () => {
@@ -54,6 +54,91 @@ describe("sanitizeScheduleTaskUpdatePayload", () => {
     expect(fields.start_date).toBe("2026-01-01");
     expect(fields.end_date).toBe("2026-02-01");
     expect(fields.duration).toBe(10);
+  });
+});
+
+describe("computePhaseWbs", () => {
+  it("leaves coded tasks untouched and only backfills persisted rows missing a code", () => {
+    const input: ScheduleTask[] = [
+      { id: "a", phase: "Detailing", wbs_code: "2.3" },
+      { id: "b", phase: "Detailing" }, // missing → 2.4
+      { phase: "Detailing" },          // missing + no id → filled but NOT backfilled
+    ];
+    const { tasks, toBackfill } = computePhaseWbs(input);
+    // First (coded) row is the same object reference, untouched.
+    expect(tasks[0]).toBe(input[0]);
+    expect(tasks[1].wbs_code).toBe("2.4"); // picks up from the 2.3 max
+    expect(tasks[2].wbs_code).toBe("2.5");
+    // Only the persisted (id-bearing) missing row is queued for backfill.
+    expect(toBackfill).toEqual([{ id: "b", wbs: "2.4" }]);
+  });
+
+  it("counts legacy trailing-number codes toward the per-phase max", () => {
+    const { tasks } = computePhaseWbs([
+      { id: "a", phase: "Detailing", wbs_code: "DET-003" },
+      { id: "b", phase: "Detailing" },
+    ]);
+    expect(tasks[1].wbs_code).toBe("2.4");
+  });
+
+  it("uses phase 0 for an unknown phase and 'Other' for a missing phase", () => {
+    const { tasks } = computePhaseWbs([
+      { id: "a", phase: "Nonexistent" },
+      { id: "b" }, // no phase → "Other" bucket, phase number 0
+    ]);
+    expect(tasks[0].wbs_code).toBe("0.1");
+    expect(tasks[1].wbs_code).toBe("0.1"); // different bucket, restarts at 1
+  });
+});
+
+describe("deriveMppDependencies", () => {
+  const base: Omit<ParsedMppTask, "uid" | "preds"> = {
+    name: "", start: null, finish: null, pct: 0, isSummary: false,
+    outlineLevel: 1, outlineNumber: "", milestone: false, durationDays: null,
+    resources: [], notes: "",
+  };
+
+  it("maps MS link types and rounds a 4800-tenths (8h) lag to 1 day", () => {
+    const parsed: ParsedMppTask[] = [
+      { ...base, uid: "1", preds: [] },
+      { ...base, uid: "2", preds: [{ predUid: "1", linkType: "1", lagDuration: "4800" }] },
+    ];
+    const out = deriveMppDependencies(parsed, { "1": "db-1", "2": "db-2" });
+    expect(out).toEqual([
+      { dbId: "db-2", predLinks: [{ id: "db-1", type: "FS", lag_days: 1 }] },
+    ]);
+  });
+
+  it("rounds lag: 2000 tenths (<½ day) → 0, 7200 tenths (1.5 days) → 2 (Math.round, .5 up)", () => {
+    const parsed: ParsedMppTask[] = [
+      { ...base, uid: "2", preds: [{ predUid: "1", linkType: "0", lagDuration: "2000" }] },
+      { ...base, uid: "3", preds: [{ predUid: "1", linkType: "3", lagDuration: "7200" }] },
+    ];
+    const out = deriveMppDependencies(parsed, { "1": "db-1", "2": "db-2", "3": "db-3" });
+    expect(out).toEqual([
+      { dbId: "db-2", predLinks: [{ id: "db-1", type: "FF", lag_days: 0 }] },
+      { dbId: "db-3", predLinks: [{ id: "db-1", type: "SS", lag_days: 2 }] },
+    ]);
+  });
+
+  it("defaults an unknown link type to FS and drops predecessors missing from the id map", () => {
+    const parsed: ParsedMppTask[] = [
+      { ...base, uid: "2", preds: [
+        { predUid: "1", linkType: "9", lagDuration: "0" },   // unknown type → FS
+        { predUid: "999", linkType: "1", lagDuration: "0" }, // no db id → dropped
+      ] },
+    ];
+    const out = deriveMppDependencies(parsed, { "1": "db-1", "2": "db-2" });
+    expect(out).toEqual([
+      { dbId: "db-2", predLinks: [{ id: "db-1", type: "FS", lag_days: 0 }] },
+    ]);
+  });
+
+  it("omits a task whose predecessors all resolve to nothing", () => {
+    const parsed: ParsedMppTask[] = [
+      { ...base, uid: "2", preds: [{ predUid: "999", linkType: "1", lagDuration: "0" }] },
+    ];
+    expect(deriveMppDependencies(parsed, { "2": "db-2" })).toEqual([]);
   });
 });
 
