@@ -25,6 +25,16 @@ import {
   submittalLineageLabel,
   type SubmittalLineageRow,
 } from "@/lib/submittalLineage";
+import {
+  DRAWING_TYPES,
+  DRAWING_TYPE_ABBR,
+  buildComponentChips,
+  componentState,
+  missingDrawingTypes,
+  sortComponents,
+  type DrawingType,
+  type SubmittalComponent,
+} from "@/lib/submittalComponents";
 import { BIC_CHOICES, STATUSES, STATUS_CFG, TYPES } from "./format";
 import type { DrawingSet, DrawingSetsById, Submittal, SubmittalRoundRecord } from "./types";
 
@@ -67,9 +77,16 @@ interface SubmittalVirtualListProps {
    * (flag off) the list renders flat exactly as before.
    */
   groupByLineage?: boolean;
+  /**
+   * Phase 4 per-drawing-type (flag `submittal_drawing_types`): when true, render
+   * S/E/P chips on each row. `componentsBySubmittal` maps submittal id → its
+   * component rows. When false (flag off) no chips render.
+   */
+  showTypeChips?: boolean;
+  componentsBySubmittal?: Record<string, SubmittalComponent[]>;
 }
 
-export function SubmittalVirtualList({ filtered, isLoading, rows, selectedId, selectedIds, toggleSelect, setSelectedId, drawingSetsById, groupByLineage = false }: SubmittalVirtualListProps) {
+export function SubmittalVirtualList({ filtered, isLoading, rows, selectedId, selectedIds, toggleSelect, setSelectedId, drawingSetsById, groupByLineage = false, showTypeChips = false, componentsBySubmittal = {} }: SubmittalVirtualListProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   // Flatten to render rows once. Off ⇒ a trivial depth-0 wrapper over `filtered`
   // (identical order/behavior to before). On ⇒ the parent-grouped tree order.
@@ -136,6 +153,7 @@ export function SubmittalVirtualList({ filtered, isLoading, rows, selectedId, se
                 depth={item.depth}
                 childCount={item.childCount}
                 parentName={item.parentName}
+                typeChipComponents={showTypeChips ? (componentsBySubmittal[r.id as string] || []) : undefined}
               />
             </div>
           );
@@ -160,9 +178,11 @@ interface SubmittalRowProps {
   childCount?: number;
   /** Phase 3 lineage: parent label for a child row ("(removed)" if orphaned); null when top-level. */
   parentName?: string | null;
+  /** Phase 4: this row's component rows (S/E/P chips). undefined ⇒ flag off, no chips. */
+  typeChipComponents?: SubmittalComponent[];
 }
 
-function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsById, depth = 0, childCount = 0, parentName = null }: SubmittalRowProps) {
+function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsById, depth = 0, childCount = 0, parentName = null, typeChipComponents }: SubmittalRowProps) {
   const cfg = STATUS_CFG[row.status ?? ""] || STATUS_CFG.Draft;
   // Derived workflow stage — gives users IFA/OFA/BFA/OFS/IFC/Released
   // alongside the literal submittal status. R&R outcomes are surfaced
@@ -296,6 +316,13 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
             {row.required_date ? formatDate(row.required_date) : "—"}
             {overdue && " ⚠"}
           </div>
+          {/* Phase 4: S/E/P chips — each tracked drawing type's state. Rendered
+              only when the flag passes components down (undefined ⇒ nothing). */}
+          {typeChipComponents && typeChipComponents.length > 0 && (
+            <div style={{ marginTop: 4, display: "flex", justifyContent: "flex-end" }}>
+              <SubmittalTypeChips components={typeChipComponents} />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -347,9 +374,25 @@ interface SubmittalDetailProps {
   onSpinOff?: () => void;
   /** Navigate the detail panel to a sibling submittal by id (Phase 3 lineage links). */
   onSelectSubmittal?: (id: string) => void;
+  /**
+   * Phase 4 per-drawing-type (flag `submittal_drawing_types`): when true, show
+   * the per-type (Shop/Erection/Part) received + release section. Defaults to
+   * false — nothing renders. Independent of the fab-release gate.
+   */
+  drawingTypesEnabled?: boolean;
+  /** This submittal's component rows (one per tracked drawing type). */
+  components?: SubmittalComponent[];
+  /** Set (or clear) a type's received date. */
+  onComponentSetReceived?: (args: { drawingType: DrawingType; existing: SubmittalComponent | null; date: string | null }) => void;
+  /** Release / un-release a type for fabrication (parallel to the fab gate). */
+  onComponentSetReleased?: (args: { drawingType: DrawingType; existing: SubmittalComponent | null; released: boolean }) => void;
+  /** Start tracking a drawing type (create an empty component row). */
+  onComponentAddType?: (drawingType: DrawingType) => void;
+  /** Stop tracking a drawing type (remove its component row). */
+  onComponentRemoveType?: (component: SubmittalComponent) => void;
 }
 
-export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = false, splittingEnabled = false, onSpinOff, onSelectSubmittal }: SubmittalDetailProps) {
+export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = false, splittingEnabled = false, onSpinOff, onSelectSubmittal, drawingTypesEnabled = false, components = [], onComponentSetReceived, onComponentSetReleased, onComponentAddType, onComponentRemoveType }: SubmittalDetailProps) {
   // Round-over-round per-sheet disposition matrix (computed before any early
   // return to keep hook order stable). Empty-safe — renders nothing when the
   // submittal has no recorded reviewer responses.
@@ -450,6 +493,9 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
                   ⚠ {Math.abs(daysUntil(submittal.required_date))}d overdue
                 </span>
               )}
+              {/* Phase 4: S/E/P chips — each tracked drawing type's received/
+                  released state at a glance. Rendered only under the flag. */}
+              {drawingTypesEnabled && <SubmittalTypeChips components={components} />}
             </div>
           </div>
           <button type="button" aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, marginLeft: 10 }}>×</button>
@@ -551,6 +597,24 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
                 </div>
               </div>
             )}
+          </DetailSection>
+        )}
+
+        {/* Phase 4 per-drawing-type tracking — Shop / Erection / Part, each with
+            its own received date + release-for-fab toggle, tracked independently
+            (Shop can release while Erection waits). Flag-gated; the release here
+            is PARALLEL to (not part of) the submittals.status fab-release gate. */}
+        {drawingTypesEnabled && submittal.id && submittal.project_id && (
+          <DetailSection title="Drawing types (Shop / Erection / Part)">
+            <DrawingTypeComponents
+              submittalId={submittal.id}
+              projectId={submittal.project_id}
+              components={components}
+              onSetReceived={(args) => onComponentSetReceived?.(args)}
+              onSetReleased={(args) => onComponentSetReleased?.(args)}
+              onAddType={(t) => onComponentAddType?.(t)}
+              onRemoveType={(c) => onComponentRemoveType?.(c)}
+            />
           </DetailSection>
         )}
 
@@ -884,6 +948,183 @@ function DetailSection({ title, children }: { title: string; children: ReactNode
         {title}
       </div>
       {children}
+    </div>
+  );
+}
+
+// ── Phase 4: per-drawing-type (Shop / Erection / Part) components ─────────
+// Flag-gated by `submittal_drawing_types` at the page. S/E/P chips show each
+// tracked type's state (not received / received / released); the detail-panel
+// section lets the user set a received date + release toggle per type,
+// independently. Release-per-type is a PARALLEL concern — it does NOT touch
+// submittals.status or the fab-release gate.
+
+// A small colored pill per tracked drawing type. Released = success tint;
+// received = neutral-strong; not-received = muted outline. Ported from the
+// standalone tracker's TypeChips.
+export function SubmittalTypeChips({ components }: { components: SubmittalComponent[] }) {
+  const chips = buildComponentChips(components);
+  if (chips.length === 0) return null;
+  return (
+    <span style={{ display: "inline-flex", gap: 4 }}>
+      {chips.map((chip) => {
+        const released = chip.state === "released";
+        const received = chip.state === "received";
+        const style: CSSProperties = released
+          ? { color: "var(--status-success, #16a34a)", background: "var(--status-success-bg, rgba(22,163,74,0.14))", borderColor: "var(--status-success, #16a34a)" }
+          : received
+            ? { color: "var(--text-primary)", background: "var(--bg-surface-high)", borderColor: "var(--border-strong, var(--border-default))" }
+            : { color: "var(--text-muted)", background: "transparent", borderColor: "var(--border-default)" };
+        return (
+          <span
+            key={chip.drawingType}
+            title={chip.title}
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              height: 16, minWidth: 16, padding: "0 3px", borderRadius: 3,
+              border: "1px solid", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              ...style,
+            }}
+          >
+            {chip.abbr}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+export interface DrawingTypeComponentsProps {
+  submittalId: string;
+  projectId: string;
+  components: SubmittalComponent[];
+  /** Set (or clear) a type's received date. */
+  onSetReceived: (args: { drawingType: DrawingType; existing: SubmittalComponent | null; date: string | null }) => void;
+  /** Release / un-release a type for fabrication. */
+  onSetReleased: (args: { drawingType: DrawingType; existing: SubmittalComponent | null; released: boolean }) => void;
+  /** Add an (empty) component row for a type not tracked yet. */
+  onAddType: (drawingType: DrawingType) => void;
+  /** Remove a type's component row entirely. */
+  onRemoveType: (component: SubmittalComponent) => void;
+}
+
+export function DrawingTypeComponents({ components, onSetReceived, onSetReleased, onAddType, onRemoveType }: DrawingTypeComponentsProps) {
+  const present = sortComponents(components).filter(
+    (c): c is SubmittalComponent & { drawing_type: DrawingType } =>
+      (DRAWING_TYPES as readonly string[]).includes(c.drawing_type),
+  );
+  const missing = missingDrawingTypes(components);
+
+  return (
+    <div>
+      {present.length === 0 && (
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 8 }}>
+          No drawing types tracked yet. Add Shop, Erection, or Part below to track
+          each independently.
+        </div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {present.map((c) => {
+          const state = componentState(c);
+          const released = state === "released";
+          return (
+            <div
+              key={c.drawing_type}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "auto 1fr auto",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 10px",
+                borderRadius: 4,
+                border: "1px solid var(--border-default)",
+                background: released ? "var(--status-success-bg, rgba(22,163,74,0.08))" : "var(--bg-surface-low)",
+              }}
+            >
+              {/* Type label + state chip */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+                  {DRAWING_TYPE_ABBR[c.drawing_type]}
+                </span>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                  {c.drawing_type}
+                </span>
+              </div>
+
+              {/* Received date control */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  Rcvd
+                </span>
+                <input
+                  type="date"
+                  value={c.received_date || ""}
+                  onChange={(e) => onSetReceived({ drawingType: c.drawing_type, existing: c, date: e.target.value || null })}
+                  aria-label={`${c.drawing_type} received date`}
+                  style={{
+                    fontFamily: "var(--font-mono)", fontSize: 11, padding: "2px 6px",
+                    background: "var(--bg-input, var(--bg-surface-low))",
+                    border: "1px solid var(--border-default)", borderRadius: 3,
+                    color: "var(--text-primary)", outline: "none", maxWidth: 140,
+                  }}
+                />
+              </div>
+
+              {/* Release toggle + remove */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, justifySelf: "end" }}>
+                <button
+                  type="button"
+                  onClick={() => onSetReleased({ drawingType: c.drawing_type, existing: c, released: !released })}
+                  title={released
+                    ? `${c.drawing_type} released${c.released_date ? ` ${formatDate(c.released_date)}` : ""} — click to un-release`
+                    : `Release ${c.drawing_type} for fabrication`}
+                  style={{
+                    padding: "3px 10px", borderRadius: 3, cursor: "pointer",
+                    fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                    border: released ? "1px solid var(--status-success, #16a34a)" : "1px solid var(--border-default)",
+                    background: released ? "var(--status-success, #16a34a)" : "transparent",
+                    color: released ? "#fff" : "var(--text-muted)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {released ? `RELEASED${c.released_date ? ` · ${formatDate(c.released_date)}` : ""}` : "RELEASE"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRemoveType(c)}
+                  title={`Stop tracking ${c.drawing_type}`}
+                  aria-label={`Remove ${c.drawing_type}`}
+                  style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 13, lineHeight: 1, padding: "0 2px" }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add a not-yet-tracked type */}
+      {missing.length > 0 && (
+        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+          {missing.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onAddType(t)}
+              title={`Track ${t} drawings independently`}
+              style={{
+                padding: "4px 10px", borderRadius: 3, background: "transparent",
+                border: "1px dashed var(--border-default)", color: "var(--accent)",
+                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                cursor: "pointer", textTransform: "uppercase",
+              }}
+            >
+              + {t}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

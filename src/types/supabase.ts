@@ -6396,6 +6396,60 @@ export type Database = {
           },
         ]
       }
+      submittal_components: {
+        Row: {
+          created_at: string
+          drawing_type: string
+          id: string
+          is_released: boolean
+          notes: string | null
+          project_id: string
+          received_date: string | null
+          released_date: string | null
+          submittal_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          drawing_type: string
+          id?: string
+          is_released?: boolean
+          notes?: string | null
+          project_id: string
+          received_date?: string | null
+          released_date?: string | null
+          submittal_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          drawing_type?: string
+          id?: string
+          is_released?: boolean
+          notes?: string | null
+          project_id?: string
+          received_date?: string | null
+          released_date?: string | null
+          submittal_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submittal_components_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_components_submittal_id_fkey"
+            columns: ["submittal_id"]
+            isOneToOne: false
+            referencedRelation: "submittals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       submittal_rounds: {
         Row: {
           ball_in_court: string | null

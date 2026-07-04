@@ -34,6 +34,8 @@ import { forecastPortfolio } from "@/lib/submittalForecast";
 import { batchProcess } from "@/utils/batchProcess";
 import { usePermissions } from "@/services/permissions";
 import { useFlag } from "@/hooks/useFeatureFlag";
+import { useSubmittalComponents } from "@/hooks/useSubmittalComponents";
+import type { DrawingType } from "@/lib/submittalComponents";
 import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import { shouldBumpRevisionOnResubmit } from "@/lib/submittalRevision";
 import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submittals/format";
@@ -210,6 +212,20 @@ export default function Submittals() {
   // detail panel + children grouped under the parent in the register. Default
   // off — the register renders flat and no spin-off/lineage UI appears.
   const splittingEnabled = useFlag("submittal_splitting");
+
+  // Phase 4 opt-in: when on, each submittal tracks its drawing types
+  // (Shop/Erection/Part) independently — per-type received + released dates via
+  // the submittal_components table, with S/E/P chips + a per-type section in the
+  // detail panel. Default off — no components query fires and no UI renders.
+  // Release-per-type is INDEPENDENT of submittals.status and the fab-release gate.
+  const drawingTypesEnabled = useFlag("submittal_drawing_types");
+  const {
+    bySubmittal: componentsBySubmittal,
+    setReceived: setComponentReceived,
+    setReleased: setComponentReleased,
+    addType: addComponentType,
+    remove: removeComponentMut,
+  } = useSubmittalComponents(projectId, drawingTypesEnabled);
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["submittals", projectId] });
@@ -670,12 +686,43 @@ export default function Submittals() {
             setSelectedId={setSelectedId}
             drawingSetsById={drawingSetsById}
             groupByLineage={splittingEnabled}
+            showTypeChips={drawingTypesEnabled}
+            componentsBySubmittal={componentsBySubmittal}
           />
 
           {/* Detail panel */}
           <SubmittalDetail
             approvedRoutesToScrub={approvedRoutesToScrub}
             splittingEnabled={splittingEnabled}
+            drawingTypesEnabled={drawingTypesEnabled}
+            components={selected ? (componentsBySubmittal[selected.id] || []) : []}
+            onComponentSetReceived={(args) => {
+              if (!selected?.id || !selected?.project_id) return;
+              setComponentReceived({
+                submittalId: selected.id,
+                projectId: selected.project_id,
+                drawingType: args.drawingType,
+                existing: args.existing,
+                date: args.date,
+              });
+            }}
+            onComponentSetReleased={(args) => {
+              if (!selected?.id || !selected?.project_id) return;
+              setComponentReleased({
+                submittalId: selected.id,
+                projectId: selected.project_id,
+                drawingType: args.drawingType,
+                existing: args.existing,
+                released: args.released,
+              });
+            }}
+            onComponentAddType={(drawingType) => {
+              if (!selected?.id || !selected?.project_id) return;
+              addComponentType({ submittalId: selected.id, projectId: selected.project_id, drawingType });
+            }}
+            onComponentRemoveType={(component) => {
+              if (component.id) removeComponentMut.mutate(component.id);
+            }}
             onSpinOff={() => selected && setSpinOffParentId(selected.id)}
             onSelectSubmittal={(id) => setSelectedId(id)}
             submittal={selectedView}
@@ -800,6 +847,7 @@ export default function Submittals() {
           allDrawings={allDrawings}
           allRfis={allRfis}
           parentSubmittal={spinOffParent as Submittal | null}
+          drawingTypesEnabled={drawingTypesEnabled}
           existingNumbers={new Set(
             rows
               .filter((r: any) => r.id !== editing?.id)
@@ -811,12 +859,29 @@ export default function Submittals() {
             if (editing) {
               await updateMut.mutateAsync({ id: editing.id, ...data });
             } else {
+              // Phase 4: `drawing_types` is a UI-only key (the types to start
+              // tracking) — split it off the record so it never hits the
+              // submittals insert as a phantom column. Component rows are created
+              // after the submittal insert (need its id + project_id).
+              const { drawing_types: chosenTypes, ...submittalData } = data as {
+                drawing_types?: DrawingType[];
+              } & Record<string, unknown>;
               // Covers both a plain create and a spin-off child (the record
               // already carries parent_submittal_id + split_reason when split).
-              const created = await createMut.mutateAsync(data);
+              const created = await createMut.mutateAsync(submittalData);
               // Jump the detail panel to the freshly-created child so its lineage
               // is immediately visible (createMut also selects it, belt+braces).
-              if (created?.id) setSelectedId(created.id);
+              if (created?.id) {
+                setSelectedId(created.id);
+                if (drawingTypesEnabled && Array.isArray(chosenTypes) && chosenTypes.length > 0) {
+                  const pid = (created.project_id as string) || projectId;
+                  if (pid) {
+                    for (const t of chosenTypes) {
+                      addComponentType({ submittalId: created.id, projectId: pid, drawingType: t });
+                    }
+                  }
+                }
+              }
             }
             setShowCreate(false);
             setEditingId(null);
