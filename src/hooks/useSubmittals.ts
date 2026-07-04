@@ -26,6 +26,7 @@ import { logTransition } from "@/services/auditLogger";
 import { lockSet } from "@/lib/drawingHub";
 import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
+import { bumpRevision as nextRevision } from "@/lib/submittalRevision";
 import { supabase } from "@/lib/supabase";
 import {
   FabReleaseBlockedError,
@@ -116,6 +117,8 @@ export interface AddRoundInput {
     submitted_date?: string | null;
     /** Status BEFORE this move — lets the smart triggers detect the transition. */
     status?: string | null;
+    /** Current text revision ('0','A','Rev 2'…) — read when auto-bumping it. */
+    revision?: string | null;
   };
   status: string;
   ball_in_court?: string | null;
@@ -124,6 +127,21 @@ export interface AddRoundInput {
   notes?: string | null;
   /** Bump the submittal's revision round_number (true on Revise & Resubmit). */
   bumpRevision?: boolean;
+  /**
+   * Auto-advance the submittal's TEXT `revision` column to its next value
+   * (Phase 2, flag-gated by `submittal_revision_autobump`). Distinct from
+   * `bumpRevision` above, which increments the numeric `round_number` column.
+   * The caller decides when this is true (flag ON && genuine resubmit — see
+   * shouldBumpRevisionOnResubmit); when false/absent the revision is left
+   * exactly as-is (today's manual behavior).
+   */
+  bumpTextRevision?: boolean;
+  /**
+   * The current text revision to bump from. Falls back to
+   * `input.submittal.revision` when omitted. Only consulted when
+   * `bumpTextRevision` is true.
+   */
+  currentRevision?: string | null;
   /** Extra fields to persist with the same patch (e.g. approval_chain_step
    * when the move follows a custom routing chain). */
   extraPatch?: Record<string, unknown> | null;
@@ -277,6 +295,12 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   if (input.submitted_date && plan.setSubmitted) patch.submitted_date = input.submitted_date;
   if (input.returned_date && plan.setReturned) patch.returned_date = input.returned_date;
   if (input.bumpRevision) patch.round_number = (Number(s.round_number) || 1) + 1;
+  // Phase 2 (flag-gated at the caller): auto-advance the TEXT `revision` column
+  // when a resubmit opens a new round. Kept in this same patch so the round row
+  // and the bumped revision are written atomically for the caller.
+  if (input.bumpTextRevision) {
+    patch.revision = nextRevision(input.currentRevision ?? s.revision ?? null);
+  }
   if (isFabRelease) patch.fab_release_override_reason = fabOverride;
 
   let updated: unknown;
