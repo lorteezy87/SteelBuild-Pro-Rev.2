@@ -1,31 +1,30 @@
-import React, { useMemo, useState, useEffect, Suspense } from "react";
+import React, { useMemo, useState, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { formatCurrency } from "../shared/formatters";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { useProjectContext } from "@/components/shared/ProjectContext";
-import ProgressBar from "../shared/ProgressBar";
-import { HealthPill, healthColor } from "./portfolioHealth";
 import { formatLocalDate } from "@/utils/dates";
-import {
-  PHASE_DOT,
-  MiniProjectTimeline,
-} from "./portfolioTimeline";
 import {
   computeCoExposure, summarizeSchedulesByProject, computeTotalTons,
   computeFabricatedTonnage, computeDeliveriesStats, computeRfiTurnaround,
   computeDataIssues, computeFinancials, computeProductionData,
   computeProjectMap, computeProjectMetrics, enrichProjectMetrics, computeBudgetChartData,
   computePortfolioKPIs, computePccData,
-  applyMetricsView, selectWatchlist, computePortfolioHealthGauge,
+  applyMetricsView, selectWatchlist,
+  computeTodayLabel,
 } from "./portfolioDerive";
 import { Button } from "@/components/design-system";
 import { MiniSparkline, Card, HeaderBar, KPIBlock } from "./portfolioPrimitives";
 import DeliveryRail from "./DeliveryRail";
 import CoExposurePanel from "./CoExposurePanel";
-
-const ROW_HEIGHT = 40;
+import { useLiveHealthSnapshot } from "./useLiveHealthSnapshot";
+import ProjectHealthRow from "./portfolio/ProjectHealthRow";
+import PriorityColumn from "./portfolio/PriorityColumn";
+import WaitingOnColumn from "./portfolio/WaitingOnColumn";
+import RiskWatchColumn from "./portfolio/RiskWatchColumn";
+import SidebarHealthGauge from "./portfolio/SidebarHealthGauge";
 
 // Lazy-load the only recharts visual on this route so the ~600 kB
 // vendor-charts chunk is fetched on demand (when the Financial Control
@@ -89,27 +88,8 @@ export default function PortfolioView({
     navigate("/Dashboard");
   };
 
-  // ── Sparkline history: store 7-day KPI snapshots in localStorage ──────────
-  const [sparkHistory, setSparkHistory] = useState({});
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("sbp-portfolio-spark");
-      if (raw) setSparkHistory(JSON.parse(raw));
-    } catch { /* noop */ }
-  }, []);
-
   const projectMap = useMemo(() => computeProjectMap(projects), [projects]);
-  const today = useMemo(() => {
-    const d = new Date();
-    return d
-      .toLocaleDateString("en-US", {
-        weekday: "long",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-      .toUpperCase();
-  }, []);
+  const today = useMemo(() => computeTodayLabel(), []);
 
   const projectMetrics = useMemo(
     () => computeProjectMetrics(projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses),
@@ -128,34 +108,8 @@ export default function PortfolioView({
     [projects, allRFIs, allCOs, allCodes, allWPs, allExpenses, allDeliveries, enrichedMetrics],
   );
 
-  // ── Persist sparkline snapshot once per day ────────────────────────────────
-  useEffect(() => {
-    if (!portfolioKPIs) return;
-    try {
-      const dateKey = new Date().toISOString().slice(0, 10);
-      const hist = { ...sparkHistory };
-      hist[dateKey] = {
-        overdueRFIs: portfolioKPIs.overdueRFIs,
-        openRFIs: portfolioKPIs.openRFIs,
-        pendingCOs: portfolioKPIs.pendingCOs,
-        lateDeliveries: portfolioKPIs.lateDeliveries,
-        atRisk: portfolioKPIs.atRisk,
-      };
-      // keep last 7 days only
-      const keys = Object.keys(hist).sort().slice(-7);
-      const trimmed = {};
-      keys.forEach((k) => (trimmed[k] = hist[k]));
-      localStorage.setItem("sbp-portfolio-spark", JSON.stringify(trimmed));
-      setSparkHistory(trimmed);
-    } catch { /* noop */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [portfolioKPIs]);
-
-  const sparkFor = (field) => {
-    const days = Object.keys(sparkHistory).sort();
-    if (days.length < 2) return [];
-    return days.map((d) => sparkHistory[d]?.[field] ?? 0);
-  };
+  // ── Sparkline history: 7-day KPI snapshots persisted once per day (localStorage) ──
+  const { sparkFor } = useLiveHealthSnapshot(portfolioKPIs);
 
   const budgetChartData = useMemo(() => computeBudgetChartData(projectMetrics), [projectMetrics]);
 
@@ -788,288 +742,16 @@ export default function PortfolioView({
                 </tr>
               </thead>
               <tbody>
-                {displayMetrics.map((p, i) => {
-                  const variance = p.hasBudgetData ? p.budget - p.actual : null;
-                  const isOverBudget = variance !== null && variance < 0;
-                  const hStatus = p.effectiveHealth || p.health_status;
-                  const rowBg = hStatus === "At Risk" ? "rgba(255,61,61,0.04)" : hStatus === "Watch" ? "rgba(245,158,11,0.03)" : "transparent";
-                  const hColor = healthColor(hStatus);
-                  return (
-                    <React.Fragment key={p.id}>
-                    <tr
-                      onClick={() => openProjectDashboard(p.id)}
-                      style={{
-                        borderBottom: "1px solid var(--divider)",
-                        background: rowBg,
-                        height: ROW_HEIGHT,
-                        cursor: "pointer",
-                        transition: "background 0.12s",
-                        borderLeft: `4px solid ${hColor}`,
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
-                      onMouseLeave={e => e.currentTarget.style.background = rowBg}
-                    >
-                      <td style={{ padding: "6px 8px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>{i + 1}</td>
-                      <td style={{ padding: "6px 8px", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", minWidth: 160 }}>
-                        <div style={{ display: "flex", flexDirection: "column" }}>
-                          <span style={{ fontWeight: 700 }}>{p.name || p.project_number}</span>
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{p.project_number}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: "6px 8px", fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: PHASE_DOT[p.phase] || "var(--text-muted)", display: "inline-block", marginRight: 6 }} />
-                        {p.phase || "—"}
-                      </td>
-                      {/* Timeline — compact per-project mini-Gantt. The bars
-                          are now individually clickable: phase bar → Schedule
-                          scoped to this project + filtered to that phase; any
-                          other part of the strip → the full schedule. We stop
-                          propagation inside so neither firing triggers the
-                          outer row click ("open project dashboard"). */}
-                      <td
-                        style={{ padding: "6px 8px", textAlign: "center" }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <MiniProjectTimeline
-                          summary={projectScheduleSummaries[p.id]}
-                          onTimelineClick={() => navigate(`${createPageUrl("Schedule")}?project=${p.id}`)}
-                          onPhaseClick={(phaseKey) => navigate(`${createPageUrl("Schedule")}?project=${p.id}&phase=${encodeURIComponent(phaseKey)}`)}
-                        />
-                      </td>
-                      <td style={{ padding: "6px 8px", textAlign: "center" }}>
-                        <HealthPill status={hStatus} score={p.healthScore} reasons={p.healthReasons} />
-                        {p.healthReasons?.length > 0 && hStatus !== "On Track" && (
-                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2, maxWidth: 140, lineHeight: 1.3 }}>
-                            {p.healthReasons[0]}
-                          </div>
-                        )}
-                        {/* Stale-PSR-import flag. The health shown above is now the
-                            LIVE auto-health (enrichProjectMetrics demotes a stale
-                            snapshot), so this chip just notes the imported PSR is old
-                            and disagreed — prompting a re-import. */}
-                        {(() => {
-                          const prov = p.psrProvenance;
-                          if (!prov?.driftRisk) return null;
-                          return (
-                            <div
-                              title={`Showing live health. An imported PSR snapshot from ${formatLocalDate(prov.importedAt)} (${prov.ageDays}d old) rated this "${prov.snapshotHealth}" — re-import the PSR if it's out of date.`}
-                              style={{ marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.06em", color: "var(--status-warning)", border: "1px solid color-mix(in srgb, var(--status-warning) 45%, transparent)", background: "color-mix(in srgb, var(--status-warning) 12%, transparent)", padding: "1px 6px", borderRadius: 999, whiteSpace: "nowrap" }}
-                            >
-                              ⚠ PSR · {prov.ageDays}d old
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      {/* Budget — click drills into Expenses scoped to project.
-                          The Expenses page is the closest surface to budget +
-                          cost-code data today; long-term a dedicated Costs
-                          page would land these three columns cleaner. */}
-                      <td
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`${createPageUrl("Expenses")}?project=${p.id}`);
-                        }}
-                        title={p.hasBudgetData ? `Budget: ${formatCurrency(p.budget)} · Source: Cost Codes · Click to view expenses` : "No cost codes set up — click to open Expenses"}
-                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasBudgetData ? "var(--text-primary)" : "var(--status-warning)", cursor: "pointer" }}
-                      >
-                        {p.hasBudgetData ? formatCurrency(p.budget).replace(/\.\d+/, "") : (
-                          <span style={{ fontSize: 8, fontWeight: 600, color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 3, padding: "1px 5px" }}>
-                            SET UP
-                          </span>
-                        )}
-                      </td>
-                      {/* Actual — drills into Expenses */}
-                      <td
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`${createPageUrl("Expenses")}?project=${p.id}`);
-                        }}
-                        title={p.hasActualData ? `Actual spend: ${formatCurrency(p.actual)} · Source: Paid Expenses · Click to view` : "No expense data — click to open Expenses"}
-                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasActualData ? "var(--text-primary)" : "var(--text-muted)", cursor: "pointer" }}
-                      >
-                        {p.hasActualData ? formatCurrency(p.actual).replace(/\.\d+/, "") : (
-                          <span style={{ fontSize: 8, color: "var(--text-muted)" }}>$0</span>
-                        )}
-                      </td>
-                      {/* Variance = Budget - Actual (positive = under budget) — drills into Expenses */}
-                      <td
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`${createPageUrl("Expenses")}?project=${p.id}`);
-                        }}
-                        title={`Budget: ${p.hasBudgetData ? formatCurrency(p.budget) : "N/A"} | Actual: ${p.hasActualData ? formatCurrency(p.actual) : "N/A"} | Variance: ${variance !== null ? (isOverBudget ? "-" : "+") + formatCurrency(Math.abs(variance)) : "N/A"} · Click to view expenses`}
-                        style={{
-                          padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-                          color: variance === null ? "var(--text-muted)" : isOverBudget ? "var(--status-error)" : "var(--status-success)",
-                          background: isOverBudget ? "rgba(248,81,73,0.06)" : "transparent",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {variance === null ? "—" : (
-                          <span style={{
-                            background: isOverBudget ? "var(--danger-muted)" : "var(--success-muted)",
-                            border: `1px solid ${isOverBudget ? "var(--danger-border)" : "var(--success-border)"}`,
-                            borderRadius: 3, padding: "1px 6px",
-                          }}>
-                            {(isOverBudget ? "−" : "+") + formatCurrency(Math.abs(variance)).replace(/\.\d+/, "")}
-                          </span>
-                        )}
-                      </td>
-                      {/* Projected Margin = Contract Value − max(budget, actual + pending CO exposure).
-                          Drills into Change Orders because pending COs are the
-                          primary variable pushing the margin around. */}
-                      <td
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`${createPageUrl("ChangeOrders")}?project=${p.id}`);
-                        }}
-                        title={p.projectedMargin === null
-                          ? "No contract value entered — set original_contract_value to see projected margin"
-                          : `Contract: ${formatCurrency(p.contractValue)} · Est. cost at completion: ${formatCurrency(p.estimatedCostAtCompletion)} · Margin: ${(p.projectedMarginPct ?? 0).toFixed(1)}% · Click to review COs`}
-                        style={{
-                          padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-                          color: p.projectedMargin === null ? "var(--text-muted)" : p.projectedMargin < 0 ? "var(--status-error)" : (p.projectedMarginPct ?? 0) < 5 ? "var(--status-warning)" : "var(--status-success)",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {p.projectedMargin === null ? "—" : (
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.1 }}>
-                            <span style={{
-                              background: p.projectedMargin < 0 ? "var(--danger-muted)" : (p.projectedMarginPct ?? 0) < 5 ? "var(--warning-muted)" : "var(--success-muted)",
-                              border: `1px solid ${p.projectedMargin < 0 ? "var(--danger-border)" : (p.projectedMarginPct ?? 0) < 5 ? "var(--warning-border)" : "var(--success-border)"}`,
-                              borderRadius: 3, padding: "1px 6px",
-                            }}>
-                              {(p.projectedMargin < 0 ? "−" : "+") + formatCurrency(Math.abs(p.projectedMargin)).replace(/\.\d+/, "")}
-                            </span>
-                            <span style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>{(p.projectedMarginPct ?? 0).toFixed(1)}%</span>
-                          </div>
-                        )}
-                      </td>
-                      <td
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`${createPageUrl("RFIs")}?project=${p.id}`);
-                        }}
-                        title={`${p.openRFIs} open, ${p.overdueRFIs} overdue · Click to open RFIs`}
-                        style={{
-                          padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)",
-                          color: p.overdueRFIs > 0 ? "var(--status-error)" : p.openRFIs > 3 ? "var(--status-warning)" : "var(--text-primary)",
-                          fontSize: 16, fontWeight: 800,
-                          background: p.overdueRFIs > 2 ? "rgba(248,81,73,0.08)" : p.openRFIs > 5 ? "rgba(227,179,65,0.06)" : "transparent",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {p.openRFIs}
-                      </td>
-                      <td
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`${createPageUrl("RFIs")}?project=${p.id}`);
-                        }}
-                        title={`${p.openRFIs} open, ${p.overdueRFIs} overdue · Click to open RFIs`}
-                        style={{
-                          padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)",
-                          color: p.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)",
-                          fontSize: 10, fontWeight: p.overdueRFIs > 0 ? 700 : 400,
-                          background: p.overdueRFIs > 0 ? "rgba(248,81,73,0.06)" : "transparent",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {p.overdueRFIs > 0 ? (
-                          <span style={{ background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 3, padding: "1px 6px" }}>
-                            {p.overdueRFIs}
-                          </span>
-                        ) : p.overdueRFIs}
-                      </td>
-                      <td
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`${createPageUrl("WorkPackages")}?project=${p.id}`);
-                        }}
-                        title="WP progress · Click to open Work Packages"
-                        style={{ padding: "6px 8px", minWidth: 130, cursor: "pointer" }}
-                      >
-                        <ProgressBar value={p.avgProgress || 0} />
-                      </td>
-                      <td
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`${createPageUrl("ChangeOrders")}?project=${p.id}`);
-                        }}
-                        title={`${p.pendingCOs.length} pending COs totaling ${formatCurrency(p.pendingCOValue)} · Click to review`}
-                        style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: p.pendingCOs.length > 0 ? 16 : 10, fontWeight: p.pendingCOs.length > 0 ? 800 : 400, color: p.pendingCOs.length > 0 ? "var(--status-warning)" : "var(--text-muted)", cursor: "pointer" }}
-                      >
-                        {p.pendingCOs.length > 0 ? `${p.pendingCOs.length} · ${formatCurrency(p.pendingCOValue).replace(/\.\d+/, "")}` : "—"}
-                      </td>
-                      <td
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`${createPageUrl("WorkPackages")}?project=${p.id}`);
-                        }}
-                        title={p.tonnage > 0 ? `${p.tonnage}T total · ${p.avgProgress}% WP progress · Source: Work Packages · Click to open` : "No tonnage entered — click to open Work Packages"}
-                        style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: p.tonnage > 0 ? "var(--text-secondary)" : "var(--text-muted)", cursor: "pointer" }}
-                      >{p.tonnage > 0 ? `${p.tonnage}T` : <span style={{ fontSize: 8 }}>0T</span>}</td>
-                      <td style={{ padding: "6px 6px", textAlign: "center" }}>
-                        <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
-                          {[
-                            // DASH uses a callback to switch the active project AND go to /Dashboard
-                            // (there is no standalone /ProjectDashboard route). Peer buttons navigate
-                            // via URL and carry `?project=<id>` so the destination page filters to
-                            // this row's project (previously they dumped the user on ALL RFIs / ALL
-                            // deliveries, losing context from the click that just happened).
-                            //
-                            // SCHED is always rendered — every PM reviews the schedule, even when
-                            // there's no signal. RFIs / DEL stay conditional so they only appear when
-                            // there's something to act on (keeps the 3-slot row uncluttered).
-                            { label: "DASH",  nav: () => openProjectDashboard(p.id), primary: true },
-                            { label: "SCHED", nav: `${createPageUrl("Schedule")}?project=${p.id}`, accent: "var(--status-info)" },
-                            ...(p.openRFIs > 0
-                              ? [{ label: "RFIs", nav: `${createPageUrl("RFIs")}?project=${p.id}`, accent: "var(--status-warning)" }]
-                              : []),
-                            ...(p.lateDeliveries > 0
-                              ? [{ label: "DEL", nav: `${createPageUrl("Deliveries")}?project=${p.id}`, accent: "var(--status-error)" }]
-                              : []),
-                          ].slice(0, 3).map((btn) => (
-                            <button
-                              key={btn.label}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (typeof btn.nav === "function") btn.nav();
-                                else navigate(btn.nav);
-                              }}
-                              style={{
-                                background: btn.primary ? "var(--accent-muted)" : "var(--bg-surface)",
-                                border: `1px solid ${btn.primary ? "var(--accent-border)" : btn.accent ? `${btn.accent}44` : "var(--border-default)"}`,
-                                borderRadius: 3,
-                                color: btn.primary ? "var(--accent)" : btn.accent || "var(--text-secondary)",
-                                fontFamily: "var(--font-mono)",
-                                fontSize: 8,
-                                fontWeight: 700,
-                                padding: "3px 7px",
-                                cursor: "pointer",
-                                letterSpacing: "0.04em",
-                                whiteSpace: "nowrap",
-                                transition: "background 0.12s, color 0.12s",
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.background = btn.primary ? "var(--accent)" : (btn.accent || "var(--accent)"); e.currentTarget.style.color = "#fff"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.background = btn.primary ? "var(--accent-muted)" : "var(--bg-surface)"; e.currentTarget.style.color = btn.primary ? "var(--accent)" : (btn.accent || "var(--text-secondary)"); }}
-                            >
-                              {btn.label}
-                            </button>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                    <tr style={{ height: 3, padding: 0 }}>
-                      <td colSpan={15} style={{ padding: 0, border: "none" }}>
-                        <div style={{ width: "100%", height: 3, background: "var(--bg-surface-low)" }}>
-                          <div style={{ width: `${Math.min(p.avgProgress || 0, 100)}%`, height: 3, background: hColor, transition: "width 0.3s ease" }} />
-                        </div>
-                      </td>
-                    </tr>
-                    </React.Fragment>
-                  );
-                })}
+                {displayMetrics.map((p, i) => (
+                  <ProjectHealthRow
+                    key={p.id}
+                    p={p}
+                    i={i}
+                    projectScheduleSummaries={projectScheduleSummaries}
+                    openProjectDashboard={openProjectDashboard}
+                    navigate={navigate}
+                  />
+                ))}
                 {displayMetrics.length === 0 && (
                   <tr>
                     <td colSpan={15} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
@@ -1332,129 +1014,13 @@ export default function PortfolioView({
       <div style={{ display: "grid", gridTemplateColumns: "5fr 4fr 3fr", gap: 0, minHeight: 320, background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 68%, #000 32%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)" }}>
 
         {/* Column 1: TODAY'S PRIORITIES */}
-        <div style={{ borderRight: "1px solid var(--divider)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", color: "var(--status-error)", textTransform: "uppercase", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 3, height: 12, background: "var(--status-error)", borderRadius: 1 }} />
-            Today's Priorities
-          </div>
-          {pccData.priorities.length === 0 ? (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-success)", fontWeight: 700, padding: 12, textAlign: "center" }}>
-              ALL CLEAR — No overdue items
-              {rfiTurnaround && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", fontWeight: 400, marginTop: 4 }}>Avg RFI turnaround: {rfiTurnaround}d</div>}
-            </div>
-          ) : (
-            pccData.priorities.slice(0, 8).map((item, i) => {
-              const sevColor = item.severity === "critical" ? "var(--status-error)" : item.severity === "high" ? "var(--status-error)" : "var(--status-warning)";
-              return (
-                <div key={i} onClick={() => navigate(createPageUrl(item.nav))} style={{
-                  borderLeft: `3px solid ${sevColor}`,
-                  background: i === 0 ? `color-mix(in srgb, ${sevColor} 12%, var(--bg-surface))` : "color-mix(in srgb, var(--bg-surface) 88%, #000 12%)",
-                  borderRadius: "0 12px 12px 0", padding: "10px 12px", cursor: "pointer",
-                  transition: "background 0.12s, box-shadow 0.12s",
-                  boxShadow: "0 10px 24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.03)",
-                }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.boxShadow = "0 14px 28px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = i === 0 ? `color-mix(in srgb, ${sevColor} 12%, var(--bg-surface))` : "color-mix(in srgb, var(--bg-surface) 88%, #000 12%)"; e.currentTarget.style.boxShadow = "0 10px 24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.03)"; }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 800, color: sevColor }}>#{i + 1}</span>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: sevColor, letterSpacing: "0.06em" }}>{item.type} {item.id}</span>
-                      </div>
-                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {item.title}
-                      </div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 1 }}>{item.project}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)", background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: 3, padding: "1px 6px" }}>
-                          {item.action}
-                        </span>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-                          Owner: <span style={{ color: "var(--text-primary)" }}>{item.owner}</span>
-                        </span>
-                      </div>
-                    </div>
-                    {item.days > 0 && (
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 3, padding: "2px 6px", flexShrink: 0 }}>
-                        {item.days}D
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+        <PriorityColumn priorities={pccData.priorities} rfiTurnaround={rfiTurnaround} navigate={navigate} />
 
         {/* Column 2: WAITING ON */}
-        <div style={{ borderRight: "1px solid var(--divider)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", color: "var(--status-warning)", textTransform: "uppercase", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 3, height: 12, background: "var(--status-warning)", borderRadius: 1 }} />
-            Waiting On ({pccData.waitingOn.length})
-          </div>
-          {pccData.waitingOn.length === 0 ? (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", padding: 12, textAlign: "center" }}>
-              Nothing blocked externally
-            </div>
-          ) : (
-            pccData.waitingOn.slice(0, 8).map((item, i) => (
-              <div key={i} onClick={() => navigate(createPageUrl(item.nav))} style={{
-                padding: "8px 10px", borderBottom: "1px solid var(--divider)", cursor: "pointer", borderRadius: 10,
-                background: "color-mix(in srgb, var(--bg-surface) 90%, #000 10%)",
-                transition: "background 0.12s, box-shadow 0.12s",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-              }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.boxShadow = "0 10px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.03)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--bg-surface) 90%, #000 10%)"; e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.03)"; }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--status-warning)" }}>{item.type}</span>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-primary)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>{item.title}</span>
-                    </div>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 1 }}>
-                      Waiting on: <span style={{ color: "var(--status-warning)" }}>{item.waitingFor}</span>
-                      {item.amount ? <span> · {formatCurrency(item.amount).replace(/\.\d+/, "")}</span> : null}
-                    </div>
-                  </div>
-                  {item.days > 0 && (
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: item.days >= 14 ? "var(--status-error)" : "var(--text-muted)", fontWeight: 600, flexShrink: 0 }}>
-                      {item.days}d
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        <WaitingOnColumn waitingOn={pccData.waitingOn} navigate={navigate} />
 
         {/* Column 3: RISK WATCHLIST */}
-        <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 3, height: 12, background: "var(--text-muted)", borderRadius: 1 }} />
-            Risk Watchlist
-          </div>
-          {pccData.riskWatch.length === 0 ? (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-success)", padding: 12, textAlign: "center", fontWeight: 700 }}>
-              ALL PROJECTS HEALTHY
-            </div>
-          ) : (
-            pccData.riskWatch.map((p, i) => {
-              const color = p.status === "At Risk" ? "var(--status-error)" : "var(--status-warning)";
-              return (
-                <div key={i} onClick={() => openProjectDashboard(p.projectId)} style={{
-                  borderLeft: `3px solid ${color}`,
-                  background: `color-mix(in srgb, ${color} 10%, var(--bg-surface))`, borderRadius: "0 12px 12px 0",
-                  padding: "8px 10px", cursor: "pointer", boxShadow: "0 10px 24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.03)",
-                }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={(e) => e.currentTarget.style.background = `color-mix(in srgb, ${color} 10%, var(--bg-surface))`}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>{p.project}</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, color }}>{p.score}</span>
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color, marginTop: 2 }}>
-                    {p.topReason}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+        <RiskWatchColumn riskWatch={pccData.riskWatch} openProjectDashboard={openProjectDashboard} />
       </div>
     </Card>
     </ErrorBoundary>
@@ -1480,39 +1046,7 @@ export default function PortfolioView({
         }}
       >
         {/* Portfolio Health Gauge */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "10px 0" }}>
-          {(() => {
-            const { avgScore, circumference, offset, color, label } = computePortfolioHealthGauge(enrichedMetrics);
-            return (
-              <>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase" }}>
-                  Portfolio Health
-                </div>
-                <svg width={96} height={96} style={{ transform: "rotate(-90deg)" }}>
-                  <circle cx={48} cy={48} r={38} fill="none" stroke="var(--border-default)" strokeWidth={5} />
-                  <circle cx={48} cy={48} r={38} fill="none" stroke={color} strokeWidth={5}
-                    strokeDasharray={circumference} strokeDashoffset={offset}
-                    strokeLinecap="round"
-                    style={{ transition: "stroke-dashoffset 0.6s ease-out", filter: `drop-shadow(0 0 6px ${color}66)` }}
-                  />
-                  <text x={48} y={48} textAnchor="middle" dy="0.35em"
-                    style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 800, fill: color, transform: "rotate(90deg)", transformOrigin: "48px 48px" }}
-                  >
-                    {avgScore}
-                  </text>
-                </svg>
-                <span style={{
-                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-                  color, letterSpacing: "0.10em",
-                  background: `${color}18`, border: `1px solid ${color}44`,
-                  borderRadius: 4, padding: "3px 10px",
-                }}>
-                  {label}
-                </span>
-              </>
-            );
-          })()}
-        </div>
+        <SidebarHealthGauge enrichedMetrics={enrichedMetrics} />
 
         {/* Key Metrics */}
         <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>

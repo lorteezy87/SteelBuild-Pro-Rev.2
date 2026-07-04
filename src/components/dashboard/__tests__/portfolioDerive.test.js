@@ -6,6 +6,7 @@ import {
   computeProjectMap, computeProjectMetrics, enrichProjectMetrics, computeBudgetChartData,
   computePortfolioKPIs, computePccData,
   applyMetricsView, selectWatchlist, computePortfolioHealthGauge,
+  computeTodayLabel, computeVarianceColor,
 } from "../portfolioDerive";
 
 describe("computeCoExposure", () => {
@@ -341,6 +342,36 @@ describe("selectWatchlist", () => {
   it("caps at 3", () => {
     const many = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, effectiveHealth: "At Risk", healthScore: i }));
     expect(selectWatchlist(many)).toHaveLength(3);
+  });
+});
+
+describe("computeTodayLabel", () => {
+  it("formats a fixed date as an uppercased weekday/month/day/year label", () => {
+    // Use a Date built from explicit local components so the label is
+    // timezone-stable regardless of the runner's tz.
+    const d = new Date(2026, 5, 30); // June 30 2026 (Tuesday), local midnight
+    expect(computeTodayLabel(d)).toBe("TUESDAY, JUN 30, 2026");
+  });
+  it("defaults to today's date when called with no arg", () => {
+    const expected = new Date()
+      .toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })
+      .toUpperCase();
+    expect(computeTodayLabel()).toBe(expected);
+  });
+});
+
+describe("computeVarianceColor", () => {
+  it("returns null variance + muted color when there is no budget data", () => {
+    expect(computeVarianceColor(100, 40, false)).toEqual({ variance: null, isOver: false, color: "var(--text-muted)" });
+  });
+  it("marks under-budget green (positive variance)", () => {
+    expect(computeVarianceColor(100, 40, true)).toEqual({ variance: 60, isOver: false, color: "var(--status-success)" });
+  });
+  it("marks over-budget red (negative variance)", () => {
+    expect(computeVarianceColor(100, 140, true)).toEqual({ variance: -40, isOver: true, color: "var(--status-error)" });
+  });
+  it("treats exactly-on-budget as not over (green)", () => {
+    expect(computeVarianceColor(100, 100, true)).toEqual({ variance: 0, isOver: false, color: "var(--status-success)" });
   });
 });
 
