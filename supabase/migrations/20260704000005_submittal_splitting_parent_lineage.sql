@@ -1,4 +1,4 @@
--- 20260704000000_submittal_splitting_parent_lineage.sql
+-- 20260704000005_submittal_splitting_parent_lineage.sql
 --
 -- Phase 3 of the submittal-logic integration: package SPLITTING with parent
 -- lineage. An approved submittal (e.g. ARCH/MISC) can be "spun off" into new
