@@ -33,6 +33,7 @@ import {
 import { forecastPortfolio } from "@/lib/submittalForecast";
 import { batchProcess } from "@/utils/batchProcess";
 import { usePermissions } from "@/services/permissions";
+import { useFlag } from "@/hooks/useFeatureFlag";
 import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submittals/format";
 import { Dialog, DialogContent, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./submittals/uiCompat";
@@ -188,6 +189,11 @@ export default function Submittals() {
     enabled: !!projectId,
     staleTime: 30_000,
   });
+
+  // Opt-in routing correction: when on, a BFA "Approved" flows through the
+  // detailer scrub (OFS → IFC → Released) exactly like "Approved as Noted".
+  // Default off — the verb CTA keeps its legacy "Approved" → IFC skip.
+  const approvedRoutesToScrub = useFlag("submittal_approved_to_scrub");
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["submittals", projectId] });
@@ -641,6 +647,7 @@ export default function Submittals() {
 
           {/* Detail panel */}
           <SubmittalDetail
+            approvedRoutesToScrub={approvedRoutesToScrub}
             submittal={selectedView}
             allSubmittals={rowsView}
             drawingSets={drawingSetsView}

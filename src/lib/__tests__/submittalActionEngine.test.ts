@@ -111,6 +111,81 @@ describe("nextSubmittalAction", () => {
   });
 });
 
+// ── Flag-gated routing: submittal_approved_to_scrub ────────────────────────
+// When `approvedRoutesToScrub` is on, a BFA "Approved" flows through the
+// detailer scrub (OFS) exactly like "Approved as Noted", instead of skipping
+// straight to IFC. Flag-off (default / absent) behavior is asserted unchanged
+// in the primary describe block above.
+
+describe("nextSubmittalAction with approvedRoutesToScrub", () => {
+  it("Approved at EOR (→ BFA) routes to scrub (OFS) like AAN when flag on", () => {
+    const a = nextSubmittalAction(
+      { status: "Approved", ball_in_court: "EOR" },
+      { approvedRoutesToScrub: true },
+    );
+    expect(a.currentStage).toBe("BFA");
+    expect(a.label).toBe("Send for Scrub (OFS)");
+    expect(a.nextStage).toBe("OFS");
+    expect(a.nextBallInCourt).toBe("Detailer");
+  });
+
+  it("flag-on Approved matches the flag-off AAN branch exactly (label + routing)", () => {
+    const approvedOn = nextSubmittalAction(
+      { status: "Approved", ball_in_court: "EOR" },
+      { approvedRoutesToScrub: true },
+    );
+    const aanOff = nextSubmittalAction({ status: "Approved as Noted", ball_in_court: "EOR" });
+    expect(approvedOn.label).toBe(aanOff.label);
+    expect(approvedOn.nextStage).toBe(aanOff.nextStage);
+    expect(approvedOn.nextStatus).toBe(aanOff.nextStatus);
+    expect(approvedOn.nextBallInCourt).toBe(aanOff.nextBallInCourt);
+  });
+
+  it("flag-off (explicit false) keeps the legacy Approved → IFC skip", () => {
+    const a = nextSubmittalAction(
+      { status: "Approved", ball_in_court: "EOR" },
+      { approvedRoutesToScrub: false },
+    );
+    expect(a.label).toBe("Issue for Construction (IFC)");
+    expect(a.nextStage).toBe("IFC");
+  });
+
+  it("empty opts object is identical to the no-opts default (Approved → IFC)", () => {
+    const withOpts = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" }, {});
+    const noOpts = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
+    expect(withOpts.nextStage).toBe("IFC");
+    expect(withOpts.label).toBe(noOpts.label);
+    expect(withOpts.nextStage).toBe(noOpts.nextStage);
+  });
+
+  it("flag-on happy path chains Approved → OFS → IFC → Released", () => {
+    let s: { status: string | null; ball_in_court: string | null } = {
+      status: "Approved",
+      ball_in_court: "EOR",
+    };
+    const seen: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const a = nextSubmittalAction(s, { approvedRoutesToScrub: true });
+      seen.push(a.currentStage);
+      if (a.disabled || !a.nextStatus) break;
+      s = { status: a.nextStatus, ball_in_court: a.nextBallInCourt };
+    }
+    expect(seen).toContain("BFA");
+    expect(seen).toContain("OFS");
+    expect(seen).toContain("IFC");
+    expect(seen[seen.length - 1]).toBe("Released");
+  });
+
+  it("flag-on does not disturb non-Approved dispositions (AAN still → OFS)", () => {
+    const a = nextSubmittalAction(
+      { status: "Approved as Noted", ball_in_court: "EOR" },
+      { approvedRoutesToScrub: true },
+    );
+    expect(a.label).toBe("Send for Scrub (OFS)");
+    expect(a.nextStage).toBe("OFS");
+  });
+});
+
 // ── Custom approval chains (approvalChains.js) ─────────────────────────────
 
 describe("nextSubmittalAction with a custom approval chain", () => {

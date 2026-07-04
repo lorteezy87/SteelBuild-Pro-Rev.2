@@ -57,12 +57,35 @@ export interface SubmittalAction {
 const DONE_TERMINALS = new Set<string>(["Released for Fabrication", "Void"]);
 
 /**
+ * Optional routing overrides. Flag-gated behavior lives here so the default
+ * (all-absent) call is byte-for-byte identical to the historical engine.
+ */
+export interface NextSubmittalActionOptions {
+  /**
+   * When true, a BFA `Approved` disposition routes to the detailer scrub
+   * (OFS) instead of skipping straight to IFC — i.e. `Approved` follows the
+   * exact same OFS → IFC → Released path as `Approved as Noted`. Gated by the
+   * `submittal_approved_to_scrub` feature flag at the call sites.
+   *
+   * Default: false (unchanged legacy behavior — `Approved` → IFC).
+   */
+  approvedRoutesToScrub?: boolean;
+}
+
+/**
  * Compute the suggested next workflow move for a submittal.
  * Derives the current stage from (status, ball_in_court), picks the next stage
  * per the canonical flow + disposition, and maps that back to the
  * (status, ball_in_court) pair the caller should persist.
+ *
+ * `opts` carries flag-gated routing overrides; omitting it (or passing all
+ * defaults) yields identical output to the pre-flag engine.
  */
-export function nextSubmittalAction(submittal: SubmittalLike | null | undefined): SubmittalAction {
+export function nextSubmittalAction(
+  submittal: SubmittalLike | null | undefined,
+  opts?: NextSubmittalActionOptions,
+): SubmittalAction {
+  const approvedRoutesToScrub = opts?.approvedRoutesToScrub === true;
   const status = submittal?.status || "Draft";
   const bic = submittal?.ball_in_court ?? null;
   const currentStage = submittalStatusToStage(status, bic, submittal?.approved_date) || "Not Started";
@@ -137,11 +160,15 @@ export function nextSubmittalAction(submittal: SubmittalLike | null | undefined)
       label = "Log Return (BFA)";
       break;
     case "BFA":
-      if (status === "Approved") {
+      if (status === "Approved" && !approvedRoutesToScrub) {
+        // Legacy default: a clean "Approved" skips the scrub and issues
+        // straight for construction.
         nextStage = "IFC";
         label = "Issue for Construction (IFC)";
       } else {
-        // Approved as Noted (or unknown disposition) → detailer scrub.
+        // Approved as Noted (or unknown disposition) → detailer scrub. With
+        // the `submittal_approved_to_scrub` flag on, a plain "Approved" takes
+        // this same branch so BOTH dispositions flow OFS → IFC → Released.
         nextStage = "OFS";
         label = "Send for Scrub (OFS)";
       }

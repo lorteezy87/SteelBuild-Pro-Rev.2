@@ -271,9 +271,15 @@ interface SubmittalDetailProps {
   today?: string;
   /** Advance the submittal one step in the canonical flow (status + BIC together). */
   onAdvance?: (action: { nextStatus: string | null; nextBallInCourt: string | null; label: string; nextStage: string | null; chainStepIndex?: number }) => void;
+  /**
+   * When true (from the `submittal_approved_to_scrub` flag), a BFA "Approved"
+   * routes to the detailer scrub (OFS) like "Approved as Noted" instead of
+   * skipping to IFC. Defaults to false — legacy behavior.
+   */
+  approvedRoutesToScrub?: boolean;
 }
 
-export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance }: SubmittalDetailProps) {
+export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = false }: SubmittalDetailProps) {
   // Round-over-round per-sheet disposition matrix (computed before any early
   // return to keep hook order stable). Empty-safe — renders nothing when the
   // submittal has no recorded reviewer responses.
@@ -375,7 +381,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
         {/* Verb-driven next-step CTA — one click advances the canonical
             workflow (status + ball-in-court together). Disabled at terminals. */}
         {onAdvance && (() => {
-          const action = nextSubmittalAction(submittal);
+          const action = nextSubmittalAction(submittal, { approvedRoutesToScrub });
           return (
             <button
               type="button"
