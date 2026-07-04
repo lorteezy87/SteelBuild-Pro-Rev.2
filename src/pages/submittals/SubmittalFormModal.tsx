@@ -23,11 +23,24 @@ interface SubmittalFormModalProps {
   /** Submittal numbers already used in this project (excluding the row being
    *  edited) — used to block a duplicate before it 409s on the unique index. */
   existingNumbers?: Set<string>;
+  /**
+   * Phase 3 splitting (flag `submittal_splitting`): when creating a CHILD via
+   * "Spin off child", the parent submittal being split. Non-null only in the
+   * spin-off flow; drives the "Spin off from …" title, the split-reason field,
+   * and the `parent_submittal_id` / `split_reason` carried in the record. The
+   * parent's project + drawing sets are prefilled into `initial` by the caller.
+   */
+  parentSubmittal?: Submittal | null;
   onClose: () => void;
   onSubmit: (record: Record<string, any>) => void | Promise<void>;
 }
 
-export default function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], existingNumbers, onClose, onSubmit }: SubmittalFormModalProps) {
+export default function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], existingNumbers, parentSubmittal = null, onClose, onSubmit }: SubmittalFormModalProps) {
+  // Only treat this as a spin-off when creating a NEW submittal from a parent —
+  // never when editing an existing row (even a child row keeps its lineage via
+  // its own parent_submittal_id, edited through the normal path, not re-split).
+  const isSplit = !!parentSubmittal && !initial.id;
+  const [splitReason, setSplitReason] = useState<string>(initial.split_reason || "");
   const [form, setForm] = useState({
     submittal_number: initial.submittal_number || "",
     title:            initial.title            || "",
@@ -63,7 +76,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
       toast.error(`Submittal # "${number}" already exists in this project — use a different number.`);
       return;
     }
-    const record = {
+    const record: Record<string, any> = {
       ...form,
       project_id:    projectId,
       project_name:  projectName,
@@ -71,6 +84,13 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
       submitted_date: form.submitted_date || null,
       required_date:  form.required_date  || null,
     };
+    // Phase 3 splitting: on a spin-off, stamp the parent link + reason so the
+    // new child's lineage is set at create time. Not a spin-off ⇒ these keys
+    // are omitted entirely (a plain create is byte-identical to today).
+    if (isSplit && parentSubmittal?.id) {
+      record.parent_submittal_id = parentSubmittal.id;
+      record.split_reason = splitReason.trim() || null;
+    }
     await onSubmit(record);
   };
 
@@ -78,7 +98,11 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Submittal" : "New Submittal"}</DialogTitle>
+          <DialogTitle>
+            {isSplit
+              ? `Spin off from "${parentSubmittal?.submittal_number || parentSubmittal?.title || "parent"}"`
+              : isEdit ? "Edit Submittal" : "New Submittal"}
+          </DialogTitle>
         </DialogHeader>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 8 }}>
           <div style={{ gridColumn: "1 / span 1" }}>
@@ -93,6 +117,19 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
             <Label>Title *</Label>
             <Input value={form.title} onChange={(e) => setField("title", e.target.value)} placeholder="Structural steel shop drawings - Area A" />
           </div>
+          {isSplit && (
+            <div style={{ gridColumn: "1 / span 2" }}>
+              <Label>Why is it being split off?</Label>
+              <Input
+                value={splitReason}
+                onChange={(e) => setSplitReason(e.target.value)}
+                placeholder="e.g. Gate Posts — field-verify before release"
+              />
+              <div style={{ marginTop: 4, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em" }}>
+                Shown on the parent's lineage. The parent's project + drawing sets are carried over.
+              </div>
+            </div>
+          )}
           <div style={{ gridColumn: "1 / span 2" }}>
             <AutoLinkSuggestions
               entity={form}
@@ -192,7 +229,7 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
             onClick={handleSubmit}
             style={{ padding: "8px 14px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
           >
-            {isEdit ? "SAVE" : "CREATE"}
+            {isSplit ? "CREATE CHILD" : isEdit ? "SAVE" : "CREATE"}
           </button>
         </DialogFooter>
       </DialogContent>

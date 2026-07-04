@@ -6586,6 +6586,7 @@ export type Database = {
           linked_task_ids: string[] | null
           metadata: Json | null
           notes: string | null
+          parent_submittal_id: string | null
           project_id: string
           project_name: string | null
           received_from: string | null
@@ -6595,6 +6596,7 @@ export type Database = {
           revision: string | null
           round_number: number | null
           spec_section: string | null
+          split_reason: string | null
           status: string
           submittal_number: string
           submittal_type: string | null
@@ -6626,6 +6628,7 @@ export type Database = {
           linked_task_ids?: string[] | null
           metadata?: Json | null
           notes?: string | null
+          parent_submittal_id?: string | null
           project_id: string
           project_name?: string | null
           received_from?: string | null
@@ -6635,6 +6638,7 @@ export type Database = {
           revision?: string | null
           round_number?: number | null
           spec_section?: string | null
+          split_reason?: string | null
           status?: string
           submittal_number: string
           submittal_type?: string | null
@@ -6666,6 +6670,7 @@ export type Database = {
           linked_task_ids?: string[] | null
           metadata?: Json | null
           notes?: string | null
+          parent_submittal_id?: string | null
           project_id?: string
           project_name?: string | null
           received_from?: string | null
@@ -6675,6 +6680,7 @@ export type Database = {
           revision?: string | null
           round_number?: number | null
           spec_section?: string | null
+          split_reason?: string | null
           status?: string
           submittal_number?: string
           submittal_type?: string | null
@@ -6691,6 +6697,13 @@ export type Database = {
             columns: ["current_round_id"]
             isOneToOne: false
             referencedRelation: "submittal_rounds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittals_parent_submittal_id_fkey"
+            columns: ["parent_submittal_id"]
+            isOneToOne: false
+            referencedRelation: "submittals"
             referencedColumns: ["id"]
           },
           {
