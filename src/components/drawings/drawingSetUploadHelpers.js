@@ -105,3 +105,85 @@ export function buildDrawingRecord({ sheet, fileResults, meta, activeProject, re
     ].filter(Boolean).join(" · "),
   };
 }
+
+// Build the processing-step list for the upload wizard's StepProcessing UI.
+// Pure — the modal calls this with the current active step + the set of
+// already-done step ids (and any warning flags) and renders the result.
+// NOTE: `activeId` is accepted for call-site parity but the rendered active
+// state is derived from currentStepId in StepProcessing, not from here.
+export function makeProgressSteps(activeId, doneIds = [], warnings = {}) {
+  return [
+    { id: "upload",  label: "Uploading files to storage...",        done: doneIds.includes("upload")  },
+    { id: "encode",  label: "Preparing PDF for AI reading...",       done: doneIds.includes("encode")  },
+    { id: "extract", label: "✦ Claude is reading your drawing set...", detail: "Scanning title blocks and sheet index", done: doneIds.includes("extract"), warning: warnings["extract"] },
+    { id: "parse",   label: "Building sheet list...",                done: doneIds.includes("parse")   },
+    { id: "done",    label: null,                                    done: doneIds.includes("done")    },
+  ];
+}
+
+/**
+ * Merge AI-detected set metadata into the current meta state. Pure — the modal
+ * passes the previous meta, the aggregated AI set metadata, and the default
+ * issue date, and applies the returned `merged` via setMeta and `aiFilled`
+ * via setAiFilledFields.
+ *
+ * Only fills fields the user left blank; never overwrites user input. Today's
+ * default issue date and a "0"/empty revision are both treated as "blank" so
+ * the AI value can win.
+ *
+ * @returns {{ merged: object, aiFilled: Record<string, boolean> }}
+ */
+export function mergeAiSetMetadata(prev, aggregateSetMeta = {}, defaultIssueDate) {
+  const merged = { ...prev };
+  const aiFilled = {};
+  const tryFill = (prevKey, aiKey) => {
+    const current = String(prev[prevKey] ?? "").trim();
+    const aiVal = String(aggregateSetMeta[aiKey] ?? "").trim();
+    // Treat today's default issueDate as "blank" so AI can overwrite it
+    const isDefault = prevKey === "issueDate" && current === defaultIssueDate;
+    // Treat "0" revision as "blank" so AI can overwrite it
+    const isDefaultRev = prevKey === "revision" && (current === "0" || current === "");
+    if (aiVal && (!current || isDefault || isDefaultRev)) {
+      merged[prevKey] = aiVal;
+      aiFilled[prevKey] = true;
+    }
+  };
+  tryFill("setName",    "setName");
+  tryFill("setNumber",  "setNumber");
+  tryFill("setNumber",  "drawingSetNumber");
+  tryFill("revision",   "revision");
+  tryFill("issueDate",  "issueDate");
+  tryFill("issuedBy",   "issuedBy");
+  tryFill("discipline", "discipline");
+  return { merged, aiFilled };
+}
+
+/**
+ * Detect the multi-sheet-same-page regression: a source PDF with >1 page whose
+ * every extracted sheet ended up with pdf_page=1 (the original bug). Pure — it
+ * groups the built records by source file and returns the offending groups so
+ * the caller can log a loud per-file warning. Returns an array of
+ * { sourceFile, sheetCount, pageCount } — one entry per regressing PDF.
+ *
+ * @param {Array} selectedSheets the reviewed sheets in insert order
+ * @param {Array} records        the built drawing records, index-aligned with selectedSheets
+ * @param {Array} fileResults    the per-file upload results (source of pageCount)
+ */
+export function detectMultiSheetSamePageRegression(selectedSheets, records, fileResults = []) {
+  const recordsBySource = new Map();
+  selectedSheets.forEach((sheet, i) => {
+    const key = sheet.sourceFile || "?";
+    if (!recordsBySource.has(key)) recordsBySource.set(key, []);
+    recordsBySource.get(key).push(records[i]);
+  });
+  const regressions = [];
+  for (const [sourceFile, group] of recordsBySource) {
+    if (group.length <= 1) continue;
+    const fileResult = fileResults.find(r => r.fileName === sourceFile);
+    const pageCount = fileResult?.pageCount;
+    if (Number.isFinite(pageCount) && pageCount > 1 && group.every(r => r.pdf_page === 1)) {
+      regressions.push({ sourceFile, sheetCount: group.length, pageCount });
+    }
+  }
+  return regressions;
+}
