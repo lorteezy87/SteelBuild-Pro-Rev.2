@@ -597,6 +597,35 @@ export function selectWatchlist(enrichedMetrics) {
 }
 
 /**
+ * Human-readable date header for the brand bar — e.g. "MONDAY, JUN 30, 2026"
+ * (uppercased). Takes an optional Date so it's testable; the component calls it
+ * with no arg, preserving the original `new Date()` behavior.
+ */
+export function computeTodayLabel(date = new Date()) {
+  return date
+    .toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+    .toUpperCase();
+}
+
+/**
+ * Variance = budget - actual (positive = under budget) for the Project Health
+ * table's Variance cell. Returns { variance, isOver, color } where variance is
+ * null when there's no budget data, isOver is true when over budget (variance
+ * < 0), and color is the status token the cell renders in.
+ */
+export function computeVarianceColor(budget, actual, hasBudgetData) {
+  const variance = hasBudgetData ? budget - actual : null;
+  const isOver = variance !== null && variance < 0;
+  const color = variance === null ? "var(--text-muted)" : isOver ? "var(--status-error)" : "var(--status-success)";
+  return { variance, isOver, color };
+}
+
+/**
  * Sidebar portfolio-health gauge geometry: average health score across projects
  * (100 when empty) plus the SVG ring circumference/offset and the color + label
  * bands (>=80 healthy, >=60 watch, else at-risk).
