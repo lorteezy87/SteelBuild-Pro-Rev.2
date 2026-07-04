@@ -19,6 +19,12 @@ import type { CycleStats } from "@/lib/submittalForecast";
 import { LinkedRFIs as LinkedRFIsRaw, LinkedTasks as LinkedTasksRaw } from "@/components/submittals/LinkedEntities";
 import SubmittalReviewStripRaw from "@/components/submittals/SubmittalReviewStrip";
 import ApprovalChainPanelRaw from "@/components/submittals/ApprovalChainPanel";
+import {
+  buildSubmittalLineageGroups,
+  getSubmittalLineage,
+  submittalLineageLabel,
+  type SubmittalLineageRow,
+} from "@/lib/submittalLineage";
 import { BIC_CHOICES, STATUSES, STATUS_CFG, TYPES } from "./format";
 import type { DrawingSet, DrawingSetsById, Submittal, SubmittalRoundRecord } from "./types";
 
@@ -33,6 +39,16 @@ const SubmittalReviewStrip = SubmittalReviewStripRaw as unknown as ComponentType
 const LinkedRFIs = LinkedRFIsRaw as unknown as ComponentType<Record<string, any>>;
 const LinkedTasks = LinkedTasksRaw as unknown as ComponentType<Record<string, any>>;
 
+// Phase 3 splitting: the "Spin off child" action is only offered once a
+// submittal has reached an approved/terminal disposition — the split scope
+// (e.g. "Gate Posts") is defined against approved parent content, so splitting
+// a Draft/Under-Review submittal would be premature.
+const SPLIT_ELIGIBLE_STATUSES = new Set<string>([
+  "Approved",
+  "Approved as Noted",
+  "Released for Fabrication",
+]);
+
 // ── Virtual list wrapper ───────────────────────────────────────────────
 
 interface SubmittalVirtualListProps {
@@ -44,12 +60,30 @@ interface SubmittalVirtualListProps {
   toggleSelect: (id: string) => void;
   setSelectedId: (id: string) => void;
   drawingSetsById: DrawingSetsById;
+  /**
+   * Phase 3 splitting (flag `submittal_splitting`): when true, cluster child
+   * submittals under their parent (indented, with a "N splits" badge + a "from
+   * <parent>" hint), preserving the incoming sort for top-level rows. When false
+   * (flag off) the list renders flat exactly as before.
+   */
+  groupByLineage?: boolean;
 }
 
-export function SubmittalVirtualList({ filtered, isLoading, rows, selectedId, selectedIds, toggleSelect, setSelectedId, drawingSetsById }: SubmittalVirtualListProps) {
+export function SubmittalVirtualList({ filtered, isLoading, rows, selectedId, selectedIds, toggleSelect, setSelectedId, drawingSetsById, groupByLineage = false }: SubmittalVirtualListProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
+  // Flatten to render rows once. Off ⇒ a trivial depth-0 wrapper over `filtered`
+  // (identical order/behavior to before). On ⇒ the parent-grouped tree order.
+  const renderRows = useMemo<Array<SubmittalLineageRow<Submittal>>>(
+    () =>
+      groupByLineage
+        ? buildSubmittalLineageGroups(filtered)
+        : filtered.map(
+            (r): SubmittalLineageRow<Submittal> => ({ row: r, depth: 0, childCount: 0, parentId: null, parentName: null }),
+          ),
+    [filtered, groupByLineage],
+  );
   const virtualizer = useVirtualizer({
-    count: filtered.length,
+    count: renderRows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 64,
     overscan: 10,
@@ -77,7 +111,8 @@ export function SubmittalVirtualList({ filtered, isLoading, rows, selectedId, se
     <div ref={parentRef} style={{ flex: 1, overflowY: "auto", borderRight: "1px solid var(--divider)" }}>
       <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
-          const r = filtered[virtualRow.index];
+          const item = renderRows[virtualRow.index];
+          const r = item.row;
           return (
             <div
               key={r.id}
@@ -98,6 +133,9 @@ export function SubmittalVirtualList({ filtered, isLoading, rows, selectedId, se
                 onToggle={() => toggleSelect(r.id as string)}
                 onClick={() => setSelectedId(r.id as string)}
                 drawingSetsById={drawingSetsById}
+                depth={item.depth}
+                childCount={item.childCount}
+                parentName={item.parentName}
               />
             </div>
           );
@@ -116,9 +154,15 @@ interface SubmittalRowProps {
   onToggle?: () => void;
   onClick: () => void;
   drawingSetsById?: DrawingSetsById;
+  /** Phase 3 lineage: indent depth (0 = top-level). */
+  depth?: number;
+  /** Phase 3 lineage: number of direct children (drives the "N splits" badge). */
+  childCount?: number;
+  /** Phase 3 lineage: parent label for a child row ("(removed)" if orphaned); null when top-level. */
+  parentName?: string | null;
 }
 
-function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsById }: SubmittalRowProps) {
+function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsById, depth = 0, childCount = 0, parentName = null }: SubmittalRowProps) {
   const cfg = STATUS_CFG[row.status ?? ""] || STATUS_CFG.Draft;
   // Derived workflow stage — gives users IFA/OFA/BFA/OFS/IFC/Released
   // alongside the literal submittal status. R&R outcomes are surfaced
@@ -192,10 +236,21 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
             style={{ margin: 0, cursor: "pointer" }}
           />
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.06em" }}>
-            {row.submittal_number}
-            {row.total_rounds > 1 && <span style={{ marginLeft: 6, color: "var(--status-warning)" }}>R{row.total_rounds}</span>}
+        <div style={{ flex: 1, minWidth: 0, paddingLeft: depth > 0 ? depth * 16 : 0 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
+            {/* Child indicator — a corner arrow marks a spun-off child row. */}
+            {depth > 0 && <span title="Spun-off child" style={{ color: "var(--text-muted)", fontWeight: 700 }}>↳</span>}
+            <span>{row.submittal_number}</span>
+            {row.total_rounds > 1 && <span style={{ color: "var(--status-warning)" }}>R{row.total_rounds}</span>}
+            {/* "N splits" badge — how many children were spun off this parent. */}
+            {childCount > 0 && (
+              <span
+                title={`${childCount} child submittal${childCount === 1 ? "" : "s"} spun off`}
+                style={{ padding: "1px 6px", borderRadius: 3, background: "var(--accent-muted)", color: "var(--accent)", fontSize: 8, fontWeight: 700, letterSpacing: "0.04em" }}
+              >
+                {childCount} SPLIT{childCount === 1 ? "" : "S"}
+              </span>
+            )}
           </div>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {row.title}
@@ -205,6 +260,12 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
             {row.spec_section ? `Spec ${row.spec_section} · ` : ""}
             {row.discipline || row.submittal_type || ""}
           </div>
+          {/* Lineage hint on a child row — which parent it was spun off from. */}
+          {parentName && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, color: "var(--text-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              from {parentName}
+            </div>
+          )}
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
@@ -277,9 +338,18 @@ interface SubmittalDetailProps {
    * skipping to IFC. Defaults to false — legacy behavior.
    */
   approvedRoutesToScrub?: boolean;
+  /**
+   * Phase 3 splitting (flag `submittal_splitting`): when true, show the "Spin
+   * off child" action + the lineage card. Defaults to false — nothing renders.
+   */
+  splittingEnabled?: boolean;
+  /** Open the spin-off form with this submittal as the parent (Phase 3). */
+  onSpinOff?: () => void;
+  /** Navigate the detail panel to a sibling submittal by id (Phase 3 lineage links). */
+  onSelectSubmittal?: (id: string) => void;
 }
 
-export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = false }: SubmittalDetailProps) {
+export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = false, splittingEnabled = false, onSpinOff, onSelectSubmittal }: SubmittalDetailProps) {
   // Round-over-round per-sheet disposition matrix (computed before any early
   // return to keep hook order stable). Empty-safe — renders nothing when the
   // submittal has no recorded reviewer responses.
@@ -317,6 +387,13 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
         !linkedManual.has(rfi.id),
     );
   }, [submittal, allRfis]);
+  // Phase 3 lineage: this submittal's immediate parent + spun-off children,
+  // resolved against the project's submittals. Computed before any early return
+  // to keep hook order stable; empty-safe when the flag is off / no lineage.
+  const lineage = useMemo(
+    () => getSubmittalLineage(submittal, allSubmittals),
+    [submittal, allSubmittals],
+  );
   // Wrap onFieldChange so a no-op edit (typing the same value back)
   // doesn't fire a network update — small UX nicety, also stops
   // accidental "Updated" toasts when the user just tabs through.
@@ -398,6 +475,26 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
             </button>
           );
         })()}
+
+        {/* Phase 3 splitting: "Spin off child" — surfaced once the submittal is
+            approved/terminal (the split scope is only known after approval, e.g.
+            ARCH/MISC approved → later "Gate Posts"). Opens the new-submittal form
+            prefilled with this submittal as the parent. Flag-gated by the parent. */}
+        {splittingEnabled && onSpinOff && SPLIT_ELIGIBLE_STATUSES.has(submittal.status ?? "") && (
+          <button
+            type="button"
+            onClick={onSpinOff}
+            title="Create a child submittal that links back to this one"
+            style={{
+              marginTop: 8, width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+              minHeight: 34, background: "transparent", border: "1px dashed var(--accent)", borderRadius: 4,
+              color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+              cursor: "pointer", textTransform: "uppercase",
+            }}
+          >
+            ⑃ Spin off child
+          </button>
+        )}
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "14px 20px" }}>
@@ -410,6 +507,52 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
           rounds={rounds}
           projectName={projectName}
         />
+
+        {/* Phase 3 lineage — shown only under the flag AND only when this
+            submittal actually has a parent or children. "Spun off from <parent>"
+            when it's a child; a linked list of children when it's a parent. */}
+        {splittingEnabled && (lineage.parent || lineage.children.length > 0) && (
+          <DetailSection title="Lineage">
+            {lineage.parent && (
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", marginBottom: lineage.children.length > 0 ? 8 : 0 }}>
+                Spun off from{" "}
+                <button
+                  type="button"
+                  onClick={() => lineage.parent?.id && onSelectSubmittal?.(lineage.parent.id)}
+                  style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
+                >
+                  {submittalLineageLabel(lineage.parent)}
+                </button>
+                {submittal.split_reason && (
+                  <span style={{ color: "var(--text-muted)" }}> — {submittal.split_reason}</span>
+                )}
+              </div>
+            )}
+            {lineage.children.length > 0 && (
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
+                  Spun-off children ({lineage.children.length})
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {lineage.children.map((child) => (
+                    <div key={child.id} style={{ fontFamily: "var(--font-body)", fontSize: 12 }}>
+                      <button
+                        type="button"
+                        onClick={() => child.id && onSelectSubmittal?.(child.id)}
+                        style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
+                      >
+                        {submittalLineageLabel(child)}
+                      </button>
+                      {child.split_reason && (
+                        <span style={{ color: "var(--text-muted)" }}> — {child.split_reason}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </DetailSection>
+        )}
 
         {/* Review forecast — for a submittal currently out for review, project
             the expected return from the shop's historical cycle time and flag

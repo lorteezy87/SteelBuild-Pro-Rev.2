@@ -79,6 +79,9 @@ export default function Submittals() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Phase 3 splitting: when set, the create form opens as a "spin off child"
+  // with this submittal as the parent (project + drawing sets prefilled).
+  const [spinOffParentId, setSpinOffParentId] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterBIC, setFilterBIC] = useState("all");
@@ -201,6 +204,12 @@ export default function Submittals() {
   // `revision` ('0'→'1', 'A'→'B', 'Rev 2'→'Rev 3'). Default off — revision
   // stays a manual field, unchanged for anyone without the flag.
   const revisionAutoBump = useFlag("submittal_revision_autobump");
+
+  // Phase 3 opt-in: when on, an approved submittal can be "split" into child
+  // submittals that link back via parent_submittal_id, with lineage shown in the
+  // detail panel + children grouped under the parent in the register. Default
+  // off — the register renders flat and no spin-off/lineage UI appears.
+  const splittingEnabled = useFlag("submittal_splitting");
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["submittals", projectId] });
@@ -511,6 +520,16 @@ export default function Submittals() {
 
   const selected = (selectedId ? rows.find((r) => r.id === selectedId) : null) ?? null;
   const editing = (editingId ? rows.find((r) => r.id === editingId) : null) ?? null;
+  // Phase 3 splitting: the parent being spun off from (if any), and the child's
+  // prefilled seed — carry the parent's project + drawing sets so the child
+  // starts scoped to the same package; everything else (number/title) is fresh.
+  const spinOffParent = (spinOffParentId ? rows.find((r) => r.id === spinOffParentId) : null) ?? null;
+  const spinOffInitial: Partial<Submittal> = spinOffParent
+    ? {
+        discipline: spinOffParent.discipline ?? undefined,
+        drawing_set_ids: Array.isArray(spinOffParent.drawing_set_ids) ? spinOffParent.drawing_set_ids : [],
+      }
+    : {};
 
   // Domain-view bridges for the typed child components. The queries yield
   // generated DB rows (nullable string columns); the child props use the page's
@@ -650,11 +669,15 @@ export default function Submittals() {
             toggleSelect={toggleSelect}
             setSelectedId={setSelectedId}
             drawingSetsById={drawingSetsById}
+            groupByLineage={splittingEnabled}
           />
 
           {/* Detail panel */}
           <SubmittalDetail
             approvedRoutesToScrub={approvedRoutesToScrub}
+            splittingEnabled={splittingEnabled}
+            onSpinOff={() => selected && setSpinOffParentId(selected.id)}
+            onSelectSubmittal={(id) => setSelectedId(id)}
             submittal={selectedView}
             allSubmittals={rowsView}
             drawingSets={drawingSetsView}
@@ -765,27 +788,39 @@ export default function Submittals() {
         </div>
       </PhoenixPanel>
 
-      {(showCreate || editing) && (
+      {(showCreate || editing || spinOffParent) && (
         <SubmittalFormModal
-          open={showCreate || !!editing}
-          initial={editingView || {}}
+          open={showCreate || !!editing || !!spinOffParent}
+          // Spin-off: seed from the parent (project + drawing sets carried over).
+          // Edit: the row being edited. Plain create: empty.
+          initial={editingView || (spinOffParent ? (spinOffInitial as Submittal) : {})}
           projectId={projectId}
           projectName={activeProject?.project_name || activeProject?.name || ""}
           availableSets={drawingSetsView}
           allDrawings={allDrawings}
           allRfis={allRfis}
+          parentSubmittal={spinOffParent as Submittal | null}
           existingNumbers={new Set(
             rows
               .filter((r: any) => r.id !== editing?.id)
               .map((r: any) => String(r.submittal_number || "").trim())
               .filter(Boolean),
           )}
-          onClose={() => { setShowCreate(false); setEditingId(null); }}
+          onClose={() => { setShowCreate(false); setEditingId(null); setSpinOffParentId(null); }}
           onSubmit={async (data) => {
-            if (editing) await updateMut.mutateAsync({ id: editing.id, ...data });
-            else await createMut.mutateAsync(data);
+            if (editing) {
+              await updateMut.mutateAsync({ id: editing.id, ...data });
+            } else {
+              // Covers both a plain create and a spin-off child (the record
+              // already carries parent_submittal_id + split_reason when split).
+              const created = await createMut.mutateAsync(data);
+              // Jump the detail panel to the freshly-created child so its lineage
+              // is immediately visible (createMut also selects it, belt+braces).
+              if (created?.id) setSelectedId(created.id);
+            }
             setShowCreate(false);
             setEditingId(null);
+            setSpinOffParentId(null);
           }}
         />
       )}
