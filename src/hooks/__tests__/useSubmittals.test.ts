@@ -294,6 +294,39 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     });
     expect(updateSubmittal).toHaveBeenCalledWith("s3", expect.objectContaining({ round_number: 3 }));
   });
+
+  // Phase 2: the TEXT `revision` column auto-bump (distinct from round_number).
+  it("bumps the text revision from currentRevision when bumpTextRevision is set", async () => {
+    filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Revise and Resubmit", submitted_date: "2026-06-01", returned_date: "2026-06-05" }]);
+    await addSubmittalRound({
+      submittal: { id: "s4", project_id: "p1", revision: "0" },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+      bumpTextRevision: true,
+      currentRevision: "0",
+    });
+    expect(updateSubmittal).toHaveBeenCalledWith("s4", expect.objectContaining({ revision: "1" }));
+  });
+
+  it("falls back to submittal.revision when currentRevision is omitted", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s5", project_id: "p1", revision: "A" },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+      bumpTextRevision: true,
+    });
+    expect(updateSubmittal).toHaveBeenCalledWith("s5", expect.objectContaining({ revision: "B" }));
+  });
+
+  it("leaves the text revision untouched when bumpTextRevision is absent (flag-off parity)", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s6", project_id: "p1", revision: "0" },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+    });
+    const patch = updateSubmittal.mock.calls.find((c) => c[0] === "s6")?.[1] ?? {};
+    expect(patch).not.toHaveProperty("revision");
+  });
 });
 
 describe("addSubmittalRound — fab-release gate (Option C)", () => {

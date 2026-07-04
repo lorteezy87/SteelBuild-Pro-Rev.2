@@ -35,6 +35,7 @@ import { batchProcess } from "@/utils/batchProcess";
 import { usePermissions } from "@/services/permissions";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
+import { shouldBumpRevisionOnResubmit } from "@/lib/submittalRevision";
 import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submittals/format";
 import { Dialog, DialogContent, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./submittals/uiCompat";
 import { SubmittalDetail, SubmittalVirtualList } from "./submittals/components";
@@ -194,6 +195,12 @@ export default function Submittals() {
   // detailer scrub (OFS → IFC → Released) exactly like "Approved as Noted".
   // Default off — the verb CTA keeps its legacy "Approved" → IFC skip.
   const approvedRoutesToScrub = useFlag("submittal_approved_to_scrub");
+
+  // Phase 2 opt-in: when on, opening a NEW round because the prior disposition
+  // was Revise & Resubmit / Rejected auto-advances the submittal's text
+  // `revision` ('0'→'1', 'A'→'B', 'Rev 2'→'Rev 3'). Default off — revision
+  // stays a manual field, unchanged for anyone without the flag.
+  const revisionAutoBump = useFlag("submittal_revision_autobump");
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["submittals", projectId] });
@@ -686,12 +693,20 @@ export default function Submittals() {
               ].includes(status);
               const isSent = status === "Submitted" || status === "Under Review";
               if (isVerdict || isSent) {
+                // Phase 2: a resubmit SEND (prior disposition R&R/Rejected)
+                // opens the next round — auto-bump the text revision then, not
+                // on the verdict that closed the prior cycle. Flag-gated inside
+                // shouldBumpRevisionOnResubmit (off → false → revision untouched).
+                const bumpTextRevision =
+                  isSent && shouldBumpRevisionOnResubmit(selected.status, revisionAutoBump);
                 advanceMut.mutate({
                   submittal: selected as any,
                   status,
                   ball_in_court: selected.ball_in_court ?? null,
                   submitted_date: isSent ? today : (selected.submitted_date ?? undefined),
                   returned_date: isVerdict ? today : undefined,
+                  bumpTextRevision,
+                  currentRevision: selected.revision ?? null,
                 });
               } else {
                 // Void is a plain status edit (no round), so the centralized
@@ -716,12 +731,20 @@ export default function Submittals() {
               const isResubmit = ["Revise and Resubmit", "Rejected"].includes(selected.status);
               const stampSubmitted =
                 action.nextStage === "OFA" && (isResubmit || !selected.submitted_date);
+              // Phase 2: the fresh-resubmit outbound hop (→OFA with a prior
+              // R&R/Rejected disposition) opens the next round — auto-bump the
+              // text revision here. Flag-gated (off → false → untouched).
+              const bumpTextRevision =
+                action.nextStage === "OFA" &&
+                shouldBumpRevisionOnResubmit(selected.status, revisionAutoBump);
               advanceMut.mutate({
                 submittal: selected as any,
                 status: action.nextStatus,
                 ball_in_court: action.nextBallInCourt,
                 submitted_date: stampSubmitted ? today : undefined,
                 returned_date: action.nextStage === "BFA" ? today : undefined,
+                bumpTextRevision,
+                currentRevision: selected.revision ?? null,
                 extraPatch:
                   action.chainStepIndex != null
                     ? { approval_chain_step: action.chainStepIndex }
