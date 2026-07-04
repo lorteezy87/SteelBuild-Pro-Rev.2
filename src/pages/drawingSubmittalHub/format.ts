@@ -3,6 +3,8 @@ import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawing
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { effectiveDetailingState, hasGoverningSubmittal, isPackageRR } from "@/lib/detailingPackageState";
 import { computeSequenceReadiness } from "@/lib/detailingReadiness";
+import { workingDaysBetween } from "@/lib/workingDays";
+import { todayLocalISO } from "@/lib/dateMath";
 import type { CurrentRevisionInfo, Drawing, DrawingRevision, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
@@ -117,6 +119,59 @@ export function dueInfo(input: any, closed = false): DueInfo {
     return { label: `${days}d left`, days, overdue: false, dueSoon: true, tone: warning, sort: days };
   }
   return { label: fmtDate(input), days, overdue: false, dueSoon: false, tone: textMuted, sort: days };
+}
+
+// ── Working-day-aware due display (Phase 5, flag-gated at the call site) ──────
+// When the `submittal_workday_dues` flag is ON, the countdown/overdue signal is
+// counted in WORKING days (Mon–Fri) rather than calendar days, so "3d left" on
+// a Thursday means three business days, not "includes the weekend". Flag OFF
+// keeps today's calendar-day dueInfo untouched. Pure + tested; `today` is
+// injected (defaults to local today) so it stays deterministic.
+
+/** Working days left until `input`; negative = working days overdue. null on no/bad date. */
+export function workdaysUntil(input: any, today?: string): number | null {
+  const due = toDateInputValue(input); // normalize to a local 'YYYY-MM-DD'
+  if (!due) return null;
+  return workingDaysBetween(today || todayLocalISO(), due);
+}
+
+/**
+ * Working-day variant of dueInfo. Same DueInfo shape + tone tokens as the
+ * calendar-day version so the UI is a drop-in swap, but the day count, the "Nd
+ * left / Nd late" label, and the due-soon window are all in WORKING days. The
+ * dueSoon window is 5 working days (~ one week) to match the calendar 7-day one.
+ */
+export function workdayDueInfo(input: any, closed = false, today?: string): DueInfo {
+  if (closed) {
+    return { label: "Closed", days: null, overdue: false, dueSoon: false, tone: success, sort: 99999 };
+  }
+  const days = workdaysUntil(input, today);
+  if (days === null) {
+    return { label: "No date", days: null, overdue: false, dueSoon: false, tone: textMuted, sort: 99998 };
+  }
+  if (days < 0) {
+    return { label: `${Math.abs(days)}d late`, days, overdue: true, dueSoon: false, tone: error, sort: days };
+  }
+  if (days === 0) {
+    return { label: "Due today", days, overdue: false, dueSoon: true, tone: warning, sort: 0 };
+  }
+  if (days <= 5) {
+    return { label: `${days}d left`, days, overdue: false, dueSoon: true, tone: warning, sort: days };
+  }
+  return { label: fmtDate(input), days, overdue: false, dueSoon: false, tone: textMuted, sort: days };
+}
+
+/**
+ * Flag-aware dispatcher: the working-day dueInfo when `useWorkdays` is true,
+ * else the calendar-day one. Callers pass the resolved `submittal_workday_dues`
+ * flag here; every existing call site keeps its calendar-day behavior by simply
+ * not opting in (useWorkdays defaults false).
+ */
+export function dueInfoFor(
+  input: any,
+  { closed = false, useWorkdays = false, today }: { closed?: boolean; useWorkdays?: boolean; today?: string } = {},
+): DueInfo {
+  return useWorkdays ? workdayDueInfo(input, closed, today) : dueInfo(input, closed);
 }
 
 /** YYYY-MM-DD for an `<input type="date">`, read as a LOCAL calendar day so a

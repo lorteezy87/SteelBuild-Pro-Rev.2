@@ -36,8 +36,9 @@ import { usePermissions } from "@/services/permissions";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useSubmittalComponents } from "@/hooks/useSubmittalComponents";
 import type { DrawingType } from "@/lib/submittalComponents";
-import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
+import { CLOSED_SUBMITTAL_STATUSES, submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { shouldBumpRevisionOnResubmit } from "@/lib/submittalRevision";
+import { decideWorkdayDue } from "@/lib/submittalWorkdayDue";
 import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submittals/format";
 import { Dialog, DialogContent, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./submittals/uiCompat";
 import { SubmittalDetail, SubmittalVirtualList } from "./submittals/components";
@@ -219,6 +220,14 @@ export default function Submittals() {
   // detail panel. Default off — no components query fires and no UI renders.
   // Release-per-type is INDEPENDENT of submittals.status and the fab-release gate.
   const drawingTypesEnabled = useFlag("submittal_drawing_types");
+
+  // Phase 5 opt-in: when on, a move OUT to someone with a clock — into OFA (Out
+  // For Approval; ball → EOR/GC) or OFS (Out For Scrub; ball → detailer) —
+  // auto-stamps submittals.required_date = today + the project's turnaround lead
+  // counted in WORKING days (Mon–Fri), and the hub shows a working-day-aware
+  // countdown. Default off — required_date stays manual and the calendar-day
+  // display is unchanged. The learned forecast (submittalForecast) is untouched.
+  const workdayDuesEnabled = useFlag("submittal_workday_dues");
   const {
     bySubmittal: componentsBySubmittal,
     setReceived: setComponentReceived,
@@ -769,6 +778,20 @@ export default function Submittals() {
                 // shouldBumpRevisionOnResubmit (off → false → revision untouched).
                 const bumpTextRevision =
                   isSent && shouldBumpRevisionOnResubmit(selected.status, revisionAutoBump);
+                // Phase 5: derive the operational stage this (status, BIC) lands
+                // in and, when it's outbound (OFA/OFS) and no due date is set,
+                // stamp a working-day due date. Flag-gated inside decideWorkdayDue
+                // (off → null → required_date untouched). BIC is unchanged on an
+                // inline status edit, so it drives OFA-vs-OFS the same way the
+                // stage chips do.
+                const nextStage = submittalStatusToStage(status, selected.ball_in_court ?? null, selected.approved_date ?? null);
+                const workdayDue = decideWorkdayDue({
+                  stage: nextStage,
+                  currentRequiredDate: selected.required_date ?? null,
+                  today,
+                  flagEnabled: workdayDuesEnabled,
+                  projectMeta: activeProject?.metadata ?? null,
+                });
                 advanceMut.mutate({
                   submittal: selected as any,
                   status,
@@ -777,6 +800,9 @@ export default function Submittals() {
                   returned_date: isVerdict ? today : undefined,
                   bumpTextRevision,
                   currentRevision: selected.revision ?? null,
+                  extraPatch: workdayDue.requiredDate
+                    ? { required_date: workdayDue.requiredDate }
+                    : undefined,
                 });
               } else {
                 // Void is a plain status edit (no round), so the centralized
@@ -807,6 +833,21 @@ export default function Submittals() {
               const bumpTextRevision =
                 action.nextStage === "OFA" &&
                 shouldBumpRevisionOnResubmit(selected.status, revisionAutoBump);
+              // Phase 5: the verb CTA already knows the stage it's advancing to
+              // (action.nextStage). On an outbound hop (OFA/OFS) with no due date
+              // set, stamp a working-day due date. Flag-gated inside
+              // decideWorkdayDue (off → null → required_date untouched). Merged
+              // into any existing extraPatch so the chain-step patch survives.
+              const workdayDue = decideWorkdayDue({
+                stage: action.nextStage,
+                currentRequiredDate: selected.required_date ?? null,
+                today,
+                flagEnabled: workdayDuesEnabled,
+                projectMeta: activeProject?.metadata ?? null,
+              });
+              const extraPatch: Record<string, unknown> = {};
+              if (action.chainStepIndex != null) extraPatch.approval_chain_step = action.chainStepIndex;
+              if (workdayDue.requiredDate) extraPatch.required_date = workdayDue.requiredDate;
               advanceMut.mutate({
                 submittal: selected as any,
                 status: action.nextStatus,
@@ -815,10 +856,7 @@ export default function Submittals() {
                 returned_date: action.nextStage === "BFA" ? today : undefined,
                 bumpTextRevision,
                 currentRevision: selected.revision ?? null,
-                extraPatch:
-                  action.chainStepIndex != null
-                    ? { approval_chain_step: action.chainStepIndex }
-                    : undefined,
+                extraPatch: Object.keys(extraPatch).length ? extraPatch : undefined,
               });
             }}
             // Inline-edit hook — every editable cell in the detail
