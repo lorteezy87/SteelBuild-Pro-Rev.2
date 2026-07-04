@@ -23,14 +23,15 @@ import ContextPanel from "@/components/drawings/viewer/ContextPanel";
 import AnnotationLayer from "@/components/drawings/viewer/AnnotationLayer";
 import AnnotationToolbar, { MARKUP_COLORS } from "@/components/drawings/viewer/AnnotationToolbar";
 import { useMarkup } from "@/components/drawings/viewer/useMarkup";
-import { detectScaleFromPdf } from "@/components/drawings/viewer/detectScale";
 import { parseRealDistance, formatScaleFraction } from "@/components/drawings/viewer/scaleParse";
 import { extractStoragePathFromSignedUrl } from "@/components/drawings/viewer/storageUrl";
 import ZoneLayer from "@/components/drawings/viewer/ZoneLayer";
 import ZonePanel from "@/components/drawings/viewer/ZonePanel";
 import ZoneFilterBar from "@/components/drawings/viewer/ZoneFilterBar";
 import ProposalPanel from "@/components/drawings/viewer/ProposalPanel";
-import { mono, normalizeSN } from "@/pages/drawingViewer/drawingViewerUtils";
+import { mono, normalizeSN, parseZonePayload } from "@/pages/drawingViewer/drawingViewerUtils";
+import { parseAnnotationLink } from "@/pages/drawingViewer/annotationLinks";
+import { useAutoScaleOnLoad } from "@/pages/drawingViewer/useAutoScaleOnLoad";
 import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
 import { useDrawingsList } from "@/pages/drawingViewer/useDrawingsList";
 import { usePdfLoader } from "@/pages/drawingViewer/usePdfLoader";
@@ -197,79 +198,12 @@ export default function DrawingViewer() {
     }
   }, [activeDrawing, projectId, qc]);
 
-  // Auto-detect scale from the PDF's title block text layer. Two paths:
-  //
-  //   1. Toolbar AUTO button → handleAutoDetectScale() below.
-  //      Explicit, always toasts the result, overrides any existing scale.
-  //      Useful when a user wants to force a re-detection.
-  //
-  //   2. Automatic on-load effect further down. Fires once per
-  //      drawing-with-no-calibration after the PDF loads. Only applies
-  //      on HIGH confidence matches (arch scale notation like 1/4"=1'-0"),
-  //      never on the low-confidence metric fallback — metric ratios are
-  //      often used for key maps / inset details and would silently
-  //      misconfigure the sheet. Toast includes an UNDO action so a
-  //      mis-detect is one click away from being reverted.
-  const handleAutoDetectScale = useCallback(async () => {
-    if (!activeDrawing?.id || !pdfDoc) return;
-    try {
-      const hit = await detectScaleFromPdf(pdfDoc);
-      if (!hit) {
-        toast.info("No scale pattern found in the PDF text layer. Use Calibrate (K) to set manually.");
-        return;
-      }
-      await entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
-      qc.invalidateQueries({ queryKey: ["drawings", projectId] });
-      const confidence = hit.confidence === "high" ? "" : " (low confidence — verify with Calibrate if needed)";
-      toast.success(`Detected scale ${hit.label} on page ${hit.page}${confidence}`);
-    } catch (err) {
-      toast.error(`Auto-detect failed: ${err.message}`);
-    }
-  }, [activeDrawing, pdfDoc, projectId, qc]);
-
-  // Fire auto-detect the first time we see an uncalibrated drawing with
-  // a loaded PDF. Per-session dedup via autoScaleAttemptedRef so quickly
-  // switching drawings doesn't spam toasts. Skips entirely when the
-  // drawing already has a markup_scale (manual or prior auto).
-  const autoScaleAttemptedRef = useRef(new Set());
-  useEffect(() => {
-    if (!pdfDoc || !activeDrawing?.id) return;
-    if (activeDrawing.markup_scale) return;
-    if (autoScaleAttemptedRef.current.has(activeDrawing.id)) return;
-    autoScaleAttemptedRef.current.add(activeDrawing.id);
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const hit = await detectScaleFromPdf(pdfDoc);
-        if (cancelled || !hit || hit.confidence !== "high") return;
-        await entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
-        if (cancelled) return;
-        qc.invalidateQueries({ queryKey: ["drawings", projectId] });
-        const drawingIdForUndo = activeDrawing.id;
-        toast.success(`Auto-detected scale ${hit.label}`, {
-          duration: 8000,
-          action: {
-            label: "Undo",
-            onClick: async () => {
-              try {
-                await entities.Drawing.update(drawingIdForUndo, { markup_scale: null });
-                qc.invalidateQueries({ queryKey: ["drawings", projectId] });
-                toast.info("Scale reset — use Calibrate (K) to set manually.");
-              } catch (err) {
-                toast.error(`Undo failed: ${err.message}`);
-              }
-            },
-          },
-        });
-      } catch {
-        // Silent — auto-path should not spam errors. User can still
-        // click AUTO on the toolbar for explicit feedback.
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [pdfDoc, activeDrawing?.id, activeDrawing?.markup_scale, projectId, qc]);
+  // Auto-detect scale from the PDF's title block text layer. Both paths
+  // (the explicit toolbar AUTO button + the automatic once-per-uncalibrated
+  // -drawing on-load effect with its UNDO toast) live in useAutoScaleOnLoad.
+  // The hook owns the per-session dedup ref internally and returns the
+  // handler the toolbar wires to. Behaviour is unchanged.
+  const { handleAutoDetectScale } = useAutoScaleOnLoad({ activeDrawing, pdfDoc, projectId, qc });
 
   // ── Drawing-hub zones (MVP Slice 0) ────────────────────────────────
   // Three modes for the overlay:
@@ -373,26 +307,13 @@ export default function DrawingViewer() {
   const handleZoneDrawComplete = useCallback(async (payload) => {
     if (!currentRevision || !activeDrawing) return;
     try {
-      let created;
-      if (payload?.shape === "polygon") {
-        created = await createZoneSvc({
-          projectId:  activeDrawing.project_id,
-          drawingId:  activeDrawing.id,
-          revisionId: currentRevision.id,
-          label:      "",
-          shapeType:  "polygon",
-          polygonPoints: payload.points,
-        });
-      } else {
-        created = await createZoneSvc({
-          projectId:  activeDrawing.project_id,
-          drawingId:  activeDrawing.id,
-          revisionId: currentRevision.id,
-          label:      "",
-          xMin: payload.xMin, yMin: payload.yMin,
-          xMax: payload.xMax, yMax: payload.yMax,
-        });
-      }
+      const created = await createZoneSvc({
+        projectId:  activeDrawing.project_id,
+        drawingId:  activeDrawing.id,
+        revisionId: currentRevision.id,
+        label:      "",
+        ...parseZonePayload(payload),
+      });
       toast.success(`Zone ${created.zone_key} created`);
       setSelectedZoneId(created.id);
       // Drop back to view mode so the user can see their new zone.
@@ -424,58 +345,18 @@ export default function DrawingViewer() {
   }, [drawings]);
 
   // ── Handle annotation link click ──────────────────────────────────────────
+  // The pure decision (internal dest | validated external url | cross-sheet
+  // sheet | reject) lives in parseAnnotationLink — INCLUDING the XSS-safe
+  // scheme validation. The handler only performs the resolved side effect.
   const handleAnnotationClick = useCallback(async (annot) => {
-    // 1. Internal PDF destination (page ref within the same document)
-    if (annot.dest) {
-      try {
-        let pageNum = null;
-        if (typeof annot.dest === "string") {
-          // Named destination — resolve via the PDF document
-          const dest = await pdfDoc.getDestination(annot.dest);
-          if (dest) {
-            const pageRef = dest[0];
-            pageNum = await pdfDoc.getPageIndex(pageRef) + 1;
-          }
-        } else if (Array.isArray(annot.dest)) {
-          // Explicit destination array [pageRef, ...]
-          const pageRef = annot.dest[0];
-          pageNum = await pdfDoc.getPageIndex(pageRef) + 1;
-        }
-        if (pageNum && pageNum >= 1 && pageNum <= totalPages) {
-          setCurrentPage(pageNum);
-          return;
-        }
-      } catch { /* fall through to cross-sheet lookup */ }
-    }
-
-    // 2. External URL — C6 fix: validate scheme to prevent javascript: XSS
-    if (annot.url) {
-      try {
-        const parsed = new URL(annot.url, window.location.origin);
-        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-          window.open(annot.url, "_blank", "noopener,noreferrer");
-        }
-      } catch { /* malformed URL — ignore */ }
-      return;
-    }
-
-    // 3. Cross-sheet reference — try to match against sheet numbers in this project
-    //    Common patterns: "S-201", "S201", "A/S201", "DETAIL 3/S-201"
-    const refText = annot.title || annot.unsafeUrl || "";
-    if (refText) {
-      const match = refText.match(/([A-Z]{1,2}[-\s]?\d{3,4})/i);
-      if (match) {
-        const sheetRef = match[1].toUpperCase().replace(/\s+/g, "");
-        const target = drawings.find(d => {
-          const sn = (d.sheet_number || "").toUpperCase().replace(/[-\s]/g, "");
-          return sn === sheetRef || sn === sheetRef.replace("-", "");
-        });
-        if (target) {
-          setActiveId(target.id);
-          setCurrentPage(1);
-          return;
-        }
-      }
+    const target = await parseAnnotationLink(annot, { pdfDoc, totalPages, drawings });
+    if (target.type === "page") {
+      setCurrentPage(target.page);
+    } else if (target.type === "url") {
+      window.open(target.url, "_blank", "noopener,noreferrer");
+    } else if (target.type === "sheet") {
+      setActiveId(target.drawingId);
+      setCurrentPage(1);
     }
   }, [pdfDoc, totalPages, drawings, setCurrentPage]);
 
