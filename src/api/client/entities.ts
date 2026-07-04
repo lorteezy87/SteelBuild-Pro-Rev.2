@@ -233,6 +233,9 @@ export const entities = {
   TaskDependency:        createEntityClient('task_dependencies'),
   Submittal:             createEntityClient('submittals'),
   SubmittalRound:        createEntityClient('submittal_rounds'),
+  // Phase 4 submittal-logic: per-drawing-type (Shop/Erection/Part) received +
+  // released tracking, gated by the `submittal_drawing_types` flag at the UI.
+  SubmittalComponent:    createEntityClient('submittal_components'),
   SubmittalSheetResponse: createEntityClient('submittal_sheet_responses'),
   SubmittalActivity:     createEntityClient('submittal_activity'),
   Comment:               createEntityClient('comments'),

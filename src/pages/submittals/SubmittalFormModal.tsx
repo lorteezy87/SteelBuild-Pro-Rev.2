@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Input, 
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import DrawingSetSelectorRaw from "@/components/submittals/DrawingSetSelector";
 import { STATUSES, TYPES, BIC_CHOICES } from "./format";
+import { DRAWING_TYPES, type DrawingType } from "@/lib/submittalComponents";
 import type { DrawingSet, Submittal } from "./types";
 
 // DrawingSetSelector is still .jsx, so TS infers its array props from `[]`
@@ -31,16 +32,28 @@ interface SubmittalFormModalProps {
    * parent's project + drawing sets are prefilled into `initial` by the caller.
    */
   parentSubmittal?: Submittal | null;
+  /**
+   * Phase 4 per-drawing-type (flag `submittal_drawing_types`): when true, show a
+   * Shop/Erection/Part multiselect. Selected types are emitted on the record as
+   * `drawing_types` so the caller can create the component rows after insert.
+   * Default false — the picker is hidden and no `drawing_types` key is emitted.
+   */
+  drawingTypesEnabled?: boolean;
   onClose: () => void;
   onSubmit: (record: Record<string, any>) => void | Promise<void>;
 }
 
-export default function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], existingNumbers, parentSubmittal = null, onClose, onSubmit }: SubmittalFormModalProps) {
+export default function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], existingNumbers, parentSubmittal = null, drawingTypesEnabled = false, onClose, onSubmit }: SubmittalFormModalProps) {
   // Only treat this as a spin-off when creating a NEW submittal from a parent —
   // never when editing an existing row (even a child row keeps its lineage via
   // its own parent_submittal_id, edited through the normal path, not re-split).
   const isSplit = !!parentSubmittal && !initial.id;
   const [splitReason, setSplitReason] = useState<string>(initial.split_reason || "");
+  // Phase 4: which drawing types to start tracking on this submittal. Only used
+  // on CREATE (an edit manages component rows through the detail panel instead).
+  const [drawingTypes, setDrawingTypes] = useState<DrawingType[]>([]);
+  const toggleDrawingType = (t: DrawingType) =>
+    setDrawingTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
   const [form, setForm] = useState({
     submittal_number: initial.submittal_number || "",
     title:            initial.title            || "",
@@ -90,6 +103,12 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
     if (isSplit && parentSubmittal?.id) {
       record.parent_submittal_id = parentSubmittal.id;
       record.split_reason = splitReason.trim() || null;
+    }
+    // Phase 4: on CREATE, hand the caller the chosen drawing types so it can
+    // create the component rows after the submittal insert. Omitted on edit and
+    // when the flag is off (never emitted empty ⇒ plain create is unchanged).
+    if (drawingTypesEnabled && !isEdit && drawingTypes.length > 0) {
+      record.drawing_types = drawingTypes;
     }
     await onSubmit(record);
   };
@@ -152,6 +171,39 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
               availableSets={availableSets}
             />
           </div>
+          {/* Phase 4: which drawing types to track independently (Shop/Erection/
+              Part). Create-only + flag-gated. Each selected type gets its own
+              received + release tracking in the detail panel after creation. */}
+          {drawingTypesEnabled && !isEdit && (
+            <div style={{ gridColumn: "1 / span 2" }}>
+              <Label>Drawing types to track</Label>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                {DRAWING_TYPES.map((t) => {
+                  const on = drawingTypes.includes(t);
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => toggleDrawingType(t)}
+                      aria-pressed={on}
+                      style={{
+                        padding: "4px 12px", borderRadius: 3, cursor: "pointer",
+                        fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+                        border: on ? "1px solid var(--accent)" : "1px solid var(--border-default)",
+                        background: on ? "var(--accent-muted)" : "transparent",
+                        color: on ? "var(--accent)" : "var(--text-muted)",
+                      }}
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 4, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em" }}>
+                Optional — each type gets its own received + released-for-fab dates. You can also add these later from the detail panel.
+              </div>
+            </div>
+          )}
           <div>
             <Label>Type</Label>
             <Select value={form.submittal_type} onValueChange={(v) => setField("submittal_type", v)}>

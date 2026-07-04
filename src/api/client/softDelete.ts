@@ -54,7 +54,7 @@ export const PROJECT_SCOPED_TABLES = new Set<string>([
   'project_handoff_items', 'mitigation_logs', 'mitigation_actions',
   'drawing_activity', 'drawing_revisions', 'drawing_zones', 'drawing_links',
   'drawing_signoffs', 'task_dependencies', 'submittals', 'submittal_rounds',
-  'submittal_sheet_responses', 'submittal_activity', 'comments',
+  'submittal_sheet_responses', 'submittal_activity', 'submittal_components', 'comments',
   'budget_hour_items', 'risks',
   // Email integration: all three tables are project-scoped.
   'email_accounts', 'email_messages', 'email_attachments',

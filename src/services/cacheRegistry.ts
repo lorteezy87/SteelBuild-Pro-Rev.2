@@ -422,6 +422,15 @@ const REGISTRY: Record<string, EntityRegistration> = {
     ],
   },
 
+  // Phase 4 submittal-logic: per-drawing-type (Shop/Erection/Part) components.
+  submittal_component: {
+    primary:  (pid) => ["submittal-components", pid],
+    families: (pid) => [
+      ["submittal-components", pid],
+      ["submittal-components"],
+    ],
+  },
+
   change_request: {
     primary:  (pid) => ["change-requests", pid],
     families: (pid) => [
