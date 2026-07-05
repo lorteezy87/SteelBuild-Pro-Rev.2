@@ -311,7 +311,7 @@ type OpenBucket =
   | { kind: "fab"; key: FabStatusKey }
   | null;
 
-function ModelMappingSection({ summary, elements, onImport }: { summary?: ElementStatusSummary | null; elements?: any[]; onImport: () => void }) {
+export function ModelMappingSection({ summary, elements, onImport }: { summary?: ElementStatusSummary | null; elements?: any[]; onImport: () => void }) {
   const total = summary?.total ?? 0;
   const [openBucket, setOpenBucket] = useState<OpenBucket>(null);
 
@@ -516,7 +516,7 @@ interface SequenceReadinessRow {
   atRiskCount: number;
 }
 
-function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
+export function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
   return (
     <SectionCard
       title="Sequence readiness"
@@ -573,7 +573,7 @@ function SequenceReadinessSection({ rows }: { rows: SequenceReadinessRow[] }) {
 
 const REV_SEVERITY_TONE: Record<string, string> = { critical: error, high: warning, medium: info, low: textMuted };
 
-function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onCompare?: (drawingId: string) => void }) {
+export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onCompare?: (drawingId: string) => void }) {
   const shown = (rows || []).slice(0, 8);
   return (
     <SectionCard
@@ -645,7 +645,7 @@ interface InlineOwnerControlProps {
   disabled: boolean;
 }
 
-function InlineOwnerControl({ currentOwner, onAssign, disabled }: InlineOwnerControlProps) {
+export function InlineOwnerControl({ currentOwner, onAssign, disabled }: InlineOwnerControlProps) {
   const [open, setOpen] = useState(false);
   const isUnassigned = !currentOwner || currentOwner === "Unassigned";
 
@@ -735,7 +735,7 @@ interface InlineDateControlProps {
   disabled: boolean;
 }
 
-function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: InlineDateControlProps) {
+export function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: InlineDateControlProps) {
   const [open, setOpen] = useState(false);
   const hasDate = !!currentDate;
 
@@ -825,7 +825,7 @@ interface InlineDetailingControlProps {
 // Manual drafting-state advance (In Detailing → Internal Review → Ready to
 // Submit). Only rendered for drawing-set packages with NO governing submittal —
 // once a submittal exists, the submittal machine owns the state (§20).
-function InlineDetailingControl({ current, onAdvance, disabled }: InlineDetailingControlProps) {
+export function InlineDetailingControl({ current, onAdvance, disabled }: InlineDetailingControlProps) {
   return (
     <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: surface1, border: `1px solid ${border}` }}>
       <div style={{
@@ -887,7 +887,7 @@ interface ReadinessPanelProps {
   disabled: boolean;
 }
 
-function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanelProps) {
+export function ReadinessPanel({ readiness, onToggle, disabled }: ReadinessPanelProps) {
   const {
     backwardDates = {}, scheduleRisk = {}, fabricationReady, erectionReady,
     rfiBlocked, revisionImpacted, materialImpacted, longLeadImpact, prioritySequence,
