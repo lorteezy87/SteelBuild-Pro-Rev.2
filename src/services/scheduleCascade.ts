@@ -88,7 +88,15 @@ export function toDateOnly(s: any): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
 }
 
-function addDaysIso(iso: any, n: number): string | null {
+/**
+ * Add `n` whole days to a YYYY-MM-DD (or ISO) date and return a canonical
+ * YYYY-MM-DD string, or null if the input is unparseable. UTC-based on purpose:
+ * parsing as UTC midnight and doing the arithmetic in UTC keeps the result
+ * timezone-independent, so callers never hit the local-parse / UTC-serialize
+ * off-by-one that `new Date(str + "T00:00:00")` + `.toISOString()` produces
+ * under a non-zero UTC offset. Reused by Schedule bulk-duration math.
+ */
+export function addDaysIso(iso: any, n: number): string | null {
   const d = parseDateUTC(iso);
   if (!d) return null;
   d.setUTCDate(d.getUTCDate() + n);

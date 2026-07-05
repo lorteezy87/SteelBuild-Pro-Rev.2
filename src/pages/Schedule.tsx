@@ -9,7 +9,7 @@ import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar as CommandBarRaw, Button as ButtonRaw } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
-import { applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
+import { addDaysIso, applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
@@ -366,11 +366,11 @@ export default function Schedule() {
 
           const fields: Record<string, any> = { duration: newDur };
           if (task.start_date) {
-            const d = new Date(task.start_date + "T00:00:00");
-            if (!isNaN(d.getTime())) {
-              d.setDate(d.getDate() + newDur);
-              fields.end_date = d.toISOString().split("T")[0];
-            }
+            // UTC-safe: adding days via new Date(str+"T00:00:00") (local) then
+            // .toISOString() (UTC) shifts end_date by a day under a non-zero UTC
+            // offset. addDaysIso does the arithmetic in UTC — timezone-independent.
+            const end = addDaysIso(task.start_date, newDur);
+            if (end) fields.end_date = end;
           }
           return entities.ScheduleTask.update(task.id, fields);
         },
