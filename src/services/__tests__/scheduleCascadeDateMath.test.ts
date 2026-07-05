@@ -60,10 +60,18 @@ describe("addDaysIso — timezone-safe end_date for Schedule bulk duration", () 
     expect(addDaysIso("2026-02-28", 1)).toBe("2026-03-01"); // 2026 is not a leap year
   });
 
-  it("returns null for an unparseable start date (matches the bulkDurationMut guard)", () => {
+  it("returns null for an unparseable start date or a non-finite day count", () => {
     expect(addDaysIso("", 5)).toBeNull();
     expect(addDaysIso(null, 5)).toBeNull();
     expect(addDaysIso("not-a-date", 5)).toBeNull();
+    // A non-finite day count must not throw (setUTCDate(NaN) -> Invalid Date ->
+    // toISOString() RangeError). Guard it and return null like a bad date.
+    expect(addDaysIso("2026-07-04", Number.NaN)).toBeNull();
+    expect(addDaysIso("2026-07-04", Infinity)).toBeNull();
+  });
+
+  it("still supports negative day counts (fast-tracking lag) — only NaN/Infinity are rejected", () => {
+    expect(addDaysIso("2026-07-04", -3)).toBe("2026-07-01");
   });
 
   it("gives the correct end_date where the old local-parse math was off by one (UTC-positive)", () => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { PHASES } from "../../utils/phases";
 import DateOrTbdInput from "./DateOrTbdInput";
+import { addDaysIso } from "../../services/scheduleCascade";
 
 const TASK_TYPES = ["Task", "Fabrication", "Delivery", "Install", "Submittal", "RFI", "Milestone"];
 const STATUSES   = ["Not Started", "In Progress", "Complete", "On Hold", "Cancelled"];
@@ -11,10 +12,9 @@ const today = () => new Date().toISOString().split("T")[0];
 /** Add `days` calendar days to a YYYY-MM-DD string. Returns YYYY-MM-DD. */
 function addDays(dateStr, days) {
   if (!dateStr || !Number.isFinite(days)) return null;
-  const d = new Date(dateStr + "T00:00:00");
-  if (isNaN(d)) return null;
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
+  // UTC-safe: local-parse (new Date(str+"T00:00:00")) + toISOString() shifts the
+  // day under a non-zero UTC offset. addDaysIso does the arithmetic in UTC.
+  return addDaysIso(dateStr, days);
 }
 
 /** Compute the day-count between two YYYY-MM-DD strings. */
