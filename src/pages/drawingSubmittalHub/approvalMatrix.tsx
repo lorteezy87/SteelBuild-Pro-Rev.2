@@ -20,7 +20,7 @@ import {
   accent,
   border,
   buildApprovalMatrixRows,
-  dueInfo,
+  dueInfoFor,
   error,
   fmtDate,
   getStatusColor,
@@ -51,15 +51,19 @@ interface ApprovalMatrixProps {
   submittals: Submittal[];
   roundsBySubmittal: Record<string, any[]>;
   isLoading: boolean;
+  // When on (from the `submittal_workday_dues` flag), each row's Due-Status chip
+  // counts in working days (Mon–Fri). Every matrix due is a submittal date, so
+  // there is no drawing-date carve-out here. Defaults off → calendar-day.
+  useWorkdays?: boolean;
 }
 
-export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading }: ApprovalMatrixProps) {
+export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading, useWorkdays = false }: ApprovalMatrixProps) {
   const [search, setSearch] = useState("");
 
   // Build matrix + summary (pure logic in format.ts; testable).
   const matrixRows = useMemo(
-    () => buildApprovalMatrixRows(drawingSets, submittals, search),
-    [drawingSets, submittals, search],
+    () => buildApprovalMatrixRows(drawingSets, submittals, search, useWorkdays),
+    [drawingSets, submittals, search, useWorkdays],
   );
   const summary = useMemo(() => summarizeApprovalMatrix(matrixRows), [matrixRows]);
 
@@ -171,6 +175,7 @@ export function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isL
                     due={row.due}
                     allSubmittals={row.submittals}
                     roundsBySubmittal={roundsBySubmittal}
+                    useWorkdays={useWorkdays}
                   />
                 ))
               )}
@@ -190,9 +195,10 @@ interface MatrixRowProps {
   due: DueInfo;
   allSubmittals: any[];
   roundsBySubmittal: Record<string, any[]>;
+  useWorkdays?: boolean;
 }
 
-function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }: MatrixRowProps) {
+function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, useWorkdays = false }: MatrixRowProps) {
   const [expanded, setExpanded] = useState(false);
   const hasMultiple = allSubmittals.length > 1;
   const overdueStyle: CSSProperties = due?.overdue ? { color: error, fontWeight: 700 } : {};
@@ -267,7 +273,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }: M
             <Td />
             <Td style={{ color: accent }}>{s.submittal_number}</Td>
             <Td><StatusChip status={s.status} /></Td>
-            <Td><DueChip info={dueInfo(getSubmittalDueDate(s), isClosedSubmittal(s))} /></Td>
+            <Td><DueChip info={dueInfoFor(getSubmittalDueDate(s), { closed: isClosedSubmittal(s), useWorkdays })} /></Td>
             <Td style={{ textAlign: "center" }}>{s.round_number || 1}</Td>
             <Td>{CLOSED_SUBMITTAL_STATUSES.has(s.status ?? "") ? "Closed" : (s.ball_in_court || "—")}</Td>
             <Td>{fmtDate(s.submitted_date)}</Td>

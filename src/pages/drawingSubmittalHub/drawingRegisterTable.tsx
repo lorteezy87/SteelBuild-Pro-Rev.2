@@ -15,7 +15,7 @@ import {
   accent,
   border,
   currentRevisionForPackage,
-  dueInfo,
+  dueInfoFor,
   getSubmittalDueDate,
   isClosedPackage,
   mono,
@@ -219,6 +219,12 @@ export function DrawingRegisterTable({
   onOpenSummary?: (summary: any) => void;
 }) {
   const aiDiffEnabled = useFlag("revision_ai_diff");
+  // Phase 5 display: the register's Due chip is driven by the governing
+  // SUBMITTAL's required_date (getSubmittalDueDate below), so it counts in
+  // working days (Mon–Fri) when the flag is on — matching the Control Board /
+  // Approval Matrix. The per-sheet DRAWING dates are not shown here, so no
+  // calendar-day carve-out is needed. Default off → calendar-day, unchanged.
+  const workdayDues = useFlag("submittal_workday_dues");
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = useAppSecurity() as any;
@@ -270,7 +276,7 @@ export function DrawingRegisterTable({
         // Released column — a mid-flow submittal can't render alongside a green
         // "Released", and a released package reads "Released" in both columns.
         const effectiveState = effectiveDetailingState(pkg.parent, submittals, sheets);
-        const due = dueInfo(getSubmittalDueDate(latestSubmittal), done);
+        const due = dueInfoFor(getSubmittalDueDate(latestSubmittal), { closed: done, useWorkdays: workdayDues });
         const discipline = pkg.parent?.discipline || [...new Set(sheets.map((d) => d.discipline).filter(Boolean))][0] || "—";
         // §20-21: the displayed Rev is a per-set rollup of the AUTHORITATIVE
         // current revision (drawing_revisions.is_current via currentRevByDrawingId)
@@ -310,7 +316,7 @@ export function DrawingRegisterTable({
         }
         return compareDrawingSetPackages(a.pkg.parent || a.pkg, b.pkg.parent || b.pkg);
       });
-  }, [setPackages, search, healthByKey, sortByHealth, summariesBySet, currentRevByDrawingId]);
+  }, [setPackages, search, healthByKey, sortByHealth, summariesBySet, currentRevByDrawingId, workdayDues]);
 
   // Above this many rows, render the virtualized grid instead of a full <table>
   // so large projects (1000+ sets) stay fast. Small projects keep the exact
