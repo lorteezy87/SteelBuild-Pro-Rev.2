@@ -19,8 +19,10 @@
  * imported from triageBoard.tsx. They already render light via the shipped token
  * cascade; passing the identical callbacks keeps their write paths unchanged.
  */
-import { ArrowRight, FileQuestion, CircleDollarSign } from "lucide-react";
-import { AlertTriangle, Clock3, ShieldCheck, CalendarClock, ClipboardList } from "lucide-react";
+import {
+  ArrowRight, FileQuestion, CircleDollarSign,
+  AlertTriangle, Clock3, ShieldCheck, CalendarClock, ClipboardList,
+} from "lucide-react";
 import { DecisionPanel, Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
 import { buildControlBoardModel } from "./drawingControlCenter.derive";
