@@ -123,6 +123,11 @@ export default function DrawingSubmittalHub() {
   const show3d = useFlag("viewer_3d");
   // Command UI re-skin — wraps the hub in the light command chrome when on.
   const commandUi = useFlag("command_ui");
+  // Phase 5 display: count SUBMITTAL due-date countdowns in working days (Mon–Fri)
+  // rather than calendar days when on. Drawing-set dues stay calendar-day. Threaded
+  // as a param into the pure formatters (buildTriage / buildApprovalMatrixRows) and
+  // as a prop into the submittal boards — pure fns never read the flag directly.
+  const workdayDues = useFlag("submittal_workday_dues");
   const tabs = useMemo(
     () => (show3d ? [...TABS, { key: "model3d", label: "3D Model", icon: Box }] : TABS),
     [show3d],
@@ -403,8 +408,8 @@ export default function DrawingSubmittalHub() {
   const isLoading = drawingsLoading || submittalsLoading;
 
   const triage = useMemo(
-    () => buildTriage(submittals, setPackages, readinessByKey),
-    [submittals, setPackages, readinessByKey],
+    () => buildTriage(submittals, setPackages, readinessByKey, workdayDues),
+    [submittals, setPackages, readinessByKey, workdayDues],
   );
 
   const tabCounts = useMemo(() => ({
@@ -552,6 +557,7 @@ export default function DrawingSubmittalHub() {
             submittals={submittals}
             isLoading={isLoading}
             onOpenTab={setActiveTab}
+            useWorkdays={workdayDues}
           />
         )}
         {activeTab === "drawings" && (
@@ -575,6 +581,7 @@ export default function DrawingSubmittalHub() {
             submittals={submittals as unknown as HubSubmittal[]}
             roundsBySubmittal={roundsBySubmittal}
             isLoading={isLoading}
+            useWorkdays={workdayDues}
           />
         )}
         {activeTab === "revimpact" && (

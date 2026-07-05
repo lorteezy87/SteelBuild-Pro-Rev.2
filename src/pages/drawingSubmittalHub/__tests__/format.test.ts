@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CLOSED_SUBMITTAL_STATUSES,
   buildCurrentRevisionMap,
@@ -587,5 +587,104 @@ describe("buildTriage", () => {
     expect(t.pipelineCounts).toEqual({});
     expect(t.overdueDrawingSets).toBe(0);
     expect(t.atRiskCount).toBe(0);
+  });
+});
+
+// ── Phase 5: working-day-aware SUBMITTAL due display, flag threaded in ────────
+// buildTriage / buildApprovalMatrixRows have no injectable `today`; they call
+// dueInfoFor() which reads the machine clock. Freeze it to a known MONDAY so the
+// working-day counts are deterministic and independent of the day the suite runs.
+// (2026-07-06 is a Monday; 2026-07-13 the next Monday — 7 calendar / 5 working.)
+describe("buildTriage — working-day due display (submittal_workday_dues)", () => {
+  const MONDAY = new Date(2026, 6, 6, 12, 0, 0); // Mon Jul 6 2026, local noon
+  const NEXT_MONDAY = "2026-07-13"; // 7 calendar days out, 5 working days out
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(MONDAY);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // A set package governed by a submittal whose required_date is next Monday.
+  // Return `any` so the object literals don't trip the noImplicitAny ratchet on
+  // this new test file (parent: null / submittals: [] would infer implicit any).
+  const submittalGovernedPkg = (): any => ({
+    key: "pkg-s",
+    setId: "set-s",
+    name: "Main Steel",
+    parent: null,
+    sheets: [{ id: "d1", stage: "IFA", due_date: null }],
+    submittals: [
+      { id: "sub-1", round_number: 1, status: "Submitted", required_date: NEXT_MONDAY, submittal_number: "001" },
+    ],
+  });
+
+  // A drawing-only package: NO submittal governs; due comes from the sheet date.
+  const drawingOnlyPkg = (): any => ({
+    key: "pkg-d",
+    setId: "set-d",
+    name: "Anchor Bolts",
+    parent: null,
+    sheets: [{ id: "d2", stage: "IFA", due_date: NEXT_MONDAY }],
+    submittals: [],
+  });
+
+  it("counts a SUBMITTAL-governed set due in WORKING days when the flag is on", () => {
+    const t = buildTriage([], [submittalGovernedPkg()], new Map(), true);
+    const item = t.setItems.find((i) => i.id === "set-pkg-s");
+    expect(item?.due.days).toBe(5); // Mon→Mon = 5 working days (weekend dropped)
+    expect(item?.due.label).toBe("5d left");
+    expect(item?.due.dueSoon).toBe(true);
+  });
+
+  it("keeps a SUBMITTAL-governed set due in CALENDAR days when the flag is off (unchanged)", () => {
+    const t = buildTriage([], [submittalGovernedPkg()], new Map(), false);
+    const item = t.setItems.find((i) => i.id === "set-pkg-s");
+    expect(item?.due.days).toBe(7); // 7 calendar days — today's behavior
+    // Byte-identical to omitting the arg entirely (default false).
+    const tDefault = buildTriage([], [submittalGovernedPkg()], new Map());
+    expect(tDefault.setItems.find((i) => i.id === "set-pkg-s")?.due).toEqual(item?.due);
+  });
+
+  it("leaves a DRAWING-only set due CALENDAR-day even when the flag is on", () => {
+    const t = buildTriage([], [drawingOnlyPkg()], new Map(), true);
+    const item = t.setItems.find((i) => i.id === "set-pkg-d");
+    // Sheet-date fallback → calendar days regardless of the flag.
+    expect(item?.due.days).toBe(7);
+  });
+
+  it("counts an UNLINKED submittal due in working days when the flag is on", () => {
+    const submittals = [
+      { id: "u1", is_deleted: false, status: "Submitted", required_date: NEXT_MONDAY, submittal_number: "U-1" },
+    ];
+    const on = buildTriage(submittals, [], new Map(), true);
+    const off = buildTriage(submittals, [], new Map(), false);
+    expect(on.unlinkedSubmittalItems[0]?.due.days).toBe(5);
+    expect(off.unlinkedSubmittalItems[0]?.due.days).toBe(7);
+  });
+});
+
+describe("buildApprovalMatrixRows — working-day due display", () => {
+  const MONDAY = new Date(2026, 6, 6, 12, 0, 0);
+  const NEXT_MONDAY = "2026-07-13";
+  const sets = [{ id: "s1", set_name: "Main Steel", is_deleted: false }];
+  const subs = [{ id: "a", drawing_set_ids: ["s1"], round_number: 1, status: "Submitted", required_date: NEXT_MONDAY, submittal_number: "001" }];
+
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(MONDAY); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("counts each row's submittal due in working days when the flag is on", () => {
+    const row = buildApprovalMatrixRows(sets, subs, "", true).find((r) => r.id === "s1");
+    expect(row?.due.days).toBe(5);
+    expect(row?.due.dueSoon).toBe(true);
+  });
+
+  it("stays calendar-day when the flag is off (default, unchanged)", () => {
+    const on = buildApprovalMatrixRows(sets, subs, "", false).find((r) => r.id === "s1");
+    const def = buildApprovalMatrixRows(sets, subs).find((r) => r.id === "s1");
+    expect(on?.due.days).toBe(7);
+    expect(def?.due).toEqual(on?.due); // default arg === explicit false
   });
 });

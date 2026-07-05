@@ -473,8 +473,19 @@ export function buildDrawingKpis(drawings: any[], setPackages: SetPackage[]) {
 
 /** The Control-Board triage model: per-package + unlinked-submittal items,
  *  bucketed (overdue / dueSoon / needsAction / noDate), pipeline counts, and the
- *  overdue/at-risk tallies. Pure over submittals, setPackages, readinessByKey. */
-export function buildTriage(submittals: any[], setPackages: SetPackage[], readinessByKey: Map<string, any>) {
+ *  overdue/at-risk tallies. Pure over submittals, setPackages, readinessByKey.
+ *
+ *  `useWorkdays` (resolved from the `submittal_workday_dues` flag by the React
+ *  caller — pure fns never read the flag) makes the countdown WORKING-day-aware
+ *  for SUBMITTAL-governed dues only. Drawing-set dues (the earliestDate() sheet
+ *  fallback when no submittal governs) stay calendar-day regardless. Defaults
+ *  false so the flag-off path is byte-identical to today. */
+export function buildTriage(
+  submittals: any[],
+  setPackages: SetPackage[],
+  readinessByKey: Map<string, any>,
+  useWorkdays = false,
+) {
     const activeSubmittals = submittals.filter((s) => !s.is_deleted) as any[];
 
     const setItems = setPackages.map((pkg) => {
@@ -496,7 +507,13 @@ export function buildTriage(submittals: any[], setPackages: SetPackage[], readin
       // and/or detailing_state=Released for Erection) whose submittal was
       // never rolled to "Released for Fabrication" lingered on the hit list.
       const closed = isClosedPackage(pkg);
-      const dueDate = getSubmittalDueDate(latestSubmittal) || earliestDate(pkg.sheets.map(getDrawingDueDate));
+      // Prefer the governing submittal's due; only when there is none does the
+      // display fall back to the earliest sheet due. Track WHICH source won so
+      // the countdown is working-day-aware for submittal-governed dues but stays
+      // calendar-day for drawing-set (sheet) dues.
+      const submittalDue = getSubmittalDueDate(latestSubmittal);
+      const dueDate = submittalDue || earliestDate(pkg.sheets.map(getDrawingDueDate));
+      const dueBySubmittal = !!submittalDue;
       // Only surface "needs action" when the package is OPEN (closed items
       // never reach the hit list anyway, but guard against stale per-sheet
       // Rejected/Returned stages on packages that have since been released).
@@ -523,7 +540,9 @@ export function buildTriage(submittals: any[], setPackages: SetPackage[], readin
         status,
         owner,
         dueDate,
-        due: dueInfo(dueDate, closed),
+        // Working-day only when the flag is on AND a submittal governs the due;
+        // a drawing-set (sheet) due always stays calendar-day.
+        due: dueInfoFor(dueDate, { closed, useWorkdays: useWorkdays && dueBySubmittal }),
         closed,
         needsAction,
         routeTab: "drawings",
@@ -562,7 +581,8 @@ export function buildTriage(submittals: any[], setPackages: SetPackage[], readin
         status: submittal.status || "Draft",
         owner: submittal.ball_in_court || submittal.assigned_to || submittal.reviewer || "Unassigned",
         dueDate,
-        due: dueInfo(dueDate, closed),
+        // Always a submittal due date → working-day-aware when the flag is on.
+        due: dueInfoFor(dueDate, { closed, useWorkdays }),
         closed,
         needsAction,
         routeTab: "submittals",
@@ -665,9 +685,15 @@ export function fmtDate(d: any): string {
  * submittals that reference it (via drawing_set_ids), with the latest round and
  * its due info, optionally filtered by `search`, sorted into package order.
  * Pure given the search string (extracted from ApprovalMatrix so it's testable).
+ *
+ * `useWorkdays` (resolved from `submittal_workday_dues` by the caller) makes each
+ * row's Due-Status chip working-day-aware. Every matrix due is a SUBMITTAL date
+ * (getSubmittalDueDate over the linked submittals), so — unlike buildTriage —
+ * there is no drawing-date fallback to exclude here. Defaults false (flag off →
+ * byte-identical calendar-day behavior).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], search = ""): any[] {
+export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], search = "", useWorkdays = false): any[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const activeSubmittals = (submittals || []).filter((s: any) => !s.is_deleted);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -686,7 +712,10 @@ export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], s
       const latestSubmittal = linked.slice().sort(
         (a: any, b: any) => (b.round_number || 1) - (a.round_number || 1),
       )[0] || null;
-      const due = dueInfo(getSubmittalDueDate(latestSubmittal), latestSubmittal ? isClosedSubmittal(latestSubmittal) : false);
+      const due = dueInfoFor(getSubmittalDueDate(latestSubmittal), {
+        closed: latestSubmittal ? isClosedSubmittal(latestSubmittal) : false,
+        useWorkdays,
+      });
       return { ...set, submittals: linked, latestSubmittal, due };
     })
     .filter((set: any) => {
