@@ -62,6 +62,7 @@ export default [
       "steelbuild-pro/**",
       "node_modules/**",
       "e2e/**",
+      ".tmp/**",
     ],
   },
   {
