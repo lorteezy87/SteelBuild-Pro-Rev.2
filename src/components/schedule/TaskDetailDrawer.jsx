@@ -13,6 +13,7 @@ import {
   getEffectiveDueDate,
 } from '../../lib/stageDates';
 import {
+  addDaysIso,
   parseDependencies,
   serializeDependencies,
   LINK_TYPES,
@@ -333,11 +334,11 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
       toast.error('Set a start date first', { position: 'top-right', duration: 2000 });
       return;
     }
-    const start = new Date(formData.start_date + 'T00:00:00');
-    if (Number.isNaN(start.getTime())) return;
-    const end = new Date(start);
-    end.setDate(end.getDate() + days);
-    const endStr = end.toISOString().slice(0, 10);
+    // UTC-safe: new Date(str+'T00:00:00') (local) + toISOString() (UTC) shifts
+    // end_date by a day under a non-zero UTC offset. addDaysIso does the
+    // arithmetic in UTC — timezone-independent. (days is already guarded ≥1.)
+    const endStr = addDaysIso(formData.start_date, days);
+    if (!endStr) return; // unparseable start_date — leave dates untouched
     setFormData({ ...formData, end_date: endStr });
   };
   // Predecessor links are now link objects: { id, type, lag_days }. The

@@ -99,6 +99,10 @@ export function toDateOnly(s: any): string | null {
 export function addDaysIso(iso: any, n: number): string | null {
   const d = parseDateUTC(iso);
   if (!d) return null;
+  // A non-finite offset (NaN/Infinity) would make the Date invalid and throw in
+  // toISOString(); treat it like an unparseable input. Negative integers are
+  // valid (fast-tracking lag), so only reject non-finite values.
+  if (!Number.isFinite(n)) return null;
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
