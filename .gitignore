@@ -56,3 +56,7 @@ scripts/.imgtools/
 
 # agent session worktrees are local-only state, never source
 .claude/worktrees/
+
+# transient scratch/snapshot copies dropped by tooling (never source; must not
+# be tracked or linted — a stale repo copy here otherwise fails `eslint .`)
+.tmp/
