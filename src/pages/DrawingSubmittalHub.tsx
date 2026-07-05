@@ -61,6 +61,7 @@ import {
 } from "./drawingSubmittalHub/format";
 import type { Drawing as HubDrawing, DrawingRevision as HubDrawingRevision, DrawingSet as HubDrawingSet, Submittal as HubSubmittal } from "./drawingSubmittalHub/types";
 import { ApprovalMatrix, DrawingRegisterTable, FleetHealthStrip, HeaderSignal, LeadTimesModal, RevisionImpactBoard, TriageBoard } from "./drawingSubmittalHub/components";
+import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
 import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
@@ -530,25 +531,51 @@ export default function DrawingSubmittalHub() {
         {activeTab === "overview" && (
           <>
           <FleetHealthStrip fleet={fleetHealth} onOpenRegister={() => setActiveTab("drawings")} />
-          <TriageBoard
-            triage={triage}
-            kpis={kpis}
-            drawingKpis={drawingKpis}
-            isLoading={isLoading}
-            onOpenTab={setActiveTab}
-            onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
-            onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
-            onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
-            onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
-            sequenceReadiness={sequenceReadiness}
-            revisionImpact={revisionImpact}
-            isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
-            onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
-            onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
-            modelMapping={modelMappingSummary}
-            modelElementRows={modelElements as any[]}
-            onImportModelElements={() => setImportModelOpen(true)}
-          />
+          {/* Control Board: the on-skin ControlBoardPanel under command_ui
+              (Slice 1 native conversion), else the legacy bespoke TriageBoard.
+              Both take the identical prop/handler set, so the write paths,
+              mutations, and cache keys are unchanged — presentation only. */}
+          {commandUi ? (
+            <ControlBoardPanel
+              triage={triage}
+              kpis={kpis}
+              drawingKpis={drawingKpis}
+              isLoading={isLoading}
+              onOpenTab={setActiveTab}
+              onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
+              onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
+              onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
+              onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
+              sequenceReadiness={sequenceReadiness}
+              revisionImpact={revisionImpact}
+              isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
+              onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
+              onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
+              modelMapping={modelMappingSummary}
+              modelElementRows={modelElements as any[]}
+              onImportModelElements={() => setImportModelOpen(true)}
+            />
+          ) : (
+            <TriageBoard
+              triage={triage}
+              kpis={kpis}
+              drawingKpis={drawingKpis}
+              isLoading={isLoading}
+              onOpenTab={setActiveTab}
+              onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
+              onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
+              onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
+              onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
+              sequenceReadiness={sequenceReadiness}
+              revisionImpact={revisionImpact}
+              isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
+              onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
+              onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
+              modelMapping={modelMappingSummary}
+              modelElementRows={modelElements as any[]}
+              onImportModelElements={() => setImportModelOpen(true)}
+            />
+          )}
           </>
         )}
         {activeTab === "process" && (
