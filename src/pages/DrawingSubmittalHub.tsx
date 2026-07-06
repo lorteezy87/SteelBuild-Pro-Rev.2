@@ -62,6 +62,7 @@ import {
 import type { Drawing as HubDrawing, DrawingRevision as HubDrawingRevision, DrawingSet as HubDrawingSet, Submittal as HubSubmittal } from "./drawingSubmittalHub/types";
 import { ApprovalMatrix, DrawingRegisterTable, FleetHealthStrip, HeaderSignal, LeadTimesModal, RevisionImpactBoard, TriageBoard } from "./drawingSubmittalHub/components";
 import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
+import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
 import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
@@ -588,18 +589,38 @@ export default function DrawingSubmittalHub() {
           />
         )}
         {activeTab === "drawings" && (
-          <DrawingRegisterTable
-            setPackages={setPackages}
-            projectId={projectId}
-            activeProject={activeProject}
-            drawingSets={drawingSets}
-            isLoading={isLoading}
-            healthByKey={healthByKey}
-            currentRevByDrawingId={currentRevByDrawingId}
-            summariesBySet={summariesBySet}
-            onRevisionUploaded={handleRevisionUploaded}
-            onOpenSummary={setSummaryCard}
-          />
+          // Drawing Register: the on-skin DrawingRegisterPanel under command_ui
+          // (Slice 2a native conversion), else the legacy DrawingRegisterTable.
+          // Both take the identical prop set; the register's data, queries,
+          // mutations, and the ["drawing-register", projectId] cache key are
+          // unchanged — presentation only.
+          commandUi ? (
+            <DrawingRegisterPanel
+              setPackages={setPackages}
+              projectId={projectId}
+              activeProject={activeProject}
+              drawingSets={drawingSets}
+              isLoading={isLoading}
+              healthByKey={healthByKey}
+              currentRevByDrawingId={currentRevByDrawingId}
+              summariesBySet={summariesBySet}
+              onRevisionUploaded={handleRevisionUploaded}
+              onOpenSummary={setSummaryCard}
+            />
+          ) : (
+            <DrawingRegisterTable
+              setPackages={setPackages}
+              projectId={projectId}
+              activeProject={activeProject}
+              drawingSets={drawingSets}
+              isLoading={isLoading}
+              healthByKey={healthByKey}
+              currentRevByDrawingId={currentRevByDrawingId}
+              summariesBySet={summariesBySet}
+              onRevisionUploaded={handleRevisionUploaded}
+              onOpenSummary={setSummaryCard}
+            />
+          )
         )}
         {activeTab === "submittals" && <SubmittalsPage />}
         {activeTab === "matrix" && (
