@@ -13,7 +13,7 @@ import { defaultFeedSort } from "@/lib/commandCenter/sortLogic";
 import { buildTodayView } from "@/lib/commandCenter/todayView";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile } from "@/components/design-system";
-import { useFlag } from "@/hooks/useFeatureFlag";
+import { useAllFlags } from "@/hooks/useFeatureFlag";
 import CommandCenterControlCenter from "./commandCenter/CommandCenterControlCenter";
 
 /**
@@ -94,7 +94,8 @@ function saveRole(id) {
 
 export default function CommandCenter() {
   // ── Feature flag ────────────────────────────────────────────────────
-  const commandUi = useFlag("command_ui");
+  const { data: featureFlags, isLoading: flagLoading } = useAllFlags();
+  const commandUi = featureFlags?.get("command_ui") === true;
 
   // ── Command UI local state (only used when flag is on) ───────────────
   const [ccSearch, setCcSearch] = useState("");
@@ -151,6 +152,13 @@ export default function CommandCenter() {
     refetchOnWindowFocus: true,
   });
 
+  const { data: submittals = EMPTY_LIST, isLoading: submittalsLoading } = useQuery({
+    queryKey: ["submittals"],
+    queryFn: () => entities.Submittal.listAll(),
+    staleTime: STALE_TIME,
+    refetchOnWindowFocus: true,
+  });
+
   const { data: drawingSets = EMPTY_LIST } = useQuery({
     queryKey: ["drawing-sets"],
     queryFn: () => entities.DrawingSet.listAll(),
@@ -203,7 +211,7 @@ export default function CommandCenter() {
     refetchOnWindowFocus: true,
   });
 
-  const isLoading = projLoading || rfiLoading;
+  const isLoading = projLoading || rfiLoading || flagLoading || submittalsLoading;
 
   // ── Project map ─────────────────────────────────────────────────────
   const projectMap = useMemo(() => {
@@ -362,7 +370,7 @@ export default function CommandCenter() {
   if (commandUi) {
     const ccSources = {
       rfis,
-      submittals: [], // MISSING: submittals not queried in CommandCenter.jsx yet
+      submittals,
       changeOrders,
       deliveries,
       workPackages,

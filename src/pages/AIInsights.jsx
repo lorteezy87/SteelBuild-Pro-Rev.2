@@ -21,15 +21,14 @@ import {
 import { AlertTriangle, DollarSign, Layers3, Search, ShieldCheck, Truck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { computeCostCodeTotals } from "@/services/costRollup";
+import { computePortfolioProjectHealth } from "@/services/portfolioHealthScoring";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
-import { formatCurrency, formatCurrencyShort, formatDate, isOverdue, statusIn } from "@/components/shared/formatters";
+import { formatCurrency, formatCurrencyShort, formatDate } from "@/components/shared/formatters";
 import PlanningStudio from "@/components/reports/PlanningStudio";
 import { Button, CommandBar } from "@/components/design-system";
 import { useProjectId } from "@/hooks/useProjectId";
 
-const CLOSED_RFI = ["Answered", "Closed", "Void"];
-const CLOSED_ACTION = ["Complete", "Cancelled", "Closed"];
 const RISK_COLORS = {
   healthy: "#22c55e",
   watch: "#f59e0b",
@@ -70,14 +69,8 @@ function n(value) {
   return Number.isFinite(num) ? num : 0;
 }
 
-function dateValue(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
 function daysUntil(value) {
-  const d = dateValue(value);
+  const d = parseDate(value);
   if (!d) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -89,6 +82,12 @@ function statusColor(label) {
   if (label === "At Risk") return RISK_COLORS.risk;
   if (label === "Watch") return RISK_COLORS.watch;
   return RISK_COLORS.healthy;
+}
+
+function parseDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function computeProjectModel(project, data) {
@@ -118,19 +117,20 @@ function computeProjectModel(project, data) {
   const approvedCo = projectCos.filter((c) => c.status === "Approved").reduce((sum, c) => sum + n(c.co_amount), 0);
   const pendingCo = projectCos.filter((c) => ["Draft", "Submitted", "Under Review"].includes(c.status)).reduce((sum, c) => sum + n(c.co_amount), 0);
 
-  const openRfis = projectRfis.filter((r) => !statusIn(r.status, CLOSED_RFI));
-  const overdueRfis = projectRfis.filter((r) => isOverdue(r.due_date || r.date_required, r.status, CLOSED_RFI));
-  const criticalRfis = openRfis.filter((r) => ["Critical", "High"].includes(r.priority));
-  const lateDeliveries = projectDeliveries.filter((d) => {
-    const scheduled = dateValue(d.scheduled_date || d.delivery_date);
-    return scheduled && scheduled < new Date() && !String(d.status || "").toLowerCase().includes("delivered");
+  const scoring = computePortfolioProjectHealth({
+    originalContractValue: project.original_contract_value,
+    rfis: projectRfis,
+    deliveries: projectDeliveries,
+    actionItems: projectActions,
+    scheduleTasks: projectTasks,
+    budget,
+    committed,
   });
+
   const upcomingDeliveries = projectDeliveries.filter((d) => {
     const days = daysUntil(d.scheduled_date || d.delivery_date);
     return days != null && days >= 0 && days <= 14 && !String(d.status || "").toLowerCase().includes("delivered");
   });
-  const overdueActions = projectActions.filter((a) => !statusIn(a.status, CLOSED_ACTION) && isOverdue(a.due_date, a.status, CLOSED_ACTION));
-  const delayedTasks = projectTasks.filter((t) => String(t.status || "").toLowerCase().includes("delay"));
 
   const totalTons = projectWps.reduce((sum, w) => sum + n(w.tonnage), 0);
   const completedTons = projectWps.reduce((sum, w) => sum + (String(w.status || "").toLowerCase().includes("complete") ? n(w.tonnage) : 0), 0);
@@ -138,21 +138,11 @@ function computeProjectModel(project, data) {
     ? projectWps.reduce((sum, w) => sum + n(w.percent_complete), 0) / projectWps.length
     : 0;
 
-  let score = 100;
-  const reasons = [];
-  if (overdueRfis.length) { score -= Math.min(28, overdueRfis.length * 9); reasons.push(`${overdueRfis.length} overdue RFI${overdueRfis.length === 1 ? "" : "s"}`); }
-  if (criticalRfis.length) { score -= Math.min(16, criticalRfis.length * 5); reasons.push(`${criticalRfis.length} high-priority RFI${criticalRfis.length === 1 ? "" : "s"}`); }
-  if (lateDeliveries.length) { score -= Math.min(24, lateDeliveries.length * 8); reasons.push(`${lateDeliveries.length} late deliver${lateDeliveries.length === 1 ? "y" : "ies"}`); }
-  if (overdueActions.length) { score -= Math.min(14, overdueActions.length * 4); reasons.push(`${overdueActions.length} overdue action${overdueActions.length === 1 ? "" : "s"}`); }
-  if (delayedTasks.length) { score -= Math.min(18, delayedTasks.length * 6); reasons.push(`${delayedTasks.length} delayed task${delayedTasks.length === 1 ? "" : "s"}`); }
-  if (budget > 0 && committed > budget) { score -= Math.min(22, Math.ceil(((committed - budget) / budget) * 100)); reasons.push("Cost exposure over budget"); }
-  if (budget === 0 && contract > 0) { score -= 8; reasons.push("Budget not fully set up"); }
-  score = Math.max(0, Math.min(100, Math.round(score)));
-
-  const health = score >= 76 ? "On Track" : score >= 52 ? "Watch" : "At Risk";
   const targetDays = daysUntil(project.target_completion_date || project.forecast_completion_date);
-  const forecastDays = project.forecast_completion_date && project.target_completion_date
-    ? Math.round((dateValue(project.forecast_completion_date) - dateValue(project.target_completion_date)) / 86400000)
+  const forecastTarget = parseDate(project.forecast_completion_date);
+  const forecastBase = parseDate(project.target_completion_date);
+  const forecastDays = project.forecast_completion_date && project.target_completion_date && forecastTarget && forecastBase
+    ? Math.round((forecastTarget - forecastBase) / 86400000)
     : null;
 
   return {
@@ -165,19 +155,19 @@ function computeProjectModel(project, data) {
     actual,
     committed,
     margin: contract + approvedCo - committed,
-    openRfis: openRfis.length,
-    overdueRfis: overdueRfis.length,
-    criticalRfis: criticalRfis.length,
-    lateDeliveries: lateDeliveries.length,
+    openRfis: scoring.openRfis,
+    overdueRfis: scoring.overdueRfis,
+    criticalRfis: scoring.criticalRfis,
+    lateDeliveries: scoring.lateDeliveries,
     upcomingDeliveries: upcomingDeliveries.length,
-    overdueActions: overdueActions.length,
-    delayedTasks: delayedTasks.length,
+    overdueActions: scoring.overdueActions,
+    delayedTasks: scoring.delayedTasks,
     totalTons,
     completedTons,
     avgProgress,
-    score,
-    health,
-    reasons,
+    score: scoring.score,
+    health: scoring.health,
+    reasons: scoring.reasons,
     targetDays,
     forecastDays,
     projectRfis,
