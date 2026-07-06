@@ -149,3 +149,80 @@ the upload modal's `handleCreate`.
 ## Other (shipped last night)
 Submittal "Released for Fab" open-tally (`4d144c2c`), WP form project pre-select (`e19ddd23`),
 Gantt scroll position (`b37d7654`), denser/crisper sidebar (`0b734d55`/`84838b2d`).
+
+## Thread I — Enterprise Readiness (audit 2026-07-01 → remediation)
+
+Full audit report: `ENTERPRISE_READINESS_AUDIT.md` (0C / 27H / 54M / 52L). Remediation
+shipped in waves to `main` (`009fe507`→`0d932d6a`→`52dc51f0`). **Owner-only / human-credential
+items live in `docs/runbooks/owner-checklist.md`** (branch protection, secrets, PITR, MFA
+dashboard toggle, Stripe Tax/AZ TPT, legal/DPA/entity, pen test, orphan edge-fn deletes) — this
+thread tracks only the **engineering** remainder. Every entry cites its audit finding ID.
+
+**Shipped this wave (`52dc51f0`, code-verified — see caveats):**
+- [x] **M19 · Bulk actions batched.** `bulkUpdate(ids,patch)` / `bulkDelete(ids)` on the entity
+  client (one chunked `.in('id', ≤500)` op, same cleanRecord/updated_at + soft-delete semantics);
+  rewired the identical-payload handlers on SOV, ScopeExclusions, CostCodes, ActionItems,
+  EmailInbox, and the Hub package-due-date op. `Project.bulkDelete` overrides to the atomic
+  `soft_delete_project` RPC (avoids the half-archive class). Per-row paths kept where payloads differ.
+- [x] **M18 (short-term half) + H10 (telemetry half).** `ListTruncationNotice` now on Submittals,
+  RFIs, and the Detailing Hub; `warnIfTruncated` reports to Sentry (`warning`) in prod, not just DEV.
+- [x] **L20 · Realtime invalidation debounced** — 300ms trailing coalesce in `useRealtimeInvalidation`.
+- [x] **L13 (dependency-audit slice) + L31.** Advisory `dependency-audit` CI job
+  (`npm audit --omit=dev --audit-level=high`, NOT in `deploy.needs`); vitest `maxWorkers:2` on win32 +
+  `test.env` placeholders so a bare `npm test` passes with no `.env.local`.
+
+**Deferred — engineering, NOT owner-gated (needs coordinated DB-view/client rewire + field-verify):**
+- [ ] **H9 · Portfolio rollups still client-side.** `CommandCenter.jsx` + `AIInsights.jsx` issue
+  ~18 `listAll()` reads (uncapped to 100k rows, `select('*')`) and derive KPIs in the browser.
+  Fix: `security_invoker` Postgres view/RPC per dashboard (`portfolio_project_kpis(org_id)`), query the
+  aggregate; keep `listAll()` only for drill-down/export. Interim: select only needed columns. Coordinate
+  with the command_ui lock (these are Control Center surfaces). (L)
+- [~] **H10 (remaining server-side half).** Telemetry + moat-page notices shipped above; still open:
+  SQL aggregates (or at least `listAll()`) for the ~30 report pages + ExecutiveView/ExecutiveDashboard/
+  PortfolioOverview, and a **server-side GlobalSearchModal** (`.or(ilike)` per table + small limit / search
+  RPC) to replace its 6 full-table fetches. Deliberately not touched this pass. (M)
+- [ ] **M18 (medium-term half).** Paged read path on the entity layer (`filterPage` with
+  `range`+`count:'exact'`) and `useVirtualizer` on the drawing register + submittal tables (reuse
+  `DeliveriesList` as template). Only the truncation-notice short-term half shipped. (L)
+- [ ] **M17 · Duplicate permissive SELECT policies on 4 hot tables** (delivery_items, drawing_sheets,
+  submittal_activity, task_dependencies). Split each `_write FOR ALL` into INSERT/UPDATE/DELETE and scope
+  to `authenticated` so SELECT hits one policy; apply live via MCP + commit the migration. Deferred: RLS
+  surgery on live, working policies — do on a staging rehearsal first. Clears 24 advisor WARNs. (S)
+- [ ] **M2 · app-files storage reads org-scoped, not project-scoped** (+ founding-org legacy path). A
+  member invited to one project can read another project's PDFs in the same org by path. Durable plan
+  already at `docs/app-files-tenant-isolation-plan.md`. Deferred: gated on the legacy `uploads/` backfill
+  and RLS surgery on the storage policies. (L)
+- [ ] **L21 · cacheRegistry broad unscoped prefixes** — one mutation invalidates every project's cached
+  queries. Converge duplicate key spellings (`drawing-sets` vs `drawing_sets`) onto one scoped key, drop
+  unscoped prefixes from `families()`, longer staleTime on the portfolio `-all` keys. Follow-the-registry
+  refactor, testable via `cacheRegistry.test.js`. (M)
+
+**Deferred — CI (not owner-secret-gated; deferred to avoid red/noisy jobs or a policy call):**
+- [ ] **M29 · No code-coverage.** Add `@vitest/coverage-v8`, enable v8 coverage (lcov+text), start at
+  observed baselines then ratchet per-glob on the crown-jewel dirs (`src/lib/payapp`, `src/services`,
+  `src/lib`); upload lcov as a CI artifact. Advisory (no gate) first. (M)
+- [ ] **M30 · Edge functions untested + outside every gate.** Extract pure logic of `quota.ts`,
+  `providers/cost.ts`, `_shared/cors.ts`, `_shared/attachments.ts` into Vitest-tested modules (webhookLogic
+  pattern); add a `deno check supabase/functions/*/index.ts` CI step so an edge fn type-parses before deploy. (M)
+- [ ] **M36 · Block net-new `.js`/`.jsx` under `src`** (edits to existing allowed) so the TS conversion
+  converges; prioritize typing the shared infra (ProjectContext, design-system primitives, entity surface).
+  Needs an owner policy nod. (M)
+- [ ] **L13 (remaining) · gitleaks / SAST.** Dependency-audit slice shipped; secret-scanning + SAST still
+  need an owner tooling decision (see the ci.yml header note). (S)
+- [ ] **H18/H19/M31 · E2E as a real gate.** Harness is built (`e2e/`, Playwright); enabling it is
+  **owner-gated** on the `E2E_*` secrets + `E2E_ENABLED` variable + a dedicated test account — see
+  owner-checklist §1. (S, owner-blocked)
+
+**Deferred — edge-function source committed, deploy is owner-gated (CLI + field-verify):**
+- [ ] **Deploy the hardened edge functions.** Source is on `main`, NOT deployed (can't field-verify
+  headlessly): project-export pagination/full-table/manifest (H2/H26/M20/M47), schedule-assistant
+  `SERVICE_ROLE_OVERRIDE` removal (M5), stripe-billing (L6/L10), email-send (L7). Deploy commands +
+  per-function verify steps are in owner-checklist §3 / §1 (needs `SUPABASE_ACCESS_TOKEN` or interactive CLI). (M, owner-blocked)
+
+**Accepted / won't-fix:**
+- [x] **L4 · `pg_net` stays in `public`** — extension reports `does not support SET SCHEMA`; documented
+  accepted deviation.
+
+**Caveats (CLAUDE.md §32):** everything in the shipped block is code + typecheck×4 + full-suite (2454) +
+build verified, but **not field-verified** — exercise a bulk status change (SOV), a package due-date set
+(Hub), and confirm a Sentry truncation event before calling the runtime behavior done.
