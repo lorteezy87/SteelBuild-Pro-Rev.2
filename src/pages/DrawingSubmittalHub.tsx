@@ -63,6 +63,8 @@ import type { Drawing as HubDrawing, DrawingRevision as HubDrawingRevision, Draw
 import { ApprovalMatrix, DrawingRegisterTable, FleetHealthStrip, HeaderSignal, LeadTimesModal, RevisionImpactBoard, TriageBoard } from "./drawingSubmittalHub/components";
 import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
+import RevisionImpactPanel from "./drawingSubmittalHub/RevisionImpactPanel";
+import { ApprovalMatrixPanel } from "./drawingSubmittalHub/ApprovalMatrixPanel";
 import { calculateDrawingHealthScore, summarizeFleetHealth } from "@/services/drawingHealthScore";
 import { buildRevisionImpactRows } from "@/lib/revisionImpactBoard";
 import RevisionSummaryCard from "@/components/drawings/RevisionSummaryCard";
@@ -81,6 +83,11 @@ const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
 // boundary below, so deferring the import is behavior-preserving.
 const SubmittalVisualBoard = lazyWithRetry(
   () => import("@/components/submittals/SubmittalVisualBoard"),
+) as unknown as ComponentType<AnyProps>;
+// On-skin Process Board (SP3 native command_ui conversion). Swapped in only when
+// `command_ui` is on; the legacy SubmittalVisualBoard stays for the flag-off path.
+const ProcessBoardPanel = lazyWithRetry(
+  () => import("@/components/submittals/ProcessBoardPanel"),
 ) as unknown as ComponentType<AnyProps>;
 const DocControlPanel = lazyWithRetry(() =>
   import("@/components/drawings/register/DocControlPanel").then((m) => ({
@@ -580,13 +587,28 @@ export default function DrawingSubmittalHub() {
           </>
         )}
         {activeTab === "process" && (
-          <SubmittalVisualBoard
-            setPackages={setPackages}
-            submittals={submittals}
-            isLoading={isLoading}
-            onOpenTab={setActiveTab}
-            useWorkdays={workdayDues}
-          />
+          // Process Board: the on-skin ProcessBoardPanel under command_ui (SP3
+          // native conversion), else the legacy SubmittalVisualBoard. Both take
+          // the identical prop set — including `useWorkdays` for the working-day
+          // due display — so the board math, routing, and cache paths are
+          // unchanged; presentation only.
+          commandUi ? (
+            <ProcessBoardPanel
+              setPackages={setPackages}
+              submittals={submittals}
+              isLoading={isLoading}
+              onOpenTab={setActiveTab}
+              useWorkdays={workdayDues}
+            />
+          ) : (
+            <SubmittalVisualBoard
+              setPackages={setPackages}
+              submittals={submittals}
+              isLoading={isLoading}
+              onOpenTab={setActiveTab}
+              useWorkdays={workdayDues}
+            />
+          )
         )}
         {activeTab === "drawings" && (
           // Drawing Register: the on-skin DrawingRegisterPanel under command_ui
@@ -624,20 +646,48 @@ export default function DrawingSubmittalHub() {
         )}
         {activeTab === "submittals" && <SubmittalsPage />}
         {activeTab === "matrix" && (
-          <ApprovalMatrix
-            drawingSets={drawingSets}
-            submittals={submittals as unknown as HubSubmittal[]}
-            roundsBySubmittal={roundsBySubmittal}
-            isLoading={isLoading}
-            useWorkdays={workdayDues}
-          />
+          // Approval Matrix: the on-skin ApprovalMatrixPanel under command_ui
+          // (SP3 native conversion), else the legacy ApprovalMatrix. Both take
+          // the identical prop set — including `useWorkdays` for the working-day
+          // due display — and both call the same buildApprovalMatrixRows /
+          // summarizeApprovalMatrix in format.ts, so rows, sort, counts, and the
+          // cycle-time / aging analytics are unchanged; presentation only.
+          commandUi ? (
+            <ApprovalMatrixPanel
+              drawingSets={drawingSets}
+              submittals={submittals as unknown as HubSubmittal[]}
+              roundsBySubmittal={roundsBySubmittal}
+              isLoading={isLoading}
+              useWorkdays={workdayDues}
+            />
+          ) : (
+            <ApprovalMatrix
+              drawingSets={drawingSets}
+              submittals={submittals as unknown as HubSubmittal[]}
+              roundsBySubmittal={roundsBySubmittal}
+              isLoading={isLoading}
+              useWorkdays={workdayDues}
+            />
+          )
         )}
         {activeTab === "revimpact" && (
-          <RevisionImpactBoard
-            rows={revisionImpactRows}
-            onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
-            isLoading={isLoading}
-          />
+          // Revision Impact: the on-skin RevisionImpactPanel under command_ui
+          // (SP3 native conversion), else the legacy RevisionImpactBoard. Rows
+          // arrive pre-enriched from the hub and the Compare handler is passed
+          // through unchanged — presentation only.
+          commandUi ? (
+            <RevisionImpactPanel
+              rows={revisionImpactRows}
+              onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
+              isLoading={isLoading}
+            />
+          ) : (
+            <RevisionImpactBoard
+              rows={revisionImpactRows}
+              onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
+              isLoading={isLoading}
+            />
+          )
         )}
         {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
         {activeTab === "model3d" && (
