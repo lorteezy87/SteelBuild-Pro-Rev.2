@@ -35,6 +35,8 @@ const emptyRelated: PortfolioRelated = {
   costCodes: [],
   rfis: [],
   deliveries: [],
+  actionItems: [],
+  scheduleTasks: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -162,6 +164,30 @@ describe("buildPortfolioSummary – health scoring", () => {
     expect(allRows[0].score).toBe(83);
     expect(allRows[0].overdueRfis).toBe(1);
   });
+
+  it("applies overdue action deductions", () => {
+    const projects = [makeProject({ id: "p1" })];
+    const related: PortfolioRelated = {
+      ...emptyRelated,
+      actionItems: [
+        { project_id: "p1", status: "Open", due_date: "2020-01-01" },
+      ],
+    };
+    const { allRows } = buildPortfolioSummary(projects, related);
+    expect(allRows[0].score).toBe(88); // 92 - 4 for one overdue action
+  });
+
+  it("applies delayed task deductions", () => {
+    const projects = [makeProject({ id: "p1" })];
+    const related: PortfolioRelated = {
+      ...emptyRelated,
+      scheduleTasks: [
+        { project_id: "p1", status: "Delayed" },
+      ],
+    };
+    const { allRows } = buildPortfolioSummary(projects, related);
+    expect(allRows[0].score).toBe(86); // 92 - 6 for one delayed task
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -259,7 +285,7 @@ describe("healthTone", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildPortfolioSummary – late deliveries", () => {
-  it("counts deliveries past scheduled_date that are not Delivered/Cancelled", () => {
+  it("counts deliveries past scheduled_date that are not Delivered", () => {
     const projects = [makeProject({ id: "p1" })];
     const related: PortfolioRelated = {
       ...emptyRelated,
@@ -270,6 +296,6 @@ describe("buildPortfolioSummary – late deliveries", () => {
       ],
     };
     const { allRows } = buildPortfolioSummary(projects, related);
-    expect(allRows[0].lateDeliveries).toBe(1);
+    expect(allRows[0].lateDeliveries).toBe(2);
   });
 });

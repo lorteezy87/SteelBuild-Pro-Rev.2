@@ -199,6 +199,7 @@ function toneFromCount(count: number, warnAt: number, dangerAt: number): PanelTo
 const OPEN_RFI_STATUSES = new Set(["Open", "Under Review", "Incomplete Response"]);
 const PENDING_SUB_STATUSES = new Set(["IFA", "OFA", "BFA", "OFS", "IFC", "R&R", "Pending", "Under Review", "Resubmit"]);
 const PENDING_CO_STATUSES = new Set(["Draft", "Submitted", "Under Review", "Pending"]);
+const WAITING_SUB_STATUSES = new Set(["IFA", "OFA"]);
 
 function rfiTodayPriority(rfi: RfiSource): PanelRow | null {
   if (!OPEN_RFI_STATUSES.has(rfi.status || "Open")) return null;
@@ -222,11 +223,8 @@ function rfiTodayPriority(rfi: RfiSource): PanelRow | null {
 }
 
 function submittialWaitingRow(sub: SubmittalSource): PanelRow | null {
-  if (!PENDING_SUB_STATUSES.has(sub.status || "")) return null;
-  // "Waiting on" = ball is NOT in contractor's court
+  if (!WAITING_SUB_STATUSES.has(sub.status || "")) return null;
   const bic = sub.ball_in_court || "";
-  const waitingStatuses = new Set(["OFA", "IFA"]); // sent out, waiting for GC/EOR review
-  if (!waitingStatuses.has(sub.status || "") && bic.toLowerCase() === "contractor") return null;
   const dueDays = daysUntilDate(sub.due_date);
   const subParts: string[] = [sub.status || "Pending"];
   if (sub.ball_in_court) subParts.push(sub.ball_in_court);
@@ -375,6 +373,24 @@ function deliveriesToActionItems(dels: DeliverySource[]): ActionItem[] {
         raw: d as Record<string, unknown>,
       };
     });
+}
+
+function workPackagesToActionItems(workPackages: WorkPackageSource[]): ActionItem[] {
+  return workPackages
+    .filter((w) => w.status === "On Hold" || w.status === "Blocked")
+    .map((w): ActionItem => ({
+      id: w.id || String(Math.random()),
+      itemType: "WP",
+      title: `${w.wp_number || "WP"} — ${w.name || "Work Package"}`,
+      status: w.status || "Blocked",
+      priority: null,
+      owner: null,
+      dueDate: null,
+      linkedTo: null,
+      projectId: w.project_id || null,
+      urgency: "blocking",
+      raw: w as Record<string, unknown>,
+    }));
 }
 
 function urgencyOrder(u: ActionItem["urgency"]): number {
@@ -526,6 +542,7 @@ export function buildCommandCenterSummary(sources: CommandCenterSources): Comman
     ...submittalToActionItems(submittals),
     ...changeOrderToActionItems(changeOrders),
     ...deliveriesToActionItems(deliveries),
+    ...workPackagesToActionItems(workPackages),
   ].sort((a, b) => urgencyOrder(a.urgency) - urgencyOrder(b.urgency));
 
   return {
