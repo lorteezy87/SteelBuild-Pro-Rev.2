@@ -19,6 +19,7 @@ import { entities } from "@/api/supabaseClient";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
+import { useFlag } from "@/hooks/useFeatureFlag";
 import { border, error as errorTone, fmtDate, mono, surface2, textMuted, textPrimary } from "./format";
 
 export type EscalationKind = "rfi" | "pco";
@@ -50,6 +51,11 @@ function buildContextBody(item: any): string {
 export default function EscalateModal({ item, initialKind = "rfi", projectId, projectName, onClose }: EscalateModalProps) {
   const qc = useQueryClient();
   const { can } = usePermissions();
+  // SP4: this Radix dialog portals to <body>, outside the shell's light island.
+  // Under command_ui, tag the content root with `.detailing-cc` so it inherits
+  // the shipped light token-alias (bg/text/border/accent → cmd palette). Flag
+  // off → no class → byte-identical dark dialog.
+  const commandUi = useFlag("command_ui");
   const canRfi = can("create", "rfi");
   const canPco = can("create", "change_order");
 
@@ -128,7 +134,7 @@ export default function EscalateModal({ item, initialKind = "rfi", projectId, pr
 
   return (
     <Dialog open onOpenChange={(o: boolean) => !o && onClose()}>
-      <DialogContent style={{
+      <DialogContent className={commandUi ? "detailing-cc" : undefined} style={{
         maxWidth: 560,
         background: "var(--bg-surface-secondary)",
         border: `1px solid ${border}`,
