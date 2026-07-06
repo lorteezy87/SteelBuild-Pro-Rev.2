@@ -63,14 +63,16 @@ function tintCanvas(src, color) {
 
 function RevisionAiPanel({
   status, summary, deltas, error, retryMsg, cached, downstream,
-  disabled, onGenerate, onRegenerate, onToggleDismiss, onCreateRfi, onClose,
+  disabled, light = false, onGenerate, onRegenerate, onToggleDismiss, onCreateRfi, onClose,
 }) {
   const kept = deltas.filter((d) => !d.dismissed).length;
   return (
     <div style={{
       width: 360, flexShrink: 0, display: "flex", flexDirection: "column",
       borderRadius: 10, border: "1px solid var(--border-default)",
-      background: "var(--bg-base, #0D1117)", overflow: "hidden",
+      // SP4: `--bg-base` isn't remapped by the `.detailing-cc` alias, so swap it
+      // to the alias-remapped `--bg-surface` when the parent dialog is light.
+      background: light ? "var(--bg-surface)" : "var(--bg-base, #0D1117)", overflow: "hidden",
     }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
@@ -448,9 +450,17 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
 
   const aiBusyDisabled = rendering || isLoading || notEnough || !oldSel || !newSel;
 
+  // SP4: under command_ui, tag this portaled Radix dialog `.detailing-cc` so
+  // the header/controls/AI-rail chrome inherits the shell's light token-alias.
+  // The DialogContent bg is already `--bg-surface-secondary` (alias-remapped
+  // light); the canvas viewport keeps its functional gray. Flag off → no class,
+  // byte-identical.
+  const commandUi = useFlag("command_ui");
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
+        className={commandUi ? "detailing-cc" : undefined}
         style={{
           maxWidth: "min(96vw, 1500px)",
           width: "96vw",
@@ -669,6 +679,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                 cached={aiCached}
                 downstream={downstream}
                 disabled={aiBusyDisabled}
+                light={commandUi}
                 onGenerate={runAiDiff}
                 onRegenerate={() => runAiDiff(true)}
                 onToggleDismiss={toggleDismiss}

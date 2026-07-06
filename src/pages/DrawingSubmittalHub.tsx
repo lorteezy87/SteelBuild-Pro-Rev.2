@@ -799,7 +799,14 @@ export default function DrawingSubmittalHub() {
         >
           {activeTabPanel}
         </DetailingCommandShell>
-        {sharedModals}
+        {/* SP4: under command_ui, wrap the shared modals in `.detailing-cc` so
+            the NON-portaled ones (LeadTimes / ModelElementImport / RFIForm —
+            plain `position:fixed`, not React portals) inherit the shell's light
+            token cascade. The portaled Radix modals (Escalate / RevisionCompare
+            / RevisionSummary / RevisionImpactReport) escape this wrapper and
+            carry `.detailing-cc` on their own DialogContent instead. Wrapper
+            lives in the command branch only → flag-off path is byte-identical. */}
+        <div className="detailing-cc">{sharedModals}</div>
       </>
     );
   }

@@ -1,6 +1,7 @@
 import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useFlag } from "@/hooks/useFeatureFlag";
 import StepChoice from "./upload/StepChoice";
 import StepFiles from "./upload/StepFiles";
 import StepMeta from "./upload/StepMeta";
@@ -37,6 +38,11 @@ export default function DrawingSetUploadModal({
   existingSetNames = [],
 }) {
   const qc = useQueryClient();
+  // SP4: portaled Radix dialog. Under command_ui, append `.detailing-cc` to the
+  // content root so the reused `sbd-*` wizard chrome inherits the shell's light
+  // token-alias + the `.detailing-cc .sbd-card-strong` light card rule. Flag off
+  // → class unchanged (`sbd-card-strong` only) → byte-identical.
+  const commandUi = useFlag("command_ui");
   const state = useUploadWizardState({ onClose });
   const {
     step, setStep,
@@ -58,7 +64,7 @@ export default function DrawingSetUploadModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sbd-card-strong" style={{ maxWidth: 640, maxHeight: "90vh", overflowY: "auto" }}>
+      <DialogContent className={commandUi ? "sbd-card-strong detailing-cc" : "sbd-card-strong"} style={{ maxWidth: 640, maxHeight: "90vh", overflowY: "auto" }}>
         <DialogHeader>
           <DialogTitle>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

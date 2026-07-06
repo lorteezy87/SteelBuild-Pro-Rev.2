@@ -3,6 +3,7 @@ import { entities, integrations } from "@/api/supabaseClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useFlag } from "@/hooks/useFeatureFlag";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 import { validatePdfPage } from "@/lib/pdfSheetExtractor";
 import { ensureCurrentRevision, recordSheetSlipSheet } from "@/lib/drawingHub";
@@ -477,6 +478,11 @@ function StepSuccess({ selectedSet, revMeta, stats, onClose }) {
 // ── Main Modal ─────────────────────────────────────────────────────
 export default function RevisionUploadModal({ open, onClose, onComplete, activeProject, preSelectedSet, drawingSets = [] }) {
   const qc = useQueryClient();
+  // SP4: portaled Radix dialog. Under command_ui, append `.detailing-cc` so the
+  // reused `sbd-*` wizard chrome inherits the shell's light token-alias. The
+  // DialogContent bg is `--bg-surface-low` (alias-remapped light). Flag off →
+  // class unchanged → byte-identical.
+  const commandUi = useFlag("command_ui");
   // Derive virtual sets from drawings if drawingSets is sparse
   const [derivedSets, setDerivedSets] = React.useState([]);
   useEffect(() => {
@@ -779,7 +785,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sbd-card-strong" style={{ maxWidth: 620, maxHeight: "92vh", overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)" }}>
+      <DialogContent className={commandUi ? "sbd-card-strong detailing-cc" : "sbd-card-strong"} style={{ maxWidth: 620, maxHeight: "92vh", overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)" }}>
         <DialogHeader>
           <DialogTitle>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
