@@ -23,8 +23,8 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 - SECURITY DEFINER functions must set `search_path` explicitly.
 - Known-fixed classes of bugs (do not reintroduce): feature_flags privilege escalation, vendors blanket-true policies.
 
-## Known open issue — DO NOT let this regress
-`src/**/numberSequencing.jsx` (or wherever it currently lives): client-side `Math.max()` is overriding the atomic database RPC for sequence numbers, creating duplicate-number risk under concurrency. Any edit touching number-sequence generation must go through the DB RPC only — never derive the next number client-side. This is gated by a hook (see `.claude/hooks/`).
+## Number-sequence integrity — DO NOT regress
+Official record numbers (RFI/CO/submittal/…) come ONLY from the atomic DB RPC `get_next_sequence_number` — never derive the next number client-side. `src/components/shared/numberSequencing.jsx` once floored the RPC with a client-side `Math.max()`, which could mint duplicate numbers under concurrency; that was removed (fixed c5612168) — `getNextFormattedNumber` now re-allocates from the RPC until it clears any existing records, and fails closed if the RPC is unavailable. Keep it RPC-only. Gated by a hook (see `.claude/hooks/`).
 
 ## MCP server
 `steelbuild-mcp-server` — 18 tools across portfolio/coordination/commercial/logistics domains. Authenticates via user JWT so RLS applies automatically. Don't bypass this with service-role calls in application code.
