@@ -211,7 +211,7 @@ Refs:
 
 These have **ready patches** but touch files currently under active claims by other agent sessions. **Coordinate before applying** (respect `AGENT_CLAIMS.md`); do not overwrite another session's work.
 
-- [ ] **command_ui contrast (AA) — under `opus-command-ui-lock`** — [H17]
+- [x] **command_ui contrast (AA)** — [H17] — **SHIPPED** (commit 2f56ae6f): added `--cmd-good/warn/danger-text` AA tokens + darkened `--cmd-text-muted`; the good/warn/danger chips use them so status text on the pastel fills clears WCAG AA (4.71–4.86:1, verified). Pastel backgrounds + vivid `--cmd-*` FILL hues unchanged — no dark-theming, honors `opus-command-ui-lock`.
   - File: `src/styles/command.css` (intentionally-light Control Center kit).
   - Ready patch: add AA-compliant chip-text tokens while keeping the pastel backgrounds:
     - `--cmd-good-text: #067647`
@@ -221,13 +221,13 @@ These have **ready patches** but touch files currently under active claims by ot
   - Why: current chip text on pastel fills fails WCAG AA contrast.
   - Verify: contrast checker >= 4.5:1 on chip text over its background; visual spot-check on the RFI/Detailing Control Centers.
 
-- [ ] **DataTable keyboard a11y — under `opus-command-ui-lock`** — [H16]
+- [x] **DataTable keyboard a11y** — [H16] — **SHIPPED** (commit 2f56ae6f): clickable `<tr>` now has `role="button"` + `tabIndex={0}` + an Enter/Space `onKeyDown` mirroring `onClick`; non-clickable rows stay inert.
   - File: `src/components/command/DataTable.tsx`.
   - Ready patch: on the clickable `<tr>`, add `tabIndex={0}`, `role="button"`, and an `onKeyDown` handler that activates the row on **Enter** and **Space** (mirroring the existing `onClick`).
   - Why: clickable rows are mouse-only today — not keyboard-operable, fails a11y.
   - Verify: Tab to a row, press Enter and Space, confirm the same navigation as a click.
 
-- [ ] **Remove stale `ignoreCommand` from `vercel.json` — under `opus-lazychunk-cache`** — [L14]
+- [x] **Remove stale `ignoreCommand` from `vercel.json`** — [L14] — **SHIPPED** (commit 2f56ae6f): removed the dead `ignoreCommand` (git auto-deploy is off; the CI Action is the sole deploy path). Cache-Control headers left intact.
   - File: `vercel.json`.
   - Ready action: remove the stale `ignoreCommand` entry (Vercel git auto-deploy is off; the CI Action is the sole deploy path, so the ignore gate is dead and previously ERRORED Vercel deploys).
   - Why: dead config that has caused deploy errors before; do not reintroduce an in-repo `ignoreCommand`.
