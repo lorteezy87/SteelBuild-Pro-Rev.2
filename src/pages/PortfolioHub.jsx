@@ -92,10 +92,22 @@ export default function PortfolioHub() {
     staleTime: 30 * 1000,
     enabled: fetchForCC,
   });
+  const { data: actionItems = [] } = useQuery({
+    queryKey: ["portfolio-action-items"],
+    queryFn: () => entities.ActionItem.listAll(),
+    staleTime: 30 * 1000,
+    enabled: fetchForCC,
+  });
+  const { data: scheduleTasks = [] } = useQuery({
+    queryKey: ["portfolio-schedule-tasks"],
+    queryFn: () => entities.ScheduleTask.listAll("-start_date"),
+    staleTime: 60 * 1000,
+    enabled: fetchForCC,
+  });
 
   const related = useMemo(
-    () => ({ changeOrders, workPackages, costCodes, rfis, deliveries }),
-    [changeOrders, workPackages, costCodes, rfis, deliveries],
+    () => ({ changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks }),
+    [changeOrders, workPackages, costCodes, rfis, deliveries, actionItems, scheduleTasks],
   );
 
   // Navigate to the project dashboard when a row is clicked

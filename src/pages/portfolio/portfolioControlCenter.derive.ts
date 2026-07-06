@@ -7,6 +7,7 @@
  */
 import { calcContractValue, calcWpProgress, calcDaysToDeadline } from "@/utils/projectKpis";
 import { computeCostCodeTotals } from "@/services/costRollup";
+import { computePortfolioProjectHealth } from "@/services/portfolioHealthScoring";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +37,8 @@ export interface PortfolioRelated {
   costCodes: Array<{ project_id?: string; budget_amount?: number | null; committed_cost?: number | null; actual_cost?: number | null; [key: string]: unknown }>;
   rfis: Array<{ project_id?: string; status?: string | null; date_required?: string | null; priority?: string | null }>;
   deliveries: Array<{ project_id?: string; status?: string | null; scheduled_date?: string | null; delivery_date?: string | null }>;
+  actionItems: Array<{ project_id?: string; status?: string | null; due_date?: string | null }>;
+  scheduleTasks: Array<{ project_id?: string; status?: string | null }>;
 }
 
 /** One enriched row after rollup. */
@@ -109,8 +112,6 @@ export interface PortfolioSummary {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-const CLOSED_RFI = new Set(["Answered", "Closed", "Void"]);
-const CLOSED_DELIVERY = new Set(["Delivered", "Cancelled"]);
 const ACTIVE_STATUSES = new Set(["Active", "In Progress"]);
 
 function n(v: unknown): number {
@@ -133,48 +134,6 @@ function daysUntilDate(v: string | null | undefined): number | null {
   return Math.round((d.getTime() - today.getTime()) / 86400000);
 }
 
-/**
- * Health score algorithm — mirrors AIInsights.computeProjectModel verbatim
- * so the two pages produce identical scores.
- */
-function scoreProject(
-  project: ProjectRecord,
-  overdueRfiCount: number,
-  criticalRfiCount: number,
-  lateDeliveryCount: number,
-  budget: number,
-  committed: number,
-): { score: number; health: EnrichedProject["health"]; reasons: string[] } {
-  let score = 100;
-  const reasons: string[] = [];
-
-  if (overdueRfiCount) {
-    score -= Math.min(28, overdueRfiCount * 9);
-    reasons.push(`${overdueRfiCount} overdue RFI${overdueRfiCount === 1 ? "" : "s"}`);
-  }
-  if (criticalRfiCount) {
-    score -= Math.min(16, criticalRfiCount * 5);
-    reasons.push(`${criticalRfiCount} high-priority RFI${criticalRfiCount === 1 ? "" : "s"}`);
-  }
-  if (lateDeliveryCount) {
-    score -= Math.min(24, lateDeliveryCount * 8);
-    reasons.push(`${lateDeliveryCount} late deliver${lateDeliveryCount === 1 ? "y" : "ies"}`);
-  }
-  if (budget > 0 && committed > budget) {
-    score -= Math.min(22, Math.ceil(((committed - budget) / budget) * 100));
-    reasons.push("Cost exposure over budget");
-  }
-  if (budget === 0 && n(project.original_contract_value) > 0) {
-    score -= 8;
-    reasons.push("Budget not fully set up");
-  }
-
-  score = Math.max(0, Math.min(100, Math.round(score)));
-  const health: EnrichedProject["health"] =
-    score >= 76 ? "On Track" : score >= 52 ? "Watch" : "At Risk";
-  return { score, health, reasons };
-}
-
 function toPanelRow(p: EnrichedProject): PortfolioPanelRow {
   return {
     id: p.id,
@@ -189,6 +148,30 @@ function toPanelRow(p: EnrichedProject): PortfolioPanelRow {
     openRfis: p.openRfis,
     overdueRfis: p.overdueRfis,
   };
+}
+
+type ProjectIdMap<T> = Map<string, T[]>;
+
+function bucketByProjectId<T extends { project_id?: string | null | undefined }>(
+  rows: T[] | undefined,
+): ProjectIdMap<T> {
+  const buckets = new Map<string, T[]>();
+  if (!rows?.length) {
+    return buckets;
+  }
+
+  rows.forEach((row) => {
+    const projectId = row?.project_id;
+    if (!projectId) return;
+    const existing = buckets.get(projectId);
+    if (existing) {
+      existing.push(row);
+    } else {
+      buckets.set(projectId, [row]);
+    }
+  });
+
+  return buckets;
 }
 
 // ---------------------------------------------------------------------------
@@ -206,19 +189,36 @@ export function buildPortfolioSummary(
   projects: ProjectRecord[],
   related: PortfolioRelated,
 ): PortfolioSummary {
-  const { changeOrders, workPackages, costCodes, rfis, deliveries } = related;
-  const now = new Date();
+  const {
+    changeOrders,
+    workPackages,
+    costCodes,
+    rfis,
+    deliveries,
+    actionItems,
+    scheduleTasks,
+  } = related;
+
+  const changeOrdersByProject = bucketByProjectId(changeOrders);
+  const workPackagesByProject = bucketByProjectId(workPackages);
+  const costCodesByProject = bucketByProjectId(costCodes);
+  const rfisByProject = bucketByProjectId(rfis);
+  const deliveriesByProject = bucketByProjectId(deliveries);
+  const actionItemsByProject = bucketByProjectId(actionItems);
+  const scheduleTasksByProject = bucketByProjectId(scheduleTasks);
 
   // Enrich each project
   const allRows: EnrichedProject[] = projects.map((project) => {
     const pId = project.id;
 
     // ── Related slices ──
-    const projCOs = changeOrders.filter((c) => c.project_id === pId);
-    const projWPs = workPackages.filter((w) => w.project_id === pId);
-    const projCodes = costCodes.filter((c) => c.project_id === pId);
-    const projRfis = rfis.filter((r) => r.project_id === pId);
-    const projDeliveries = deliveries.filter((d) => d.project_id === pId);
+    const projCOs = changeOrdersByProject.get(pId) ?? [];
+    const projWPs = workPackagesByProject.get(pId) ?? [];
+    const projCodes = costCodesByProject.get(pId) ?? [];
+    const projRfis = rfisByProject.get(pId) ?? [];
+    const projDeliveries = deliveriesByProject.get(pId) ?? [];
+    const projActions = actionItemsByProject.get(pId) ?? [];
+    const projTasks = scheduleTasksByProject.get(pId) ?? [];
 
     // ── Contract value (reuse canonical helper) ──
     const { revised: revisedContract } = calcContractValue(project, projCOs);
@@ -236,33 +236,22 @@ export function buildPortfolioSummary(
       0,
     );
 
-    // ── RFI health ──
-    const openRfis = projRfis.filter((r) => !CLOSED_RFI.has(r.status || "")).length;
-    const overdueRfis = projRfis.filter((r) => {
-      if (CLOSED_RFI.has(r.status || "")) return false;
-      const due = dateValue(r.date_required);
-      return due !== null && due < now;
-    }).length;
-    const criticalRfis = projRfis.filter(
-      (r) => !CLOSED_RFI.has(r.status || "") && ["Critical", "High"].includes(r.priority || ""),
-    ).length;
-
-    // ── Delivery health ──
-    const lateDeliveries = projDeliveries.filter((d) => {
-      if (CLOSED_DELIVERY.has(String(d.status || "").trim())) return false;
-      const scheduled = dateValue(d.scheduled_date || d.delivery_date);
-      return scheduled !== null && scheduled < now;
-    }).length;
-
-    // ── Health score (same algorithm as AIInsights) ──
-    const { score, health, reasons } = scoreProject(
-      project,
+    const {
+      score,
+      health,
+      reasons,
+      openRfis,
       overdueRfis,
-      criticalRfis,
       lateDeliveries,
+    } = computePortfolioProjectHealth({
+      originalContractValue: project.original_contract_value,
+      rfis: projRfis,
+      deliveries: projDeliveries,
+      actionItems: projActions,
+      scheduleTasks: projTasks,
       budget,
       committed,
-    );
+    });
 
     return {
       ...project,
