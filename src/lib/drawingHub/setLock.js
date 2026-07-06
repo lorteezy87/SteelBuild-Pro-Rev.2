@@ -2,11 +2,12 @@
  * drawingHub/setLock.js — Set-level edit lock for drawing_sets.
  *
  * Migration 071 added is_locked / locked_at / locked_by / locked_reason on
- * drawing_sets. When a set is locked, every write path that mutates a
- * sheet's zones, links, dependencies, or markup MUST refuse to proceed.
- * The DB does NOT enforce the lock — RLS only checks project membership —
- * so this module's `assertSetUnlocked()` guard is the single source of
- * truth for the rule.
+ * drawing_sets. When a set is locked, the DB now enforces a write barrier
+ * across the core hub mutation tables (drawings, drawing_zones,
+ * drawing_links, and drawing_zone_dependencies) via triggers.
+ * This module's `assertSetUnlocked()` guard is a defense-in-depth layer
+ * for interactive clients, while DB-level enforcement blocks service-role
+ * and direct DB writes too.
  *
  * Lock granularity is the SET, not the sheet. A sheet's drawing row points
  * back to drawing_sets via drawing_set_id; we resolve the set and check
