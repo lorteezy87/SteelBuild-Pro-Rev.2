@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
@@ -18,7 +18,6 @@ import { PhoenixPanel as PhoenixPanelRaw } from "@/components/shared/PhoenixPane
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { toast } from "sonner";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { daysUntil } from "@/lib/dateMath";
 import SubmittalBulkEditModal from "@/components/submittals/SubmittalBulkEditModal";
 import SubmittalBulkAddModal from "@/components/submittals/SubmittalBulkAddModal";
 import NewRoundModalRaw from "@/components/submittals/NewRoundModal";
@@ -39,9 +38,11 @@ import type { DrawingType } from "@/lib/submittalComponents";
 import { CLOSED_SUBMITTAL_STATUSES, submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { shouldBumpRevisionOnResubmit } from "@/lib/submittalRevision";
 import { decideWorkdayDue } from "@/lib/submittalWorkdayDue";
-import { BIC_CHOICES, STATUSES, compareSubmittalsByDrawingSet } from "./submittals/format";
+import { BIC_CHOICES, STATUSES } from "./submittals/format";
 import { Dialog, DialogContent, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./submittals/uiCompat";
 import { SubmittalDetail, SubmittalVirtualList } from "./submittals/components";
+import SubmittalRegisterPanel from "./submittals/SubmittalRegisterPanel";
+import { computeSubmittalStats, filterAndSortSubmittals } from "./submittals/submittalRegister.derive";
 import SubmittalFormModal from "./submittals/SubmittalFormModal";
 import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types";
 
@@ -228,6 +229,30 @@ export default function Submittals() {
   // countdown. Default off — required_date stays manual and the calendar-day
   // display is unchanged. The learned forecast (submittalForecast) is untouched.
   const workdayDuesEnabled = useFlag("submittal_workday_dues");
+
+  // command_ui re-skin (Slice 2b): when on, the register chrome (header / KPI
+  // strip / filter bar) renders on the light kit via SubmittalRegisterPanel.
+  // Off → the legacy CommandBar + KpiTile + PhoenixPanel chrome, byte-identical.
+  // The list + detail bodies are the SAME elements in both paths.
+  const commandUi = useFlag("command_ui");
+
+  // Apply [data-skin="command"] on the standalone /Submittals route so the kit's
+  // `cmd-*` classes resolve there too. Inside the DCC hub the shell
+  // (DetailingCommandShell) already sets it whole-<html>; setting it again is
+  // idempotent (same value) and the nested cleanup restores "command", so the
+  // hub path is unaffected. Gated on the flag (the effect always runs — the
+  // hooks-rules-safe form of useCommandSkin, which can't be called
+  // conditionally). Flag off → skin untouched, legacy chrome unchanged.
+  useEffect(() => {
+    if (!commandUi) return;
+    const root = document.documentElement;
+    const prev = root.getAttribute("data-skin");
+    root.setAttribute("data-skin", "command");
+    return () => {
+      if (prev) root.setAttribute("data-skin", prev);
+      else root.removeAttribute("data-skin");
+    };
+  }, [commandUi]);
   const {
     bySubmittal: componentsBySubmittal,
     setReceived: setComponentReceived,
@@ -480,58 +505,18 @@ export default function Submittals() {
   });
 
   // ── Filter/search ──────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    // KPI cards filter by GROUPED status (matching their stat counts); the
-    // status dropdown filters by an EXACT status. Group keys expand to the same
-    // status sets the counts use — fixes "Pending/Approved show nothing" and
-    // "Rejected counts 2 but lists 1" (the count grouped statuses the exact
-    // filter didn't). See the `stats` memo for the matching count definitions.
-    const STATUS_GROUPS: Record<string, string[]> = {
-      __pending: ["Submitted", "Under Review"],
-      __approved: ["Approved", "Approved as Noted", "Released for Fabrication"],
-      __rejected: ["Rejected", "Revise and Resubmit"],
-    };
-    let list = rows;
-    if (filterStatus !== "all") {
-      const group = STATUS_GROUPS[filterStatus];
-      list = group
-        ? list.filter((r) => group.includes(r.status))
-        : list.filter((r) => r.status === filterStatus);
-    }
-    if (filterBIC !== "all") list = list.filter((r) => r.ball_in_court === filterBIC);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((r) =>
-        (r.submittal_number || "").toLowerCase().includes(q) ||
-        (r.title || "").toLowerCase().includes(q) ||
-        (r.spec_section || "").toLowerCase().includes(q),
-      );
-    }
-    return list
-      .slice()
-      // Domain-view bridge for the comparator (same rows, nullable columns
-      // modeled as optional) — no runtime change.
-      .sort((a, b) => compareSubmittalsByDrawingSet(a as Submittal, b as Submittal, drawingSetsById));
-  }, [rows, filterStatus, filterBIC, search, drawingSetsById]);
+  // Pure filter+sort extracted to submittalRegister.derive (Slice 2b, TDD) —
+  // byte-identical to the former inline memo (status-group / BIC / search then
+  // drawing-set sort). Domain-view bridge cast: same rows, nullable columns
+  // modeled as optional — no runtime change.
+  const filtered = useMemo(
+    () => filterAndSortSubmittals(rows as Submittal[], { filterStatus, filterBIC, search }, drawingSetsById),
+    [rows, filterStatus, filterBIC, search, drawingSetsById],
+  );
 
-  const stats = useMemo(() => {
-    const total = rows.length;
-    const pending = rows.filter((r) => ["Submitted", "Under Review"].includes(r.status)).length;
-    // Match the useSubmittals hook's `approved` definition — anything past
-    // the BFA gate counts (Approved / Approved as Noted / Released for Fab).
-    const approved = rows.filter((r) =>
-      r.status === "Approved" ||
-      r.status === "Approved as Noted" ||
-      r.status === "Released for Fabrication"
-    ).length;
-    const rejected = rows.filter((r) => ["Rejected", "Revise and Resubmit"].includes(r.status)).length;
-    const overdue = rows.filter((r) => {
-      if (!r.required_date) return false;
-      if (["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(r.status)) return false;
-      return daysUntil(r.required_date) < 0;
-    }).length;
-    return { total, pending, approved, rejected, overdue };
-  }, [rows]);
+  // KPI counts — same pure derive. `today` is local-today; overdue is identical
+  // in sign to the former `daysUntil(required_date) < 0` check.
+  const stats = useMemo(() => computeSubmittalStats(rows as Submittal[], localToday()), [rows]);
 
   // Review-return forecast across all submittals — learns the shop's cycle
   // time from history (rounds + completed submittals) and projects each pending
@@ -579,15 +564,213 @@ export default function Submittals() {
   // toggleAll uses the *filtered* list, not all rows — matches the
   // RFI pattern. Without this, "select all" while a status filter
   // was active would silently grab hidden rows too.
-  const allSelected = filtered.length > 0 && filtered.every((r) => selectedIds.has(r.id));
+  // `filtered` is the domain `Submittal[]` view (id modeled optional); rows
+  // always carry an id at runtime, so cast at the Set boundary — the same
+  // `r.id as string` bridge SubmittalVirtualList already uses.
+  const allSelected = filtered.length > 0 && filtered.every((r) => selectedIds.has(r.id as string));
   const toggleAll = useCallback(() => {
     setSelectedIds((prev) => {
-      if (filtered.length > 0 && filtered.every((r) => prev.has(r.id))) return new Set();
+      if (filtered.length > 0 && filtered.every((r) => prev.has(r.id as string))) return new Set();
       const next = new Set(prev);
-      filtered.forEach((r) => next.add(r.id));
+      filtered.forEach((r) => next.add(r.id as string));
       return next;
     });
   }, [filtered]);
+
+  // ── Register list + detail elements ───────────────────────────────────
+  // Built ONCE and shared by both chrome paths (legacy PhoenixPanel + the
+  // on-skin SubmittalRegisterPanel). Because both paths render the SAME
+  // elements with the SAME props, every list/detail behavior — splitting /
+  // lineage grouping, per-type S/E/P chips, working-day due display, revision —
+  // is byte-identical regardless of skin; only the surrounding chrome changes.
+  const listEl = (
+    <SubmittalVirtualList
+      filtered={filteredView}
+      isLoading={isLoading}
+      rows={rowsView}
+      selectedId={selectedId}
+      selectedIds={selectedIds}
+      toggleSelect={toggleSelect}
+      setSelectedId={setSelectedId}
+      drawingSetsById={drawingSetsById}
+      groupByLineage={splittingEnabled}
+      showTypeChips={drawingTypesEnabled}
+      componentsBySubmittal={componentsBySubmittal}
+    />
+  );
+
+  const detailEl = (
+    <SubmittalDetail
+      approvedRoutesToScrub={approvedRoutesToScrub}
+      splittingEnabled={splittingEnabled}
+      drawingTypesEnabled={drawingTypesEnabled}
+      components={selected ? (componentsBySubmittal[selected.id] || []) : []}
+      onComponentSetReceived={(args) => {
+        if (!selected?.id || !selected?.project_id) return;
+        setComponentReceived({
+          submittalId: selected.id,
+          projectId: selected.project_id,
+          drawingType: args.drawingType,
+          existing: args.existing,
+          date: args.date,
+        });
+      }}
+      onComponentSetReleased={(args) => {
+        if (!selected?.id || !selected?.project_id) return;
+        setComponentReleased({
+          submittalId: selected.id,
+          projectId: selected.project_id,
+          drawingType: args.drawingType,
+          existing: args.existing,
+          released: args.released,
+        });
+      }}
+      onComponentAddType={(drawingType) => {
+        if (!selected?.id || !selected?.project_id) return;
+        addComponentType({ submittalId: selected.id, projectId: selected.project_id, drawingType });
+      }}
+      onComponentRemoveType={(component) => {
+        if (component.id) removeComponentMut.mutate(component.id);
+      }}
+      onSpinOff={() => selected && setSpinOffParentId(selected.id)}
+      onSelectSubmittal={(id) => setSelectedId(id)}
+      submittal={selectedView}
+      allSubmittals={rowsView}
+      drawingSets={drawingSetsView}
+      rounds={selected ? (roundsBySubmittal[selected.id] || []) : []}
+      sheetResponses={
+        selected
+          ? allSheetResponses.filter((r: any) =>
+              (roundsBySubmittal[selected.id] || []).some(
+                (rd: any) => rd.id === r.submittal_round_id,
+              ),
+            )
+          : []
+      }
+      drawings={allDrawings}
+      cycleStats={reviewForecast.stats}
+      today={today}
+      allRfis={allRfis}
+      allTasks={allTasks}
+      projectName={activeProject?.project_name || activeProject?.name || "Project"}
+      project={activeProject}
+      onClose={() => setSelectedId(null)}
+      onEdit={() => selected && setEditingId(selected.id)}
+      onDelete={() => selected && setToDelete(selected.id)}
+      onStatusChange={(status) => {
+        if (!selected || status === selected.status) return;
+        const today = localToday();
+        // Funnel real workflow moves through the audited round path so the
+        // round log stays the submit→return CYCLE truth (§20): a SEND opens
+        // (or advances) the open cycle, a VERDICT closes it — addSubmittalRound
+        // updates the open round in place or opens the next cycle. Draft/Void
+        // are plain status edits (no round). The round log sat empty because
+        // inline status changes used to bypass this entirely.
+        const isVerdict = [
+          "Approved", "Approved as Noted", "Revise and Resubmit",
+          "Rejected", "Released for Fabrication",
+        ].includes(status);
+        const isSent = status === "Submitted" || status === "Under Review";
+        if (isVerdict || isSent) {
+          // Phase 2: a resubmit SEND (prior disposition R&R/Rejected)
+          // opens the next round — auto-bump the text revision then, not
+          // on the verdict that closed the prior cycle. Flag-gated inside
+          // shouldBumpRevisionOnResubmit (off → false → revision untouched).
+          const bumpTextRevision =
+            isSent && shouldBumpRevisionOnResubmit(selected.status, revisionAutoBump);
+          // Phase 5: derive the operational stage this (status, BIC) lands
+          // in and, when it's outbound (OFA/OFS) and no due date is set,
+          // stamp a working-day due date. Flag-gated inside decideWorkdayDue
+          // (off → null → required_date untouched). BIC is unchanged on an
+          // inline status edit, so it drives OFA-vs-OFS the same way the
+          // stage chips do.
+          const nextStage = submittalStatusToStage(status, selected.ball_in_court ?? null, selected.approved_date ?? null);
+          const workdayDue = decideWorkdayDue({
+            stage: nextStage,
+            currentRequiredDate: selected.required_date ?? null,
+            today,
+            flagEnabled: workdayDuesEnabled,
+            projectMeta: activeProject?.metadata ?? null,
+          });
+          advanceMut.mutate({
+            submittal: selected as any,
+            status,
+            ball_in_court: selected.ball_in_court ?? null,
+            submitted_date: isSent ? today : (selected.submitted_date ?? undefined),
+            returned_date: isVerdict ? today : undefined,
+            bumpTextRevision,
+            currentRevision: selected.revision ?? null,
+            extraPatch: workdayDue.requiredDate
+              ? { required_date: workdayDue.requiredDate }
+              : undefined,
+          });
+        } else {
+          // Void is a plain status edit (no round), so the centralized
+          // BIC-clear in addSubmittalRound doesn't fire — null it here so
+          // a voided submittal shows "Closed", not a stale reviewer (§20).
+          const patch: { id: string; [key: string]: any } = { id: selected.id, status };
+          if (CLOSED_SUBMITTAL_STATUSES.has(status)) patch.ball_in_court = null;
+          updateMut.mutate(patch);
+        }
+      }}
+      onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
+      // Verb CTA — advance via the audited write path: logs a round +
+      // patches + auto-locks atomically. Stamps the submitted date when
+      // sending out (→OFA) and the returned date when logging a return
+      // (→BFA); never a fake date otherwise (§22).
+      onAdvance={(action) => {
+        if (!selected || !action.nextStatus) return;
+        const today = localToday();
+        // Stamp the submitted date on the FIRST outbound hop (or a
+        // fresh resubmit after R&R) — multi-party routing chains pass
+        // through OFA several times and must not re-stamp each hop.
+        const isResubmit = ["Revise and Resubmit", "Rejected"].includes(selected.status);
+        const stampSubmitted =
+          action.nextStage === "OFA" && (isResubmit || !selected.submitted_date);
+        // Phase 2: the fresh-resubmit outbound hop (→OFA with a prior
+        // R&R/Rejected disposition) opens the next round — auto-bump the
+        // text revision here. Flag-gated (off → false → untouched).
+        const bumpTextRevision =
+          action.nextStage === "OFA" &&
+          shouldBumpRevisionOnResubmit(selected.status, revisionAutoBump);
+        // Phase 5: the verb CTA already knows the stage it's advancing to
+        // (action.nextStage). On an outbound hop (OFA/OFS) with no due date
+        // set, stamp a working-day due date. Flag-gated inside
+        // decideWorkdayDue (off → null → required_date untouched). Merged
+        // into any existing extraPatch so the chain-step patch survives.
+        const workdayDue = decideWorkdayDue({
+          stage: action.nextStage,
+          currentRequiredDate: selected.required_date ?? null,
+          today,
+          flagEnabled: workdayDuesEnabled,
+          projectMeta: activeProject?.metadata ?? null,
+        });
+        const extraPatch: Record<string, unknown> = {};
+        if (action.chainStepIndex != null) extraPatch.approval_chain_step = action.chainStepIndex;
+        if (workdayDue.requiredDate) extraPatch.required_date = workdayDue.requiredDate;
+        advanceMut.mutate({
+          submittal: selected as any,
+          status: action.nextStatus,
+          ball_in_court: action.nextBallInCourt,
+          submitted_date: stampSubmitted ? today : undefined,
+          returned_date: action.nextStage === "BFA" ? today : undefined,
+          bumpTextRevision,
+          currentRevision: selected.revision ?? null,
+          extraPatch: Object.keys(extraPatch).length ? extraPatch : undefined,
+        });
+      }}
+      // Inline-edit hook — every editable cell in the detail
+      // panel calls this with a single-field patch so we don't
+      // need to round-trip through the modal for trivial fixes
+      // like "fix the date" or "rename this submittal".
+      onFieldChange={(patch) => selected && updateMut.mutate({ id: selected.id, ...patch })}
+      onNewRound={() => setShowNewRound(true)}
+      onReturnRound={(roundId) => {
+        const round = allRounds.find((r) => r.id === roundId);
+        if (round) setShowSheetResponse(round);
+      }}
+    />
+  );
 
   if (!projectId) return (
     <div className="sb-dashboard-reference-page" style={{ textAlign: "center" }}>
@@ -599,279 +782,124 @@ export default function Submittals() {
 
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" }}>
-      <CommandBar
-        eyebrow={`${activeProject?.project_name || "PROJECT"} · SUBMITTALS`}
-        title="Submittal Register"
-        count={filtered.length}
-        unit={filtered.length !== rows.length ? ` OF ${rows.length}` : ""}
-        subtitle={stats.overdue > 0
-          ? `${stats.overdue} overdue · ${stats.pending} awaiting review`
-          : `${stats.pending} awaiting review · ${stats.approved} approved`}
-      >
-        {can("create", "submittal") && (
-          <Button variant="secondary" icon="upload" onClick={() => setShowBulkAdd(true)}>
-            BULK ADD
-          </Button>
-        )}
-        {can("create", "submittal") && (
-          <Button variant="primary" icon="plus" onClick={() => setShowCreate(true)}>
-            NEW SUBMITTAL
-          </Button>
-        )}
-      </CommandBar>
+      {commandUi ? (
+        // Slice 2b — on-skin register chrome. The list + detail bodies are the
+        // SAME elements as the legacy path (built above), so splitting/lineage,
+        // per-type chips, working-day due, and revision are all preserved.
+        <SubmittalRegisterPanel
+          filtered={filteredView}
+          rows={rowsView}
+          stats={stats}
+          reviewsAtRisk={reviewsAtRisk}
+          filterStatus={filterStatus}
+          filterBIC={filterBIC}
+          search={search}
+          onFilterStatus={setFilterStatus}
+          onFilterBIC={setFilterBIC}
+          onSearch={setSearch}
+          selectedIds={selectedIds}
+          allSelected={allSelected}
+          toggleAll={toggleAll}
+          projectLabel={activeProject?.project_name || "Project"}
+          canCreate={can("create", "submittal")}
+          onNewSubmittal={() => setShowCreate(true)}
+          onBulkAdd={() => setShowBulkAdd(true)}
+          list={listEl}
+          detail={detailEl}
+        />
+      ) : (
+        <>
+          <CommandBar
+            eyebrow={`${activeProject?.project_name || "PROJECT"} · SUBMITTALS`}
+            title="Submittal Register"
+            count={filtered.length}
+            unit={filtered.length !== rows.length ? ` OF ${rows.length}` : ""}
+            subtitle={stats.overdue > 0
+              ? `${stats.overdue} overdue · ${stats.pending} awaiting review`
+              : `${stats.pending} awaiting review · ${stats.approved} approved`}
+          >
+            {can("create", "submittal") && (
+              <Button variant="secondary" icon="upload" onClick={() => setShowBulkAdd(true)}>
+                BULK ADD
+              </Button>
+            )}
+            {can("create", "submittal") && (
+              <Button variant="primary" icon="plus" onClick={() => setShowCreate(true)}>
+                NEW SUBMITTAL
+              </Button>
+            )}
+          </CommandBar>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-        <KpiTile compact label="Total"   value={stats.total}    color="var(--accent)"
-          active={filterStatus === "all" && filterBIC === "all"}
-          onClick={() => { setFilterStatus("all"); setFilterBIC("all"); }} />
-        <KpiTile compact label="Pending" value={stats.pending}  color="var(--status-warning)"
-          active={filterStatus === "__pending"}
-          onClick={() => setFilterStatus("__pending")} />
-        <KpiTile compact label="Approved" value={stats.approved} color="var(--status-success)"
-          active={filterStatus === "__approved"}
-          onClick={() => setFilterStatus("__approved")} />
-        <KpiTile compact label="Rejected" value={stats.rejected} color="var(--status-error)"
-          active={filterStatus === "__rejected"}
-          onClick={() => setFilterStatus("__rejected")} />
-        <KpiTile compact label="Overdue" value={stats.overdue} color="var(--status-error)" />
-        <KpiTile compact label="At risk" value={reviewsAtRisk} color="var(--status-warning)" sub="forecast" />
-      </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+            <KpiTile compact label="Total"   value={stats.total}    color="var(--accent)"
+              active={filterStatus === "all" && filterBIC === "all"}
+              onClick={() => { setFilterStatus("all"); setFilterBIC("all"); }} />
+            <KpiTile compact label="Pending" value={stats.pending}  color="var(--status-warning)"
+              active={filterStatus === "__pending"}
+              onClick={() => setFilterStatus("__pending")} />
+            <KpiTile compact label="Approved" value={stats.approved} color="var(--status-success)"
+              active={filterStatus === "__approved"}
+              onClick={() => setFilterStatus("__approved")} />
+            <KpiTile compact label="Rejected" value={stats.rejected} color="var(--status-error)"
+              active={filterStatus === "__rejected"}
+              onClick={() => setFilterStatus("__rejected")} />
+            <KpiTile compact label="Overdue" value={stats.overdue} color="var(--status-error)" />
+            <KpiTile compact label="At risk" value={reviewsAtRisk} color="var(--status-warning)" sub="forecast" />
+          </div>
 
-      <ListTruncationNotice count={rows.length} label="submittals" />
+          <ListTruncationNotice count={rows.length} label="submittals" />
 
-      <PhoenixPanel style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Filter bar */}
-        <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--divider)", background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 76%, #000 24%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)", alignItems: "center", backdropFilter: "blur(14px) saturate(145%)", WebkitBackdropFilter: "blur(14px) saturate(145%)" }}>
-          {/* Master checkbox — operates on the *filtered* list so it
-              respects the active status / BIC filters. The
-              indeterminate state is set imperatively because <input>
-              doesn't expose it as a controllable React prop. */}
-          <input
-            type="checkbox"
-            aria-label="Select all visible submittals"
-            ref={(el) => {
-              if (!el) return;
-              const some = filtered.some((r) => selectedIds.has(r.id));
-              el.indeterminate = some && !allSelected;
-            }}
-            checked={allSelected}
-            onChange={toggleAll}
-            disabled={filtered.length === 0}
-            style={{ margin: 0, marginRight: 4, cursor: filtered.length === 0 ? "not-allowed" : "pointer", accentColor: "var(--accent)" }}
-          />
-          <input
-            className="sbd-input"
-            aria-label="Search submittals"
-            placeholder="Search # / title / spec section"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, maxWidth: 360, padding: "8px 12px", fontSize: 12, borderRadius: 999 }}
-          />
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterBIC} onValueChange={setFilterBIC}>
-            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="Ball-in-court" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Any Ball-in-Court</SelectItem>
-              {BIC_CHOICES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+          <PhoenixPanel style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* Filter bar */}
+            <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--divider)", background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 76%, #000 24%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)", alignItems: "center", backdropFilter: "blur(14px) saturate(145%)", WebkitBackdropFilter: "blur(14px) saturate(145%)" }}>
+              {/* Master checkbox — operates on the *filtered* list so it
+                  respects the active status / BIC filters. The
+                  indeterminate state is set imperatively because <input>
+                  doesn't expose it as a controllable React prop. */}
+              <input
+                type="checkbox"
+                aria-label="Select all visible submittals"
+                ref={(el) => {
+                  if (!el) return;
+                  const some = filtered.some((r) => selectedIds.has(r.id as string));
+                  el.indeterminate = some && !allSelected;
+                }}
+                checked={allSelected}
+                onChange={toggleAll}
+                disabled={filtered.length === 0}
+                style={{ margin: 0, marginRight: 4, cursor: filtered.length === 0 ? "not-allowed" : "pointer", accentColor: "var(--accent)" }}
+              />
+              <input
+                className="sbd-input"
+                aria-label="Search submittals"
+                placeholder="Search # / title / spec section"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ flex: 1, maxWidth: 360, padding: "8px 12px", fontSize: 12, borderRadius: 999 }}
+              />
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterBIC} onValueChange={setFilterBIC}>
+                <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="Ball-in-court" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any Ball-in-Court</SelectItem>
+                  {BIC_CHOICES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
-          {/* List */}
-          <SubmittalVirtualList
-            filtered={filteredView}
-            isLoading={isLoading}
-            rows={rowsView}
-            selectedId={selectedId}
-            selectedIds={selectedIds}
-            toggleSelect={toggleSelect}
-            setSelectedId={setSelectedId}
-            drawingSetsById={drawingSetsById}
-            groupByLineage={splittingEnabled}
-            showTypeChips={drawingTypesEnabled}
-            componentsBySubmittal={componentsBySubmittal}
-          />
-
-          {/* Detail panel */}
-          <SubmittalDetail
-            approvedRoutesToScrub={approvedRoutesToScrub}
-            splittingEnabled={splittingEnabled}
-            drawingTypesEnabled={drawingTypesEnabled}
-            components={selected ? (componentsBySubmittal[selected.id] || []) : []}
-            onComponentSetReceived={(args) => {
-              if (!selected?.id || !selected?.project_id) return;
-              setComponentReceived({
-                submittalId: selected.id,
-                projectId: selected.project_id,
-                drawingType: args.drawingType,
-                existing: args.existing,
-                date: args.date,
-              });
-            }}
-            onComponentSetReleased={(args) => {
-              if (!selected?.id || !selected?.project_id) return;
-              setComponentReleased({
-                submittalId: selected.id,
-                projectId: selected.project_id,
-                drawingType: args.drawingType,
-                existing: args.existing,
-                released: args.released,
-              });
-            }}
-            onComponentAddType={(drawingType) => {
-              if (!selected?.id || !selected?.project_id) return;
-              addComponentType({ submittalId: selected.id, projectId: selected.project_id, drawingType });
-            }}
-            onComponentRemoveType={(component) => {
-              if (component.id) removeComponentMut.mutate(component.id);
-            }}
-            onSpinOff={() => selected && setSpinOffParentId(selected.id)}
-            onSelectSubmittal={(id) => setSelectedId(id)}
-            submittal={selectedView}
-            allSubmittals={rowsView}
-            drawingSets={drawingSetsView}
-            rounds={selected ? (roundsBySubmittal[selected.id] || []) : []}
-            sheetResponses={
-              selected
-                ? allSheetResponses.filter((r: any) =>
-                    (roundsBySubmittal[selected.id] || []).some(
-                      (rd: any) => rd.id === r.submittal_round_id,
-                    ),
-                  )
-                : []
-            }
-            drawings={allDrawings}
-            cycleStats={reviewForecast.stats}
-            today={today}
-            allRfis={allRfis}
-            allTasks={allTasks}
-            projectName={activeProject?.project_name || activeProject?.name || "Project"}
-            project={activeProject}
-            onClose={() => setSelectedId(null)}
-            onEdit={() => selected && setEditingId(selected.id)}
-            onDelete={() => selected && setToDelete(selected.id)}
-            onStatusChange={(status) => {
-              if (!selected || status === selected.status) return;
-              const today = localToday();
-              // Funnel real workflow moves through the audited round path so the
-              // round log stays the submit→return CYCLE truth (§20): a SEND opens
-              // (or advances) the open cycle, a VERDICT closes it — addSubmittalRound
-              // updates the open round in place or opens the next cycle. Draft/Void
-              // are plain status edits (no round). The round log sat empty because
-              // inline status changes used to bypass this entirely.
-              const isVerdict = [
-                "Approved", "Approved as Noted", "Revise and Resubmit",
-                "Rejected", "Released for Fabrication",
-              ].includes(status);
-              const isSent = status === "Submitted" || status === "Under Review";
-              if (isVerdict || isSent) {
-                // Phase 2: a resubmit SEND (prior disposition R&R/Rejected)
-                // opens the next round — auto-bump the text revision then, not
-                // on the verdict that closed the prior cycle. Flag-gated inside
-                // shouldBumpRevisionOnResubmit (off → false → revision untouched).
-                const bumpTextRevision =
-                  isSent && shouldBumpRevisionOnResubmit(selected.status, revisionAutoBump);
-                // Phase 5: derive the operational stage this (status, BIC) lands
-                // in and, when it's outbound (OFA/OFS) and no due date is set,
-                // stamp a working-day due date. Flag-gated inside decideWorkdayDue
-                // (off → null → required_date untouched). BIC is unchanged on an
-                // inline status edit, so it drives OFA-vs-OFS the same way the
-                // stage chips do.
-                const nextStage = submittalStatusToStage(status, selected.ball_in_court ?? null, selected.approved_date ?? null);
-                const workdayDue = decideWorkdayDue({
-                  stage: nextStage,
-                  currentRequiredDate: selected.required_date ?? null,
-                  today,
-                  flagEnabled: workdayDuesEnabled,
-                  projectMeta: activeProject?.metadata ?? null,
-                });
-                advanceMut.mutate({
-                  submittal: selected as any,
-                  status,
-                  ball_in_court: selected.ball_in_court ?? null,
-                  submitted_date: isSent ? today : (selected.submitted_date ?? undefined),
-                  returned_date: isVerdict ? today : undefined,
-                  bumpTextRevision,
-                  currentRevision: selected.revision ?? null,
-                  extraPatch: workdayDue.requiredDate
-                    ? { required_date: workdayDue.requiredDate }
-                    : undefined,
-                });
-              } else {
-                // Void is a plain status edit (no round), so the centralized
-                // BIC-clear in addSubmittalRound doesn't fire — null it here so
-                // a voided submittal shows "Closed", not a stale reviewer (§20).
-                const patch: { id: string; [key: string]: any } = { id: selected.id, status };
-                if (CLOSED_SUBMITTAL_STATUSES.has(status)) patch.ball_in_court = null;
-                updateMut.mutate(patch);
-              }
-            }}
-            onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
-            // Verb CTA — advance via the audited write path: logs a round +
-            // patches + auto-locks atomically. Stamps the submitted date when
-            // sending out (→OFA) and the returned date when logging a return
-            // (→BFA); never a fake date otherwise (§22).
-            onAdvance={(action) => {
-              if (!selected || !action.nextStatus) return;
-              const today = localToday();
-              // Stamp the submitted date on the FIRST outbound hop (or a
-              // fresh resubmit after R&R) — multi-party routing chains pass
-              // through OFA several times and must not re-stamp each hop.
-              const isResubmit = ["Revise and Resubmit", "Rejected"].includes(selected.status);
-              const stampSubmitted =
-                action.nextStage === "OFA" && (isResubmit || !selected.submitted_date);
-              // Phase 2: the fresh-resubmit outbound hop (→OFA with a prior
-              // R&R/Rejected disposition) opens the next round — auto-bump the
-              // text revision here. Flag-gated (off → false → untouched).
-              const bumpTextRevision =
-                action.nextStage === "OFA" &&
-                shouldBumpRevisionOnResubmit(selected.status, revisionAutoBump);
-              // Phase 5: the verb CTA already knows the stage it's advancing to
-              // (action.nextStage). On an outbound hop (OFA/OFS) with no due date
-              // set, stamp a working-day due date. Flag-gated inside
-              // decideWorkdayDue (off → null → required_date untouched). Merged
-              // into any existing extraPatch so the chain-step patch survives.
-              const workdayDue = decideWorkdayDue({
-                stage: action.nextStage,
-                currentRequiredDate: selected.required_date ?? null,
-                today,
-                flagEnabled: workdayDuesEnabled,
-                projectMeta: activeProject?.metadata ?? null,
-              });
-              const extraPatch: Record<string, unknown> = {};
-              if (action.chainStepIndex != null) extraPatch.approval_chain_step = action.chainStepIndex;
-              if (workdayDue.requiredDate) extraPatch.required_date = workdayDue.requiredDate;
-              advanceMut.mutate({
-                submittal: selected as any,
-                status: action.nextStatus,
-                ball_in_court: action.nextBallInCourt,
-                submitted_date: stampSubmitted ? today : undefined,
-                returned_date: action.nextStage === "BFA" ? today : undefined,
-                bumpTextRevision,
-                currentRevision: selected.revision ?? null,
-                extraPatch: Object.keys(extraPatch).length ? extraPatch : undefined,
-              });
-            }}
-            // Inline-edit hook — every editable cell in the detail
-            // panel calls this with a single-field patch so we don't
-            // need to round-trip through the modal for trivial fixes
-            // like "fix the date" or "rename this submittal".
-            onFieldChange={(patch) => selected && updateMut.mutate({ id: selected.id, ...patch })}
-            onNewRound={() => setShowNewRound(true)}
-            onReturnRound={(roundId) => {
-              const round = allRounds.find((r) => r.id === roundId);
-              if (round) setShowSheetResponse(round);
-            }}
-          />
-        </div>
-      </PhoenixPanel>
+            <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
+              {listEl}
+              {detailEl}
+            </div>
+          </PhoenixPanel>
+        </>
+      )}
 
       {(showCreate || editing || spinOffParent) && (
         <SubmittalFormModal
