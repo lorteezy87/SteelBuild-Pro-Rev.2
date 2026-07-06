@@ -29,7 +29,25 @@ export function DataTable<Row extends { id?: string }>({
             <tr><td className="cmd-table__empty" colSpan={columns.length}>{emptyMessage}</td></tr>
           ) : (
             rows.map((row, i) => (
-              <tr key={row.id || i} className={onRowClick ? "is-clickable" : undefined} onClick={onRowClick ? () => onRowClick(row) : undefined}>
+              <tr
+                key={row.id || i}
+                className={onRowClick ? "is-clickable" : undefined}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                role={onRowClick ? "button" : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                onKeyDown={
+                  onRowClick
+                    ? (e) => {
+                        // Keyboard parity with onClick: Enter/Space activate the row
+                        // (preventDefault on Space so it doesn't scroll the page).
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onRowClick(row);
+                        }
+                      }
+                    : undefined
+                }
+              >
                 {columns.map((c) => <td key={c.key} style={{ textAlign: c.align || "left" }}>{c.render(row)}</td>)}
               </tr>
             ))

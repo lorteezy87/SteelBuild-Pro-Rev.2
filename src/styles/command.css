@@ -8,11 +8,18 @@
   --cmd-surface: #ffffff;
   --cmd-border: #e4e8ee;
   --cmd-text: #1b2430;
-  --cmd-text-muted: #6b7585;
+  --cmd-text-muted: #57606f;
   --cmd-gold: #f2a706;
   --cmd-good: #12b76a;
   --cmd-warn: #f59e0b;
   --cmd-danger: #ef4444;
+  /* AA-contrast (WCAG >=4.5:1) text tones for vivid-status text on the pastel
+     chip fills. The --cmd-good/warn/danger hues stay for FILLS (pills, icons),
+     but as text on the light chip backgrounds they fail contrast — chips use
+     these darker -text tones instead. */
+  --cmd-good-text: #067647;
+  --cmd-warn-text: #93540b;
+  --cmd-danger-text: #b42318;
   --cmd-info: #2e90e0;
   --cmd-review: #8b5cf6;
   background: var(--cmd-bg);
@@ -43,9 +50,9 @@
 [data-skin="command"] .cmd-hero__chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 [data-skin="command"] .cmd-hero__project { font-weight: 600; font-size: 13px; color: var(--cmd-text); }
 [data-skin="command"] .cmd-chip { padding: 3px 10px; border-radius: 999px; background: #e9edf2; color: var(--cmd-text-muted); font-size: 12px; }
-[data-skin="command"] .cmd-chip--good { background: #d6f0de; color: var(--cmd-good); }
-[data-skin="command"] .cmd-chip--warn { background: #fbe5c0; color: var(--cmd-warn); }
-[data-skin="command"] .cmd-chip--danger { background: #f9d2ce; color: var(--cmd-danger); }
+[data-skin="command"] .cmd-chip--good { background: #d6f0de; color: var(--cmd-good-text); }
+[data-skin="command"] .cmd-chip--warn { background: #fbe5c0; color: var(--cmd-warn-text); }
+[data-skin="command"] .cmd-chip--danger { background: #f9d2ce; color: var(--cmd-danger-text); }
 [data-skin="command"] .cmd-chip--info { background: #d7e5fb; color: var(--cmd-info); }
 [data-skin="command"] .cmd-hero__right { display: flex; gap: 12px; }
 [data-skin="command"] .cmd-statcard { min-width: 96px; padding: 10px 14px; border: 1px solid var(--cmd-border); border-radius: 10px; background: var(--cmd-surface); text-align: center; }
