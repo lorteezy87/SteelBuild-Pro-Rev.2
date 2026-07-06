@@ -79,8 +79,10 @@ export const getNextFormattedNumber = async (...rawArgs) => {
   if (!fieldName) throw new Error("fieldName is required");
   if (!prefix) throw new Error("prefix is required");
 
-  // Always scan existing records to find the real max — prevents duplicates
-  // when the sequence table is out of sync with actual data.
+  // Scan active records for the highest existing number. The atomic RPC starts a
+  // fresh sequence at 1 and has no knowledge of pre-existing records, so a
+  // sequence that trails the data (e.g. after a bulk import) can hand back a
+  // value that would collide with an existing record number.
   // Only scans active rows — deleted numbers are reusable (partial unique index).
   const existing = await entities[entityName]?.filter({ project_id: projectId }) || [];
   const maxFromRecords = existing.reduce((max, item) => {
@@ -88,28 +90,24 @@ export const getNextFormattedNumber = async (...rawArgs) => {
     return numericValue != null && numericValue > max ? numericValue : max;
   }, 0);
 
-  try {
-    const seqValue = await getNextNumber(projectId, recordType);
-    // Use whichever is higher: sequence value or (max from existing records + 1)
-    const actualNext = Math.max(seqValue, maxFromRecords + 1);
-
-    // Self-heal: if the sequence was behind, fast-forward it.
-    // Use conditional update to avoid regressing a value that another call
-    // may have already advanced past our target.
-    if (actualNext > seqValue) {
-      await supabase
-        .from('number_sequences')
-        .update({ next_value: actualNext + 1, updated_at: new Date().toISOString() })
-        .eq('project_id', projectId)
-        .eq('record_type', recordType)
-        .lt('next_value', actualNext + 1);
-    }
-
-    return `${prefix}${String(actualNext).padStart(padLength, "0")}`;
-  } catch {
-    // Sequence table unavailable — use record scan result
-    return `${prefix}${String(maxFromRecords + 1).padStart(padLength, "0")}`;
+  // The number ALWAYS comes from the atomic RPC — never a client-side Math.max.
+  // (Flooring client-side reintroduced duplicates: two concurrent callers that
+  // read the same maxFromRecords both floored to the same value. The RPC
+  // serializes callers into DISTINCT values.) If the sequence trails the data
+  // and the RPC hands back a value that would collide with an existing record,
+  // re-allocate — each call returns a fresh distinct number — until it clears
+  // the existing max. This burns the stale low values once; afterwards the
+  // sequence is ahead and a single call suffices. If the RPC can't allocate,
+  // getNextNumber throws and we fail closed rather than invent a number here.
+  let allocated = await getNextNumber(projectId, recordType);
+  // Bounded by how far the sequence trails the data, so a pathological
+  // non-advancing RPC can't spin forever.
+  let remaining = maxFromRecords - allocated + 1;
+  while (allocated <= maxFromRecords && remaining-- > 0) {
+    allocated = await getNextNumber(projectId, recordType);
   }
+
+  return `${prefix}${String(allocated).padStart(padLength, "0")}`;
 };
 
 /**

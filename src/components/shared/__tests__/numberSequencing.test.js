@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // The whole point of numberSequencing is that official record numbers come from
 // the atomic server-side RPC (get_next_sequence_number), never from a
-// client-side derivation. These tests pin that contract: the happy path MUST
-// call the RPC, and Math.max only ever acts as a self-heal floor alongside it.
+// client-side derivation. These tests pin that contract: every allocated number
+// comes from the RPC (which serializes concurrent callers into DISTINCT values).
+// When a sequence trails existing records, the client RE-ALLOCATES from the RPC
+// until it clears the existing max — it never floors with a client-side Math.max
+// (that reintroduced duplicates under concurrency) and never invents a number.
 vi.mock("@/lib/supabase", () => ({
   supabase: { rpc: vi.fn(), from: vi.fn() },
 }));
@@ -97,10 +100,9 @@ describe("getNextNumber", () => {
 });
 
 describe("getNextFormattedNumber", () => {
-  it("formats the RPC value and does NOT self-heal when the sequence is ahead", async () => {
+  it("formats the RPC value directly when the sequence is ahead of existing records", async () => {
     entities.RFI = { filter: vi.fn().mockResolvedValue([]) };
     supabase.rpc.mockResolvedValue({ data: 5, error: null });
-    const { update } = stubUpdateChain();
 
     const result = await getNextFormattedNumber({
       projectId: "p",
@@ -112,15 +114,18 @@ describe("getNextFormattedNumber", () => {
     });
 
     expect(result).toBe("RFI-005");
-    expect(update).not.toHaveBeenCalled(); // 5 == max(5, 0+1), nothing to fast-forward
+    expect(supabase.rpc).toHaveBeenCalledTimes(1); // ahead of records → no re-allocation
+    expect(supabase.from).not.toHaveBeenCalled();  // never writes a number client-side
   });
 
-  it("self-heals the sequence forward when existing records are ahead of the RPC", async () => {
+  it("re-allocates from the atomic RPC past existing record numbers (no client-side floor / self-heal write)", async () => {
     entities.RFI = {
       filter: vi.fn().mockResolvedValue([{ rfi_number: "RFI-010" }, { rfi_number: "RFI-007" }]),
     };
-    supabase.rpc.mockResolvedValue({ data: 5, error: null });
-    const { update } = stubUpdateChain();
+    // Sequence trails the data: the atomic RPC hands out 5,6,7,… — each distinct.
+    let seq = 4;
+    supabase.rpc.mockImplementation(() => Promise.resolve({ data: ++seq, error: null }));
+    stubUpdateChain(); // lets the old client-Math.max path run to completion for a clean assertion
 
     const result = await getNextFormattedNumber({
       projectId: "p",
@@ -131,12 +136,32 @@ describe("getNextFormattedNumber", () => {
       padLength: 3,
     });
 
-    expect(result).toBe("RFI-011"); // max(5, 10 + 1)
-    expect(supabase.from).toHaveBeenCalledWith("number_sequences");
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({ next_value: 12 }));
+    expect(result).toBe("RFI-011"); // first RPC value that clears the existing max of 10
+    expect(supabase.from).not.toHaveBeenCalled(); // no client-side Math.max / self-heal write
   });
 
-  it("falls back to the record scan when sequence allocation fails", async () => {
+  it("issues DISTINCT numbers to concurrent callers even when the sequence is behind the data", async () => {
+    entities.RFI = { filter: vi.fn().mockResolvedValue([{ rfi_number: "RFI-010" }]) };
+    let seq = 0;
+    supabase.rpc.mockImplementation(() => Promise.resolve({ data: ++seq, error: null }));
+    stubUpdateChain(); // lets the old (buggy) client-Math.max path run to completion
+
+    const a = await getNextFormattedNumber({
+      projectId: "p", recordType: "RFI", entityName: "RFI", fieldName: "rfi_number", prefix: "RFI-",
+    });
+    const b = await getNextFormattedNumber({
+      projectId: "p", recordType: "RFI", entityName: "RFI", fieldName: "rfi_number", prefix: "RFI-",
+    });
+
+    // The removed client-side Math.max floored BOTH callers to RFI-011 — a
+    // duplicate official number. The atomic RPC is now the sole allocator, so
+    // every allocation is distinct.
+    expect(a).not.toBe(b);
+    expect(a).toBe("RFI-011"); // first caller burns the stale 1..10, lands on 11
+    expect(b).toBe("RFI-012"); // second caller gets the next distinct RPC value
+  });
+
+  it("fails closed when the RPC is unavailable (never invents a client-side number)", async () => {
     entities.RFI = { filter: vi.fn().mockResolvedValue([{ rfi_number: "RFI-004" }]) };
     supabase.rpc.mockResolvedValue({ data: null, error: { message: "down" } });
 
@@ -149,7 +174,7 @@ describe("getNextFormattedNumber", () => {
         fieldName: "rfi_number",
         prefix: "RFI-",
       }),
-    ).resolves.toBe("RFI-005"); // maxFromRecords(4) + 1, padLength defaults to 3
+    ).rejects.toThrow(/Failed to allocate sequence number for RFI/);
     await vi.runAllTimersAsync();
     await assertion;
   });
@@ -161,7 +186,6 @@ describe("getNextFormattedNumber", () => {
 
     entities.RFI = { filter: vi.fn().mockResolvedValue([]) };
     supabase.rpc.mockResolvedValue({ data: 2, error: null });
-    stubUpdateChain();
 
     const result = await getNextFormattedNumber("p", "RFI", "RFI", "rfi_number", "RFI-", 3);
     expect(result).toBe("RFI-002");
