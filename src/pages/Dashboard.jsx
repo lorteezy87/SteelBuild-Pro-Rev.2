@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useNavigate } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
@@ -13,6 +13,7 @@ import ProjectDashboard from "./dashboard/ProjectDashboard";
 import DashboardHeader from "./dashboard/DashboardHeader";
 // command_ui flag — lazy-loaded so the CC bundle is not in the classic path
 const DashboardControlCenter = lazyWithRetry(() => import("./dashboardCC/DashboardControlCenter"));
+const PortfolioControlCenter = lazyWithRetry(() => import("./portfolio/PortfolioControlCenter"));
 
 // KPI presentation specs — value is filled per-scope below. Ids match
 // DASHBOARD_KPI_IDS so Settings (visible_kpis / kpi_order) drive this strip.
@@ -85,9 +86,12 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { activeProject, setActiveProject } = useProjectContext();
   const pid = activeProject?.id;
+  const [portfolioSearch, setPortfolioSearch] = useState("");
+  const [portfolioHealthFilter, setPortfolioHealthFilter] = useState("All");
   const projectScope = pid || "portfolio";
   // command_ui flag — must be called unconditionally (Rules of Hooks)
   const commandUi = useFlag("command_ui");
+  const shouldLoadCommandScopedOnlyData = !!pid || !commandUi;
   const listForDashboard = (entity, sortBy) =>
     pid ? entity.filter({ project_id: pid }, sortBy) : entity.list(sortBy);
 
@@ -120,8 +124,10 @@ export default function Dashboard() {
     }
   }, [activeProjectIsLive, pid, projectsLoading, setActiveProject]);
 
-  const scopePortfolioRows = (rows) =>
-    pid ? rows : rows.filter((row) => row?.project_id && liveProjectIds.has(row.project_id));
+  const scopePortfolioRows = useCallback(
+    (rows) => pid ? rows : rows.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
+    [pid, liveProjectIds],
+  );
 
   const { data: allRFIs = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["rfis-dashboard", projectScope],
@@ -150,29 +156,35 @@ export default function Dashboard() {
     queryKey: ["action-items-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.ActionItem),
     refetchInterval: refetchMs,
+    enabled: commandUi ? true : shouldLoadCommandScopedOnlyData,
   });
   const { data: allExpenses = [] } = useQuery({
     queryKey: ["expenses-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.Expense),
+    enabled: shouldLoadCommandScopedOnlyData,
   });
-  // Portfolio timeline column needs schedule_tasks for every project.
-  // Tiny payload — one row per task, a few date columns — so fetching
-  // them globally is cheaper than per-project drilldown round-trips.
+  // Portfolio timeline column needs schedule_tasks for every non-singleton
+  // project portfolio view (command_ui off + classic path). Tiny payload —
+  // one row per task, a few date columns — so global fetch is cheaper than
+  // per-project drilldown round-trips.
   const { data: allScheduleTasks = [] } = useQuery({
     queryKey: ["schedule-tasks-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.ScheduleTask, "-start_date"),
     staleTime: 60 * 1000,
+    enabled: commandUi ? true : shouldLoadCommandScopedOnlyData,
   });
   // Used by the Document Hub submittal pipeline + Drawings count tile.
   const { data: allSubmittals = [] } = useQuery({
     queryKey: ["submittals-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.Submittal),
     staleTime: 30 * 1000,
+    enabled: shouldLoadCommandScopedOnlyData,
   });
   const { data: allDrawings = [] } = useQuery({
     queryKey: ["drawings-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.Drawing),
     staleTime: 30 * 1000,
+    enabled: shouldLoadCommandScopedOnlyData,
   });
   // Cash-flow figures (total billed / collected / pending payment /
   // retention) on the Financial Controls section come from SOV items.
@@ -180,6 +192,7 @@ export default function Dashboard() {
     queryKey: ["sov-items-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.SOVItem),
     staleTime: 60 * 1000,
+    enabled: !!pid,
   });
   // Recent Activity feed pulls from drawing_activity (the only
   // activity surface that's actually populated — the generic
@@ -203,41 +216,47 @@ export default function Dashboard() {
         : Promise.resolve([]),
     staleTime: 30 * 1000,
     refetchInterval: refetchMs,
+    enabled: !!pid,
   });
   // ── Field activity rollup (added with the Field overhaul) ──
   // Each field surface (Daily Logs / Photos / Punchlist / Inspections /
-  // Safety / QC) feeds the new <FieldActivitySection> on the project
-  // dashboard AND the /Field hub. Pull globally and slice per-project
-  // so we don't duplicate fetches across the two consumers.
+  // Safety / QC) feeds the project dashboard plus its corresponding module.
+  // Pull per-project only to avoid portfolio-mode overhead.
   const { data: allDailyLogs = [] } = useQuery({
     queryKey: ["daily-logs-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.DailyLog, "-date"),
     staleTime: 60 * 1000,
+    enabled: !!pid,
   });
   const { data: allPhotos = [] } = useQuery({
     queryKey: ["photos-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.Photo, "-taken_date"),
     staleTime: 60 * 1000,
+    enabled: !!pid,
   });
   const { data: allPunchlist = [] } = useQuery({
     queryKey: ["punchlist-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.PunchlistItem),
     staleTime: 60 * 1000,
+    enabled: !!pid,
   });
   const { data: allInspections = [] } = useQuery({
     queryKey: ["inspections-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.Inspection, "-inspection_date"),
     staleTime: 60 * 1000,
+    enabled: !!pid,
   });
   const { data: allSafetyIncidents = [] } = useQuery({
     queryKey: ["safety-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.SafetyIncident, "-incident_date"),
     staleTime: 60 * 1000,
+    enabled: !!pid,
   });
   const { data: allQualityRecords = [] } = useQuery({
     queryKey: ["qc-records-dashboard", projectScope],
     queryFn: () => listForDashboard(entities.QualityControlRecord, "-test_date"),
     staleTime: 60 * 1000,
+    enabled: !!pid,
   });
 
   /* ── Project-scoped slices (derived from global data to avoid dupe queries) ── */
@@ -271,11 +290,37 @@ export default function Dashboard() {
 
   const isLoading = projectsLoading || rfisLoading;
 
+  const portfolioRelated = useMemo(
+    () => ({
+      changeOrders: scopePortfolioRows(allCOs),
+      workPackages: scopePortfolioRows(allWPs),
+      costCodes: scopePortfolioRows(allCodes),
+      rfis: scopePortfolioRows(allRFIs),
+      deliveries: scopePortfolioRows(allDeliveries),
+      actionItems: scopePortfolioRows(allActionItems),
+      scheduleTasks: scopePortfolioRows(allScheduleTasks),
+    }),
+    [
+      allCOs, allWPs, allCodes, allRFIs, allDeliveries,
+      allActionItems, allScheduleTasks, scopePortfolioRows,
+    ],
+  );
+
+  const onOpenProjectFromPortfolioCommand = useCallback((project) => {
+    if (!project?.id) return;
+    const match = projects.find((p) => p.id === project.id);
+    setActiveProject(match ? match : project);
+  }, [projects, setActiveProject]);
+
   // ── Settings → Dashboard header (welcome banner + configurable KPI strip) ──
   // Real metrics computed from the data already loaded above, scoped to the
   // active project or the portfolio. visible_kpis / kpi_order / show_welcome /
   // dashboard_density all come from Settings → Dashboard.
   const kpiList = useMemo(() => {
+    if (commandUi && !pid) {
+      return [];
+    }
+
     const scoped = (all) => all.filter((r) => r?.project_id && liveProjectIds.has(r.project_id));
     const rfiArr = pid ? rfis : scoped(allRFIs);
     const coArr  = pid ? cos : scoped(allCOs);
@@ -310,7 +355,7 @@ export default function Dashboard() {
     return orderedIds
       .filter((id) => visible.has(id) && KPI_SPECS[id])
       .map((id) => ({ id, label: KPI_SPECS[id].label, color: KPI_SPECS[id].color, value: values[id] }));
-  }, [pid, rfis, cos, wps, deliveries, actionItems, submittals, expenses, activeProject,
+  }, [commandUi, pid, rfis, cos, wps, deliveries, actionItems, submittals, expenses, activeProject,
       allRFIs, allCOs, allWPs, allDeliveries, allActionItems, allSubmittals, allExpenses,
       drawings, allDrawings,
       portfolioProjects, liveProjectIds, prefs.kpi_order, prefs.visible_kpis]);
@@ -391,6 +436,27 @@ export default function Dashboard() {
             safetyIncidents={safetyIncidents}
             qualityRecords={qualityRecords}
             onNavigate={onNavigateDash}
+          />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (commandUi && !pid) {
+    if (!projectsLoading && projects.length === 0) {
+      return <FirstProjectWelcome onStart={() => navigate("/Onboarding")} />;
+    }
+    return (
+      <ErrorBoundary label="Portfolio Control Center">
+        <Suspense fallback={<LoadingSkeleton variant="page" />}>
+          <PortfolioControlCenter
+            projects={portfolioProjects}
+            related={portfolioRelated}
+            search={portfolioSearch}
+            onSearch={setPortfolioSearch}
+            healthFilter={portfolioHealthFilter}
+            onHealthFilter={setPortfolioHealthFilter}
+            onOpenProject={onOpenProjectFromPortfolioCommand}
           />
         </Suspense>
       </ErrorBoundary>
