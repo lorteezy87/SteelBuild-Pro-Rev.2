@@ -3,7 +3,6 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "git": { "deploymentEnabled": { "main": false, "staging": false } },
-  "ignoreCommand": "if [ \"$VERCEL_ENV\" = \"preview\" ]; then exit 0; else exit 1; fi",
   "headers": [
     {
       "source": "/assets/(.*)",
