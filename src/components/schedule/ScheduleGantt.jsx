@@ -1268,6 +1268,13 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             const dispEnd   = effEnd(task);
             const isShifted = !!effectiveDates[task.id]?.shifted;
             const isEditing = editingId === task.id;
+            // Summary/parent rows have trigger-derived start/end (see the
+            // schedule_summary_rollup migration), so the inline date editor must
+            // show them read-only — any typed value is overwritten on the next
+            // child change. Matches TaskDetailDrawer. The Gantt already enriches
+            // rows with _hasChildren/_isRolledUpSummary, so the flag-based
+            // predicate is sufficient here.
+            const isSummaryRow = isSummaryScheduleTask(task);
             const leftHovered = hoveredRowId === task.id;
             const parentRowBg = task._hasChildren ? `${GANTT_STATUS_HEX.inProgress}0A` : "transparent";
             const critical = isCriticalTask(task);
@@ -1442,7 +1449,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 </span>
                 {/* Start */}
                 {isEditing ? (
-                  <input type="date" value={editDraft.start_date} onChange={e => setEditDraft(d => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%" }} />
+                  <input type="date" value={editDraft.start_date} disabled={isSummaryRow} title={isSummaryRow ? "Derived from children — not editable" : undefined} onChange={e => setEditDraft(d => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%", ...(isSummaryRow ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} />
                 ) : (
                   <span
                     className="sbd-num"
@@ -1454,7 +1461,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 )}
                 {/* Finish */}
                 {isEditing ? (
-                  <input type="date" value={editDraft.end_date} onChange={e => setEditDraft(d => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%" }} />
+                  <input type="date" value={editDraft.end_date} disabled={isSummaryRow} title={isSummaryRow ? "Derived from children — not editable" : undefined} onChange={e => setEditDraft(d => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%", ...(isSummaryRow ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} />
                 ) : (
                   <span
                     className="sbd-num"
