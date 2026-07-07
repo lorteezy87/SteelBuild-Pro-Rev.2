@@ -12,6 +12,8 @@
  * task edited from the field reconciles with the schedule board exactly.
  */
 
+import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
+
 /** Quick-set progress buttons offered on each task card. */
 export const PROGRESS_STEPS = [0, 25, 50, 75, 100];
 
@@ -117,7 +119,13 @@ function compareTasks(a, b, todayIso) {
  */
 export function tasksForToday(tasks, todayIso, { horizonDays = 7 } = {}) {
   const horizonIso = addDaysIso(todayIso, horizonDays);
-  const live = (Array.isArray(tasks) ? tasks : []).filter((t) => t && !t.is_deleted);
+  // Drop summary/parent rows: a foreman acts on leaf work items, not rolled-up
+  // parents. A summary's dates only span its children, so it would otherwise
+  // show up as "overdue"/"active" noise duplicating the child rows.
+  const parentIds = buildParentIdSet(Array.isArray(tasks) ? tasks : []);
+  const live = (Array.isArray(tasks) ? tasks : []).filter(
+    (t) => t && !t.is_deleted && !isSummaryTask(t, parentIds),
+  );
 
   const relevant = live.filter((t) => {
     const u = taskUrgency(t, todayIso);

@@ -8,6 +8,7 @@
 
 import { PHASES } from "@/utils/phases";
 import { formatDateShort } from "@/components/shared/formatters";
+import { isSummaryTask as isSummaryTaskCanonical } from "@/lib/schedule/summaryTasks";
 
 const CLOSED_STATUSES = ["complete", "completed", "closed", "cancelled", "canceled"];
 
@@ -22,8 +23,10 @@ export function isOpenTask(task) {
   return !CLOSED_STATUSES.some((closed) => status.includes(closed));
 }
 
+// Delegates to the canonical predicate (src/lib/schedule/summaryTasks.js) so
+// this and every other surface share one definition of "summary/parent row".
 export function isSummaryTask(task, parentIds = new Set()) {
-  return Boolean(task?.is_summary || task?._hasChildren || task?._isRolledUpSummary || parentIds.has(task?.id));
+  return isSummaryTaskCanonical(task, parentIds);
 }
 
 export function isWorkTask(task, parentIds = new Set()) {

@@ -1157,7 +1157,11 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             if (row.type === "summary") {
               const { phase, tasks, pctComplete } = row;
               const isOpen = !collapsed[phase.key];
-              const phaseOverdue = tasks.filter(isOverdue).length;
+              // Summary/parent rows must never be counted as overdue — their
+              // window merely spans their children, so a late child already
+              // shows up on its own row. Counting the parent too would
+              // double-count and inflate the phase's overdue badge.
+              const phaseOverdue = tasks.filter((t) => !isSummaryScheduleTask(t) && isOverdue(t)).length;
               const phaseCritical = tasks.filter(isCriticalTask).length;
               const phaseTbd = tasks.filter(t => !effStart(t) || !effEnd(t)).length;
               const phaseMeta = [

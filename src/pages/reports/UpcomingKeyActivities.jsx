@@ -16,6 +16,7 @@ import ReportShell from "./ReportShell";
 import { FilterBar, SelectFilter } from "./ReportFilters";
 import { formatDate } from "./utils";
 import { mono, body, CARD } from "./constants";
+import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -44,9 +45,14 @@ export default function UpcomingKeyActivities() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const windowEnd = new Date(today.getTime() + Number(windowDays) * 86400000);
+    // Summary/parent rows are not real "activities" — they only span their
+    // children, which are listed individually. Exclude them so the list shows
+    // actionable leaf work, not redundant parent buckets.
+    const parentIds = buildParentIdSet(tasks);
     const m = {};
     tasks.forEach((t) => {
       if (!t.start_date) return;
+      if (isSummaryTask(t, parentIds)) return;
       const d = new Date(t.start_date);
       if (d < today || d > windowEnd) return;
       if (t.status === "Complete" || t.status === "Cancelled") return;

@@ -18,6 +18,7 @@ import ReportTable from "./ReportTable";
 import { FilterBar, SelectFilter, SearchInput } from "./ReportFilters";
 import { exportTableCSV, formatDate } from "./utils";
 import { mono, body } from "./constants";
+import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 const WINDOWS = [
@@ -50,10 +51,14 @@ export default function UpcomingMilestones() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const windowEnd = new Date(today.getTime() + Number(windowDays) * 86400000);
+    // A milestone is a leaf marker; exclude any that has become a parent so a
+    // rolled-up summary never masquerades as a milestone on this list.
+    const parentIds = buildParentIdSet(tasks);
     return tasks
       .filter(
         (t) =>
           t.task_type === "Milestone" &&
+          !isSummaryTask(t, parentIds) &&
           t.start_date &&
           new Date(t.start_date) >= today &&
           new Date(t.start_date) <= windowEnd
