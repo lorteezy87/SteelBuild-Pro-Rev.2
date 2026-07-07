@@ -22,6 +22,7 @@ import MultiSelectChips from '@/components/shared/MultiSelectChips';
 import { logActivity } from '@/services/auditLogger';
 import DateOrTbdInput from './DateOrTbdInput';
 import { validReparentTargets } from '@/lib/schedule/hierarchy';
+import { isSummaryTask, buildParentIdSet } from '@/lib/schedule/summaryTasks';
 
 // Coerce JSONB values that may come back from Postgres as strings or null.
 // Mirrors the helper in DailyLogForm — the entity wrapper also normalises,
@@ -289,6 +290,14 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
   if (!open || !task) return null;
 
   const isDetailing = usesStageDates(formData);
+
+  // Summary/parent tasks have their start_date/end_date DERIVED from children by
+  // the DB rollup trigger — any value typed here is overwritten on the next
+  // child change. Detect via the canonical predicate (row flags OR appearing as
+  // another task's parent_task_id across allTasks) and render the date/duration
+  // controls read-only so users aren't misled into editing a derived field.
+  const summaryParentIds = buildParentIdSet(allTasks);
+  const isSummary = isSummaryTask(task, summaryParentIds);
 
   const handleSave = () => {
     if (!onUpdate) return;
@@ -639,48 +648,67 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                   derivedEnd={formData.end_date}
                 />
               ) : (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 120px',
-                  gap: 12,
-                }}>
-                  <div>
-                    <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Start Date</label>
-                    <DateOrTbdInput
-                      value={formData.start_date}
-                      onChange={(v) => setFormData({ ...formData, start_date: v })}
-                      inputStyle={{
-                        width: '100%',
-                        ...drawerControlStyle,
-                      }}
-                    />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 120px',
+                    gap: 12,
+                  }}>
+                    <div>
+                      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Start Date</label>
+                      <DateOrTbdInput
+                        value={formData.start_date}
+                        onChange={(v) => setFormData({ ...formData, start_date: v })}
+                        disabled={isSummary}
+                        inputStyle={{
+                          width: '100%',
+                          ...drawerControlStyle,
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>End Date</label>
+                      <DateOrTbdInput
+                        value={formData.end_date}
+                        onChange={(v) => setFormData({ ...formData, end_date: v })}
+                        disabled={isSummary}
+                        inputStyle={{
+                          width: '100%',
+                          ...drawerControlStyle,
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Duration (days)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={duration}
+                        onChange={(e) => handleDurationChange(e.target.value)}
+                        readOnly={isSummary}
+                        disabled={isSummary}
+                        placeholder="—"
+                        title={isSummary ? 'Derived from children — not editable' : 'Edit duration to auto-shift the end date'}
+                        style={{
+                          ...drawerControlStyle,
+                          width: '100%',
+                          ...(isSummary ? { opacity: 0.55, cursor: 'not-allowed', background: 'rgba(255,255,255,0.035)', color: drawerMutedText } : {}),
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>End Date</label>
-                    <DateOrTbdInput
-                      value={formData.end_date}
-                      onChange={(v) => setFormData({ ...formData, end_date: v })}
-                      inputStyle={{
-                        width: '100%',
-                        ...drawerControlStyle,
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Duration (days)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={duration}
-                      onChange={(e) => handleDurationChange(e.target.value)}
-                      placeholder="—"
-                      title="Edit duration to auto-shift the end date"
-                      style={{
-                        ...drawerControlStyle,
-                        width: '100%',
-                      }}
-                    />
-                  </div>
+                  {isSummary && (
+                    <div style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.04em',
+                      color: drawerMutedText, lineHeight: 1.4,
+                      padding: '6px 8px',
+                      background: 'rgba(255,255,255,0.025)',
+                      border: `1px dashed ${drawerMutedBorder}`,
+                      borderRadius: 2,
+                    }}>
+                      Summary task — dates roll up from child tasks (earliest start, latest finish) and can't be edited directly.
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -10,6 +10,7 @@
  */
 
 import { riskScore } from "@/pages/rfis/rfiControlCenter.derive";
+import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
 
 // ── Source record shapes (subset of entity fields we actually read) ────────
 
@@ -407,7 +408,13 @@ function urgencyOrder(u: ActionItem["urgency"]): number {
 
 function deriveScheduleHealth(tasks: ScheduleTaskSource[]): { label: string; tone: PanelTone } {
   if (tasks.length === 0) return { label: "No Data", tone: "neutral" };
-  const activeTasks = tasks.filter((t) => t.status !== "Complete" && t.status !== "Cancelled");
+  // Exclude summary/parent rows from the at-risk ratio: their rolled-up dates
+  // merely span their children, so a late child already counts. Including the
+  // parent double-counts and skews the Behind/At Risk badge.
+  const parentIds = buildParentIdSet(tasks);
+  const leafTasks = tasks.filter((t) => !isSummaryTask(t, parentIds));
+  if (leafTasks.length === 0) return { label: "On Track", tone: "good" };
+  const activeTasks = leafTasks.filter((t) => t.status !== "Complete" && t.status !== "Cancelled");
   if (activeTasks.length === 0) return { label: "On Track", tone: "good" };
   const delayed = activeTasks.filter((t) => t.status === "Delayed").length;
   const overdueTasks = activeTasks.filter((t) => {

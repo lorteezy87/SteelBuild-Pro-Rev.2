@@ -111,6 +111,23 @@ describe("tasksForToday", () => {
     expect(tasksForToday(null, TODAY)).toEqual([]);
     expect(tasksForToday(undefined, TODAY)).toEqual([]);
   });
+
+  it("excludes summary/parent tasks — a foreman acts on leaf work only", () => {
+    const withSummaries = [
+      // Flagged summary parent, overdue — must be dropped.
+      { id: "sum", task_name: "Erection (phase)", is_summary: true, end_date: ago(2) },
+      // Unflagged parent detected by linkage (has a child) — must be dropped.
+      { id: "parent", task_name: "Bay A", end_date: ago(2) },
+      // The real leaf work items — kept.
+      { id: "child", task_name: "Set column A-1", parent_task_id: "parent", end_date: ago(2) },
+      { id: "solo", task_name: "Weld splice", end_date: ago(1) },
+    ];
+    const ids = tasksForToday(withSummaries, TODAY).map((t) => t.id);
+    expect(ids).toContain("child");
+    expect(ids).toContain("solo");
+    expect(ids).not.toContain("sum");
+    expect(ids).not.toContain("parent");
+  });
 });
 
 describe("display helpers", () => {

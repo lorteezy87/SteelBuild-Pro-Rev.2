@@ -149,4 +149,36 @@ describe("feedAggregator effective-date overlay", () => {
     expect(p2B.start_date).toBe(addDays(TODAY, -3));
     expect(p2B._shifted).toBe(false);
   });
+
+  it("excludes summary/parent tasks from the feed (no overdue double-count)", () => {
+    // A summary parent + its late leaf child. Only the leaf should emit a feed
+    // item; the parent (whose end_date merely spans the child) must be dropped
+    // so the Command Center overdue/due-soon windows don't double-count.
+    const parent = {
+      id: "sum-1",
+      project_id: "proj-1",
+      task_name: "Fabrication (phase)",
+      start_date: addDays(TODAY, -20),
+      end_date:   addDays(TODAY, -2), // overdue
+      status: "In Progress",
+      is_summary: true,
+      dependencies: null,
+    };
+    const child = {
+      id: "leaf-1",
+      project_id: "proj-1",
+      task_name: "Fab beam B-12",
+      start_date: addDays(TODAY, -20),
+      end_date:   addDays(TODAY, -2), // overdue
+      status: "In Progress",
+      parent_task_id: "sum-1",
+      dependencies: null,
+    };
+
+    const feed = buildFeed({ scheduleTasks: [parent, child] });
+    const taskItems = feed.filter((f) => f.itemType === "TASK");
+    const ids = taskItems.map((f) => f.sourceId);
+    expect(ids).toContain("leaf-1");
+    expect(ids).not.toContain("sum-1");
+  });
 });

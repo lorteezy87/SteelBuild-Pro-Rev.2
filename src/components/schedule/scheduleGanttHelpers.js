@@ -10,6 +10,7 @@
 import { parseDateUTC, toDateOnly } from "./scheduleDateUtils";
 import { displayPct, isMilestoneTask } from "./scheduleTaskUtils";
 import { parseDeps } from "./scheduleDependencies";
+import { isSummaryTask as isSummaryTaskCanonical } from "@/lib/schedule/summaryTasks";
 
 export function addDaysUTC(date, days) {
   const next = new Date(date);
@@ -142,8 +143,13 @@ export function isOpenScheduleTask(task) {
   return !["complete", "completed", "closed", "cancelled", "canceled"].some((closed) => status.includes(closed));
 }
 
+// Row-level summary check (flag-based). Delegates to the canonical predicate so
+// the "is this a parent/summary row?" logic lives in exactly one place. The
+// Gantt already enriches rows with _hasChildren/_isRolledUpSummary, so the
+// single-arg (flag-only) form is sufficient here; surfaces that lack that
+// enrichment pass a parentIds set to the canonical helper directly.
 export function isSummaryScheduleTask(task) {
-  return Boolean(task?._hasChildren || task?._isRolledUpSummary || task?.is_summary);
+  return isSummaryTaskCanonical(task);
 }
 
 export function isActionableScheduleTask(task) {

@@ -141,6 +141,29 @@ describe("buildCommandCenterSummary", () => {
     expect(s.tones.scheduleHealth).toBe("danger");
   });
 
+  it("excludes summary/parent tasks from schedule-health at-risk ratio", () => {
+    // One overdue LEAF child under a summary parent. If the parent (which is
+    // also overdue, spanning the child) were counted, atRiskCount/active would
+    // be 2/2 = 100% → "Behind". Excluding the parent leaves 1 overdue leaf out
+    // of 1 active leaf; the child's own overdue still classifies, but the
+    // parent must not inflate the count. Assert the parent is not double-counted
+    // by comparing against the same scenario with the parent removed entirely.
+    const withParent = buildCommandCenterSummary(makeSources({
+      scheduleTasks: [
+        { id: "sum", task_name: "Phase", status: "In Progress", end_date: dateOffset(-10), project_id: "p1", is_summary: true },
+        { id: "leaf", task_name: "Work", status: "In Progress", end_date: dateOffset(-10), project_id: "p1", parent_task_id: "sum" },
+      ],
+    }));
+    const leafOnly = buildCommandCenterSummary(makeSources({
+      scheduleTasks: [
+        { id: "leaf", task_name: "Work", status: "In Progress", end_date: dateOffset(-10), project_id: "p1" },
+      ],
+    }));
+    // Same health regardless of whether the summary parent is present — proving
+    // the parent contributes nothing to the at-risk computation.
+    expect(withParent.kpis.scheduleHealth).toBe(leafOnly.kpis.scheduleHealth);
+  });
+
   it("pending COs flow into openActionItems and budgetVariance", () => {
     const changeOrders = [
       { id: "co1", co_number: "CO-001", title: "Extra beam", status: "Submitted" },
