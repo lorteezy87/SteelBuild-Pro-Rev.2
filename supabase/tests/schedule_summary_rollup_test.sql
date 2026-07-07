@@ -1,6 +1,6 @@
 -- ============================================================================
 -- SQL-level test for the schedule summary-rollup trigger
--- (migration 20260706000000_schedule_summary_rollup.sql)
+-- (migration 20260707061933_schedule_summary_rollup.sql)
 -- ============================================================================
 --
 -- Run against a NON-PROD branch database (never prod). Wrapped in a single
