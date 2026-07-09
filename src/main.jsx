@@ -1,6 +1,7 @@
 // Sentry must initialise before any other app code — keep this import FIRST.
 import './instrument'
 
+import { Capacitor } from '@capacitor/core'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
@@ -50,3 +51,12 @@ if (typeof window !== 'undefined') {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <App />
 )
+
+// Native (Capacitor iOS) bootstrap. No-op on web: the module and its native
+// plugin dependencies are only fetched when running inside the native shell, so
+// the browser bundle and the test runner are entirely unaffected.
+if (Capacitor.isNativePlatform()) {
+  import('@/lib/native/capacitor')
+    .then((m) => m.initNativePlatform())
+    .catch((err) => logError(err, { source: 'native-bootstrap' }))
+}

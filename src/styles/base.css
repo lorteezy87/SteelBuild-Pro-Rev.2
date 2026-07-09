@@ -19,6 +19,39 @@ html, body, #root {
   min-height: 100vh;
 }
 
+/* ── Safe-area insets (notch / home indicator) ──
+   The variables are always available so any component can opt into them. The
+   padding rules below activate ONLY in the installed PWA (display-mode:
+   standalone) or the native Capacitor shell (html.capacitor-native) — a normal
+   browser tab is never affected, because env(safe-area-inset-*) resolves to 0
+   without viewport-fit=cover on a notched device, and both selectors are false
+   in-tab. */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+}
+
+/* The installed iOS PWA uses a translucent status bar (see the
+   apple-mobile-web-app-status-bar-style meta in index.html), so the app must
+   clear the top inset itself. */
+@media (display-mode: standalone) {
+  #root {
+    padding-top: var(--safe-area-inset-top);
+    padding-bottom: var(--safe-area-inset-bottom);
+  }
+}
+
+/* The native shell insets the webview below the status bar automatically
+   (StatusBar.overlaysWebView = false), so only the home-indicator area at the
+   bottom needs padding. Higher specificity than the standalone rule above, so
+   it wins inside the native app. */
+html.capacitor-native #root {
+  padding-top: 0;
+  padding-bottom: var(--safe-area-inset-bottom);
+}
+
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: 700;
