@@ -87,13 +87,27 @@ export default function FieldHub() {
     enabled: !!commandUi,
   });
 
+  // Key must match the cacheRegistry `punchlist` primary (["punchlist", pid]).
+  // It was ["punchlist-items", pid], which no invalidation ever touched, so
+  // the hub feed went stale the moment anyone edited an item in the register.
   const { data: rawPunchlist = [] } = useQuery({
-    queryKey: ["punchlist-items", projectId],
+    queryKey: ["punchlist", projectId],
     queryFn: () =>
       projectId
         ? entities.PunchlistItem.filter({ project_id: projectId })
         : entities.PunchlistItem.list(),
     enabled: !!commandUi,
+  });
+
+  // Daily logs reference schedule tasks (daily_logs.schedule_task_ids), and
+  // schedule_tasks is the only field-adjacent table with a real `phase`
+  // column — so it's how a log gets a phase we can actually stand behind.
+  const { data: scheduleTasks = [] } = useQuery({
+    queryKey: ["schedule-tasks", projectId],
+    queryFn: () =>
+      projectId ? entities.ScheduleTask.filter({ project_id: projectId }) : [],
+    enabled: !!commandUi && !!projectId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: projects = [] } = useQuery({
@@ -117,6 +131,7 @@ export default function FieldHub() {
   // ── command_ui filter state ────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
+  const [phaseFilter, setPhaseFilter] = useState("All");
 
   // ── Tab state ──────────────────────────────────────────────────────────────
   // command_ui prepends a "Command Center" tab (the Control Center) and lands
@@ -165,10 +180,13 @@ export default function FieldHub() {
       inspections={inspections}
       incidents={incidents}
       punchlistItems={punchlistItems}
+      scheduleTasks={scheduleTasks}
       search={search}
       onSearch={setSearch}
       typeFilter={typeFilter}
       onTypeFilterChange={setTypeFilter}
+      phaseFilter={phaseFilter}
+      onPhaseFilterChange={setPhaseFilter}
       onLogActivity={
         can("create", "dailyLog")
           ? () =>

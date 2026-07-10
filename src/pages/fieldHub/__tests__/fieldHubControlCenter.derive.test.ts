@@ -129,3 +129,67 @@ describe("buildFieldHubSummary", () => {
     expect(empty.coordinationQueue.length).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase identification on activity rows
+// ---------------------------------------------------------------------------
+describe("buildFieldHubSummary — activity phase", () => {
+  const tasks = [
+    { id: "t-fab", phase: "Fabrication" },
+    { id: "t-erect", phase: "Installation" },
+  ];
+
+  function rowsFor(args: Parameters<typeof buildFieldHubSummary>) {
+    return buildFieldHubSummary(...args).activityRows;
+  }
+
+  it("reads a daily log's phase from its linked schedule tasks", () => {
+    const rows = rowsFor([
+      [{ id: "l1", date: "2026-06-01", schedule_task_ids: ["t-fab"], activities: "misc" }],
+      [], [], [], tasks,
+    ]);
+    expect(rows[0].phase).toBe("Fabrication");
+    expect(rows[0].phaseSource).toBe("linked");
+  });
+
+  it("canonicalizes a linked Installation phase to Erection", () => {
+    const rows = rowsFor([
+      [{ id: "l1", date: "2026-06-01", schedule_task_ids: ["t-erect"] }],
+      [], [], [], tasks,
+    ]);
+    expect(rows[0].phase).toBe("Erection");
+  });
+
+  it("derives a punchlist item's phase from its description, flagged as a guess", () => {
+    const rows = rowsFor([[], [], [], [{ id: "p1", description: "Touch up galvanizing" }], []]);
+    expect(rows[0].phase).toBe("Fabrication");
+    expect(rows[0].phaseSource).toBe("derived");
+  });
+
+  it("derives an inspection's phase from inspection_type", () => {
+    const rows = rowsFor([[], [{ id: "i1", inspection_type: "Field Bolt-Up" }], [], [], []]);
+    expect(rows[0].phase).toBe("Erection");
+    expect(rows[0].phaseSource).toBe("derived");
+  });
+
+  it("prefers a stored phase column over any derivation", () => {
+    const rows = rowsFor([[], [], [], [{ id: "p1", description: "erect beams", phase: "Closeout" }], []]);
+    expect(rows[0].phase).toBe("Closeout");
+    expect(rows[0].phaseSource).toBe("stored");
+  });
+
+  it("leaves phase null rather than guessing on a record with no text", () => {
+    const rows = rowsFor([[], [], [{ id: "s1" }], [], []]);
+    expect(rows[0].phase).toBeNull();
+  });
+
+  it("works when scheduleTasks is omitted entirely", () => {
+    const rows = rowsFor([
+      [{ id: "l1", date: "2026-06-01", schedule_task_ids: ["t-fab"], activities: "shop weld" }],
+      [], [], [],
+    ] as Parameters<typeof buildFieldHubSummary>);
+    // No task index → falls back to deriving from the log's own text.
+    expect(rows[0].phase).toBe("Fabrication");
+    expect(rows[0].phaseSource).toBe("derived");
+  });
+});

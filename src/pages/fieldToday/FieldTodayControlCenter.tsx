@@ -27,6 +27,7 @@
 
 import { useMemo, useState } from "react";
 import { useResolvedFileUrl } from "@/hooks/useResolvedFileUrl";
+import PhaseBadge from "@/components/field/PhaseBadge";
 import {
   CalendarCheck,
   Camera,
@@ -320,6 +321,11 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
       render: (r) => (
         <span style={{ fontWeight: 600 }}>{r.activity}</span>
       ),
+    },
+    {
+      key: "phase",
+      header: "Phase",
+      render: (r) => <PhaseBadge phase={r.phase} source={r.phaseSource} />,
     },
     {
       key: "location",
