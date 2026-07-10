@@ -31,6 +31,7 @@ import {
   pointsToSvgAttr,
   simplifyStroke,
 } from "./coords";
+import { formatMeasureLabel } from "./measureLabel";
 
 const ARROW_HEAD_SIZE = 10; // canvas pixels
 const NOTE_PIN_SIZE = 22;   // canvas pixels
@@ -921,28 +922,3 @@ function cursorFor(tool) {
   }
 }
 
-/**
- * Format a distance in PDF user units (points: 1/72 inch) into an engineer-
- * friendly label.
- *
- * If `scale` is provided (real_inches_per_pdf_inch — see drawings.markup_scale
- * set by the Calibrate tool), the label reads as real-world feet-inches.
- * Without it, falls back to raw page-inches + a ~ prefix so the user knows
- * they're looking at page measurements, not real dimensions.
- *
- * Number formatting rules match how PMs read dimension strings on shop
- * drawings: under 12" → decimal inches (e.g. 8.3"), 12"+ → F'-I.I" format
- * (e.g. 14'-6.2"). No rounding beyond one decimal — users need enough
- * precision to eyeball whether a spec matches.
- */
-function formatMeasureLabel(pdfDist, scale) {
-  const pdfInches = pdfDist / 72;
-  const inches = scale ? pdfInches * scale : pdfInches;
-  const prefix = scale ? "" : "~"; // ~ means "page inches, not calibrated"
-  if (inches < 12) {
-    return `${prefix}${inches.toFixed(1)}"`;
-  }
-  const ft = Math.floor(inches / 12);
-  const rem = inches - ft * 12;
-  return `${prefix}${ft}'-${rem.toFixed(1)}"`;
-}
