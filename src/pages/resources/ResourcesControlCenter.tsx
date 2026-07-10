@@ -15,7 +15,7 @@
  * the authoritative conflict signal.
  */
 import { useMemo, useState } from "react";
-import { Users, AlertTriangle, Gauge, Wrench, HardHat } from "lucide-react";
+import { Users, AlertTriangle, Gauge, Wrench, HardHat, Pencil, Trash2 } from "lucide-react";
 import "@/styles/command.css";
 import {
   PageHero,
@@ -112,11 +112,17 @@ export interface ResourcesControlCenterProps {
   projectName?: string | null;
   /** If provided, opens the resource form. */
   onAddResource?: (() => void) | null;
+  /** If provided, opens the resource form prefilled for editing. */
+  onEditResource?: ((r: ResourceRecord) => void) | null;
+  /** If provided, prompts to delete the resource. */
+  onDeleteResource?: ((r: ResourceRecord) => void) | null;
 }
 
 export default function ResourcesControlCenter({
   projectName,
   onAddResource,
+  onEditResource,
+  onDeleteResource,
 }: ResourcesControlCenterProps) {
   useCommandSkin();
   const projectId = useProjectId();
@@ -267,6 +273,39 @@ export default function ResourcesControlCenter({
           <span className="cmd-row__meta">—</span>
         ),
     },
+    ...(onEditResource || onDeleteResource
+      ? ([{
+          key: "actions",
+          header: "",
+          align: "right",
+          render: (r: ResourceRecord) => (
+            <span style={{ display: "inline-flex", gap: 4, justifyContent: "flex-end" }}>
+              {onEditResource && (
+                <button
+                  type="button"
+                  className="cmd-icon-btn"
+                  aria-label={`Edit ${r.name || "resource"}`}
+                  title="Edit resource"
+                  onClick={(e) => { e.stopPropagation(); onEditResource(r); }}
+                >
+                  <Pencil size={13} />
+                </button>
+              )}
+              {onDeleteResource && (
+                <button
+                  type="button"
+                  className="cmd-icon-btn resources-cc__danger"
+                  aria-label={`Delete ${r.name || "resource"}`}
+                  title="Delete resource"
+                  onClick={(e) => { e.stopPropagation(); onDeleteResource(r); }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </span>
+          ),
+        }] as Column<ResourceRecord>[])
+      : []),
   ];
 
   return (
@@ -379,8 +418,30 @@ export default function ResourcesControlCenter({
       <DataTable
         columns={columns}
         rows={filtered}
+        onRowClick={onEditResource ?? undefined}
         emptyMessage="No resources match your filters."
       />
+
+      <style>{`
+        .resources-cc .cmd-icon-btn {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 26px; height: 26px; padding: 0;
+          background: transparent;
+          border: 1px solid var(--border-default);
+          border-radius: 2px;
+          color: var(--text-muted);
+          cursor: pointer;
+          transition: color 0.12s, border-color 0.12s;
+        }
+        .resources-cc .cmd-icon-btn:hover {
+          color: var(--accent);
+          border-color: var(--accent);
+        }
+        .resources-cc .cmd-icon-btn.resources-cc__danger:hover {
+          color: var(--status-error);
+          border-color: var(--danger-border);
+        }
+      `}</style>
     </div>
   );
 }
