@@ -6,20 +6,29 @@
  * panels (the DrawingSubmittalHub pattern) and changes neither page's logic.
  * Both remain independently routable for deep-links.
  *
- * command_ui flag: when enabled, renders ResourcesControlCenter instead of
- * the tab shell. The Control Center loads its own resource data (the shell
- * does not) and preserves full access to the same underlying entity.
+ * command_ui flag: when enabled, the Resource-Register tab renders
+ * ResourcesControlCenter instead of ResourceManagement. The Control Center
+ * loads its own resource data (the shell does not), so the shell owns the
+ * add/edit/delete plumbing on its behalf — otherwise a command_ui tenant has
+ * no way to edit a resource once it exists (the Crew Schedule board is
+ * create-only, and the Control Center table was read-only).
  */
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { entities } from "@/api/supabaseClient";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import DeleteDialog from "@/components/shared/DeleteDialog";
 import { useFlag } from "@/hooks/useFeatureFlag";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import ResourcesControlCenter from "@/pages/resources/ResourcesControlCenter";
 
 const ResourceRegister = lazyWithRetry(() => import("@/pages/ResourceManagement"));
 const CrewSchedule = lazyWithRetry(() => import("@/pages/ResourceScheduling"));
+const ResourceFormModal = lazyWithRetry(() => import("@/components/resources/ResourceFormModal"));
 
 const TABS = [
   { key: "register", label: "Resource Register" },
@@ -28,6 +37,8 @@ const TABS = [
 
 export default function ResourceHub() {
   const commandUi = useFlag("command_ui");
+  const qc = useQueryClient();
+  const { activeProject } = useProjectContext();
   const [params, setParams] = useSearchParams();
   const param = params.get("res_tab");
   const activeTab = TABS.some((t) => t.key === param) ? param : "register";
@@ -40,6 +51,40 @@ export default function ResourceHub() {
       },
       { replace: true },
     );
+
+  /* ── Resource CRUD, on behalf of ResourcesControlCenter ── */
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const closeForm = () => { setShowForm(false); setEditing(null); };
+
+  // ResourceFormModal.toEntity() hands us a payload already mapped to the
+  // resources table's columns, so it goes straight through.
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => entities.Resource.update(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["resources"] });
+      toast.success("Resource updated");
+      closeForm();
+    },
+    onError: (e) => toast.error("Failed to update resource: " + (e?.message || "Unknown error")),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => entities.Resource.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["resources"] });
+      toast.success("Resource deleted");
+      setDeleteTarget(null);
+    },
+    onError: (e) => toast.error("Failed to delete resource: " + (e?.message || "Unknown error")),
+  });
+
+  // The modal only calls onSave in edit mode; it owns the create mutation itself.
+  const handleSave = (data) => {
+    if (editing) updateMut.mutate({ id: editing.id, data });
+  };
 
   // command_ui: the Resource-Register tab renders the new Control Center, but the
   // tab strip stays so the Crew-Schedule grid (only reachable via this hub) isn't lost.
@@ -96,11 +141,37 @@ export default function ResourceHub() {
         <ErrorBoundary label="Resources">
           <Suspense fallback={<LoadingSkeleton variant="page" />}>
             {activeTab === "register"
-              ? (commandUi ? <ResourcesControlCenter /> : <ResourceRegister />)
+              ? (commandUi ? (
+                  <ResourcesControlCenter
+                    projectName={activeProject?.name}
+                    onAddResource={() => { setEditing(null); setShowForm(true); }}
+                    onEditResource={(r) => { setEditing(r); setShowForm(true); }}
+                    onDeleteResource={setDeleteTarget}
+                  />
+                ) : <ResourceRegister />)
               : <CrewSchedule />}
           </Suspense>
         </ErrorBoundary>
       </div>
+
+      {showForm && (
+        <Suspense fallback={null}>
+          <ResourceFormModal
+            projectId={activeProject?.id}
+            editing={editing}
+            onClose={closeForm}
+            onSave={handleSave}
+          />
+        </Suspense>
+      )}
+
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        title="Delete Resource"
+        description={`Delete "${deleteTarget?.name || "this resource"}"? Crew members assigned to it become top-level resources. This cannot be undone.`}
+      />
     </div>
   );
 }

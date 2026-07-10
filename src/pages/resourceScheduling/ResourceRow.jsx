@@ -1,4 +1,5 @@
 import React from "react";
+import { Pencil } from "lucide-react";
 import WorkPackageBar from "./WorkPackageBar";
 import { TODAY_COLOR, extractSkillsRS, getRowCapacityBg } from "./utils";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
@@ -28,6 +29,10 @@ export default function ResourceRow({
   onOpenContextMenu,
   onBarHoverEnter,
   onBarHoverLeave,
+  // Optional: opens the resource editor. The board can create resources, so
+  // it must also be able to edit them — otherwise a resource created here has
+  // no edit path without switching to the Resource Register tab.
+  onEditResource,
 }) {
   const resource = entry.resource;
   const rowAssignedWPs = scheduledWps.filter(wp => wp.crew === resource.name);
@@ -164,6 +169,29 @@ export default function ResourceRow({
             </div>
           )}
         </div>
+
+        {onEditResource && (
+          <button
+            type="button"
+            onClick={() => onEditResource(resource)}
+            aria-label={`Edit ${resource.name}`}
+            title="Edit resource"
+            style={{
+              flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 22, height: 22, padding: 0, marginLeft: 4,
+              background: "transparent",
+              border: "1px solid var(--border-default)",
+              borderRadius: 2,
+              color: "var(--text-muted)",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
+          >
+            <Pencil size={11} />
+          </button>
+        )}
       </div>
 
       {/* Timeline bars */}
