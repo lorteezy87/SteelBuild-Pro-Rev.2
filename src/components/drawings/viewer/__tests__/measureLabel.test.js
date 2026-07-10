@@ -46,4 +46,15 @@ describe("formatMeasureLabel — uncalibrated", () => {
   it("still renders large page distances as feet", () => {
     expect(formatMeasureLabel(14.5 * PT, null)).toBe(`~1'-2.5"`);
   });
+  it("treats a zero scale as uncalibrated, not as a calibrated zero", () => {
+    expect(formatMeasureLabel(1 * PT, 0)).toBe('~1.0"');
+  });
+  it("treats a non-numeric scale as uncalibrated", () => {
+    expect(formatMeasureLabel(1 * PT, "0")).toBe('~1.0"');
+    expect(formatMeasureLabel(1 * PT, NaN)).toBe('~1.0"');
+  });
+  it("rolls over correctly well past the first foot", () => {
+    // 143.96 page inches → rounds to 144.0 → 12'-0.0"
+    expect(formatMeasureLabel(143.96 * PT, null)).toBe(`~12'-0.0"`);
+  });
 });
