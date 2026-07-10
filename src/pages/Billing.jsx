@@ -20,6 +20,7 @@ import { PLANS } from "@/lib/billing/plans";
 import { startCheckout, openBillingPortal } from "@/lib/billing/billingService";
 import { CommandBar } from "@/components/design-system";
 import { useFlag } from "@/hooks/useFeatureFlag";
+import { isNativePlatform } from "@/lib/native/platform";
 import BillingControlCenter from "./billing/BillingControlCenter";
 import { listOrgMembers, listInvitations } from "@/lib/org/repository";
 import { entities } from "@/api/supabaseClient";
@@ -30,6 +31,9 @@ export default function Billing() {
   const [busy, setBusy] = useState(null);
   const canManage = currentRole === "owner" || currentRole === "admin";
   const commandUi = useFlag("command_ui");
+  // Native (App Store) build is sign-in only: no in-app purchase/checkout/portal
+  // UI. Plans are managed on the web. Keep the read-only current-plan display.
+  const native = isNativePlatform();
   const orgId = currentOrg?.id;
 
   // Returning from Checkout — the webhook flips the plan async, so refetch.
@@ -120,20 +124,29 @@ export default function Billing() {
             <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Renews {String(currentOrg.current_period_end).slice(0, 10)}</div>
           )}
         </div>
-        {canManage && currentOrg?.stripe_customer_id && (
+        {canManage && currentOrg?.stripe_customer_id && !native && (
           <button className="sbd-btn sbd-btn-ghost" onClick={manage} disabled={busy === "portal"}>
             <CreditCard size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />{busy === "portal" ? "Opening…" : "Manage billing"} <ExternalLink size={12} style={{ verticalAlign: "-1px", marginLeft: 4 }} />
           </button>
         )}
       </div>
 
-      {!canManage && (
+      {!canManage && !native && (
         <div className="sbd-card" style={{ padding: 14, color: "var(--text-muted)", fontSize: 13 }}>
           Only a workspace owner or admin can change the plan.
         </div>
       )}
 
-      {/* Plan cards */}
+      {/* Plan cards + checkout — hidden in the native (sign-in-only) build; the
+          App Store app doesn't sell subscriptions, they're managed on the web. */}
+      {native ? (
+        <div className="sbd-card" style={{ padding: 16, color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.55 }}>
+          Your subscription is managed on the web. Sign in at{" "}
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>steelbuild-pro.com</span>{" "}
+          to view plans or change your subscription.
+        </div>
+      ) : (
+      <>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
         {PLANS.map((p) => {
           const current = p.key === planKey;
@@ -179,6 +192,8 @@ export default function Billing() {
       <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
         Secure payments by Stripe. Cancel anytime from Manage billing.
       </div>
+      </>
+      )}
     </>
   );
 

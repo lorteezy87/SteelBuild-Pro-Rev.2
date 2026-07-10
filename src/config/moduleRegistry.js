@@ -12,6 +12,20 @@
  * Breadcrumbs, and BellDropdown.
  */
 
+import { isNativePlatform } from "@/lib/native/platform";
+
+// The native iOS build is sign-in only: the billing/subscription surface is
+// stripped from the nav menus (App Store Guideline 3.1.x — accounts and plans
+// are managed on the web). The route itself still resolves, so deep links and
+// the read-only Billing page keep working; only the menu entries are hidden.
+const NATIVE_HIDDEN_PAGES = new Set(["Billing"]);
+function hideNativePages(groups) {
+  if (!isNativePlatform()) return groups;
+  return groups
+    .map((g) => ({ ...g, items: (g.items || []).filter((it) => !NATIVE_HIDDEN_PAGES.has(it.page)) }))
+    .filter((g) => (g.items || []).length > 0);
+}
+
 // ── Tab definitions ──────────────────────────────────────────────────
 export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
@@ -111,7 +125,7 @@ export const ALL_MODULES = [
 ];
 
 // ── Modules dropdown nav groups (3-column layout) ────────────────────
-export const NAV_GROUPS = [
+export const NAV_GROUPS = hideNativePages([
   {
     label: "OVERVIEW",
     items: [
@@ -196,7 +210,7 @@ export const NAV_GROUPS = [
       { label: "Calculators", icon: "🧮", page: "CalculatorsHub" },
     ],
   },
-];
+]);
 
 // Column assignment for the 3-column modules dropdown
 const COLUMN_1_GROUPS = ["OVERVIEW", "PROJECTS", "DETAILING", "PROJECT MANAGEMENT"];
@@ -210,7 +224,7 @@ export function getDropdownColumn(groupLabel) {
 }
 
 // ── Sidebar groups (desktop + mobile drawer) ─────────────────────────
-export const SIDEBAR_GROUPS = [
+export const SIDEBAR_GROUPS = hideNativePages([
   {
     label: "OVERVIEW",
     collapsible: false,
@@ -306,7 +320,7 @@ export const SIDEBAR_GROUPS = [
       { label: "Calculators",                  icon: "🧮", page: "CalculatorsHub" },
     ],
   },
-];
+]);
 
 // ── Page display labels (built from ALL_MODULES + overrides) ─────────
 export const PAGE_LABELS = (() => {

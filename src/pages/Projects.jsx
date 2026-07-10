@@ -14,6 +14,7 @@ import { formatLocalDate } from "@/utils/dates";
 import { useNavigate } from "react-router-dom";
 import { usePlan } from "@/hooks/usePlan";
 import { withinLimit } from "@/lib/billing/plans";
+import { isNativePlatform } from "@/lib/native/platform";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import ProjectsControlCenter from "./projects/ProjectsControlCenter";
 
@@ -602,6 +603,9 @@ export default function Projects() {
   const projectLimit = plan.limits.projects;
   const atProjectLimit = !withinLimit(projectLimit, projects.length);
   const commandUi = useFlag("command_ui");
+  // Sign-in-only native build: at the project limit, inform the user but don't
+  // steer them to the (web-only) billing/upgrade surface.
+  const native = isNativePlatform();
 
   /* ── Mutations ── */
   const createMut = useMutation({
@@ -758,13 +762,17 @@ export default function Projects() {
           <button
             onClick={() => {
               if (atProjectLimit) {
-                toast.error(`Your ${plan.name} plan includes ${projectLimit} project${projectLimit === 1 ? "" : "s"}. Upgrade to add more.`);
-                navigate("/Billing");
+                toast.error(
+                  native
+                    ? `Your ${plan.name} plan includes ${projectLimit} project${projectLimit === 1 ? "" : "s"}.`
+                    : `Your ${plan.name} plan includes ${projectLimit} project${projectLimit === 1 ? "" : "s"}. Upgrade to add more.`,
+                );
+                if (!native) navigate("/Billing");
                 return;
               }
               setEditing(null); setModalOpen(true);
             }}
-            title={atProjectLimit ? `${plan.name} plan limit reached — upgrade for more projects` : "Create a new project"}
+            title={atProjectLimit ? (native ? `${plan.name} plan limit reached` : `${plan.name} plan limit reached — upgrade for more projects`) : "Create a new project"}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
             style={{

@@ -18,6 +18,7 @@ import { useOrg } from "@/components/shared/OrgContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { usePlan } from "@/hooks/usePlan";
 import { seatCapacity } from "@/lib/billing/plans";
+import { isNativePlatform } from "@/lib/native/platform";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import {
@@ -59,6 +60,9 @@ export default function OrgMembers() {
   // server enforces at accept time). Enterprise/Business = unlimited (null).
   const { plan } = usePlan();
   const navigate = useNavigate();
+  // Sign-in-only native build: hide the "Upgrade" (→ billing) upsells; plans are
+  // managed on the web. The seat/plan-limit messages themselves still show.
+  const native = isNativePlatform();
   const memberLimit = plan.limits.members;
   const cap = seatCapacity(members.length, invites.length, memberLimit);
   const atMemberLimit = cap.atLimit;
@@ -249,7 +253,7 @@ export default function OrgMembers() {
       <CommandBar eyebrow={currentOrg?.name || "Workspace"} title="Team" count={members.length} unit=" members" subtitle="Invite teammates and manage who can access this workspace" />
 
       {!(loadingMembers || loadingInvites) && (
-        <CapacityMeter cap={cap} planName={plan.name} canManage={canManage} onUpgrade={() => navigate("/Billing")} />
+        <CapacityMeter cap={cap} planName={plan.name} canManage={canManage} onUpgrade={native ? undefined : () => navigate("/Billing")} />
       )}
 
       {canManage && staged.length > 0 && (
@@ -283,8 +287,8 @@ export default function OrgMembers() {
           </div>
           {!cap.unlimited && staged.length > seatsLeft && (
             <div style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
-              Only {seatsLeft} seat{seatsLeft === 1 ? "" : "s"} left on {plan.name} — extra invites will be rejected. Remove some or{" "}
-              <button type="button" onClick={() => navigate("/Billing")} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>upgrade</button>.
+              Only {seatsLeft} seat{seatsLeft === 1 ? "" : "s"} left on {plan.name} — extra invites will be rejected. Remove some{native ? "." : (<>{" "}or{" "}
+              <button type="button" onClick={() => navigate("/Billing")} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>upgrade</button>.</>)}
             </div>
           )}
         </div>
@@ -310,8 +314,8 @@ export default function OrgMembers() {
           </form>
           {atMemberLimit ? (
             <div style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
-              {plan.name} plan limit reached ({memberLimit} member{memberLimit === 1 ? "" : "s"}).{" "}
-              <button type="button" onClick={() => navigate("/Billing")} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>Upgrade</button> to invite more.
+              {plan.name} plan limit reached ({memberLimit} member{memberLimit === 1 ? "" : "s"}).{native ? "" : (<>{" "}
+              <button type="button" onClick={() => navigate("/Billing")} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>Upgrade</button> to invite more.</>)}
             </div>
           ) : (
             <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
@@ -415,7 +419,7 @@ function CapacityMeter({ cap, planName, canManage, onUpgrade }) {
             {cap.unlimited ? ` · Unlimited on ${planName}` : ""}
           </span>
         </div>
-        {!cap.unlimited && cap.atLimit && canManage && (
+        {!cap.unlimited && cap.atLimit && canManage && onUpgrade && (
           <button type="button" onClick={onUpgrade} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11, fontWeight: 700 }}>Upgrade →</button>
         )}
       </div>

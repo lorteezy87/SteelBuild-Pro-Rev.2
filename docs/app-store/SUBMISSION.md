@@ -124,7 +124,7 @@ must serve the bundled offline assets, not a dev URL.
 | **2.1 Completeness** | Reviewer can actually use the app | **Action:** create a demo login with seeded data; put it in App Review Information. |
 | **4.2 Minimum functionality** | Not "just a repackaged website" | **Handled:** native camera capture, haptics, share sheet, native status bar/splash, offline-capable bundled assets. Keep leaning on native capabilities. |
 | **5.1.1(v) Account deletion** | Any user who can create an account can delete it **in-app** | ✅ **Implemented — see §6.1** (self-service "Delete my account" in Settings → Profile). Needs staging deploy + test before submission. |
-| **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ⚠️ **DECISION — see §6.2.** Recommended: iOS app is sign-in-only; sell/renew subscriptions on the web. |
+| **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ✅ **Sign-in-only — see §6.2.** The native build hides all in-app purchase UI (plans, checkout, portal, upgrade upsells); subscriptions are managed on the web. |
 | **5.1.1 / 5.1.2 Data & privacy** | Privacy policy linked; data use disclosed | **Handled:** legal pages exist; link them and complete nutrition labels. |
 | **4.8 / 5.1.1 Sign in with Apple** | If you offer a third-party social login (e.g. Google), you must also offer Sign in with Apple (with narrow exceptions) | **Check:** if only email/password is offered, this does not apply. Confirm the auth methods enabled in Supabase. |
 | **2.3 Accurate metadata** | Store listing matches the app | Keep marketing copy truthful; no hidden/unfinished features. |
@@ -154,16 +154,31 @@ Self-service account deletion now ships in the app:
    `account_deletions` audit row (that table is org-scoped). Add a dedicated
    account-deletion audit if your compliance program requires one.
 
-### 6.2 In-app purchase decision
+### 6.2 In-app purchase — ✅ sign-in-only (decided + implemented)
 
-The app already integrates Stripe (`supabase/functions/stripe-billing`). Apple's
-rules: digital subscriptions **used inside the app** typically must go through
-Apple IAP (30/15% fee). The common compliant pattern for B2B SaaS is:
-- the **iOS app is sign-in only** — no plan purchase/upgrade UI in the app;
-- accounts and billing are created/managed on the **web**.
+Decision: the iOS app is **sign-in only**. Accounts and subscriptions are
+created and managed on the **web** (existing Stripe flow); the native build
+carries no in-app purchase surface, so Apple IAP is not required and there's no
+15–30% cut. This is gated at runtime via `isNativePlatform()`
+(`src/lib/native/platform.ts`), so the web app is completely unchanged:
 
-Decide this with product/legal. If any purchase/upgrade UI ships in the iOS
-build, plan for StoreKit IAP and the review scrutiny that comes with it.
+- `src/pages/Billing.jsx` — plan cards (Stripe Checkout) and the "Manage
+  billing" (Stripe portal) button are hidden natively; a read-only current-plan
+  view + "managed on the web" note render instead.
+- `src/config/moduleRegistry.js` — the **Billing** nav entry is stripped from
+  the menus natively (the route still resolves for the read-only page).
+- Plan-limit **"Upgrade"** upsells are hidden natively (the limit messages still
+  show): `OrgMembers.jsx`, `team/TeamControlCenter.tsx`, `Projects.jsx`.
+
+**Adding IAP later** is a clean, additive change (see the discussion on
+migration direction): you'd add StoreKit as an option without stranding anyone.
+The reverse (starting with IAP, moving to web) is the messy direction because
+Apple-billed subscribers can't be migrated to Stripe. Starting sign-in-only
+keeps both doors open.
+
+**Reviewer note:** because purchase happens on the web, give App Review a
+**demo account that already has a usable plan** so they can exercise the app
+without needing to sign up or pay (Guideline 2.1).
 
 ### 6.3 Other
 

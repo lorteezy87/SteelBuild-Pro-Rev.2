@@ -16,6 +16,7 @@
 
 import { useMemo } from "react";
 import { Users, Mail, Link2, X, Shield, UserPlus } from "lucide-react";
+import { isNativePlatform } from "@/lib/native/platform";
 import "@/styles/command.css";
 import {
   PageHero, KpiStrip, DecisionPanel, Pill, FilterBar, DataTable, useCommandSkin,
@@ -130,6 +131,10 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
     onChangeRole, onRemove, onRevoke, onCopyLink, onNavigateToBilling,
     onSendStaged, onSetStagedRole, onRemoveStaged, onDismissStaged,
   } = props;
+
+  // Sign-in-only native build: hide the "Upgrade" (→ billing) upsells; the
+  // limit messages themselves still show. Plans are managed on the web.
+  const native = isNativePlatform();
 
   useCommandSkin();
 
@@ -294,8 +299,8 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
           <SeatBar pct={seatsPct} atLimit={seatsAtLimit} near={seatsNear} unlimited={false} />
           {seatsAtLimit && canManage && (
             <div style={{ ...mono, fontSize: 11, color: "var(--status-error)", marginTop: 4, display: "flex", gap: 6, alignItems: "center" }}>
-              {planName} seat limit reached ({seatsLimit}).{" "}
-              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11 }}>Upgrade</button>
+              {planName} seat limit reached ({seatsLimit}).{!native && (<>{" "}
+              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11 }}>Upgrade</button></>)}
             </div>
           )}
         </div>
@@ -415,8 +420,8 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
           </div>
           {seatsLimit != null && staged.length > seatsLeft && (
             <div style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
-              Only {seatsLeft} seat{seatsLeft === 1 ? "" : "s"} left on {planName}.{" "}
-              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11 }}>Upgrade</button>
+              Only {seatsLeft} seat{seatsLeft === 1 ? "" : "s"} left on {planName}.{!native && (<>{" "}
+              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11 }}>Upgrade</button></>)}
             </div>
           )}
         </div>
@@ -463,8 +468,8 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
           </form>
           {atMemberLimit ? (
             <div style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
-              {planName} plan limit reached.{" "}
-              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11 }}>Upgrade</button>
+              {planName} plan limit reached.{!native && (<>{" "}
+              <button type="button" onClick={onNavigateToBilling} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11 }}>Upgrade</button></>)}
             </div>
           ) : (
             <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
