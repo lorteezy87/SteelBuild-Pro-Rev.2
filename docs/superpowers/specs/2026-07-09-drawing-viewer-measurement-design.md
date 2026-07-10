@@ -324,11 +324,34 @@ shares no code with the above beyond the viewer shell.
   y-up bottom-left. The round-trip is self-consistent — confirm no consumer
   relies on the top-left reading before doing y-math.
 
+## Resolved (owner, 2026-07-10)
+
+**Scale detection runs any time a drawing is being viewed — not canvas-only.**
+Two parts, because they cost very different things:
+
+- *The badge* needs no PDF at all. It reads `markup_scale` / `scale_status` off
+  the `drawings` row. Change `ViewerToolbar.jsx:139`'s `{pdfDoc && …}` gate to
+  key on the drawing, so iframe mode shows the same `Ambiguous ⚠` / `No Scale`
+  state as canvas mode.
+- *Detection* needs the parsed document. `usePdfLoader.js:61` today refuses to
+  load it unless `renderMode === 'canvas'`. Load it in iframe mode too, but
+  **only when the drawing is unresolved** (`markup_scale IS NULL AND scale_status
+  IS NULL`) — detection persists, so it is a once-per-drawing cost, not a
+  once-per-view one. Failures must stay silent: iframe mode is often reached
+  *because* pdfjs could not load that file (`DrawingViewer.jsx:708–718` offers
+  "Switch to browser PDF" after a `pdfError`), and a detection failure must
+  never surface an error over a document the browser is rendering fine.
+
+**Save failures escalate to a toast.** Today a rejected write rolls back the
+optimistic mark and shows only `⚠ SAVE FAILED` in a collapsible toolbar
+(`useMarkup.js:110–124`, `AnnotationToolbar.jsx:266–267`). With the toolbar
+collapsed the user just watches their markup vanish — which is exactly how the
+CHECK-constraint bug went unreported for a month. Surface it.
+
+**`scale_status` keeps provenance:** `undetected | ambiguous | auto | manual`.
+Already applied in migration `20260710070047`. `auto` vs `manual` is what lets
+the on-load effect leave a hand-calibration alone forever.
+
 ## Open questions
 
-- Should scale detection run in iframe render mode? Today the whole scale group
-  is canvas-only (`ViewerToolbar.jsx:139`).
-- Escalate persistent save failures to a toast, rather than the collapsible
-  `⚠ SAVE FAILED`?
-- Final `scale_status` enum — is `auto` vs `manual` provenance worth carrying,
-  or is `ambiguous` vs `undetected` sufficient?
+None outstanding.

@@ -1360,6 +1360,221 @@ scale_status='manual', which stops auto-detect from ever overwriting it."
 
 ---
 
+## Task 6A: Escalate save failures to a toast
+
+Owner decision, 2026-07-10. Today a rejected write rolls back the optimistic
+mark and shows only `⚠ SAVE FAILED` in a **collapsible** toolbar
+(`useMarkup.js:110–124`, `AnnotationToolbar.jsx:266–267`). With the toolbar
+collapsed the user just watches their markup vanish — which is precisely how
+the CHECK-constraint bug survived unreported for a month.
+
+**Files:**
+- Modify: `src/components/drawings/viewer/useMarkup.js`
+
+- [ ] **Step 1: Add the toast import**
+
+`useMarkup.js` does not import `sonner` today. Add it after line 32
+(`useRealtimeInvalidation`), matching the import style already in the file:
+
+```js
+import { toast } from "sonner";
+```
+
+- [ ] **Step 2: Toast inside `trackOp`'s catch**
+
+Replace the `catch (err)` block of `trackOp` (currently lines 115–120):
+
+```js
+    } catch (err) {
+      setSaveError(err?.message || "Save failed");
+      // Refetch server truth so the optimistic cache can't drift after a
+      // rejected write (lock, RLS, network).
+      qc.invalidateQueries({ queryKey });
+      throw err;
+    } finally {
+```
+
+with:
+
+```js
+    } catch (err) {
+      const message = err?.message || "Save failed";
+      setSaveError(message);
+      // The toolbar's ⚠ SAVE FAILED is collapsible, so a rejected write could
+      // look like the mark simply vanishing. Escalate. A stable toast id means
+      // a debounced burst of failing text edits shows one toast, not twenty.
+      toast.error(
+        /DRAWING_SET_LOCKED/.test(message)
+          ? "This drawing set is locked from edits. Unlock the set to mark it up."
+          : `Markup not saved — ${message}`,
+        { id: `markup-save-failed-${drawingId}` },
+      );
+      // Refetch server truth so the optimistic cache can't drift after a
+      // rejected write (lock, RLS, network).
+      qc.invalidateQueries({ queryKey });
+      throw err;
+    } finally {
+```
+
+- [ ] **Step 3: Add `drawingId` to `trackOp`'s dependency array**
+
+`trackOp` currently closes over `[qc, queryKey]`. The toast id now reads
+`drawingId`, so the dep array must become `[qc, queryKey, drawingId]`. Verify
+the lint rule `react-hooks/exhaustive-deps` is satisfied.
+
+- [ ] **Step 4: Verify no toast storm on the debounced path**
+
+Text edits debounce at `UPDATE_DEBOUNCE_MS = 450`. Confirm the stable
+`id` collapses repeated failures into one toast: temporarily make an update
+throw (e.g. edit a note on a locked set), type several characters, and confirm
+exactly one toast is visible at a time.
+
+- [ ] **Step 5: Test, lint, commit**
+
+```bash
+npm test -- src/components/drawings/viewer/
+npm run lint
+git add src/components/drawings/viewer/useMarkup.js
+git commit -m "fix(viewer): surface markup save failures as a toast
+
+A rejected write rolled back the optimistic mark and reported only through a
+collapsible toolbar indicator, so markup appeared to vanish silently. That is
+how the drawing_markups CHECK bug went unreported for a month."
+```
+
+---
+
+## Task 6B: Scale badge + detection outside canvas mode
+
+Owner decision, 2026-07-10: scale detection should run "any time a drawing is
+being viewed," not canvas-only. Two halves, with very different costs.
+
+**Read this before starting.** `renderMode` is `"canvas"` (pdfjs) or `"iframe"`
+(browser-native PDF, no annotation layer). Iframe mode is reachable two ways: a
+deliberate toggle, and as the **fallback after `pdfError`** —
+`DrawingViewer.jsx:708–718` renders "Switch to browser PDF" when pdfjs failed to
+load the file. So in iframe mode pdfjs may be *unable* to parse this PDF at all.
+A detection failure must therefore never surface an error over a document the
+browser is happily rendering.
+
+**Files:**
+- Modify: `src/pages/drawingViewer/ViewerToolbar.jsx`
+- Modify: `src/pages/drawingViewer/usePdfLoader.js`
+
+- [ ] **Step 1: The badge needs no PDF — ungate it**
+
+The badge reads `markup_scale` / `scale_status` off the `drawings` row, not the
+document. In `ViewerToolbar.jsx`, change the group's gate from `{pdfDoc && (`
+to key on the drawing instead:
+
+```jsx
+      {activeDrawing?.file_url && (
+```
+
+Keep the `Auto Scale` button gated on the document, because auto-detect genuinely
+needs it. Its `disabled` prop becomes:
+
+```jsx
+            disabled={!activeDrawing?.id || !pdfDoc}
+            title={pdfDoc
+              ? "Scan this sheet's title block and try to auto-detect its scale"
+              : "Auto-detect needs the PDF parsed — switch to canvas mode"}
+```
+
+- [ ] **Step 2: Load the document for detection even in iframe mode**
+
+In `usePdfLoader.js`, replace the effect at lines 59–84.
+
+The document is loaded when canvas mode needs it to render, **or** when the
+drawing is unresolved and we owe it a detection pass. Detection persists to the
+`drawings` row, so this is a once-per-drawing cost, not once-per-view.
+
+```js
+  // Load the PDF when canvas mode needs it to render, OR when the drawing has
+  // never been scale-resolved and we owe it one detection pass. Detection
+  // persists (markup_scale / scale_status), so an unresolved drawing parses at
+  // most once, not on every view.
+  //
+  // Iframe mode is also the fallback after a pdfError, meaning pdfjs may be
+  // unable to parse this file at all. A detection-only load must therefore fail
+  // SILENTLY — never surface an error over a PDF the browser is rendering fine.
+  const needsDetection =
+    activeDrawing?.markup_scale == null && activeDrawing?.scale_status == null;
+  useEffect(() => {
+    if (!resolvedUrl) return;
+    const forRender = renderMode === "canvas";
+    if (!forRender && !needsDetection) return;
+
+    let cancelled = false;
+    let loadingTask = null;
+
+    loadingTask = pdfjsLib.getDocument(resolvedUrl);
+    loadingTask.promise
+      .then((doc) => {
+        if (cancelled) { doc.destroy(); return; }
+        setPdfDoc(doc);
+        setTotalPages(doc.numPages);
+        if (forRender) setPdfError(null);
+      })
+      .catch((err) => {
+        // Only canvas mode has an error surface. In iframe mode the user is
+        // already looking at the document; a failed detection parse is not
+        // their problem.
+        if (!cancelled && forRender) setPdfError(`PDF load failed: ${err.message}`);
+      });
+
+    return () => {
+      cancelled = true;
+      if (loadingTask) {
+        loadingTask.destroy?.();
+      }
+    };
+  }, [resolvedUrl, renderMode, needsDetection]);
+```
+
+- [ ] **Step 3: Confirm the iframe render path is untouched**
+
+`DrawingViewer.jsx:693–707` renders the `<iframe src={resolvedUrl}>` off
+`resolvedUrl`, not `pdfDoc`. Loading `pdfDoc` in iframe mode must not change
+what is rendered. Read those lines and confirm. Do not edit them.
+
+- [ ] **Step 4: Confirm the canvas render path is untouched**
+
+`usePdfRenderer.js:37` bails on `!pdfDoc || !canvasRef.current`, and the canvas
+is only mounted when `renderMode === "canvas"` (`DrawingViewer.jsx:553`). So a
+`pdfDoc` present in iframe mode renders nothing. Read and confirm. Do not edit.
+
+- [ ] **Step 5: Verify manually**
+
+```bash
+npm run dev
+```
+
+Open an uncalibrated drawing, switch to browser-PDF mode, reload.
+
+Expected: the scale badge appears in iframe mode showing `No Scale` or
+`Ambiguous ⚠`; auto-detect runs once and persists; `Auto Scale` is disabled with
+its explanatory tooltip. Then open an already-calibrated drawing in iframe mode
+and confirm via the network tab that the PDF is **not** re-parsed by pdfjs (only
+the iframe's own fetch occurs).
+
+- [ ] **Step 6: Test, lint, build, commit**
+
+```bash
+npm test
+npm run lint
+npm run build
+git add src/pages/drawingViewer/ViewerToolbar.jsx src/pages/drawingViewer/usePdfLoader.js
+git commit -m "feat(viewer): show the scale badge and run detection outside canvas mode
+
+The badge reads the drawings row, not the PDF, so it no longer hides in iframe
+mode. Detection now parses the document in iframe mode too, but only for a
+drawing that has never been resolved, and fails silently — iframe mode is the
+fallback after pdfjs could not load the file."
+```
+
+---
+
 ## Task 7: Verify against the real app
 
 Tests prove the units. Only the running app proves the fix.
