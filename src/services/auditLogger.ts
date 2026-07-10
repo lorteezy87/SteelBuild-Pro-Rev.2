@@ -4,7 +4,8 @@
  * Writes to entities.Activity so the Activity page + ActivityFeed
  * component actually have data to display.
  *
- * Called automatically by useCrudMutation after every successful create/update/delete.
+ * Call logActivity / logTransition after a successful create/update/delete
+ * (schedule, submittals, daily logs, drawing sets, budget hours, … all do).
  * Fire-and-forget — audit failures never block the primary operation.
  *
  * The `activities` table stores columns in snake_case (entity_type, entity_name,

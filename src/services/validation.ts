@@ -30,14 +30,6 @@ function required(value: any, field: string, label: string): ValidationError | n
   return null;
 }
 
-function positiveNumber(value: any, field: string, label: string): ValidationError | null {
-  const num = Number(value);
-  if (isNaN(num) || num <= 0) {
-    return { field, message: `${label} must be a positive number.`, rule: "POSITIVE_NUMBER" };
-  }
-  return null;
-}
-
 function nonNegativeNumber(value: any, field: string, label: string): ValidationError | null {
   const num = Number(value);
   if (isNaN(num) || num < 0) {
@@ -119,43 +111,12 @@ const RULES: Record<string, RuleFn> = {
     return errors.filter(Boolean) as ValidationError[];
   },
 
-  change_order: (data) => {
-    const errors: (ValidationError | null)[] = [];
-    errors.push(required(data.project_id, "project_id", "Project"));
-    errors.push(required(data.title, "title", "Title"));
-    errors.push(required(data.co_amount, "co_amount", "CO Amount"));
-    if (data.co_amount !== undefined && data.co_amount !== null) {
-      const num = Number(data.co_amount);
-      if (isNaN(num)) errors.push({ field: "co_amount", message: "CO Amount must be a number.", rule: "NUMBER" });
-    }
-    // Margin % must be 0–100 when provided
-    if (data.margin_percent !== undefined && data.margin_percent !== null && data.margin_percent !== "") {
-      const mp = Number(data.margin_percent);
-      if (isNaN(mp) || mp < 0 || mp > 100) {
-        errors.push({ field: "margin_percent", message: "Margin % must be between 0 and 100.", rule: "RANGE" });
-      }
-    }
-    errors.push(validDate(data.submitted_date, "submitted_date", "Submitted Date"));
-    errors.push(validDate(data.approved_date, "approved_date", "Approved Date"));
-    if (data.status === "Approved") {
-      errors.push(required(data.approved_by, "approved_by", "Approved By"));
-      errors.push(required(data.approved_date, "approved_date", "Approved Date"));
-    }
-    return errors.filter(Boolean) as ValidationError[];
-  },
-
-  expense: (data) => {
-    const errors: (ValidationError | null)[] = [];
-    errors.push(required(data.project_id, "project_id", "Project"));
-    errors.push(required(data.amount, "amount", "Amount"));
-    errors.push(positiveNumber(data.amount, "amount", "Amount"));
-    errors.push(required(data.vendor, "vendor", "Vendor"));
-    errors.push(required(data.expense_type, "expense_type", "Expense Type"));
-    errors.push(validDate(data.expense_date, "expense_date", "Expense Date"));
-    errors.push(validDate(data.invoice_date, "invoice_date", "Invoice Date"));
-    errors.push(validDate(data.payment_date, "payment_date", "Payment Date"));
-    return errors.filter(Boolean) as ValidationError[];
-  },
+  // NOTE: `expense` and `change_order` rules were removed 2026-07-10. They were
+  // unreachable — the only callers were useFinancials' expenseCrud/changeOrderCrud
+  // mutations, which nothing consumed. Expenses and change orders are written by
+  // ExpenseFormModal / COFormModal, which validate locally with different rules
+  // (e.g. the modal requires cost_code, the removed rule required vendor). If a
+  // service rule is ever reinstated, reconcile it with the modal first.
 
   cost_code: (data) => {
     const errors: (ValidationError | null)[] = [];
