@@ -81,7 +81,10 @@ export default function PayApplications() {
     },
     enabled: !!projectId,
   });
-  const { data: changeOrders = [] } = useQuery({ queryKey: ["change_orders", projectId], queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
+  // Key must be the cacheRegistry `change_order` primary (hyphenated). It was
+  // ["change_orders", projectId], which no invalidation ever matched — so
+  // approving a CO left this pay app billing against a stale contract sum.
+  const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders", projectId], queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
 
   const contract = useMemo(() => ({
     originalContractSum: num(activeProject?.original_contract_value),

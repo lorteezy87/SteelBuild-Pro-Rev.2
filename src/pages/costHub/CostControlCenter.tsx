@@ -110,12 +110,12 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
     });
   }, [costCodeRows, phaseFilter, overBudgetOnly, search]);
 
-  // Chart data uses costCodeRows (the expense-rolled rows from useFinancials —
-  // actual_cost/committed_cost = sum of Paid expenses matched by cost_code_number),
-  // NOT the raw costCodes' denormalized actual_cost/committed_cost columns, which
-  // expenses never write to. This keeps the bars / spend curve / category donut /
-  // variance consistent with the "Actual"/"Committed" KPI cards (which already use
-  // summary.actual/committed from the same rollup).
+  // Chart data uses costCodeRows from useFinancials, whose actual_cost /
+  // committed_cost are resolved with preferManualActual: a typed-in column on
+  // the cost code WINS when > 0, else the expense rollup (Paid expenses matched
+  // by cost_code_number). Never the sum of both. This keeps the bars / spend
+  // curve / category donut / variance consistent with the "Actual"/"Committed"
+  // KPI cards, which read summary.actual/committed from the same rollup.
   const barData = useMemo(() => buildBarChartData(costCodeRows), [costCodeRows]);
   const cumData = useMemo(() => buildCumulativeData(costCodeRows), [costCodeRows]);
   const pieData = useMemo(() => buildCategoryPieData(costCodeRows), [costCodeRows]);

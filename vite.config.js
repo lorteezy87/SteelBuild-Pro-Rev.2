@@ -150,10 +150,14 @@ export default defineConfig({
       'node_modules/**',
       'dist/**',
       '.claude/**',
+      '.tmp/**',
       'steelbuild-pro/**',
-      // Playwright E2E specs (e2e/**) run under `npm run test:e2e`, not Vitest —
-      // they import @playwright/test, which would throw under the Vitest runner.
-      'e2e/**',
+      // Playwright E2E specs run under `npm run test:e2e`, not Vitest — they
+      // import @playwright/test, which throws under the Vitest runner. Matched
+      // at any depth: a stale repo copy under .tmp/ has its own e2e/ dir that
+      // the root-relative 'e2e/**' pattern never matched, so `npm run test`
+      // reported 3 red files on an otherwise clean tree.
+      '**/e2e/**',
     ],
     // Default environment is `node` — keeps the 488 pure-helper tests
     // fast (no jsdom overhead). Component tests opt into jsdom via a

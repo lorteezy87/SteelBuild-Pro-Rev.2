@@ -13,7 +13,7 @@ import {
   wpProgressPct,
   timelineElapsedPct,
   budgetCommitted,
-  committedCosts,
+  committedSpend,
   costVariance,
   revisedContractValue,
   daysRemaining,
@@ -219,7 +219,10 @@ export function buildDashboardSummary(input: {
   const scheduleHealth = clamp(Math.round(100 - Math.max(0, elapsedPct - schedulePct)), 0, 100);
 
   const budget = budgetCommitted(codes as Parameters<typeof budgetCommitted>[0]);
-  const committed = committedCosts(expenses as Parameters<typeof committedCosts>[0]);
+  const committed = committedSpend(
+    codes as Parameters<typeof committedSpend>[0],
+    expenses as Parameters<typeof committedSpend>[1],
+  );
   const costDelta = costVariance(
     codes as Parameters<typeof costVariance>[0],
     expenses as Parameters<typeof costVariance>[1],

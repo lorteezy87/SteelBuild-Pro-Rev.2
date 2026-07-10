@@ -191,7 +191,7 @@ export default function Backcharges() {
   const selected = backcharges.find((b) => b.id === selectedId) || null;
 
   // Change orders + RFIs for the link pickers / resolved numbers in the package.
-  const { data: changeOrders = [] } = useQuery({ queryKey: ["change_orders", projectId], queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
+  const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders", projectId], queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
   const { data: rfis = [] } = useQuery({ queryKey: ["rfis", projectId], queryFn: () => entities.RFI.filter({ project_id: projectId }), enabled: !!projectId, staleTime: 60_000 });
   const coById = useMemo(() => new Map((changeOrders || []).map((c) => [c.id, c])), [changeOrders]);
   const rfiById = useMemo(() => new Map((rfis || []).map((r) => [r.id, r])), [rfis]);
