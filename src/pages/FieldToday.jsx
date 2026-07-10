@@ -32,6 +32,9 @@ import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import { CommandBar } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
+import PhaseBadge from "@/components/field/PhaseBadge";
+import { canonicalFieldPhase, PHASE_SOURCE } from "@/lib/field/fieldPhase";
+import { derivePhase } from "@/utils/phases";
 import { compressImage } from "@/utils/compressImage";
 import { localToday } from "@/utils/dates";
 import {
@@ -588,6 +591,10 @@ function TaskCaptureCard({ task, todayIso, saving, onSetProgress }) {
   const tone = URGENCY[bucket] || URGENCY.active;
   const pct = clampPercent(task.percent_complete);
   const crew = taskCrew(task);
+  // schedule_tasks.phase is a real column; fall back to the app-wide keyword
+  // derivation so older tasks that predate the column still identify a phase.
+  const phase = canonicalFieldPhase(task.phase || derivePhase({ task_name: taskLabel(task) }));
+  const phaseSource = task.phase ? PHASE_SOURCE.STORED : PHASE_SOURCE.DERIVED;
 
   return (
     <div
@@ -614,20 +621,22 @@ function TaskCaptureCard({ task, todayIso, saving, onSetProgress }) {
           >
             {taskLabel(task)}
           </div>
-          {crew && (
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                marginTop: 4,
-                fontSize: 11,
-                color: "var(--text-muted)",
-              }}
-            >
-              <Users size={12} /> {crew}
-            </div>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+            <PhaseBadge phase={phase} source={phaseSource} />
+            {crew && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  fontSize: 11,
+                  color: "var(--text-muted)",
+                }}
+              >
+                <Users size={12} /> {crew}
+              </div>
+            )}
+          </div>
         </div>
         <span
           style={{
