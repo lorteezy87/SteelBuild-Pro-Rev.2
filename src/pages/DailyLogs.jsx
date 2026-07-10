@@ -11,6 +11,7 @@ import { Copy } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import {
   appendRecordToCaches,
@@ -75,6 +76,13 @@ export default function DailyLogs() {
   // at fetch time, but a stale cache from before the migration could still
   // surface deleted rows. Mirrors the BudgetHours / Procurement pattern.
   const logs = useMemo(() => rawLogs.filter((r) => !r.is_deleted), [rawLogs]);
+
+  // Field Hub rows deep-link here with ?id=<log>; open it for edit.
+  useAutoOpenEdit(
+    logs,
+    (log) => { setEditing(log); setShowForm(true); },
+    { enabled: !isLoading },
+  );
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

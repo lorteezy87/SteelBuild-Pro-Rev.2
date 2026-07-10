@@ -105,6 +105,8 @@ export interface FieldHubControlCenterProps {
   onOpenInspection?: ((id: string) => void) | null;
   /** Open a safety incident by id. */
   onOpenIncident?: ((id: string) => void) | null;
+  /** Open a daily log by id. */
+  onOpenDailyLog?: ((id: string) => void) | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +128,7 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
     onOpenPunchlist,
     onOpenInspection,
     onOpenIncident,
+    onOpenDailyLog,
   } = props;
 
   useCommandSkin();
@@ -202,10 +205,17 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
   }, [s.activityRows, typeFilter, search]);
 
   // ── Row click dispatcher ───────────────────────────────────────────────────
+  // Every row type must be represented here — a missing branch reads to the
+  // user as "this item can't be opened".
+  const OPENERS: Record<string, ((id: string) => void) | null | undefined> = {
+    Punchlist: onOpenPunchlist,
+    Inspection: onOpenInspection,
+    Safety: onOpenIncident,
+    "Daily Log": onOpenDailyLog,
+  };
+
   function handleRowClick(row: FieldActivityRow) {
-    if (row.type === "Punchlist" && onOpenPunchlist) onOpenPunchlist(row.id);
-    else if (row.type === "Inspection" && onOpenInspection) onOpenInspection(row.id);
-    else if (row.type === "Safety" && onOpenIncident) onOpenIncident(row.id);
+    OPENERS[row.type]?.(row.id);
   }
 
   // ── Table columns ──────────────────────────────────────────────────────────

@@ -10,9 +10,12 @@
  * lazy-loads the existing page unchanged; all remain independently routable.
  * `?field_tab=` drives the active tab.
  *
- * command_ui flag: when on, renders FieldHubControlCenter instead of the tab
- * shell. Data is fetched here (same entities the sub-pages use) and passed
- * down; the classic tab path is untouched.
+ * command_ui flag: adds a leading "Command Center" tab rendering
+ * FieldHubControlCenter. Its data is fetched here (same entities the sub-pages
+ * use) and passed down. The tab shell is shared by both skins — an earlier
+ * version returned the Control Center *instead of* the shell, which made
+ * `?field_tab=`/`?id=` inert (so hub rows opened nothing) and hid every
+ * register tab from command_ui users.
  */
 import { Suspense, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -115,91 +118,78 @@ export default function FieldHub() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
 
-  // ── Classic tab state ──────────────────────────────────────────────────────
+  // ── Tab state ──────────────────────────────────────────────────────────────
+  // command_ui prepends a "Command Center" tab (the Control Center) and lands
+  // there by default; the registers stay reachable, which is what makes the
+  // row-click deep-links below actually land somewhere.
+  const visibleTabs = useMemo(
+    () => (commandUi ? [{ key: "hub", label: "Command Center", Component: null }, ...TABS] : TABS),
+    [commandUi],
+  );
+  const defaultKey = commandUi ? "hub" : "today";
   const param = params.get("field_tab");
-  const activeKey = TABS.some((t) => t.key === param) ? param : "today";
-  const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
+  const activeKey = visibleTabs.some((t) => t.key === param) ? param : defaultKey;
+  const Active = TABS.find((t) => t.key === activeKey)?.Component ?? null;
   const setTab = (key) =>
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
         next.set("field_tab", key);
+        // Switching tabs by hand must not carry a record id along, or the
+        // destination register would open an unrelated record's editor.
+        next.delete("id");
         return next;
       },
       { replace: true },
     );
 
-  // ── command_ui branch ─────────────────────────────────────────────────────
-  if (commandUi) {
-    return (
-      <div className="sb-dashboard-reference-page field-hub-page">
-        <FieldHubControlCenter
-          projectName={projectName}
-          logs={logs}
-          inspections={inspections}
-          incidents={incidents}
-          punchlistItems={punchlistItems}
-          search={search}
-          onSearch={setSearch}
-          typeFilter={typeFilter}
-          onTypeFilterChange={setTypeFilter}
-          // "Log Field Activity" → navigate to the DailyLogs tab in the classic hub
-          // or trigger the DailyLogs ?new=1 param. We use the tab navigation so no
-          // second modal infra is needed here.
-          onLogActivity={
-            can("create", "dailyLog")
-              ? () =>
-                  setParams(
-                    (prev) => {
-                      const next = new URLSearchParams(prev);
-                      next.set("field_tab", "dailylogs");
-                      return next;
-                    },
-                    { replace: false },
-                  )
-              : null
-          }
-          // Deep-link handlers: for now navigate to the respective tab + open via
-          // ?id= param (same pattern as the RFI page's URL-driven selection).
-          onOpenPunchlist={(id) =>
-            setParams(
-              (prev) => {
-                const next = new URLSearchParams(prev);
-                next.set("field_tab", "punchlist");
-                next.set("id", id);
-                return next;
-              },
-              { replace: false },
-            )
-          }
-          onOpenInspection={(id) =>
-            setParams(
-              (prev) => {
-                const next = new URLSearchParams(prev);
-                next.set("field_tab", "inspections");
-                next.set("id", id);
-                return next;
-              },
-              { replace: false },
-            )
-          }
-          onOpenIncident={(id) =>
-            setParams(
-              (prev) => {
-                const next = new URLSearchParams(prev);
-                next.set("field_tab", "safety");
-                next.set("id", id);
-                return next;
-              },
-              { replace: false },
-            )
-          }
-        />
-      </div>
+  /**
+   * Deep-link a hub row to its register: switch tabs and hand the record id to
+   * the destination page, which opens it via useAutoOpenEdit(`?id=`).
+   */
+  const openRecord = (tabKey) => (id) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("field_tab", tabKey);
+        next.set("id", id);
+        return next;
+      },
+      { replace: false },
     );
-  }
 
-  // ── Classic tab shell (untouched) ─────────────────────────────────────────
+  const controlCenter = (
+    <FieldHubControlCenter
+      projectName={projectName}
+      logs={logs}
+      inspections={inspections}
+      incidents={incidents}
+      punchlistItems={punchlistItems}
+      search={search}
+      onSearch={setSearch}
+      typeFilter={typeFilter}
+      onTypeFilterChange={setTypeFilter}
+      onLogActivity={
+        can("create", "dailyLog")
+          ? () =>
+              setParams(
+                (prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.set("field_tab", "dailylogs");
+                  next.set("new", "1");
+                  return next;
+                },
+                { replace: false },
+              )
+          : null
+      }
+      onOpenPunchlist={openRecord("punchlist")}
+      onOpenInspection={openRecord("inspections")}
+      onOpenIncident={openRecord("safety")}
+      onOpenDailyLog={openRecord("dailylogs")}
+    />
+  );
+
   return (
     <div
       className="sb-dashboard-reference-page"
@@ -216,7 +206,7 @@ export default function FieldHub() {
           flexWrap: "wrap",
         }}
       >
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const isActive = tab.key === activeKey;
           return (
             <button
@@ -251,7 +241,7 @@ export default function FieldHub() {
       <div style={{ minHeight: 0, position: "relative" }}>
         <ErrorBoundary label="Field">
           <Suspense fallback={<LoadingSkeleton variant="page" />}>
-            <Active />
+            {activeKey === "hub" ? controlCenter : Active ? <Active /> : null}
           </Suspense>
         </ErrorBoundary>
       </div>
