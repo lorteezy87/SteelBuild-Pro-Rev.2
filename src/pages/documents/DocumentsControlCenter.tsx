@@ -14,7 +14,7 @@
  */
 
 import { useMemo } from "react";
-import { FolderOpen, FileText, Clock, AlertCircle, HardDrive, Layers } from "lucide-react";
+import { FolderOpen, FileText, Clock, AlertCircle, HardDrive, Layers, FolderInput, Trash2, XCircle } from "lucide-react";
 import "@/styles/command.css";
 import {
   PageHero,
@@ -27,8 +27,9 @@ import {
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
+import FolderBar from "./FolderBar";
 import { buildDocumentsSummary, fmtSizeKb } from "./documentsControlCenter.derive";
-import type { DocumentRecord } from "./documentsControlCenter.derive";
+import type { DocumentRecord, FolderRecord } from "./documentsControlCenter.derive";
 import { LIST_FILETYPE_STYLES, FILETYPE_FALLBACK } from "./utils";
 
 // ---------------------------------------------------------------------------
@@ -112,6 +113,22 @@ export interface DocumentsControlCenterProps {
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onToggleAll?: (checked: boolean) => void;
+
+  /* ── Folder browsing (document_folders) ── */
+  folders: FolderRecord[];
+  /** null = project root. */
+  currentFolderId: string | null;
+  onNavigateFolder: (folderId: string | null) => void;
+  onCreateFolder: (name: string, parentFolderId: string | null) => void;
+  onRenameFolder: (folder: FolderRecord, name: string) => void;
+  onDeleteFolder: (folder: FolderRecord) => void;
+  onBulkDeleteFolders: (folderIds: string[]) => void;
+  onBulkMoveFolders: (folderIds: string[]) => void;
+  onOpenBulkCreateFolders: () => void;
+  /** Move the currently-selected documents into a folder (opens the picker). */
+  onMoveSelectedDocs: () => void;
+  onDeleteSelectedDocs: () => void;
+  onClearSelection: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,10 +141,22 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
     categoryFilter, onCategoryChange, onStatusTabChange,
     onOpenDoc, onExport, onUpload,
     selectedIds, onToggleSelect, onToggleAll,
+    folders, currentFolderId, onNavigateFolder,
+    onCreateFolder, onRenameFolder, onDeleteFolder,
+    onBulkDeleteFolders, onBulkMoveFolders, onOpenBulkCreateFolders,
+    onMoveSelectedDocs, onDeleteSelectedDocs, onClearSelection,
   } = props;
 
   useCommandSkin();
   const s = useMemo(() => buildDocumentsSummary(allDocuments), [allDocuments]);
+
+  // While searching, the list spans every folder — so show where each hit
+  // lives. Inside a folder the column would be a constant, so we hide it.
+  const isSearching = search.trim().length > 0;
+  const folderNameById = useMemo(
+    () => new Map(folders.map((f) => [f.id, f.name])),
+    [folders],
+  );
 
   // Derive the list of unique categories from the real data so chips are dynamic.
   const liveCategories = useMemo(() => {
@@ -206,6 +235,17 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
       header: "Category",
       render: (d) => d.category || <span className="cmd-row__meta">Uncategorized</span>,
     },
+    ...(isSearching
+      ? ([{
+          key: "folder",
+          header: "Folder",
+          render: (d: DocumentRecord) => (
+            <span className="cmd-row__meta">
+              {d.folder_id ? folderNameById.get(d.folder_id) ?? "—" : "All Documents"}
+            </span>
+          ),
+        }] as Column<DocumentRecord>[])
+      : []),
     {
       key: "status",
       header: "Status",
@@ -353,12 +393,71 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
         }
       />
 
+      {/* Folder browser. Hidden while searching, because search deliberately
+          spans every folder and a breadcrumb would then be misleading. */}
+      {!isSearching && (
+        <div style={{ marginBottom: 12 }}>
+          <FolderBar
+            folders={folders}
+            currentFolderId={currentFolderId}
+            onNavigate={onNavigateFolder}
+            onCreate={onCreateFolder}
+            onRename={onRenameFolder}
+            onDelete={onDeleteFolder}
+            onBulkDelete={onBulkDeleteFolders}
+            onBulkMove={onBulkMoveFolders}
+            onOpenBulkCreate={onOpenBulkCreateFolders}
+          />
+        </div>
+      )}
+
+      {selectable && selectedIds!.size > 0 && (
+        <div className="docs-cc__batch">
+          <span className="docs-cc__batch-count">
+            {selectedIds!.size} DOCUMENT{selectedIds!.size === 1 ? "" : "S"} SELECTED
+          </span>
+          <button type="button" className="cmd-chip-btn" onClick={onMoveSelectedDocs}>
+            <FolderInput size={12} /> Move To…
+          </button>
+          <button type="button" className="cmd-chip-btn docs-cc__batch-danger" onClick={onDeleteSelectedDocs}>
+            <Trash2 size={12} /> Delete
+          </button>
+          <button type="button" className="cmd-chip-btn" onClick={onClearSelection}>
+            <XCircle size={12} /> Clear
+          </button>
+        </div>
+      )}
+
       <DataTable
         columns={columns}
         rows={filteredDocs}
         onRowClick={onOpenDoc}
-        emptyMessage="No documents match your filters."
+        emptyMessage={
+          isSearching
+            ? "No documents match your search."
+            : currentFolderId
+              ? "This folder is empty."
+              : "No documents match your filters."
+        }
       />
+
+      <style>{`
+        .docs-cc__batch {
+          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+          padding: 8px 12px; margin-bottom: 12px;
+          background: var(--accent-muted);
+          border: 1px solid var(--accent-border);
+          border-radius: 2px;
+        }
+        .docs-cc__batch-count {
+          font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+          letter-spacing: 0.06em; color: var(--accent); margin-right: 4px;
+        }
+        .docs-cc__batch .cmd-chip-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+        }
+        .docs-cc__batch-danger { color: var(--status-error); }
+      `}</style>
     </div>
   );
 }

@@ -29,6 +29,7 @@ import { batchProcess } from "@/utils/batchProcess";
 import EmptyStateAction from "@/components/shared/EmptyStateAction";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import DocumentsControlCenter from "./documents/DocumentsControlCenter";
+import { filterDocsForCommandUi, planFolderDeletion } from "./documents/documentsControlCenter.derive";
 
 import { STATUS_TABS } from "./documents/constants";
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
@@ -158,21 +159,56 @@ export default function Documents() {
     },
   });
 
-  // Soft-delete the folder (is_deleted=true via the DrawingSet/Comment-style
-  // soft-delete pattern in supabaseClient). Documents inside keep their
-  // folder_id pointing at a now-hidden row, so they fall back to "root"
-  // visually because the active-folder filter won't match any visible
-  // folder. A future commit can either reparent docs to the deleted
-  // folder's parent OR null their folder_id; for now the simple path is
-  // good enough.
+  /**
+   * Delete folders, promoting their contents first.
+   *
+   * `document_folders` is a soft-delete table, so the FK's ON DELETE CASCADE
+   * never fires. Left alone, a deleted folder's documents and sub-folders keep
+   * pointing at a hidden row: they match neither the root view (folder_id IS
+   * NULL) nor any visible folder, and silently disappear from the UI. So we
+   * reparent every survivor to the nearest ancestor that isn't being deleted
+   * BEFORE tombstoning the folders — and abort the delete if that fails, so a
+   * partial run can never strand documents.
+   */
+  const deleteFoldersWithReparent = useCallback(
+    async (folderIds) => {
+      const plan = planFolderDeletion(folders, allDocuments, folderIds);
+
+      const folderMoves = await batchProcess(plan.folderReparents, (r) =>
+        entities.DocumentFolder.update(r.id, { parent_folder_id: r.parent_folder_id }),
+      );
+      const docMoves = await batchProcess(plan.docReparents, (r) =>
+        entities.Document.update(r.id, { folder_id: r.folder_id }),
+      );
+      if (folderMoves.failed.length > 0 || docMoves.failed.length > 0) {
+        throw new Error("Could not move the folder's contents out — nothing was deleted.");
+      }
+
+      const { succeeded, failed } = await batchProcess(plan.deleteIds, (id) =>
+        entities.DocumentFolder.delete(id),
+      );
+      if (failed.length > 0 && succeeded.length === 0) {
+        throw new Error(`All ${failed.length} folder deletes failed.`);
+      }
+      return { succeeded, failed, promoted: plan.docReparents.length };
+    },
+    [folders, allDocuments],
+  );
+
+  const invalidateFolders = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
+    queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
+  }, [queryClient, activeProject?.id]);
+
   const deleteFolderMut = useMutation({
-    mutationFn: (id) => entities.DocumentFolder.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
-      // Also invalidate documents so the list re-renders without the
-      // deleted folder's contents in case the user is browsing it.
-      queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
-      toast.success("Folder deleted");
+    mutationFn: (id) => deleteFoldersWithReparent([id]),
+    onSuccess: ({ promoted }) => {
+      invalidateFolders();
+      toast.success(
+        promoted > 0
+          ? `Folder deleted — ${promoted} document${promoted === 1 ? "" : "s"} moved up`
+          : "Folder deleted",
+      );
     },
     onError: (err) => toast.error(err?.message || "Failed to delete folder"),
   });
@@ -229,21 +265,14 @@ export default function Documents() {
   });
 
   /**
-   * Bulk-delete a set of folders. Mirrors deleteFolderMut but accepts
-   * an array. Documents inside detach to root visually because the
-   * filter won't match a hidden folder; cleanup pass to null
-   * folder_id is a follow-up.
+   * Bulk-delete a set of folders. Same contents-promotion contract as
+   * deleteFolderMut; an ancestor and its own child may both be in the set,
+   * which planFolderDeletion resolves by skipping doomed ancestors.
    */
   const bulkDeleteFoldersMut = useMutation({
-    mutationFn: async (folderIds) => {
-      const { succeeded, failed } = await batchProcess(folderIds, (id) =>
-        entities.DocumentFolder.delete(id),
-      );
-      return { succeeded, failed };
-    },
+    mutationFn: (folderIds) => deleteFoldersWithReparent(folderIds),
     onSuccess: ({ succeeded, failed }) => {
-      queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
-      queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
+      invalidateFolders();
       const total = succeeded.length + failed.length;
       if (failed.length === 0) {
         toast.success(`Deleted ${succeeded.length} folder${succeeded.length === 1 ? "" : "s"}`);
@@ -340,34 +369,19 @@ export default function Documents() {
     [allDocuments]
   );
 
-  // Command UI filtered list: search + category chip + status tab.
-  // Intentionally ignores folder navigation (the control center is a flat
-  // table; folder browsing lives in the classic path).
-  const ccFilteredDocs = useMemo(() => {
-    let result = [...allDocuments];
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (d) =>
-          d.displayName?.toLowerCase().includes(q) ||
-          d.documentNumber?.toLowerCase().includes(q) ||
-          d.fileName?.toLowerCase().includes(q) ||
-          d.description?.toLowerCase().includes(q) ||
-          d.tags?.some((t) => t.toLowerCase().includes(q))
-      );
-    }
-    if (ccCategoryFilter !== "All") {
-      result = result.filter(
-        (d) => (d.category || "Uncategorized") === ccCategoryFilter
-      );
-    }
-    if (statusTab !== "all") {
-      result = result.filter((d) => d.status === statusTab);
-    }
-    return result.sort((a, b) =>
-      new Date(b.uploadedDate || b.created_at || 0) - new Date(a.uploadedDate || a.created_at || 0)
-    );
-  }, [allDocuments, searchQuery, ccCategoryFilter, statusTab]);
+  // Command UI filtered list: folder scope + search + category chip + status
+  // tab. Search spans every folder (see filterDocsForCommandUi).
+  const ccFilteredDocs = useMemo(
+    () =>
+      filterDocsForCommandUi({
+        docs: allDocuments,
+        search: searchQuery,
+        category: ccCategoryFilter,
+        statusTab,
+        currentFolderId,
+      }),
+    [allDocuments, searchQuery, ccCategoryFilter, statusTab, currentFolderId],
+  );
 
   /* ── Mutations ── */
   const bulkStatusMut = useMutation({
@@ -475,6 +489,15 @@ export default function Documents() {
   const selectAll = () => setSelectedIds(new Set(filteredDocs.map((d) => d.id)));
   const deselectAll = () => setSelectedIds(new Set());
 
+  // Command UI has no inline confirm strip (the classic BatchActionBar owns
+  // that), so gate the destructive bulk delete behind a native confirm.
+  const handleConfirmBulkDeleteDocs = () => {
+    const n = selectedIds.size;
+    if (n === 0) return;
+    const ok = window.confirm(`Delete ${n} document${n === 1 ? "" : "s"}? This cannot be undone from the UI.`);
+    if (ok) bulkDeleteMut.mutate();
+  };
+
   /* ── Drag & drop ── */
   const onDragEnter = (e) => { e.preventDefault(); dragCounter.current++; setIsDragOver(true); };
   const onDragLeave = (e) => {
@@ -529,6 +552,46 @@ export default function Documents() {
             />
           </Suspense>
         )}
+        {bulkCreateOpen && (
+          <Suspense fallback={null}>
+            <BulkCreateFoldersModal
+              open={bulkCreateOpen}
+              parentLabel={
+                currentFolderId
+                  ? folders.find((f) => f.id === currentFolderId)?.name || "Current folder"
+                  : "(Root)"
+              }
+              onClose={() => setBulkCreateOpen(false)}
+              onSubmit={handleBulkCreateFolders}
+            />
+          </Suspense>
+        )}
+        <FolderPicker
+          open={!!pickerFor}
+          title={
+            pickerFor?.kind === "folders"
+              ? `Move ${pickerFor.ids.length} folder${pickerFor.ids.length === 1 ? "" : "s"} to…`
+              : `Move ${pickerFor?.ids?.length ?? 0} document${pickerFor?.ids?.length === 1 ? "" : "s"} to…`
+          }
+          folders={folders}
+          initialFolderId={currentFolderId}
+          disabledIds={
+            pickerFor?.kind === "folders"
+              ? new Set(pickerFor.ids.flatMap((id) => [...collectFolderAndDescendants(folders, id)]))
+              : new Set()
+          }
+          confirmLabel="Move"
+          onClose={() => setPickerFor(null)}
+          onConfirm={(destFolderId) => {
+            if (!pickerFor) return;
+            if (pickerFor.kind === "folders") {
+              moveFoldersMut.mutate({ folderIds: pickerFor.ids, destFolderId });
+            } else {
+              moveDocsMut.mutate({ docIds: pickerFor.ids, destFolderId });
+            }
+            setPickerFor(null);
+          }}
+        />
       </>
     );
     return (
@@ -552,6 +615,18 @@ export default function Documents() {
               ? setSelectedIds(new Set(ccFilteredDocs.map((d) => d.id)))
               : deselectAll()
           }
+          folders={folders}
+          currentFolderId={currentFolderId}
+          onNavigateFolder={setCurrentFolderId}
+          onCreateFolder={(name, parentFolderId) => createFolderMut.mutate({ name, parentFolderId })}
+          onRenameFolder={(folder, name) => renameFolderMut.mutate({ id: folder.id, name })}
+          onDeleteFolder={(folder) => deleteFolderMut.mutate(folder.id)}
+          onBulkDeleteFolders={(ids) => bulkDeleteFoldersMut.mutate(ids)}
+          onBulkMoveFolders={(ids) => setPickerFor({ kind: "folders", ids })}
+          onOpenBulkCreateFolders={() => setBulkCreateOpen(true)}
+          onMoveSelectedDocs={() => setPickerFor({ kind: "docs", ids: [...selectedIds] })}
+          onDeleteSelectedDocs={handleConfirmBulkDeleteDocs}
+          onClearSelection={deselectAll}
         />
         {modals}
       </>

@@ -131,8 +131,8 @@ export default function FolderBar({
     setMenuFolderId(null);
     const ok = window.confirm(
       `Delete folder "${folder.name}"?\n\n` +
-      `Documents inside this folder will move to its parent (root if it has no parent). ` +
-      `Sub-folders will also be removed.`
+      `Documents and sub-folders inside will move up to its parent ` +
+      `(All Documents if it has no parent). Nothing is deleted except the folder itself.`
     );
     if (!ok) return;
     onDelete(folder);
@@ -151,8 +151,8 @@ export default function FolderBar({
     if (ids.length === 0) return;
     const ok = window.confirm(
       `Delete ${ids.length} folder${ids.length === 1 ? "" : "s"}?\n\n` +
-      `Documents inside will be detached and fall back to the root view. ` +
-      `Sub-folders will also be removed.`
+      `Documents and sub-folders inside will move up to the nearest surviving parent. ` +
+      `Nothing is deleted except the selected folders.`
     );
     if (!ok) return;
     onBulkDelete?.(ids);
