@@ -104,11 +104,33 @@ is expected and good: keep both rows.
 
 ---
 
-## Task 1: Migration — unblock persistence
+## Task 1: Migration — unblock persistence ✅ DONE (2026-07-10)
 
 This is the fix for the reported "measurement vanishes" symptom. It is not
 measurement-specific: `pen`, `rect`, `highlight`, `arrow`, `measure`, `note`,
 and `stamp` are all rejected today. Only `cloud` passes.
+
+> **Applied as `20260710070047_drawing_markup_types_and_scale_status`, commit
+> `c7ea5f8d`. The backfill in Step 3 was DROPPED — do not run it.**
+>
+> Two reasons, found on execution:
+>
+> 1. **It would destroy correct data.** Probing each sheet's own page text layer
+>    shows `J1.4` (page 7) and `S223` (page 11) both print `SCALE: 1/8" = 1'-0"`
+>    → 96, exactly what is stored. Page 1 of each set PDF has no scale at all,
+>    so the old forward scan landed on an agreeing page. The values are right;
+>    only the mechanism was wrong.
+> 2. **The database would have refused it.** Both sheets sit on drawing sets
+>    auto-locked by the fab-release gate. `guard_drawing_set_lock_for_drawings`
+>    rejects any `UPDATE` to a locked set's `drawings` row — no column filter,
+>    no bypass in `raise_if_drawing_set_locked`. The combined migration aborted
+>    with `42501 DRAWING_SET_LOCKED` and rolled back atomically; the DDL was
+>    then applied alone.
+>
+> Consequence for later tasks: those two rows keep `markup_scale = 96` and
+> `scale_status = NULL`. That is the correct end state. `useAutoScaleOnLoad`
+> skips any drawing with a `markup_scale`, and the badge renders the fraction
+> from `markup_scale` alone, so neither needs `scale_status` set.
 
 **Files:**
 - Create: `supabase/migrations/<recorded-version>_drawing_markup_types_and_scale_status.sql`
@@ -175,14 +197,9 @@ ALTER TABLE public.drawings DROP CONSTRAINT IF EXISTS drawings_scale_status_chec
 ALTER TABLE public.drawings ADD CONSTRAINT drawings_scale_status_check
   CHECK (scale_status IS NULL OR scale_status IN ('undetected','ambiguous','auto','manual'));
 
--- Every stored markup_scale was produced by the whole-document scan (both live
--- rows sit on pdf_page > 1), so each was read off the wrong sheet. Reset and let
--- per-page detection or manual Calibrate repopulate. Soft-deleted rows untouched.
-UPDATE public.drawings
-   SET markup_scale = NULL, scale_status = 'undetected'
- WHERE markup_scale IS NOT NULL
-   AND is_deleted = false
-   AND COALESCE(pdf_page, 1) > 1;
+-- NO BACKFILL. See the note at the top of this task: the two candidate rows
+-- already hold the scale printed on their own sheet, and both sit on
+-- fab-release-locked drawing sets whose guard trigger rejects any UPDATE.
 ```
 
 - [ ] **Step 4: Verify in-DB — the migration is live**

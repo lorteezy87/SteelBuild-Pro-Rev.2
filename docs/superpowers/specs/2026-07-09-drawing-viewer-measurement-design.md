@@ -48,7 +48,14 @@ live inside multi-page set PDFs and the viewer renders
 inherits page 1's scale.
 
 Both live rows with a `markup_scale` sit on `pdf_page > 1`, so both values were
-produced by the whole-document scan and neither is trustworthy.
+produced by the whole-document scan rather than read off their own sheet.
+
+**Verified 2026-07-10 — the mechanism is broken but these two values are right.**
+Extracting the text layer of each sheet's own page: `J1.4` page 7 and `S223`
+page 11 both print `SCALE: 1/8" = 1'-0"` → 96, matching what is stored. Page 1
+of each set PDF contains no scale notation at all, so the old forward scan
+landed on a page that happened to agree. No backfill is needed. Correct by
+luck, not by design — which is precisely why the mechanism still has to change.
 
 **RC3 — the label formatter has a boundary bug.**
 `formatMeasureLabel` (`AnnotationLayer.jsx:938–948`) branches `if (inches < 12)`
@@ -129,18 +136,24 @@ ALTER TABLE public.drawings ADD CONSTRAINT drawings_scale_status_check
 `calibrate` is a tool, not a markup type — it calls `onCalibrate`, never
 `onAddItem` (`AnnotationLayer.jsx:183–186`). **Do not add it to the CHECK.**
 
-Backfill — reset the two live rows only; leave soft-deleted rows alone. The
-soft-delete predicate is `is_deleted = false` (boolean, `NOT NULL DEFAULT
-false`). Verified 2026-07-09: this statement matches exactly `J1.4` (page 7)
-and `S223` (page 11), and nothing else.
+**Backfill: dropped.** Two independent reasons, both discovered while applying
+the migration on 2026-07-10.
 
-```sql
-UPDATE public.drawings
-   SET markup_scale = NULL, scale_status = 'undetected'
- WHERE markup_scale IS NOT NULL
-   AND is_deleted = false
-   AND COALESCE(pdf_page, 1) > 1;
-```
+1. *It isn't needed.* Both candidate rows already hold the scale printed on
+   their own sheet (see RC2 above). Nulling them would destroy correct data and
+   force the owner to re-calibrate two sheets for nothing.
+2. *It would not have been permitted anyway.* `J1.4` and `S223` belong to
+   drawing sets auto-locked by the fab-release gate (`Auto-locked: submittal
+   S-012 / S-013 reached "Released for Fabrication"`). The trigger
+   `guard_drawing_set_lock_for_drawings` rejects **any** `UPDATE` to a locked
+   set's `drawings` row — it does not filter by column, and
+   `raise_if_drawing_set_locked` offers no bypass. The original migration
+   aborted with `42501 DRAWING_SET_LOCKED` and rolled back atomically.
+
+This is worth remembering: `drawings.markup_scale` and `drawings.scale_status`
+are viewer metadata, but the lock guard treats them as drawing content. Any
+future migration that touches `drawings` rows will hit the same wall on any
+fab-released set.
 
 ⚠ CI does not run migrations. Apply in-DB and name the committed file to match
 the recorded `schema_migrations` version.
