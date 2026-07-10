@@ -83,4 +83,22 @@ describe("formatFeetInches — contracts", () => {
   it("rejects a non-positive precision", () => {
     expect(formatFeetInches(6.5, { precision: 0 })).toBe("—");
   });
+  it("coerces a string precision", () => {
+    expect(formatFeetInches(6.5, { precision: "16" })).toBe('6 1/2"');
+  });
+  it("rejects a non-integer precision rather than mis-reducing the fraction", () => {
+    expect(formatFeetInches(3.1, { precision: 16.5 })).toBe("—");
+  });
+  it("rejects a negative precision", () => {
+    expect(formatFeetInches(6.5, { precision: -16 })).toBe("—");
+  });
+  it("does not print a negative zero", () => {
+    expect(formatFeetInches(-0.01)).toBe('0"');
+    expect(formatFeetInches(-0.03)).toBe('0"');
+    expect(formatFeetInches(-0)).toBe('0"');
+  });
+  it("still signs a negative that survives rounding", () => {
+    expect(formatFeetInches(-6.5)).toBe('-6 1/2"');
+    expect(formatFeetInches(-0.0625)).toBe('-0 1/16"');
+  });
 });

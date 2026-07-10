@@ -23,7 +23,8 @@ import { reduceFraction } from "./fractionConversion";
 /**
  * @param {number} decimalInches
  * @param {{ precision?: number, prefix?: string, emptyLabel?: string }} [opts]
- *        precision  — fractional denominator; 16 = nearest 1/16". Must be > 0.
+ *        precision  — fractional denominator; must be a positive integer
+ *                     (16 = nearest 1/16"). Coerced with Number().
  *        prefix     — rendered outside the sign (e.g. "~" for uncalibrated).
  *        emptyLabel — returned bare, without prefix, on invalid input.
  * @returns {string}
@@ -32,18 +33,23 @@ export function formatFeetInches(decimalInches, opts = {}) {
   const { precision = 16, prefix = "", emptyLabel = "—" } = opts;
 
   const value = Number(decimalInches);
+  const ticksPerInch = Number(precision);
   if (!Number.isFinite(value)) return emptyLabel;
-  if (!Number.isFinite(precision) || precision <= 0) return emptyLabel;
+  // Non-integer denominators are silently re-rounded by reduceFraction, which
+  // would print a fraction that doesn't match the value we rounded to.
+  if (!Number.isInteger(ticksPerInch) || ticksPerInch <= 0) return emptyLabel;
 
-  const sign = value < 0 ? "-" : "";
   const magnitude = Math.abs(value);
-
   // Round to ticks first — this is what makes the foot-carry fall out for free.
-  const totalTicks = Math.round(magnitude * precision);
-  const wholeInches = Math.floor(totalTicks / precision);
-  const remainderTicks = totalTicks - wholeInches * precision;
+  const totalTicks = Math.round(magnitude * ticksPerInch);
+  // Sign is decided AFTER rounding: -0.01" rounds to zero ticks and must print
+  // 0", not -0".
+  const sign = value < 0 && totalTicks > 0 ? "-" : "";
 
-  const reduced = reduceFraction(remainderTicks, precision);
+  const wholeInches = Math.floor(totalTicks / ticksPerInch);
+  const remainderTicks = totalTicks - wholeInches * ticksPerInch;
+
+  const reduced = reduceFraction(remainderTicks, ticksPerInch);
   const fraction = reduced && reduced.num > 0 ? ` ${reduced.num}/${reduced.den}` : "";
 
   let body;
