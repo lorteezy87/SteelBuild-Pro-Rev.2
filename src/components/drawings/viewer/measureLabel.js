@@ -24,7 +24,13 @@ const POINTS_PER_INCH = 72;
 export function formatMeasureLabel(pdfDist, scale) {
   const pdfInches = pdfDist / POINTS_PER_INCH;
 
-  if (scale) return formatFeetInches(pdfInches * scale);
+  // Guard the TYPE, not just truthiness: a string "0" is truthy and would
+  // render as a calibrated `0"` — an un-prefixed, false-precision dimension.
+  // markup_scale arrives as a JSON number today; this keeps a future CSV
+  // import or hand-edited row from silently mislabelling a measurement.
+  if (typeof scale === "number" && Number.isFinite(scale) && scale > 0) {
+    return formatFeetInches(pdfInches * scale);
+  }
 
   // Round to one decimal BEFORE banding on 12", or 11.97 page inches prints
   // as 12.0" instead of 1'-0.0".
