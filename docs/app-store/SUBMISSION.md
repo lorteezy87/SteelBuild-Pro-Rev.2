@@ -123,7 +123,7 @@ must serve the bundled offline assets, not a dev URL.
 |---|---|---|
 | **2.1 Completeness** | Reviewer can actually use the app | **Action:** create a demo login with seeded data; put it in App Review Information. |
 | **4.2 Minimum functionality** | Not "just a repackaged website" | **Handled:** native camera capture, haptics, share sheet, native status bar/splash, offline-capable bundled assets. Keep leaning on native capabilities. |
-| **5.1.1(v) Account deletion** | Any user who can create an account can delete it **in-app** | ⚠️ **GAP — see §6.1.** Current flow is org-owner-only, deletes the whole workspace, and is behind an off-by-default flag. |
+| **5.1.1(v) Account deletion** | Any user who can create an account can delete it **in-app** | ✅ **Implemented — see §6.1** (self-service "Delete my account" in Settings → Profile). Needs staging deploy + test before submission. |
 | **3.1.1 / 3.1.3 Payments** | Digital subscriptions consumed in-app generally need Apple IAP | ⚠️ **DECISION — see §6.2.** Recommended: iOS app is sign-in-only; sell/renew subscriptions on the web. |
 | **5.1.1 / 5.1.2 Data & privacy** | Privacy policy linked; data use disclosed | **Handled:** legal pages exist; link them and complete nutrition labels. |
 | **4.8 / 5.1.1 Sign in with Apple** | If you offer a third-party social login (e.g. Google), you must also offer Sign in with Apple (with narrow exceptions) | **Check:** if only email/password is offered, this does not apply. Confirm the auth methods enabled in Supabase. |
@@ -131,20 +131,28 @@ must serve the bundled offline assets, not a dev URL.
 
 ## 6. Compliance action items — do BEFORE first submit
 
-### 6.1 Account deletion (highest priority — hard rejection risk)
+### 6.1 Account deletion — ✅ implemented (verify on staging before submit)
 
-`src/components/settings/DangerZone.jsx` today:
-- is gated by the `account_deletion` feature flag (**OFF by default**),
-- is visible to **org owners only**, and
-- deletes the **entire organization**, not an individual user's account.
+Self-service account deletion now ships in the app:
+- **UI:** `src/components/settings/DeleteAccountZone.jsx`, rendered in
+  Settings → Profile (`UserSettingsTab.jsx`). Available to **every**
+  authenticated user regardless of role, **not** behind a feature flag, with a
+  type-your-email confirmation.
+- **Backend:** the `account-delete` edge function gained a `mode: "account"`
+  path. It erases any workspace the caller **solely owns** (product policy —
+  takes the whole workspace and its members' access with it), deletes the
+  caller's `auth.users` row (FK-cascading their memberships, `user_profiles`
+  PII, and `user_projects`; authorship columns are `ON DELETE SET NULL`), and
+  removes co-members who are left in no workspace.
 
-Apple requires that **every user who can create an account can delete their own
-account from within the app**. To comply, add a per-user "Delete my account"
-flow (settings → account) available to all roles, backed by the `account-delete`
-edge function extended to handle single-user deletion (with sensible handling
-for the last remaining owner of a workspace), and ensure the entry point is not
-hidden behind an off-by-default flag on the App Store build. Providing an
-in-app link to a support/erasure request is **not** sufficient for Apple.
+**Before relying on this for submission:**
+1. Deploy the updated function: `supabase functions deploy account-delete --project-ref <ref>`.
+2. On staging, verify all three cases: (a) a member of a shared workspace,
+   (b) a co-owner (workspace survives), (c) a **sole owner** (workspace is
+   fully erased). Confirm the `auth.users` row and `user_profiles` PII are gone.
+3. Note: a pure account deletion that erases no workspace writes no
+   `account_deletions` audit row (that table is org-scoped). Add a dedicated
+   account-deletion audit if your compliance program requires one.
 
 ### 6.2 In-app purchase decision
 
