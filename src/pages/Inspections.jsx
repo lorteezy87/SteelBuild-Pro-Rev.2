@@ -8,6 +8,7 @@ import InspectionList from "@/components/inspections/InspectionList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 
 const TYPES = [
   "Steel Fabrication",
@@ -69,6 +70,13 @@ export default function Inspections() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // Field Hub rows deep-link here with ?id=<inspection>; open it for edit/close.
+  useAutoOpenEdit(
+    inspections,
+    (inspection) => { setEditing(inspection); setShowForm(true); },
+    { enabled: !isLoading },
+  );
 
   const createMut = useMutation({
     mutationFn: (data) => entities.Inspection.create({ ...data, project_id: data.project_id || projectId }),

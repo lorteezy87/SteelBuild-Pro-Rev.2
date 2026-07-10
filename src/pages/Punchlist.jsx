@@ -9,6 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, ProgressBar, BulkActionBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 export default function Punchlist() {
@@ -35,7 +36,7 @@ export default function Punchlist() {
   };
   const clearSelection = () => setSelectedIds([]);
 
-  const { data: rawPunchlist = [] } = useQuery({
+  const { data: rawPunchlist = [], isLoading } = useQuery({
     queryKey: ["punchlist", projectId],
     queryFn: () =>
       projectId
@@ -46,6 +47,13 @@ export default function Punchlist() {
   useRealtimeInvalidation("punchlist_items", projectId, [["punchlist", projectId]]);
 
   const punchlist = React.useMemo(() => rawPunchlist.filter((r) => !r.is_deleted), [rawPunchlist]);
+
+  // Field Hub rows deep-link here with ?id=<item>; open it for edit/close.
+  useAutoOpenEdit(
+    punchlist,
+    (item) => { setEditing(item); setShowForm(true); },
+    { enabled: !isLoading },
+  );
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
