@@ -8,9 +8,13 @@
  *   const {
  *     costCodes, expenses, sovItems, changeOrders,
  *     summary, costCodeRows, reviewFlags,
- *     expenseCrud, costCodeCrud, changeOrderCrud,
+ *     costCodeCrud,
  *     refreshAll,
  *   } = useFinancials(projectId, project);
+ *
+ * Only costCodeCrud is exposed — it's the one write path with a live consumer
+ * (Cost Control Center). Expenses and change orders are written by their own
+ * page mutations (Expenses.jsx, ChangeOrders.jsx), which own their validation.
  */
 
 import { useMemo, useCallback } from "react";
@@ -556,47 +560,6 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     await invalidateEntities(qc, ["cost_code", "expense", "sov_item", "change_order", "project", "work_package"], projectId);
   }, [qc, projectId]);
 
-  // ── Expense CRUD ────────────────────────────────────────────────────
-  type ExpenseCreate = Record<string, unknown>;
-  const expenseCreateMut = useMutation<Expense, Error, ExpenseCreate>({
-    mutationFn: async (data) => {
-      const errors = validate("expense", data, "create");
-      if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
-      return await entities.Expense.create(data as Insert<'expenses'>);
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["expense"], projectId);
-      toast.success("Expense created");
-    },
-    onError: (err) => toast.error(`Failed to create expense: ${err.message}`),
-  });
-
-  type ExpenseUpdate = { id: string } & Record<string, unknown>;
-  const expenseUpdateMut = useMutation<Expense, Error, ExpenseUpdate>({
-    mutationFn: async ({ id, ...data }) => {
-      if (!id) throw new Error("Update requires an id.");
-      return await entities.Expense.update(id, data as Update<'expenses'>);
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["expense"], projectId);
-      toast.success("Expense updated");
-    },
-    onError: (err) => toast.error(`Failed to update expense: ${err.message}`),
-  });
-
-  const expenseDeleteMut = useMutation<string, Error, string>({
-    mutationFn: async (id) => {
-      if (!id) throw new Error("Delete requires an id.");
-      await entities.Expense.delete(id);
-      return id;
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["expense"], projectId);
-      toast.success("Expense deleted");
-    },
-    onError: (err) => toast.error(`Failed to delete expense: ${err.message}`),
-  });
-
   // ── Cost Code CRUD ──────────────────────────────────────────────────
   type CostCodeCreate = Record<string, unknown> & { cost_code_number?: string };
   const costCodeCreateMut = useMutation<CostCode, Error, CostCodeCreate>({
@@ -643,47 +606,6 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     onError: (err) => toast.error(`Failed to delete cost code: ${err.message}`),
   });
 
-  // ── Change Order CRUD ───────────────────────────────────────────────
-  type COCreate = Record<string, unknown>;
-  const coCreateMut = useMutation<ChangeOrder, Error, COCreate>({
-    mutationFn: async (data) => {
-      const errors = validate("change_order", data, "create");
-      if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
-      return await entities.ChangeOrder.create(data as Insert<'change_orders'>);
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["change_order", "project"], projectId);
-      toast.success("Change order created");
-    },
-    onError: (err) => toast.error(`Failed to create change order: ${err.message}`),
-  });
-
-  type COUpdate = { id: string } & Record<string, unknown>;
-  const coUpdateMut = useMutation<ChangeOrder, Error, COUpdate>({
-    mutationFn: async ({ id, ...data }) => {
-      if (!id) throw new Error("Update requires an id.");
-      return await entities.ChangeOrder.update(id, data as Update<'change_orders'>);
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["change_order", "project"], projectId);
-      toast.success("Change order updated");
-    },
-    onError: (err) => toast.error(`Failed to update change order: ${err.message}`),
-  });
-
-  const coDeleteMut = useMutation<string, Error, string>({
-    mutationFn: async (id) => {
-      if (!id) throw new Error("Delete requires an id.");
-      await entities.ChangeOrder.delete(id);
-      return id;
-    },
-    onSuccess: async () => {
-      await invalidateEntities(qc, ["change_order", "project"], projectId);
-      toast.success("Change order deleted");
-    },
-    onError: (err) => toast.error(`Failed to delete change order: ${err.message}`),
-  });
-
   return {
     // Raw data
     costCodes,
@@ -713,10 +635,8 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     formatSigned,
     varianceColor,
 
-    // CRUD
-    expenseCrud: { create: expenseCreateMut, update: expenseUpdateMut, delete: expenseDeleteMut },
+    // CRUD (only cost codes have a live consumer — Cost Control Center)
     costCodeCrud: { create: costCodeCreateMut, update: costCodeUpdateMut, delete: costCodeDeleteMut },
-    changeOrderCrud: { create: coCreateMut, update: coUpdateMut, delete: coDeleteMut },
 
     // Refresh
     refreshAll,
