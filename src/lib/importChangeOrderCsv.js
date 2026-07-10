@@ -243,25 +243,48 @@ function normalizePercent(raw) {
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
-function normalizeStatus(raw) {
+/**
+ * The ONLY statuses `change_orders` accepts:
+ *   CHECK (status IN ('Draft','Submitted','Under Review','Approved','Rejected','Void'))
+ * — see chk_change_orders_status in the baseline schema. Emitting anything else
+ * makes the INSERT fail with a check violation.
+ */
+export const CO_STATUSES = new Set([
+  "Draft",
+  "Submitted",
+  "Under Review",
+  "Approved",
+  "Rejected",
+  "Void",
+]);
+
+/**
+ * Map a free-text CSV status onto the DB vocabulary.
+ *
+ * Returns null when the value can't be mapped — the caller falls back to
+ * "Draft" and warns the reviewer. It must NEVER return a value outside
+ * CO_STATUSES: this used to pass unrecognized text straight through (on the
+ * mistaken belief that "the DB has no CHECK constraint on status"), and mapped
+ * "closed"/"completed" to a "Closed" that does not exist in the constraint.
+ * Either one aborts the import at that row.
+ */
+export function normalizeStatus(raw) {
   if (raw === null || raw === undefined) return null;
   const s = String(raw).trim().toLowerCase();
   if (!s) return null;
-  // Map common variants → the canonical status values the DB + UI use.
+
   if (/^draft$/.test(s)) return "Draft";
   if (/^(submitted|sent|issued)$/.test(s)) return "Submitted";
   if (/^(under\s*review|in\s*review|reviewing|pending)$/.test(s)) return "Under Review";
   if (/^(approved|executed|accepted)$/.test(s)) return "Approved";
-  // "closed" is ambiguous — a CO can be closed-out as approved, rejected, OR
-  // withdrawn — so it must NOT be silently elevated to Approved (that inflated
-  // approved-contract-value rollups). Map it to a neutral Closed the reviewer
-  // can reclassify in the import preview.
-  if (/^(closed|closed\s*out|complete|completed)$/.test(s)) return "Closed";
   if (/^(rejected|denied|declined)$/.test(s)) return "Rejected";
   if (/^(void|cancelled|canceled|withdrawn)$/.test(s)) return "Void";
-  // Pass through whatever the user wrote if none matched — the DB
-  // has no CHECK constraint on status, so arbitrary values are fine.
-  return String(raw).trim();
+
+  // "closed" is ambiguous — a CO can be closed out as approved, rejected, OR
+  // withdrawn — so it must NOT be silently elevated to Approved, which would
+  // inflate the revised contract value. There is no neutral terminal status in
+  // the constraint, so leave it unmapped and let the reviewer classify it.
+  return null;
 }
 
 // ── Parser ──────────────────────────────────────────────────────────
@@ -302,6 +325,18 @@ export function parseChangeOrderCsv(csvText, { fileName = "" } = {}) {
       `Expected headers like "CO #", "Title", "Amount", "Status". Got: ${rows[bestIdx].join(", ")}`,
     );
   }
+
+  // Statuses we couldn't map onto CO_STATUSES. They import as Draft; the
+  // reviewer needs to see which ones so they can reclassify after import
+  // (notably "Closed", which is ambiguous and must not become "Approved").
+  const unmappedStatuses = new Set();
+  const resolveStatus = (raw) => {
+    const mapped = normalizeStatus(raw);
+    if (mapped) return mapped;
+    const trimmed = String(raw ?? "").trim();
+    if (trimmed) unmappedStatuses.add(trimmed);
+    return "Draft";
+  };
   const idx = bestIdxObj || buildColumnIndex(rows[0]);
   if (idx.co_number < 0)  warnings.push(`No CO-number column found (looked for "CO #", "Number", "CCO", etc.).`);
   if (idx.title < 0 && idx.description < 0) warnings.push(`No title or description column found — CO names will be blank.`);
@@ -345,7 +380,7 @@ export function parseChangeOrderCsv(csvText, { fileName = "" } = {}) {
       title:        title || (desc ? desc.slice(0, 120) : ""),
       description:  desc || null,
       reason_code:  reason || null,
-      status:       normalizeStatus(status) || "Draft",
+      status:       resolveStatus(status),
       co_amount:    normalizeMoney(amount),
       submitted_date: normalizeDate(subDate),
       approved_date:  normalizeDate(appDate),
@@ -359,6 +394,15 @@ export function parseChangeOrderCsv(csvText, { fileName = "" } = {}) {
         amount_raw: amount, submitted_raw: subDate, approved_raw: appDate,
       },
     });
+  }
+
+  if (unmappedStatuses.size > 0) {
+    warnings.push(
+      `${unmappedStatuses.size} status value${unmappedStatuses.size === 1 ? "" : "s"} ` +
+      `could not be matched and will import as "Draft": ` +
+      `${[...unmappedStatuses].map((s) => `"${s}"`).join(", ")}. ` +
+      `Reclassify them after import — "Closed" is deliberately not treated as Approved.`,
+    );
   }
 
   // Single-project detection: if every row agreed on a project number,

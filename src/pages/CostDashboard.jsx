@@ -182,14 +182,13 @@ export default function CostDashboard() {
   const contingency = Number(project?.contingency_amount) || 0;
   const contractVal = project ? computeRevisedContractValue(project, cos) : 0;
 
-  // Per-code actual/committed must come from the EXPENSE rollup (sum of Paid
-  // expenses matched by expenses.cost_code === cost_codes.cost_code_number),
-  // NOT the denormalized cost_codes.actual_cost/committed_cost columns — those
-  // are stale (the expenses table never writes back to them). useFinancials
-  // computes the authoritative rollup into costCodeRows[].actual_cost/
-  // committed_cost (same source the KPI cards use). Overlay those onto each
-  // raw code; everything downstream (charts, totals, EAC, contingency, alerts,
-  // breakdown table, CSV) reads `enrichedCodes` so it reflects real spend.
+  // Per-code actual/committed come from useFinancials' costCodeRows, which
+  // resolve each code with preferManualActual: a typed-in
+  // cost_codes.actual_cost/committed_cost WINS when > 0, otherwise the expense
+  // rollup (expenses.cost_code === cost_codes.cost_code_number) is used. The
+  // two are never summed. Overlay those onto each raw code; everything
+  // downstream (charts, totals, EAC, contingency, alerts, breakdown table, CSV)
+  // reads `enrichedCodes` so it reflects the same spend Budget Control shows.
   const { costCodeRows } = useFinancials(activeProject?.id, project);
 
   const enrichedCodes = useMemo(() => {
@@ -539,9 +538,16 @@ export default function CostDashboard() {
               const actual = Number(c.actual_cost) || 0;
               const committed = Number(c.committed_cost) || 0;
               const forecast = Number(c.forecast_to_complete) || 0;
-              // Exposure = committed (which already includes paid amounts)
+              // Variance is actual − budget, matching the TOTALS row
+              // (computeCostCodeTotals), the bar chart, and the Variance Alerts
+              // panel. It used to be committed − budget here alone, so the
+              // column did not foot to its own total whenever a cost code had
+              // committed-but-unpaid cost.
+              const variance = actual - budget;
+              // Exposure = committed (which already includes paid amounts).
+              // Deliberately a different basis from variance: it answers "how
+              // much of the budget is spoken for", not "how far over are we".
               const exposure = committed;
-              const variance = exposure - budget;
               const pctUsed = budget > 0 ? (exposure / budget) * 100 : 0;
               const overContingency = contingency > 0 && variance > contingency;
               return (

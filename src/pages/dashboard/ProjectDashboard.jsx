@@ -29,7 +29,7 @@ import TeamWorkflowSection from "./sections/TeamWorkflowSection";
 import {
   budgetCommitted,
   cashCollected,
-  committedCosts,
+  committedSpend,
   costVariance,
   daysRemaining,
   openRFICount,
@@ -153,6 +153,7 @@ export default function ProjectDashboard({
               <FinancialControlsSection
                 project={project}
                 cos={cos}
+                codes={codes}
                 expenses={expenses}
                 wps={wps}
                 sovItems={sovItems}
@@ -479,7 +480,7 @@ function buildDashboardModel(input) {
   const elapsedPct = timelineElapsedPct(project);
   const scheduleHealth = clamp(Math.round(100 - Math.max(0, elapsedPct - schedulePct)), 0, 100);
   const budget = budgetCommitted(codes);
-  const committed = committedCosts(expenses);
+  const committed = committedSpend(codes, expenses);
   const costDelta = costVariance(codes, expenses);
   const costPct = budget > 0 ? (costDelta / budget) * 100 : 0;
   const budgetHealth = budget > 0 ? clamp(Math.round(100 + Math.min(0, costPct)), 0, 100) : 78;

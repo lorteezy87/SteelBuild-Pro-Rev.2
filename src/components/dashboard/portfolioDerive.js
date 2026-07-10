@@ -7,6 +7,7 @@
 import { summarizeProjectSchedule } from "./portfolioTimeline";
 import { statusIn, parseUTCDate, isOverdue, daysOverdue } from "../shared/formatters";
 import { computeWeightedHealth, HEALTH_ORDER, psrHealthProvenance } from "./portfolioHealth";
+import { resolveProjectSpend } from "@/services/costRollup";
 
 /**
  * Split every change order into trust buckets: approved (committed), pending
@@ -313,11 +314,17 @@ export function computeProjectMetrics(projects, allRFIs, allCOs, allCodes, allWP
       const budget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
       const hasBudgetData = pCodes.length > 0;
       const paidExpenses = pExpenses.filter((e) => statusIn(e.payment_status, ["Paid"]));
-      const actual = paidExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      // Resolved exactly as Budget Control resolves it: a typed-in
+      // cost_codes.actual_cost beats that code's expense rollup. Summing paid
+      // expenses alone reported $0 for any project whose actuals are typed onto
+      // cost codes rather than logged as expenses — the same project showed
+      // real spend on Budget Control and nothing here.
+      const spend = resolveProjectSpend(pCodes, pExpenses);
+      const actual = spend.actual;
       // hasActualData must mirror the slice that produces `actual` — otherwise
       // a project with only Submitted/Approved (unpaid) expenses shows as
       // "has data" while actual stays $0, faking a green Variance cell.
-      const hasActualData = paidExpenses.length > 0;
+      const hasActualData = paidExpenses.length > 0 || spend.mappedActual > 0;
       const openRFIs = pRFIs.filter((r) => !statusIn(r.status, ["Answered", "Closed"])).length;
       const overdueRFIs = pRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
       const avgProgress = pWPs.length > 0 ? Math.round(pWPs.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / pWPs.length) : 0;

@@ -19,6 +19,8 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { readChangeOrderCsvFile } from "@/lib/importChangeOrderCsv";
+import { batchProcess } from "@/utils/batchProcess";
+import { invalidateEntity } from "@/services/cacheRegistry";
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -168,19 +170,33 @@ export default function ChangeOrderImportModal({
         });
       }
 
-      let created = 0;
-      for (const row of toInsert) {
-         
-        await entities.ChangeOrder.create(row);
-        created += 1;
+      // One bad row must not abort the rest of the import. This loop used to
+      // let the first rejected INSERT throw straight out, leaving a partial
+      // import with no indication of where it stopped.
+      const { succeeded, failed } = await batchProcess(toInsert, (row) =>
+        entities.ChangeOrder.create(row),
+      );
+      const created = succeeded.length;
+
+      setLastResult({ created, skipped, failed: failed.length });
+      if (failed.length > 0) {
+        toast.warning(
+          `${created} imported, ${failed.length} failed` +
+          `${skipped ? `, ${skipped} skipped (already in project)` : ""}` +
+          ` — first error: ${failed[0].error}`,
+        );
+      } else {
+        toast.success(`${created} change order${created === 1 ? "" : "s"} imported${skipped ? `, ${skipped} skipped (already in project)` : ""}`);
       }
 
-      setLastResult({ created, skipped });
-      toast.success(`${created} change order${created === 1 ? "" : "s"} imported${skipped ? `, ${skipped} skipped (already in project)` : ""}`);
-      qc.invalidateQueries({ queryKey: ["cos-all"] });
-      qc.invalidateQueries({ queryKey: ["change-orders"] });
-      qc.invalidateQueries({ queryKey: ["change-orders", chosenProjectId] });
-      onCreated?.({ created, skipped });
+      // invalidateEntity fans out to every registered change_order query family
+      // (the hand-rolled list here missed change-orders-global / -dash /
+      // all-cos-portfolio). Approved COs also move a project's revised contract
+      // value, so ["projects"] has to go too.
+      await invalidateEntity(qc, "change_order", chosenProjectId);
+      qc.invalidateQueries({ queryKey: ["projects"] });
+
+      onCreated?.({ created, skipped, failed: failed.length });
       setStep("done");
       setTimeout(() => { reset(); onClose(); }, 1500);
     } catch (e) {
@@ -462,6 +478,9 @@ export default function ChangeOrderImportModal({
               {lastResult && (
                 <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
                   {lastResult.created} new · {lastResult.skipped} skipped
+                  {lastResult.failed > 0 && (
+                    <span style={{ color: "var(--status-error)" }}> · {lastResult.failed} failed</span>
+                  )}
                 </div>
               )}
             </div>
