@@ -5,8 +5,10 @@
 -- Phase 1 of the submittal-logic routing correction. When ON, a BFA
 -- "Approved" disposition routes through the detailer scrub (OFS -> IFC ->
 -- Released) exactly like "Approved as Noted", instead of skipping straight to
--- IFC. Default OFF so global behavior is unchanged; the owner
--- (nickl@shsteelaz.com) is opted in via `user_overrides` for field testing.
+-- IFC. Default behavior remains unchanged.
+-- 
+-- Per-user enrollment is administrator-managed operational state.
+-- Existing administrator-set global values and overrides are preserved.
 --
 -- Additive + idempotent: re-running only refreshes the description while
 -- preserving any admin-set global `enabled` value and the owner override.
@@ -17,7 +19,7 @@ INSERT INTO public.feature_flags (flag_key, enabled, user_overrides, description
 VALUES (
   'submittal_approved_to_scrub',
   false,
-  '{"nickl@shsteelaz.com": true}'::jsonb,
+  '{}'::jsonb,
   'When on, a BFA "Approved" submittal routes through the detailer scrub (OFS -> IFC -> Released) like "Approved as Noted", rather than skipping to IFC. Phase 1 submittal-logic routing correction.'
 )
 ON CONFLICT (flag_key) DO UPDATE

@@ -5,9 +5,10 @@
 -- Phase 4 of the submittal-logic integration. When ON, the submittal detail
 -- panel exposes per-drawing-type (Shop / Erection / Part) received + released
 -- tracking (backed by the submittal_components table), plus S/E/P chips on the
--- register rows + detail header. Default OFF so global behavior is unchanged;
--- the owner (nickl@shsteelaz.com) is opted in via `user_overrides` for field
--- testing.
+-- register rows + detail header. Default behavior remains unchanged.
+-- 
+-- Per-user enrollment is administrator-managed operational state.
+-- Existing administrator-set global values and overrides are preserved.
 --
 -- Additive + idempotent: re-running only refreshes the description while
 -- preserving any admin-set global `enabled` value and the owner override.
@@ -22,7 +23,7 @@ INSERT INTO public.feature_flags (flag_key, enabled, user_overrides, description
 VALUES (
   'submittal_drawing_types',
   false,
-  '{"nickl@shsteelaz.com": true}'::jsonb,
+  '{}'::jsonb,
   'When on, a submittal tracks each drawing type (Shop/Erection/Part) independently — its own received + released-for-fabrication dates — via the submittal_components table, with per-type controls in the detail panel and S/E/P chips in the register. Release-per-type is independent of submittals.status and the fab-release gate. Phase 4 submittal-logic integration.'
 )
 ON CONFLICT (flag_key) DO UPDATE

@@ -10,10 +10,10 @@
 -- OFA uses the `approval` lead, OFS the `scrub` lead from
 -- projects.metadata.detailing_lead_days (per-package override honored),
 -- defaulting to ~10 working days when absent. The hub's due countdown is then
--- shown in working days too. Default OFF so global behavior is unchanged
--- (required_date stays manual, calendar-day display, learned forecast
--- untouched); the owner (nickl@shsteelaz.com) is opted in via `user_overrides`
--- for field testing.
+-- shown in working days too. Default behavior remains unchanged.
+-- 
+-- Per-user enrollment is administrator-managed operational state.
+-- Existing administrator-set global values and overrides are preserved.
 --
 -- Additive + idempotent: re-running only refreshes the description while
 -- preserving any admin-set global `enabled` value and the owner override.
@@ -29,7 +29,7 @@ INSERT INTO public.feature_flags (flag_key, enabled, user_overrides, description
 VALUES (
   'submittal_workday_dues',
   false,
-  '{"nickl@shsteelaz.com": true}'::jsonb,
+  '{}'::jsonb,
   'When on, a submittal moving into OFA (Out For Approval) or OFS (Out For Scrub) auto-stamps its due date (submittals.required_date, only when unset) at today + the project turnaround lead counted in WORKING days (Mon-Fri); OFA uses the approval lead, OFS the scrub lead from projects.metadata.detailing_lead_days (per-package override honored, ~10 working-day default), and the due countdown is shown in working days. Default off: required_date stays manual, calendar-day display, learned forecast unchanged. Phase 5 submittal-logic integration.'
 )
 ON CONFLICT (flag_key) DO UPDATE
