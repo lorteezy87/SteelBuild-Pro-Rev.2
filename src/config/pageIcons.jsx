@@ -59,8 +59,6 @@ export const PAGE_ICON = {
   BudgetHours: TrendingUp,
 
   CostHub: Wallet,
-  Financials: Wallet,
-  CostDashboard: TrendingUp,
   SOV: Receipt,
   PayApplications: Receipt,
   Backcharges: DollarSign,
