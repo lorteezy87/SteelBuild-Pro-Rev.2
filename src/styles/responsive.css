@@ -371,6 +371,27 @@ body {
   }
 }
 
+/* Phone (<=640px): restack multi-column field forms + scroll long tab strips. */
+@media (max-width: 640px) {
+  /* DailyLogForm inline grids collapse to a single column so nothing gets
+     crushed at ~375px. Desktop keeps the inline grid templates. */
+  .dl-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* FieldHub tab strip: a single horizontally-scrollable row instead of
+     wrapping ~9-10 tabs into 3-4 stacked rows on a phone. */
+  .field-hub-tabstrip {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .field-hub-tabstrip > button {
+    flex: 0 0 auto;
+  }
+}
+
 @media (max-width: 560px) {
   .field-fast-capture-rail {
     top: 52px;

@@ -350,11 +350,17 @@ export default function PhotoUploadModal({ projectId, onClose }) {
           <button
             onClick={onClose}
             disabled={isUploading}
+            aria-label="Close"
             style={{
               background: "transparent",
               border: "none",
               color: "var(--text-muted)",
               cursor: isUploading ? "not-allowed" : "pointer",
+              minWidth: 40,
+              minHeight: 40,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               padding: 4,
               opacity: isUploading ? 0.5 : 1,
             }}
@@ -750,11 +756,17 @@ function ItemRow({ item, onChange, onRemove, disabled }) {
       <button
         onClick={onRemove}
         disabled={disabled}
+        aria-label="Remove photo"
         style={{
           background: "transparent",
           border: "none",
           color: "var(--text-muted)",
           cursor: disabled ? "not-allowed" : "pointer",
+          minWidth: 40,
+          minHeight: 40,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           padding: 4,
         }}
         title="Remove"

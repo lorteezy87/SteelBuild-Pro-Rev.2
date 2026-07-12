@@ -120,26 +120,41 @@ export default function PhotoStripUploader({
                 disabled={disabled}
                 aria-label="Remove photo"
                 style={{
+                  // 40px transparent hit area anchored top-right so the tap
+                  // target clears the mobile min while the visible badge stays
+                  // small (the thumbnail itself has no other click action).
                   position: "absolute",
-                  top: 2,
-                  right: 2,
-                  width: 18,
-                  height: 18,
-                  borderRadius: 9,
+                  top: 0,
+                  right: 0,
+                  width: 40,
+                  height: 40,
                   border: "none",
-                  background: "rgba(7,9,14,0.78)",
-                  color: "white",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  lineHeight: 1,
+                  background: "transparent",
                   cursor: disabled ? "not-allowed" : "pointer",
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 0,
+                  alignItems: "flex-start",
+                  justifyContent: "flex-end",
+                  padding: 2,
                 }}
               >
-                {"×"}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    background: "rgba(7,9,14,0.78)",
+                    color: "white",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {"×"}
+                </span>
               </button>
             </div>
           );

@@ -216,6 +216,7 @@ export default function FieldHub() {
       <div
         role="tablist"
         aria-label="Field"
+        className="field-hub-tabstrip"
         style={{
           display: "flex",
           gap: 6,
