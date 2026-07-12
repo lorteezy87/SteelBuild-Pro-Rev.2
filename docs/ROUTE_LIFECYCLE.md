@@ -17,8 +17,13 @@ The route layer now distinguishes route intent so lifecycle, visibility, and nav
 - Legacy compatibility paths in `STATIC_ROUTE_METADATA`:
   - `/GanttChart` → `/Schedule`
   - `/RFIHub` → `/RFIs`
+  - `/Financials` → `/CostHub`
+  - `/CostDashboard` → `/CostHub`
   - `/ProjectDetail` → `/Projects`
 - Legacy entries remain in route inventory and are validated as redirects with mounted targets.
+
+- CostHub is the canonical Budget Control surface. `/Financials` and
+  `/CostDashboard` now resolve to `/CostHub` through compatibility redirects.
 
 ## retired
 - Retired implementations are deleted from the registry and routing entry points.

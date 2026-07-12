@@ -168,6 +168,14 @@ export default function AppRoutes() {
         />
 
         <Route path="ProjectDetail" element={<LegacyProjectDetailRedirect />} />
+        <Route
+          path="Financials"
+          element={<Navigate to={STATIC_ROUTE_METADATA["/Financials"].target} replace />}
+        />
+        <Route
+          path="CostDashboard"
+          element={<Navigate to={STATIC_ROUTE_METADATA["/CostDashboard"].target} replace />}
+        />
 
         {/* /RFIHub was retired — redirect old links to /RFIs */}
         <Route path="RFIHub" element={<Navigate to={STATIC_ROUTE_METADATA["/RFIHub"].target} replace />} />

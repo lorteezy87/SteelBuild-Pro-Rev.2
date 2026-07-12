@@ -41,7 +41,7 @@ export default function FinancialSnapshotCard({ financials = {} }) {
           <div style={{ width: 3, height: 16, background: "var(--accent)", borderRadius: 2 }} />
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Financial Snapshot</span>
         </div>
-        <button onClick={() => navigate(createPageUrl("Financials"))} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.10em", fontWeight: 600 }}>DETAIL →</button>
+        <button onClick={() => navigate(createPageUrl("CostHub"))} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.10em", fontWeight: 600 }}>DETAIL →</button>
       </div>
 
       <div style={{ padding: "10px 16px 16px" }}>
@@ -51,7 +51,7 @@ export default function FinancialSnapshotCard({ financials = {} }) {
             <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.5 }}>◎</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 8 }}>Awaiting Budget Data</div>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", marginBottom: 14, lineHeight: 1.5 }}>Set a contract value in Project Settings, then add cost codes and expenses to see your financials here.</div>
-            <button onClick={() => navigate(createPageUrl("Financials"))} style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--accent)", background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-btn)", padding: "8px 16px", cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase" }}>Set Up Budget →</button>
+            <button onClick={() => navigate(createPageUrl("CostHub"))} style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--accent)", background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-btn)", padding: "8px 16px", cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase" }}>Set Up Budget →</button>
           </div>
         )}
         {/* Financial content — only when data exists */}

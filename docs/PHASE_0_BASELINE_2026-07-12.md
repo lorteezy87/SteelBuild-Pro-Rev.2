@@ -100,6 +100,17 @@
   - `src/lib/production/repository.ts`
 - ✅ Mutation authority now prefers live domain commands/repositories plus RLS/RPC (no universal workflow engine).
 
+### Batch 14 — Budget Control canonicalization
+- ✅ Batch 14 completed:
+  - Made `CostHub` the canonical Budget Control surface.
+  - Deleted `src/pages/Financials.jsx`.
+  - Deleted `src/pages/CostDashboard.jsx`.
+  - Added compatibility redirects for `/Financials` and `/CostDashboard` to `/CostHub`.
+  - Added redirect entries to `STATIC_ROUTE_METADATA` and route tests.
+- ✅ Began route-by-route `command_ui` retirement:
+  - Budget legacy pages are retired in routing and only the canonical `CostHub` remains.
+- ⚠️ **P0-07 remains in progress** (command_ui fallback retirement continues by batch).
+
 ## Product Disposition Matrix
 
 | Area | KEEP | FINISH | HIDE | RETIRE |

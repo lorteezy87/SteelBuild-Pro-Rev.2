@@ -46,6 +46,8 @@ export const STATIC_ROUTE_METADATA = {
   "/Landing": { lifecycle: "active", kind: "entry" },
   "/GanttChart": { lifecycle: "legacy", kind: "redirect", target: "/Schedule" },
   "/RFIHub": { lifecycle: "legacy", kind: "redirect", target: "/RFIs" },
+  "/Financials": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
+  "/CostDashboard": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
   "/ProjectDetail": { lifecycle: "legacy", kind: "redirect", target: "/Projects" },
 };
 
@@ -139,8 +141,6 @@ const ROUTE_DOMAINS = {
   // ── Cost & Finance ──
   cost: {
     CostHub:             r(lazyWithRetry(() => import("@/pages/CostHub")),             "Budget Control",       { projectScoped: true }),
-    Financials:          r(lazyWithRetry(() => import("@/pages/Financials")),          "Budget Control",       { projectScoped: true }),
-    CostDashboard:       r(lazyWithRetry(() => import("@/pages/CostDashboard")),       "Cost Dashboard",       { projectScoped: true }),
     ChangeOrders:        r(lazyWithRetry(() => import("@/pages/ChangeOrders")),        "Change Orders",        { projectScoped: true }),
     Backcharges:        r(lazyWithRetry(() => import("@/pages/Backcharges")),         "Backcharge Defense",   { projectScoped: true }),
     SOV:                 r(lazyWithRetry(() => import("@/pages/SOV")),                 "Schedule of Values",   { projectScoped: true }),
@@ -217,7 +217,6 @@ registerRoutePrefetcher("RFIs", () => import("@/pages/RFIs"));
 registerRoutePrefetcher("Drawings", () => import("@/pages/Drawings"));
 registerRoutePrefetcher("DrawingViewer", () => import("@/pages/DrawingViewer"));
 registerRoutePrefetcher("WorkPackages", () => import("@/pages/WorkPackages"));
-registerRoutePrefetcher("Financials", () => import("@/pages/Financials"));
 
 // ── Derived: page → component map (legacy router contract) ───────────
 export const PAGES = Object.fromEntries(
