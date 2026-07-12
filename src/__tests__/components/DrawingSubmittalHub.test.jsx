@@ -53,7 +53,15 @@ vi.mock("@/lib/supabase", () => ({
 
 vi.mock("@/hooks/useFeatureFlag", () => ({ useFlag: () => false, useFeatureFlag: () => false }));
 vi.mock("@/components/shared/useAppSecurity", () => ({
-  useAppSecurity: () => ({ can: () => true, user: { email: "test@example.com" } }),
+  useAppSecurity: () => ({ user: { email: "test@example.com", id: "test-user-id" } }),
+}));
+vi.mock("@/services/permissions", () => ({
+  usePermissions: () => ({
+    can: () => true,
+    userId: "test-user-id",
+    isAdmin: false,
+    user: { id: "test-user-id", email: "test@example.com" },
+  }),
 }));
 
 import DrawingSubmittalHub from "@/pages/DrawingSubmittalHub";

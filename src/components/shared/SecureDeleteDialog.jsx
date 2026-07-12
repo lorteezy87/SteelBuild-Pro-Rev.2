@@ -11,7 +11,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { useAppSecurity }      from './useAppSecurity';
+import { usePermissions } from "@/services/permissions";
 import { useDestructiveAudit } from './useDestructiveAudit';
 
 export default function SecureDeleteDialog({
@@ -25,7 +25,7 @@ export default function SecureDeleteDialog({
   typedValue   = 'DELETE',
 }) {
   const trapRef = useFocusTrap(open);
-  const { can, isAdmin } = useAppSecurity();
+  const { can } = usePermissions();
   const { logAction } = useDestructiveAudit();
   const userEmail = typeof window !== 'undefined' ? localStorage.getItem('current_user_email') : null;
   const [typed, setTyped] = useState('');
@@ -37,7 +37,7 @@ export default function SecureDeleteDialog({
   if (!open) return null;
 
   const permAction = requireTyped ? 'delete_project' : 'delete';
-  const allowed    = can(permAction, record);
+  const allowed    = can(permAction);
   const isOwner    = !record?.created_by || record.created_by === userEmail;
   const typeOk     = !requireTyped || typed.trim() === typedValue;
   const canConfirm = allowed && typeOk;

@@ -82,6 +82,12 @@
 - ✅ `/GanttChart` is restored to the advertised route inventory.
 - ✅ Route lifecycle validation now enforces labeled route metadata and mountability checks.
 
+### Batch 12 — Permission authority consolidation
+- ✅ Closed: **P0-08** — consolidated UI authorization to `usePermissions()` as the sole permission resolver.
+- ✅ `useAppSecurity()` now provides only identity and write-shaping helpers (`user`, `stamp`, `assertProjectId`).
+- ✅ Permission checks for `FeatureFlagsAdmin` and privileged surfaces now remain in `usePermissions()`.
+- ✅ RLS/RPC remains the authoritative control for actual reads/writes and workflow state transitions.
+
 ## Product Disposition Matrix
 
 | Area | KEEP | FINISH | HIDE | RETIRE |

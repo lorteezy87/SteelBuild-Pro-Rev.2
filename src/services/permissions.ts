@@ -1,12 +1,15 @@
 /**
  * permissions.ts — Server-authoritative permission model.
  *
- * Problem: useAppSecurity stores roles in localStorage (bypassable).
- *          can() returns true for ALL authenticated users.
+ * Sole client-side authorization resolver in the UI.
+ * Authorization is combined from:
+ * - `user_profiles.role` (global account role),
+ * - `get_my_project_role(project_id)` (active-project role) with global-admin override.
  *
- * Solution: Fetch role from user_profiles table (server truth).
- *           Frontend role logic is DISPLAY ONLY — never gates mutations.
- *           All mutation guards use validateTransition() which checks role.
+ * Frontend checks are intentional display behavior only:
+ * - `can()` and `canPerform()` gate what the UI enables.
+ * - RLS and RPC policies still block unauthorized reads/writes.
+ * - Workflow transitions remain validated by `validateTransition()`.
  *
  * Usage:
  *   import { usePermissions } from "@/services/permissions";
@@ -156,6 +159,7 @@ export function usePermissions() {
     : projectId
       ? (projectRole ?? "viewer")
       : globalRole;
+  // Keep least-privilege display behavior while project role data is loading.
   const roleRank = ROLE_RANK[role] ?? 99;
 
   /**
