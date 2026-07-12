@@ -47,6 +47,13 @@
 - ✅ Closed: `web-ifc` remains on-demand.
 - ⚠️ Oversized-chunk warning remains open; do not suppress it without explicit measurement and review.
 
+### Batch 7 — Data removal + synthetic replacements
+- ✅ Closed: Tracked export payloads were removed from repository source via `git rm`, including `exports/SteelBuild-Pro-Skyport-Redfield.xlsx`, `exports/data/skyport_core.json`, `exports/data/skyport_drawings.json`, `exports/data/skyport_rfis.json`, `exports/data/skyport_schedule.json`, `exports/build_workbook.py`, `exports/app/SteelBuild-Pro-App.xlsx`, `exports/app/SteelBuild-Pro.xlsm`, `exports/app/build_app_shell.py`, `exports/app/inject_vba.ps1`, and `exports/app/vba/*`.
+- ✅ Closed: `exports/` directory and `*.xlsm` are now ignored in `.gitignore` as non-source operational/customer deliverables.
+- ✅ Closed: Synthetic demo values were introduced in user-facing public/demo content and PSR parser tests (project `Rivergate Logistics Center`, number `DEMO-001`/`90001`, synthetic RFI references and sheet/file identifiers).
+- ✅ Closed: Export remediation policy recorded in `docs/EXPORT_DATA_POLICY.md`.
+- ⚠️ Export history remains in prior Git history and is not rewritten by this batch; a separately approved owner decision is required before history remediation.
+
 ## Product Disposition Matrix
 
 | Area | KEEP | FINISH | HIDE | RETIRE |

@@ -171,7 +171,7 @@ function ProductMockup() {
       </div>
       <div className="lp-product-main">
         <div className="lp-product-topbar">
-          <div className="lp-project-pill">Skyport at Redfield <span>Project ID: SB-2021</span></div>
+          <div className="lp-project-pill">Rivergate Logistics Center <span>Project ID: DEMO-001</span></div>
           <div className="lp-product-search">Search drawings, submittals, RFIs, or documents...</div>
           <div className="lp-product-user">JM</div>
         </div>

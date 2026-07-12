@@ -12,12 +12,12 @@
  *
  * Usage:
  *   downloadSchedule({
- *     filename: "project-25531-schedule.ics",
+ *     filename: "project-DEMO-001-schedule.ics",
  *     events: [
  *       { uid: "task-abc", title: "Bldg 2 Erection", start: "2026-05-15", end: "2026-05-22", description: "...", category: "TASK" },
  *       { uid: "rfi-042",  title: "RFI-042 due", start: "2026-04-30", allDay: true, category: "RFI", reminderDaysBefore: 3 },
  *     ],
- *     calendarName: "SteelBuild Pro — Project 25531",
+ *     calendarName: "SteelBuild Pro — Project DEMO-001",
  *   });
  */
 
