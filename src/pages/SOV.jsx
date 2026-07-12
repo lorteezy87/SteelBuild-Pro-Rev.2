@@ -193,18 +193,17 @@ export default function SOV() {
   /* ── Mutations ── */
   const createMut = useMutation({
     mutationFn: async (d) => {
+      if (!activeProject?.id) {
+        throw new Error("Select a project before creating a SOV item.");
+      }
       let sovId;
       try {
-        sovId = activeProject?.id
-          ? await getNextNumber(activeProject.id, 'SOV')
-          : null;
+        sovId = await getNextNumber(activeProject.id, "SOV");
       } catch (e) {
-        console.warn('getNextNumber failed, using fallback:', e);
-        sovId = null;
+        console.warn("[SOV] getNextNumber failed:", e?.message);
+        throw new Error("Unable to reserve a SOV id. Please retry.");
       }
-      if (!sovId) {
-        sovId = `SOV-${String((sovs.length || 0) + 1).padStart(3, '0')}`;
-      }
+      if (!sovId) throw new Error("Unable to reserve a SOV id. Please retry.");
       return entities.SOVItem.create({
         ...d,
         sov_id: sovId,
@@ -589,7 +588,7 @@ export default function SOV() {
     URL.revokeObjectURL(url);
   };
 
-  const nextSovId = `SOV-${String((sovs.length || 0) + 1).padStart(3, '0')}`;
+  const nextSovId = "";
   const COL_COUNT = 16;
 
   /* ═══════════════════════════════════════════════════════════════

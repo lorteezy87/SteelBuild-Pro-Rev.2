@@ -331,12 +331,9 @@ export default function FabRelease() {
       const nextNumber = await getNextNumber(projectId, "wp_number");
       wpNumber = `WP-${String(nextNumber).padStart(3, "0")}`;
     } catch (err) {
-      console.warn("[FabRelease] getNextNumber fallback:", err?.message);
-      const maxNumber = workPackages
-        .map((wp) => parseInt(String(wp.wp_number || "").replace(/\D/g, ""), 10))
-        .filter((value) => !Number.isNaN(value))
-        .reduce((max, value) => Math.max(max, value), 0);
-      wpNumber = `WP-${String(maxNumber + 1).padStart(3, "0")}`;
+      console.warn("[FabRelease] getNextNumber failed:", err?.message);
+      toast.error("Unable to reserve a work package number. Please retry.");
+      return;
     }
     setDetailWP(null);
     setEditingWP({

@@ -110,13 +110,16 @@ export default function ExpensesPage() {
   /* ── Mutations ── */
   const createMut = useMutation({
     mutationFn: async (d) => {
+      if (!activeProject?.id) {
+        throw new Error("Select a project before creating an expense.");
+      }
       let expenseNumber;
       try {
-        expenseNumber = activeProject?.id ? await getNextNumber(activeProject.id, "EXPENSE") : null;
+        expenseNumber = await getNextNumber(activeProject.id, "EXPENSE");
       } catch {
-        expenseNumber = null;
+        throw new Error("Unable to reserve an expense number. Please retry.");
       }
-      if (!expenseNumber) expenseNumber = `EXP-${String((expenses.length || 0) + 1).padStart(3, "0")}`;
+      if (!expenseNumber) throw new Error("Unable to reserve an expense number. Please retry.");
       return entities.Expense.create({ ...d, expense_number: expenseNumber, project_id: d.project_id || activeProject?.id });
     },
     onSuccess: () => {
@@ -384,7 +387,7 @@ export default function ExpensesPage() {
         sovItems={sovItems}
         expenses={expenses}
         costCodes={costCodes}
-        nextNumber={`EXP-${String((expenses.length || 0) + 1).padStart(3, "0")}`}
+        nextNumber=""
         defaultProjectId={activeProject?.id}
       />
       <ExpenseImportModal
