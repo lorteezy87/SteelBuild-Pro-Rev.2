@@ -34,7 +34,6 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
 import { AlertTriangle, Box, CalendarClock, Gauge, Link2 } from "lucide-react";
 import { useFlag } from "@/hooks/useFeatureFlag";
-import Model3DTab from "@/components/viewer3d/Model3DTab";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
 import { DetailingCommandShell } from "./drawingSubmittalHub/DetailingCommandShell";
@@ -98,6 +97,12 @@ const DocControlPanel = lazyWithRetry(() =>
 const RevisionCompareModalLazy = lazyWithRetry(
   () => import("@/components/drawings/RevisionCompareModal"),
 ) as unknown as ComponentType<AnyProps>;
+// 3D remains out of the normal Detailing path; its interaction subsystem is loaded
+// separately, web-ifc stays a second-level dynamic import, and the feature is
+// already guarded by the feature flag.
+const Model3DTab = lazyWithRetry(
+  () => import("@/components/viewer3d/Model3DTab")
+);
 
 // The design-system primitives + these shared screens are still .jsx; cast
 // at the boundary (removable once the shared layer is typed).
@@ -204,7 +209,7 @@ export default function DrawingSubmittalHub() {
     // fab colors that "didn't stick" (the assigned pieces weren't in the 1000).
     // fetchAllModelElements pages with .range() so the WHOLE roster loads.
     queryFn: () => fetchAllModelElements(projectId),
-    enabled: !!projectId,
+    enabled: !!projectId && show3d && activeTab === "model3d",
     staleTime: 60_000,
   });
 
