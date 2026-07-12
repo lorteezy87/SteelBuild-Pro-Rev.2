@@ -9,7 +9,7 @@ import {
   filterDocsForCommandUi,
   planFolderDeletion,
 } from "../documentsControlCenter.derive";
-import type { DocumentRecord, FolderRecord } from "../documentsControlCenter.derive";
+import type { CommandUiFilterInput, DocumentRecord, FolderRecord } from "../documentsControlCenter.derive";
 
 function isoOffset(offsetDays: number): string {
   const d = new Date();
@@ -222,7 +222,7 @@ describe("filterDocsForCommandUi", () => {
     { id: "3", displayName: "Beam Detail", folder_id: "f1", category: "Structural", status: "Approved",    uploadedDate: "2026-01-04" },
     { id: "4", displayName: "Site Grade", folder_id: "f4", category: "Civil",      status: "Approved",     uploadedDate: "2026-01-06" },
   ];
-  const base = { docs, search: "", category: "All", statusTab: "all", currentFolderId: null };
+  const base: CommandUiFilterInput = { docs, search: "", category: "All", statusTab: "all", currentFolderId: null };
 
   it("scopes to the current folder when not searching", () => {
     expect(filterDocsForCommandUi(base).map((d) => d.id)).toEqual(["1"]);

@@ -86,7 +86,7 @@ function earliestPhase(phases) {
  * @param {object} record  A punchlist item / inspection / incident / daily log.
  * @param {string} type    One of FIELD_ACTIVITY_TYPES.
  * @param {object} [opts]
- * @param {Map<string, {phase?: string}>} [opts.tasksById]  schedule_tasks by id,
+ * @param {Map<string, {phase?: string | null}>} [opts.tasksById]  schedule_tasks by id,
  *        used to resolve a daily log's linked phase.
  * @returns {{ phase: string, source: string }}
  */
