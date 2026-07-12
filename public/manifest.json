@@ -1,17 +1,26 @@
 {
+  "id": "/",
   "name": "SteelBuild Pro",
   "short_name": "SteelBuild",
-  "description": "Structural steel construction project management",
+  "description": "Structural steel construction project management — RFIs, drawings, fabrication, deliveries, costs, and field operations.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#020617",
-  "theme_color": "#0f172a",
+  "background_color": "#0B0E11",
+  "theme_color": "#0B0E11",
+  "categories": ["business", "productivity"],
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }

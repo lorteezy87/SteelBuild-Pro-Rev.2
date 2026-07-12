@@ -35,6 +35,33 @@ function installWebManifest() {
 
 installWebManifest()
 
+// Register the offline app-shell service worker (public/sw.js). Best-effort:
+// registration failure must never break app boot. Gated to real deploys —
+// NOT localhost/dev (a SW + Vite HMR fight each other) and NOT protected Vercel
+// previews (caching an auth-walled shell is useless). Mirrors installWebManifest.
+function registerServiceWorker() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return
+  if (!('serviceWorker' in navigator)) return
+  // import.meta.env.PROD is false under `vite` dev; only run on built output.
+  if (!import.meta.env.PROD) return
+
+  const { hostname } = window.location
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return
+  const isProductionAlias = hostname === 'steelbuild-pro.vercel.app'
+  const isProtectedVercelDeployment = hostname.endsWith('.vercel.app') && !isProductionAlias
+  if (isProtectedVercelDeployment) return
+
+  window.addEventListener('load', () => {
+    // updateViaCache:'none' — always revalidate the SW script itself so a new
+    // strategy ships promptly (the HTTP cache never masks a sw.js update).
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch((err) => {
+      logError(err, { source: 'sw.register' })
+    })
+  })
+}
+
+registerServiceWorker()
+
 // Capture errors that escape React's render tree (async work, promise
 // rejections, third-party scripts) so they share a logging path with the
 // ErrorBoundaries.
