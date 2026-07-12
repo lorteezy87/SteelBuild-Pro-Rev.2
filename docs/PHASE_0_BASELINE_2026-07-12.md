@@ -118,6 +118,20 @@
   - Preserved all specialized report routes (`/Reports/:slug`) including Job Status, Decision Log, and Activity.
   - Kept search and category filtering via `REPORTS` + `ReportsHubControlCenter`.
 
+### Batch 16 — Resource Register canonicalization
+- ✅ Batch 16 completed:
+  - Made `ResourceHub` / `ResourcesControlCenter` the canonical Resource Register surface.
+  - Deleted `src/pages/ResourceManagement.jsx`.
+  - Added compatibility redirect for `/ResourceManagement` → `/ResourceHub`.
+  - Kept Crew Scheduling as a distinct supported workflow.
+
+### Open items
+- 🔄 Batches 14–16 completed in sequence for canonicalization by route:
+  - Budget Control
+  - Reports & Insights
+  - Resource Register
+- P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
+
 ## Product Disposition Matrix
 
 | Area | KEEP | FINISH | HIDE | RETIRE |

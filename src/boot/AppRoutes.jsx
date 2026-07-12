@@ -176,6 +176,10 @@ export default function AppRoutes() {
           path="CostDashboard"
           element={<Navigate to={STATIC_ROUTE_METADATA["/CostDashboard"].target} replace />}
         />
+        <Route
+          path="ResourceManagement"
+          element={<Navigate to={STATIC_ROUTE_METADATA["/ResourceManagement"].target} replace />}
+        />
 
         {/* /RFIHub was retired — redirect old links to /RFIs */}
         <Route path="RFIHub" element={<Navigate to={STATIC_ROUTE_METADATA["/RFIHub"].target} replace />} />

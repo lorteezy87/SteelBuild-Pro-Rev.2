@@ -22,7 +22,7 @@ export const PRIMARY_TABS = [
   // folded into FIELD — fewer logical groups, and every page stays reachable
   // (these arrays drive route-reachability + tab mapping, not a visible tab bar).
   // FieldPlan added here so it's no longer orphaned from the registry.
-  { label: "FABRICATION", pages: ["WorkPackages", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "MarginRisk", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling", "ResourceManagement"] },
+  { label: "FABRICATION", pages: ["WorkPackages", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "MarginRisk", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldToday", "FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
@@ -87,7 +87,6 @@ export const ALL_MODULES = [
   { icon: "⚖", name: "Backcharge Defense",      group: "Cost",          page: "Backcharges" },
   { icon: "🧾", name: "Pay Applications",   group: "Cost",          page: "PayApplications" },
   { icon: "\uD83D\uDC65", name: "Resources",          group: "Fabrication",   page: "ResourceHub" },
-  { icon: "\uD83D\uDC65", name: "Resource Register",  group: "Resources",     page: "ResourceManagement" },
   { icon: "\u25A8", name: "Crew Scheduling",          group: "Resources",     page: "ResourceScheduling" },
   { icon: "\uD83D\uDCCB", name: "Reports",            group: "Reporting",     page: "ReportsHub" },
   { icon: "\uD83D\uDCCB", name: "Job Status Report",  group: "Reporting",     page: "JobStatusReport" },

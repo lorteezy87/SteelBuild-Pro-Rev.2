@@ -49,6 +49,7 @@ export const STATIC_ROUTE_METADATA = {
   "/Financials": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
   "/CostDashboard": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
   "/ProjectDetail": { lifecycle: "legacy", kind: "redirect", target: "/Projects" },
+  "/ResourceManagement": { lifecycle: "legacy", kind: "redirect", target: "/ResourceHub" },
 };
 
 /**
@@ -119,8 +120,7 @@ const ROUTE_DOMAINS = {
     Schedule:             r(lazyWithRetry(() => import("@/pages/Schedule")),            "Schedule",             { projectScoped: true }),
     ProjectCalendar:      r(lazyWithRetry(() => import("@/pages/ProjectCalendar")),     "Project Calendar",     { projectScoped: true }),
     FieldPlan:            r(lazyWithRetry(() => import("@/pages/FieldPlan")),           "Field Plan",          { projectScoped: true }),
-    ResourceHub:          r(lazyWithRetry(() => import("@/pages/ResourceHub")),         "Resources"),
-    ResourceManagement:   r(lazyWithRetry(() => import("@/pages/ResourceManagement")),  "Resource Management"),
+    ResourceHub:          r(lazyWithRetry(() => import("@/pages/ResourceHub")),         "Resources",             { projectScoped: true }),
     ResourceScheduling:   r(lazyWithRetry(() => import("@/pages/ResourceScheduling")),  "Crew Scheduling"),
   },
 
