@@ -10,7 +10,7 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { effectiveDetailingState } from "@/lib/detailingPackageState";
 import { useFlag } from "@/hooks/useFeatureFlag";
-import { useAppSecurity } from "@/components/shared/useAppSecurity";
+import { usePermissions } from "@/services/permissions";
 import {
   accent,
   border,
@@ -227,8 +227,8 @@ export function DrawingRegisterTable({
   const workdayDues = useFlag("submittal_workday_dues");
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { can } = useAppSecurity() as any;
-  const canEdit = !can || can("edit", "drawing");
+  const { can } = usePermissions();
+  const canEdit = can("edit", "drawing");
   const [search, setSearch] = useState("");
   const [revisionSet, setRevisionSet] = useState<any>(null);
   const [reportSet, setReportSet] = useState<any>(null);
