@@ -86,8 +86,11 @@ function earliestPhase(phases) {
  * @param {object} record  A punchlist item / inspection / incident / daily log.
  * @param {string} type    One of FIELD_ACTIVITY_TYPES.
  * @param {object} [opts]
- * @param {Map<string, {phase?: string}>} [opts.tasksById]  schedule_tasks by id,
- *        used to resolve a daily log's linked phase.
+ * @param {Map<string, {phase?: string|null}>} [opts.tasksById]  schedule_tasks by
+ *        id, used to resolve a daily log's linked phase. A task's `phase` column
+ *        is nullable; the earliest-phase reducer below already ignores nullish
+ *        values (this keeps the type in sync with ScheduleTaskRef so the strict
+ *        typecheck gate passes — Map value types are invariant in TS).
  * @returns {{ phase: string, source: string }}
  */
 export function resolveFieldPhase(record, type, opts = {}) {

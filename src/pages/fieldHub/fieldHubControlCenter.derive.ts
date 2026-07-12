@@ -28,7 +28,7 @@ function phaseFields(
   type: string,
   opts?: { tasksById?: Map<string, ScheduleTaskRef> },
 ): { phase: string | null; phaseSource: string } {
-  const { phase, source } = resolveFieldPhase(record, type, opts);
+  const { phase, source } = resolveFieldPhase(record as object, type, opts);
   return { phase, phaseSource: source };
 }
 
