@@ -109,7 +109,14 @@
   - Added redirect entries to `STATIC_ROUTE_METADATA` and route tests.
 - ✅ Began route-by-route `command_ui` retirement:
   - Budget legacy pages are retired in routing and only the canonical `CostHub` remains.
-- ⚠️ **P0-07 remains in progress** (command_ui fallback retirement continues by batch).
+- ⚠️ **P0-07 remains in progress** (command_ui fallback retirement continues).
+
+### Batch 15 — Reports & Insights canonicalization
+- ✅ Batch 15 completed:
+  - Made `ReportsHub` the canonical Reports & Insights catalog surface.
+  - Removed legacy tab-shell and `command_ui` split from `src/pages/ReportsHub.jsx`.
+  - Preserved all specialized report routes (`/Reports/:slug`) including Job Status, Decision Log, and Activity.
+  - Kept search and category filtering via `REPORTS` + `ReportsHubControlCenter`.
 
 ## Product Disposition Matrix
 
