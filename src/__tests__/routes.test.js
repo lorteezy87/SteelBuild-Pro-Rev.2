@@ -7,7 +7,15 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { ALL_ROUTE_PATHS, PAGE_LABELS, PROJECT_SCOPED_PAGES, routeLabel } from "../routes";
+import {
+  ALL_ROUTE_PATHS,
+  PAGE_LABELS,
+  PAGE_LIFECYCLES,
+  PROJECT_SCOPED_PAGES,
+  ROUTE_LIFECYCLES,
+  STATIC_ROUTE_METADATA,
+  routeLabel,
+} from "../routes";
 
 describe("routes — page registry", () => {
   it("exposes a route path for every labeled page", () => {
@@ -16,10 +24,11 @@ describe("routes — page registry", () => {
     }
   });
 
-  it("includes the root, Landing, and RFIHub static routes", () => {
+  it("includes the supported static routes", () => {
     expect(ALL_ROUTE_PATHS).toContain("/");
     expect(ALL_ROUTE_PATHS).toContain("/Landing");
     expect(ALL_ROUTE_PATHS).toContain("/RFIHub");
+    expect(ALL_ROUTE_PATHS).toContain("/ProjectDetail");
   });
 
   it("has no duplicate route paths", () => {
@@ -28,6 +37,33 @@ describe("routes — page registry", () => {
       expect(seen.has(path)).toBe(false);
       seen.add(path);
     }
+  });
+
+  it("requires lifecycle metadata for labeled registry pages", () => {
+    for (const key of Object.keys(PAGE_LABELS)) {
+      const lifecycle = PAGE_LIFECYCLES[key];
+      expect(lifecycle, `Registry page ${key} missing lifecycle`).toBeDefined();
+      expect(ROUTE_LIFECYCLES.includes(lifecycle), `Invalid lifecycle "${lifecycle}" for ${key}`).toBe(true);
+    }
+  });
+
+  it("marks privileged operations as internal", () => {
+    ["FeatureFlagsAdmin", "UsersManagement", "DataExchange"].forEach((page) => {
+      expect(PAGE_LIFECYCLES[page], `${page} should be registered`).toBe("internal");
+    });
+  });
+
+  it("includes compatibility metadata paths and validates redirect targets", () => {
+    for (const [path, meta] of Object.entries(STATIC_ROUTE_METADATA)) {
+      expect(ALL_ROUTE_PATHS, `Static path ${path} should be mounted`).toContain(path);
+
+      if (meta.kind === "redirect") {
+        expect(meta.lifecycle, `Compatibility redirect ${path} should be legacy`).toBe("legacy");
+        expect(ALL_ROUTE_PATHS, `Redirect target ${meta.target} should be mounted`).toContain(meta.target);
+      }
+    }
+
+    expect(ALL_ROUTE_PATHS).toContain("/GanttChart");
   });
 });
 

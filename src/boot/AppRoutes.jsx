@@ -1,7 +1,7 @@
 import { Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { lazyWithRetry } from "@/lib/lazyRetry";
-import { PAGES, PROJECT_SCOPED_PAGES } from "@/config/routes";
+import { PAGES, PROJECT_SCOPED_PAGES, STATIC_ROUTE_METADATA } from "@/config/routes";
 import PageNotFound from "@/lib/PageNotFound";
 import PageErrorBoundary from "@/components/shared/ErrorBoundary";
 import ProjectScopedRoute from "@/components/shared/ProjectScopedRoute";
@@ -32,6 +32,17 @@ function LazyRoute({ label, children }) {
       </PageErrorBoundary>
     </Suspense>
   );
+}
+
+function LegacyProjectDetailRedirect() {
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get("projectId") || searchParams.get("id");
+
+  if (!projectId) {
+    return <Navigate to="/Projects" replace />;
+  }
+
+  return <Navigate to={`/Projects?id=${encodeURIComponent(projectId)}`} replace />;
 }
 
 export const LANDING_REDIRECT_KEY = "sbp-landing-redirected";
@@ -156,8 +167,13 @@ export default function AppRoutes() {
           }
         />
 
+        <Route path="ProjectDetail" element={<LegacyProjectDetailRedirect />} />
+
+        {/* /RFIHub was retired — redirect old links to /RFIs */}
+        <Route path="RFIHub" element={<Navigate to={STATIC_ROUTE_METADATA["/RFIHub"].target} replace />} />
+
         {/* /GanttChart was retired — redirect old deep-links to /Schedule */}
-        <Route path="GanttChart" element={<Navigate to="/Schedule" replace />} />
+        <Route path="GanttChart" element={<Navigate to={STATIC_ROUTE_METADATA["/GanttChart"].target} replace />} />
       </Route>
 
       {/* 404 — outside layout */}
