@@ -21,7 +21,10 @@ The route layer now distinguishes route intent so lifecycle, visibility, and nav
   - `/CostDashboard` → `/CostHub`
   - `/ProjectDetail` → `/Projects`
   - `/ResourceManagement` → `/ResourceHub`
+- `/AIInsights` → `/PortfolioHub`
 - Legacy entries remain in route inventory and are validated as redirects with mounted targets.
+- PortfolioHub remains the canonical Portfolio Overview route entry.
+- Executive View remains supported as a separate workflow in ExecutiveView.
 
 CostHub is the canonical Budget Control surface. `/Financials` and
 `/CostDashboard` now resolve to `/CostHub` through compatibility redirects.
@@ -51,3 +54,6 @@ CostHub is the canonical Budget Control surface. `/Financials` and
   - each registered page lifecycle is `active` or `internal`,
   - static compatibility entries are mounted in `ALL_ROUTE_PATHS`,
   - legacy redirect targets are present in `ALL_ROUTE_PATHS`.
+
+
+

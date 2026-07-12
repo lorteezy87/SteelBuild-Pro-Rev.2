@@ -125,11 +125,20 @@
   - Added compatibility redirect for `/ResourceManagement` → `/ResourceHub`.
   - Kept Crew Scheduling as a distinct supported workflow.
 
+### Batch 17 — Portfolio Overview canonicalization
+- ✅ Batch 17 completed:
+  - Made `PortfolioHub` the canonical Portfolio Overview implementation.
+  - Deleted `src/pages/AIInsights.jsx`.
+  - Added compatibility redirect `/AIInsights` to `/PortfolioHub`.
+  - Preserved `ExecutiveView` as a distinct supported workflow and route.
+  - Kept `P0-07` in progress: command_ui fallback retirement continues.
+
 ### Open items
-- 🔄 Batches 14–16 completed in sequence for canonicalization by route:
+- 🔄 Batches 14–17 completed in sequence for canonicalization by route:
   - Budget Control
   - Reports & Insights
   - Resource Register
+  - Portfolio Overview
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
 
 ## Product Disposition Matrix
@@ -158,3 +167,9 @@
 
 ## Next-step Interpretation
 Selective, in-house consolidation is preferred over a full rewrite. Phase 1 priorities are therefore: date correctness, false-success controls, routing cleanup, then controlled placeholder/hide/review pass while preserving the underlying architecture and data foundation.
+
+
+
+
+
+
