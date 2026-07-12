@@ -5,9 +5,11 @@
 -- Phase 3 of the submittal-logic integration. When ON, the submittal register
 -- + detail panel expose package SPLITTING: a "Spin off child" action on an
 -- approved/terminal submittal, a lineage card ("Spun off from <parent>" +
--- child list), and parent-grouped register rows. Default OFF so global behavior
--- is unchanged; the owner (nickl@shsteelaz.com) is opted in via `user_overrides`
--- for field testing.
+-- child list), and parent-grouped register rows. Default behavior remains
+-- unchanged.
+-- 
+-- Per-user enrollment is administrator-managed operational state.
+-- Existing administrator-set global values and overrides are preserved.
 --
 -- Additive + idempotent: re-running only refreshes the description while
 -- preserving any admin-set global `enabled` value and the owner override.
@@ -21,7 +23,7 @@ INSERT INTO public.feature_flags (flag_key, enabled, user_overrides, description
 VALUES (
   'submittal_splitting',
   false,
-  '{"nickl@shsteelaz.com": true}'::jsonb,
+  '{}'::jsonb,
   'When on, an approved submittal can be split into child submittals that link back to the parent (parent_submittal_id + split_reason), with lineage shown in the detail panel and children grouped under the parent in the register. Phase 3 submittal-logic integration.'
 )
 ON CONFLICT (flag_key) DO UPDATE

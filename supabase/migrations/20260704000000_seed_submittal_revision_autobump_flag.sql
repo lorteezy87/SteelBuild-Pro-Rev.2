@@ -5,9 +5,11 @@
 -- Phase 2 of the submittal-logic integration. When ON, opening a NEW round
 -- because the prior disposition was "Revise and Resubmit" or "Rejected"
 -- auto-advances the submittal's text `revision` column to its next value
--- ('0' -> '1', 'A' -> 'B', 'Rev 2' -> 'Rev 3'). Default OFF so global behavior
--- is unchanged (revision stays a manual field); the owner (nickl@shsteelaz.com)
--- is opted in via `user_overrides` for field testing.
+-- ('0' -> '1', 'A' -> 'B', 'Rev 2' -> 'Rev 3'). Default behavior remains
+-- unchanged (revision stays manual when disabled).
+-- 
+-- Per-user enrollment is administrator-managed operational state.
+-- Existing administrator-set global values and overrides are preserved.
 --
 -- Additive + idempotent: re-running only refreshes the description while
 -- preserving any admin-set global `enabled` value and the owner override.
@@ -18,7 +20,7 @@ INSERT INTO public.feature_flags (flag_key, enabled, user_overrides, description
 VALUES (
   'submittal_revision_autobump',
   false,
-  '{"nickl@shsteelaz.com": true}'::jsonb,
+  '{}'::jsonb,
   'When on, a Revise & Resubmit / Rejected verdict that opens a new round auto-bumps the submittal text revision to its next value (0->1, A->B, Rev 2->Rev 3). Default off; revision stays manual otherwise. Phase 2 submittal-logic integration.'
 )
 ON CONFLICT (flag_key) DO UPDATE

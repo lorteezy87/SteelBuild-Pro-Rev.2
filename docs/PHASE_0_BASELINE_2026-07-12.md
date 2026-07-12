@@ -62,6 +62,9 @@
 - ✅ Closed: CO creation now preserves user input, generates missing numbers only through `getNextFormattedNumber`, and errors if no project/number can be obtained.
 - ✅ Closed: Browser-side guessing of official numbers is removed from these flows (RFI, CO, work package, SOV, expense creation/import now fail-closed on allocator failure).
 
+### Phase 1 execution item 7
+- ✅ Complete: Feature-flag authority consolidation. The typed server-backed catalog now defines all production flags, and personal overrides remain administrator-managed environment state.
+
 ## Product Disposition Matrix
 
 | Area | KEEP | FINISH | HIDE | RETIRE |
