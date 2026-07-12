@@ -11,7 +11,26 @@
  * KPI "Equipment On-Site" is SUBSTITUTED — there is no dedicated equipment table.
  * We derive it from daily_logs.equipment_used (free-text) for today's logs:
  *   count logs from today that have a non-empty equipment_used string.
+ *
+ * Phase: none of the four field tables carries a `phase` column, so every
+ * activity row's phase is resolved by src/lib/field/fieldPhase.js and tagged
+ * with its provenance (`phaseSource`) so the UI can render a guess as a guess.
  */
+import {
+  resolveFieldPhase,
+  indexTasksById,
+  FIELD_ACTIVITY_TYPES,
+} from "@/lib/field/fieldPhase";
+
+/** Adapter: resolveFieldPhase returns `source`; the row field is `phaseSource`. */
+function phaseFields(
+  record: unknown,
+  type: string,
+  opts?: { tasksById?: Map<string, ScheduleTaskRef> },
+): { phase: string | null; phaseSource: string } {
+  const { phase, source } = resolveFieldPhase(record, type, opts);
+  return { phase, phaseSource: source };
+}
 
 /** ISO date string yyyy-mm-dd matching local date today. */
 function todayLocal(): string {
@@ -96,6 +115,16 @@ export interface FieldActivityRow {
   priority: string;
   status: string;
   reportedBy: string;
+  /** Lifecycle phase, or null when the record carries no phase evidence. */
+  phase: string | null;
+  /** "stored" | "linked" | "derived" — a derived phase must render as a guess. */
+  phaseSource: string;
+}
+
+/** A schedule_tasks row, used to resolve a daily log's linked phase. */
+export interface ScheduleTaskRef {
+  id?: string;
+  phase?: string | null;
 }
 
 export interface InspectionQueueRow {
@@ -166,8 +195,11 @@ export function buildFieldHubSummary(
   inspections: InspectionRecord[],
   incidents: SafetyIncidentRecord[],
   punchlistItems: PunchlistItemRecord[],
+  /** schedule_tasks, used only to resolve a daily log's linked phase. */
+  scheduleTasks: ScheduleTaskRef[] = [],
 ): FieldHubSummary {
   const today = todayLocal();
+  const tasksById = indexTasksById(scheduleTasks);
 
   // ── KPI: Workforce Today ────────────────────────────────────────────────
   const todayLogs = logs.filter((l) => l.date === today);
@@ -273,44 +305,48 @@ export function buildFieldHubSummary(
     id: l.id || Math.random().toString(36).slice(2),
     time: l.date || "—",
     activity: l.activities?.slice(0, 80) || `Daily log — ${l.crew_name || "crew"}`,
-    type: "Daily Log",
+    type: FIELD_ACTIVITY_TYPES.DAILY_LOG,
     location: (l.location as string | null | undefined) || l.superintendent || "—",
     priority: "Normal",
     status: l.status || "Submitted",
     reportedBy: l.superintendent || l.crew_name || "—",
+    ...phaseFields(l, FIELD_ACTIVITY_TYPES.DAILY_LOG, { tasksById }),
   }));
 
   const inspectionRows: FieldActivityRow[] = inspections.map((i) => ({
     id: i.id || Math.random().toString(36).slice(2),
     time: i.inspection_date || "—",
     activity: i.inspection_type || "Inspection",
-    type: "Inspection",
+    type: FIELD_ACTIVITY_TYPES.INSPECTION,
     location: i.location || "—",
     priority: i.deficiencies_count && i.deficiencies_count > 0 ? "High" : "Normal",
     status: i.status || "Scheduled",
     reportedBy: i.inspector_name || "—",
+    ...phaseFields(i, FIELD_ACTIVITY_TYPES.INSPECTION),
   }));
 
   const incidentRows: FieldActivityRow[] = incidents.map((i) => ({
     id: i.id || Math.random().toString(36).slice(2),
     time: i.incident_date || "—",
     activity: i.incident_type || i.description?.slice(0, 60) || "Safety incident",
-    type: "Safety",
+    type: FIELD_ACTIVITY_TYPES.SAFETY,
     location: i.location || "—",
     priority: i.severity || "Medium",
     status: i.status || "Open",
     reportedBy: i.reported_by || "—",
+    ...phaseFields(i, FIELD_ACTIVITY_TYPES.SAFETY),
   }));
 
   const punchRows: FieldActivityRow[] = punchlistItems.map((p) => ({
     id: p.id || Math.random().toString(36).slice(2),
     time: p.target_completion_date || "—",
     activity: p.description || p.category || "Punchlist item",
-    type: "Punchlist",
+    type: FIELD_ACTIVITY_TYPES.PUNCHLIST,
     location: p.location || "—",
     priority: p.priority || "Normal",
     status: p.status || "Open",
     reportedBy: p.assigned_to || "—",
+    ...phaseFields(p, FIELD_ACTIVITY_TYPES.PUNCHLIST),
   }));
 
   // Sort all rows by date descending (newest first). Rows without a date sort to end.

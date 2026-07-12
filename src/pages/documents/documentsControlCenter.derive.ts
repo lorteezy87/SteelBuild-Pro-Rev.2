@@ -44,6 +44,24 @@ export interface CategoryRow {
   totalSizeKb: number;
 }
 
+/** A `document_folders` row, as fetched by the Documents shell. */
+export interface FolderRecord {
+  id: string;
+  name: string;
+  parent_folder_id?: string | null;
+}
+
+export interface CommandUiFilterInput {
+  docs: DocumentRecord[];
+  search: string;
+  /** "All" = no category restriction. */
+  category: string;
+  /** "all" = no status restriction. */
+  statusTab: string;
+  /** null = project root. */
+  currentFolderId: string | null;
+}
+
 export interface DocumentsSummary {
   /** Raw KPI fields */
   total: number;
@@ -85,6 +103,117 @@ export function fmtSizeKb(kb: number): string {
   if (kb >= 1024 * 1024) return `${(kb / (1024 * 1024)).toFixed(1)} GB`;
   if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
   return `${Math.round(kb)} KB`;
+}
+
+/**
+ * Walk up the parent_folder_id chain to build a breadcrumb path, root-first.
+ * Bounded at depth 50 so a cycle in the data can never hang the render.
+ */
+export function buildFolderPath(folders: FolderRecord[], currentFolderId: string | null): FolderRecord[] {
+  if (!currentFolderId) return [];
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const path: FolderRecord[] = [];
+  let cursor = byId.get(currentFolderId);
+  let safety = 0;
+  while (cursor && safety++ < 50) {
+    path.unshift(cursor);
+    cursor = cursor.parent_folder_id ? byId.get(cursor.parent_folder_id) : undefined;
+  }
+  return path;
+}
+
+export interface FolderDeletionPlan {
+  /** Folder ids to soft-delete. */
+  deleteIds: string[];
+  /** Surviving child folders promoted to their nearest surviving ancestor. */
+  folderReparents: Array<{ id: string; parent_folder_id: string | null }>;
+  /** Documents inside a deleted folder, promoted to the nearest surviving ancestor. */
+  docReparents: Array<{ id: string; folder_id: string | null }>;
+}
+
+/**
+ * Plan the reparenting that must accompany a folder delete.
+ *
+ * `document_folders` is a soft-delete table, so the `ON DELETE CASCADE` on
+ * `parent_folder_id` never fires. Without this, a deleted folder's documents
+ * and sub-folders keep pointing at a now-hidden row: they match neither the
+ * root view (`folder_id IS NULL`) nor any visible folder, and disappear from
+ * the UI entirely. So we promote every survivor to the nearest ancestor that
+ * is not itself being deleted (root when all ancestors are going away).
+ *
+ * Handles bulk deletes: an ancestor and its child can both be in `folderIds`.
+ */
+export function planFolderDeletion(
+  folders: FolderRecord[],
+  docs: DocumentRecord[],
+  folderIds: string[],
+): FolderDeletionPlan {
+  const doomed = new Set(folderIds);
+  const byId = new Map(folders.map((f) => [f.id, f]));
+
+  /** Walk up from `startId` to the first ancestor not being deleted. */
+  const survivingAncestor = (startId: string | null | undefined): string | null => {
+    let cursor = startId ?? null;
+    let safety = 0;
+    while (cursor && doomed.has(cursor) && safety++ < 50) {
+      cursor = byId.get(cursor)?.parent_folder_id ?? null;
+    }
+    return cursor ?? null;
+  };
+
+  const folderReparents = folders
+    .filter((f) => !doomed.has(f.id) && f.parent_folder_id && doomed.has(f.parent_folder_id))
+    .map((f) => ({ id: f.id, parent_folder_id: survivingAncestor(f.parent_folder_id) }));
+
+  const docReparents = docs
+    .filter((d) => d.folder_id && doomed.has(d.folder_id))
+    .map((d) => ({ id: d.id as string, folder_id: survivingAncestor(d.folder_id) }));
+
+  return { deleteIds: [...doomed], folderReparents, docReparents };
+}
+
+/** Documents sitting directly inside `currentFolderId` (null = project root). */
+export function scopeDocsToFolder(docs: DocumentRecord[], currentFolderId: string | null): DocumentRecord[] {
+  return docs.filter((d) => (d.folder_id ?? null) === (currentFolderId ?? null));
+}
+
+const SEARCH_FIELDS = ["displayName", "documentNumber", "fileName", "description", "drawingNumber"] as const;
+
+function matchesSearch(d: DocumentRecord, q: string): boolean {
+  for (const f of SEARCH_FIELDS) {
+    const v = d[f];
+    if (typeof v === "string" && v.toLowerCase().includes(q)) return true;
+  }
+  const tags = d.tags;
+  if (Array.isArray(tags) && tags.some((t) => String(t).toLowerCase().includes(q))) return true;
+  return false;
+}
+
+/**
+ * The Documents Control Center list.
+ *
+ * Folder scoping is skipped while a search is active so a global search finds
+ * documents regardless of which folder the user happens to be standing in —
+ * this mirrors the classic (non-command_ui) list in Documents.jsx.
+ */
+export function filterDocsForCommandUi(input: CommandUiFilterInput): DocumentRecord[] {
+  const { docs, search, category, statusTab, currentFolderId } = input;
+  const q = search.trim().toLowerCase();
+
+  let result = q ? docs.filter((d) => matchesSearch(d, q)) : scopeDocsToFolder(docs, currentFolderId);
+
+  if (category !== "All") {
+    result = result.filter((d) => (d.category || "Uncategorized") === category);
+  }
+  if (statusTab !== "all") {
+    result = result.filter((d) => d.status === statusTab);
+  }
+
+  return [...result].sort((a, b) => {
+    const da = parseDate(a.uploadedDate ?? a.created_at)?.getTime() ?? 0;
+    const db = parseDate(b.uploadedDate ?? b.created_at)?.getTime() ?? 0;
+    return db - da;
+  });
 }
 
 /** Group documents by category, returning sorted rows (count desc). */

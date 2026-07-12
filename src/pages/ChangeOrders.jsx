@@ -36,6 +36,9 @@ import {
   toastCrudError,
 } from "@/components/shared/crudFeedback";
 import { usePermissions } from "@/services/permissions";
+import { supabase } from "@/lib/supabase";
+import { batchProcess } from "@/utils/batchProcess";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import CoControlCenter from "./changeOrders/CoControlCenter";
@@ -229,6 +232,49 @@ export default function ChangeOrders() {
     },
     onError: (e) => toastCrudError(e, "Failed to delete change order"),
   });
+
+  /**
+   * Bulk-approve. Approving a CO moves the project's revised contract value
+   * (computeRevisedContractValue sums approved co_amount), so `approved_by`
+   * must be recorded — the validation rules require it, and this path used to
+   * write status + approved_date only, leaving no record of who approved it.
+   *
+   * Also batched: this fired one un-awaited mutation per id, so a failure
+   * halfway through was invisible and every write invalidated the cache.
+   */
+  const bulkApprove = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const approvedBy =
+      user?.user_metadata?.full_name
+      || user?.email?.split("@")[0]
+      || null;
+    if (!approvedBy) {
+      toast.error("Could not identify the approver — sign in again before approving.");
+      return;
+    }
+
+    const data = {
+      status: "Approved",
+      approved_date: new Date().toISOString().split("T")[0],
+      approved_by: approvedBy,
+    };
+    const { succeeded, failed } = await batchProcess(ids, (id) =>
+      entities.ChangeOrder.update(id, data),
+    );
+
+    setSelectedIds(new Set());
+    await invalidateEntity(qc, "change_order", projectId);
+    qc.invalidateQueries({ queryKey: ["projects"] });
+
+    if (failed.length > 0) {
+      toast.warning(`Approved ${succeeded.length} of ${ids.length} — ${failed.length} failed`);
+    } else {
+      toast.success(`Approved ${succeeded.length} change order${succeeded.length === 1 ? "" : "s"}`);
+    }
+  };
 
   const handleSave = (d) => {
     if (editing) updateMut.mutate({ id: editing.id, data: d });
@@ -459,11 +505,7 @@ export default function ChangeOrders() {
             {
               label: "APPROVE",
               icon: "check",
-              onClick: () => {
-                const ids = [...selectedIds];
-                ids.forEach((id) => updateMut.mutate({ id, data: { status: "Approved", approved_date: new Date().toISOString().split("T")[0] } }));
-                setSelectedIds(new Set());
-              },
+              onClick: () => { void bulkApprove(); },
             },
             ...(can("delete", "change_order") ? [{
               label: "DELETE",

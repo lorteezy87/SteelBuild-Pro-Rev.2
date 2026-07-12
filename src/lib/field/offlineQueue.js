@@ -33,6 +33,9 @@ export const OP_SCHEDULE_PROGRESS = "schedule-progress";
 /** Op type for a punchlist-item create (dedup'd by client_op_id on replay). */
 export const OP_PUNCH_CREATE = "punch-create";
 
+/** Op type for a daily-log create (dedup'd by client_op_id on replay). */
+export const OP_DAILYLOG_CREATE = "daily-log-create";
+
 /** Op type for a photo create — the blob lives in IndexedDB (see blobStore.js). */
 export const OP_PHOTO_CREATE = "photo-create";
 
@@ -126,6 +129,23 @@ export function makePunchCreateOp(payload, clientOpId, now) {
   return {
     id: clientOpId,
     type: OP_PUNCH_CREATE,
+    payload,
+    createdAt: now,
+  };
+}
+
+/**
+ * Build a daily-log-create op. Like the punch create, the op id IS the
+ * client_op_id (also carried in the payload) so the queue can't hold the same
+ * log twice and a lost-response replay collides with the daily_logs
+ * partial-unique index. No coalesceKey — distinct logs must never collapse.
+ * Photos are NOT part of the offline payload (they need a live upload); an
+ * offline log syncs its text/manning fields, and photos are added online.
+ */
+export function makeDailyLogCreateOp(payload, clientOpId, now) {
+  return {
+    id: clientOpId,
+    type: OP_DAILYLOG_CREATE,
     payload,
     createdAt: now,
   };

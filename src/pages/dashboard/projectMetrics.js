@@ -5,6 +5,7 @@
  * computations over Supabase entities. Keeps the dashboard component
  * presentational — every number below comes from live data.
  */
+import { resolveProjectSpend } from "@/services/costRollup";
 
 export function daysBetween(from, to) {
   if (!from || !to) return null;
@@ -96,23 +97,46 @@ export function budgetCommitted(costCodes = []) {
   return costCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
 }
 
-/** Sum of all expenses regardless of status — total committed costs. */
+/**
+ * Sum of all expenses regardless of status — total committed costs.
+ *
+ * EXPENSE-ONLY. This ignores a typed-in `cost_codes.committed_cost`, so it does
+ * NOT agree with Budget Control / the Cost pages. Prefer `committedSpend` for
+ * any "committed vs budget" figure; this remains only for expense-series math
+ * (burn rate), where an undated typed column has nothing to contribute.
+ */
 export function committedCosts(expenses = []) {
   return expenses
     .filter((e) => e.payment_status !== "Voided")
     .reduce((s, e) => s + (Number(e.amount) || 0), 0);
 }
 
-/** Paid-to-date — expenses where payment_status === 'Paid'. */
+/** Paid-to-date — expenses where payment_status === 'Paid'. EXPENSE-ONLY, see above. */
 export function costToDate(expenses = []) {
   return expenses
     .filter((e) => e.payment_status === "Paid")
     .reduce((s, e) => s + (Number(e.amount) || 0), 0);
 }
 
-/** Cost variance = budget_committed − committed_costs. Positive = under budget. */
+/**
+ * Committed spend, resolved the same way Budget Control resolves it: a typed-in
+ * `cost_codes.committed_cost` wins over that code's expense rollup, and
+ * expenses that map to no cost code still count. Without this, a project whose
+ * costs are typed onto cost codes rather than logged as expenses reported $0
+ * committed on the Dashboard while Budget Control showed the real figure.
+ */
+export function committedSpend(costCodes = [], expenses = []) {
+  return resolveProjectSpend(costCodes, expenses).committed;
+}
+
+/** Paid-to-date, resolved like Budget Control. See committedSpend. */
+export function actualSpend(costCodes = [], expenses = []) {
+  return resolveProjectSpend(costCodes, expenses).actual;
+}
+
+/** Cost variance = budget_committed − committed spend. Positive = under budget. */
 export function costVariance(costCodes = [], expenses = []) {
-  return budgetCommitted(costCodes) - committedCosts(expenses);
+  return budgetCommitted(costCodes) - committedSpend(costCodes, expenses);
 }
 
 /** Average percent_complete across all work packages. */

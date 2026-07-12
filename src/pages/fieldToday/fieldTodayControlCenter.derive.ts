@@ -18,6 +18,8 @@ import {
   taskLabel,
   taskCrew,
 } from "@/lib/field/fieldToday";
+import { canonicalFieldPhase, PHASE_SOURCE } from "@/lib/field/fieldPhase";
+import { derivePhase } from "@/utils/phases";
 
 // ── Type shapes (real DB column names) ────────────────────────────────────────
 
@@ -34,6 +36,8 @@ export interface ScheduleTaskRecord {
   resource_names?: string | null;
   assigned_to?: string | null;
   is_deleted?: boolean | null;
+  /** Real column on schedule_tasks — the lifecycle phase of this activity. */
+  phase?: string | null;
   [key: string]: unknown;
 }
 
@@ -111,6 +115,13 @@ export interface FieldTaskRow {
   reportedBy: string;
   /** raw percent for the table cell */
   pct: number;
+  /**
+   * Lifecycle phase. Unlike the field registers, schedule_tasks has a real
+   * `phase` column, so this is usually "stored" rather than inferred.
+   */
+  phase: string | null;
+  /** "stored" when the column is set, "derived" when inferred from the name. */
+  phaseSource: string;
   _task: ScheduleTaskRecord;
 }
 
@@ -254,6 +265,10 @@ export function buildFieldTodaySummary(
       nextAction: nextActionForTask(task, bucket),
       reportedBy: taskCrew(task),
       pct,
+      phase: canonicalFieldPhase(
+        task.phase || derivePhase({ task_name: taskLabel(task), phase: task.phase }),
+      ),
+      phaseSource: task.phase ? PHASE_SOURCE.STORED : PHASE_SOURCE.DERIVED,
       _task: task,
     };
   });

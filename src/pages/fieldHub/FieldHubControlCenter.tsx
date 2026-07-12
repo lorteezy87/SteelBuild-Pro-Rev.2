@@ -26,12 +26,15 @@ import {
 } from "@/components/command";
 import type { Column, KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
+import { FIELD_PHASES } from "@/lib/field/fieldPhase";
+import PhaseBadge from "@/components/field/PhaseBadge";
 import { buildFieldHubSummary } from "./fieldHubControlCenter.derive";
 import type {
   DailyLogRecord,
   InspectionRecord,
   SafetyIncidentRecord,
   PunchlistItemRecord,
+  ScheduleTaskRef,
   FieldActivityRow,
   SiteCoordRow,
   InspectionQueueRow,
@@ -42,6 +45,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 const TYPE_CHIPS = ["All", "Daily Log", "Inspection", "Safety", "Punchlist"];
+const PHASE_CHIPS = ["All", ...FIELD_PHASES];
 
 /** Today ISO string (local) for overdue comparisons in cells. */
 function todayLocal(): string {
@@ -94,10 +98,14 @@ export interface FieldHubControlCenterProps {
   inspections: InspectionRecord[];
   incidents: SafetyIncidentRecord[];
   punchlistItems: PunchlistItemRecord[];
+  /** schedule_tasks — resolves the real phase behind each daily log. */
+  scheduleTasks?: ScheduleTaskRef[];
   search: string;
   onSearch: (v: string) => void;
   typeFilter: string;
   onTypeFilterChange: (v: string) => void;
+  phaseFilter: string;
+  onPhaseFilterChange: (v: string) => void;
   onLogActivity: (() => void) | null;
   /** Open a punchlist item by id. */
   onOpenPunchlist?: ((id: string) => void) | null;
@@ -105,6 +113,8 @@ export interface FieldHubControlCenterProps {
   onOpenInspection?: ((id: string) => void) | null;
   /** Open a safety incident by id. */
   onOpenIncident?: ((id: string) => void) | null;
+  /** Open a daily log by id. */
+  onOpenDailyLog?: ((id: string) => void) | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,21 +128,25 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
     inspections,
     incidents,
     punchlistItems,
+    scheduleTasks,
     search,
     onSearch,
     typeFilter,
     onTypeFilterChange,
+    phaseFilter,
+    onPhaseFilterChange,
     onLogActivity,
     onOpenPunchlist,
     onOpenInspection,
     onOpenIncident,
+    onOpenDailyLog,
   } = props;
 
   useCommandSkin();
 
   const s = useMemo(
-    () => buildFieldHubSummary(logs, inspections, incidents, punchlistItems),
-    [logs, inspections, incidents, punchlistItems],
+    () => buildFieldHubSummary(logs, inspections, incidents, punchlistItems, scheduleTasks),
+    [logs, inspections, incidents, punchlistItems, scheduleTasks],
   );
 
   // ── Hero chips ────────────────────────────────────────────────────────────
@@ -188,6 +202,9 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
     if (typeFilter && typeFilter !== "All") {
       rows = rows.filter((r) => r.type === typeFilter);
     }
+    if (phaseFilter && phaseFilter !== "All") {
+      rows = rows.filter((r) => r.phase === phaseFilter);
+    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       rows = rows.filter(
@@ -195,17 +212,25 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
           r.activity.toLowerCase().includes(q) ||
           r.location.toLowerCase().includes(q) ||
           r.reportedBy.toLowerCase().includes(q) ||
-          r.type.toLowerCase().includes(q),
+          r.type.toLowerCase().includes(q) ||
+          (r.phase ?? "").toLowerCase().includes(q),
       );
     }
     return rows;
-  }, [s.activityRows, typeFilter, search]);
+  }, [s.activityRows, typeFilter, phaseFilter, search]);
 
   // ── Row click dispatcher ───────────────────────────────────────────────────
+  // Every row type must be represented here — a missing branch reads to the
+  // user as "this item can't be opened".
+  const OPENERS: Record<string, ((id: string) => void) | null | undefined> = {
+    Punchlist: onOpenPunchlist,
+    Inspection: onOpenInspection,
+    Safety: onOpenIncident,
+    "Daily Log": onOpenDailyLog,
+  };
+
   function handleRowClick(row: FieldActivityRow) {
-    if (row.type === "Punchlist" && onOpenPunchlist) onOpenPunchlist(row.id);
-    else if (row.type === "Inspection" && onOpenInspection) onOpenInspection(row.id);
-    else if (row.type === "Safety" && onOpenIncident) onOpenIncident(row.id);
+    OPENERS[row.type]?.(row.id);
   }
 
   // ── Table columns ──────────────────────────────────────────────────────────
@@ -234,6 +259,11 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
       key: "type",
       header: "Type",
       render: (r) => <Pill tone={typeTone(r.type)}>{r.type}</Pill>,
+    },
+    {
+      key: "phase",
+      header: "Phase",
+      render: (r) => <PhaseBadge phase={r.phase} source={r.phaseSource} />,
     },
     {
       key: "location",
@@ -428,6 +458,18 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
                 {chip}
               </button>
             ))}
+            <span className="field-hub-cc__chip-sep" aria-hidden="true" />
+            {PHASE_CHIPS.map((chip) => (
+              <button
+                key={`phase-${chip}`}
+                type="button"
+                className={`cmd-chip-btn${phaseFilter === chip ? " is-active" : ""}`}
+                onClick={() => onPhaseFilterChange(chip)}
+                title={chip === "All" ? "All phases" : `Only ${chip} activities`}
+              >
+                {chip === "All" ? "All Phases" : chip}
+              </button>
+            ))}
           </>
         }
       />
@@ -438,6 +480,17 @@ export default function FieldHubControlCenter(props: FieldHubControlCenterProps)
         onRowClick={handleRowClick}
         emptyMessage="No field activities match your filters."
       />
+
+      <style>{`
+        .field-hub-cc__chip-sep {
+          display: inline-block;
+          width: 1px;
+          height: 18px;
+          margin: 0 4px;
+          background: var(--border-default);
+          vertical-align: middle;
+        }
+      `}</style>
     </div>
   );
 }

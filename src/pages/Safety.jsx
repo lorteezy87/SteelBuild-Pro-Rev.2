@@ -8,6 +8,7 @@ import SafetyIncidentList from "@/components/safety/SafetyIncidentList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 export default function Safety() {
@@ -17,7 +18,7 @@ export default function Safety() {
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data: rawIncidents = [] } = useQuery({
+  const { data: rawIncidents = [], isLoading } = useQuery({
     queryKey: ["safety-incidents", projectId],
     queryFn: () =>
       projectId
@@ -47,6 +48,13 @@ export default function Safety() {
     setEditing(null);
     setShowForm(true);
   });
+
+  // Field Hub rows deep-link here with ?id=<incident>; open it for edit/close.
+  useAutoOpenEdit(
+    incidents,
+    (incident) => { setEditing(incident); setShowForm(true); },
+    { enabled: !isLoading },
+  );
 
   const createMut = useMutation({
     mutationFn: (data) => entities.SafetyIncident.create({ ...data, project_id: data.project_id || projectId }),

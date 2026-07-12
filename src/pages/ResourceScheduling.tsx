@@ -19,10 +19,14 @@ import WPContextMenu from "./resourceScheduling/WPContextMenu";
 import TimelineHeaderRaw from "./resourceScheduling/TimelineHeader";
 import UnscheduledTray from "./resourceScheduling/UnscheduledTray";
 import ResourceRow from "./resourceScheduling/ResourceRow";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus } from "lucide-react";
 import { buildResourceGuruPlanning } from "@/lib/resourcePlanning";
 import { ResourceGuruCommandStrip } from "./resourceScheduling/components";
+
+// Only mounted while the edit dialog is open — keep it off the board's chunk.
+const ResourceFormModal = lazyWithRetry(() => import("@/components/resources/ResourceFormModal"));
 
 // One-shot keyframe injection - must run at module load, not render.
 injectKeyframes();
@@ -65,6 +69,20 @@ export default function ResourceScheduling() {
       toast.success("Resource created");
     },
     onError: (err) => toast.error(err.message || "Failed to create resource"),
+  });
+
+  // The board could create resources but never edit them, so a resource added
+  // here had no edit path at all. ResourceFormModal hands back a payload
+  // already mapped to the `resources` columns, so it goes straight through.
+  const [editingResource, setEditingResource] = useState<any>(null);
+  const updateResMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => entities.Resource.update(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["resources"] });
+      setEditingResource(null);
+      toast.success("Resource updated");
+    },
+    onError: (err: any) => toast.error(err?.message || "Failed to update resource"),
   });
 
   // Data queries
@@ -909,6 +927,19 @@ export default function ResourceScheduling() {
         onClose={() => setShowNewResource(false)}
       />
 
+      {/* Edit Resource Modal — reuses the register's form so both surfaces
+          write the exact same column mapping. */}
+      {editingResource && (
+        <React.Suspense fallback={null}>
+          <ResourceFormModal
+            projectId={activeProject?.id}
+            editing={editingResource}
+            onClose={() => setEditingResource(null)}
+            onSave={(data: any) => updateResMut.mutate({ id: editingResource.id, data })}
+          />
+        </React.Suspense>
+      )}
+
       {/* Capacity view */}
       {viewMode === "capacity" && (
         <CapacityView capacity={capacity} workPackages={workPackages} />
@@ -1205,6 +1236,7 @@ export default function ResourceScheduling() {
               todayOffset={todayOffset}
               onBarPointerDown={onBarPointerDown}
               onOpenContextMenu={setContextMenu}
+              onEditResource={setEditingResource}
               onBarHoverEnter={(e, wp) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 const shopBud = Number(wp.shop_hours_budget) || 0;

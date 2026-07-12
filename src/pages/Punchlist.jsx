@@ -8,7 +8,10 @@ import PunchlistList from "@/components/punchlist/PunchlistList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, ProgressBar, BulkActionBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
+import { useOutbox } from "@/lib/field/OutboxContext";
+import { makePunchCreateOp, newClientOpId, isLikelyOfflineError } from "@/lib/field/offlineQueue";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 export default function Punchlist() {
@@ -18,6 +21,7 @@ export default function Punchlist() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const qc = useQueryClient();
+  const { enqueue: enqueueOutbox, flush: flushOutbox } = useOutbox();
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   // C4 — multi-select + signed close-out
@@ -35,7 +39,7 @@ export default function Punchlist() {
   };
   const clearSelection = () => setSelectedIds([]);
 
-  const { data: rawPunchlist = [] } = useQuery({
+  const { data: rawPunchlist = [], isLoading } = useQuery({
     queryKey: ["punchlist", projectId],
     queryFn: () =>
       projectId
@@ -46,6 +50,13 @@ export default function Punchlist() {
   useRealtimeInvalidation("punchlist_items", projectId, [["punchlist", projectId]]);
 
   const punchlist = React.useMemo(() => rawPunchlist.filter((r) => !r.is_deleted), [rawPunchlist]);
+
+  // Field Hub rows deep-link here with ?id=<item>; open it for edit/close.
+  useAutoOpenEdit(
+    punchlist,
+    (item) => { setEditing(item); setShowForm(true); },
+    { enabled: !isLoading },
+  );
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -69,8 +80,23 @@ export default function Punchlist() {
         projectId,
         description: created?.description?.slice(0, 80) || "",
       });
+      flushOutbox(); // online write succeeded → drain any offline backlog
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err, data) => {
+      // No signal? Queue the create for replay instead of dropping it. The
+      // client_op_id (minted in handleSave) rides both this attempt and the
+      // retry, so a lost-response replay can't mint a duplicate (punchlist_items
+      // has a partial-unique index on client_op_id — see baseline schema).
+      if (isLikelyOfflineError(err)) {
+        const record = { ...data, project_id: data.project_id || projectId };
+        enqueueOutbox(makePunchCreateOp(record, record.client_op_id, Date.now()));
+        setShowForm(false);
+        setEditing(null);
+        toast.message("Saved offline — will sync when you're back online");
+        return;
+      }
+      toast.error(err.message);
+    },
   });
 
   // Update mutation receives { ...data, id, _prevStatus } so we can fire a
@@ -167,7 +193,9 @@ export default function Punchlist() {
     if (editing) {
       updateMut.mutate({ ...data, id: editing.id, _prevStatus: editing.status });
     } else {
-      createMut.mutate(data);
+      // Mint the idempotency key up front so it rides BOTH the online create and
+      // any offline retry (dedup'd server-side on replay).
+      createMut.mutate({ ...data, client_op_id: newClientOpId() });
     }
   };
 

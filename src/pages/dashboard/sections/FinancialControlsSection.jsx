@@ -30,7 +30,7 @@ import {
   revisedContractValue,
   pendingCOTotal,
   pricePerTon,
-  committedCosts,
+  committedSpend,
   burnRatePerDay,
   projectedFinalCost,
   projectedMargin,
@@ -55,6 +55,7 @@ const ROW_STYLE = {
 export default function FinancialControlsSection({
   project,
   cos = [],
+  codes = [],
   expenses = [],
   wps = [],
   sovItems = [],
@@ -73,7 +74,9 @@ export default function FinancialControlsSection({
   );
   const contractVal = useMemo(() => revisedContractValue(project, cos), [project, cos]);
   const ppt = useMemo(() => pricePerTon(project, cos, wps), [project, cos, wps]);
-  const committed = useMemo(() => committedCosts(expenses), [expenses]);
+  // Resolved like Budget Control: a typed-in cost_codes.committed_cost beats
+  // that code's expense rollup, so the two screens report the same number.
+  const committed = useMemo(() => committedSpend(codes, expenses), [codes, expenses]);
   const burn = useMemo(() => burnRatePerDay(expenses, project), [expenses, project]);
   const projFinal = useMemo(() => projectedFinalCost(expenses, project), [expenses, project]);
   const projMargin = useMemo(() => projectedMargin(project, cos, expenses), [project, cos, expenses]);
