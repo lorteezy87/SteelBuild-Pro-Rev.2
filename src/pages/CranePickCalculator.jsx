@@ -527,16 +527,6 @@ export default function CranePickCalculator() {
               >
                 Clear
               </button>
-              {/* Future hook — saving a pick into the active project.
-                  Wired as disabled for now so the affordance is discoverable.
-                  v2: Supabase `lift_plans` table keyed on project_id. */}
-              <button
-                onClick={() => toast.info("Saving picks to a project is coming soon.")}
-                style={keycapButtonStyle("stub")}
-                title="Future: save this pick to the active project's lift plan"
-              >
-                Save to Project (soon)
-              </button>
             </div>
 
             {/* Pick History — device-kit tape. Each generated Pick Summary is
