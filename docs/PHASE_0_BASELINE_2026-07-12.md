@@ -27,9 +27,16 @@
 - `npm run build`: passed with warnings
 
 ## Build Warnings (must remain documented)
-- Unresolved `/photos/desktop/_raw/FieldHub.png`
-- Malformed CSS comment containing `desk-*/sbd-*`
-- Large bundles (especially `web-ifc`) over 500 kB
+- ✅ Closed: Unresolved `/photos/desktop/_raw/FieldHub.png` (replaced with `/photos/desktop/FieldHub.webp`)
+- ✅ Closed: Malformed CSS comment containing `desk-*/sbd-*`
+- Open: Large bundles (especially `web-ifc`) over 500 kB *(must not be suppressed without bundle-size measurement and explicit review)*  
+
+## Phase 1 Placeholder Remediation
+
+### Batch 5 — Warning remediation
+- ✅ Closed: FieldHub hero asset reference updated in `src/pages/dashboard/dashboardTheme.css`.
+- ✅ Closed: Command command-scope CSS comment syntax fixed in `src/styles/command.css`.
+- ⏳ Open: Oversized bundle warning remains; do not suppress without measurement.
 
 ## Product Disposition Matrix
 
