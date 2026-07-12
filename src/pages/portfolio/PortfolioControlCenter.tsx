@@ -7,8 +7,8 @@
  * Mirrors the RfiControlCenter structure exactly:
  *   PageHero → KpiStrip → 3 DecisionPanel → FilterBar → DataTable
  *
- * Data is passed in from PortfolioHub.jsx (the flag-branch shell), keeping
- * this file pure presentational + derivation.
+ * Data is passed in from PortfolioHub.jsx, the canonical Portfolio Overview shell.
+ * Keeps this component presentational + derivation-focused.
  */
 import { useMemo, useCallback } from "react";
 import { LayoutGrid, DollarSign, AlertTriangle, TrendingUp, CheckCircle2, BarChart3, CalendarClock } from "lucide-react";
@@ -442,3 +442,7 @@ export default function PortfolioControlCenter(props: PortfolioControlCenterProp
     </div>
   );
 }
+
+
+
+

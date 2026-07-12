@@ -27,7 +27,7 @@ export const PRIMARY_TABS = [
   { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldToday", "FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "COST",        pages: ["CostHub", "ChangeOrders", "Backcharges", "SOV", "PayApplications", "ContractManagement"] },
-  { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "AIInsights", "JobStatusReport", "DecisionLog", "Reports", "AlertsCenter", "Activity"] },
+  { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "JobStatusReport", "DecisionLog", "Reports", "AlertsCenter", "Activity"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
 
@@ -90,7 +90,7 @@ export const ALL_MODULES = [
   { icon: "\u25A8", name: "Crew Scheduling",          group: "Resources",     page: "ResourceScheduling" },
   { icon: "\uD83D\uDCCB", name: "Reports",            group: "Reporting",     page: "ReportsHub" },
   { icon: "\uD83D\uDCCB", name: "Job Status Report",  group: "Reporting",     page: "JobStatusReport" },
-  { icon: "\u2728", name: "Portfolio Analytics",      group: "Reporting",     page: "AIInsights" },
+
   { icon: "\uD83D\uDCCA", name: "Activity Log",       group: "Reporting",     page: "Activity" },
   { icon: "\uD83D\uDD0D", name: "Inspections",        group: "Quality",       page: "Inspections" },
   { icon: "\u26A0", name: "Safety",                   group: "Quality",       page: "Safety" },
@@ -381,3 +381,6 @@ if (import.meta.env.DEV) {
     });
   });
 }
+
+
+

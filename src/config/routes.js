@@ -50,6 +50,7 @@ export const STATIC_ROUTE_METADATA = {
   "/CostDashboard": { lifecycle: "legacy", kind: "redirect", target: "/CostHub" },
   "/ProjectDetail": { lifecycle: "legacy", kind: "redirect", target: "/Projects" },
   "/ResourceManagement": { lifecycle: "legacy", kind: "redirect", target: "/ResourceHub" },
+  "/AIInsights": { lifecycle: "legacy", kind: "redirect", target: "/PortfolioHub" },
 };
 
 /**
@@ -81,7 +82,6 @@ const ROUTE_DOMAINS = {
     ProjectsHub:            r(lazyWithRetry(() => import("@/pages/ProjectsHub")),           "Projects"),
     Onboarding:             r(lazyWithRetry(() => import("@/pages/Onboarding")),            "Onboarding"),
     PortfolioHub:           r(lazyWithRetry(() => import("@/pages/PortfolioHub")),          "Portfolio Overview"),
-    AIInsights:             r(lazyWithRetry(() => import("@/pages/AIInsights")),            "Portfolio Overview"),
   },
 
   // ── Communications ──
@@ -339,3 +339,7 @@ export const pagesConfig = {
   Pages: PAGES,
   // Layout is imported directly by App.jsx (no longer bundled here)
 };
+
+
+
+

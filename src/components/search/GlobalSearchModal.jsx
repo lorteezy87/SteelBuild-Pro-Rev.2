@@ -42,7 +42,7 @@ const QUICK_NAV = [
   { icon: "📋", name: "Daily Logs",  page: "DailyLogs",               group: "Navigate" },
   { icon: "$", name: "Change Orders", page: "ChangeOrders",            group: "Navigate" },
   { icon: "👥", name: "Contacts",    page: "Contacts",                group: "Navigate" },
-  { icon: "✨", name: "Portfolio",   page: "AIInsights",              group: "Navigate" },
+  { icon: "✨", name: "Portfolio",              page: "PortfolioHub",              group: "Navigate" },
 ];
 
 const SCOPE_OPTIONS = [
@@ -614,3 +614,4 @@ export default function GlobalSearchModal({ open, onClose }) {
     </>
   );
 }
+

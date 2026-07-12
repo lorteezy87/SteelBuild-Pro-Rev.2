@@ -180,6 +180,10 @@ export default function AppRoutes() {
           path="ResourceManagement"
           element={<Navigate to={STATIC_ROUTE_METADATA["/ResourceManagement"].target} replace />}
         />
+        <Route
+          path="AIInsights"
+          element={<Navigate to={STATIC_ROUTE_METADATA["/AIInsights"].target} replace />}
+        />
 
         {/* /RFIHub was retired — redirect old links to /RFIs */}
         <Route path="RFIHub" element={<Navigate to={STATIC_ROUTE_METADATA["/RFIHub"].target} replace />} />
@@ -193,3 +197,5 @@ export default function AppRoutes() {
     </Routes>
   );
 }
+
+
