@@ -51,6 +51,7 @@ export const STATIC_ROUTE_METADATA = {
   "/ProjectDetail": { lifecycle: "legacy", kind: "redirect", target: "/Projects" },
   "/ResourceManagement": { lifecycle: "legacy", kind: "redirect", target: "/ResourceHub" },
   "/AIInsights": { lifecycle: "legacy", kind: "redirect", target: "/PortfolioHub" },
+  "/MarginRisk": { lifecycle: "legacy", kind: "redirect", target: "/RiskHub" },
 };
 
 /**
@@ -108,7 +109,6 @@ const ROUTE_DOMAINS = {
     FabRelease:         r(lazyWithRetry(() => import("@/pages/FabRelease")),         "Fab Release",         { projectScoped: true }),
     ProductionStatus:   r(lazyWithRetry(() => import("@/pages/ProductionStatus")),   "Production Status",   { projectScoped: true }),
     RiskHub:            r(lazyWithRetry(() => import("@/pages/RiskHub")),            "Risk",                { projectScoped: true }),
-    MarginRisk:         r(lazyWithRetry(() => import("@/pages/MarginRisk")),         "Margin Risk",         { projectScoped: true }),
     BudgetHours:        r(lazyWithRetry(() => import("@/pages/BudgetHours")),        "Budget Hours",        { projectScoped: true }),
     Procurement:        r(lazyWithRetry(() => import("@/pages/Procurement")),        "Procurement",         { projectScoped: true }),
     LookAheadSchedule:  r(lazyWithRetry(() => import("@/pages/LookAheadSchedule")),  "Look-Ahead Schedule", { projectScoped: true }),
