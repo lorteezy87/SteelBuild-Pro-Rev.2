@@ -417,7 +417,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {/* Date & Superintendent */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div className="dl-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
           <div>
             <label style={labelStyle}>Date</label>
             <input type="date" value={formData.date} onChange={set("date")} style={inputStyle} required />
@@ -438,7 +438,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
         )}
 
         {/* Weather row */}
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "12px" }}>
+        <div className="dl-form-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "12px" }}>
           <div>
             <label style={labelStyle}>Weather</label>
             <input
@@ -467,7 +467,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
         />
 
         {/* Headline crew & hours — backed by manning totals when filled */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+        <div className="dl-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
           <div>
             <label style={labelStyle}>Crew Name</label>
             <input type="text" value={formData.crew_name} onChange={set("crew_name")} style={inputStyle} />
@@ -494,7 +494,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
         </div>
 
         {/* Equipment & Materials */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div className="dl-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
           <div>
             <label style={labelStyle}>Equipment Used</label>
             <textarea value={formData.equipment_used} onChange={set("equipment_used")} style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} />
@@ -506,7 +506,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
         </div>
 
         {/* Delays */}
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+        <div className="dl-form-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
           <div>
             <label style={labelStyle}>Delays / Issues</label>
             <textarea value={formData.delays} onChange={set("delays")} style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} />
@@ -518,7 +518,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
         </div>
 
         {/* Safety */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div className="dl-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
           <div>
             <label style={labelStyle}>Safety Incidents</label>
             <input type="number" min="0" value={formData.safety_incidents} onChange={set("safety_incidents")} style={inputStyle} />
@@ -530,7 +530,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
         </div>
 
         {/* Related links — Action Items + RFIs + Deliveries */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+        <div className="dl-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
           <MultiSelectChips
             label="Related Action Items"
             value={formData.related_action_item_ids}
@@ -674,7 +674,7 @@ function ManningSection({ manning, totals, setManningField }) {
       <label style={labelStyle}>
         Manning Breakdown · Total {totals.totalCount} crew · {totals.totalHours} man-hrs
       </label>
-      <div style={{
+      <div className="dl-form-grid" style={{
         background: "var(--bg-surface-low)",
         border: "1px solid var(--border-default)",
         borderRadius: 8,

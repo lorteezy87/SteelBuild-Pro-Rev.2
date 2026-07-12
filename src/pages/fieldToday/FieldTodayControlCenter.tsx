@@ -194,8 +194,8 @@ function ProgressButtons({ task, saving, onSetProgress }: ProgressButtonsProps) 
             onClick={(e) => { e.stopPropagation(); onSetProgress(step); }}
             aria-pressed={active}
             style={{
-              minHeight: 28,
-              minWidth: 34,
+              minHeight: 40,
+              minWidth: 40,
               borderRadius: 6,
               border: `1px solid ${active ? accentColor : "var(--cmd-border)"}`,
               background: active
@@ -449,7 +449,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
             onClick={onFlushOutbox}
             style={{
               flexShrink: 0,
-              minHeight: 28,
+              minHeight: 40,
               padding: "4px 12px",
               borderRadius: 6,
               border: "1px solid var(--status-warning)",
@@ -494,6 +494,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
+            minHeight: 40,
             padding: "8px 14px",
             fontWeight: 700,
             borderColor: "var(--status-warning)",
@@ -512,6 +513,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
+            minHeight: 40,
             padding: "8px 14px",
             fontWeight: 700,
             opacity: uploadingPhoto ? 0.6 : 1,
@@ -528,6 +530,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
+            minHeight: 40,
             padding: "8px 14px",
             fontWeight: 700,
           }}
@@ -718,6 +721,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
                   alignItems: "center",
                   gap: 6,
                   marginTop: 4,
+                  minHeight: 40,
                   padding: "6px 12px",
                 }}
               >
@@ -761,6 +765,7 @@ export default function FieldTodayControlCenter(props: FieldTodayControlCenterPr
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 6,
+                  minHeight: 40,
                   padding: "6px 0",
                 }}
               >

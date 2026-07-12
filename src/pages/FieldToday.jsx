@@ -307,7 +307,7 @@ export default function FieldToday() {
     ) : null;
 
     return (
-      <div className="sb-dashboard-reference-page">
+      <div className="sb-dashboard-reference-page field-mobile-console">
         <input
           ref={photoInputRef}
           type="file"
