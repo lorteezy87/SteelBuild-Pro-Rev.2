@@ -38,6 +38,15 @@
 - ✅ Closed: Command command-scope CSS comment syntax fixed in `src/styles/command.css`.
 - ⏳ Open: Oversized bundle warning remains; do not suppress without measurement.
 
+### Batch 6 — 3D tab lazy-loading
+- ✅ Closed: `Model3DTab` is now a separate lazy chunk in `src/pages/DrawingSubmittalHub.tsx`.
+- ✅ Closed: Drawings/Summary control-center route footprint dropped from ~222.16 KB to ~197.27 KB.
+- ✅ Closed: Gzip footprint dropped from ~60.24 KB to ~52.98 KB.
+- ✅ Closed: `Model3DTab` chunk is now approximately 28.10 KB / 9.56 KB gzip.
+- ✅ Closed: Large `model-elements` query now defers until `show3d` is true and `activeTab === "model3d"`.
+- ✅ Closed: `web-ifc` remains on-demand.
+- ⚠️ Oversized-chunk warning remains open; do not suppress it without explicit measurement and review.
+
 ## Product Disposition Matrix
 
 | Area | KEEP | FINISH | HIDE | RETIRE |
