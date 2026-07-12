@@ -5,6 +5,7 @@ import {
   enqueueOp,
   makeProgressOp,
   makePunchCreateOp,
+  makeDailyLogCreateOp,
   makePhotoCreateOp,
   newClientOpId,
   flushQueue,
@@ -12,6 +13,7 @@ import {
   isUniqueViolation,
   OP_SCHEDULE_PROGRESS,
   OP_PUNCH_CREATE,
+  OP_DAILYLOG_CREATE,
   OP_PHOTO_CREATE,
 } from "../offlineQueue";
 
@@ -160,6 +162,24 @@ describe("makePunchCreateOp", () => {
     const op = makePunchCreateOp(record, "cid-1", 500);
     expect(op).toMatchObject({ id: "cid-1", type: OP_PUNCH_CREATE, payload: record, createdAt: 500 });
     expect(op.coalesceKey).toBeUndefined(); // creates must never coalesce
+  });
+});
+
+describe("makeDailyLogCreateOp", () => {
+  it("uses the client_op_id as the op id and carries the payload, never coalescing", () => {
+    const record = { date: "2026-07-12", project_id: "p1", headcount: 6, client_op_id: "cid-7" };
+    const op = makeDailyLogCreateOp(record, "cid-7", 900);
+    expect(op).toMatchObject({ id: "cid-7", type: OP_DAILYLOG_CREATE, payload: record, createdAt: 900 });
+    expect(op.coalesceKey).toBeUndefined(); // distinct logs must never collapse
+  });
+
+  it("keeps two distinct logs as two ops in the queue (id de-dup only drops exact repeats)", () => {
+    let q = [];
+    q = enqueueOp(q, makeDailyLogCreateOp({ date: "d1" }, "cid-a", 1));
+    q = enqueueOp(q, makeDailyLogCreateOp({ date: "d2" }, "cid-b", 2));
+    q = enqueueOp(q, makeDailyLogCreateOp({ date: "d1-retry" }, "cid-a", 3)); // same id → replaces
+    expect(q).toHaveLength(2);
+    expect(q.map((o) => o.id)).toEqual(["cid-b", "cid-a"]);
   });
 });
 

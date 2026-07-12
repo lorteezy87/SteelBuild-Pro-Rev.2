@@ -6,6 +6,7 @@ import { progressPatch } from "@/lib/field/fieldToday";
 import {
   OP_SCHEDULE_PROGRESS,
   OP_PUNCH_CREATE,
+  OP_DAILYLOG_CREATE,
   OP_PHOTO_CREATE,
   isUniqueViolation,
 } from "@/lib/field/offlineQueue";
@@ -58,6 +59,17 @@ function makeGlobalHandlers(queryClient) {
       }
       invalidate(["field-hub-punchlist"]);
       invalidate(["punchlist"]);
+    },
+    [OP_DAILYLOG_CREATE]: async (record) => {
+      try {
+        await entities.DailyLog.create(record);
+      } catch (err) {
+        // Already created (same client_op_id hit the daily_logs partial-unique
+        // index) — replay is a no-op. Any other error is real: rethrow to keep
+        // the op queued.
+        if (!isUniqueViolation(err)) throw err;
+      }
+      invalidate(["daily-logs"]);
     },
     [OP_PHOTO_CREATE]: async (_payload, op) => {
       await replayPhotoCreate(op, {
