@@ -78,15 +78,6 @@ export const functions = {
           return { data: null };
         }
 
-      // PDF generation
-      case 'generateExecutivePDF':
-        try {
-          const { data } = await supabase.functions.invoke('generate-pdf', { body: params });
-          return { data };
-        } catch {
-          return { data: null };
-        }
-
       default:
         console.warn(`functions.invoke('${name}') is not implemented. Deploy a Supabase Edge Function.`);
         return { data: null };

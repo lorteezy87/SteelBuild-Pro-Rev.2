@@ -65,6 +65,15 @@
 ### Phase 1 execution item 7
 - ✅ Complete: Feature-flag authority consolidation. The typed server-backed catalog now defines all production flags, and personal overrides remain administrator-managed environment state.
 
+### Batch 10 — Legacy and unsupported report runtime retirement
+- ✅ Fully closed: **P0-02** — retired duplicate/unsupported standalone page implementations with clear compatibility routing.
+- ✅ Fully closed: **P0-05** — retired unsupported server-side Job Status PDF execution paths from the production report page.
+- ✅ Agent Memory is classified as **retired** (`src/pages/AgentMemory.jsx` deleted).
+- ✅ Standalone Project Detail page is classified as **retired** (`src/pages/ProjectDetail.jsx` deleted); canonical project detail remains `src/pages/Projects.jsx` with `ProjectDetailView`.
+- ✅ `src/boot/AppRoutes.jsx` continues to preserve compatibility redirects for legacy deep links (`/ProjectDetail?projectId=<id>` and `/ProjectDetail?id=<id>`) to `Projects?id=<id>`.
+- ✅ Job Status Report still supports project list, search and filters, readiness calculations, drilldown, PSR spreadsheet import, and preview/readiness display.
+- ✅ Server-PDF report generation is retired; report data path and readiness context remain.
+
 ## Product Disposition Matrix
 
 | Area | KEEP | FINISH | HIDE | RETIRE |

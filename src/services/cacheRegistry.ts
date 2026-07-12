@@ -42,7 +42,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
     primary:  (pid) => ["projects"],
     families: (pid) => [
       ["projects"],
-      ["project", pid],           // ProjectDetail.jsx single-project fetch
     ],
   },
 
