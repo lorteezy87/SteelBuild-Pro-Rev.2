@@ -88,6 +88,18 @@
 - ✅ Permission checks for `FeatureFlagsAdmin` and privileged surfaces now remain in `usePermissions()`.
 - ✅ RLS/RPC remains the authoritative control for actual reads/writes and workflow state transitions.
 
+### Batch 13 — Dormant workflow abstraction retirement
+- ✅ Closed: **P0-10** — retired unused workflow and mutation abstractions.
+- ✅ Legacy workflow abstraction and its tests removed (not used by production mutations).
+- ✅ Generic save abstraction retired.
+- ✅ Unused delivery CRUD hook retired.
+- ✅ Active typed repositories remain in use:
+  - `src/lib/org/repository.ts`
+  - `src/lib/backcharge/repository.ts`
+  - `src/lib/payapp/repository.ts`
+  - `src/lib/production/repository.ts`
+- ✅ Mutation authority now prefers live domain commands/repositories plus RLS/RPC (no universal workflow engine).
+
 ## Product Disposition Matrix
 
 | Area | KEEP | FINISH | HIDE | RETIRE |
