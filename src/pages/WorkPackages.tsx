@@ -179,28 +179,17 @@ export default function WorkPackages() {
       if (!rows?.length) throw new Error("No rows to add");
       if (!effectiveProjectId) throw new Error("Select a project first");
       const needsNumbers = rows.filter((row) => !row.wp_number);
-      let nextStart: number | null = null;
-      if (needsNumbers.length > 0) {
-        try {
-          nextStart = await getNextNumber(effectiveProjectId, "wp_number");
-        } catch (err) {
-          console.warn("[WorkPackages] getNextNumber fallback:", err?.message);
-          const maxNum = workPackages
-            .map((wp) => parseInt((wp.wp_number || "").replace(/\D/g, ""), 10))
-            .filter((n) => !Number.isNaN(n))
-            .reduce((max, n) => Math.max(max, n), 0);
-          nextStart = maxNum + 1;
-        }
-      }
-      let cursor = nextStart;
-      const prepared = rows.map((row) => {
+      const prepared: any[] = [];
+      for (const row of rows) {
         let wpNumber = row.wp_number;
-        if (!wpNumber && cursor != null) {
-          wpNumber = `WP-${String(cursor).padStart(3, "0")}`;
-          cursor += 1;
+        if (!wpNumber) {
+          wpNumber = `WP-${String(await getNextNumber(effectiveProjectId, "wp_number")).padStart(3, "0")}`;
         }
-        return { ...row, wp_number: wpNumber, project_id: effectiveProjectId, project_name: row.project_name || undefined };
-      });
+        prepared.push({ ...row, wp_number: wpNumber, project_id: effectiveProjectId, project_name: row.project_name || undefined });
+      }
+      if (needsNumbers.length > 0 && prepared.some((row) => !row.wp_number)) {
+        throw new Error("Unable to reserve work package numbers for all rows. Please retry.");
+      }
       return batchProcess(prepared, (data) => entities.WorkPackage.create(data), 5);
     },
     onSuccess: (results) => {
@@ -299,18 +288,17 @@ export default function WorkPackages() {
       if (effectiveProjectId) {
         const n = await getNextNumber(effectiveProjectId, "wp_number");
         wpNumber = `WP-${String(n).padStart(3, "0")}`;
+      } else {
+        throw new Error("No active project selected");
       }
     } catch (err) {
-      console.warn("[WorkPackages] getNextNumber fallback:", err?.message);
-      const maxNum = workPackages
-        .map((wp) => parseInt((wp.wp_number || "").replace(/\D/g, ""), 10))
-        .filter((n) => !Number.isNaN(n))
-        .reduce((max, n) => Math.max(max, n), 0);
-      wpNumber = `WP-${String(maxNum + 1).padStart(3, "0")}`;
+      console.warn("[WorkPackages] getNextNumber failed:", err?.message);
+      toast.error("Unable to reserve a work package number. Please retry.");
+      return;
     }
     setEditingWP({ wp_number: wpNumber, project_id: effectiveProjectId ?? undefined });
     setWPModalOpen(true);
-  }, [effectiveProjectId, workPackages]);
+  }, [effectiveProjectId]);
 
   useAutoOpenCreate(handleWPCreate, { enabled: !!effectiveProjectId });
 

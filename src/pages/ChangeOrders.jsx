@@ -168,14 +168,12 @@ export default function ChangeOrders() {
   /* -- Mutations -- */
   const createMut = useMutation({
     mutationFn: async (d) => {
-      // RFI-style numbering: if the user typed a CO number in the form,
-      // honor it as-is. Only auto-generate when the field is blank.
-      // Format: "CO #NNN" with zero-padded 3-digit suffix, matching the
-      // RFI convention. Falls back to a project-scoped index if the
-      // sequence helper is unavailable.
       const userTyped = (d.co_number || "").trim();
       let coNumber = userTyped;
       const targetProjectId = d.project_id || projectId || null;
+      if (!targetProjectId) {
+        throw new Error("Select a project before creating a change order.");
+      }
       if (!coNumber && targetProjectId) {
         try {
           coNumber = await getNextFormattedNumber({
@@ -185,13 +183,14 @@ export default function ChangeOrders() {
             fieldName: "co_number",
             prefix: "CO #",
           });
+          if (!coNumber) {
+            throw new Error("Unable to reserve a change order number. Please retry.");
+          }
         } catch {
-          coNumber = null;
+          throw new Error("Unable to reserve a change order number. Please retry.");
         }
       }
-      if (!coNumber) {
-        coNumber = `CO #${String((cos.length || 0) + 1).padStart(3, "0")}`;
-      }
+      if (!coNumber) throw new Error("Unable to reserve a change order number. Please retry.");
       return entities.ChangeOrder.create({
         ...d,
         co_number: coNumber,
@@ -416,11 +415,7 @@ export default function ChangeOrders() {
         sovItems={sovItems}
         sourceRfiLabel={sourceRfiLabel}
         projects={projects}
-        // Heuristic preview of the auto-assigned number for the modal
-        // placeholder. The real auto-assignment runs in createMut and
-        // uses getNextFormattedNumber against the live project — this
-        // is just a hint shown when the user hasn't typed anything.
-        nextNumber={`CO #${String((cos.length || 0) + 1).padStart(3, "0")}`}
+        nextNumber=""
       />
       <ChangeOrderImportModal
         open={importOpen}

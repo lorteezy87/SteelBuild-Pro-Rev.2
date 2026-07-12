@@ -54,6 +54,14 @@
 - ✅ Closed: Export remediation policy recorded in `docs/EXPORT_DATA_POLICY.md`.
 - ⚠️ Export history remains in prior Git history and is not rewritten by this batch; a separately approved owner decision is required before history remediation.
 
+### Batch 8 — Official-number integrity
+- ✅ Closed: P0-06 (official-number safety) — Work package, SOV, expense, and change-order creation paths now fail closed unless allocation succeeds.
+- ✅ Closed: Work-package creation and bulk import now rely on allocator-backed numbering only (`getNextNumber`) and no longer invent fallback numbers from browser state.
+- ✅ Closed: Expense creation/import now requires active project and allocator-backed numbering (`getNextNumber`), with failed allocation rows marked as failed during import.
+- ✅ Closed: SOV creation now requires active project and uses `getNextNumber(activeProject.id, "SOV")` exclusively.
+- ✅ Closed: CO creation now preserves user input, generates missing numbers only through `getNextFormattedNumber`, and errors if no project/number can be obtained.
+- ✅ Closed: Browser-side guessing of official numbers is removed from these flows (RFI, CO, work package, SOV, expense creation/import now fail-closed on allocator failure).
+
 ## Product Disposition Matrix
 
 | Area | KEEP | FINISH | HIDE | RETIRE |

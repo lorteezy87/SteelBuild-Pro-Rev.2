@@ -268,9 +268,18 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
       try {
         let expenseNumber;
         try {
-          expenseNumber = await getNextNumber(activeProject.id, 'EXPENSE');
-        } catch { expenseNumber = null; }
-        if (!expenseNumber) expenseNumber = `EXP-${Date.now().toString().slice(-6)}-${i}`;
+          expenseNumber = await getNextNumber(activeProject.id, "EXPENSE");
+        } catch (err) {
+          failed += 1;
+          console.error("Unable to reserve expense number for import row:", rec, err);
+          setProgress({ done: i + 1, total: valid.length, failed });
+          continue;
+        }
+        if (!expenseNumber) {
+          failed += 1;
+          setProgress({ done: i + 1, total: valid.length, failed });
+          continue;
+        }
 
         const payload = {
           project_id: activeProject.id,
