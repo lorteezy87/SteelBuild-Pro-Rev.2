@@ -103,3 +103,16 @@ export async function reconcilePendingPhotos(liveKeys) {
     if (!live.has(key)) await deletePendingPhoto(key);
   }
 }
+
+/**
+ * Wipe ALL pending photo blobs. Called on sign-out / user switch so one user's
+ * offline captures can never linger in IndexedDB on a shared field tablet (the
+ * localStorage outbox is cleared alongside it — see AuthContext). Best-effort.
+ */
+export async function clearPendingPhotos() {
+  try {
+    await runOp("readwrite", (store) => store.clear());
+  } catch {
+    /* best-effort — unavailable IndexedDB (private mode / SSR) is a no-op */
+  }
+}

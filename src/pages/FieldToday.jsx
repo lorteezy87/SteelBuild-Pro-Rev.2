@@ -56,26 +56,16 @@ import {
   progressPatch,
 } from "@/lib/field/fieldToday";
 import { useFlag } from "@/hooks/useFeatureFlag";
-import { useFieldOutbox } from "@/hooks/useFieldOutbox";
+import { useOutbox } from "@/lib/field/OutboxContext";
 import {
   makeProgressOp,
   makePunchCreateOp,
   makePhotoCreateOp,
   newClientOpId,
   isLikelyOfflineError,
-  isUniqueViolation,
-  OP_SCHEDULE_PROGRESS,
-  OP_PUNCH_CREATE,
-  OP_PHOTO_CREATE,
+  loadQueue,
 } from "@/lib/field/offlineQueue";
-import { loadQueue } from "@/lib/field/offlineQueue";
-import { replayPhotoCreate } from "@/lib/field/photoSync";
-import {
-  putPendingPhoto,
-  getPendingPhoto,
-  deletePendingPhoto,
-  reconcilePendingPhotos,
-} from "@/lib/field/blobStore";
+import { putPendingPhoto, reconcilePendingPhotos } from "@/lib/field/blobStore";
 import FieldTodayControlCenter from "./fieldToday/FieldTodayControlCenter";
 
 // ── Urgency presentation (logic-free; buckets come from the helper) ──
@@ -153,42 +143,11 @@ export default function FieldToday() {
       .map((bucket) => ({ bucket, tasks: byBucket.get(bucket) }));
   }, [todaysWork, todayIso]);
 
-  // ── Offline outbox: queue idempotent progress writes when there's no signal,
-  // replay them (in order) on reconnect. Only progress is queued — replaying a
-  // "set task X to N%" is safe to repeat; creates are not (see offlineQueue.js).
-  const outboxHandlers = useMemo(
-    () => ({
-      [OP_SCHEDULE_PROGRESS]: async ({ id, pct }) => {
-        await entities.ScheduleTask.update(id, progressPatch(pct));
-        queryClient.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-        queryClient.invalidateQueries({ queryKey: ["field-plan-tasks", projectId] });
-      },
-      [OP_PUNCH_CREATE]: async (record) => {
-        try {
-          await entities.PunchlistItem.create(record);
-        } catch (err) {
-          // A prior attempt already created this row (same client_op_id) — the
-          // replay is a no-op, not a failure. Any other error is real: rethrow
-          // so the op stays queued for the next reconnect.
-          if (!isUniqueViolation(err)) throw err;
-        }
-        queryClient.invalidateQueries({ queryKey: ["field-hub-punchlist", projectId] });
-        queryClient.invalidateQueries({ queryKey: ["punchlist", projectId] });
-      },
-      [OP_PHOTO_CREATE]: async (_payload, op) => {
-        await replayPhotoCreate(op, {
-          getBlob: getPendingPhoto,
-          uploadFile: integrations.Core.UploadFile,
-          createPhoto: entities.Photo.create,
-          deleteBlob: deletePendingPhoto,
-          isUniqueViolation,
-        });
-        queryClient.invalidateQueries({ queryKey: ["field-hub-photos", projectId] });
-      },
-    }),
-    [queryClient, projectId],
-  );
-  const { pending: pendingSync, enqueue: enqueueOutbox, flush: flushOutbox } = useFieldOutbox(outboxHandlers);
+  // ── Offline outbox: queued idempotent captures replay (in order) on reconnect.
+  // The single app-wide instance lives in OutboxProvider so the queue drains from
+  // ANY page, not just here (see src/lib/field/OutboxContext.jsx); this page just
+  // consumes it to enqueue on a no-signal write and surface the pending count.
+  const { pending: pendingSync, enqueue: enqueueOutbox, flush: flushOutbox } = useOutbox();
 
   // ── Task progress: optimistic write back to the schedule (offline-safe) ──
   const progressMut = useMutation({

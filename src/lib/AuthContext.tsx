@@ -4,10 +4,12 @@ import * as Sentry from '@sentry/react';
 import { supabase } from '@/lib/supabase';
 import { stripPrivilegeMeta } from '@/lib/authMeta';
 import { queryClientInstance } from '@/lib/query-client';
+import { clearPendingPhotos } from '@/lib/field/blobStore';
 
 // Clear every trace of the previous user's tenant data from the browser so it
 // can never render for the next user on a shared device (M38): the React Query
-// cache and any offline field-capture outboxes in localStorage.
+// cache, the offline field-capture outbox in localStorage, AND the pending
+// photo blobs in IndexedDB (the outbox ops and their blobs must go together).
 function clearTenantClientState(): void {
   queryClientInstance.clear();
   try {
@@ -20,6 +22,9 @@ function clearTenantClientState(): void {
   } catch {
     // localStorage may be unavailable (private mode / SSR) — best-effort.
   }
+  // Fire-and-forget: async IndexedDB wipe of any offline photo blobs. Best-effort
+  // and self-guarding (no-op when IndexedDB is unavailable).
+  void clearPendingPhotos();
 }
 
 export type AppUser = {
