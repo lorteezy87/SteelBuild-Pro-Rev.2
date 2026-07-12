@@ -24,7 +24,7 @@ import {
 
 /** Adapter: resolveFieldPhase returns `source`; the row field is `phaseSource`. */
 function phaseFields(
-  record: unknown,
+  record: Record<string, unknown>,
   type: string,
   opts?: { tasksById?: Map<string, ScheduleTaskRef> },
 ): { phase: string | null; phaseSource: string } {

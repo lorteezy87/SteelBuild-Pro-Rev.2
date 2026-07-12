@@ -24,7 +24,7 @@ export interface PhaseBadgeProps {
 export default function PhaseBadge({ phase, source }: PhaseBadgeProps) {
   if (!phase) return <span className="cmd-row__meta">—</span>;
 
-  const color = PHASE_COLORS[phase] ?? "var(--text-muted)";
+  const color = PHASE_COLORS[phase as keyof typeof PHASE_COLORS] ?? "var(--text-muted)";
   const isDerived = source === PHASE_SOURCE.DERIVED;
 
   return (
