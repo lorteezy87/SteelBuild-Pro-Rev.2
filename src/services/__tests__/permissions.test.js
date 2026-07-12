@@ -1,7 +1,7 @@
 /**
  * permissions.test.js — RBAC gate (canPerform) decision matrix.
  *
- * canPerform is UI-gating only (the authoritative guard is workflowEngine),
+ * canPerform is UI-gating only. The authoritative guard is RLS and domain RPCs,
  * but it still drives what users see, so its role × action × entity logic is
  * worth pinning down.
  */
