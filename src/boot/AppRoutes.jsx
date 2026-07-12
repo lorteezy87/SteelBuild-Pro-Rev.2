@@ -184,6 +184,10 @@ export default function AppRoutes() {
           path="AIInsights"
           element={<Navigate to={STATIC_ROUTE_METADATA["/AIInsights"].target} replace />}
         />
+        <Route
+          path="MarginRisk"
+          element={<Navigate to={STATIC_ROUTE_METADATA["/MarginRisk"].target} replace />}
+        />
 
         {/* /RFIHub was retired — redirect old links to /RFIs */}
         <Route path="RFIHub" element={<Navigate to={STATIC_ROUTE_METADATA["/RFIHub"].target} replace />} />

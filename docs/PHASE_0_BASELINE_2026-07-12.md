@@ -133,12 +133,21 @@
   - Preserved `ExecutiveView` as a distinct supported workflow and route.
   - Kept `P0-07` in progress: command_ui fallback retirement continues.
 
+### Batch 18 — RiskHub canonicalization
+- ✅ Batch 18 completed:
+  - Made `RiskHub` the canonical risk-triage surface.
+  - Deleted `src/pages/MarginRisk.jsx`.
+  - Preserved `/Constraints` as detailed constraint management.
+  - Added compatibility redirect `/MarginRisk` to `/RiskHub`.
+  - Kept `P0-07` in progress: command_ui fallback retirement continues.
+
 ### Open items
-- 🔄 Batches 14–17 completed in sequence for canonicalization by route:
+- 🔄 Batches 14–18 completed in sequence for canonicalization by route:
   - Budget Control
   - Reports & Insights
   - Resource Register
   - Portfolio Overview
+  - Risk
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
 
 ## Product Disposition Matrix

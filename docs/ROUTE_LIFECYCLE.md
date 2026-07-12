@@ -22,9 +22,12 @@ The route layer now distinguishes route intent so lifecycle, visibility, and nav
   - `/ProjectDetail` → `/Projects`
   - `/ResourceManagement` → `/ResourceHub`
 - `/AIInsights` → `/PortfolioHub`
+- `/MarginRisk` → `/RiskHub`
 - Legacy entries remain in route inventory and are validated as redirects with mounted targets.
 - PortfolioHub remains the canonical Portfolio Overview route entry.
 - Executive View remains supported as a separate workflow in ExecutiveView.
+- RiskHub is the canonical risk-triage surface.
+- `/Constraints` remains the supported detailed constraint CRUD workflow.
 
 CostHub is the canonical Budget Control surface. `/Financials` and
 `/CostDashboard` now resolve to `/CostHub` through compatibility redirects.
