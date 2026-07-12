@@ -34,10 +34,20 @@ import { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } from "./moduleRegistry";
  * @typedef {Object} RouteEntry
  * @property {React.LazyExoticComponent<any>} component  Lazy page component.
  * @property {string} label                              Breadcrumb / tab label.
+ * @property {"active"|"internal"} lifecycle             Route lifecycle.
  * @property {boolean} [projectScoped]                   True if page genuinely
  *                                                       depends on an active
  *                                                       project; defaults false.
  */
+export const ROUTE_LIFECYCLES = Object.freeze(["active", "internal"]);
+
+export const STATIC_ROUTE_METADATA = {
+  "/": { lifecycle: "active", kind: "entry" },
+  "/Landing": { lifecycle: "active", kind: "entry" },
+  "/GanttChart": { lifecycle: "legacy", kind: "redirect", target: "/Schedule" },
+  "/RFIHub": { lifecycle: "legacy", kind: "redirect", target: "/RFIs" },
+  "/ProjectDetail": { lifecycle: "legacy", kind: "redirect", target: "/Projects" },
+};
 
 /**
  * Sugar so a page row stays one line:
@@ -52,6 +62,7 @@ function r(component, label, opts) {
   return {
     component,
     label,
+    lifecycle: opts?.lifecycle || "active",
     projectScoped: opts?.projectScoped === true,
   };
 }
@@ -66,7 +77,6 @@ const ROUTE_DOMAINS = {
     Projects:               r(lazyWithRetry(() => import("@/pages/Projects")),              "Projects"),
     ProjectsHub:            r(lazyWithRetry(() => import("@/pages/ProjectsHub")),           "Projects"),
     Onboarding:             r(lazyWithRetry(() => import("@/pages/Onboarding")),            "Onboarding"),
-    ProjectDetail:          r(lazyWithRetry(() => import("@/pages/ProjectDetail")),         "Project Detail"),
     PortfolioHub:           r(lazyWithRetry(() => import("@/pages/PortfolioHub")),          "Portfolio Overview"),
     AIInsights:             r(lazyWithRetry(() => import("@/pages/AIInsights")),            "Portfolio Overview"),
   },
@@ -162,15 +172,14 @@ const ROUTE_DOMAINS = {
     ScopeExclusions:  r(lazyWithRetry(() => import("@/pages/ScopeExclusions")),  "Scope & Exclusions"),
     Contacts:         r(lazyWithRetry(() => import("@/pages/Contacts")),         "Contacts"),
     Vendors:          r(lazyWithRetry(() => import("@/pages/Vendors")),          "Vendors"),
-    DataExchange:     r(lazyWithRetry(() => import("@/pages/DataExchange")),     "Data Exchange",       { projectScoped: true }),
+    DataExchange:     r(lazyWithRetry(() => import("@/pages/DataExchange")),     "Data Exchange",       { projectScoped: true, lifecycle: "internal" }),
     Integrations:     r(lazyWithRetry(() => import("@/pages/Integrations")),     "Integrations"),
     Settings:         r(lazyWithRetry(() => import("@/pages/Settings")),         "Settings"),
     OrgMembers:       r(lazyWithRetry(() => import("@/pages/OrgMembers")),       "Team"),
     Billing:          r(lazyWithRetry(() => import("@/pages/Billing")),          "Billing"),
-    UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management"),
-    ProjectMembers:   r(lazyWithRetry(() => import("@/pages/ProjectMembers")),   "Project Members"),
-    FeatureFlagsAdmin: r(lazyWithRetry(() => import("@/pages/FeatureFlagsAdmin")), "Feature Flags"),
-    AgentMemory:      r(lazyWithRetry(() => import("@/pages/AgentMemory")),      "Agent Memory"),
+    UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management",       { lifecycle: "internal" }),
+    ProjectMembers:   r(lazyWithRetry(() => import("@/pages/ProjectMembers")),   "Project Members",       { lifecycle: "internal" }),
+    FeatureFlagsAdmin: r(lazyWithRetry(() => import("@/pages/FeatureFlagsAdmin")), "Feature Flags",       { lifecycle: "internal" }),
     Tutorial:         r(lazyWithRetry(() => import("@/pages/Tutorial")),         "Tutorial / Help"),
   },
 
@@ -220,6 +229,11 @@ export const PAGE_LABELS = Object.fromEntries(
   Object.entries(ROUTE_REGISTRY).map(([key, entry]) => [key, entry.label])
 );
 
+// ── Derived: page → lifecycle map ───────────────────────────────────
+export const PAGE_LIFECYCLES = Object.fromEntries(
+  Object.entries(ROUTE_REGISTRY).map(([key, entry]) => [key, entry.lifecycle])
+);
+
 // ── Derived: pages whose UI depends on an active project ─────────────
 export const PROJECT_SCOPED_PAGES = new Set(
   Object.entries(ROUTE_REGISTRY)
@@ -228,12 +242,10 @@ export const PROJECT_SCOPED_PAGES = new Set(
 );
 
 // ── Derived: full set of route paths the app actually serves ─────────
-// "/", "/Landing", "/RFIHub" are static mounts in App.jsx, not in the
-// registry, so they get spliced in explicitly.
+// "/", "/Landing", "/RFIHub", and "/ProjectDetail" are legacy static mounts
+// handled in AppRoutes, so they get spliced in explicitly.
 export const ALL_ROUTE_PATHS = Array.from(new Set([
-  "/",
-  "/Landing",
-  "/RFIHub",
+  ...Object.keys(STATIC_ROUTE_METADATA),
   ...Object.keys(PAGES).map((p) => `/${p}`),
 ]));
 
@@ -280,10 +292,22 @@ export async function validateRoutes() {
     if (!entry.label) {
       issues.push(`Registered page has no label: ${key}`);
     }
+    if (!ROUTE_LIFECYCLES.includes(entry.lifecycle)) {
+      issues.push(`Unknown lifecycle for registered page ${key}: ${entry.lifecycle}`);
+    }
   }
   for (const p of PROJECT_SCOPED_PAGES) {
     if (!registered.has(p)) {
       issues.push(`PROJECT_SCOPED_PAGES references unregistered page: ${p}`);
+    }
+  }
+
+  for (const [path, meta] of Object.entries(STATIC_ROUTE_METADATA)) {
+    if (!ALL_ROUTE_PATHS.includes(path)) {
+      issues.push(`Static route path not mounted: ${path}`);
+    }
+    if (meta.kind === "redirect" && !ALL_ROUTE_PATHS.includes(meta.target)) {
+      issues.push(`Redirect target not mounted: ${path} -> ${meta.target}`);
     }
   }
 

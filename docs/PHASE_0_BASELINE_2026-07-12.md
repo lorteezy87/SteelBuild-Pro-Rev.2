@@ -74,6 +74,14 @@
 - ✅ Job Status Report still supports project list, search and filters, readiness calculations, drilldown, PSR spreadsheet import, and preview/readiness display.
 - ✅ Server-PDF report generation is retired; report data path and readiness context remain.
 
+### Batch 11 — Route lifecycle contracts and compatibility validation
+- ✅ Fully closed: **P0-09** — introduced lifecycle metadata contract for route registry entries.
+- ✅ Every registry route is now `active` or `internal` via `PAGE_LIFECYCLES`.
+- ✅ Compatibility entry/redirect metadata is centralized in `STATIC_ROUTE_METADATA` (`/`, `/Landing`, `/GanttChart`, `/RFIHub`, `/ProjectDetail`).
+- ✅ Redirect targets are now tested as mounted routes.
+- ✅ `/GanttChart` is restored to the advertised route inventory.
+- ✅ Route lifecycle validation now enforces labeled route metadata and mountability checks.
+
 ## Product Disposition Matrix
 
 | Area | KEEP | FINISH | HIDE | RETIRE |
