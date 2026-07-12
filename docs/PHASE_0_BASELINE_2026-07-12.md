@@ -141,13 +141,22 @@
   - Added compatibility redirect `/MarginRisk` to `/RiskHub`.
   - Kept `P0-07` in progress: command_ui fallback retirement continues.
 
+### Batch 19 — Billing canonicalization
+- ✅ Batch 19 completed:
+  - Made `BillingControlCenter` the canonical Billing page shell.
+  - Kept Stripe service calls and permission gating in `src/pages/Billing.jsx`.
+  - Preserved checkout-return refetch, plan actions, and billing portal behavior.
+  - Removed the classic vs command_ui branch split in `Billing.jsx`.
+  - Kept `P0-07` in progress: command_ui fallback retirement continues.
+
 ### Open items
-- 🔄 Batches 14–18 completed in sequence for canonicalization by route:
+- 🔄 Batches 14–19 completed in sequence for canonicalization by route:
   - Budget Control
   - Reports & Insights
   - Resource Register
   - Portfolio Overview
   - Risk
+  - Billing
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
 
 ## Product Disposition Matrix
