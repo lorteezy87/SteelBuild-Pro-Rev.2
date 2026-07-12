@@ -54,7 +54,6 @@ export const PAGE_ICON = {
   Deliveries: Truck,
   ResourceHub: Users2,
   ResourceScheduling: Users2,
-  ResourceManagement: Users2,
   RiskHub: ShieldAlert,
   BudgetHours: TrendingUp,
 

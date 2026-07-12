@@ -1,17 +1,15 @@
 /**
- * ResourceHub — consolidates "Resource Register" (ResourceManagement) and
- * "Crew Schedule" (ResourceScheduling) under one nav entry, so the two
- * resource surfaces stop competing for sidebar space (module-consolidation
- * Phase 2). This is a thin tab shell: it lazy-loads the existing pages as tab
- * panels (the DrawingSubmittalHub pattern) and changes neither page's logic.
- * Both remain independently routable for deep-links.
+ * ResourceHub — canonical Resource Register entry point.
  *
- * command_ui flag: when enabled, the Resource-Register tab renders
- * ResourcesControlCenter instead of ResourceManagement. The Control Center
- * loads its own resource data (the shell does not), so the shell owns the
- * add/edit/delete plumbing on its behalf — otherwise a command_ui tenant has
- * no way to edit a resource once it exists (the Crew Schedule board is
- * create-only, and the Control Center table was read-only).
+ * ResourcesControlCenter is the supported Resource Register implementation.
+ * This shell remains responsible for CRUD plumbing (open modal, mutation
+ * wiring, delete confirmation) while keeping tab navigation for the two
+ * supported resource workflows:
+ *
+ * - Resource Register (ResourcesControlCenter)
+ * - Crew Schedule (ResourceScheduling)
+ *
+ * Legacy ResourceManagement links continue through compatibility redirect.
  */
 import { Suspense, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -22,11 +20,9 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import ResourcesControlCenter from "@/pages/resources/ResourcesControlCenter";
 
-const ResourceRegister = lazyWithRetry(() => import("@/pages/ResourceManagement"));
 const CrewSchedule = lazyWithRetry(() => import("@/pages/ResourceScheduling"));
 const ResourceFormModal = lazyWithRetry(() => import("@/components/resources/ResourceFormModal"));
 
@@ -36,7 +32,6 @@ const TABS = [
 ];
 
 export default function ResourceHub() {
-  const commandUi = useFlag("command_ui");
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
   const [params, setParams] = useSearchParams();
@@ -59,8 +54,9 @@ export default function ResourceHub() {
 
   const closeForm = () => { setShowForm(false); setEditing(null); };
 
-  // ResourceFormModal.toEntity() hands us a payload already mapped to the
-  // resources table's columns, so it goes straight through.
+  // ResourcesControlCenter owns the grid and hands us resource rows plus
+  // action hooks. Its own rendering handles reads and role gating; this
+  // shell only owns persistence + lifecycle glue.
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.Resource.update(id, data),
     onSuccess: () => {
@@ -86,8 +82,6 @@ export default function ResourceHub() {
     if (editing) updateMut.mutate({ id: editing.id, data });
   };
 
-  // command_ui: the Resource-Register tab renders the new Control Center, but the
-  // tab strip stays so the Crew-Schedule grid (only reachable via this hub) isn't lost.
   return (
     <div
       className="sb-dashboard-reference-page"
@@ -141,14 +135,12 @@ export default function ResourceHub() {
         <ErrorBoundary label="Resources">
           <Suspense fallback={<LoadingSkeleton variant="page" />}>
             {activeTab === "register"
-              ? (commandUi ? (
-                  <ResourcesControlCenter
-                    projectName={activeProject?.name}
-                    onAddResource={() => { setEditing(null); setShowForm(true); }}
-                    onEditResource={(r) => { setEditing(r); setShowForm(true); }}
-                    onDeleteResource={setDeleteTarget}
-                  />
-                ) : <ResourceRegister />)
+              ? <ResourcesControlCenter
+                  projectName={activeProject?.name}
+                  onAddResource={() => { setEditing(null); setShowForm(true); }}
+                  onEditResource={(r) => { setEditing(r); setShowForm(true); }}
+                  onDeleteResource={setDeleteTarget}
+                />
               : <CrewSchedule />}
           </Suspense>
         </ErrorBoundary>

@@ -20,10 +20,18 @@ The route layer now distinguishes route intent so lifecycle, visibility, and nav
   - `/Financials` → `/CostHub`
   - `/CostDashboard` → `/CostHub`
   - `/ProjectDetail` → `/Projects`
+  - `/ResourceManagement` → `/ResourceHub`
 - Legacy entries remain in route inventory and are validated as redirects with mounted targets.
 
-- CostHub is the canonical Budget Control surface. `/Financials` and
-  `/CostDashboard` now resolve to `/CostHub` through compatibility redirects.
+CostHub is the canonical Budget Control surface. `/Financials` and
+`/CostDashboard` now resolve to `/CostHub` through compatibility redirects.
+
+- Resources are canonicalized in `ResourceHub`:
+  - `/ResourceManagement` is a compatibility redirect to `/ResourceHub`.
+  - `ResourceHub` owns the supported Resource Register workflow via
+    `ResourcesControlCenter`.
+  - Crew Scheduling remains a distinct supported workflow in
+    `ResourceScheduling` and continues to be a separate registered page.
 
 ## retired
 - Retired implementations are deleted from the registry and routing entry points.
