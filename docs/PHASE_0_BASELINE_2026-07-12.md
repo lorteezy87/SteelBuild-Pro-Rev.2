@@ -149,14 +149,30 @@
   - Removed the classic vs command_ui branch split in `Billing.jsx`.
   - Kept `P0-07` in progress: command_ui fallback retirement continues.
 
+### Batch 20 — Settings canonicalization
+- ✅ Batch 20 completed:
+  - Made `SettingsControlCenter` the canonical Settings page shell.
+  - Removed classic vs command_ui branching from `src/pages/Settings.jsx`.
+  - Preserved all settings sections and mutation wiring in `Settings.jsx`.
+  - Kept `P0-07` in progress: command_ui fallback retirement continues.
+
+### Batch 21 — Vendors canonicalization
+- ✅ Batch 21 completed:
+  - Made `VendorControlCenter` the canonical Vendors page presentation.
+  - Removed the duplicate classic KPI, risk-flags, search/filter, export, and vendor-list path.
+  - Preserved vendor queries, statistics, filters, exports, mutations, selection, and dialogs.
+  - Kept `P0-07` in progress: command_ui fallback retirement continues.
+
 ### Open items
-- 🔄 Batches 14–19 completed in sequence for canonicalization by route:
+- 🔄 Batches 14–21 completed in sequence for canonicalization by route:
   - Budget Control
   - Reports & Insights
   - Resource Register
   - Portfolio Overview
   - Risk
   - Billing
+  - Settings
+  - Vendors
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
 
 ## Product Disposition Matrix
