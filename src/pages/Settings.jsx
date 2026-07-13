@@ -6,7 +6,6 @@ import { AuthContext } from "@/lib/AuthContext";
 import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import UserSettingsTab from "@/components/settings/UserSettingsTab.jsx";
-import { CommandBar } from "@/components/design-system";
 import NotificationsTab from "@/components/settings/NotificationsTab.jsx";
 import DisplayTab from "@/components/settings/DisplayTab.jsx";
 import DashboardTab from "@/components/settings/DashboardTab.jsx";
@@ -15,7 +14,6 @@ import RolesTab from "@/components/settings/RolesTab.jsx";
 import SystemTab from "@/components/settings/SystemTab.jsx";
 import CostCodesTab from "@/components/settings/CostCodesTab.jsx";
 import SetupAdminTab from "@/components/settings/SetupAdminTab.jsx";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import SettingsControlCenter from "./settings/SettingsControlCenter";
 
 // Settings are grouped into three levels: personal, workspace, admin.
@@ -50,8 +48,6 @@ const TAB_GROUPS = [
   },
 ];
 
-const ALL_TABS = TAB_GROUPS.flatMap(g => g.tabs);
-
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
   useEffect(() => {
@@ -72,7 +68,6 @@ export default function Settings() {
   const [hoveredTab, setHoveredTab] = useState(null);
   const qc = useQueryClient();
   const isMobile = useIsMobile();
-  const commandUi = useFlag("command_ui");
 
   const { data: userSettings } = useQuery({
     queryKey: ['user-settings', user?.id],
@@ -120,11 +115,8 @@ export default function Settings() {
     }))
     .filter(group => group.tabs.length > 0);
 
-  const activeTabMeta = ALL_TABS.find(t => t.id === activeTab);
-
-  // Shared settings body (sidebar tabs + content card) — rendered in both paths.
-  // Extracted here so the command_ui branch can pass it as children without
-  // duplicating any of the form wiring or mutation logic.
+  // SettingsControlCenter is the canonical shell.
+  // All settings forms and mutations stay in Settings.jsx so behavior cannot diverge.
   const settingsBody = (
     <div style={{
       display: 'grid',
@@ -256,30 +248,13 @@ export default function Settings() {
     </div>
   );
 
-  // command_ui flag-branch: wrap the same body in the light Command UI shell.
-  // All form saves, tab navigation, and mutations are unchanged — the body is
-  // identical; only the page chrome differs.
-  if (commandUi) {
-    return (
-      <SettingsControlCenter
-        user={user}
-        prefs={userPrefs}
-        visibleSectionCount={visibleGroups.reduce((n, g) => n + g.tabs.length, 0)}
-      >
-        {settingsBody}
-      </SettingsControlCenter>
-    );
-  }
-
-  // Classic (non-flag) path — unchanged chrome, same body.
   return (
-    <div className="sb-dashboard-reference-page">
-      <CommandBar
-        eyebrow={isAdmin ? "PERSONAL · WORKSPACE" : "PERSONAL"}
-        title="Settings"
-        subtitle={`${user?.full_name || user?.email || "Signed in"} · ${activeTabMeta?.label || "Profile"}${activeTabMeta?.desc ? ` · ${activeTabMeta.desc}` : ""}`}
-      />
+    <SettingsControlCenter
+      user={user}
+      prefs={userPrefs}
+      visibleSectionCount={visibleGroups.reduce((count, group) => count + group.tabs.length, 0)}
+    >
       {settingsBody}
-    </div>
+    </SettingsControlCenter>
   );
 }
