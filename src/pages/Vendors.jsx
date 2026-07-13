@@ -3,27 +3,16 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { toast } from "sonner";
-import { AlertTriangle, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import VendorFormModal from "@/components/vendors/VendorFormModal";
-import VendorList from "@/components/vendors/VendorList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar, Button as DSButton, BulkActionBar } from "@/components/design-system";
-import KPIStrip from "../components/shared/KPIStrip";
-import SearchFilter from "../components/shared/SearchFilter";
-import { PhoenixPanel } from "../components/shared/PhoenixPanel";
-import { formatCurrency } from "../components/shared/formatters";
-import { RefreshCw } from "lucide-react";
-import { VENDOR_STATUS } from "@/lib/enums";
+import { BulkActionBar } from "@/components/design-system";
 import { exportToCSV } from "@/lib/csv";
 import { batchProcess } from "@/utils/batchProcess";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import VendorControlCenter from "./vendors/VendorControlCenter";
 
 export default function Vendors() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
-  const commandUi = useFlag("command_ui");
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -37,7 +26,7 @@ export default function Vendors() {
   const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   // ── Queries ──
-  const { data: vendors = [], refetch } = useQuery({
+  const { data: vendors = [] } = useQuery({
     queryKey: ["vendors"],
     queryFn: () => entities.Vendor.list("-is_preferred"),
     staleTime: 5 * 60 * 1000,
@@ -230,34 +219,6 @@ export default function Vendors() {
     return matchSearch && matchStatus && matchType;
   }), [vendors, search, statusFilter, typeFilter]);
 
-  // ── Stats ──
-  const activeCount = vendors.filter(v => v.status === VENDOR_STATUS.ACTIVE).length;
-  const preferredCount = vendors.filter(v => v.is_preferred).length;
-  const totalSpend = Object.values(vendorStats).reduce((s, v) => s + (v.totalSpend || 0), 0);
-  const totalDeliveries = Object.values(vendorStats).reduce((s, v) => s + (v.deliveryCount || 0), 0);
-
-  // Risk flags
-  const riskVendors = useMemo(() => {
-    const now = new Date();
-    return vendors.filter(v => {
-      if (v.status === VENDOR_STATUS.PROBATION || v.status === VENDOR_STATUS.SUSPENDED) return true;
-      if (v.certifications_expiry && new Date(v.certifications_expiry) < now) return true;
-      if (v.insurance_expiry && new Date(v.insurance_expiry) < now) return true;
-      const stats = vendorStats[v.company_name];
-      if (stats && stats.onTimeRate !== null && stats.onTimeRate < 70) return true;
-      return false;
-    });
-  }, [vendors, vendorStats]);
-
-  const kpis = [
-    { label: "Total Vendors", value: vendors.length, color: "slate" },
-    { label: "Active", value: activeCount, color: "green" },
-    { label: "Preferred", value: preferredCount, color: "blue" },
-    { label: "Deliveries", value: totalDeliveries, color: "amber" },
-    { label: "Total Spend", value: formatCurrency(totalSpend), color: totalSpend > 0 ? "purple" : "slate" },
-    { label: "At Risk", value: riskVendors.length, color: riskVendors.length > 0 ? "rose" : "slate" },
-  ];
-
   const types = [...new Set(vendors.map(v => v.vendor_type).filter(Boolean))].sort();
 
   const exportCSV = () => {
@@ -274,7 +235,7 @@ export default function Vendors() {
     exportToCSV({ filename: "vendors.csv", headers, rows });
   };
 
-  // Shared modals (reused in both branches)
+  // Shared dialogs remain owned by Vendors.jsx alongside the mutations.
   const modals = (
     <>
       <VendorFormModal
@@ -300,152 +261,65 @@ export default function Vendors() {
     </>
   );
 
-  // ── Command UI branch ──
-  if (commandUi) {
-    return (
-      <div className="vendor-page">
-        <VendorControlCenter
-          vendors={vendors}
-          filtered={filtered}
-          vendorStats={vendorStats}
-          search={search}
-          onSearch={setSearch}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          typeFilter={typeFilter}
-          onTypeFilterChange={setTypeFilter}
-          vendorTypes={types}
-          onExport={exportCSV}
-          onCreate={() => { setEditing(null); setShowForm(true); }}
-          onOpenVendor={(v) => { setEditing(v); setShowForm(true); }}
-          projectHealth={activeProject?.health_status || null}
-          percentComplete={activeProject?.scope_complete_pct_override != null ? Number(activeProject.scope_complete_pct_override) : null}
-          selectedIds={selectedIds}
-          onToggleSelect={toggleSelect}
-          onToggleAll={toggleAll}
-        />
-        <BulkActionBar
-          count={selectedIds.size}
-          onClear={() => setSelectedIds(new Set())}
-          actions={[
-            {
-              label: "MARK ACTIVE",
-              icon: "check",
-              onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Active" } }),
-            },
-            {
-              label: "MARK INACTIVE",
-              icon: "more",
-              onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Inactive" } }),
-            },
-            {
-              label: "MARK PREFERRED",
-              icon: "action",
-              onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { is_preferred: true } }),
-            },
-            {
-              label: "DELETE",
-              icon: "x",
-              variant: "danger",
-              onClick: () => setShowBulkDelete(true),
-            },
-          ]}
-        />
-        {modals}
-      </div>
-    );
-  }
-
-  // ── Classic branch (flag off — unchanged behavior) ──
   return (
-    <div className="sb-dashboard-reference-page">
-      <CommandBar
-        eyebrow="SUPPLY CHAIN"
-        title="Vendors & Suppliers"
-        count={vendors.length}
-        unit=" · VENDORS"
-        subtitle={`${activeCount} active${riskVendors.length > 0 ? ` · ${riskVendors.length} at risk` : ""} · certs · insurance · on-time performance`}
-      >
-        <DSButton variant="secondary" onClick={refetch} title="Refresh">
-          <RefreshCw size={12} /> Refresh
-        </DSButton>
-        <DSButton variant="primary" icon="plus" onClick={() => { setEditing(null); setShowForm(true); }}>
-          New Vendor
-        </DSButton>
-      </CommandBar>
-
-      <KPIStrip items={kpis} />
-
-      {/* ── Risk Flags Panel ── */}
-      {riskVendors.length > 0 && (
-        <PhoenixPanel
-          title={<span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <AlertTriangle size={14} style={{ color: "var(--status-error)" }} />
-            Vendor Risk Flags
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", fontWeight: 400 }}>
-              {riskVendors.length} vendor{riskVendors.length !== 1 ? "s" : ""}
-            </span>
-          </span>}
-          style={{ marginBottom: 14, border: "1px solid rgba(248,81,73,0.3)" }}
-        >
-          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
-            {riskVendors.slice(0, 5).map(v => {
-              const now = new Date();
-              const reasons = [];
-              if (v.certifications_expiry && new Date(v.certifications_expiry) < now) reasons.push("Cert expired");
-              if (v.insurance_expiry && new Date(v.insurance_expiry) < now) reasons.push("Insurance expired");
-              if (v.status === VENDOR_STATUS.PROBATION) reasons.push("On probation");
-              if (v.status === VENDOR_STATUS.SUSPENDED) reasons.push("Suspended");
-              const stats = vendorStats[v.company_name];
-              if (stats?.onTimeRate !== null && stats?.onTimeRate < 70) reasons.push(`${stats.onTimeRate}% on-time`);
-
-              return (
-                <div key={v.id} style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "8px 12px", background: "var(--bg-surface-low)",
-                  borderRadius: "var(--radius-card)", borderLeft: "3px solid var(--status-error)",
-                }}>
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", flex: 1 }}>
-                    {v.company_name}
-                  </span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", fontWeight: 600 }}>
-                    {reasons.join(" · ")}
-                  </span>
-                  <Button variant="ghost" size="sm" style={{ fontFamily: "var(--font-mono)", fontSize: 9, padding: "4px 8px", height: "auto" }}
-                    onClick={() => { setEditing(v); setShowForm(true); }}>
-                    Review
-                  </Button>
-                </div>
-              );
-            })}
-            {riskVendors.length > 5 && (
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", padding: "4px 0" }}>
-                +{riskVendors.length - 5} more at-risk vendors
-              </div>
-            )}
-          </div>
-        </PhoenixPanel>
-      )}
-
-      {/* ── Search & Filters ── */}
-      <div className="filter-bar-responsive" style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "flex-end", flexWrap: "wrap" }}>
-        <div style={{ flex: 1 }}>
-          <SearchFilter search={search} onSearchChange={setSearch} filters={[
-            { key: "status", value: statusFilter, onChange: setStatusFilter, placeholder: "Status", options: Object.values(VENDOR_STATUS) },
-            ...(types.length > 1 ? [{ key: "type", value: typeFilter, onChange: setTypeFilter, placeholder: "Type", options: types }] : []),
-          ]} />
-        </div>
-        <Button variant="outline" size="sm" onClick={exportCSV} style={{ marginBottom: 16 }}>
-          <Download className="w-3.5 h-3.5 mr-1" />Export
-        </Button>
-      </div>
-
-      {/* ── Vendor List ── */}
-      <VendorList
-        vendors={filtered}
-        onEdit={(vendor) => { setEditing(vendor); setShowForm(true); }}
-        onDelete={setDeleteTarget}
+    <div className="vendor-page">
+      <VendorControlCenter
+        vendors={vendors}
+        filtered={filtered}
         vendorStats={vendorStats}
+        search={search}
+        onSearch={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        typeFilter={typeFilter}
+        onTypeFilterChange={setTypeFilter}
+        vendorTypes={types}
+        onExport={exportCSV}
+        onCreate={() => {
+          setEditing(null);
+          setShowForm(true);
+        }}
+        onOpenVendor={(vendor) => {
+          setEditing(vendor);
+          setShowForm(true);
+        }}
+        projectHealth={activeProject?.health_status || null}
+        percentComplete={
+          activeProject?.scope_complete_pct_override != null
+            ? Number(activeProject.scope_complete_pct_override)
+            : null
+        }
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleAll={toggleAll}
+      />
+
+      <BulkActionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[
+          {
+            label: "MARK ACTIVE",
+            icon: "check",
+            onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Active" } }),
+          },
+          {
+            label: "MARK INACTIVE",
+            icon: "more",
+            onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Inactive" } }),
+          },
+          {
+            label: "MARK PREFERRED",
+            icon: "action",
+            onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { is_preferred: true } }),
+          },
+          {
+            label: "DELETE",
+            icon: "x",
+            variant: "danger",
+            onClick: () => setShowBulkDelete(true),
+          },
+        ]}
       />
 
       {modals}
