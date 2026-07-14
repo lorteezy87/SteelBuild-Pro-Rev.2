@@ -163,8 +163,22 @@
   - Preserved vendor queries, statistics, filters, exports, mutations, selection, and dialogs.
   - Kept `P0-07` in progress: command_ui fallback retirement continues.
 
+### Batch 22 — Pay Applications canonicalization
+- ✅ Batch 22 completed:
+  - Made `PayApplicationsControlCenter` the unconditional Pay Applications route UI.
+  - Removed the duplicate classic pay-application list and editor path.
+  - Preserved G702/G703 editing, status changes, draft deletion safeguards, PDF export, audit logging, and cache invalidation.
+  - Kept distinct secondary workflows and legacy compatibility routing intact.
+
+### Batch 23 — Production Status canonicalization
+- ✅ Batch 23 completed:
+  - Made `ProductionStatusControlCenter` the unconditional Production Status route UI.
+  - Removed the duplicate classic production header, KPI, stage, and piece-table path.
+  - Preserved production imports, project-scoped queries, drawing-link coverage, filters, CSV export, loading state, and cache invalidation.
+  - Kept `P0-07` in progress: command_ui fallback retirement continues.
+
 ### Open items
-- 🔄 Batches 14–21 completed in sequence for canonicalization by route:
+- **IN PROGRESS:** batches 14–23 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, and Production Status; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
   - Budget Control
   - Reports & Insights
   - Resource Register
@@ -173,6 +187,8 @@
   - Billing
   - Settings
   - Vendors
+  - Pay Applications
+  - Production Status
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
 
 ## Product Disposition Matrix

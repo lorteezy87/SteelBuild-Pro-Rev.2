@@ -1,12 +1,11 @@
 /**
- * ProductionStatusControlCenter.tsx — Command UI skin for the Production Status page.
+ * ProductionStatusControlCenter.tsx — canonical Production Status presentation.
  *
  * Light-theme, command-kit layout that mirrors the RFI Control Center pattern.
  * Receives all data as props from the ProductionStatus.jsx shell (which retains
  * the React Query fetch, modal state, and import mutations). This component is
- * purely presentational — no network calls.
+ * the canonical presentation and is purely presentational — no network calls.
  *
- * Mounted behind the `command_ui` feature flag in ProductionStatus.jsx.
  */
 import { useMemo } from "react";
 import { Link } from "react-router-dom";

@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Pay Applications Control Center (command_ui redesign).
+ * Pure derivations for the canonical Pay Applications Control Center.
  * No React, no network. All money math via src/lib/money.ts (integer-cents
  * convention) — NEVER raw floats or toLocaleString on raw db values.
  *

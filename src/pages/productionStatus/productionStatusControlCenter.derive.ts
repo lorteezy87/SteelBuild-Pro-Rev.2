@@ -1,7 +1,7 @@
 /**
- * Pure derivations for the Production Status Control Center (command_ui redesign).
- * No React, no network. Computes identical KPIs to the classic ProductionStatus.jsx
- * rollup, extended with stage-group queues for the DecisionPanel columns.
+ * Pure derivations for the canonical Production Status Control Center.
+ * No React, no network. Computes KPIs directly from production-control rows,
+ * with stage-group queues for the DecisionPanel columns.
  *
  * The canonical fab stages and their per-stage percent baselines come from
  * src/lib/importProductionStatus.js — we import them directly to stay in sync.
