@@ -184,8 +184,18 @@
   - Removed the duplicate classic team-management shell without changing organization repository behavior.
   - Kept `P0-07` in progress: command_ui fallback retirement continues.
 
+### Batch 25 — Field Hub canonicalization
+- ✅ Batch 25 completed:
+  - Made `FieldHubControlCenter` the permanent leading Field Hub overview tab.
+  - Preserved all specialized field register tabs and deep-link behavior.
+  - Removed `command_ui` branching.
+  - Deferred aggregate hub queries unless the Command Center tab is active.
+  - Added explicit aggregate loading behavior.
+  - Preserved permissions, cache keys, project scoping, phase resolution, and lazy-loaded registers.
+  - Kept `P0-07` in progress.
+
 ### Open items
-- **IN PROGRESS:** batches 14–24 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, and Team; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
+- **IN PROGRESS:** batches 14–25 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, and Field Hub; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
   - Budget Control
   - Reports & Insights
   - Resource Register
@@ -197,6 +207,7 @@
   - Pay Applications
   - Production Status
   - Organization Members
+  - Field Hub
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
 
 ## Product Disposition Matrix
