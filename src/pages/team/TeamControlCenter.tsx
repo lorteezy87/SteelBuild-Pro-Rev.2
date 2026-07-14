@@ -1,8 +1,7 @@
 /**
- * TeamControlCenter — Command UI reskin of OrgMembers (flag: command_ui).
+ * TeamControlCenter — canonical workspace team-management presentation.
  * Presentation-only. All data + mutations are owned by the parent OrgMembers.jsx
- * and passed via props — no RBAC logic lives here. The classic OrgMembers path
- * is entirely untouched.
+ * and passed via props — no RBAC logic lives here.
  *
  * RBAC contract (do NOT change):
  *   canManage  — controls whether invite/role-change/remove actions are rendered
@@ -478,7 +477,6 @@ export default function TeamControlCenter(props: TeamControlCenterProps) {
       <DataTable<OrgMemberRow>
         columns={columns}
         rows={filteredMembers}
-        onRowClick={() => { /* no-op: detail drawer not in scope for this slice */ }}
         emptyMessage="No members match your search."
       />
     </div>

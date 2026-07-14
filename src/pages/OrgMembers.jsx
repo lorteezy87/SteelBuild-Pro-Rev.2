@@ -1,17 +1,15 @@
 /**
- * OrgMembers — workspace team management (multi-tenant SaaS).
+ * OrgMembers — canonical workspace team management surface.
  *
- * Invite teammates by email (creates a tokenised invite → shareable accept
- * link), see/revoke pending invites, and manage current members (role, remove).
- * Owner/admin only for the mutating actions; everyone can view. Org membership
- * grants workspace access — an admin still adds members to specific projects
- * (via Project Members) for project data.
+ * Invite teammates by email, see/revoke pending invites, and manage current
+ * members and roles. Owner/admin-only mutations remain owned by this page;
+ * TeamControlCenter is presentation-only. DangerZone remains mounted here so
+ * owner-only workspace deletion stays available with the canonical shell.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Users, Mail, Link2, X, Shield } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import DangerZone from "@/components/settings/DangerZone.jsx";
 import { useOrg } from "@/components/shared/OrgContext";
@@ -25,13 +23,9 @@ import {
   updateMemberRole, removeMember, inviteLink,
 } from "@/lib/org/repository";
 import { prepareOnboardingInvites, clampOrgRole } from "@/lib/org/onboardingInvites";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import TeamControlCenter from "./team/TeamControlCenter";
 
-const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "Member" };
-
 export default function OrgMembers() {
-  const commandUi = useFlag("command_ui");
   const { user } = useAuth();
   const { currentOrg, currentRole } = useOrg();
   const qc = useQueryClient();
@@ -42,7 +36,6 @@ export default function OrgMembers() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [busy, setBusy] = useState(false);
-  // Search state for the Command UI reskin only (classic path doesn't use it)
   const [ccSearch, setCcSearch] = useState("");
 
   const { data: members = [], isLoading: loadingMembers } = useQuery({
@@ -54,9 +47,8 @@ export default function OrgMembers() {
 
   const ownerCount = useMemo(() => members.filter((m) => m.role === "owner").length, [members]);
 
-  // Plan seat gating: count current members + still-pending invites against the
-  // plan's member limit so we don't create invites that can't be accepted (the
-  // server enforces at accept time). Enterprise/Business = unlimited (null).
+  // Plan seat gating counts current members and pending invites. The server
+  // enforces the same limit when an invitation is accepted.
   const { plan } = usePlan();
   const navigate = useNavigate();
   const memberLimit = plan.limits.members;
@@ -67,12 +59,9 @@ export default function OrgMembers() {
     qc.invalidateQueries({ queryKey: ["org-invites", orgId] });
   };
 
-  // ── Onboarding hand-off ────────────────────────────────────────────────────
-  // The setup wizard (Onboarding → "Invite your team") routes here with the
-  // collected roster on location.state.prefillInvites. Stage it for one-click
-  // review + batch send: prepareOnboardingInvites maps project roles → org roles
-  // and drops anyone already a member / already invited. Seeded ONCE, after the
-  // member + invite lists load (needed for the dedupe) so the user's edits stick.
+  // The setup wizard routes here with location.state.prefillInvites. Stage the
+  // roster once after both lists load so existing members and invites are
+  // removed without overwriting the user's edits.
   const location = useLocation();
   const prefill = location.state?.prefillInvites;
   const [staged, setStaged] = useState([]);
@@ -88,10 +77,6 @@ export default function OrgMembers() {
       existingEmails: members.map((m) => m.email),
       pendingEmails: invites.map((i) => i.email),
     });
-    // Clamp: a non-owner cannot grant 'owner'. The DB enforces this too
-    // (org_invites_insert WITH CHECK), but clamping here keeps the role select
-    // from showing a stale 'owner' value and stops the batch attempting a
-    // doomed insert. owner→admin (the most an admin may grant).
     const clamped = prepared.map((inv) => ({ ...inv, role: clampOrgRole(inv.role, { isOwner }) }));
     setStaged(clamped);
     setStagedSkipped(skipped);
@@ -127,11 +112,9 @@ export default function OrgMembers() {
     setSendingStaged(true);
     const results = [];
     for (const inv of staged) {
-      // Defense-in-depth: never let a non-owner send an 'owner' invite even if a
-      // stale value slipped through (the seed already clamps; the DB enforces too).
-      const role = clampOrgRole(inv.role, { isOwner });
+      const inviteRole = clampOrgRole(inv.role, { isOwner });
       try {
-        await createInvitation(orgId, inv.email, role, user.id);
+        await createInvitation(orgId, inv.email, inviteRole, user.id);
         results.push({ email: inv.email, ok: true });
       } catch {
         results.push({ email: inv.email, ok: false });
@@ -192,13 +175,17 @@ export default function OrgMembers() {
     return <div className="page-content" style={{ padding: 24 }}><CommandBar eyebrow="Workspace" title="Team" /></div>;
   }
 
-  // ── Command UI reskin (flag: command_ui) ────────────────────────────────────
-  // Presentation-only branch — all state/handlers below are the exact same
-  // variables used by the classic path. No RBAC logic is duplicated or changed.
-  if (commandUi) {
+  if (loadingMembers || loadingInvites) {
     return (
+      <div className="page-content" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="page" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="team-page">
       <TeamControlCenter
-        // Data
         orgName={currentOrg?.name || "Workspace"}
         members={members}
         invites={invites}
@@ -210,228 +197,34 @@ export default function OrgMembers() {
         seatsAtLimit={cap.atLimit}
         seatsNear={cap.near}
         planName={plan.name}
-        // RBAC gates (pass-through, not recomputed)
         canManage={canManage}
         isOwner={isOwner}
-        // Onboarding staged batch
         staged={staged}
         stagedSkippedNote={stagedSkippedNote}
         sendingStaged={sendingStaged}
         seatsLeft={seatsLeft}
-        // Single-invite form state
         inviteEmail={email}
         inviteRole={role}
         inviteBusy={busy}
         atMemberLimit={atMemberLimit}
-        // Search/filter (CC-local state; classic path ignores it)
         search={ccSearch}
         onSearch={setCcSearch}
-        // Mutation handlers — exact same functions, zero modification
         onSendInvite={sendInvite}
         onSetInviteEmail={setEmail}
         onSetInviteRole={setRole}
         onChangeRole={onChangeRole}
         onRemove={onRemove}
-        onRevoke={(id) => onRevoke(id)}
+        onRevoke={onRevoke}
         onCopyLink={copyLink}
         onNavigateToBilling={() => navigate("/Billing")}
-        // Staged batch handlers
         onSendStaged={sendStaged}
         onSetStagedRole={setStagedRole}
         onRemoveStaged={removeStaged}
         onDismissStaged={() => setStaged([])}
       />
-    );
-  }
-
-  return (
-    <div className="sb-dashboard-reference-page page-content" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 920 }}>
-      <CommandBar eyebrow={currentOrg?.name || "Workspace"} title="Team" count={members.length} unit=" members" subtitle="Invite teammates and manage who can access this workspace" />
-
-      {!(loadingMembers || loadingInvites) && (
-        <CapacityMeter cap={cap} planName={plan.name} canManage={canManage} onUpgrade={() => navigate("/Billing")} />
-      )}
-
-      {canManage && staged.length > 0 && (
-        <div className="sbd-card" style={{ padding: 16, border: "1px solid color-mix(in srgb, var(--accent) 40%, var(--border-default))" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, color: "var(--text-primary)", fontWeight: 700, fontSize: 13 }}>
-            <Users size={15} style={{ color: "var(--accent)" }} /> Invite your team from setup
-          </div>
-          <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.5 }}>
-            Carried over from onboarding — review the roles, then send. Each becomes a 14-day invite link in Pending below.
-            Project roles (PM / field / viewer) are assigned later on Project Members.
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {staged.map((inv, idx) => (
-              <div key={inv.email} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ flex: "1 1 240px", minWidth: 180, color: "var(--text-primary)", fontWeight: 600, fontSize: 14, wordBreak: "break-all" }}>{inv.email}</span>
-                <select value={inv.role} onChange={(e) => setStagedRole(idx, e.target.value)} disabled={sendingStaged} className="sbd-select" style={{ padding: "8px 10px", borderRadius: 9, minHeight: 38 }}>
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                  {isOwner && <option value="owner">Owner</option>}
-                </select>
-                <button type="button" onClick={() => removeStaged(idx)} disabled={sendingStaged} className="sbd-btn sbd-btn-ghost" style={{ ...smallBtn, color: "var(--status-error)" }} title="Remove from this batch"><X size={13} /></button>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
-            <button type="button" className="sbd-btn sbd-btn-primary" onClick={sendStaged} disabled={sendingStaged || atMemberLimit} style={{ minHeight: 40 }}>
-              {sendingStaged ? "Sending…" : `Send ${staged.length} invite${staged.length === 1 ? "" : "s"}`}
-            </button>
-            <button type="button" className="sbd-btn sbd-btn-ghost" onClick={() => setStaged([])} disabled={sendingStaged} style={{ minHeight: 40 }}>Dismiss</button>
-            {stagedSkippedNote && <span style={{ ...mono, fontSize: 11, color: "var(--text-muted)" }}>{stagedSkippedNote}</span>}
-          </div>
-          {!cap.unlimited && staged.length > seatsLeft && (
-            <div style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
-              Only {seatsLeft} seat{seatsLeft === 1 ? "" : "s"} left on {plan.name} — extra invites will be rejected. Remove some or{" "}
-              <button type="button" onClick={() => navigate("/Billing")} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>upgrade</button>.
-            </div>
-          )}
-        </div>
-      )}
-
-      {canManage && (
-        <div className="sbd-card" style={{ padding: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, color: "var(--text-primary)", fontWeight: 700, fontSize: 13 }}>
-            <Mail size={15} style={{ color: "var(--accent)" }} /> Invite a teammate
-          </div>
-          <form onSubmit={sendInvite} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <input
-              type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@company.com" disabled={busy}
-              style={{ flex: "1 1 260px", minWidth: 200, background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 9, padding: "10px 12px", color: "var(--text-primary)", fontSize: 14, outline: "none" }}
-            />
-            <select value={role} onChange={(e) => setRole(e.target.value)} disabled={busy} className="sbd-select" style={{ padding: "10px 12px", borderRadius: 9, minHeight: 40 }}>
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-            </select>
-            <button type="submit" className="sbd-btn sbd-btn-primary" disabled={busy || !email.trim() || atMemberLimit} style={{ minHeight: 40 }}>
-              {busy ? "Inviting…" : "Send invite"}
-            </button>
-          </form>
-          {atMemberLimit ? (
-            <div style={{ ...mono, fontSize: 11, color: "var(--status-warning)", marginTop: 8 }}>
-              {plan.name} plan limit reached ({memberLimit} member{memberLimit === 1 ? "" : "s"}).{" "}
-              <button type="button" onClick={() => navigate("/Billing")} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>Upgrade</button> to invite more.
-            </div>
-          ) : (
-            <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-              Creates a 14-day invite link (copied to your clipboard) — send it to them; they accept after signing in.
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Pending invites */}
-      {(loadingInvites ? false : invites.length > 0) && (
-        <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={sectionHdr}>Pending invites ({invites.length})</div>
-          <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <tbody>
-              {invites.map((inv) => (
-                <tr key={inv.id}>
-                  <td style={td}><span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{inv.email}</span></td>
-                  <td style={td}><Badge>{ROLE_LABEL[inv.role] || inv.role}</Badge></td>
-                  <td style={{ ...td, ...mono, fontSize: 11, color: "var(--text-muted)" }}>expires {String(inv.expires_at).slice(0, 10)}</td>
-                  <td style={{ ...td, textAlign: "right" }}>
-                    {canManage && (
-                      <>
-                        <button onClick={() => copyLink(inv.token)} className="sbd-btn sbd-btn-ghost" style={smallBtn} title="Copy invite link"><Link2 size={13} /> Link</button>
-                        <button onClick={() => onRevoke(inv.id)} className="sbd-btn sbd-btn-ghost" style={{ ...smallBtn, color: "var(--status-error)" }} title="Revoke"><X size={13} /></button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Members */}
-      <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={sectionHdr}><Users size={13} style={{ verticalAlign: "-2px", marginRight: 6 }} />Members</div>
-        {loadingMembers ? (
-          <div style={{ padding: 16 }}><LoadingSkeleton variant="list" /></div>
-        ) : (
-          <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <tbody>
-              {members.map((m) => {
-                const self = m.user_id === user.id;
-                return (
-                  <tr key={m.id}>
-                    <td style={td}>
-                      <div style={{ color: "var(--text-primary)", fontWeight: 600 }}>
-                        {m.full_name || m.email || `${m.user_id.slice(0, 8)}…`}{self && <span style={{ ...mono, fontSize: 9, color: "var(--accent)", marginLeft: 8 }}>YOU</span>}
-                      </div>
-                      {m.email && m.full_name && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{m.email}</div>}
-                    </td>
-                    <td style={{ ...td, width: 130 }}>
-                      {canManage && !self ? (
-                        <select value={m.role} onChange={(e) => onChangeRole(m, e.target.value)} className="sbd-select" style={{ padding: "5px 8px", borderRadius: 7, fontSize: 12 }}>
-                          <option value="member">Member</option>
-                          <option value="admin">Admin</option>
-                          {(isOwner || m.role === "owner") && <option value="owner">Owner</option>}
-                        </select>
-                      ) : (
-                        <Badge tone={m.role === "owner" ? "var(--accent)" : undefined}><Shield size={11} style={{ verticalAlign: "-1px", marginRight: 3 }} />{ROLE_LABEL[m.role] || m.role}</Badge>
-                      )}
-                    </td>
-                    <td style={{ ...td, textAlign: "right", width: 90 }}>
-                      {canManage && !self && (
-                        <button onClick={() => onRemove(m)} className="sbd-btn sbd-btn-ghost" style={{ ...smallBtn, color: "var(--status-error)" }} title="Remove from workspace"><X size={13} /> Remove</button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+      <div style={{ padding: "0 var(--cmd-page-px, 24px) 24px" }}>
+        <DangerZone />
       </div>
-      <DangerZone />
     </div>
-  );
-}
-
-const mono = { fontFamily: "var(--font-mono)" };
-const sectionHdr = { padding: "10px 14px", background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 };
-const td = { padding: "10px 14px", borderBottom: "1px solid var(--divider)", color: "var(--text-secondary)" };
-const smallBtn = { padding: "4px 8px", fontSize: 11, minHeight: 28, display: "inline-flex", alignItems: "center", gap: 4 };
-
-function CapacityMeter({ cap, planName, canManage, onUpgrade }) {
-  const barColor = cap.atLimit ? "var(--status-error)" : cap.near ? "var(--status-warning)" : "var(--accent)";
-  const countColor = cap.atLimit ? "var(--status-error)" : "var(--text-primary)";
-  return (
-    <div className="sbd-card" style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ ...mono, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 }}>Workspace seats</span>
-          <span style={{ color: countColor, fontWeight: 800, fontSize: 15 }}>
-            {cap.unlimited ? cap.used : `${cap.used} / ${cap.limit}`}
-          </span>
-          <span style={{ ...mono, fontSize: 11, color: "var(--text-muted)" }}>
-            {cap.members} member{cap.members === 1 ? "" : "s"}
-            {cap.pending > 0 ? ` · ${cap.pending} pending invite${cap.pending === 1 ? "" : "s"}` : ""}
-            {cap.unlimited ? ` · Unlimited on ${planName}` : ""}
-          </span>
-        </div>
-        {!cap.unlimited && cap.atLimit && canManage && (
-          <button type="button" onClick={onUpgrade} style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: "pointer", ...mono, fontSize: 11, fontWeight: 700 }}>Upgrade →</button>
-        )}
-      </div>
-      {!cap.unlimited && (
-        <div style={{ height: 6, borderRadius: 999, background: "var(--bg-surface-low)", overflow: "hidden" }}>
-          <div style={{ width: `${cap.pct}%`, height: "100%", background: barColor, borderRadius: 999, transition: "width .2s ease" }} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Badge({ children, tone }) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 9px", borderRadius: 999, border: `1px solid ${tone ? `color-mix(in srgb, ${tone} 40%, var(--border-default))` : "var(--border-default)"}`, background: "var(--bg-surface-low)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: tone || "var(--text-secondary)", letterSpacing: "0.04em" }}>
-      {children}
-    </span>
   );
 }
