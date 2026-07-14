@@ -1,6 +1,6 @@
 /**
- * Pure derivations for the Field Hub Control Center (command_ui redesign).
- * No React, no network — takes raw entity arrays and returns KPI + panel data.
+ * Pure derivations for the canonical Field Hub Control Center.
+ * No React/network behavior — takes raw entity arrays and returns KPI + panel data.
  *
  * Sources:
  *   daily_logs        → DailyLog entity      (headcount, hours_worked, safety_incidents, equipment_used, date, crew_name, superintendent)

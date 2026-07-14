@@ -1,9 +1,9 @@
 /**
- * Field Hub Control Center — light Command UI skin.
- * Rendered by FieldHub.jsx when the `command_ui` flag is on.
+ * Field Hub Control Center — canonical Field Hub overview.
  *
  * Data is supplied by the parent (FieldHub.jsx) which already owns the
- * React Query subscriptions. This component is pure-presentation + useMemo.
+ * React Query subscriptions. This component is presentation-only + useMemo;
+ * register navigation remains owned by the parent.
  *
  * Panel layout:
  *   1. PageHero — icon HardHat, project name + chips

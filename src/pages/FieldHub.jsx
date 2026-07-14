@@ -8,14 +8,8 @@
  *
  * Thin tab shell (the DrawingSubmittalHub / ResourceHub pattern): each tab
  * lazy-loads the existing page unchanged; all remain independently routable.
- * `?field_tab=` drives the active tab.
- *
- * command_ui flag: adds a leading "Command Center" tab rendering
- * FieldHubControlCenter. Its data is fetched here (same entities the sub-pages
- * use) and passed down. The tab shell is shared by both skins — an earlier
- * version returned the Control Center *instead of* the shell, which made
- * `?field_tab=`/`?id=` inert (so hub rows opened nothing) and hid every
- * register tab from command_ui users.
+ * `?field_tab=` drives the active tab, with the Command Center overview as the
+ * permanent default.
  */
 import { Suspense, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -26,7 +20,6 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { usePermissions } from "@/services/permissions";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import FieldHubControlCenter from "./fieldHub/FieldHubControlCenter";
 
 const FieldTodayPage = lazyWithRetry(() => import("@/pages/FieldToday"));
@@ -53,69 +46,85 @@ const TABS = [
 
 export default function FieldHub() {
   const [params, setParams] = useSearchParams();
-  const commandUi = useFlag("command_ui");
   const projectId = useProjectId();
   const { can } = usePermissions();
 
-  // ── command_ui data layer ──────────────────────────────────────────────────
-  // All four entity fetches mirror what the sub-pages already do.
-  // We only pay the network cost when command_ui is on.
-  const { data: rawLogs = [] } = useQuery({
+  const visibleTabs = useMemo(
+    () => [{ key: "hub", label: "Command Center", Component: null }, ...TABS],
+    [],
+  );
+  const param = params.get("field_tab");
+  const activeKey = visibleTabs.some((t) => t.key === param) ? param : "hub";
+  const Active = TABS.find((t) => t.key === activeKey)?.Component ?? null;
+  const hubActive = activeKey === "hub";
+
+  // Field Hub aggregate data mirrors the existing register sources and is only
+  // loaded while the Command Center overview is active.
+  const { data: rawLogs = [], isLoading: logsLoading } = useQuery({
     queryKey: ["daily-logs", projectId],
     queryFn: () =>
       projectId
         ? entities.DailyLog.filter({ project_id: projectId })
         : entities.DailyLog.list("-date"),
-    enabled: !!commandUi,
+    enabled: hubActive,
   });
 
-  const { data: rawInspections = [] } = useQuery({
+  const { data: rawInspections = [], isLoading: inspectionsLoading } = useQuery({
     queryKey: ["inspections", projectId],
     queryFn: () =>
       projectId
         ? entities.Inspection.filter({ project_id: projectId })
         : entities.Inspection.list("-inspection_date"),
-    enabled: !!commandUi,
+    enabled: hubActive,
   });
 
-  const { data: rawIncidents = [] } = useQuery({
+  const { data: rawIncidents = [], isLoading: incidentsLoading } = useQuery({
     queryKey: ["safety-incidents", projectId],
     queryFn: () =>
       projectId
         ? entities.SafetyIncident.filter({ project_id: projectId })
         : entities.SafetyIncident.list("-incident_date"),
-    enabled: !!commandUi,
+    enabled: hubActive,
   });
 
   // Key must match the cacheRegistry `punchlist` primary (["punchlist", pid]).
   // It was ["punchlist-items", pid], which no invalidation ever touched, so
   // the hub feed went stale the moment anyone edited an item in the register.
-  const { data: rawPunchlist = [] } = useQuery({
+  const { data: rawPunchlist = [], isLoading: punchlistLoading } = useQuery({
     queryKey: ["punchlist", projectId],
     queryFn: () =>
       projectId
         ? entities.PunchlistItem.filter({ project_id: projectId })
         : entities.PunchlistItem.list(),
-    enabled: !!commandUi,
+    enabled: hubActive,
   });
 
   // Daily logs reference schedule tasks (daily_logs.schedule_task_ids), and
   // schedule_tasks is the only field-adjacent table with a real `phase`
   // column — so it's how a log gets a phase we can actually stand behind.
-  const { data: scheduleTasks = [] } = useQuery({
+  const { data: scheduleTasks = [], isLoading: scheduleTasksLoading } = useQuery({
     queryKey: ["schedule-tasks", projectId],
     queryFn: () =>
       projectId ? entities.ScheduleTask.filter({ project_id: projectId }) : [],
-    enabled: !!commandUi && !!projectId,
+    enabled: hubActive && !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: () => entities.Project.list(),
     staleTime: 5 * 60 * 1000,
-    enabled: !!commandUi,
+    enabled: hubActive,
   });
+
+  const hubLoading = hubActive && (
+    logsLoading
+    || inspectionsLoading
+    || incidentsLoading
+    || punchlistLoading
+    || projectsLoading
+    || (projectId ? scheduleTasksLoading : false)
+  );
 
   // Soft-delete filter — mirrors the pattern used in DailyLogs / Inspections / Safety.
   const logs = useMemo(() => rawLogs.filter((r) => !r.is_deleted), [rawLogs]);
@@ -128,23 +137,11 @@ export default function FieldHub() {
     [projects, projectId],
   );
 
-  // ── command_ui filter state ────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
   const [phaseFilter, setPhaseFilter] = useState("All");
 
   // ── Tab state ──────────────────────────────────────────────────────────────
-  // command_ui prepends a "Command Center" tab (the Control Center) and lands
-  // there by default; the registers stay reachable, which is what makes the
-  // row-click deep-links below actually land somewhere.
-  const visibleTabs = useMemo(
-    () => (commandUi ? [{ key: "hub", label: "Command Center", Component: null }, ...TABS] : TABS),
-    [commandUi],
-  );
-  const defaultKey = commandUi ? "hub" : "today";
-  const param = params.get("field_tab");
-  const activeKey = visibleTabs.some((t) => t.key === param) ? param : defaultKey;
-  const Active = TABS.find((t) => t.key === activeKey)?.Component ?? null;
   const setTab = (key) =>
     setParams(
       (prev) => {
@@ -260,7 +257,13 @@ export default function FieldHub() {
       <div style={{ minHeight: 0, position: "relative" }}>
         <ErrorBoundary label="Field">
           <Suspense fallback={<LoadingSkeleton variant="page" />}>
-            {activeKey === "hub" ? controlCenter : Active ? <Active /> : null}
+            {activeKey === "hub"
+              ? hubLoading
+                ? <LoadingSkeleton variant="page" />
+                : controlCenter
+              : Active
+                ? <Active />
+                : null}
           </Suspense>
         </ErrorBoundary>
       </div>
