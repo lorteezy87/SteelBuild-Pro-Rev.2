@@ -194,8 +194,18 @@
   - Preserved permissions, cache keys, project scoping, phase resolution, and lazy-loaded registers.
   - Kept `P0-07` in progress.
 
+### Batch 26 — Backcharge Defense canonicalization
+- ✅ Batch 26 completed:
+  - Made `BackchargeControlCenter` the canonical register.
+  - Preserved and promoted the complete detail workflow.
+  - Preserved T&M tickets, audit trail, status changes, linked CO/RFI context, defense-package generation, editing, and deletion.
+  - Corrected Open Backcharges filtering to include all canonical open statuses.
+  - Removed `command_ui` branching and the duplicate register/KPI shell.
+  - Kept repository, RLS, cache, and export behavior unchanged.
+  - Kept `P0-07` in progress.
+
 ### Open items
-- **IN PROGRESS:** batches 14–25 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, and Field Hub; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
+- **IN PROGRESS:** batches 14–26 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Field Hub, and Backcharge Defense; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
   - Budget Control
   - Reports & Insights
   - Resource Register
@@ -208,6 +218,7 @@
   - Production Status
   - Organization Members
   - Field Hub
+  - Backcharge Defense
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
 
 ## Product Disposition Matrix

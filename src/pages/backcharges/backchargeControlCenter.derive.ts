@@ -1,7 +1,6 @@
 /**
- * Pure derivations for the Backcharge Defense Control Center (command_ui redesign).
- * No React, no network. Reuses rollupBackcharges from the canonical cost engine so
- * both paths compute identically.
+ * Pure derivations for the canonical Backcharge Defense Control Center.
+ * No React, no network. Reuses rollupBackcharges from the canonical cost engine.
  */
 import { rollupBackcharges, computeTmTicketTotal } from "@/lib/backcharge/cost";
 import {
@@ -86,6 +85,25 @@ export function vendorSummary(backcharges: Backcharge[]): VendorSummaryRow[] {
     });
   }
   return rows.sort((a, b) => b.totalAmount - a.totalAmount);
+}
+
+/** Filter the canonical register by search text and status. */
+export function filterBackcharges(backcharges: Backcharge[], search: string, statusFilter: string): Backcharge[] {
+  const q = search.trim().toLowerCase();
+  return backcharges.filter((b) => {
+    if (statusFilter === "open") {
+      if (!OPEN_BACKCHARGE_STATUSES.has(b.status as BackchargeStatus)) return false;
+    } else if (statusFilter !== "all" && b.status !== statusFilter) {
+      return false;
+    }
+    if (!q) return true;
+    return (
+      (b.title || "").toLowerCase().includes(q) ||
+      (b.responsible_party || "").toLowerCase().includes(q) ||
+      (b.backcharge_number || "").toLowerCase().includes(q) ||
+      (b.description || "").toLowerCase().includes(q)
+    );
+  });
 }
 
 /** All KPIs + queues for the Backcharge Defense Control Center. */
