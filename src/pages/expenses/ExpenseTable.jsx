@@ -19,6 +19,7 @@ export default function ExpenseTable({
   onToggleAll,
   onEdit,
   onDelete,
+  onOpen,
 }) {
   const [hoveredRow, setHoveredRow] = useState(null);
 
@@ -70,10 +71,11 @@ export default function ExpenseTable({
                   <tr
                     key={e.id}
                     style={{ background: rowBg, borderBottom: "1px solid var(--divider)", transition: "background 0.1s" }}
+                    onClick={onOpen ? () => onOpen(e) : undefined}
                     onMouseEnter={() => setHoveredRow(e.id)}
                     onMouseLeave={() => setHoveredRow(null)}
                   >
-                    <td style={{ padding: "9px 14px", textAlign: "center", cursor: "pointer" }} onClick={() => onToggleSelect(e.id)}>
+                    <td style={{ padding: "9px 14px", textAlign: "center", cursor: "pointer" }} onClick={(event) => { event.stopPropagation(); onToggleSelect(e.id); }}>
                       {isSelected ? <CheckSquare size={12} color="var(--accent)" /> : <Square size={12} color="var(--text-muted)" />}
                     </td>
                     <td style={{ padding: "9px 14px", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent-light)", fontWeight: 600 }}>{e.expense_number}</td>
@@ -93,13 +95,13 @@ export default function ExpenseTable({
                     <td style={{ padding: "9px 14px", textAlign: "center" }}>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center", opacity: isHovered ? 1 : 0, transition: "opacity 0.15s" }}>
                         <button
-                          onClick={() => onEdit(e)}
+                          onClick={(event) => { event.stopPropagation(); onEdit(e); }}
                           style={{ width: 26, height: 26, borderRadius: 6, background: "var(--bg-surface-high)", border: "1px solid var(--border-default)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text-muted)" }}
                         >
                           <Pencil size={11} />
                         </button>
                         <button
-                          onClick={() => onDelete(e)}
+                          onClick={(event) => { event.stopPropagation(); onDelete(e); }}
                           style={{ width: 26, height: 26, borderRadius: 6, background: "var(--danger-muted)", border: "1px solid var(--danger-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--danger)" }}
                         >
                           <Trash2 size={11} />

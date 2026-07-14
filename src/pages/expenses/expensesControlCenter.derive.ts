@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Expenses Control Center (command_ui redesign).
+ * Pure derivations for the canonical Expenses Control Center.
  * No React, no network, no side effects.
  *
  * AMOUNT UNITS: expenses.amount is stored as **dollars** (not integer cents).
