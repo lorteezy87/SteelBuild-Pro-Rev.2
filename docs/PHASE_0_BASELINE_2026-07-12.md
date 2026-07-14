@@ -177,8 +177,15 @@
   - Preserved production imports, project-scoped queries, drawing-link coverage, filters, CSV export, loading state, and cache invalidation.
   - Kept `P0-07` in progress: command_ui fallback retirement continues.
 
+### Batch 24 — Organization Members canonicalization
+- ✅ Batch 24 completed:
+  - Made `TeamControlCenter` the unconditional Organization Members presentation.
+  - Preserved invitations, seat limits, role controls, onboarding handoff, self-removal and last-owner protections, billing navigation, and workspace deletion in `DangerZone`.
+  - Removed the duplicate classic team-management shell without changing organization repository behavior.
+  - Kept `P0-07` in progress: command_ui fallback retirement continues.
+
 ### Open items
-- **IN PROGRESS:** batches 14–23 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, and Production Status; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
+- **IN PROGRESS:** batches 14–24 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, and Team; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
   - Budget Control
   - Reports & Insights
   - Resource Register
@@ -189,6 +196,7 @@
   - Vendors
   - Pay Applications
   - Production Status
+  - Organization Members
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
 
 ## Product Disposition Matrix

@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Team Control Center (command_ui redesign).
+ * Pure derivations for the canonical Team Control Center.
  * No React, no network. All inputs come from listOrgMembers() +
  * listInvitations() + seatCapacity() — already loaded by OrgMembers.jsx.
  */
