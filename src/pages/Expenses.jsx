@@ -19,9 +19,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/ProjectContext";
-import { CommandBar } from "@/components/design-system";
 import DeleteDialog from "../components/shared/DeleteDialog";
-import { Plus, RefreshCw } from "lucide-react";
 import ExpenseFormModal from "../components/expenses/ExpenseFormModal";
 import ExpenseImportModal from "../components/expenses/ExpenseImportModal";
 import { formatCurrencyShort, roundCurrency } from "../components/shared/formatters";
@@ -40,14 +38,12 @@ import AlertChips    from "./expenses/AlertChips";
 import FilterBar     from "./expenses/FilterBar";
 import ExpenseTable  from "./expenses/ExpenseTable";
 import BulkActionBar from "./expenses/BulkActionBar";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import ExpensesControlCenter from "./expenses/ExpensesControlCenter";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 export default function ExpensesPage() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
-  const commandUi = useFlag("command_ui");
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -273,6 +269,16 @@ export default function ExpensesPage() {
     });
   }, [expenses, debouncedSearch, costCodeFilter, typeFilter, statusFilter, wpFilter, filterByDate]);
 
+  useEffect(() => {
+    const visibleIds = new Set(filtered.map((expense) => expense.id));
+    setSelected((current) => {
+      const next = current.filter((id) => visibleIds.has(id));
+      return next.length === current.length && next.every((id, index) => id === current[index])
+        ? current
+        : next;
+    });
+  }, [filtered]);
+
   /* ── Spend by cost code (for donut) ── */
   const spendByCostCode = useMemo(() => {
     const map = {};
@@ -373,7 +379,7 @@ export default function ExpensesPage() {
   const toggleAll = () => setSelected(selected.length === filtered.length ? [] : filtered.map((e) => e.id));
   const handleExportCSV = () => exportExpensesCSV(filtered, activeProject?.name);
 
-  /* ── Shared modals rendered in both classic and command_ui paths ── */
+  /* ── Shared modals rendered inside the canonical control center ── */
   const modals = (
     <>
       <ExpenseFormModal
@@ -426,131 +432,98 @@ export default function ExpensesPage() {
     );
   }
 
-  /* ── command_ui flag: render the light Control Center skin ── */
-  if (commandUi) {
-    return (
-      <div className="exp-page">
-        <ListTruncationNotice count={expenses.length} label="expenses" />
-        <ExpensesControlCenter
-          projectName={activeProject?.name || "Project"}
-          expenses={expenses}
-          filtered={filtered}
-          search={search}
-          onSearch={setSearch}
-          statusFilter={statusFilter}
-          onStatusFilter={(v) => { setStatusFilter(v); setActiveKPI(null); }}
-          onExport={handleExportCSV}
-          onImport={() => setImportOpen(true)}
-          onCreate={() => { setEditing(null); setModalOpen(true); }}
-          onOpenExpense={(e) => { setEditing(e); setModalOpen(true); }}
-        />
-        {modals}
-      </div>
-    );
-  }
-
   return (
-    <div className="sb-dashboard-reference-page" style={{ paddingBottom: selected.length > 0 ? 72 : 0 }}>
+    <div className="exp-page">
       <ListTruncationNotice count={expenses.length} label="expenses" />
-      <CommandBar
-        eyebrow={activeProject?.name || "COST"}
-        title="Expenses"
-        count={expenses.length}
-        unit=" · ENTRIES"
-        subtitle={`${formatCurrencyShort(totalCommitted)} committed · ${formatCurrencyShort(totalPaid)} paid`}
-      >
-        <button
-          onClick={refetch}
-          title="Refresh"
-          className="sbd-btn"
-          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}
-        >
-          <RefreshCw size={12} /> Refresh
-        </button>
-        <button
-          onClick={() => { setEditing(null); setModalOpen(true); }}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> New Expense
-        </button>
-      </CommandBar>
-
-      <KpiStrip
-        activeKPI={activeKPI}
-        onClick={handleKPIClick}
-        totalBudget={totalBudget}
-        totalCommitted={totalCommitted}
-        totalPaid={totalPaid}
-        paidCount={paidCount}
-        totalRemaining={totalRemaining}
-        totalOutstanding={totalOutstanding}
-        pctUsed={pctUsed}
-        remainingColor={remainingColor}
-        remainingBorderColor={remainingBorderColor}
+      <ExpensesControlCenter
+        projectName={activeProject?.name || "Project"}
         expenses={expenses}
-      />
-
-      <AnalyticsGrid
-        spendByCostCode={spendByCostCode}
-        costCodeBudgetVsActual={costCodeBudgetVsActual}
-        statusBreakdown={statusBreakdown}
-        topVendors={topVendors}
-        expenses={expenses}
-        totalCommitted={totalCommitted}
-      />
-
-      <AlertChips
-        alerts={visibleAlerts}
-        onDismiss={(key) => setDismissedAlerts((prev) => [...prev, key])}
-      />
-
-      <FilterBar
-        search={search} onSearchChange={setSearch}
-        costCodeFilter={costCodeFilter} onCostCodeFilter={setCostCodeFilter}
-        typeFilter={typeFilter} onTypeFilter={setTypeFilter}
+        filtered={filtered}
+        search={search}
+        onSearch={setSearch}
         statusFilter={statusFilter}
         onStatusFilter={(v) => { setStatusFilter(v); setActiveKPI(null); }}
-        wpFilter={wpFilter} onWPFilter={setWpFilter} workPackages={workPackages}
-        dateRangeFilter={dateRangeFilter} onDateRangeFilter={setDateRangeFilter}
-        activeKPI={activeKPI}
-        onClearKPI={() => { setActiveKPI(null); setStatusFilter("all"); }}
-        onImport={() => setImportOpen(true)}
+        onRefresh={refetch}
         onExport={handleExportCSV}
-      />
+        onImport={() => setImportOpen(true)}
+        onCreate={() => { setEditing(null); setModalOpen(true); }}
+        onOpenExpense={(e) => { setEditing(e); setModalOpen(true); }}
+      >
+        <KpiStrip
+          activeKPI={activeKPI}
+          onClick={handleKPIClick}
+          totalBudget={totalBudget}
+          totalCommitted={totalCommitted}
+          totalPaid={totalPaid}
+          paidCount={paidCount}
+          totalRemaining={totalRemaining}
+          totalOutstanding={totalOutstanding}
+          pctUsed={pctUsed}
+          remainingColor={remainingColor}
+          remainingBorderColor={remainingBorderColor}
+          expenses={expenses}
+        />
 
-      <ExpenseTable
-        filtered={filtered}
-        isLoading={isLoading}
-        selected={selected}
-        onToggleSelect={toggleSelect}
-        onToggleAll={toggleAll}
-        onEdit={(e) => { setEditing(e); setModalOpen(true); }}
-        onDelete={setDeleteTarget}
-      />
+        <AnalyticsGrid
+          spendByCostCode={spendByCostCode}
+          costCodeBudgetVsActual={costCodeBudgetVsActual}
+          statusBreakdown={statusBreakdown}
+          topVendors={topVendors}
+          expenses={expenses}
+          totalCommitted={totalCommitted}
+        />
 
-      <BulkActionBar
-        count={selected.length}
-        isPending={bulkUpdateMut.isPending || bulkDeleteMut.isPending}
-        onMarkPaid={() => {
-          if (!bulkUpdateMut.isPending && !bulkDeleteMut.isPending) {
-            bulkUpdateMut.mutate({ ids: selected, data: { payment_status: "Paid" } });
-          }
-        }}
-        onMarkVoided={() => {
-          if (!bulkUpdateMut.isPending && !bulkDeleteMut.isPending) {
-            bulkUpdateMut.mutate({ ids: selected, data: { payment_status: "Voided" } });
-          }
-        }}
-        onDelete={() => {
-          if (!bulkDeleteMut.isPending && !bulkUpdateMut.isPending) {
-            bulkDeleteMut.mutate(selected);
-          }
-        }}
-        onClear={() => setSelected([])}
-      />
+        <AlertChips
+          alerts={visibleAlerts}
+          onDismiss={(key) => setDismissedAlerts((prev) => [...prev, key])}
+        />
 
+        <FilterBar
+          search={search} onSearchChange={setSearch}
+          costCodeFilter={costCodeFilter} onCostCodeFilter={setCostCodeFilter}
+          typeFilter={typeFilter} onTypeFilter={setTypeFilter}
+          statusFilter={statusFilter}
+          onStatusFilter={(v) => { setStatusFilter(v); setActiveKPI(null); }}
+          wpFilter={wpFilter} onWPFilter={setWpFilter} workPackages={workPackages}
+          dateRangeFilter={dateRangeFilter} onDateRangeFilter={setDateRangeFilter}
+          activeKPI={activeKPI}
+          onClearKPI={() => { setActiveKPI(null); setStatusFilter("all"); }}
+          onImport={() => setImportOpen(true)}
+          onExport={handleExportCSV}
+        />
+
+        <ExpenseTable
+          filtered={filtered}
+          isLoading={isLoading}
+          selected={selected}
+          onToggleSelect={toggleSelect}
+          onToggleAll={toggleAll}
+          onEdit={(e) => { setEditing(e); setModalOpen(true); }}
+          onDelete={setDeleteTarget}
+          onOpen={(e) => { setEditing(e); setModalOpen(true); }}
+        />
+
+        <BulkActionBar
+          count={selected.length}
+          isPending={bulkUpdateMut.isPending || bulkDeleteMut.isPending}
+          onMarkPaid={() => {
+            if (!bulkUpdateMut.isPending && !bulkDeleteMut.isPending) {
+              bulkUpdateMut.mutate({ ids: selected, data: { payment_status: "Paid" } });
+            }
+          }}
+          onMarkVoided={() => {
+            if (!bulkUpdateMut.isPending && !bulkDeleteMut.isPending) {
+              bulkUpdateMut.mutate({ ids: selected, data: { payment_status: "Voided" } });
+            }
+          }}
+          onDelete={() => {
+            if (!bulkDeleteMut.isPending && !bulkUpdateMut.isPending) {
+              bulkDeleteMut.mutate(selected);
+            }
+          }}
+          onClear={() => setSelected([])}
+        />
+      </ExpensesControlCenter>
       {modals}
     </div>
   );

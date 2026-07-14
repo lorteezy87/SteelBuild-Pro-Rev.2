@@ -205,7 +205,7 @@
   - Kept `P0-07` in progress.
 
 ### Open items
-- **IN PROGRESS:** batches 14–26 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Field Hub, and Backcharge Defense; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
+- **IN PROGRESS:** batches 14–27 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Field Hub, Backcharge Defense, and Expenses; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
   - Budget Control
   - Reports & Insights
   - Resource Register
@@ -219,7 +219,21 @@
   - Organization Members
   - Field Hub
   - Backcharge Defense
+  - Expenses
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
+
+### Batch 27 — Expenses canonicalization
+- ✅ `ExpensesControlCenter` is now the only route-level Expenses presentation.
+- Preserved project-scoped loading and no-project behavior, allocator-backed creation, edit/delete dialogs, CSV import/export, refresh, advanced filters, analytics, alerts, budget-vs-actual reporting, selection, filtered select-all, bulk actions, cache invalidation, and dollar/rounding behavior.
+- Preserved row-open editing and isolated checkbox/delete actions in the composed expense table.
+- Removed the alternate `command_ui` and classic page returns. Specialized expense components remain composed inside the canonical shell because their workflows are still active.
+- No database schemas, migrations, permissions, repository functions, or allocator behavior changed.
+- Files changed: `src/pages/Expenses.jsx`, `src/pages/expenses/ExpenseTable.jsx`, `src/pages/expenses/ExpensesControlCenter.tsx`, `src/pages/expenses/expensesControlCenter.derive.ts`, and this baseline document. No Expenses component files were deleted because the active specialized workflows are composed by the canonical shell.
+- Working-tree line counts: `Expenses.jsx` 494 lines; `ExpensesControlCenter.tsx` 220 lines. The page remains larger than the turnover target because the parent still owns all active query, filter, analytics, selection, mutation, and allocator behavior.
+- Stale-path search passed with no matches for `command_ui`, `commandUi`, `classic`, `CommandBar`, `Plus`, or `useFlag` in the Expenses page/control-center/derive files.
+- Validation passed: focused Expenses tests (2 files, 13 tests), `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, `npm run typecheck:noimplicitany`, and full tests (245 files, 2,930 tests).
+- Production build passed with 4,318 transformed modules. Existing large-chunk warnings remain; the Expenses chunk is 72.36 KB because active specialized presentation remains composed.
+- Commit: `phase0: canonicalize expenses UI`; PR #77 remains Draft. No deployment or merge performed. Unrelated worktree changes were not staged.
 
 ## Product Disposition Matrix
 
