@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { vendorSummary, buildBackchargeSummary } from "../backchargeControlCenter.derive";
+import { vendorSummary, buildBackchargeSummary, filterBackcharges } from "../backchargeControlCenter.derive";
 import type { Backcharge } from "../backchargeControlCenter.derive";
 
 function bc(overrides: Partial<Backcharge> & { id: string; title: string; status: Backcharge["status"] }): Backcharge {
@@ -126,5 +126,17 @@ describe("buildBackchargeSummary", () => {
     expect(empty.openQueue).toHaveLength(0);
     expect(empty.disputedQueue).toHaveLength(0);
     expect(empty.byVendor).toHaveLength(0);
+  });
+});
+
+describe("filterBackcharges", () => {
+  it("treats open as every canonical open status", () => {
+    const filtered = filterBackcharges(SAMPLE, "", "open");
+    expect(filtered.map((b) => b.status)).toEqual(["pending", "disputed", "draft", "notice_sent"]);
+  });
+
+  it("keeps all statuses for all and exact matching for other filters", () => {
+    expect(filterBackcharges(SAMPLE, "", "all")).toHaveLength(SAMPLE.length);
+    expect(filterBackcharges(SAMPLE, "", "collected").map((b) => b.id)).toEqual(["4"]);
   });
 });
