@@ -4,12 +4,11 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType, CSSProperties, PropsWithChildren } from "react";
+import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { logActivity } from "@/services/auditLogger";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Clock3, PackageCheck, Search, Truck } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
@@ -29,12 +28,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { batchProcess } from "@/utils/batchProcess";
-import {
-  BulkActionBar as BulkActionBarRaw,
-  Button as ButtonRaw,
-  EmptyState as EmptyStateRaw,
-  StatusPill,
-} from "@/components/design-system";
+import { BulkActionBar as BulkActionBarRaw } from "@/components/design-system";
 import SequenceFilterRaw, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { exportDeliveriesCSV, isFabComplete } from "./deliveries/utils";
 import {
@@ -43,38 +37,19 @@ import {
   getDeliveryDisplayName,
   sortDeliveriesForDispatch,
 } from "./deliveries/analytics";
-import { deliveryStyles } from "./deliveries/styles";
-import {
-  LANE_ORDER,
-  RISK_FILTERS,
-  SCHEDULE_FILTERS,
-  STATUS_COLOR,
-  VIEW_OPTIONS,
-  display,
-  formatTons,
-  mono,
-  num,
-  todayIso,
-} from "./deliveries/format";
+import { LANE_ORDER, todayIso } from "./deliveries/format";
 import {
   DeliveryDetailModal,
   DispatchBoard,
-  ExceptionRail,
-  FilterSelect,
-  HeroMetric,
   ReceivingQuickPanel,
-  RegisterView,
   ScheduleView,
 } from "./deliveries/components";
 import type { DeliveryMetrics, DeliveryRecord } from "./deliveries/types";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import DeliveryControlCenter from "./deliveries/DeliveryControlCenter";
 
 // The design-system primitives and LoadingSkeleton are still .jsx, so TS infers
 // permissive types. These casts are removable once the shared layer is typed.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
-const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
-const EmptyState = EmptyStateRaw as unknown as ComponentType<AnyProps>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 // Same boundary cast for the .jsx feature components whose default-valued props
@@ -94,7 +69,6 @@ export default function Deliveries() {
   const qc = useQueryClient();
   const { can } = usePermissions();
   const receiveMode = searchParams.get("receive") === "1";
-  const commandUi = useFlag("command_ui");
 
   const [view, setView] = useState("dispatch");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -346,7 +320,27 @@ export default function Deliveries() {
     });
 
   const toggleAll = (checked: boolean) =>
-    setSelectedIds(checked ? new Set(filtered.map((delivery) => delivery.id)) : new Set());
+    setSelectedIds(
+      checked
+        ? new Set(
+            filtered
+              .map((delivery) => delivery.id)
+              .filter((id): id is string => Boolean(id))
+          )
+        : new Set()
+    );
+
+  useEffect(() => {
+    const visibleIds = new Set(
+      filtered
+        .map((delivery) => delivery.id)
+        .filter((id): id is string => Boolean(id))
+    );
+    setSelectedIds((previous) => {
+      const next = new Set([...previous].filter((id) => visibleIds.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [filtered]);
 
   const handleProjectSelect = (value: string) => {
     const next = new URLSearchParams(searchParams);
@@ -407,7 +401,8 @@ export default function Deliveries() {
   const projectName = projectMap[projectId ?? ""] || activeProject?.name || "All Projects";
   const selectedDeliveries = filtered.filter((delivery) => selectedIds.has(delivery.id));
 
-  // Modals are shared between the command_ui branch and the classic branch.
+  // The page owns all modal state and mutation handlers; the control center only
+  // supplies the route-level presentation around these workflows.
   const modals = (
     <>
       <DeliveryDetailModal
@@ -475,347 +470,83 @@ export default function Deliveries() {
     </>
   );
 
-  // ---------------------------------------------------------------------------
-  // command_ui flag-branch — Deliveries Control Center
-  // ---------------------------------------------------------------------------
-  if (commandUi) {
-    return (
-      <div className="delivery-page">
-        {/* The Dispatch board + Schedule views are styled by this CSS string; the
-            classic path injects it below, so the command path must too or those
-            embedded views render unstyled. */}
-        <style>{deliveryStyles}</style>
-        <DeliveryControlCenter
-          projectName={projectName}
-          deliveries={activeDeliveries}
-          filtered={filtered}
-          metrics={metricsTyped}
-          search={search}
-          onSearch={setSearch}
-          scheduleFilter={scheduleFilter}
-          onScheduleFilterChange={setScheduleFilter}
-          riskFilter={riskFilter}
-          onRiskFilterChange={setRiskFilter}
-          view={view}
-          onViewChange={setView}
-          onOpenDelivery={setDetail}
-          onExport={() => exportDeliveriesCSV(filtered, projectMap, wpLabelMap)}
-          onImport={can("create", "delivery") ? () => setShowImport(true) : null}
-          onCreate={can("create", "delivery") ? () => { setEditing(null); setDetail(null); setShowForm(true); } : null}
-          projectHealth={undefined}
-          percentComplete={undefined}
-          selectedIds={selectedIds}
-          onToggleSelect={toggleSelect}
-          onToggleAll={toggleAll}
-          dispatchBoard={
-            <DispatchBoard
-              laneGroups={laneGroups}
-              projectMap={projectMap}
-              workPackageMap={workPackageMap}
-              selectedIds={selectedIds}
-              onToggle={toggleSelect}
-              onOpen={setDetail}
-              onSetStatus={setDeliveryStatus}
-            />
-          }
-          scheduleView={
-            <ScheduleView
-              metrics={metricsTyped}
-              filtered={filtered}
-              projectMap={projectMap}
-              workPackageMap={workPackageMap}
-              onOpen={setDetail}
-            />
-          }
-        />
-        <BulkActionBar
-          count={selectedIds.size}
-          onClear={() => setSelectedIds(new Set())}
-          actions={[
-            { label: "In Transit", icon: "arrow", onClick: () => bulkUpdate("In Transit") },
-            { label: "Delivered", icon: "check", variant: "primary", onClick: () => bulkUpdate("Delivered") },
-            { label: "Partial", icon: "alert", onClick: () => bulkUpdate("Partial") },
-            {
-              label: "Export",
-              icon: "download",
-              onClick: () => exportDeliveriesCSV(selectedDeliveries, projectMap, wpLabelMap, "deliveries-selected.csv"),
-            },
-          ]}
-        />
-        {modals}
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Classic layout (flag off)
-  // ---------------------------------------------------------------------------
-
   return (
-    <div className="sb-dashboard-reference-page delivery-page">
-      <style>{deliveryStyles}</style>
-
-      <section className="delivery-hero">
-        <div className="delivery-hero-main">
-          <div className="delivery-kicker">
-            <Truck size={14} />
-            Logistics Control - {projectName}
-          </div>
-          <h1 style={display}>Deliveries</h1>
-          <p>
-            Plan load-out, spot late trucks, confirm receiving, and keep field-ready steel visible before it
-            turns into a site constraint.
-          </p>
-          <div className="delivery-hero-actions">
-            <Button
-              variant="secondary"
-              icon="download"
-              onClick={() => exportDeliveriesCSV(filtered, projectMap, wpLabelMap)}
-            >
-              CSV
-            </Button>
-            {can("create", "delivery") && (
-              <Button variant="outline" icon="upload" onClick={() => setShowImport(true)}>
-                Import Ticket
-              </Button>
-            )}
-            {can("create", "delivery") && (
-              <Button variant="outline" icon="upload" onClick={() => setShowListImport(true)} title="Bulk-import a Tekla EPM Master Shipping List">
-                Import Shipping List
-              </Button>
-            )}
-            {can("create", "delivery") && (
-              <Button
-                variant="primary"
-                icon="plus"
-                onClick={() => {
-                  setEditing(null);
-                  setDetail(null);
-                  setShowForm(true);
-                }}
-              >
-                Schedule Load
-              </Button>
-            )}
-          </div>
-        </div>
-        <div className="delivery-hero-grid">
-          <HeroMetric
-            label="Open Loads"
-            value={metrics.openCount}
-            sub={`${formatTons(metrics.totalOpenTons)} inbound`}
-            color="var(--phase-delivery)"
-            icon={PackageCheck}
+    <div className="delivery-page">
+      <DeliveryControlCenter
+        projectName={projectName}
+        projectId={projectId}
+        projectOptions={projects}
+        onProjectChange={handleProjectSelect}
+        deliveries={activeDeliveries}
+        filtered={filtered}
+        metrics={metricsTyped}
+        search={search}
+        onSearch={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        scheduleFilter={scheduleFilter}
+        onScheduleFilterChange={setScheduleFilter}
+        riskFilter={riskFilter}
+        onRiskFilterChange={setRiskFilter}
+        view={view}
+        onViewChange={setView}
+        onOpenDelivery={setDetail}
+        onExport={() => exportDeliveriesCSV(filtered, projectMap, wpLabelMap)}
+        onImport={can("create", "delivery") ? () => setShowImport(true) : null}
+        onImportList={can("create", "delivery") ? () => setShowListImport(true) : null}
+        onCreate={can("create", "delivery") ? () => { setEditing(null); setDetail(null); setShowForm(true); } : null}
+        onClearFilters={() => {
+          setStatusFilter("all");
+          setScheduleFilter("all");
+          setRiskFilter("all");
+          setSeqFilter(null);
+          setSearch("");
+        }}
+        sequenceFilter={<SequenceFilter items={activeDeliveries} value={seqFilter} onChange={setSeqFilter} />}
+        truncationNotice={<ListTruncationNotice count={deliveries.length} label="deliveries" />}
+        receivingPanel={receiveMode ? (
+          <ReceivingQuickPanel
+            metrics={metricsTyped}
+            projectMap={projectMap}
+            workPackageMap={workPackageMap}
+            onOpen={setDetail}
+            onExit={clearReceiveMode}
+            onFilter={(filter) => {
+              setView("schedule");
+              setScheduleFilter(filter);
+              setRiskFilter("all");
+            }}
+            onScheduleLoad={() => {
+              setEditing(null);
+              setDetail(null);
+              setShowForm(true);
+            }}
           />
-          <HeroMetric
-            label="Due Today"
-            value={metrics.dueToday.length}
-            sub={`${formatTons(metrics.dueToday.reduce((sum, d) => sum + num(d.weight_tons), 0))} scheduled`}
-            color="var(--status-warning)"
-            icon={Clock3}
+        ) : null}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleAll={toggleAll}
+        dispatchBoard={
+          <DispatchBoard
+            laneGroups={laneGroups}
+            projectMap={projectMap}
+            workPackageMap={workPackageMap}
+            selectedIds={selectedIds}
+            onToggle={toggleSelect}
+            onOpen={setDetail}
+            onSetStatus={setDeliveryStatus}
           />
-          <HeroMetric
-            label="Exceptions"
-            value={metrics.exceptions.length}
-            sub={`${metrics.overdue.length} late loads`}
-            color={metrics.exceptions.length ? "var(--status-error)" : "var(--status-success)"}
-            icon={AlertTriangle}
+        }
+        scheduleView={
+          <ScheduleView
+            metrics={metricsTyped}
+            filtered={filtered}
+            projectMap={projectMap}
+            workPackageMap={workPackageMap}
+            onOpen={setDetail}
           />
-          <HeroMetric
-            label="Ready To Receive"
-            value={metrics.readyToReceive.length}
-            sub={`${metrics.deliveredLast7.length} received in 7d`}
-            color="var(--status-success)"
-            icon={CheckCircle2}
-          />
-        </div>
-      </section>
-
-      {receiveMode && (
-        <ReceivingQuickPanel
-          metrics={metricsTyped}
-          projectMap={projectMap}
-          workPackageMap={workPackageMap}
-          onOpen={setDetail}
-          onExit={clearReceiveMode}
-          onFilter={(filter) => {
-            setView("schedule");
-            setScheduleFilter(filter);
-            setRiskFilter("all");
-          }}
-          onScheduleLoad={() => {
-            setEditing(null);
-            setDetail(null);
-            setShowForm(true);
-          }}
-        />
-      )}
-
-      <section className="delivery-flow-strip">
-        <div className="delivery-flow-header">
-          <div>
-            <div className="delivery-section-label">Load Pipeline</div>
-            <div className="delivery-muted">Status mix across active and recently completed delivery records.</div>
-          </div>
-          <div className="delivery-flow-total" style={mono}>
-            {metrics.totalOpenPieces.toLocaleString()} open pcs
-          </div>
-        </div>
-        <div className="delivery-status-flow">
-          {metrics.statusRollup.map((item) => (
-            <button
-              key={item.status}
-              className={`delivery-status-step ${statusFilter === item.status ? "is-active" : ""}`}
-              onClick={() => setStatusFilter(statusFilter === item.status ? "all" : item.status)}
-              style={{ "--step-color": STATUS_COLOR[item.status] || "var(--text-muted)" } as CSSProperties}
-            >
-              <span>{item.status}</span>
-              <strong>{item.count}</strong>
-              <small>{formatTons(item.tons)}</small>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="delivery-toolbar">
-        <div className="delivery-search">
-          <Search size={15} />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search vendor, PO, load, carrier, truck, work package..."
-          />
-        </div>
-        {!projectId && (
-          <select value={projectId || ""} onChange={(event) => handleProjectSelect(event.target.value)}>
-            <option value="">All Projects</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name || (project as any).project_name}
-              </option>
-            ))}
-          </select>
-        )}
-        <FilterSelect value={scheduleFilter} onChange={setScheduleFilter} options={SCHEDULE_FILTERS} />
-        <FilterSelect value={riskFilter} onChange={setRiskFilter} options={RISK_FILTERS} />
-        <div className="delivery-view-toggle">
-          {VIEW_OPTIONS.map((option) => {
-            const Icon = option.icon;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                className={view === option.id ? "is-active" : ""}
-                onClick={() => setView(option.id)}
-              >
-                {Icon && <Icon size={14} />}
-                <span>{option.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Surface the silent 2000-row read cap on entities.Delivery.filter (raw `deliveries`). */}
-      <ListTruncationNotice count={deliveries.length} label="deliveries" />
-
-      <SequenceFilter items={activeDeliveries} value={seqFilter} onChange={setSeqFilter} />
-
-      <section className="delivery-layout">
-        <ExceptionRail
-          metrics={metricsTyped}
-          projectMap={projectMap}
-          workPackageMap={workPackageMap}
-          onOpen={setDetail}
-          onFilterLate={() => {
-            setScheduleFilter("late");
-            setRiskFilter("all");
-          }}
-        />
-
-        <main className="delivery-main">
-          <div className="delivery-view-header">
-            <div>
-              <div className="delivery-section-label">
-                {view === "dispatch" ? "Dispatch Board" : view === "schedule" ? "Schedule Lookahead" : "Delivery Register"}
-              </div>
-              <div className="delivery-muted">
-                {filtered.length} of {metrics.totalCount} deliveries shown
-              </div>
-            </div>
-            <div className="delivery-header-actions">
-              <StatusPill label={`${selectedIds.size} Selected`} color={selectedIds.size ? "var(--accent)" : "var(--text-muted)"} />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setStatusFilter("all");
-                  setScheduleFilter("all");
-                  setRiskFilter("all");
-                  setSeqFilter(null);
-                  setSearch("");
-                }}
-              >
-                Clear Filters
-              </Button>
-            </div>
-          </div>
-
-          {view === "dispatch" && (
-            <DispatchBoard
-              laneGroups={laneGroups}
-              projectMap={projectMap}
-              workPackageMap={workPackageMap}
-              selectedIds={selectedIds}
-              onToggle={toggleSelect}
-              onOpen={setDetail}
-              onSetStatus={setDeliveryStatus}
-            />
-          )}
-
-          {view === "schedule" && (
-            <ScheduleView
-              metrics={metricsTyped}
-              filtered={filtered}
-              projectMap={projectMap}
-              workPackageMap={workPackageMap}
-              onOpen={setDetail}
-            />
-          )}
-
-          {view === "register" && (
-            <RegisterView
-              deliveries={filtered}
-              projectMap={projectMap}
-              workPackageMap={workPackageMap}
-              selectedIds={selectedIds}
-              onToggle={toggleSelect}
-              onToggleAll={toggleAll}
-              onOpen={setDetail}
-              onEdit={(delivery) => {
-                setEditing(delivery);
-                setDetail(null);
-              }}
-              allSelected={filtered.length > 0 && selectedIds.size === filtered.length}
-            />
-          )}
-
-          {filtered.length === 0 && (
-            <div className="delivery-empty">
-              <EmptyState
-                icon="delivery"
-                title={metrics.totalCount === 0 ? "No deliveries tracked" : "No deliveries match your filters"}
-                body={
-                  metrics.totalCount === 0
-                    ? "Schedule the first load or import a shipping ticket to start tracking field arrivals."
-                    : "Clear filters or adjust the search to bring loads back into view."
-                }
-              />
-            </div>
-          )}
-        </main>
-      </section>
-
+        }
+      />
       <BulkActionBar
         count={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
@@ -830,7 +561,6 @@ export default function Deliveries() {
           },
         ]}
       />
-
       {modals}
     </div>
   );

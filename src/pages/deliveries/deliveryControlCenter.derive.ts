@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Delivery Control Center (command_ui redesign).
+ * Pure derivations for the canonical Delivery Control Center.
  * No React, no network. Wraps the already-computed DeliveryMetrics from
  * analytics.js — no re-computation, just shaping the data for the UI.
  */

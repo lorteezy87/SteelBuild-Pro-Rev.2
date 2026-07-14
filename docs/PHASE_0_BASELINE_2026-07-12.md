@@ -205,7 +205,7 @@
   - Kept `P0-07` in progress.
 
 ### Open items
-- **IN PROGRESS:** batches 14–27 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Field Hub, Backcharge Defense, and Expenses; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
+- **IN PROGRESS:** batches 14–28 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Field Hub, Backcharge Defense, Expenses, and Deliveries; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
   - Budget Control
   - Reports & Insights
   - Resource Register
@@ -220,6 +220,7 @@
   - Field Hub
   - Backcharge Defense
   - Expenses
+  - Deliveries
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
 
 ### Batch 27 — Expenses canonicalization
@@ -234,6 +235,18 @@
 - Validation passed: focused Expenses tests (2 files, 13 tests), `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, `npm run typecheck:noimplicitany`, and full tests (245 files, 2,930 tests).
 - Production build passed with 4,318 transformed modules. Existing large-chunk warnings remain; the Expenses chunk is 72.36 KB because active specialized presentation remains composed.
 - Commit: `phase0: canonicalize expenses UI`; PR #77 remains Draft. No deployment or merge performed. Unrelated worktree changes were not staged.
+
+### Batch 28 — Deliveries canonicalization
+- ✅ `DeliveryControlCenter` is now the only route-level Deliveries presentation.
+- Preserved logistics parity: project-scoped and all-project queries, URL project normalization, `?receive=1` entry/exit, loading, realtime invalidation, 60-second refetching, create/edit/delete, permission gates, detail modal, single and bulk status transitions, fabrication-complete Delivered guards, partial bulk success, filtered select-all, filtered and selected CSV export, Shipping Ticket and Master Shipping List imports, Dispatch, Schedule, Register, status/schedule/risk/sequence filters, broad logistics search, receiving quick entry, overdue alert creation with in-session deduplication, activity logging, cache invalidation, truncation notice, and deep-link behavior.
+- Promoted Master Shipping List import to a distinct `Import Shipping List` action. Register, Dispatch, Schedule, and receiving remain supported workflows inside the canonical shell.
+- Removed the `command_ui` flag and alternate classic return from `src/pages/Deliveries.tsx`; mutation, permission, repository, audit, cache, and fabrication-guard authority remains in the page container.
+- Files changed: `src/pages/Deliveries.tsx`, `src/pages/deliveries/DeliveryControlCenter.tsx`, `src/pages/deliveries/deliveryControlCenter.derive.ts`, and this baseline document. No delivery implementation files were deleted because the shared import, modal, dispatch, schedule, register, and receiving workflows remain active.
+- Working-tree line counts: `Deliveries.tsx` 837 → 567 lines; `DeliveryControlCenter.tsx` 483 → 559 lines. The control center grew because classic-only controls required for logistics parity were absorbed into the canonical shell.
+- Stale-path search passed: no `useFlag("command_ui")`, `commandUi`, classic/flag-branch comments, `CommandBar`, or alternate delivery return remains in the delivery page, control center, or derive files. Delivery references remain only in the canonical route and active delivery modules.
+- Validation passed: focused delivery tests (2 files, 19 tests), `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, `npm run typecheck:noimplicitany`, and full tests (245 files, 2,930 tests).
+- Production build passed with 4,318 transformed modules. Existing large-chunk warnings remain; the Deliveries chunk is 105.41 KB.
+- Commit: Batch 28 focused canonicalization commit; PR #77 remains Draft. No deployment, merge, or migration was performed. Unrelated worktree changes were not staged.
 
 ## Product Disposition Matrix
 
