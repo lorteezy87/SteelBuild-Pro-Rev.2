@@ -371,11 +371,11 @@ async function listProjectStorageFiles(
 
 async function handle(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
-  if (req.method !== "POST") return errorResponse(405, "Method not allowed");
+  if (req.method !== "POST") return errorResponse(405, "Method not allowed", req);
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return errorResponse(401, "Unauthorized — valid JWT required");
+    return errorResponse(401, "Unauthorized — valid JWT required", req);
   }
   const token = authHeader.slice("Bearer ".length).trim();
 
@@ -383,22 +383,22 @@ async function handle(req: Request): Promise<Response> {
   try {
     body = await req.json();
   } catch {
-    return errorResponse(400, "Invalid JSON body");
+    return errorResponse(400, "Invalid JSON body", req);
   }
   const projectId = body.project_id;
   if (!projectId || typeof projectId !== "string") {
-    return errorResponse(400, "project_id is required");
+    return errorResponse(400, "project_id is required", req);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !anonKey || !serviceKey) {
-    return errorResponse(500, "Edge function not configured");
+    return errorResponse(500, "Edge function not configured", req);
   }
 
   const user = await verifyJwt(token, supabaseUrl, anonKey);
-  if (!user) return errorResponse(401, "Invalid or expired session");
+  if (!user) return errorResponse(401, "Invalid or expired session", req);
 
   // RLS-scoped client: anon key + caller JWT. Every select below is filtered by
   // Postgres RLS to rows the caller may read.
@@ -416,11 +416,11 @@ async function handle(req: Request): Promise<Response> {
 
   if (projectErr) {
     console.error(`[project-export] project fetch error: ${projectErr.message}`);
-    return errorResponse(500, "Failed to read project");
+    return errorResponse(500, "Failed to read project", req);
   }
   if (!project) {
     // No row visible under RLS => caller is not a member (or it doesn't exist).
-    return errorResponse(403, "No access to this project");
+    return errorResponse(403, "No access to this project", req);
   }
 
   // Fetch each project-owned table under RLS, paging past the ~1000-row cap. A
@@ -431,7 +431,7 @@ async function handle(req: Request): Promise<Response> {
     const { rows, error } = await readTablePaged(rls, table, projectId);
     if (error) {
       console.error(`[project-export] ${table} fetch error: ${error}`);
-      return errorResponse(500, `Failed to read ${table}`);
+      return errorResponse(500, `Failed to read ${table}`, req);
     }
     tableResults.push({ table, rows });
   }
@@ -461,7 +461,7 @@ async function handle(req: Request): Promise<Response> {
   const { error: auditErr } = await admin.from("activities").insert(auditRecord);
   if (auditErr) {
     console.error(`[project-export] audit insert failed: ${auditErr.message}`);
-    return errorResponse(500, "Failed to record export audit entry");
+    return errorResponse(500, "Failed to record export audit entry", req);
   }
 
   // Log scope only — never row-level project data — into function logs.
@@ -471,7 +471,7 @@ async function handle(req: Request): Promise<Response> {
       `files=${envelope.file_count}`,
   );
 
-  return jsonResponse(envelope);
+  return jsonResponse(envelope, 200, req);
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -480,6 +480,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[project-export] Unhandled: ${message}`);
-    return errorResponse(500, `Internal error: ${message}`);
+    return errorResponse(500, `Internal error: ${message}`, req);
   }
 });
