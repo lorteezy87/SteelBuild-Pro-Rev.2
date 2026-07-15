@@ -477,3 +477,11 @@ Selective, in-house consolidation is preferred over a full rewrite. Phase 1 prio
 - Existing Edge Functions are inventory-only in this batch. Deployment revision, secrets, CORS, quotas, kill switches, and RPC state require staging evidence.
 - The staging smoke runbook covers authentication, project and tenant scope, roles, drawings, Submittals, RFI/fabrication gates, Schedule, Work Packages, Deliveries, Change Orders, financials, Field Hub, team permissions, exports, health, deep links, and service-worker updates.
 - Validation artifacts remain non-deploying. No staging or production deployment, merge, migration application, Edge Function deployment, production data mutation, or remote configuration change occurred.
+
+## Batch 43E: source CORS correction and staging handoff
+
+- Source correction commit: `f453abbd` (`fix: enforce configured Edge Function CORS origins`). A configured `ALLOWED_ORIGINS` value is now authoritative and exact; arbitrary Vercel previews, localhost, production origins, malformed entries, and rejected-origin production fallbacks are not accepted. Health, project-export, schedule-assistant, email-send, stripe-billing, and llm-proxy use the shared request-aware policy.
+- Owner-confirmed staging serialization: `https://steelbuild-pro-staging.vercel.app,https://steelbuild-pro-staging-h7gds390x-lorteezy87s-projects.vercel.app`. The source correction was not deployed in this batch.
+- Read-only evidence now reports 30 staging migration records and all 13 candidate migrations present, superseding earlier six-pending planning text. No migration, schema change, function deployment, flag change, fixture creation, production action, merge, or PR readiness change occurred.
+- `account-delete` is reported active at version 2 with the previously recorded source hash, but deployment-history metadata and rollback revision are unavailable; it remains frozen and is a P1 external evidence gate. Reported `project-export` source drift requires a future exact-candidate redeploy.
+- Protected-preview runtime verification, authenticated project-export smoke, and schedule-assistant functional smoke remain staging/owner gates. Local validation passed: focused CORS tests 1 file/5 tests, lint, all five type gates, full Vitest 252 files/2,973 tests, and build with 4,282 transformed modules.

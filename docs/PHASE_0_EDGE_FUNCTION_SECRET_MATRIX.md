@@ -168,3 +168,12 @@ The six approved feature-flag migrations are present in candidate order and rema
 The Supabase dashboard also displays a platform technical-issue notice and an outstanding-invoice warning. These are external environment conditions and are not treated as evidence that secrets are configured.
 
 Batch 43B remains owner-blocked. Do not apply migrations, deploy functions, set flags, create fixtures, invoke `account-delete`, promote the preview, or touch production.
+
+## Batch 43E source and scope update
+
+- `ALLOWED_ORIGINS` is now an exact shared source policy. The owner-confirmed staging value is `https://steelbuild-pro-staging.vercel.app,https://steelbuild-pro-staging-h7gds390x-lorteezy87s-projects.vercel.app`; `*` is not permitted.
+- The approved candidate deployment scope remains `health`, `project-export`, and `schedule-assistant`. Health and project-export can deploy with built-in Supabase runtime secrets; schedule-assistant can deploy without a custom secret but cannot receive a functional smoke result without an LLM provider or a proven nonpersistent path.
+- `email-ingest`, `email-send`, `llm-proxy`, and `stripe-billing` remain undeployed/disabled for this staging pass. `account-delete` remains frozen at reported version 2 and must not be invoked, redeployed, or modified.
+- The current read-only staging function inventory reports 30 migration records and all 13 candidate migrations present. This supersedes the earlier six-pending statement. No migration or function deployment occurred in Batch 43E.
+- The current account-delete version discrepancy is insufficient evidence for executable drift because the reported hash matches the prior recorded hash; provider deployment-history evidence is still required for actor, timestamps, and rollback. Keep it as a P1 external gate.
+- Project-export source drift was reported on the deployed staging revision. Redeploy only from the exact clean source candidate after explicit approval.

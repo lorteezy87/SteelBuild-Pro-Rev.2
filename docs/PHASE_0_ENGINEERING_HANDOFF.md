@@ -454,3 +454,15 @@ The physical staging database backup identifier remains `15 Jul 2026 05:54:28 UT
 ## Batch 43B Edge Function secret evidence update
 
 Owner evidence confirms that staging has no custom Edge Function secrets. The exact per-function deployment order, minimum custom secret set, optional-secret behavior, smoke requests, rollback anchors, and missing-secret matrix are maintained in [PHASE_0_EDGE_FUNCTION_SECRET_MATRIX.md](PHASE_0_EDGE_FUNCTION_SECRET_MATRIX.md). Only `account-delete` is currently deployed; it must not be invoked. The Supabase dashboard technical-issue and outstanding-invoice notices remain external environment conditions. Batch 43B remains owner-blocked.
+
+## Batch 43E current source and staging handoff
+
+Source candidate `f453abbd` corrects the Edge Function origin boundary. When `ALLOWED_ORIGINS` is configured, the shared parser uses exact normalized origins only; it does not add production, localhost, arbitrary Vercel previews, or a production fallback for rejected origins. The owner-confirmed staging serialization is `https://steelbuild-pro-staging.vercel.app,https://steelbuild-pro-staging-h7gds390x-lorteezy87s-projects.vercel.app`. Active response helpers now receive `Request` so approved browser responses carry the approved origin. Health uses the shared parser with `GET, HEAD, OPTIONS`; schedule-assistant and llm-proxy no longer maintain duplicate CORS parsers.
+
+The current read-only staging inventory reports 30 migration records and all 13 candidate migrations present. This supersedes earlier Batch 43B planning text that described six migrations as pending. No migration or schema change was performed in Batch 43E. The current staging function inventory reports health, project-export, and schedule-assistant active; account-delete is active at version 2 and remains frozen; disabled integrations remain outside the approved scope.
+
+The account-delete v2 finding is **P1 / requires staging-provider evidence**: the current reported hash matches the previously recorded hash, but v1/v2 deployment actor, timestamps, and rollback revision are unavailable through the read-only evidence. No executable drift is proven, and the function was not invoked, redeployed, or modified. Project-export has reported deployed-source comment drift from the approved candidate; the next deploy must be from the exact clean source candidate and has not occurred.
+
+The protected Vercel preview still blocks unauthenticated runtime inspection. Authenticated project-export smoke is blocked until a dedicated staging fixture and JWT exist. Schedule-assistant cannot receive a functional smoke claim without an LLM provider or a proven nonpersistent path. Existing Vercel Node/deprecation/chunk warnings remain documented follow-ups.
+
+Batch 43E local evidence: focused CORS tests 1/1 file and 5/5 tests; lint and all five type gates passed; full Vitest passed with 252 files and 2,973 tests; production build passed with 4,282 transformed modules. The next action is a separately approved staging-only redeploy from `f453abbd`; no production deployment, merge, migration application, function deployment, or PR readiness change occurred.
