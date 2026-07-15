@@ -1,19 +1,20 @@
 /**
- * Classic-branch RFI table: header row + the list of RfiRow, or an empty state.
- * Presentational — extracted verbatim from RFIs.jsx. `rows` is the filtered list;
- * `totalCount` is the unfiltered RFI count (drives the empty-state copy).
+ * Canonical RFI register: header row + the list of RfiRow, or an empty state.
+ * `rows` is the filtered list; `totalCount` drives the empty-state copy.
  */
 import RfiRow from "./RfiRow";
 import { EmptyState } from "@/components/design-system";
 
-export default function RfiTable({ rows, totalCount, selectedIds, onToggleAll, onToggleSelect, onOpen }) {
+export default function RfiTable({ rows, totalCount, selectedIds = new Set(), onToggleAll = () => {}, onToggleSelect = () => {}, onOpen = () => {} }) {
+  const allVisibleSelected = rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
+
   return (
     <div className="rfi-table-shell">
       <div className="rfi-table-header">
         <div>
           <input
             type="checkbox"
-            checked={rows.length > 0 && selectedIds.size === rows.length}
+            checked={allVisibleSelected}
             onChange={(e) => onToggleAll(e.target.checked)}
           />
         </div>
