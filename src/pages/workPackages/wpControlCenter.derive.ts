@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Work Package Control Center (command_ui skin).
+ * Pure derivations for the canonical Work Package Control Center.
  * No React, no network. Wraps the already-computed `metrics` object from
  * analytics.js — does NOT recompute buildWorkPackageMetrics.
  */
@@ -106,6 +106,17 @@ export interface WpPanels {
   atRisk: EnrichedWp[];
   /** All four phase rollup rows, unchanged from analytics. */
   phaseRail: PhaseRollupRow[];
+}
+
+/** Return true only when every visible row is selected. */
+export function areAllFilteredRowsSelected(rows: Array<{ id: string }>, selectedIds: Set<string>): boolean {
+  return rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
+}
+
+/** Keep selection aligned with the current visible workflow rows. */
+export function reconcileSelection(selectedIds: Set<string>, visibleIds: Iterable<string>): Set<string> {
+  const allowed = new Set(visibleIds);
+  return new Set([...selectedIds].filter((id) => allowed.has(id)));
 }
 
 /**

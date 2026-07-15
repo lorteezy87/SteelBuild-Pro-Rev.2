@@ -7,7 +7,7 @@
  * is slipping, and what needs a human update next.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -34,20 +34,17 @@ import { batchProcess } from "@/utils/batchProcess";
 import { BulkActionBar as BulkActionBarRaw } from "@/components/design-system";
 import SequenceFilterRaw, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { exportWorkPackagesCSV } from "./workPackages/utils";
+import { prepareBulkWorkPackageRows } from "./workPackages/creation";
 import { buildWorkPackageMetrics, sortWorkPackagesForExecution } from "./workPackages/analytics";
-import { RESPONSIVE_CSS, contentGridStyle, pageStyle } from "./workPackages/styles";
 import {
-  ControlPanel,
   ExceptionPanel,
-  Hero,
   PhaseFlowView,
   RegisterView,
   StatusBoardView,
-  SummaryStrip,
 } from "./workPackages/components";
 import type { WorkPackage } from "./workPackages/types";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import WpControlCenter from "./workPackages/WpControlCenter";
+import { reconcileSelection } from "./workPackages/wpControlCenter.derive";
 import { calcWpProgress } from "@/utils/projectKpis";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
@@ -67,7 +64,6 @@ export default function WorkPackages() {
   const projectId = useProjectId();
   const qc = useQueryClient();
   const { can } = usePermissions();
-  const commandUi = useFlag("command_ui");
 
   const [view, setView] = useState("flow");
   const [phaseFilter, setPhaseFilter] = useState("all");
@@ -81,6 +77,7 @@ export default function WorkPackages() {
   const [detailWP, setDetailWP] = useState<WorkPackage | null>(null);
   const [selectedWPs, setSelectedWPs] = useState<Set<string>>(new Set());
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
+  const [allocatingNumber, setAllocatingNumber] = useState(false);
 
   const { data: rawWorkPackages = [], isLoading: wpLoading } = useQuery({
     queryKey: ["work-packages", projectId],
@@ -176,20 +173,7 @@ export default function WorkPackages() {
 
   const bulkCreateMut = useMutation({
     mutationFn: async (rows: any[]) => {
-      if (!rows?.length) throw new Error("No rows to add");
-      if (!effectiveProjectId) throw new Error("Select a project first");
-      const needsNumbers = rows.filter((row) => !row.wp_number);
-      const prepared: any[] = [];
-      for (const row of rows) {
-        let wpNumber = row.wp_number;
-        if (!wpNumber) {
-          wpNumber = `WP-${String(await getNextNumber(effectiveProjectId, "wp_number")).padStart(3, "0")}`;
-        }
-        prepared.push({ ...row, wp_number: wpNumber, project_id: effectiveProjectId, project_name: row.project_name || undefined });
-      }
-      if (needsNumbers.length > 0 && prepared.some((row) => !row.wp_number)) {
-        throw new Error("Unable to reserve work package numbers for all rows. Please retry.");
-      }
+      const prepared = await prepareBulkWorkPackageRows(rows, effectiveProjectId, getNextNumber);
       return batchProcess(prepared, (data) => entities.WorkPackage.create(data), 5);
     },
     onSuccess: (results) => {
@@ -261,9 +245,16 @@ export default function WorkPackages() {
     [filtered, selectedWPs]
   );
 
+  useEffect(() => {
+    setSelectedWPs((previous) => {
+      const next = reconcileSelection(previous, filtered.map((wp) => wp.id));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [filtered]);
+
   const projectName = selectedProject?.name || (projectId ? "No active project" : "All Projects");
 
-  // Project-level context for the Command UI hero (mirrors RFIs.jsx pattern).
+  // Project-level context for the canonical execution shell.
   const projectHealth = (selectedProject as unknown as { health_status?: string | null })?.health_status ?? null;
   const percentComplete =
     (selectedProject as unknown as { scope_complete_pct_override?: number | null })?.scope_complete_pct_override != null
@@ -283,6 +274,8 @@ export default function WorkPackages() {
   };
 
   const handleWPCreate = useCallback(async () => {
+    if (allocatingNumber) return;
+    setAllocatingNumber(true);
     let wpNumber = "";
     try {
       if (effectiveProjectId) {
@@ -295,10 +288,12 @@ export default function WorkPackages() {
       console.warn("[WorkPackages] getNextNumber failed:", err?.message);
       toast.error("Unable to reserve a work package number. Please retry.");
       return;
+    } finally {
+      setAllocatingNumber(false);
     }
     setEditingWP({ wp_number: wpNumber, project_id: effectiveProjectId ?? undefined });
     setWPModalOpen(true);
-  }, [effectiveProjectId]);
+  }, [allocatingNumber, effectiveProjectId]);
 
   useAutoOpenCreate(handleWPCreate, { enabled: !!effectiveProjectId });
 
@@ -310,228 +305,16 @@ export default function WorkPackages() {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Command UI skin (flag: command_ui)
-  // Passes all pre-computed state + handlers down to the presentation layer.
-  // Modals (WPFormModal, WPBulkAddModal, DeleteDialog, WorkPackageDetailModal)
-  // remain here so they stay in the container's mutation scope.
-  // ---------------------------------------------------------------------------
-  if (commandUi) {
-    const wpModals = (
-      <>
-        <WPBulkAddModal
-          open={bulkAddOpen}
-          onClose={() => setBulkAddOpen(false)}
-          onCommit={(rows: unknown[]) => bulkCreateMut.mutate(rows)}
-          projectId={effectiveProjectId}
-          projectName={projectName}
-          existingWPs={workPackages}
-          isSaving={bulkCreateMut.isPending}
-        />
+  const canCreate = !!effectiveProjectId && can("create", "work_package") && !allocatingNumber;
+  const canEdit = can("edit", "work_package");
+  const canDelete = can("delete", "work_package");
 
-        {(wpModalOpen || editingWP) && (
-          <WPFormModal
-            open={wpModalOpen || !!editingWP}
-            onClose={() => { setWPModalOpen(false); setEditingWP(null); }}
-            onSave={(data: unknown) => {
-              if (editingWP?.id) updateWPMut.mutate({ id: editingWP.id, data });
-              else createWPMut.mutate(data);
-            }}
-            wp={editingWP}
-            projects={projects}
-            nextNumber={editingWP?.wp_number || ""}
-            allDrawings={drawings}
-            defaultProjectId={effectiveProjectId || ""}
-          />
-        )}
-
-        {detailWP && (
-          <WorkPackageDetailModal
-            wp={detailWP}
-            drawings={drawings}
-            onClose={() => setDetailWP(null)}
-            onEdit={(wp: WorkPackage) => { setDetailWP(null); handleWPEdit(wp); }}
-          />
-        )}
-
-        <DeleteDialog
-          open={!!deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-          onConfirm={() => { if (deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }}
-          title="Delete Work Package"
-          description={`Delete "${deleteTarget?.name}" (${deleteTarget?.wp_number})? This cannot be undone.`}
-        />
-      </>
-    );
-
-    return (
-      <div className="wp-page">
-        <ListTruncationNotice count={rawWorkPackages.length} label="work packages" />
-        <WpControlCenter
-          projectName={projectName}
-          workPackages={workPackages as unknown as Parameters<typeof WpControlCenter>[0]["workPackages"]}
-          filtered={filtered as unknown as Parameters<typeof WpControlCenter>[0]["filtered"]}
-          metrics={metrics as unknown as Parameters<typeof WpControlCenter>[0]["metrics"]}
-          search={search}
-          onSearch={setSearch}
-          phaseFilter={phaseFilter}
-          onPhaseFilter={setPhaseFilter}
-          statusFilter={statusFilter}
-          onStatusFilter={setStatusFilter}
-          riskFilter={riskFilter}
-          onRiskFilter={setRiskFilter}
-          onOpenWp={setDetailWP as unknown as Parameters<typeof WpControlCenter>[0]["onOpenWp"]}
-          onExport={() => exportWorkPackagesCSV(filtered)}
-          onCreate={can("create", "work_package") ? handleWPCreate : null}
-          selectedIds={selectedWPs}
-          onToggleSelect={toggleSelect}
-          onToggleAll={(checked) =>
-            setSelectedWPs(checked ? new Set(filtered.map((w) => w.id)) : new Set())
-          }
-          projectHealth={projectHealth}
-          percentComplete={percentComplete}
-        />
-
-        <BulkActionBar
-          count={selectedWPs.size}
-          onClear={() => setSelectedWPs(new Set())}
-          actions={[
-            {
-              label: "SET COMPLETE",
-              icon: "check",
-              onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "Complete" }),
-              disabled: bulkStatusMut.isPending,
-            },
-            {
-              label: "SET IN PROGRESS",
-              icon: "arrow",
-              onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "In Progress" }),
-              disabled: bulkStatusMut.isPending,
-            },
-            {
-              label: "EXPORT",
-              icon: "download",
-              onClick: () => exportWorkPackagesCSV(selectedRows),
-            },
-          ]}
-        />
-
-        {wpModals}
-      </div>
-    );
-  }
-
-  return (
-    <div className="sb-dashboard-reference-page" style={pageStyle}>
-      <style>{RESPONSIVE_CSS}</style>
-      <ListTruncationNotice count={rawWorkPackages.length} label="work packages" />
-      <Hero
-        projectName={projectName}
-        metrics={metrics}
-        view={view}
-        onViewChange={setView}
-        onExport={() => exportWorkPackagesCSV(filtered)}
-        onBulkAdd={() => setBulkAddOpen(true)}
-        onCreate={handleWPCreate}
-        canCreate={!!effectiveProjectId && can("create", "work_package")}
-      />
-
-      <SummaryStrip metrics={metrics} onPhaseFilter={setPhaseFilter} phaseFilter={phaseFilter} />
-
-      <ControlPanel
-        search={search}
-        onSearch={setSearch}
-        phaseFilter={phaseFilter}
-        onPhaseFilter={setPhaseFilter}
-        statusFilter={statusFilter}
-        onStatusFilter={setStatusFilter}
-        riskFilter={riskFilter}
-        onRiskFilter={setRiskFilter}
-        filteredCount={filtered.length}
-        totalCount={metrics.totalCount}
-        onClear={() => {
-          setSearch("");
-          setPhaseFilter("all");
-          setStatusFilter("all");
-          setRiskFilter("all");
-          setSeqFilter(null);
-        }}
-      />
-
-      <SequenceFilter items={workPackages} value={seqFilter} onChange={setSeqFilter} />
-
-      <div className="wp-content-grid" style={contentGridStyle}>
-        <ExceptionPanel
-          metrics={metrics}
-          onRiskFilter={setRiskFilter}
-          onStatusFilter={setStatusFilter}
-          onPhaseFilter={setPhaseFilter}
-          onOpen={setDetailWP}
-        />
-
-        <main style={{ minWidth: 0 }}>
-          {view === "flow" && (
-            <PhaseFlowView
-              rows={filtered}
-              phaseRollup={metrics.phaseRollup}
-              onOpen={setDetailWP}
-              onEdit={can("edit", "work_package") ? handleWPEdit : null}
-              onDelete={can("delete", "work_package") ? setDeleteTarget : null}
-              selectedWPs={selectedWPs}
-              onToggleSelect={toggleSelect}
-            />
-          )}
-
-          {view === "board" && (
-            <StatusBoardView
-              rows={filtered}
-              onOpen={setDetailWP}
-              onEdit={can("edit", "work_package") ? handleWPEdit : null}
-              onDelete={can("delete", "work_package") ? setDeleteTarget : null}
-            />
-          )}
-
-          {view === "register" && (
-            <RegisterView
-              rows={filtered}
-              selectedWPs={selectedWPs}
-              onToggleSelect={toggleSelect}
-              onOpen={setDetailWP}
-              onEdit={can("edit", "work_package") ? handleWPEdit : null}
-              onDelete={can("delete", "work_package") ? setDeleteTarget : null}
-            />
-          )}
-        </main>
-      </div>
-
-      <BulkActionBar
-        count={selectedWPs.size}
-        onClear={() => setSelectedWPs(new Set())}
-        actions={[
-          {
-            label: "SET COMPLETE",
-            icon: "check",
-            onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "Complete" }),
-            disabled: bulkStatusMut.isPending,
-          },
-          {
-            label: "SET IN PROGRESS",
-            icon: "arrow",
-            onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "In Progress" }),
-            disabled: bulkStatusMut.isPending,
-          },
-          {
-            label: "EXPORT",
-            icon: "download",
-            onClick: () => exportWorkPackagesCSV(selectedRows),
-          },
-        ]}
-      />
-
+  const wpModals = (
+    <>
       <WPBulkAddModal
         open={bulkAddOpen}
         onClose={() => setBulkAddOpen(false)}
-        onCommit={(rows) => bulkCreateMut.mutate(rows)}
+        onCommit={(rows: unknown[]) => bulkCreateMut.mutate(rows)}
         projectId={effectiveProjectId}
         projectName={projectName}
         existingWPs={workPackages}
@@ -542,7 +325,7 @@ export default function WorkPackages() {
         <WPFormModal
           open={wpModalOpen || !!editingWP}
           onClose={() => { setWPModalOpen(false); setEditingWP(null); }}
-          onSave={(data) => {
+          onSave={(data: unknown) => {
             if (editingWP?.id) updateWPMut.mutate({ id: editingWP.id, data });
             else createWPMut.mutate(data);
           }}
@@ -559,7 +342,7 @@ export default function WorkPackages() {
           wp={detailWP}
           drawings={drawings}
           onClose={() => setDetailWP(null)}
-          onEdit={(wp) => { setDetailWP(null); handleWPEdit(wp); }}
+          onEdit={(wp: WorkPackage) => { setDetailWP(null); handleWPEdit(wp); }}
         />
       )}
 
@@ -570,6 +353,120 @@ export default function WorkPackages() {
         title="Delete Work Package"
         description={`Delete "${deleteTarget?.name}" (${deleteTarget?.wp_number})? This cannot be undone.`}
       />
-    </div>
+    </>
+  );
+
+  const bulkActions = (
+    <BulkActionBar
+      count={selectedWPs.size}
+      onClear={() => setSelectedWPs(new Set())}
+      actions={[
+        {
+          label: "SET COMPLETE",
+          icon: "check",
+          onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "Complete" }),
+          disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
+        },
+        {
+          label: "SET IN PROGRESS",
+          icon: "arrow",
+          onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "In Progress" }),
+          disabled: bulkStatusMut.isPending || selectedWPs.size === 0,
+        },
+        {
+          label: "EXPORT",
+          icon: "download",
+          onClick: () => exportWorkPackagesCSV(selectedRows),
+          disabled: selectedRows.length === 0,
+        },
+      ]}
+    />
+  );
+
+  return (
+    <WpControlCenter
+      projectName={projectName}
+      workPackages={workPackages as unknown as Parameters<typeof WpControlCenter>[0]["workPackages"]}
+      filtered={filtered as unknown as Parameters<typeof WpControlCenter>[0]["filtered"]}
+      metrics={metrics as unknown as Parameters<typeof WpControlCenter>[0]["metrics"]}
+      view={view}
+      onViewChange={setView}
+      search={search}
+      onSearch={setSearch}
+      phaseFilter={phaseFilter}
+      onPhaseFilter={setPhaseFilter}
+      statusFilter={statusFilter}
+      onStatusFilter={setStatusFilter}
+      riskFilter={riskFilter}
+      onRiskFilter={setRiskFilter}
+      onClearFilters={() => {
+        setSearch("");
+        setPhaseFilter("all");
+        setStatusFilter("all");
+        setRiskFilter("all");
+        setSeqFilter(null);
+      }}
+      filteredCount={filtered.length}
+      totalCount={metrics.totalCount}
+      onOpenWp={setDetailWP as unknown as Parameters<typeof WpControlCenter>[0]["onOpenWp"]}
+      onExport={() => exportWorkPackagesCSV(filtered)}
+      onBulkAdd={() => setBulkAddOpen(true)}
+      onCreate={canCreate ? handleWPCreate : null}
+      canCreate={canCreate}
+      selectedIds={selectedWPs}
+      onToggleSelect={toggleSelect}
+      onToggleAll={(checked) =>
+        setSelectedWPs(checked ? new Set(filtered.map((w) => w.id)) : new Set())
+      }
+      projectHealth={projectHealth}
+      percentComplete={percentComplete}
+      sequenceFilter={<SequenceFilter items={workPackages} value={seqFilter} onChange={setSeqFilter} />}
+      exceptionPanel={
+        <ExceptionPanel
+          metrics={metrics}
+          onRiskFilter={setRiskFilter}
+          onStatusFilter={setStatusFilter}
+          onPhaseFilter={setPhaseFilter}
+          onOpen={setDetailWP}
+        />
+      }
+      listTruncationNotice={<ListTruncationNotice count={rawWorkPackages.length} label="work packages" />}
+      bulkActions={bulkActions}
+      modals={wpModals}
+    >
+      <main style={{ minWidth: 0 }}>
+        {view === "flow" && (
+          <PhaseFlowView
+            rows={filtered}
+            phaseRollup={metrics.phaseRollup}
+            onOpen={setDetailWP}
+            onEdit={canEdit ? handleWPEdit : null}
+            onDelete={canDelete ? setDeleteTarget : null}
+            selectedWPs={selectedWPs}
+            onToggleSelect={toggleSelect}
+          />
+        )}
+
+        {view === "board" && (
+          <StatusBoardView
+            rows={filtered}
+            onOpen={setDetailWP}
+            onEdit={canEdit ? handleWPEdit : null}
+            onDelete={canDelete ? setDeleteTarget : null}
+          />
+        )}
+
+        {view === "register" && (
+          <RegisterView
+            rows={filtered}
+            selectedWPs={selectedWPs}
+            onToggleSelect={toggleSelect}
+            onOpen={setDetailWP}
+            onEdit={canEdit ? handleWPEdit : null}
+            onDelete={canDelete ? setDeleteTarget : null}
+          />
+        )}
+      </main>
+    </WpControlCenter>
   );
 }

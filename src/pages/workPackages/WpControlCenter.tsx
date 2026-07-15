@@ -1,16 +1,17 @@
 /**
- * WpControlCenter — presentation-only Command UI skin for Work Packages.
+ * WpControlCenter — canonical presentation shell for Work Packages.
  *
  * Receives pre-computed analytics + enriched rows from the WorkPackages
  * container (which still owns all data access and mutations).
- * Composed from the shared @/components/command kit, reusing format.ts
- * helpers and wpControlCenter.derive.ts for pure derivations.
+ * The active execution workflow, exception rail, filters, bulk actions, and
+ * modal surfaces are composed through slots so this shell does not duplicate
+ * or reimplement domain behavior.
  *
  * CSS: inline styles only for the custom phase-rail section per task spec.
  * Everything else uses cmd-* classes from command.css.
  */
 
-import { useMemo } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import {
   Boxes,
   Truck,
@@ -20,6 +21,9 @@ import {
   AlertTriangle,
   BookOpen,
   PauseCircle,
+  Download,
+  Plus,
+  Upload,
 } from "lucide-react";
 import "@/styles/command.css";
 import {
@@ -27,20 +31,15 @@ import {
   KpiStrip,
   DecisionPanel,
   Pill,
-  FilterBar,
-  DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
+import type { KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
-import {
-  wpStatusTone,
-  riskTone,
-  buildWpPanels,
-} from "./wpControlCenter.derive";
+import { areAllFilteredRowsSelected, buildWpPanels } from "./wpControlCenter.derive";
 import type { WpMetrics, EnrichedWp } from "./wpControlCenter.derive";
-import { formatTons, formatHours, phaseColor, PHASE_META, RISK_FILTERS } from "./format";
-import { formatDate } from "./utils";
+import { formatTons, formatHours, phaseColor, PHASE_META, VIEW_OPTIONS } from "./format";
+import { ControlPanel } from "./components";
+import { RESPONSIVE_CSS, contentGridStyle, pageStyle } from "./styles";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -60,9 +59,9 @@ function nextPhase(phase: string): string {
   return map[phase] || "—";
 }
 
-/** Scroll to the DataTable. Mirrors the RFI pattern. */
-function scrollToTable() {
-  document.querySelector(".wp-cc .cmd-table-wrap")?.scrollIntoView({
+/** Scroll to the active execution workflow. */
+function scrollToBody(body: HTMLDivElement | null) {
+  body?.scrollIntoView({
     behavior: "smooth",
     block: "start",
   });
@@ -77,6 +76,8 @@ export interface WpControlCenterProps {
   workPackages: EnrichedWp[];
   filtered: EnrichedWp[];
   metrics: WpMetrics;
+  view: string;
+  onViewChange: (view: string) => void;
   search: string;
   onSearch: (v: string) => void;
   phaseFilter: string;
@@ -85,9 +86,14 @@ export interface WpControlCenterProps {
   onStatusFilter: (v: string) => void;
   riskFilter: string;
   onRiskFilter: (v: string) => void;
+  onClearFilters: () => void;
+  filteredCount: number;
+  totalCount: number;
   onOpenWp: (wp: EnrichedWp) => void;
   onExport: () => void;
+  onBulkAdd: () => void;
   onCreate: (() => void) | null;
+  canCreate: boolean;
   /** Bulk selection state (drives checkbox column + BulkActionBar in container). */
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
@@ -95,6 +101,12 @@ export interface WpControlCenterProps {
   /** From the project record — passes straight through to the hero. */
   projectHealth?: string | null;
   percentComplete?: number | null;
+  sequenceFilter?: ReactNode;
+  exceptionPanel?: ReactNode;
+  listTruncationNotice?: ReactNode;
+  bulkActions?: ReactNode;
+  modals?: ReactNode;
+  children: ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +118,8 @@ export default function WpControlCenter(props: WpControlCenterProps) {
     projectName,
     filtered,
     metrics,
+    view,
+    onViewChange,
     search,
     onSearch,
     phaseFilter,
@@ -114,17 +128,29 @@ export default function WpControlCenter(props: WpControlCenterProps) {
     onStatusFilter,
     riskFilter,
     onRiskFilter,
+    onClearFilters,
+    filteredCount,
+    totalCount,
     onOpenWp,
     onExport,
+    onBulkAdd,
     onCreate,
+    canCreate,
     selectedIds,
     onToggleSelect,
     onToggleAll,
     projectHealth,
     percentComplete,
+    sequenceFilter,
+    exceptionPanel,
+    listTruncationNotice,
+    bulkActions,
+    modals,
+    children,
   } = props;
 
   useCommandSkin();
+  const bodyRef = useRef<HTMLDivElement | null>(null);
 
   const panels = useMemo(() => buildWpPanels(metrics), [metrics]);
 
@@ -193,117 +219,12 @@ export default function WpControlCenter(props: WpControlCenterProps) {
     },
   ];
 
-  // Selection
   const selectable = !!(selectedIds && onToggleSelect && onToggleAll);
-  const allSelected =
-    selectable && filtered.length > 0 && selectedIds!.size === filtered.length;
-
-  // DataTable columns
-  const columns: Column<EnrichedWp>[] = [
-    ...(selectable
-      ? ([
-          {
-            key: "sel",
-            header: (
-              <input
-                type="checkbox"
-                className="cmd-check"
-                checked={allSelected}
-                onChange={(e) => onToggleAll!(e.target.checked)}
-                aria-label="Select all work packages"
-              />
-            ),
-            render: (w: EnrichedWp) => (
-              <input
-                type="checkbox"
-                className="cmd-check"
-                checked={selectedIds!.has(w.id)}
-                onClick={(e) => e.stopPropagation()}
-                onChange={() => onToggleSelect!(w.id)}
-                aria-label="Select work package"
-              />
-            ),
-          },
-        ] as Column<EnrichedWp>[])
-      : []),
-    {
-      key: "num",
-      header: "WP #",
-      render: (w) => <span className="cmd-row__num">{w.wp_number || "—"}</span>,
-    },
-    {
-      key: "name",
-      header: "Package",
-      render: (w) => w.name || "Untitled",
-    },
-    {
-      key: "phase",
-      header: "Phase",
-      render: (w) => (
-        <Pill tone="neutral">
-          <span style={{ color: phaseColor(w._signals?.phase || w.phase || "") }}>
-            {w._signals?.phase || w.phase || "—"}
-          </span>
-        </Pill>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (w) => (
-        <Pill tone={wpStatusTone(w._signals?.status || w.status)}>
-          {w._signals?.status || w.status || "Not Started"}
-        </Pill>
-      ),
-    },
-    {
-      key: "risk",
-      header: "Risk",
-      render: (w) => (
-        <Pill tone={riskTone(w._signals?.risk)}>
-          {w._signals?.risk === "high"
-            ? "Exception"
-            : w._signals?.risk === "medium"
-            ? "Warning"
-            : "Clear"}
-        </Pill>
-      ),
-    },
-    {
-      key: "progress",
-      header: "Progress",
-      align: "right" as const,
-      render: (w) => `${w._signals?.progress ?? w.percent_complete ?? 0}%`,
-    },
-    {
-      key: "tonnage",
-      header: "Tonnage",
-      align: "right" as const,
-      render: (w) => formatTons(w.tonnage),
-    },
-    {
-      key: "hourBurn",
-      header: "Labor Burn",
-      align: "right" as const,
-      render: (w) => {
-        const burn = w._signals?.hourBurn ?? 0;
-        return burn > 0 ? `${burn}%` : "—";
-      },
-    },
-    {
-      key: "crew",
-      header: "Crew",
-      render: (w) => w.crew || <span className="cmd-row__meta">—</span>,
-    },
-    {
-      key: "planEnd",
-      header: "Plan End",
-      render: (w) => formatDate(w.scheduled_end_date),
-    },
-  ];
 
   return (
-    <div className="wp-cc">
+    <div className="wp-cc sb-dashboard-reference-page" style={pageStyle}>
+      <style>{RESPONSIVE_CSS}</style>
+      {listTruncationNotice}
       {/* ------------------------------------------------------------------ */}
       {/* HERO                                                                 */}
       {/* ------------------------------------------------------------------ */}
@@ -323,6 +244,49 @@ export default function WpControlCenter(props: WpControlCenterProps) {
           ...heroStats,
         ]}
       />
+
+      <div className="wp-cc__toolbar" style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", padding: "12px 24px" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} aria-label="Work package view">
+          {VIEW_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const active = view === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className={`cmd-chip-btn${active ? " is-active" : ""}`}
+                onClick={() => onViewChange(option.id)}
+                aria-pressed={active}
+              >
+                {Icon && <Icon size={13} />}
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {selectable && (
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-secondary)", fontSize: 11 }}>
+              <input
+                type="checkbox"
+                checked={areAllFilteredRowsSelected(filtered, selectedIds!)}
+                onChange={(event) => onToggleAll!(event.target.checked)}
+                aria-label="Select all visible work packages"
+              />
+              Select visible ({filtered.length})
+            </label>
+          )}
+          <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}>
+            <Download size={14} /> CSV
+          </button>
+          <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onBulkAdd} disabled={!canCreate}>
+            <Upload size={14} /> Bulk Add
+          </button>
+          <button type="button" className="cmd-btn cmd-btn--primary" onClick={onCreate || undefined} disabled={!canCreate}>
+            <Plus size={14} /> New WP
+          </button>
+        </div>
+      </div>
 
       {/* ------------------------------------------------------------------ */}
       {/* KPI STRIP                                                            */}
@@ -351,8 +315,8 @@ export default function WpControlCenter(props: WpControlCenterProps) {
             <div
               key={row.phase}
               style={{
-                background: "#ffffff",
-                border: "1px solid #e4e8ee",
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border-default)",
                 borderRadius: 12,
                 padding: "14px 18px",
                 flex: "1 1 180px",
@@ -378,9 +342,9 @@ export default function WpControlCenter(props: WpControlCenterProps) {
               </div>
 
               {/* Count + tonnage */}
-              <div style={{ color: "#1b2430", fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>
+              <div style={{ color: "var(--text-primary)", fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>
                 {row.count}
-                <span style={{ fontSize: 13, fontWeight: 400, color: "#6b7280", marginLeft: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 400, color: "var(--text-muted)", marginLeft: 6 }}>
                   {formatTons(row.tons)}
                 </span>
               </div>
@@ -389,7 +353,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
               <div
                 style={{
                   height: 4,
-                  background: "#e4e8ee",
+                  background: "var(--divider)",
                   borderRadius: 2,
                   overflow: "hidden",
                   marginTop: 4,
@@ -408,7 +372,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
 
               {/* Progress label */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 11, color: "#6b7280" }}>{row.progress}% complete</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{row.progress}% complete</span>
                 {row.highRisk > 0 && (
                   <span style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>
                     {row.highRisk} exception{row.highRisk > 1 ? "s" : ""}
@@ -429,7 +393,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
           title="Work Queue"
           onViewAll={() => {
             onRiskFilter("high");
-            scrollToTable();
+            scrollToBody(bodyRef.current);
           }}
         >
           {panels.workQueue.map((w) => {
@@ -461,7 +425,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
         </DecisionPanel>
 
         {/* Ready to Advance — packages near threshold, not in Erection */}
-        <DecisionPanel title="Ready to Advance" onViewAll={scrollToTable}>
+        <DecisionPanel title="Ready to Advance" onViewAll={() => scrollToBody(bodyRef.current)}>
           {panels.readyToAdvance.map((w) => (
             <div
               className="cmd-row is-clickable"
@@ -485,7 +449,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
         </DecisionPanel>
 
         {/* At Risk — over labor budget or overdue */}
-        <DecisionPanel title="At Risk" onViewAll={scrollToTable}>
+        <DecisionPanel title="At Risk" onViewAll={() => scrollToBody(bodyRef.current)}>
           {panels.atRisk.map((w) => (
             <div
               className="cmd-row is-clickable"
@@ -511,66 +475,28 @@ export default function WpControlCenter(props: WpControlCenterProps) {
         </DecisionPanel>
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* FILTER BAR                                                           */}
-      {/* ------------------------------------------------------------------ */}
-      <FilterBar
+      <ControlPanel
         search={search}
         onSearch={onSearch}
-        searchPlaceholder="Search WP number, name, crew, phase, or status"
-        onExport={onExport}
-        primaryLabel="Add WP"
-        onPrimary={onCreate}
-        filters={
-          <>
-            {/* Phase chips */}
-            {PHASES.map((p) => (
-              <button
-                key={p}
-                type="button"
-                className={`cmd-chip-btn${phaseFilter === (p === "All" ? "all" : p) ? " is-active" : ""}`}
-                onClick={() => onPhaseFilter(p === "All" ? "all" : p)}
-              >
-                {p}
-              </button>
-            ))}
-            <span style={{ width: 1, background: "var(--border)", margin: "0 4px" }} />
-            {/* Status chips */}
-            {STATUSES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                className={`cmd-chip-btn${statusFilter === (s === "All" ? "all" : s) ? " is-active" : ""}`}
-                onClick={() => onStatusFilter(s === "All" ? "all" : s)}
-              >
-                {s}
-              </button>
-            ))}
-            <span style={{ width: 1, background: "var(--border)", margin: "0 4px" }} />
-            {/* Risk chips */}
-            {RISK_FILTERS.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                className={`cmd-chip-btn${riskFilter === r.id ? " is-active" : ""}`}
-                onClick={() => onRiskFilter(r.id)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </>
-        }
+        phaseFilter={phaseFilter}
+        onPhaseFilter={onPhaseFilter}
+        statusFilter={statusFilter}
+        onStatusFilter={onStatusFilter}
+        riskFilter={riskFilter}
+        onRiskFilter={onRiskFilter}
+        filteredCount={filteredCount}
+        totalCount={totalCount}
+        onClear={onClearFilters}
       />
+      {sequenceFilter}
 
-      {/* ------------------------------------------------------------------ */}
-      {/* DATA TABLE                                                           */}
-      {/* ------------------------------------------------------------------ */}
-      <DataTable
-        columns={columns}
-        rows={filtered}
-        onRowClick={onOpenWp}
-        emptyMessage="No work packages match your filters."
-      />
+      <div ref={bodyRef} className="wp-cc__body" style={contentGridStyle}>
+        {exceptionPanel}
+        {children}
+      </div>
+
+      {bulkActions}
+      {modals}
     </div>
   );
 }
