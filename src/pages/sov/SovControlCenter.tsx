@@ -1,6 +1,6 @@
 /**
  * SOV Control Center — light Command UI skin.
- * Rendered by SOV.jsx when the `command_ui` flag is on.
+ * Rendered unconditionally by SOV.jsx.
  * Receives all data + callbacks from the parent (no network calls here).
  *
  * Mirrors the RfiControlCenter pattern exactly:

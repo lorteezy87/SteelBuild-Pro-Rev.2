@@ -1,11 +1,11 @@
 /**
  * BillingControlCenter — light Command UI skin for the Billing page.
  *
- * Renders behind the `command_ui` feature flag. The classic Billing page
+ * Provides the canonical Billing shell. The Billing page
  * (plan cards + portal/checkout actions) is composed BELOW the hero and KPI
  * strip so ALL existing handlers are unchanged. This component is purely
  * presentational — it adds a hero header and a KPI strip; every Stripe
- * action still lives in the classic components passed as `children`.
+ * action still lives in the billing components passed as `children`.
  *
  * Real data only:
  *   - Plan name, price, status from usePlan / organizations.plan
@@ -55,7 +55,7 @@ export interface BillingControlCenterProps {
   /** Active project count in this workspace. */
   projectCount: number;
   /**
-   * The classic Billing UI — plan cards, portal button, checkout CTA — is
+   * The Billing plan UI — plan cards, portal button, checkout CTA — is
    * passed as children so it renders below the hero and KPIs completely
    * unchanged. No handler logic moves here.
    */
@@ -129,14 +129,14 @@ export default function BillingControlCenter(props: BillingControlCenterProps) {
       <KpiStrip cells={kpiCells} />
 
       {/*
-        Classic billing UI: plan cards (upgrade/downgrade via Stripe Checkout)
+        Billing plan UI: plan cards (upgrade/downgrade via Stripe Checkout)
         and the Manage Billing portal link. No handlers are altered — the parent
-        Billing.jsx mounts these below the hero/KPIs when commandUi is true.
+        Billing.jsx mounts these below the hero/KPIs within the canonical presentation.
         CSS WANTS (add to command.css or a billing-specific sheet if the
         coordinator wants a named class without inline styles):
-          .billing-cc__classic { display: flex; flex-direction: column; gap: 18px; max-width: 1000px; }
+          .billing-cc__plans { display: flex; flex-direction: column; gap: 18px; max-width: 1000px; }
       */}
-      <div className="billing-cc__classic" style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 1000 }}>
+      <div className="billing-cc__plans" style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 1000 }}>
         {children}
       </div>
     </div>

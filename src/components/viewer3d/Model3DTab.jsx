@@ -20,7 +20,6 @@ import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport"
 import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { useFlag } from "@/hooks/useFeatureFlag";
 
 const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer"));
 
@@ -65,15 +64,14 @@ const loadingChip = {
 
 export default function Model3DTab({ modelMapping, modelElementRows, projectId, rosterLoading }) {
   const qc = useQueryClient();
-  // command_ui re-skin (SP5): when the Detailing hub runs under the light command
+  // canonical light presentation (SP5): the Detailing hub runs under the canonical light command
   // shell this tab is already inside `.detailing-cc`, so every var(--*) token +
   // sbd-* class in the side panel below flips light automatically via the shipped
   // `.detailing-cc` alias block. The ONE piece that doesn't is the outer
   // container's hardcoded `--bg-base` fallback — swap that to the aliased surface
-  // so the frame reads light too. Flag-off keeps the classic dark container.
+  // so the frame reads light too. The canonical surface uses the light container.
   // The 3D canvas + its floating overlays (fsBtn / saveBanner / loadingChip) sit
   // ON the dark viewport and stay dark by design (chrome-only re-skin).
-  const commandUi = useFlag("command_ui");
   const [buffer, setBuffer] = useState(null);
   const [fileName, setFileName] = useState(null);
   const [modelFile, setModelFile] = useState(null); // the picked File (for upload)
@@ -413,7 +411,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   return (
     <div
       ref={containerRef}
-      style={{ display: "flex", height: isFullscreen ? "100vh" : "min(72vh, 720px)", minHeight: 420, border: isFullscreen ? "none" : "1px solid var(--border-default)", borderRadius: isFullscreen ? 0 : 10, overflow: "hidden", background: commandUi ? "var(--bg-surface)" : "var(--bg-base, #0d1117)" }}
+      style={{ display: "flex", height: isFullscreen ? "100vh" : "min(72vh, 720px)", minHeight: 420, border: isFullscreen ? "none" : "1px solid var(--border-default)", borderRadius: isFullscreen ? 0 : 10, overflow: "hidden", background: "var(--bg-surface)" }}
     >
       <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
         <Suspense fallback={<LoadingSkeleton variant="page" />}>

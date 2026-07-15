@@ -415,3 +415,14 @@ Selective, in-house consolidation is preferred over a full rewrite. Phase 1 prio
 - Changed source/test files: `src/pages/Drawings.jsx`, drawing table/grid/dialog/upload/import/revision components, `src/components/drawings/drawingsUtils.js`, `src/lib/drawingUploadUtils.js`, and the focused drawing tests. Unrelated tracked and untracked worktree changes were preserved and excluded.
 - Commit: `refactor: reconcile Drawings workflow authority`.
 - Delivery: pushed only to `origin/agent/handoff-cleanup`; draft PR #77 remains open. No deployment, production migration, or merge was performed.
+
+## Batch 38: repository-wide presentation-flag retirement and dead-path inventory
+
+- Starting commit: `307dafbfeade773c69c158b5194fd4f5aa3f5153` (Batch 37 HEAD; pushed on `agent/handoff-cleanup`).
+- Retired the remaining `command_ui` presentation infrastructure from runtime source. The typed production catalog now contains 8 operational keys; the historical SQL catalog row remains unchanged and no migration clears remote rollout state.
+- Removed presentation-flag branches from Action Items, Budget Hours, Command Center, Dashboard, Drawing Viewer, Field Today, Procurement, Projects, Schedule of Values, Doc Control, revision dialogs, and 3D viewer chrome. Operational flags remain server-backed and unchanged.
+- Added `docs/FEATURE_FLAG_AND_DEAD_PATH_INVENTORY.md` with flag ownership/disposition, route inventory, compatibility targets, visible dead-end evidence, and deletion-proof rules. The route registry currently contains 75 pages and 10 static metadata entries.
+- Added `src/__tests__/commandUiRetirement.test.js` as a guard against reintroducing the retired runtime flag or branch identifier.
+- Visible DMS provider/sync controls remain classified HIDE, and the generic unsupported-function warning remains classified FINISH; neither unrelated workflow was changed in this batch.
+- No implementation files, migrations, schemas, RLS policies, RPCs, or operational flags were deleted. Canonical control-center components and their command stylesheet remain active code, not fallback infrastructure.
+- Required validation, final commit SHA, and exact changed-file list are recorded in the final handoff after execution. PR #77 remains open and Draft. No deployment, merge, or production migration occurred.

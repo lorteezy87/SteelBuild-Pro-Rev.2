@@ -1,5 +1,5 @@
 /* Command UI — light-default design system, matched to 06_rfis.png.
-   Scoped under [data-skin="command"] so it never touches the classic dark app.
+   Scoped under [data-skin="command"] so it stays scoped to canonical control-center surfaces.
    IMPORTANT: this light surface renders INSIDE the dark SteelBuild app, so every
    text element sets its color EXPLICITLY — never inherit, or the dark theme's
    light text bleeds in and goes invisible on the white cards. */

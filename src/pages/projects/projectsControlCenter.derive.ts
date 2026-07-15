@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Projects Control Center (command_ui redesign).
+ * Pure derivations for the Projects Control Center (canonical presentation redesign).
  * No React, no network. All KPI aggregations reuse the canonical helpers in
  * src/utils/projectKpis.js so the command view computes identically to the
  * classic Projects page.

@@ -1,6 +1,6 @@
 /**
- * ResourcesControlCenter — Command UI redesign of the Resources hub.
- * Gated behind the `command_ui` feature flag; enabled in ResourceHub.jsx.
+ * ResourcesControlCenter — canonical Resources hub presentation.
+ * Rendered unconditionally by ResourceHub.jsx; ResourceHub owns the edit/delete plumbing.
  *
  * Owns its own data fetch (the ResourceHub shell does not load resource data).
  * Mirrors the pattern of RfiControlCenter: loads data → buildResourcesSummary →

@@ -1,9 +1,9 @@
 /**
- * Pure derivations for the Dashboard Control Center (command_ui redesign).
+ * Pure derivations for the Dashboard Control Center (canonical presentation redesign).
  * No React, no network.
  *
  * Re-uses the canonical helpers from projectMetrics.js so the KPI numbers
- * shown in the CC are byte-identical to those in the classic ProjectDashboard.
+ * shown in the CC are byte-identical to those in the page-owned ProjectDashboard.
  * Do NOT inline the math here — import the helper.
  */
 
@@ -211,7 +211,7 @@ export function buildDashboardSummary(input: {
     qualityRecords = [],
   } = input;
 
-  // ── Reuse canonical helpers (numbers match classic dashboard exactly) ───────
+  // ── Reuse canonical helpers (numbers match page-owned dashboard exactly) ───────
   const openRfis = openRFICount(rfis as Parameters<typeof openRFICount>[0]);
   const overdueRfis = overdueRFICount(rfis as Parameters<typeof overdueRFICount>[0]);
   const schedulePct = wpProgressPct(wps as Parameters<typeof wpProgressPct>[0]);
@@ -329,7 +329,7 @@ export function buildDashboardSummary(input: {
 
   // ── Recent activity table ─────────────────────────────────────────────────
   // Re-uses recentActivityFeed from projectMetrics so the feed clusters the
-  // same way as in the classic dashboard.
+  // same way as in the page-owned dashboard.
   const activityFeed = recentActivityFeed(
     drawingActivity as Parameters<typeof recentActivityFeed>[0],
     4,

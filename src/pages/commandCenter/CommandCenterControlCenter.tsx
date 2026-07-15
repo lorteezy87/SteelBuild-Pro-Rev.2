@@ -2,7 +2,7 @@
  * CommandCenterControlCenter — light Command UI redesign of the Command Center.
  *
  * Kit archetype: PageHero + KpiStrip (6 cells) + 3 DecisionPanels + FilterBar + DataTable.
- * Rendered only when the `command_ui` flag is on — the classic CommandCenter.jsx
+ * Canonical Command Center presentation. The page-owned CommandCenter.jsx
  * path is untouched.
  *
  * Data wiring lives in CommandCenter.jsx (the existing queries); this component is
@@ -54,7 +54,7 @@ export interface CommandCenterControlCenterProps {
   /** Type-filter chips ("All" | "RFI" | "SUB" | "CO" | "DEL"). */
   typeFilter: string;
   onTypeChange: (v: string) => void;
-  /** Open the classic item detail drawer. */
+  /** Open the page-owned item detail drawer. */
   onOpenItem: (item: ActionItem) => void;
   /** "Forward Look" button handler — reuses existing ForwardLookDrawer. */
   onForwardLook: () => void;

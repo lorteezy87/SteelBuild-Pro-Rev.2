@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Field Today Control Center (command_ui redesign).
+ * Pure derivations for the Field Today Control Center (canonical presentation redesign).
  * No React, no network. All inputs are real data shapes from the existing
  * hooks and entities — no fabricated fields.
  *

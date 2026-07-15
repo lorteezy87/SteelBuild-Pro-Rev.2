@@ -1,7 +1,7 @@
 /**
  * RevisionCompareModal — visual diff between two revisions of one sheet.
  *
- * Classic light-table overlay: the OLD revision is tinted red, the NEW one
+ * Light-table overlay: the OLD revision is tinted red, the NEW one
  * blue, composited with multiply on white. Unchanged linework reads dark,
  * content only in the old rev reads RED (removed), content only in the new
  * rev reads BLUE (added). Plus a wipe slider and side-by-side mode, and a
@@ -450,17 +450,16 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
 
   const aiBusyDisabled = rendering || isLoading || notEnough || !oldSel || !newSel;
 
-  // SP4: under command_ui, tag this portaled Radix dialog `.detailing-cc` so
+  // SP4: under canonical presentation, tag this portaled Radix dialog `.detailing-cc` so
   // the header/controls/AI-rail chrome inherits the shell's light token-alias.
   // The DialogContent bg is already `--bg-surface-secondary` (alias-remapped
   // light); the canvas viewport keeps its functional gray. Flag off → no class,
   // byte-identical.
-  const commandUi = useFlag("command_ui");
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className={commandUi ? "detailing-cc" : undefined}
+        className="detailing-cc"
         style={{
           maxWidth: "min(96vw, 1500px)",
           width: "96vw",
@@ -679,7 +678,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                 cached={aiCached}
                 downstream={downstream}
                 disabled={aiBusyDisabled}
-                light={commandUi}
+                light
                 onGenerate={runAiDiff}
                 onRegenerate={() => runAiDiff(true)}
                 onToggleDismiss={toggleDismiss}

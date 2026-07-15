@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Risk Control Center (command_ui redesign).
+ * Pure derivations for the Risk Control Center (canonical presentation redesign).
  * No React, no network. All inputs come from real DB records pulled by RiskHub.
  *
  * The data sources for this page are NOT a dedicated `project_risks` table —

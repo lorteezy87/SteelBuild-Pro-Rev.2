@@ -1,7 +1,7 @@
 /**
  * ImpactBoardPanel — the on-skin Doc Control "Impacts" view (Slice 2c).
  *
- * Presentation-only re-skin of ImpactBoard onto the command_ui kit. The create /
+ * Presentation-only re-skin of ImpactBoard onto the canonical presentation kit. The create /
  * move-status mutations, the "resolved/closed sets resolved_at" rule, permission
  * gate, and cache invalidation are UNCHANGED — reused verbatim; only the chrome
  * (card / add form / status columns / impact cards / priority chip) is swapped to

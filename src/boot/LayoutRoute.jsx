@@ -3,13 +3,12 @@ import { useEffect } from "react";
 import PageErrorBoundary from "@/components/shared/ErrorBoundary";
 import Layout from "@/Layout";
 import { PAGES } from "@/config/routes";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import { useTheme } from "@/components/shared/ThemeContext";
 
 /**
  * LayoutRoute — mounts the app chrome (Layout) ONCE and keeps it across
  * navigations; the page <Outlet> renders inside it. Also defaults the whole
- * shell to the light theme when the command_ui flag is on (the user can still
+ * shell to the light theme when the canonical layout is active (the user can still
  * toggle dark afterward). (The removed DesktopShell / desktop_shell path is
  * gone — Layout is the only shell.)
  */
@@ -20,16 +19,13 @@ export default function LayoutRoute() {
   const canonicalPageName =
     Object.keys(PAGES).find((pageName) => pageName.toLowerCase() === segment.toLowerCase()) || segment;
   const currentPageName = canonicalPageName || "Dashboard";
-  const commandUi = useFlag("command_ui");
   const { setTheme } = useTheme();
 
-  // The command_ui redesign is light-first. Default the whole shell to the light
-  // theme once when the flag turns on (the user can still toggle dark afterward —
-  // we only react to the flag, not to the theme, so we never trap them in light).
+  // The command presentation is light-first. Set the same default once while
+  // preserving the user's ability to toggle the theme afterward.
   useEffect(() => {
-    if (commandUi) setTheme("light");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commandUi]);
+    setTheme("light");
+  }, [setTheme]);
 
   return (
     <PageErrorBoundary label="Layout" key="layout-boundary">

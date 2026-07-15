@@ -1,6 +1,5 @@
 export const FEATURE_FLAG_KEYS = [
   "account_deletion",
-  "command_ui",
   "revision_ai_diff",
   "submittal_approved_to_scrub",
   "submittal_drawing_types",

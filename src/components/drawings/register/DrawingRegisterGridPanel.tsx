@@ -1,7 +1,7 @@
 /**
  * DrawingRegisterGridPanel — the on-skin Doc Control "Register" view (Slice 2c).
  *
- * Presentation-only re-skin of DrawingRegisterGrid onto the command_ui kit. Every
+ * Presentation-only re-skin of DrawingRegisterGrid onto the canonical presentation kit. Every
  * query, mutation, permission gate, provisioning path, watch toggle, and the
  * `["drawing-register", projectId]` cache-key invalidation are UNCHANGED — this
  * panel reuses the exact same hooks + handlers as the legacy grid; only the chrome

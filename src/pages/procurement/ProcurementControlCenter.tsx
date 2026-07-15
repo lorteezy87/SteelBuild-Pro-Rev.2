@@ -1,8 +1,8 @@
 /**
  * ProcurementControlCenter.tsx
  *
- * Command-UI skin for the Procurement page. Rendered when the `command_ui`
- * feature flag is true. The classic path (Procurement.tsx main body) is
+ * Canonical control-center skin for the Procurement page. Rendered when the `canonical presentation`
+ * canonical route is active. The page-owned Procurement body is
  * untouched — this file is a pure presentation layer over the same data.
  *
  * Data contract:
@@ -10,7 +10,7 @@
  *                 rows where procurement_category IS NOT NULL).
  *   - `filtered` — the items after the page's search/status/category
  *                 filters have been applied (drives the DataTable).
- *   - All event handlers come from the classic Procurement shell — no new
+ *   - All event handlers come from the page-owned Procurement shell — no new
  *     mutations live here.
  *
  * CSS wants (inline styles used — coordinator should add to command.css):

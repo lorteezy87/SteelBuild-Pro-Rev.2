@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Portfolio Control Center (command_ui redesign).
+ * Pure derivations for the Portfolio Control Center (canonical presentation redesign).
  * No React, no network. Reuses the canonical helpers from utils/projectKpis.js
  * so the redesigned page computes identically to the classic Portfolio Overview.
  *

@@ -1,7 +1,7 @@
 /**
  * ReviewQueuePanel — the on-skin Doc Control "Reviews" view (Slice 2c).
  *
- * Presentation-only re-skin of ReviewQueue onto the command_ui kit. The mutations
+ * Presentation-only re-skin of ReviewQueue onto the canonical presentation kit. The mutations
  * (request review / record decision), permission gate, cache invalidation, and
  * duplicate-role (23505) error handling are UNCHANGED — reused verbatim from the
  * legacy view; only the chrome (card / toolbar / request form / table / decision
