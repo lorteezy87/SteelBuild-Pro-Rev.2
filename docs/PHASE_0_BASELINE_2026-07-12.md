@@ -467,3 +467,13 @@ Selective, in-house consolidation is preferred over a full rewrite. Phase 1 prio
 - Reproduction outcomes: B41-P1-001, 002, 003, 004, and 006 require remote data, deployment, credentials, or owner evidence and cannot be safely reproduced locally. B41-P1-005 was confirmed blocked by the repository plan: the read-only GitHub branch-protection API returned HTTP 403. No remote setting was changed.
 - Scope decision: no speculative source, RLS, migration, Edge Function, dependency, or date fix was selected. The existing critical local tests passed; external findings were added to the checklist with explicit staging/owner actions.
 - No migration, deployment, merge, production configuration, production data, or Edge Function action occurred. The final Batch 41 documentation commit SHA is reported in the final task response.
+
+## Batch 42: staging-candidate preparation and dry run
+
+- Entry decision: repository-controlled gates passed at `a86c18ffcf00359b7a798b9be5822c18199565c7`; the documented legacy flat Storage finding is accepted for the current single-tenant application because no active leak is established by the available evidence. It remains deferred, not resolved, and is a hard gate before organization #2 alongside legal review.
+- Candidate documentation added: staging identity rules, redacted environment matrix, migration delta manifest, Edge Function manifest, retained operational flag matrix, local build/preview procedure, smoke coverage, and rollback runbook.
+- Staging targets remain separate Vercel and Supabase projects. The expected Vercel project is `steelbuild-pro-staging`; the expected Supabase target is the staging project recorded in `docs/runbooks/staging-setup.md`. No credentials are committed.
+- The six feature-flag seed/catalog migrations remain staging-verification items. Their presence in Git is not treated as evidence of application. Existing administrator global values and user overrides must be compared before and after staging application.
+- Existing Edge Functions are inventory-only in this batch. Deployment revision, secrets, CORS, quotas, kill switches, and RPC state require staging evidence.
+- The staging smoke runbook covers authentication, project and tenant scope, roles, drawings, Submittals, RFI/fabrication gates, Schedule, Work Packages, Deliveries, Change Orders, financials, Field Hub, team permissions, exports, health, deep links, and service-worker updates.
+- Validation artifacts remain non-deploying. No staging or production deployment, merge, migration application, Edge Function deployment, production data mutation, or remote configuration change occurred.

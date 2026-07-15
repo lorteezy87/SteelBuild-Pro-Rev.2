@@ -85,3 +85,20 @@ Use the staging **Supabase** project as the restore target for the PITR rehearsa
 ## Rollback
 - **Frontend**: Vercel → staging project → Deployments → promote a previous deployment. (Prod identically.)
 - **Database**: staging is where you prove a migration is reversible *before* prod. There is no automatic DB rollback in prod — write down-migrations or a documented reversal for anything risky, and rehearse it on staging first.
+
+## Batch 42 candidate reconciliation
+
+- The expected staging targets remain the separate `steelbuild-pro-staging`
+  Vercel project and the separate Supabase staging project described above.
+- This runbook contains no credential values. Secret names are references to
+  GitHub, Vercel, Supabase, Stripe, Sentry, and provider secret stores only.
+- The existing as-built statements require owner re-verification during the
+  staging run. Batch 41 did not independently verify migration history, Edge
+  Function revisions, secret parity, backup freshness, or Storage policy state
+  from the local checkout.
+- The legacy flat Storage finding is accepted for the current single-tenant
+  staging candidate because no active leak is established by the available
+  evidence. It remains a hard gate before organization #2 and must be reviewed
+  with the legal-review gate.
+- No staging deploy, migration application, Edge Function deployment, or remote
+  setting change is authorized by Batch 42 itself.
