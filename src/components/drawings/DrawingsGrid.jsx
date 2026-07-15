@@ -299,7 +299,7 @@ function SheetCard({
         <ActionBtn label="View" onClick={() => onView(drawing)} />
         <ActionBtn label="Edit" onClick={() => onEdit(drawing)} />
         {drawing.drawing_set_name?.trim() && !drawing.set_approval_status && (
-          <ActionBtn label="Approve" onClick={() => onSetApproval(drawing.drawing_set_name.trim())} />
+          <ActionBtn label="Approve" onClick={() => onSetApproval(drawing)} />
         )}
         <ActionBtn label="Next" title="Advance stage" onClick={() => onAdvance(drawing)} disabled={drawing.stage === "Released"} />
         <ActionBtn label="Del" onClick={() => onDelete(drawing.id)} title="Delete" danger />
@@ -451,7 +451,7 @@ function SetSection({
             onClick={(event) => event.stopPropagation()}
           >
             {!aggregates.approval && onSetApproval && (
-              <ActionBtn label="Approve" onClick={() => onSetApproval(group.name)} />
+              <ActionBtn label="Approve" onClick={() => onSetApproval(group)} />
             )}
             {onRenameSet && <ActionBtn label="Rename" onClick={() => onRenameSet(group)} />}
             {onDeleteSet && <ActionBtn label="Delete Set" onClick={() => onDeleteSet(group)} danger />}

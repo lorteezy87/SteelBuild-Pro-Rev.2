@@ -47,6 +47,28 @@ export function validateStageTransition(from, to) {
 }
 
 /**
+ * Classify a direct sheet-stage write before it reaches the entity client.
+ * Linked sets belong to the Submittal workflow; only rows without a linked
+ * submittal may use the legacy sheet-stage recovery path.
+ */
+export function classifyDrawingStageMutation(drawing, targetStage, submittalsBySetId = {}) {
+  const setId = drawing?.drawing_set_id || null;
+  const linked = !!setId && Number(submittalsBySetId[setId]?.total || 0) > 0;
+  if (linked) {
+    return {
+      kind: "submittal",
+      allowed: false,
+      reason: `Set has a linked submittal (${submittalsBySetId[setId]?.latestStatus || "workflow"}).`,
+    };
+  }
+  return {
+    kind: "legacy-recovery",
+    allowed: true,
+    reason: `Sheet-stage recovery to ${targetStage} for a set without a linked submittal.`,
+  };
+}
+
+/**
  * Check whether a drawing is overdue: past its due date AND still active.
  * A done/inactive sheet is never "late" — released, superseded (replaced by a
  * newer revision), or part of an approved set.
@@ -621,6 +643,13 @@ export function groupByDrawingSetName(drawings) {
     map[name].push(d);
   });
   return map;
+}
+
+/** Return a stable identity for a drawing set, preferring the FK. */
+export function getDrawingSetIdentity(drawing) {
+  if (drawing?.drawing_set_id) return `id:${drawing.drawing_set_id}`;
+  const name = String(drawing?.drawing_set_name || "").trim();
+  return name ? `name:${name}` : null;
 }
 
 /**

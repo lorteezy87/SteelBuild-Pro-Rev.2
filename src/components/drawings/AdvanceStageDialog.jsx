@@ -1,4 +1,4 @@
-// AdvanceStageDialog — submittal-driven workflow with a legacy escape
+// AdvanceStageDialog — submittal-driven workflow with a constrained recovery path
 // hatch. When a user clicks "advance stage" on a sheet/group, we no
 // longer mutate `drawings.stage` directly as the primary action — the
 // submittal status is the workflow source of truth (per Sprint-2),
@@ -19,7 +19,7 @@
 //               with no submittal) where direct sheet-stage edits are
 //               the only sensible path.
 //
-// Pure presentational — parent owns navigation + the legacy mutation.
+// Pure presentational — parent owns navigation + the optional legacy recovery mutation.
 
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -33,6 +33,7 @@ export default function AdvanceStageDialog({
   onClose,
   onLegacy,
   onViaSubmittal,
+  allowLegacy = false,
 }) {
   return (
     <Dialog open={!!open} onOpenChange={(o) => !o && onClose && onClose()}>
@@ -106,7 +107,7 @@ export default function AdvanceStageDialog({
         </div>
 
         <DialogFooter style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch" }}>
-          <button
+          {allowLegacy && <button
             className="sbd-btn sbd-btn-primary"
             onClick={() => {
               onViaSubmittal && onViaSubmittal({ drawingId, setId, targetStage });
@@ -125,7 +126,7 @@ export default function AdvanceStageDialog({
             }}
           >
             UPDATE VIA SUBMITTAL →
-          </button>
+          </button>}
 
           <button
             className="sbd-btn"
