@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Documents Control Center (command_ui redesign).
+ * Pure derivations for the canonical Documents Control Center.
  * No React, no network. All inputs come from the normalized document shape
  * produced by `./utils.normalizeDocument`.
  *
@@ -51,7 +51,7 @@ export interface FolderRecord {
   parent_folder_id?: string | null;
 }
 
-export interface CommandUiFilterInput {
+export interface DocumentFilterInput {
   docs: DocumentRecord[];
   search: string;
   /** "All" = no category restriction. */
@@ -60,6 +60,11 @@ export interface CommandUiFilterInput {
   statusTab: string;
   /** null = project root. */
   currentFolderId: string | null;
+  activeFilters?: {
+    category?: string[];
+    discipline?: string[];
+    status?: string[];
+  };
 }
 
 export interface DocumentsSummary {
@@ -190,23 +195,36 @@ function matchesSearch(d: DocumentRecord, q: string): boolean {
 }
 
 /**
- * The Documents Control Center list.
+ * Filter the canonical Documents workspace.
  *
  * Folder scoping is skipped while a search is active so a global search finds
  * documents regardless of which folder the user happens to be standing in —
- * this mirrors the classic (non-command_ui) list in Documents.jsx.
+ * Search deliberately spans every folder, while the folder browser scopes
+ * the list when the user is not searching.
  */
-export function filterDocsForCommandUi(input: CommandUiFilterInput): DocumentRecord[] {
-  const { docs, search, category, statusTab, currentFolderId } = input;
+export function filterDocuments(input: DocumentFilterInput): DocumentRecord[] {
+  const { docs, search, category, statusTab, currentFolderId, activeFilters = {} } = input;
   const q = search.trim().toLowerCase();
+  const categoryFilters = activeFilters.category ?? [];
+  const disciplineFilters = activeFilters.discipline ?? [];
+  const statusFilters = activeFilters.status ?? [];
 
   let result = q ? docs.filter((d) => matchesSearch(d, q)) : scopeDocsToFolder(docs, currentFolderId);
 
-  if (category !== "All") {
-    result = result.filter((d) => (d.category || "Uncategorized") === category);
+  if (category !== "All" || categoryFilters.length > 0) {
+    result = result.filter((d) => {
+      const value = d.category || "Uncategorized";
+      return (category === "All" || value === category)
+        && (categoryFilters.length === 0 || categoryFilters.includes(value));
+    });
+  }
+  if (disciplineFilters.length > 0) {
+    result = result.filter((d) => disciplineFilters.includes(d.discipline || ""));
   }
   if (statusTab !== "all") {
     result = result.filter((d) => d.status === statusTab);
+  } else if (statusFilters.length > 0) {
+    result = result.filter((d) => statusFilters.includes(d.status || ""));
   }
 
   return [...result].sort((a, b) => {

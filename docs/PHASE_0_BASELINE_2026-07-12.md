@@ -205,7 +205,7 @@
   - Kept `P0-07` in progress.
 
 ### Open items
-- **IN PROGRESS:** batches 14–28 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Field Hub, Backcharge Defense, Expenses, and Deliveries; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
+- **IN PROGRESS:** batches 14–29 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Organization Members, Field Hub, Backcharge Defense, Expenses, Deliveries, and Documents; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
   - Budget Control
   - Reports & Insights
   - Resource Register
@@ -246,7 +246,7 @@
 - Stale-path search passed: no `useFlag("command_ui")`, `commandUi`, classic/flag-branch comments, `CommandBar`, or alternate delivery return remains in the delivery page, control center, or derive files. Delivery references remain only in the canonical route and active delivery modules.
 - Validation passed: focused delivery tests (2 files, 19 tests), `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, `npm run typecheck:noimplicitany`, and full tests (245 files, 2,930 tests).
 - Production build passed with 4,318 transformed modules. Existing large-chunk warnings remain; the Deliveries chunk is 105.41 KB.
-- Commit: Batch 28 focused canonicalization commit; PR #77 remains Draft. No deployment, merge, or migration was performed. Unrelated worktree changes were not staged.
+- Commit: `932010679c177f33b97c5a230f242598799082c5` (`phase0: canonicalize deliveries UI`); PR #77 remains Draft. No deployment, merge, or migration was performed. Unrelated worktree changes were not staged.
 
 ## Product Disposition Matrix
 
@@ -280,3 +280,13 @@ Selective, in-house consolidation is preferred over a full rewrite. Phase 1 prio
 
 
 
+
+## Batch 29: Documents canonicalization
+
+- Starting commit: `932010679c177f33b97c5a230f242598799082c5` (`phase0: canonicalize deliveries UI`).
+- Documents now uses `DocumentsControlCenter` as its only route shell. The classic page branch and browser feature-flag selection were removed; active Documents components remain composed through the canonical shell.
+- Preserved project and no-project states, loading behavior, normalized document data, upload and drag/drop flows, edit/detail/download actions, grid/list/folder views, search, status and advanced filters, sorting, category context, CSV export, review queue, transmittal generation, folder navigation and CRUD, bulk create/move/delete/reparent safeguards, filtered selection cleanup, partial-failure handling, query invalidation, Supabase storage resolution, RLS-backed mutations, soft-delete behavior, and empty states.
+- No DMS workflow implementation was deleted. The canonical shell owns presentation while `Documents.jsx` continues to own queries, mutations, modal state, storage access, and workflow callbacks.
+- Validation passed: focused Documents derivation tests (1 file, 39 tests), `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, `npm run typecheck:noimplicitany`, and the full suite (245 files, 2,931 tests).
+- Production build passed with 4,317 transformed modules. Existing large-chunk warnings remain; the Documents chunk is 93.36 KB.
+- Batch 28 baseline wording was reconciled to the authoritative starting SHA above. The Batch 29 focused canonicalization commit is recorded in git history and in the handoff report. No deployment or merge was performed.

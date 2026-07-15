@@ -19,6 +19,7 @@ export default function Toolbar({
   sortKey, onSortChange,
   viewMode, onViewModeChange,
   onUploadOpen, onExportCsv, onReviewQueueClick, onTransmittalOpen,
+  compact = false,
 }) {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortLabel = SORT_OPTIONS.find((o) => o.key === sortKey)?.label || "Sort";
@@ -47,6 +48,7 @@ export default function Toolbar({
         </span>
         <div style={{ width: 1, height: 24, background: "var(--border-default)" }} />
 
+{!compact && (
         <button
           onClick={onUploadOpen}
           style={{
@@ -70,7 +72,9 @@ export default function Toolbar({
         >
           <Upload size={12} /> Upload
         </button>
+        )}
 
+        {!compact && (
         <button
           onClick={onExportCsv}
           title="Export filtered list as CSV"
@@ -93,6 +97,7 @@ export default function Toolbar({
         >
           <FileSpreadsheet size={12} /> Export
         </button>
+        )}
 
         {reviewCount > 0 && (
           <button
@@ -144,6 +149,7 @@ export default function Toolbar({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, justifyContent: "flex-end" }}>
+{!compact && (
         <input
           type="text"
           placeholder="Search documents, drawings, revisions..."
@@ -160,6 +166,7 @@ export default function Toolbar({
             fontSize: 12,
           }}
         />
+        )}
 
         <div style={{ position: "relative" }}>
           <button

@@ -22,19 +22,16 @@ import { lazyWithRetry } from "@/lib/lazyRetry";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DocumentCard from "@/components/dms/DocumentCard";
 import DocumentFilters from "@/components/dms/DocumentFilters";
-import DocumentLeftPanel from "@/components/dms/DocumentLeftPanel";
 import DocumentDetailPanel from "@/components/dms/DocumentDetailPanel";
 import FolderPicker, { collectFolderAndDescendants } from "@/components/dms/FolderPicker";
 import { batchProcess } from "@/utils/batchProcess";
 import EmptyStateAction from "@/components/shared/EmptyStateAction";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import DocumentsControlCenter from "./documents/DocumentsControlCenter";
-import { filterDocsForCommandUi, planFolderDeletion } from "./documents/documentsControlCenter.derive";
+import { filterDocuments, planFolderDeletion } from "./documents/documentsControlCenter.derive";
 
 import { STATUS_TABS } from "./documents/constants";
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
 import FolderSection from "./documents/FolderSection";
-import FolderBar from "./documents/FolderBar";
 import Toolbar from "./documents/Toolbar";
 import BatchActionBar from "./documents/BatchActionBar";
 import ListView from "./documents/ListView";
@@ -65,7 +62,6 @@ const SORT_FNS = {
 export default function Documents() {
   const { activeProject } = useProjectContext();
   const queryClient = useQueryClient();
-  const commandUi = useFlag("command_ui");
 
   const [viewMode, setViewMode]           = useState("grid");
   const [searchQuery, setSearchQuery]     = useState("");
@@ -90,11 +86,6 @@ export default function Documents() {
   // instance that handles both cases.
   const [pickerFor, setPickerFor]                 = useState(null);
   const dragCounter = useRef(0);
-  // Command UI: category chip filter for DocumentsControlCenter.
-  // "All" = no category restriction. Updated by the chip bar in the
-  // control center without touching the classic activeFilters path.
-  const [ccCategoryFilter, setCcCategoryFilter] = useState("All");
-
   // Reset folder navigation when the user switches projects so we never
   // accidentally show a folder from a different project.
   React.useEffect(() => { setCurrentFolderId(null); }, [activeProject?.id]);
@@ -329,58 +320,32 @@ export default function Documents() {
   };
 
   /* ── Filter + sort ── */
+  const categoryFilter = activeFilters.category?.[0] || "All";
   const filteredDocs = useMemo(() => {
-    let result = [...allDocuments];
-
-    // Folder scoping. We compare against the raw column (folder_id) which
-    // normalizeDocument carries through. Search overrides the folder
-    // filter so users don't have to remember which folder they were in
-    // when they search globally.
-    if (!searchQuery.trim()) {
-      result = result.filter((d) => (d.folder_id ?? null) === (currentFolderId ?? null));
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (d) =>
-          d.displayName?.toLowerCase().includes(q) ||
-          d.documentNumber?.toLowerCase().includes(q) ||
-          d.fileName?.toLowerCase().includes(q) ||
-          d.description?.toLowerCase().includes(q) ||
-          d.drawingNumber?.toLowerCase().includes(q) ||
-          d.tags?.some((t) => t.toLowerCase().includes(q))
-      );
-    }
-
-    if (activeFilters.category?.length)   result = result.filter((d) => activeFilters.category.includes(d.category));
-    if (activeFilters.discipline?.length) result = result.filter((d) => activeFilters.discipline.includes(d.discipline));
-    if (statusTab !== "all")              result = result.filter((d) => d.status === statusTab);
-    else if (activeFilters.status?.length) result = result.filter((d) => activeFilters.status.includes(d.status));
-
+    const result = filterDocuments({
+      docs: allDocuments,
+      search: searchQuery,
+      category: categoryFilter,
+      statusTab,
+      currentFolderId,
+      activeFilters,
+    });
     const fn = SORT_FNS[sortKey];
     if (fn) result.sort(fn);
-
     return result;
-  }, [allDocuments, searchQuery, activeFilters, statusTab, sortKey, currentFolderId]);
+  }, [allDocuments, searchQuery, activeFilters, categoryFilter, statusTab, sortKey, currentFolderId]);
+
+  React.useEffect(() => {
+    const allowedIds = new Set(filteredDocs.map((doc) => doc.id));
+    setSelectedIds((previous) => {
+      const next = new Set([...previous].filter((id) => allowedIds.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [filteredDocs]);
 
   const reviewCount = useMemo(
     () => allDocuments.filter((d) => d.status === "Under Review" || d.status === "Revise & Resubmit").length,
     [allDocuments]
-  );
-
-  // Command UI filtered list: folder scope + search + category chip + status
-  // tab. Search spans every folder (see filterDocsForCommandUi).
-  const ccFilteredDocs = useMemo(
-    () =>
-      filterDocsForCommandUi({
-        docs: allDocuments,
-        search: searchQuery,
-        category: ccCategoryFilter,
-        statusTab,
-        currentFolderId,
-      }),
-    [allDocuments, searchQuery, ccCategoryFilter, statusTab, currentFolderId],
   );
 
   /* ── Mutations ── */
@@ -434,6 +399,10 @@ export default function Documents() {
 
   /* ── Handlers ── */
   const handleFilterChange    = (key, value) => setActiveFilters((prev) => ({ ...prev, [key]: value }));
+  const handleCategoryChange  = (value) => setActiveFilters((prev) => ({
+    ...prev,
+    category: value === "All" ? [] : [value],
+  }));
   const handleClearAllFilters = () => { setActiveFilters({}); setSearchQuery(""); setStatusTab("all"); };
   const handleViewDoc         = (doc) => setSelectedDoc(doc);
   const handleEditDoc         = (doc) => setEditingDoc(doc);
@@ -458,6 +427,12 @@ export default function Documents() {
     try {
       await entities.Document.delete(doc.id);
       queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
+      setSelectedIds((previous) => {
+        if (!previous.has(doc.id)) return previous;
+        const next = new Set(previous);
+        next.delete(doc.id);
+        return next;
+      });
       toast.success("Document deleted");
     } catch {
       toast.error("Failed to delete document");
@@ -489,8 +464,6 @@ export default function Documents() {
   const selectAll = () => setSelectedIds(new Set(filteredDocs.map((d) => d.id)));
   const deselectAll = () => setSelectedIds(new Set());
 
-  // Command UI has no inline confirm strip (the classic BatchActionBar owns
-  // that), so gate the destructive bulk delete behind a native confirm.
   const handleConfirmBulkDeleteDocs = () => {
     const n = selectedIds.size;
     if (n === 0) return;
@@ -508,10 +481,10 @@ export default function Documents() {
   const onDragOver = (e) => { e.preventDefault(); e.stopPropagation(); };
   const onDrop     = (e) => { e.preventDefault(); e.stopPropagation(); dragCounter.current = 0; setIsDragOver(false); setUploadOpen(true); };
 
-  /* ── Render guards ── */
+  /* ── Render guard ── */
   if (!activeProject) {
     return (
-      <div className="sb-dashboard-reference-page" style={{ textAlign: "center" }}>
+      <div className="docs-empty-state" style={{ textAlign: "center" }}>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-secondary)" }}>
           Select a project to view documents
         </div>
@@ -519,10 +492,157 @@ export default function Documents() {
     );
   }
 
-  /* ── Command UI branch ── */
-  // All modals (detail panel, edit modal, upload modal) reuse the same state
-  // so modal behavior is identical between the two skins.
-  if (commandUi) {
+    const documentControls = (
+      <Toolbar
+        allDocumentsCount={allDocuments.length}
+        reviewCount={reviewCount}
+        selectedCount={selectedIds.size}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        sortKey={sortKey}
+        onSortChange={setSortKey}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        onUploadOpen={() => setUploadOpen(true)}
+        onExportCsv={handleExportCsv}
+        onReviewQueueClick={() => { setStatusTab("Under Review"); setActiveFilters({}); }}
+        onTransmittalOpen={() => setTransmittalOpen(true)}
+        compact
+      />
+    );
+
+    const statusTabs = (
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border-default)", marginBottom: 12, flexShrink: 0 }}>
+        {STATUS_TABS.map((tab) => {
+          const count = tab.key === "all"
+            ? allDocuments.length
+            : allDocuments.filter((d) => d.status === tab.key).length;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setStatusTab(tab.key)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
+                background: "transparent",
+                color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
+                border: "none",
+                borderBottom: statusTab === tab.key ? "2px solid var(--accent)" : "2px solid transparent",
+                marginBottom: -1,
+                fontFamily: "var(--font-mono)", fontSize: 9,
+                fontWeight: statusTab === tab.key ? 700 : 500,
+                letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {tab.label}
+              {count > 0 && <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: statusTab === tab.key ? "var(--accent-muted)" : "var(--bg-surface-high)", color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)" }}>{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
+
+    const advancedFilters = (
+      <DocumentFilters
+        onFilterChange={handleFilterChange}
+        activeFilters={activeFilters}
+        onClearAll={handleClearAllFilters}
+      />
+    );
+
+    const batchActions = (
+      <BatchActionBar
+        selectedCount={selectedIds.size}
+        filteredCount={filteredDocs.length}
+        onSelectAll={selectAll}
+        onDeselectAll={deselectAll}
+        onSetStatus={(s) => bulkStatusMut.mutate(s)}
+        isSettingStatus={bulkStatusMut.isPending}
+        onBulkDownload={handleBulkDownload}
+        onBulkMove={() => setPickerFor({ kind: "docs", ids: [...selectedIds] })}
+        onBulkDelete={() => setConfirmBulkDelete(true)}
+        isBulkDeleting={bulkDeleteMut.isPending}
+        confirmBulkDelete={confirmBulkDelete}
+        onConfirmBulkDelete={() => bulkDeleteMut.mutate()}
+        onCancelBulkDelete={() => setConfirmBulkDelete(false)}
+      />
+    );
+
+    const documentContent = (
+      <>
+        {isLoading ? (
+          <div style={{ padding: 16 }}>
+            <LoadingSkeleton variant="table" rows={6} />
+          </div>
+        ) : allDocuments.length === 0 ? (
+          <EmptyState onUploadOpen={() => setUploadOpen(true)} />
+        ) : filteredDocs.length === 0 ? (
+          <EmptyStateAction
+            icon="⊘"
+            message={
+              statusTab !== "all"
+                ? `No documents with status "${statusTab}" in this ${currentFolderId ? "folder" : "view"}`
+                : searchQuery.trim()
+                  ? `No documents matching "${searchQuery.trim()}"`
+                  : "No documents match the current filters"
+            }
+            actions={[
+              { label: "Clear Filters", onClick: handleClearAllFilters },
+              { label: "+ Upload Document", onClick: () => setUploadOpen(true), secondary: true },
+            ]}
+          />
+        ) : viewMode === "grid" ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12, overflowY: "auto" }}>
+            {filteredDocs.map((doc) => (
+              <div key={doc.id} style={{ position: "relative" }}>
+                <div
+                  onClick={(e) => { e.stopPropagation(); toggleSelect(doc.id); }}
+                  style={{
+                    position: "absolute", top: 8, left: 8, zIndex: 10, width: 18, height: 18,
+                    borderRadius: 4,
+                    background: selectedIds.has(doc.id) ? "#10B981" : "rgba(0,0,0,0.5)",
+                    border: selectedIds.has(doc.id) ? "2px solid #10B981" : "2px solid var(--text-muted)",
+                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  {selectedIds.has(doc.id) && <span style={{ color: "white", fontSize: 11, lineHeight: 1 }}>{"\u2714"}</span>}
+                </div>
+                <DocumentCard
+                  doc={doc}
+                  onView={handleViewDoc}
+                  onDownload={handleDownloadDoc}
+                  onEdit={handleEditDoc}
+                  onLink={handleLinkDoc}
+                  onMove={(d) => setPickerFor({ kind: "docs", ids: [d.id] })}
+                  onDelete={handleDeleteDoc}
+                />
+              </div>
+            ))}
+          </div>
+        ) : viewMode === "list" ? (
+          <ListView
+            filteredDocs={filteredDocs}
+            selectedIds={selectedIds}
+            sortKey={sortKey}
+            onSortChange={setSortKey}
+            onToggleSelect={toggleSelect}
+            onSelectAll={selectAll}
+            onDeselectAll={deselectAll}
+            onSelectDoc={setSelectedDoc}
+          />
+        ) : (
+          <FolderView
+            filteredDocs={filteredDocs}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            onViewDoc={handleViewDoc}
+            onDownloadDoc={handleDownloadDoc}
+            onEditDoc={handleEditDoc}
+            onDeleteDoc={handleDeleteDoc}
+          />
+        )}
+      </>
+    );
     const modals = (
       <>
         {selectedDoc && (
@@ -592,6 +712,23 @@ export default function Documents() {
             setPickerFor(null);
           }}
         />
+        {transmittalOpen && (
+          <Suspense fallback={null}>
+            <TransmittalModal
+              open={transmittalOpen}
+              project={activeProject}
+              selectedDocs={allDocuments.filter((d) => selectedIds.has(d.id))}
+              form={transmittalForm}
+              onFormChange={(key, value) => setTransmittalForm((prev) => ({ ...prev, [key]: value }))}
+              onClose={() => setTransmittalOpen(false)}
+              onGenerated={() => {
+                setTransmittalOpen(false);
+                setTransmittalForm({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
+                setSelectedIds(new Set());
+              }}
+            />
+          </Suspense>
+        )}
       </>
     );
     return (
@@ -599,11 +736,11 @@ export default function Documents() {
         <DocumentsControlCenter
           projectName={activeProject?.name || ""}
           allDocuments={allDocuments}
-          filteredDocs={ccFilteredDocs}
+          filteredDocs={filteredDocs}
           search={searchQuery}
           onSearch={setSearchQuery}
-          categoryFilter={ccCategoryFilter}
-          onCategoryChange={setCcCategoryFilter}
+          categoryFilter={categoryFilter}
+          onCategoryChange={handleCategoryChange}
           onStatusTabChange={setStatusTab}
           onOpenDoc={setSelectedDoc}
           onExport={handleExportCsv}
@@ -612,7 +749,7 @@ export default function Documents() {
           onToggleSelect={toggleSelect}
           onToggleAll={(checked) =>
             checked
-              ? setSelectedIds(new Set(ccFilteredDocs.map((d) => d.id)))
+              ? setSelectedIds(new Set(filteredDocs.map((d) => d.id)))
               : deselectAll()
           }
           folders={folders}
@@ -627,344 +764,37 @@ export default function Documents() {
           onMoveSelectedDocs={() => setPickerFor({ kind: "docs", ids: [...selectedIds] })}
           onDeleteSelectedDocs={handleConfirmBulkDeleteDocs}
           onClearSelection={deselectAll}
-        />
+          documentControls={documentControls}
+          statusTabs={statusTabs}
+          advancedFilters={advancedFilters}
+          batchActions={batchActions}
+          documentContent={documentContent}
+          isDragOver={isDragOver}
+          onDragEnter={onDragEnter}
+          onDragLeave={onDragLeave}
+          onDragOver={onDragOver}
+          onDrop={onDrop}        />
         {modals}
-      </>
+        {transmittalOpen && (
+          <Suspense fallback={null}>
+            <TransmittalModal
+              open={transmittalOpen}
+              project={activeProject}
+              selectedDocs={allDocuments.filter((d) => selectedIds.has(d.id))}
+              form={transmittalForm}
+              onFormChange={(key, value) => setTransmittalForm((prev) => ({ ...prev, [key]: value }))}
+              onClose={() => setTransmittalOpen(false)}
+              onGenerated={() => {
+                setTransmittalOpen(false);
+                setTransmittalForm({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
+                setSelectedIds(new Set());
+              }}
+            />
+          </Suspense>
+        )}      </>
     );
+
   }
-
-  return (
-    <div
-      className="sb-dashboard-reference-page"
-      style={{ display: "flex", flexDirection: "column", height: "100%", gap: 16, position: "relative" }}
-      onDragEnter={onDragEnter}
-      onDragLeave={onDragLeave}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
-      {/* Drag overlay */}
-      {isDragOver && (
-        <div style={{
-          position: "absolute",
-          inset: 0,
-          zIndex: 2500,
-          background: "rgba(200,155,32,0.08)",
-          border: "3px dashed var(--accent)",
-          borderRadius: 16,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          pointerEvents: "none",
-        }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: "var(--accent)", marginTop: 12, letterSpacing: "0.06em" }}>
-              DROP FILES TO UPLOAD
-            </div>
-          </div>
-        </div>
-      )}
-
-      <Toolbar
-        allDocumentsCount={allDocuments.length}
-        reviewCount={reviewCount}
-        selectedCount={selectedIds.size}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        sortKey={sortKey}
-        onSortChange={setSortKey}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onUploadOpen={() => setUploadOpen(true)}
-        onExportCsv={handleExportCsv}
-        onReviewQueueClick={() => { setStatusTab("Under Review"); setActiveFilters({}); }}
-        onTransmittalOpen={() => setTransmittalOpen(true)}
-      />
-
-      <BatchActionBar
-        selectedCount={selectedIds.size}
-        filteredCount={filteredDocs.length}
-        onSelectAll={selectAll}
-        onDeselectAll={deselectAll}
-        onSetStatus={(s) => bulkStatusMut.mutate(s)}
-        isSettingStatus={bulkStatusMut.isPending}
-        onBulkDownload={handleBulkDownload}
-        onBulkMove={() => setPickerFor({ kind: "docs", ids: [...selectedIds] })}
-        onBulkDelete={() => setConfirmBulkDelete(true)}
-        isBulkDeleting={bulkDeleteMut.isPending}
-        confirmBulkDelete={confirmBulkDelete}
-        onConfirmBulkDelete={() => bulkDeleteMut.mutate()}
-        onCancelBulkDelete={() => setConfirmBulkDelete(false)}
-      />
-
-      {/* Main content area */}
-      <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
-        <DocumentLeftPanel
-          documents={allDocuments}
-          filteredCount={filteredDocs.length}
-          activeFilters={activeFilters}
-          onFilterChange={handleFilterChange}
-        />
-
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-          <div style={{ marginBottom: 12 }}>
-            <FolderBar
-              folders={folders}
-              currentFolderId={currentFolderId}
-              onNavigate={setCurrentFolderId}
-              onCreate={(name, parentFolderId) => createFolderMut.mutate({ name, parentFolderId })}
-              onRename={(folder, name) => renameFolderMut.mutate({ id: folder.id, name })}
-              onDelete={(folder) => deleteFolderMut.mutate(folder.id)}
-              onBulkDelete={(ids) => bulkDeleteFoldersMut.mutate(ids)}
-              onBulkMove={(ids) => setPickerFor({ kind: "folders", ids })}
-              onOpenBulkCreate={() => setBulkCreateOpen(true)}
-            />
-          </div>
-
-          {/* Status tabs */}
-          <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border-default)", marginBottom: 12, flexShrink: 0 }}>
-            {STATUS_TABS.map((tab) => {
-              const count = tab.key === "all"
-                ? allDocuments.length
-                : allDocuments.filter((d) => d.status === tab.key).length;
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => setStatusTab(tab.key)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "7px 14px",
-                    background: "transparent",
-                    color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
-                    border: "none",
-                    borderBottom: statusTab === tab.key ? "2px solid var(--accent)" : "2px solid transparent",
-                    borderRadius: 0,
-                    marginBottom: -1,
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 9,
-                    fontWeight: statusTab === tab.key ? 700 : 500,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    cursor: "pointer",
-                    transition: "color 0.15s, border-color 0.15s",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {tab.label}
-                  {count > 0 && (
-                    <span style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 8,
-                      fontWeight: 700,
-                      padding: "1px 5px",
-                      borderRadius: 3,
-                      background: statusTab === tab.key ? "var(--accent-muted)" : "var(--bg-surface-high)",
-                      color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
-                    }}>
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <DocumentFilters
-            onFilterChange={handleFilterChange}
-            activeFilters={activeFilters}
-            onClearAll={handleClearAllFilters}
-          />
-
-          {isLoading ? (
-            <div style={{ padding: 16 }}>
-              <LoadingSkeleton variant="table" rows={6} />
-            </div>
-          ) : allDocuments.length === 0 ? (
-            <EmptyState onUploadOpen={() => setUploadOpen(true)} />
-          ) : filteredDocs.length === 0 ? (
-            <EmptyStateAction
-              icon="⊘"
-              message={
-                statusTab !== "all"
-                  ? `No documents with status "${statusTab}" in this ${currentFolderId ? "folder" : "view"}`
-                  : searchQuery.trim()
-                    ? `No documents matching "${searchQuery.trim()}"`
-                    : "No documents match the current filters"
-              }
-              actions={[
-                { label: "Clear Filters", onClick: handleClearAllFilters },
-                { label: "+ Upload Document", onClick: () => setUploadOpen(true), secondary: true },
-              ]}
-            />
-          ) : viewMode === "grid" ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12, overflowY: "auto" }}>
-              {filteredDocs.map((doc) => (
-                <div key={doc.id} style={{ position: "relative" }}>
-                  <div
-                    onClick={(e) => { e.stopPropagation(); toggleSelect(doc.id); }}
-                    style={{
-                      position: "absolute",
-                      top: 8,
-                      left: 8,
-                      zIndex: 10,
-                      width: 18,
-                      height: 18,
-                      borderRadius: 4,
-                      background: selectedIds.has(doc.id) ? "#10B981" : "rgba(0,0,0,0.5)",
-                      border: selectedIds.has(doc.id) ? "2px solid #10B981" : "2px solid var(--text-muted)",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {selectedIds.has(doc.id) && (
-                      <span style={{ color: "white", fontSize: 11, lineHeight: 1 }}>{"\u2714"}</span>
-                    )}
-                  </div>
-                  <DocumentCard
-                    doc={doc}
-                    onView={handleViewDoc}
-                    onDownload={handleDownloadDoc}
-                    onEdit={handleEditDoc}
-                    onLink={handleLinkDoc}
-                    onMove={(d) => setPickerFor({ kind: "docs", ids: [d.id] })}
-                    onDelete={handleDeleteDoc}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : viewMode === "list" ? (
-            <ListView
-              filteredDocs={filteredDocs}
-              selectedIds={selectedIds}
-              sortKey={sortKey}
-              onSortChange={setSortKey}
-              onToggleSelect={toggleSelect}
-              onSelectAll={selectAll}
-              onDeselectAll={deselectAll}
-              onSelectDoc={setSelectedDoc}
-            />
-          ) : (
-            /* Folder view */
-            <FolderView
-              filteredDocs={filteredDocs}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-              onViewDoc={handleViewDoc}
-              onDownloadDoc={handleDownloadDoc}
-              onEditDoc={handleEditDoc}
-              onDeleteDoc={handleDeleteDoc}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Detail / edit / upload modals */}
-      {selectedDoc && (
-        <DocumentDetailPanel
-          doc={selectedDoc}
-          allDocuments={allDocuments}
-          onClose={() => setSelectedDoc(null)}
-          onEdit={handleEditDoc}
-          onDelete={handleDeleteDoc}
-        />
-      )}
-      {editingDoc && (
-        <Suspense fallback={null}>
-          <DocumentEditModal
-            projectId={activeProject?.id}
-            doc={editingDoc}
-            onClose={() => setEditingDoc(null)}
-          />
-        </Suspense>
-      )}
-      {uploadOpen && (
-        <Suspense fallback={null}>
-          <UploadModal
-            projectId={activeProject.id}
-            folderId={currentFolderId}
-            onClose={() => setUploadOpen(false)}
-          />
-        </Suspense>
-      )}
-
-      {transmittalOpen && (
-        <Suspense fallback={null}>
-          <TransmittalModal
-            open={transmittalOpen}
-            project={activeProject}
-            selectedDocs={allDocuments.filter((d) => selectedIds.has(d.id))}
-            form={transmittalForm}
-            onFormChange={(key, value) => setTransmittalForm((prev) => ({ ...prev, [key]: value }))}
-            onClose={() => setTransmittalOpen(false)}
-            onGenerated={() => {
-              setTransmittalOpen(false);
-              setTransmittalForm({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
-              setSelectedIds(new Set());
-            }}
-          />
-        </Suspense>
-      )}
-
-      {/* Bulk-create folders dialog — mounted only while open so its lazy chunk
-          loads on demand. */}
-      {bulkCreateOpen && (
-        <Suspense fallback={null}>
-          <BulkCreateFoldersModal
-            open={bulkCreateOpen}
-            parentLabel={
-              currentFolderId
-                ? folders.find((f) => f.id === currentFolderId)?.name || "Current folder"
-                : "(Root)"
-            }
-            onClose={() => setBulkCreateOpen(false)}
-            onSubmit={handleBulkCreateFolders}
-          />
-        </Suspense>
-      )}
-
-      {/* Folder picker — reused for both moving documents and folders.
-          When moving folders, the picker disables the moved folders +
-          their entire descendant sub-trees so the user can't create a
-          cycle (folder X → child of itself or one of its children). */}
-      <FolderPicker
-        open={!!pickerFor}
-        title={
-          pickerFor?.kind === "folders"
-            ? `Move ${pickerFor.ids.length} folder${pickerFor.ids.length === 1 ? "" : "s"} to…`
-            : `Move ${pickerFor?.ids?.length ?? 0} document${pickerFor?.ids?.length === 1 ? "" : "s"} to…`
-        }
-        folders={folders}
-        initialFolderId={currentFolderId}
-        disabledIds={
-          pickerFor?.kind === "folders"
-            // Disable the moved folders + every descendant of each.
-            ? new Set(
-                pickerFor.ids.flatMap((id) => [...collectFolderAndDescendants(folders, id)])
-              )
-            : new Set()
-        }
-        confirmLabel="Move"
-        onClose={() => setPickerFor(null)}
-        onConfirm={(destFolderId) => {
-          if (!pickerFor) return;
-          if (pickerFor.kind === "folders") {
-            moveFoldersMut.mutate({ folderIds: pickerFor.ids, destFolderId });
-          } else {
-            moveDocsMut.mutate({ docIds: pickerFor.ids, destFolderId });
-          }
-          setPickerFor(null);
-        }}
-      />
-
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-      `}</style>
-    </div>
-  );
-}
 
 function FolderView({ filteredDocs, selectedIds, onToggleSelect, onViewDoc, onDownloadDoc, onEditDoc, onDeleteDoc }) {
   const folders = {};

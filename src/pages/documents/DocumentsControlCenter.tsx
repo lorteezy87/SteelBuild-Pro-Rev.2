@@ -1,9 +1,9 @@
 /**
- * DocumentsControlCenter — Command UI skin for the Documents page.
+ * DocumentsControlCenter — canonical presentation for the Documents page.
  *
- * Light-themed, behavior-preserving re-skin that mirrors the RfiControlCenter
- * pattern. All data, mutations, and modals are owned by the parent Documents.jsx
- * shell; this component is purely presentational.
+ * The parent Documents.jsx shell owns data, mutations, and modals. This
+ * component owns the canonical catalog shell and accepts narrow workspace
+ * slots so the existing DMS controls remain in the same route.
  *
  * Inline style notes for the coordinator (CSS wants):
  *   - .docs-cc wrapper: uses cmd-panels grid and cmd-table-wrap already in command.css
@@ -13,7 +13,7 @@
  *     → using inline `style` background/color from LIST_FILETYPE_STYLES in utils.js
  */
 
-import { useMemo } from "react";
+import { type DragEventHandler, type ReactNode, useMemo } from "react";
 import { FolderOpen, FileText, Clock, AlertCircle, HardDrive, Layers, FolderInput, Trash2, XCircle } from "lucide-react";
 import "@/styles/command.css";
 import {
@@ -129,6 +129,18 @@ export interface DocumentsControlCenterProps {
   onMoveSelectedDocs: () => void;
   onDeleteSelectedDocs: () => void;
   onClearSelection: () => void;
+
+  /** Existing DMS controls composed into the canonical shell. */
+  documentControls?: ReactNode;
+  statusTabs?: ReactNode;
+  advancedFilters?: ReactNode;
+  batchActions?: ReactNode;
+  documentContent?: ReactNode;
+  isDragOver?: boolean;
+  onDragEnter?: DragEventHandler<HTMLDivElement>;
+  onDragLeave?: DragEventHandler<HTMLDivElement>;
+  onDragOver?: DragEventHandler<HTMLDivElement>;
+  onDrop?: DragEventHandler<HTMLDivElement>;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,6 +157,8 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
     onCreateFolder, onRenameFolder, onDeleteFolder,
     onBulkDeleteFolders, onBulkMoveFolders, onOpenBulkCreateFolders,
     onMoveSelectedDocs, onDeleteSelectedDocs, onClearSelection,
+    documentControls, statusTabs, advancedFilters, batchActions, documentContent,
+    isDragOver, onDragEnter, onDragLeave, onDragOver, onDrop,
   } = props;
 
   useCommandSkin();
@@ -272,7 +286,34 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
   ];
 
   return (
-    <div className="docs-cc">
+    <div
+      className="docs-cc"
+      style={{ position: "relative" }}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      {isDragOver && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 2500,
+            background: "rgba(200,155,32,0.08)",
+            border: "3px dashed var(--accent)",
+            borderRadius: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: "var(--accent)" }}>
+            DROP FILES TO UPLOAD
+          </span>
+        </div>
+      )}
       <PageHero
         Icon={FolderOpen}
         title="Documents Control Center"
@@ -393,6 +434,8 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
         }
       />
 
+      {documentControls}
+
       {/* Folder browser. Hidden while searching, because search deliberately
           spans every folder and a breadcrumb would then be misleading. */}
       {!isSearching && (
@@ -411,7 +454,10 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
         </div>
       )}
 
-      {selectable && selectedIds!.size > 0 && (
+      {statusTabs}
+      {advancedFilters}
+      {batchActions}
+      {!batchActions && selectable && selectedIds!.size > 0 && (
         <div className="docs-cc__batch">
           <span className="docs-cc__batch-count">
             {selectedIds!.size} DOCUMENT{selectedIds!.size === 1 ? "" : "S"} SELECTED
@@ -428,18 +474,20 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
         </div>
       )}
 
-      <DataTable
-        columns={columns}
-        rows={filteredDocs}
-        onRowClick={onOpenDoc}
-        emptyMessage={
-          isSearching
-            ? "No documents match your search."
-            : currentFolderId
-              ? "This folder is empty."
-              : "No documents match your filters."
-        }
-      />
+      {documentContent ?? (
+        <DataTable
+          columns={columns}
+          rows={filteredDocs}
+          onRowClick={onOpenDoc}
+          emptyMessage={
+            isSearching
+              ? "No documents match your search."
+              : currentFolderId
+                ? "This folder is empty."
+                : "No documents match your filters."
+          }
+        />
+      )}
 
       <style>{`
         .docs-cc__batch {

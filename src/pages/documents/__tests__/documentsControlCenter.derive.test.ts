@@ -6,10 +6,10 @@ import {
   buildDocumentsSummary,
   buildFolderPath,
   scopeDocsToFolder,
-  filterDocsForCommandUi,
+  filterDocuments,
   planFolderDeletion,
 } from "../documentsControlCenter.derive";
-import type { CommandUiFilterInput, DocumentRecord, FolderRecord } from "../documentsControlCenter.derive";
+import type { DocumentFilterInput, DocumentRecord, FolderRecord } from "../documentsControlCenter.derive";
 
 function isoOffset(offsetDays: number): string {
   const d = new Date();
@@ -166,7 +166,7 @@ describe("buildDocumentsSummary", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Folder scoping (command_ui folder browsing)
+// Folder scoping and canonical Documents filtering
 // ---------------------------------------------------------------------------
 const FOLDERS: FolderRecord[] = [
   { id: "f1", name: "Structural", parent_folder_id: null },
@@ -215,48 +215,65 @@ describe("scopeDocsToFolder", () => {
   });
 });
 
-describe("filterDocsForCommandUi", () => {
+describe("filterDocuments", () => {
   const docs: DocumentRecord[] = [
     { id: "1", displayName: "Root Spec",  folder_id: null, category: "General",    status: "Approved",     uploadedDate: "2026-01-03" },
-    { id: "2", displayName: "Beam Plan",  folder_id: "f1", category: "Structural", status: "Under Review", uploadedDate: "2026-01-05" },
-    { id: "3", displayName: "Beam Detail", folder_id: "f1", category: "Structural", status: "Approved",    uploadedDate: "2026-01-04" },
+    { id: "2", displayName: "Beam Plan",  folder_id: "f1", category: "Structural", discipline: "Structural", status: "Under Review", uploadedDate: "2026-01-05" },
+    { id: "3", displayName: "Beam Detail", folder_id: "f1", category: "Structural", discipline: "Structural", status: "Approved",    uploadedDate: "2026-01-04" },
     { id: "4", displayName: "Site Grade", folder_id: "f4", category: "Civil",      status: "Approved",     uploadedDate: "2026-01-06" },
   ];
-  const base: CommandUiFilterInput = { docs, search: "", category: "All", statusTab: "all", currentFolderId: null };
+  const base: DocumentFilterInput = { docs, search: "", category: "All", statusTab: "all", currentFolderId: null };
 
   it("scopes to the current folder when not searching", () => {
-    expect(filterDocsForCommandUi(base).map((d) => d.id)).toEqual(["1"]);
-    expect(filterDocsForCommandUi({ ...base, currentFolderId: "f1" }).map((d) => d.id)).toEqual(["2", "3"]);
+    expect(filterDocuments(base).map((d) => d.id)).toEqual(["1"]);
+    expect(filterDocuments({ ...base, currentFolderId: "f1" }).map((d) => d.id)).toEqual(["2", "3"]);
   });
 
   it("searches across all folders, ignoring folder scope", () => {
-    const r = filterDocsForCommandUi({ ...base, currentFolderId: "f4", search: "beam" });
+    const r = filterDocuments({ ...base, currentFolderId: "f4", search: "beam" });
     expect(r.map((d) => d.id)).toEqual(["2", "3"]);
   });
 
   it("sorts newest-first by uploadedDate", () => {
-    const r = filterDocsForCommandUi({ ...base, search: "e" });
+    const r = filterDocuments({ ...base, search: "e" });
     expect(r.map((d) => d.id)).toEqual(["4", "2", "3", "1"]);
   });
 
   it("applies the category chip on top of folder scope", () => {
-    const r = filterDocsForCommandUi({ ...base, currentFolderId: "f1", category: "Structural" });
+    const r = filterDocuments({ ...base, currentFolderId: "f1", category: "Structural" });
     expect(r.map((d) => d.id)).toEqual(["2", "3"]);
-    expect(filterDocsForCommandUi({ ...base, currentFolderId: "f1", category: "Civil" })).toEqual([]);
+    expect(filterDocuments({ ...base, currentFolderId: "f1", category: "Civil" })).toEqual([]);
   });
 
   it("applies the status tab on top of folder scope", () => {
-    const r = filterDocsForCommandUi({ ...base, currentFolderId: "f1", statusTab: "Under Review" });
+    const r = filterDocuments({ ...base, currentFolderId: "f1", statusTab: "Under Review" });
     expect(r.map((d) => d.id)).toEqual(["2"]);
   });
 
   it("treats a missing category as Uncategorized", () => {
-    const r = filterDocsForCommandUi({
+    const r = filterDocuments({
       ...base,
       docs: [{ id: "x", folder_id: null }],
       category: "Uncategorized",
     });
     expect(r.map((d) => d.id)).toEqual(["x"]);
+  });
+
+  it("applies discipline and status filters while preserving the status tab override", () => {
+    const filtered = filterDocuments({
+      ...base,
+      currentFolderId: "f1",
+      activeFilters: { discipline: ["Structural"], status: ["Approved"] },
+    });
+    expect(filtered.map((d) => d.id)).toEqual(["3"]);
+
+    const tabOverride = filterDocuments({
+      ...base,
+      currentFolderId: "f1",
+      statusTab: "Under Review",
+      activeFilters: { status: ["Approved"] },
+    });
+    expect(tabOverride.map((d) => d.id)).toEqual(["2"]);
   });
 });
 
