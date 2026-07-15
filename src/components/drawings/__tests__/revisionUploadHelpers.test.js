@@ -7,6 +7,7 @@ vi.mock("@/lib/pdfSheetExtractor", () => ({
 }));
 
 import { extractSheetsFromPdf } from "@/lib/pdfSheetExtractor";
+import { validateRevisionLabel } from "@/lib/drawingUploadUtils";
 import {
   formatBytes,
   CHANGE_STYLE,
@@ -96,5 +97,16 @@ describe("buildRevisionSnapshot", () => {
 
   it("defaults notes to an empty string when the set has none", () => {
     expect(buildRevisionSnapshot({ revision: "A" }, "reference").notes).toBe("");
+  });
+});
+
+describe("validateRevisionLabel", () => {
+  it("accepts letter revisions before IFC and numeric revisions after IFC", () => {
+    expect(validateRevisionLabel("Rev B", "OFA").ok).toBe(true);
+    expect(validateRevisionLabel("IFC Rev 2", "IFC").ok).toBe(true);
+  });
+
+  it("rejects a letter revision after IFC", () => {
+    expect(validateRevisionLabel("Rev C", "Released")).toMatchObject({ ok: false });
   });
 });

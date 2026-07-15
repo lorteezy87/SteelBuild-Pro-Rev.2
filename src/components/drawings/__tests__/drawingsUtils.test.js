@@ -3,6 +3,7 @@ import {
   isOverdue, daysLate, groupByDrawingSet,
   buildRfiMap, buildSubmittalsBySetId, filterDrawings, groupByDrawingSetName,
   computeExistingSetNames, buildDrawingSetMap, computeSelectedSetName, computeStagePipeline,
+  classifyDrawingStageMutation, getDrawingSetIdentity,
 } from "../drawingsUtils";
 
 const PAST = "2020-01-01";
@@ -161,6 +162,26 @@ describe("buildSubmittalsBySetId", () => {
       { id: "old", status: "OFA", drawing_set_ids: ["s"] },
     ], TERMINAL);
     expect(map["s"]).toEqual({ total: 2, open: 2, latestStatus: "BFA", latestId: "new" });
+  });
+});
+
+describe("drawing workflow authority helpers", () => {
+  it("blocks direct stage writes for sets linked to a submittal", () => {
+    expect(classifyDrawingStageMutation(
+      { drawing_set_id: "set-1" },
+      "IFC",
+      { "set-1": { total: 1, latestStatus: "Under Review" } },
+    )).toMatchObject({ kind: "submittal", allowed: false });
+  });
+
+  it("allows constrained legacy recovery when no submittal is linked", () => {
+    expect(classifyDrawingStageMutation({ drawing_set_id: "set-2" }, "IFA", {}))
+      .toMatchObject({ kind: "legacy-recovery", allowed: true });
+  });
+
+  it("uses FK identity before legacy name identity", () => {
+    expect(getDrawingSetIdentity({ drawing_set_id: "set-3", drawing_set_name: "Same" })).toBe("id:set-3");
+    expect(getDrawingSetIdentity({ drawing_set_name: " Same " })).toBe("name:Same");
   });
 });
 

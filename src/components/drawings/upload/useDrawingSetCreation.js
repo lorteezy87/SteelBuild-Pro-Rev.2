@@ -1,4 +1,5 @@
 import { entities } from "@/api/supabaseClient";
+import { invalidateEntities } from "@/services/cacheRegistry";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 import { withDrawingSetNumberMetadata } from "@/lib/drawingSetOrdering";
@@ -38,41 +39,40 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
 
       let parentSetId = null;
       let parentSetMetadata = null;
-      try {
-        // First check active (non-deleted) sets
-        const existing = await entities.DrawingSet.filter({
+      // First check active (non-deleted) sets
+      const existing = await entities.DrawingSet.filter({
           project_id: activeProject?.id,
           set_name:   resolvedSetName,
-        });
-        if (Array.isArray(existing) && existing.length > 0) {
-          parentSetId = existing[0].id;
-          parentSetMetadata = existing[0].metadata;
-        }
+      });
+      if (Array.isArray(existing) && existing.length > 0) {
+        parentSetId = existing[0].id;
+        parentSetMetadata = existing[0].metadata;
+      }
 
         // If none found, check for soft-deleted sets and restore them.
         // The DB unique index covers ALL rows (including is_deleted=true),
         // so creating a new row with the same name would violate the constraint.
-        if (!parentSetId) {
-          const deleted = await entities.DrawingSet.filter({
+      if (!parentSetId) {
+        const deleted = await entities.DrawingSet.filter({
             project_id: activeProject?.id,
             set_name:   resolvedSetName,
             is_deleted:  true,
+        });
+        if (Array.isArray(deleted) && deleted.length > 0) {
+          parentSetId = deleted[0].id;
+          parentSetMetadata = deleted[0].metadata;
+          // Restore the soft-deleted row
+          await entities.DrawingSet.update(parentSetId, {
+            is_deleted: false,
+            deleted_at: null,
           });
-          if (Array.isArray(deleted) && deleted.length > 0) {
-            parentSetId = deleted[0].id;
-            parentSetMetadata = deleted[0].metadata;
-            // Restore the soft-deleted row
-            await entities.DrawingSet.update(parentSetId, {
-              is_deleted: false,
-              deleted_at: null,
-            });
-          }
         }
+      }
 
         // Refresh the parent's metadata to reflect this upload
-        if (parentSetId) {
-          try {
-            await entities.DrawingSet.update(parentSetId, {
+      if (parentSetId) {
+        try {
+          await entities.DrawingSet.update(parentSetId, {
               upload_batch_id: batchId,
               revision:        meta.revision || "",
               issued_date:     meta.issueDate || null,
@@ -83,11 +83,8 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
               updated_at:      new Date().toISOString(),
             });
           } catch (updErr) {
-            console.warn("Could not refresh existing drawing_set:", updErr);
-          }
+            throw new Error(`Could not update drawing set metadata: ${updErr?.message || "unknown error"}`);
         }
-      } catch (lookupErr) {
-        console.warn("DrawingSet lookup failed, will create new:", lookupErr);
       }
 
       if (!parentSetId) {
@@ -287,11 +284,9 @@ export function useDrawingSetCreation({ meta, activeProject, fileResults, upload
         setProcessError(`${failedRows} sheet(s) failed to save. ${createdRows} created successfully.`);
       }
 
-      // The sync_drawing_set_counts() DB trigger auto-updates the parent
-      // aggregate counts, so we just need to refresh the UI caches.
-      qc.invalidateQueries({ queryKey: ["drawings"] });
-      qc.invalidateQueries({ queryKey: ["drawing_sets"] });
-      qc.invalidateQueries({ queryKey: ["drawing-sets"] }); // hub/FabRelease spelling
+      // The sync_drawing_set_counts() DB trigger updates the parent aggregate;
+      // wait for every registered drawing family before reporting completion.
+      await invalidateEntities(qc, ["drawing", "drawingSet", "submittal"], activeProject?.id);
       setStep(5);
       if (onComplete) onComplete();
     } catch (err) {
