@@ -220,3 +220,35 @@ engineering handoff.
   hardening and legal-review gates are closed.
 - [ ] No production deployment, migration application, or production mutation
   is implied by this checklist.
+
+## Batch 43A prerequisite status
+
+- [x] Approved candidate and isolated Vercel/Supabase staging identities were
+  verified read-only.
+- [x] Staging migration history was compared; it ends at
+  `20260703191034_hard_erasure_rpcs`.
+- [ ] Current staging backup identifier, timestamp/restore point, checksum or
+  verified custom-format dump, retention, and restore-read evidence recorded.
+- [ ] Six approved feature-flag migrations applied and postconditions verified.
+- [ ] All eight Edge Functions deployed/configured and secret names verified.
+- [ ] Staging Vercel environment values independently verified to point at the
+  staging Supabase ref.
+- [ ] Dedicated Organization A/B identities and non-production workflow
+  fixtures provisioned.
+- [ ] Storage cross-tenant denial and signed-URL behavior tested.
+- [ ] Staging smoke matrix executed.
+
+### Recommended production branch protection (not applied)
+
+- Require a pull request before merge with at least one approving review.
+- Require the blocking `Lint + Typecheck + Test + Build` check to pass.
+- Keep `Dependency audit (advisory)` informational until its severity and
+  remediation policy are explicitly approved.
+- Dismiss stale approvals, require conversation resolution, block force pushes,
+  and block branch deletion.
+- Include administrators in the protection rule; any emergency bypass must be a
+  temporary, owner-approved, auditable change.
+
+Batch 43A remains blocked by backup evidence, staging environment/secret
+verification, Edge Function parity, fixture provisioning, and smoke execution.
+No repository settings were changed.
