@@ -334,3 +334,7 @@ Deployment-check classification:
 Runtime status remains incomplete. Direct unauthenticated requests to the protected preview returned Vercel fallback/login content rather than the application, so bundle target, placeholder absence, runtime request, manifest, service-worker, WASM, and lazy-route checks are not marked passed. A browser session with access to the protected preview is required.
 
 The physical staging database backup identifier remains `15 Jul 2026 05:54:28 UTC`. Do not promote the preview, apply migrations, or deploy Edge Functions until browser runtime checks and required staging secret-name/function readiness checks are complete.
+
+## Batch 43B Edge Function secret evidence update
+
+Owner evidence confirms that staging has no custom Edge Function secrets. The exact per-function deployment order, minimum custom secret set, optional-secret behavior, smoke requests, rollback anchors, and missing-secret matrix are maintained in [PHASE_0_EDGE_FUNCTION_SECRET_MATRIX.md](PHASE_0_EDGE_FUNCTION_SECRET_MATRIX.md). Only `account-delete` is currently deployed; it must not be invoked. The Supabase dashboard technical-issue and outstanding-invoice notices remain external environment conditions. Batch 43B remains owner-blocked.
