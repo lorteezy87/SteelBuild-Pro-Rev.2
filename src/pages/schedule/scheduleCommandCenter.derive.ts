@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Schedule Command Center (command_ui flag).
+ * Pure derivations for the canonical Schedule Command Center.
  * No React, no network. Reuses canonical helpers from the schedule layer
  * so the command-center KPIs compute identically to what the Gantt and
  * Task List already show.

@@ -1,21 +1,21 @@
 /**
- * ScheduleCommandCenter — presentation-only wrapper.
+ * ScheduleCommandCenter — canonical Schedule page shell.
  *
  * Renders the Command UI kit chrome (hero + KPI strip + 3 decision panels +
- * filter bar) ABOVE the existing schedule body, which is passed as `children`.
+ * schedule actions) ABOVE the existing schedule body, which is passed as
+ * `children`.
  *
  * This component is WRITE-ONLY for chrome. It owns no state, fires no
  * mutations, and does not touch ScheduleGantt, reparentTasks, or any
  * schedule data logic. All data/state/mutations stay in Schedule.tsx.
  */
-import { useMemo, type ReactNode } from "react";
-import { CalendarRange, Sparkles, ListPlus } from "lucide-react";
+import { useMemo, useRef, type ReactNode } from "react";
+import { CalendarDays, CalendarRange, Download, ListPlus, Plus, Sparkles, Upload } from "lucide-react";
 import "@/styles/command.css";
 import {
   PageHero,
   KpiStrip,
   DecisionPanel,
-  FilterBar,
   useCommandSkin,
   Pill,
 } from "@/components/command";
@@ -41,20 +41,6 @@ function fmtDate(dateStr: string | null | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
-// Phase chip labels for the filter bar
-// ---------------------------------------------------------------------------
-
-const PHASE_LABELS = [
-  "Pre-Construction",
-  "Detailing",
-  "Procurement",
-  "Fabrication",
-  "Delivery",
-  "Installation",
-  "Closeout",
-];
-
-// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
@@ -65,22 +51,26 @@ export interface ScheduleCommandCenterProps {
   tasks: TaskRecord[];
   /** Pre-computed summary. If omitted, computed from `tasks` via useMemo. */
   summary?: ScheduleSummary;
-  /** Search string for the filter bar. */
-  search: string;
-  onSearch: (v: string) => void;
-  /** Currently active phase filter key (or "all"). */
-  phaseFilter: string;
-  onPhaseFilter: (phase: string) => void;
   /** Open the add-task modal. */
   onAddTask: () => void;
-  /** Open the bulk add-tasks modal. Omitted → the Bulk Add button is hidden. */
-  onBulkAdd?: () => void;
-  /** Open the WBS Builder modal. Omitted → the WBS Builder button is hidden. */
-  onWbsBuilder?: () => void;
+  /** Open the bulk add-tasks modal. */
+  onBulkAdd: () => void;
+  /** Open the WBS Builder modal. */
+  onWbsBuilder: () => void;
+  /** Open the hidden Microsoft Project XML file input. */
+  onImportMpp: () => void;
+  importing: boolean;
+  /** Export the effective schedule to calendar format. */
+  onExportIcs: () => void;
+  /** Export the visible Gantt to PDF. */
+  onExportPdf: () => void;
+  exportingPdf: boolean;
+  projectAvailable: boolean;
+  hasTasks: boolean;
+  view: string;
+  fileInput?: ReactNode;
   /** Open/select a task for detail (used by decision panel rows). */
   onOpenTask: (task: TaskRecord) => void;
-  /** Scroll the existing schedule body into view. */
-  onViewAll?: () => void;
   /** Project health_status string — shown in hero stat card. */
   projectHealth?: string | null;
   /** Overall schedule percent complete for hero stat. */
@@ -98,15 +88,19 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
     projectName,
     tasks,
     summary: summaryProp,
-    search,
-    onSearch,
-    phaseFilter,
-    onPhaseFilter,
     onAddTask,
     onBulkAdd,
     onWbsBuilder,
+    onImportMpp,
+    importing,
+    onExportIcs,
+    onExportPdf,
+    exportingPdf,
+    projectAvailable,
+    hasTasks,
+    view,
+    fileInput,
     onOpenTask,
-    onViewAll,
     projectHealth,
     pctComplete,
     children,
@@ -188,12 +182,9 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
   ];
 
   // ── Scroll helper ─────────────────────────────────────────────────────────
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   function scrollToBody() {
-    if (onViewAll) {
-      onViewAll();
-      return;
-    }
-    document.querySelector(".sched-cc__body")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    bodyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -307,61 +298,74 @@ export default function ScheduleCommandCenter(props: ScheduleCommandCenterProps)
         </DecisionPanel>
       </div>
 
-      <FilterBar
-        search={search}
-        onSearch={onSearch}
-        searchPlaceholder="Search tasks, phases, WBS, resources…"
-        secondaryActions={
-          <>
-            {onWbsBuilder ? (
-              <button
-                type="button"
-                className="cmd-btn cmd-btn--ghost"
-                onClick={onWbsBuilder}
-                title="WBS Builder — generate a work breakdown structure from a short scope-of-work description"
-              >
-                <Sparkles size={14} /> WBS Builder
-              </button>
-            ) : null}
-            {onBulkAdd ? (
-              <button
-                type="button"
-                className="cmd-btn cmd-btn--ghost"
-                onClick={onBulkAdd}
-                title="Bulk Add — paste or enter many tasks at once"
-              >
-                <ListPlus size={14} /> Bulk Add
-              </button>
-            ) : null}
-          </>
-        }
-        primaryLabel="Add Task"
-        onPrimary={onAddTask}
-        filters={
-          <>
-            <button
-              type="button"
-              className={`cmd-chip-btn${phaseFilter === "all" ? " is-active" : ""}`}
-              onClick={() => onPhaseFilter("all")}
-            >
-              All Phases
-            </button>
-            {PHASE_LABELS.map((ph) => (
-              <button
-                key={ph}
-                type="button"
-                className={`cmd-chip-btn${phaseFilter === ph ? " is-active" : ""}`}
-                onClick={() => onPhaseFilter(ph)}
-              >
-                {ph}
-              </button>
-            ))}
-          </>
-        }
-      />
+      <div className="sched-cc__actionbar" role="toolbar" aria-label="Schedule actions">
+        <div
+          className="sched-cc__action-group"
+          aria-label="Import and export actions"
+          style={{ display: "flex", gap: 6, alignItems: "center", paddingRight: 10, borderRight: "1px solid var(--divider)", marginRight: 4 }}
+        >
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            disabled={!projectAvailable || importing}
+            onClick={onImportMpp}
+            title="Import Microsoft Project XML"
+          >
+            <Upload size={14} /> {importing ? "Importing..." : "Import MS Project"}
+          </button>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            disabled={!projectAvailable || !hasTasks}
+            onClick={onExportIcs}
+            title="Download .ics for Outlook, Teams, or Google Calendar"
+          >
+            <CalendarDays size={14} /> Export ICS
+          </button>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            disabled={!projectAvailable || !hasTasks || view !== "gantt" || exportingPdf}
+            onClick={onExportPdf}
+            title={view !== "gantt" ? "Switch to the Gantt view to export" : "Export the Gantt chart as a PDF for distribution"}
+          >
+            <Download size={14} /> {exportingPdf ? "Exporting..." : "Export PDF"}
+          </button>
+        </div>
+        <div className="sched-cc__action-group" aria-label="Task actions" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            disabled={!projectAvailable}
+            onClick={onWbsBuilder}
+            title="Generate a WBS from a short scope-of-work description"
+          >
+            <Sparkles size={14} /> WBS Builder
+          </button>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            disabled={!projectAvailable}
+            onClick={onBulkAdd}
+            title="Bulk add schedule tasks"
+          >
+            <ListPlus size={14} /> Bulk Add
+          </button>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--primary"
+            disabled={!projectAvailable}
+            onClick={onAddTask}
+            title="Add a schedule task"
+          >
+            <Plus size={14} /> Add Task
+          </button>
+        </div>
+        {fileInput}
+      </div>
 
       {/* The existing schedule body: view tabs + Gantt/lookahead/list switch */}
-      <div className="sched-cc__body">
+      <div ref={bodyRef} className="sched-cc__body">
         {children}
       </div>
     </div>

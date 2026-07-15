@@ -1,7 +1,5 @@
-// Phase-filter KPI tile row for the Schedule page. Extracted verbatim from
-// Schedule.tsx, where it was byte-identical in both the command_ui and the
-// legacy return paths. One click-to-filter tile per lifecycle phase, plus an
-// "ALL PHASES" tile.
+// Phase-filter KPI tile row for the canonical Schedule workspace. One
+// click-to-filter tile per lifecycle phase, plus an "ALL PHASES" tile.
 import type { ComponentType, PropsWithChildren } from "react";
 import { PHASES } from "@/utils/phases";
 import { KpiTile as KpiTileRaw } from "@/components/design-system";
