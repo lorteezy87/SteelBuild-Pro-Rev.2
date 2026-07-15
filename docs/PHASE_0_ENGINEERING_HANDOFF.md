@@ -280,3 +280,34 @@ are external or owner-controlled:
 No migration, RLS policy, Edge Function, production configuration, or source
 workflow was changed. The final Batch 41 commit SHA is reported in the delivery
 record after commit; all external findings remain visibly open.
+
+## Batch 42 staging-candidate preparation
+
+Batch 42 records a staging execution plan without deploying. The preparation
+base is `a86c18ffcf00359b7a798b9be5822c18199565c7`; the final documentation
+commit SHA must be captured with `git rev-parse HEAD` and used as the immutable
+promotion identity. The application version is `2.1.1`, and CI must provide the
+exact commit SHA as `VITE_APP_VERSION` for the staging build.
+
+The accepted Batch 41 Storage disposition is narrow: the available evidence
+does not show an active leak in the current single-tenant application, so the
+finding may proceed as a staging verification item. It is not resolved. Legacy
+flat-object policy and reference verification remains a hard gate before
+organization #2 and is paired with the legal-review gate.
+
+The staging plan, migration manifest, Edge Function manifest, redacted
+environment matrix, smoke matrix, and rollback decisions are in:
+
+- [`docs/PHASE_0_STAGING_PLAN.md`](PHASE_0_STAGING_PLAN.md)
+- [`docs/runbooks/staging-setup.md`](runbooks/staging-setup.md)
+- [`docs/runbooks/staging-smoke-test.md`](runbooks/staging-smoke-test.md)
+- [`docs/runbooks/rollback.md`](runbooks/rollback.md)
+
+Repository gates passed at the preparation base: npm ci in an isolated
+directory, lint, all five typecheck gates, 251 Vitest files with 2,968 tests,
+production build, bundle report, and npm audit with zero vulnerabilities. The
+local runtime was Node `v24.14.0`/npm `11.11.1` on Windows; CI uses Node 20.
+Authenticated staging smoke, migration application, Edge Function deployment,
+Storage verification, backup/restore, and production approval remain
+unchecked external gates. No deployment, merge, migration application,
+production data mutation, or remote configuration change occurred.

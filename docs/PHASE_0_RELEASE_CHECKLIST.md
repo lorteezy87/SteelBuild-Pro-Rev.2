@@ -159,3 +159,64 @@ Batch 41 found no reproducible local P0 defect and made no source or remote
 configuration change. Documentation does not mark any of these findings
 resolved; statuses are `requires staging` or `blocked` as recorded in the
 engineering handoff.
+
+## Batch 42 staging-candidate checklist
+
+### Repository-controlled gates
+
+- [x] Branch is `agent/handoff-cleanup`; PR #77 remains open and Draft.
+- [x] Exact source SHA, application version, CI build timestamp rule, and
+  expected staging projects are defined in `docs/PHASE_0_STAGING_PLAN.md`.
+- [x] `npm ci`, lint, TypeScript, JavaScript, strict, noImplicitAny, full
+  Vitest, production build, bundle report, and production dependency audit have
+  passed at the preparation base.
+- [x] No credentials or secret values are included in the staging documents.
+- [x] `command_ui` is documented as retired and is not a staging presentation
+  switch.
+- [x] Legacy flat Storage isolation is accepted for the current single-tenant
+  candidate only; it remains a hard gate before organization #2 and legal
+  review.
+
+### Staging configuration and database
+
+- [ ] Separate Vercel staging project and Git auto-deploy-off setting verified.
+- [ ] Separate Supabase staging project, database, Auth users, Storage, RLS,
+  and project-scoped test fixtures verified.
+- [ ] Staging environment matrix populated through secret stores without
+  printing values.
+- [ ] Six PR #77 feature-flag migrations verified against staging migration
+  history and applied in version order.
+- [ ] Feature-flag before/after values confirm enabled and user overrides were
+  not cleared.
+- [ ] Generated types, RPCs, RLS, and schema cache verified against staging.
+- [ ] Legacy Storage objects, references, and policy behavior verified for the
+  current single-tenant candidate.
+
+### Edge Functions and flags
+
+- [ ] Eight Edge Functions plus `_shared` deployed or confirmed at the
+  candidate-compatible revisions in staging.
+- [ ] JWT mode, CORS, secrets, quotas, kill switches, and RPC dependencies
+  verified per the Edge Function manifest.
+- [ ] Retained operational flags remain disabled unless their dedicated smoke
+  case is approved; `account_deletion` remains disabled.
+
+### Smoke, backup, and rollback
+
+- [ ] Dedicated staging users and isolated fixtures provisioned.
+- [ ] `docs/runbooks/staging-smoke-test.md` executed with evidence for ST-01
+  through ST-25, including blocked/clean/authorized fabrication release.
+- [ ] Accessibility smoke completed for login, navigation, critical forms,
+  tables, dialogs, and focus restoration.
+- [ ] Staging backup and restore rehearsal completed with measured RTO/RPO.
+- [ ] Frontend, Edge Function, database forward-fix, flag, service-worker,
+  and staged-data rollback decisions recorded.
+
+### Production approval
+
+- [ ] Product, security, operations, and legal owners approve the staging
+  evidence.
+- [ ] Organization #2 milestone remains blocked until the accepted Storage
+  hardening and legal-review gates are closed.
+- [ ] No production deployment, migration application, or production mutation
+  is implied by this checklist.

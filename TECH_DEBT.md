@@ -495,3 +495,17 @@ Remaining:
   Submittals live in `src/__tests__/components/`. Default vitest env
   stays `node` for pure-helper suites; component tests opt into jsdom
   with `// @vitest-environment jsdom`. See `ARCHITECTURE.md` Testing.
+
+## Batch 42 accepted staging disposition
+
+- **B41-P1-001 legacy flat Storage isolation:** accepted for the current
+  single-tenant staging candidate because the available evidence does not show
+  an active leak. This is not a resolution. Storage policy/object verification
+  remains required before organization #2 and is paired with the legal-review
+  gate.
+- **B41-P1-002 through B41-P1-006:** remain staging or owner-controlled gates
+  for migration alignment, Edge Function deployment/configuration, critical
+  smoke coverage, branch protection, and backup/rollback readiness.
+- Batch 42 adds execution plans and evidence requirements only. It does not
+  deploy, apply migrations, modify remote configuration, or change application
+  behavior.
