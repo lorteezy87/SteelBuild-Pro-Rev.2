@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { computePhaseWbs, generateWBS, sanitizeScheduleTaskUpdatePayload } from "../wbs";
+import { normalizeSchedulePhase } from "../schedulePageHelpers";
 import { derivePhaseFromHierarchy, deriveMppDependencies, inferTaskType, parseMsProjectXml } from "../mppImport";
 import type { ParsedMppTask, ScheduleTask } from "../types";
 
@@ -25,6 +26,14 @@ describe("generateWBS", () => {
 
   it("falls back to 0.<n> for an unknown phase", () => {
     expect(generateWBS("Nonexistent", [])).toBe("0.1");
+  });
+});
+
+describe("normalizeSchedulePhase", () => {
+  it("accepts canonical phases and falls back invalid URL values to all", () => {
+    expect(normalizeSchedulePhase("Detailing")).toBe("Detailing");
+    expect(normalizeSchedulePhase(null)).toBe("all");
+    expect(normalizeSchedulePhase("not-a-phase")).toBe("all");
   });
 });
 

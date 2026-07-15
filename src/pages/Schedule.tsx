@@ -1,12 +1,10 @@
 import { useRef, useMemo, useState } from "react";
-import type { ComponentType, PropsWithChildren } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { PHASES } from "@/utils/phases";
 import { batchProcess } from "@/utils/batchProcess";
-import { CommandBar as CommandBarRaw, Button as ButtonRaw } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { addDaysIso, applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
@@ -17,18 +15,12 @@ import { computePhaseWbs, generateWBS, sanitizeScheduleTaskUpdatePayload } from 
 import { PHASE_NAME_MAP, derivePhaseFromHierarchy, deriveMppDependencies, inferTaskType, parseMsProjectXml } from "./schedule/mppImport";
 import { reparentTasks } from "@/lib/schedule/reparentTasks";
 import { computeBulkParentOptions, filterEditableTasks } from "./schedule/scheduleTaskHelpers";
+import { normalizeSchedulePhase } from "./schedule/schedulePageHelpers";
 import type { ScheduleTask } from "./schedule/types";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import ScheduleCommandCenter from "./schedule/ScheduleCommandCenter";
 import ScheduleBody from "./schedule/ScheduleBody";
 import { useScheduleModals } from "./schedule/useScheduleModals";
 import { useTaskSelection } from "./schedule/useTaskSelection";
-
-// The design-system primitives are still .jsx; these casts are removable
-// once the shared layer is typed.
-type AnyProps = PropsWithChildren<Record<string, unknown>>;
-const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
-const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
@@ -39,11 +31,7 @@ export default function Schedule() {
   // mini-Gantt) deep-linked with ?phase=Detailing. If the incoming
   // value doesn't match a known phase we silently fall back to "all"
   // so a typo'd URL doesn't leave the page empty.
-  const initialPhase = (() => {
-    const q = searchParams.get("phase");
-    if (!q) return "all";
-    return PHASES.includes(q) ? q : "all";
-  })();
+  const initialPhase = normalizeSchedulePhase(searchParams.get("phase"));
   const [phaseFilter, setPhaseFilter] = useState(initialPhase);
   const [selectedTask, setSelectedTask] = useState<ScheduleTask | null>(null);
   const [ganttFocus, setGanttFocus] = useState<any>(null);
@@ -521,6 +509,47 @@ export default function Schedule() {
     }
   };
 
+  const handleExportIcs = () => {
+    if (!projectId || scheduleTasks.length === 0) return;
+    // Use the effective-date overlay so calendar entries match where the
+    // Gantt actually places each task. Stored dates would put cascaded tasks
+    // on the wrong week.
+    const events = tasksWithEffective
+      .map((t) => scheduleTaskToEvent(t, selectedProject?.project_number || ""))
+      .filter(Boolean);
+    if (events.length === 0) {
+      toast.info("No tasks with dates to export.");
+      return;
+    }
+    downloadIcs({
+      filename: `schedule-${selectedProject?.project_number || "project"}.ics`,
+      calendarName: `${selectedProject?.name || "Project"} — Schedule`,
+      events,
+    });
+    toast.success(`Exported ${events.length} tasks to calendar`);
+  };
+
+  const handleExportPdf = async () => {
+    if (!projectId || scheduleTasks.length === 0 || view !== "gantt" || exportingPdf) return;
+    setExportingPdf(true);
+    const t = toast.loading("Generating PDF…");
+    try {
+      const { exportGanttToPdf } = await import("@/lib/exportGanttPdf");
+      const { pageCount, filename } = await exportGanttToPdf({
+        project: selectedProject,
+      } as any);
+      toast.success(
+        `Exported ${filename}${pageCount > 1 ? ` (${pageCount} pages)` : ""}`,
+        { id: t },
+      );
+    } catch (err: any) {
+      console.error("[Schedule] PDF export failed:", err);
+      toast.error(`PDF export failed: ${err?.message || "unknown error"}`, { id: t });
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const bulkUpdateStatus = (status: string) => {
     const ids = Array.from(selectedIds);
     if (!ids.length || bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending) return;
@@ -575,22 +604,9 @@ export default function Schedule() {
     return m;
   }, [scheduleTasks]);
 
-  // ── Command UI flag ──────────────────────────────────────────────────────
-  // Gate: when command_ui is enabled, wrap the existing body inside the
-  // Schedule Command Center shell. All data, state, and mutations are shared
-  // — we only add chrome above the existing body; the body JSX is moved
-  // verbatim into the children slot (see flag-branch below).
-  const commandUi = useFlag("command_ui");
-
-  // Task-name search for the command center filter bar.
-  // Only wired when commandUi is true; unused in the flag-off path.
-  const [ccSearch, setCcSearch] = useState("");
-
-  // Shared props for the schedule body. The body JSX (phase-filter tiles →
-  // bulk action toolbar) is identical between the command_ui path and the
-  // legacy path except for the bulk "Set Parent" modal backdrop, which each
-  // path supplies via `bulkParentBackdrop`. Everything else — data, state,
-  // mutations, handlers — is threaded through unchanged.
+  // Shared props for the canonical operational body. Schedule.tsx remains the
+  // logic boundary while ScheduleBody owns the Gantt, lookahead, and task-list
+  // workflows without duplicating repository or mutation logic.
   const bodyProps = {
     phaseCounts,
     tasksWithEffective,
@@ -638,166 +654,42 @@ export default function Schedule() {
     confirmBulkDelete,
   };
 
-  // ── Command UI flag-branch ───────────────────────────────────────────────
-  // When command_ui is enabled, the shared body renders inside the
-  // ScheduleCommandCenter shell. reparentTasks.js and ScheduleGantt.jsx are
-  // untouched — this branch only adds the ScheduleCommandCenter wrapper.
-  if (commandUi) {
-    return (
-      <ScheduleCommandCenter
-        projectName={selectedProject?.name || ""}
-        tasks={tasksWithEffective as any}
-        search={ccSearch}
-        onSearch={setCcSearch}
-        phaseFilter={phaseFilter}
-        onPhaseFilter={setPhaseFilter}
-        onAddTask={() => setShowAddTask(true)}
-        onBulkAdd={() => setShowBulkAdd(true)}
-        onWbsBuilder={() => setShowWbsBuilder(true)}
-        onOpenTask={(task) => { setSelectedTask(task as ScheduleTask); setShowDrawer(true); }}
-        projectHealth={selectedProject?.health_status ?? null}
-        pctComplete={undefined}
-      >
-        <ScheduleBody {...bodyProps} bulkParentBackdrop="rgba(1,4,10,0.6)" />
-      </ScheduleCommandCenter>
-    );
-  }
-
   return (
-    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      {/* CommandBar */}
-      <div
-        style={{
-          flexShrink: 0,
-          padding: "16px 24px 0",
-          position: "sticky",
-          top: 0,
-          zIndex: 40,
-          background: "linear-gradient(180deg, var(--bg-page) 0%, color-mix(in srgb, var(--bg-page) 92%, transparent) 100%)",
-          backdropFilter: "blur(18px)",
-        }}
-      >
-        <CommandBar
-          eyebrow={`PROJECT MANAGEMENT · ${(selectedProject?.name || "ALL PROJECTS").toUpperCase()}`}
-          title="Schedule"
-          count={scheduleTasks.length}
-          unit=" TASKS"
-          subtitle="Project lifecycle · Pre-Construction → Closeout"
-        >
-          {/* Import / Export group */}
-          <div style={{ display: "flex", gap: 6, alignItems: "center", paddingRight: 10, borderRight: "1px solid var(--divider)", marginRight: 4 }}>
-            <Button
-              variant="secondary"
-              icon="upload"
-              disabled={importing || !projectId}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {importing ? "IMPORTING…" : "IMPORT MPP"}
-            </Button>
-            <Button
-              variant="secondary"
-              icon="calendar"
-              disabled={!projectId || scheduleTasks.length === 0}
-              onClick={() => {
-                // Use the effective-date overlay so calendar entries match
-                // where the Gantt actually places each task — exporting
-                // stored dates would put events on the wrong week for any
-                // task pulled forward by a predecessor cascade.
-                const events = tasksWithEffective
-                  .map((t) => scheduleTaskToEvent(t, selectedProject?.project_number || ""))
-                  .filter(Boolean);
-                if (events.length === 0) { toast.info("No tasks with dates to export."); return; }
-                downloadIcs({
-                  filename: `schedule-${selectedProject?.project_number || "project"}.ics`,
-                  calendarName: `${selectedProject?.name || "Project"} — Schedule`,
-                  events,
-                });
-                toast.success(`Exported ${events.length} tasks to calendar`);
-              }}
-              title="Download .ics for Outlook / Teams / Google Calendar"
-            >
-              EXPORT .ICS
-            </Button>
-            <Button
-              variant="secondary"
-              icon="download"
-              disabled={
-                !projectId ||
-                scheduleTasks.length === 0 ||
-                view !== "gantt" ||
-                exportingPdf
-              }
-              onClick={async () => {
-                setExportingPdf(true);
-                const t = toast.loading("Generating PDF…");
-                try {
-                  const { exportGanttToPdf } = await import("@/lib/exportGanttPdf");
-                  const { pageCount, filename } = await exportGanttToPdf({
-                    project: selectedProject,
-                  } as any);
-                  toast.success(
-                    `Exported ${filename}${pageCount > 1 ? ` (${pageCount} pages)` : ""}`,
-                    { id: t }
-                  );
-                } catch (err: any) {
-                  console.error("[Schedule] PDF export failed:", err);
-                  toast.error(`PDF export failed: ${err?.message || "unknown error"}`, { id: t });
-                } finally {
-                  setExportingPdf(false);
-                }
-              }}
-              title={
-                view !== "gantt"
-                  ? "Switch to the Gantt view to export"
-                  : "Export the Gantt chart as a PDF for distribution"
-              }
-            >
-              {exportingPdf ? "EXPORTING…" : "EXPORT PDF"}
-            </Button>
-          </div>
-          {/* AI tool */}
-          <Button
-            variant="secondary"
-            icon="sparkles"
-            disabled={!projectId}
-            onClick={() => setShowWbsBuilder(true)}
-            title="Generate a WBS from a short scope-of-work description — tasks are filed under the project's existing phases."
-          >
-            WBS BUILDER
-          </Button>
-          {/* Primary actions */}
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <Button
-              variant="outline"
-              icon="plus"
-              disabled={!projectId}
-              onClick={() => setShowBulkAdd(true)}
-            >
-              BULK ADD
-            </Button>
-            <Button
-              variant="primary"
-              icon="plus"
-              disabled={!projectId}
-              onClick={() => setShowAddTask(true)}
-            >
-              ADD TASK
-            </Button>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".mpp,.xml"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleImportMPP(f);
-            }}
-          />
-        </CommandBar>
-      </div>
-
+    <ScheduleCommandCenter
+      projectName={selectedProject?.name || ""}
+      tasks={tasksWithEffective as any}
+      onAddTask={() => setShowAddTask(true)}
+      onBulkAdd={() => setShowBulkAdd(true)}
+      onWbsBuilder={() => setShowWbsBuilder(true)}
+      onImportMpp={() => fileInputRef.current?.click()}
+      importing={importing}
+      onExportIcs={handleExportIcs}
+      onExportPdf={handleExportPdf}
+      exportingPdf={exportingPdf}
+      projectAvailable={Boolean(projectId)}
+      hasTasks={scheduleTasks.length > 0}
+      view={view}
+      onOpenTask={(task) => {
+        setSelectedTask(task as ScheduleTask);
+        setShowDrawer(true);
+      }}
+      projectHealth={selectedProject?.health_status ?? null}
+      pctComplete={undefined}
+      fileInput={(
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".mpp,.xml"
+          style={{ display: "none" }}
+          aria-label="Import Microsoft Project XML"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) handleImportMPP(file);
+          }}
+        />
+      )}
+    >
       <ScheduleBody {...bodyProps} bulkParentBackdrop="color-mix(in srgb, var(--bg-base) 60%, transparent)" />
-    </div>
+    </ScheduleCommandCenter>
   );
 }

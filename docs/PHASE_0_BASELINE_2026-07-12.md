@@ -322,4 +322,17 @@ Selective, in-house consolidation is preferred over a full rewrite. Phase 1 prio
 - Focused validation passed: 3 files and 29 tests covering existing Fab Release analytics/derive behavior plus view aliases, stage normalization, broad filtering, sequence filtering, allocator formatting/failure, and duplicate-creation guards.
 - Validation passed: `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, and `npm run typecheck:noimplicitany`. Existing grandfathered strict/null and noImplicitAny errors remained ignored by the repository ratchet; no new enforced errors were present.
 - Full suite passed: 247 test files and 2,944 tests. Production build passed with 4,320 transformed modules; the Fab Release chunk is 66.09 KB. Existing chunks larger than 500 KB still produce the established build warnings.
-- Batch 31 commit: this focused canonicalization commit; the exact SHA is reported in the handoff. PR #77 remains Draft. No deployment, merge, or PR readiness change occurred; unrelated worktree changes remained untouched.
+- Batch 31 commit: `561a09eb971c6c8ee628b48cb88be535466eced6`. PR #77 remains Draft. No deployment, merge, or PR readiness change occurred; unrelated worktree changes remained untouched.
+
+## Batch 32: Schedule canonicalization
+
+- Starting commit: `561a09eb971c6c8ee628b48cb88be535466eced6` (`refactor: make Fab Release canonical`).
+- `ScheduleCommandCenter` is now the sole unconditional Schedule presentation shell.
+- The legacy/classic Schedule branch, duplicate command UI search and phase controls, and feature-flag presentation split were removed.
+- Schedule data loading, mutations, import/export workflows, effective-date handling, hierarchy operations, Gantt/list/lookahead behavior, drawers, modals, permissions, and cache invalidation remain owned by `Schedule.tsx` and the existing scheduling domain helpers.
+- Header action parity is preserved for MS Project XML/MPP import, ICS export, PDF export, WBS Builder, Bulk Add, Add Task, hidden file input handling, and pending/disabled states.
+- Search and phase controls remain in the operational body/Gantt/task-list surfaces; the unconnected duplicate controls were removed from the canonical shell.
+- Before/after source measurements: `Schedule.tsx` 748 -> 643 lines; `ScheduleCommandCenter.tsx` 347 -> 353 lines. The command center grew only to retain the existing action surface while removing the duplicate branch.
+- Build chunk measurements: Schedule route 150.23 KB -> 149.30 KB; ScheduleGantt 74.95 KB -> 74.92 KB; 4,320 -> 4,321 transformed modules. Existing large-chunk warnings remain.
+- Batch 32 validation: focused Schedule suite 17 files / 193 tests before edits; focused canonical-shell suite 3 files / 54 tests after edits; broader Schedule suite 17 files / 196 tests after edits; lint, typecheck, JavaScript typecheck, strict typecheck, noImplicitAny check, and production build passed.
+- Batch 32 commit SHA will be recorded in the handoff after the focused commit is created.

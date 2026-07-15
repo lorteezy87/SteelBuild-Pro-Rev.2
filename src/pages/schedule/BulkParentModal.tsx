@@ -1,13 +1,9 @@
-// Bulk "Set Parent" picker modal for the Schedule page. Extracted from
-// Schedule.tsx, where the two return paths were identical EXCEPT the backdrop
-// `background` value (command_ui: "rgba(1,4,10,0.6)"; legacy:
-// "color-mix(in srgb, var(--bg-base) 60%, transparent)"). That single
-// byte-level difference is parameterized via the `backdrop` prop so each path
-// renders exactly what it did before.
+// Bulk "Set Parent" picker modal for the canonical Schedule workspace. The
+// backdrop is supplied by the page shell so this modal stays presentation-only.
 import type { ScheduleTask } from "./types";
 
 interface BulkParentModalProps {
-  /** Backdrop `background` CSS value — differs per render path. */
+  /** Backdrop `background` CSS value. */
   backdrop: string;
   count: number;
   options: ScheduleTask[];
