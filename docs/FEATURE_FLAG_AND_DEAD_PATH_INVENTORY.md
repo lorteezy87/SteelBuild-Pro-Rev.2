@@ -65,14 +65,27 @@ No implementation files were deleted in Batch 38. Candidate files were retained 
 
 | Evidence | Current behavior | Disposition | Follow-up |
 | --- | --- | --- | --- |
-| `src/components/dms/DocumentStorageSettings.jsx:23-24` | Google Drive and Dropbox provider options are disabled and labeled "Coming soon". | HIDE | Keep hidden until an authenticated provider integration is shipped. |
-| `src/components/dms/DocumentStorageSettings.jsx:435-436` | Folder Sync is a disabled button that reports "Folder sync is not available yet". | HIDE | Remove or hide the control until sync has a live write path. |
-| `src/api/client/functions.ts:82` | Generic dispatcher warns that unsupported Edge Function names are not implemented. Supported named cases remain live. | FINISH | Replace the open-ended fallback with a typed allowlist or remove unsupported callers after owner review. |
-| `src/components/email/EmailAccountSettings.jsx:190` | Direct Azure AD sign-in is explicitly labeled as requiring future app registration. | KEEP/HIDE | Product roadmap disclosure; do not present as an available connector. |
+| `src/components/dms/DocumentStorageSettings.jsx:23-24` | Google Drive and Dropbox provider options are disabled and labeled "Coming soon". | HIDE | Confirmed in the pre-existing local source state; keep hidden until an authenticated provider integration is shipped. The file was not modified in Batch 39 because it already contained unrelated local changes. |
+| `src/components/dms/DocumentStorageSettings.jsx:435-436` | Folder Sync is a disabled button that reports "Folder sync is not available yet". | HIDE | Confirmed in the pre-existing local source state; keep hidden until sync has a live write path. The file was not modified in Batch 39 because it already contained unrelated local changes. |
+| `src/api/client/functions.ts:82` | Generic dispatcher warned that unsupported Edge Function names were not implemented. Supported named cases remain live. | FINISH | Unsupported names now reject explicitly; no null fallback or false-success result remains. |
+| `src/components/email/EmailAccountSettings.jsx:190` | Direct Azure AD sign-in was exposed as a disabled control requiring future app registration. | HIDE | The unavailable selector and unreachable panel were removed. Restore only when Azure AD registration and a server-backed OAuth path exist. |
 | `src/components/drawings/upload/StepReview.jsx:163` | Scanned image PDFs cannot use AI text extraction and instruct the user to enter metadata manually. | KEEP | This is a valid capability limitation with a manual recovery path, not a dead action. |
 | `src/pages/Integrations.jsx:234,248` | Integration cards disclose coming-soon providers and available-now state. | KEEP/HIDE | Preserve truthful roadmap messaging; hide only if product chooses to remove roadmap cards. |
 
 No empty mutation handlers or new false-success controls were introduced by Batch 38. Existing HIDE/FINISH findings remain follow-up work and were not silently converted into completed features.
+
+## Batch 39 handling record
+
+- Starting commit: `f77a0a6bf0b1035f32220bda429c8366e9a3df7b` (`chore: retire command UI flag and inventory dead paths`).
+- Selected inventory rows: the two DMS HIDE rows, the unsupported-function FINISH row, and the unavailable Outlook OAuth HIDE row.
+- DMS HIDE rows were confirmed in the pre-existing local source state and left untouched to preserve unrelated worktree changes. They have no route, database, or data-retention impact.
+- The dispatcher now has an explicit supported switch and rejects unknown function names. `generateAlerts`, LLM proxy aliases, agent memory, and atomic sequence RPC behavior remain unchanged.
+- The email settings surface now exposes only Manual Forward and Power Automate. Existing account queries, create/update/delete mutations, cache invalidation, and webhook behavior remain unchanged.
+- Finished: 1. Hidden: 3, including 2 pre-satisfied DMS controls. Retired: 0. Compatibility routes changed: 0. Implementation files deleted: 0.
+- Focused tests added: `src/api/client/__tests__/functions.test.ts` and `src/components/email/__tests__/EmailAccountSettings.test.jsx`.
+- Validation passed: focused guard run covered 3 files and 3 tests; `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, `npm run typecheck:noimplicitany`, and `npm test -- --run` passed. The full suite passed with 251 test files and 2,968 tests; strict/noImplicitAny retained only the existing grandfathered ignored errors.
+- Production build passed with 4,282 transformed modules. Existing chunks larger than 500 kB remain warned by Vite.
+- Deferred: DMS source cleanup remains an owner-reviewed follow-up because the file was already locally modified before Batch 39; the truthful scanned-PDF limitation and Integrations roadmap disclosure remain KEEP.
 
 ## Evidence and follow-up rules
 
