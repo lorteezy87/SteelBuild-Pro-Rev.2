@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Fab Release Control Center (command_ui redesign).
+ * Pure derivations for the canonical Fab Release Control Center.
  * No React, no network. Reads outputs of buildFabReleaseMetrics() from
  * analytics.js — never re-derives fab logic here.
  *
