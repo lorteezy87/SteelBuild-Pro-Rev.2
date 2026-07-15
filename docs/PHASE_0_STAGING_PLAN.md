@@ -308,3 +308,22 @@ set/verify test-mode Stripe configuration. Redeployment remains a separate,
 explicitly approved action.
 
 **Batch 43B decision: BLOCKED.**
+
+## Batch 43B owner-provided backup evidence update
+
+Owner-provided evidence verifies the separate SteelBuild-Pro Staging project:
+
+- Supabase project: `SteelBuild-Pro Staging`
+- Supabase ref: `abbeavtbifuddtrifvae`
+- Evidence path: `/project/abbeavtbifuddtrifvae/database/backups/scheduled`
+- Database backup identifier: physical backup dated `15 Jul 2026 05:54:28 UTC`
+- Target: Supabase staging ref `abbeavtbifuddtrifvae`
+- Restore control: available in the Supabase dashboard; no restore was initiated or destructively tested
+- Earlier visible physical backups: 14 Jul, 13 Jul, and 12 Jul 2026
+- Migration precedence: the verified backup predates the proposed six migrations
+- Retention: the supplied evidence does not establish an exact retention period
+- Database restore readiness: dashboard-supported, not restore-tested
+- Storage rollback readiness: not established; Supabase database backups do not include Storage API objects, so restored database metadata would not restore deleted Storage objects
+- The `main / PRODUCTION` badge is the primary-branch designation inside this separate staging project and does not change the staging ref
+
+Vercel staging environment identity and required secret-name presence remain outstanding. Do not apply migrations or deploy Edge Functions until those checks are verified.
