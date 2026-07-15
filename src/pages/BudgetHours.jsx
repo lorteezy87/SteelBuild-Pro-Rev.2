@@ -24,13 +24,11 @@
 import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2, X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { entities } from "@/api/supabaseClient";
-import { OperationsPageShell, OpsActionButton } from "@/components/operations/OperationsPageShell";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { PRESET_LIST } from "@/lib/budgetHourPresets";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import { usePermissions } from "@/services/permissions";
 import { logActivity } from "@/services/auditLogger";
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -494,15 +492,13 @@ export default function BudgetHours() {
   const projectId = useProjectId();
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
-  const commandUi = useFlag("command_ui");
   const { can } = usePermissions();
   const [presetOpen, setPresetOpen] = useState(false);
-  // State used by both paths — the command_ui path reads these; the classic
-  // path ignores them. Declared unconditionally (no conditional hooks).
+  // Control-center filters remain page-owned so query and mutation state stays stable.
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [overBudgetOnly, setOverBudgetOnly] = useState(false);
-  // Scope-item create/edit modal + delete confirm (command_ui CRUD).
+  // Scope-item create/edit modal + delete confirm (canonical presentation CRUD).
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
   const [scopeEditTarget, setScopeEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -639,7 +635,7 @@ export default function BudgetHours() {
 
   const saveCell = (id, patch) => updateMut.mutate({ id, patch });
 
-  /* ── Scope-item modal CRUD (command_ui) ── */
+  /* ── Scope-item modal CRUD ── */
   const openCreateScope = () => {
     setScopeEditTarget(null);
     setScopeModalOpen(true);
@@ -673,8 +669,7 @@ export default function BudgetHours() {
     deleteMut.mutate(deleteTarget.id, { onSettled: () => setDeleteTarget(null) });
   };
 
-  /* ── Command UI branch ── */
-  if (commandUi) {
+  /* ── Canonical Budget Hours control center ── */
     // Apply search + category + over-budget filter for the DataTable.
     // Misses rows are always excluded from the table (they have their own panel).
     const commandFiltered = rows
@@ -763,332 +758,4 @@ export default function BudgetHours() {
         />
       </>
     );
-  }
-
-  /* ── Empty / loading states ── */
-  if (!projectId) {
-    return (
-      <div className="sb-dashboard-reference-page" style={{
-        padding: 32, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)",
-        textAlign: "center",
-      }}>
-        Select a project to track budget hours.
-      </div>
-    );
-  }
-
-  return (
-    <div className="sb-dashboard-reference-page">
-    <OperationsPageShell
-      eyebrow={activeProject?.project_number || "Budget Control"}
-      title="Budget Hours"
-      subtitle={`${activeProject?.name || "Project"} labor-hour command center: compare kickoff budget, current actuals, linked work packages, and misses before they become margin problems.`}
-      meta={[
-        { label: "Scope Items", value: rows.filter((r) => r.category !== "Misses").length },
-        { label: "Specialty", value: specialtyRows.length },
-        { label: "Variance", value: fmtPct(totalVarPct), color: varianceColor(totalVarPct) },
-        { label: "Actual / Budget", value: `${fmtHours(totalActual)} / ${fmtHours(totalBudget)}` },
-      ]}
-      metrics={[
-        { label: "Shop Budget", value: fmtHours(totals.sb), sub: "hours" },
-        { label: "Shop Actual", value: fmtHours(totals.sa), sub: fmtPct(shopVarPct), color: varianceColor(shopVarPct) },
-        { label: "Field Budget", value: fmtHours(totals.fb), sub: "hours" },
-        { label: "Field Actual", value: fmtHours(totals.fa), sub: fmtPct(fieldVarPct), color: varianceColor(fieldVarPct) },
-        { label: "Total Hours", value: `${fmtHours(totalActual)} / ${fmtHours(totalBudget)}`, sub: fmtPct(totalVarPct), color: varianceColor(totalVarPct) },
-      ]}
-      actions={(
-        <>
-          <OpsActionButton onClick={() => setPresetOpen(true)}>
-            Set Up From Template
-          </OpsActionButton>
-          <OpsActionButton variant="primary" onClick={addBlankRow} icon={<Plus size={13} />}>
-            Add Item
-          </OpsActionButton>
-        </>
-      )}
-    >
-      {isLoading && (
-        <div style={{ padding: 24, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
-          Loading…
-        </div>
-      )}
-
-      {!isLoading && rows.length === 0 && (
-        <div style={{
-          padding: 32,
-          background: "var(--bg-surface)",
-          border: "1px dashed var(--border-default)",
-          borderRadius: 8,
-          textAlign: "center",
-        }}>
-          <div style={{
-            fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-primary)", marginBottom: 6,
-          }}>
-            No budget-hour items yet.
-          </div>
-          <div style={{
-            fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 14,
-          }}>
-            Start with the Estimating Kickoff (Standard 12) preset, or add a single blank row.
-          </div>
-          <button
-            onClick={() => setPresetOpen(true)}
-            style={{
-              background: "var(--accent)", color: "var(--bg-base)", border: "none",
-              borderRadius: 6, padding: "8px 16px",
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-              cursor: "pointer", textTransform: "uppercase",
-            }}
-          >
-            Set Up From Template
-          </button>
-        </div>
-      )}
-
-      {/* Standard scope */}
-      {standardRows.length > 0 && (
-        <BudgetTable
-          title="Standard Scope"
-          rows={standardRows}
-          wpsById={wpsById}
-          onSave={saveCell}
-          onDelete={requestDeleteRow}
-          onMoveToSpecialty={(id) => updateMut.mutate({ id, patch: { is_specialty: true, category: "Specialty" } })}
-        />
-      )}
-
-      {/* Specialty items */}
-      {specialtyRows.length > 0 && (
-        <BudgetTable
-          title="Specialty Items"
-          rows={specialtyRows}
-          wpsById={wpsById}
-          onSave={saveCell}
-          onDelete={requestDeleteRow}
-          onMoveToStandard={(id) => updateMut.mutate({ id, patch: { is_specialty: false, category: "Standard" } })}
-        />
-      )}
-
-      {/* Add specialty button — only if standard exists, so the user can
-          start a "Specialty" group without touching the empty state. */}
-      {rows.filter((r) => r.category !== "Misses").length > 0 && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: -4 }}>
-          <button
-            onClick={() => {
-              const maxSort = Math.max(0, ...rows.map((r) => Number(r.sort_order) || 0));
-              createMut.mutate({
-                project_id: projectId,
-                category: "Specialty",
-                scope_item: "New Specialty Item",
-                sort_order: maxSort + 10,
-                is_specialty: true,
-                shop_hours_budget: 0,
-                shop_hours_actual: 0,
-                field_hours_budget: 0,
-                field_hours_actual: 0,
-                metadata: {},
-              });
-            }}
-            style={{
-              background: "transparent", border: "1px dashed var(--border-default)", borderRadius: 4,
-              padding: "6px 12px", color: "var(--text-muted)",
-              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-              cursor: "pointer", textTransform: "uppercase",
-            }}
-          >
-            + Add Specialty Item
-          </button>
-        </div>
-      )}
-
-      {/* Misses */}
-      {rows.length > 0 && (
-        <MissesPanel
-          projectId={projectId}
-          missesRow={missesRow}
-          onCreateRow={async (payload) => {
-            const created = await entities.BudgetHourItem.create(payload);
-            qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] });
-            return created;
-          }}
-          onUpdateRow={(id, patch) => updateMut.mutate({ id, patch })}
-        />
-      )}
-
-      <PresetDialog open={presetOpen} onClose={() => setPresetOpen(false)} onPick={applyPreset} />
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={confirmDeleteRow}
-        title="Delete scope item?"
-        description={
-          deleteTarget?.scope_item
-            ? `"${deleteTarget.scope_item}" will be removed from Budget Hours.`
-            : "This scope item will be removed from Budget Hours."
-        }
-      />
-    </OperationsPageShell>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   Per-section table
-───────────────────────────────────────────── */
-function BudgetTable({ title, rows, wpsById, onSave, onDelete, onMoveToSpecialty, onMoveToStandard }) {
-  const totals = useMemo(() => {
-    let sb = 0, sa = 0, fb = 0, fa = 0;
-    for (const r of rows) {
-      sb += Number(r.shop_hours_budget) || 0;
-      fb += Number(r.field_hours_budget) || 0;
-      const eff = effectiveActuals(r, wpsById);
-      sa += eff.shop;
-      fa += eff.field;
-    }
-    return { sb, sa, fb, fa };
-  }, [rows, wpsById]);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-        letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)",
-      }}>
-        {title}
-      </div>
-      <div style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderRadius: 8,
-        overflow: "hidden",
-      }}>
-        {/* Header */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(200px, 1.5fr) 80px 80px 70px 80px 80px 70px 1fr 36px",
-          gap: 8, padding: "8px 12px",
-          background: "var(--bg-surface-secondary)",
-          borderBottom: "1px solid var(--divider)",
-        }}>
-          {["Scope Item", "Shop Bud", "Shop Act", "Δ %", "Field Bud", "Field Act", "Δ %", "Notes", ""].map((h, i) => (
-            <div key={i} style={{
-              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-              letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--text-muted)",
-              textAlign: i === 0 || i === 7 ? "left" : "right",
-            }}>
-              {h}
-            </div>
-          ))}
-        </div>
-        {/* Rows */}
-        {rows.map((r) => {
-          const eff = effectiveActuals(r, wpsById);
-          const shopPct = variancePct(r.shop_hours_budget, eff.shop);
-          const fieldPct = variancePct(r.field_hours_budget, eff.field);
-          return (
-            <div key={r.id} style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(200px, 1.5fr) 80px 80px 70px 80px 80px 70px 1fr 36px",
-              gap: 8, padding: "6px 12px",
-              alignItems: "center",
-              borderBottom: "1px solid var(--divider)",
-            }}>
-              <TextCell value={r.scope_item} placeholder="Scope item name"
-                onSave={(v) => onSave(r.id, { scope_item: v || "Untitled" })}
-              />
-              <HourCell value={r.shop_hours_budget}
-                onSave={(v) => onSave(r.id, { shop_hours_budget: v })}
-              />
-              <HourCell value={eff.shop} locked={eff.linked}
-                onSave={(v) => onSave(r.id, { shop_hours_actual: v })}
-              />
-              <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: varianceColor(shopPct) }}>
-                {fmtPct(shopPct)}
-              </div>
-              <HourCell value={r.field_hours_budget}
-                onSave={(v) => onSave(r.id, { field_hours_budget: v })}
-              />
-              <HourCell value={eff.field} locked={eff.linked}
-                onSave={(v) => onSave(r.id, { field_hours_actual: v })}
-              />
-              <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: varianceColor(fieldPct) }}>
-                {fmtPct(fieldPct)}
-              </div>
-              <TextCell value={r.notes} placeholder="—"
-                onSave={(v) => onSave(r.id, { notes: v })}
-              />
-              <div style={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
-                {onMoveToSpecialty && (
-                  <button
-                    onClick={() => onMoveToSpecialty(r.id)}
-                    title="Move to Specialty Items"
-                    style={{
-                      background: "transparent", border: "none", cursor: "pointer",
-                      color: "var(--text-muted)", padding: 2, fontFamily: "var(--font-mono)", fontSize: 9,
-                    }}
-                  >
-                    ↓
-                  </button>
-                )}
-                {onMoveToStandard && (
-                  <button
-                    onClick={() => onMoveToStandard(r.id)}
-                    title="Move to Standard Scope"
-                    style={{
-                      background: "transparent", border: "none", cursor: "pointer",
-                      color: "var(--text-muted)", padding: 2, fontFamily: "var(--font-mono)", fontSize: 9,
-                    }}
-                  >
-                    ↑
-                  </button>
-                )}
-                <button
-                  onClick={() => onDelete(r)}
-                  style={{
-                    background: "transparent", border: "none", cursor: "pointer",
-                    color: "var(--status-error)", padding: 2,
-                  }}
-                  title="Remove"
-                >
-                  <Trash2 size={11} />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-        {/* Totals */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(200px, 1.5fr) 80px 80px 70px 80px 80px 70px 1fr 36px",
-          gap: 8, padding: "8px 12px",
-          background: "var(--bg-surface-secondary)",
-          alignItems: "center",
-        }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Subtotal
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-            {fmtHours(totals.sb)}
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-            {fmtHours(totals.sa)}
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: varianceColor(variancePct(totals.sb, totals.sa)) }}>
-            {fmtPct(variancePct(totals.sb, totals.sa))}
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-            {fmtHours(totals.fb)}
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-            {fmtHours(totals.fa)}
-          </div>
-          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: varianceColor(variancePct(totals.fb, totals.fa)) }}>
-            {fmtPct(variancePct(totals.fb, totals.fa))}
-          </div>
-          <div />
-          <div />
-        </div>
-      </div>
-    </div>
-  );
 }

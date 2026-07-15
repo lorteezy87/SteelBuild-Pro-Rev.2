@@ -257,11 +257,11 @@ export const drawingViewerStyles = `
 }
 
 /* ===========================================================================
-   command_ui light re-skin (SP5) — SURROUNDING CHROME ONLY.
+   canonical light presentation (SP5) — SURROUNDING CHROME ONLY.
    ---------------------------------------------------------------------------
    The DrawingViewer is a standalone route (not inside the Detailing command
    shell), so DrawingViewer.jsx flips [data-skin="command"] on <html> + tags
-   the root .detailing-cc while the command_ui flag is on. That makes the
+   the root .detailing-cc for the canonical presentation. That makes the
    shipped [data-skin="command"] .detailing-cc token-alias block resolve every
    var(--bg-surface / --text-* / --border-default / --accent / ...) the header,
    toolbar, sidebar, and hints consume to the light kit palette.

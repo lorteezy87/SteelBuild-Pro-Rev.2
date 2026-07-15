@@ -114,7 +114,7 @@ select option:disabled {
   color: #f3f7ff !important;
 }
 
-/* LIGHT surfaces (light theme + the light command_ui skin): option panels must
+/* LIGHT surfaces (light theme + the canonical light presentation): option panels must
    be LIGHT too. The global `select option { background:#07111f }` rule above is
    for dark dropdowns, but on Chrome/Windows that dark <option> background leaks
    into the closed control when it's hovered — on a light page that paints the

@@ -53,7 +53,6 @@ import {
 } from "@/lib/drawingHub";
 import { logActivity } from "@/services/auditLogger";
 import { invalidateEntity } from "@/services/cacheRegistry";
-import { useFlag } from "@/hooks/useFeatureFlag";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -64,28 +63,6 @@ export default function DrawingViewer() {
   const projectId = activeProject?.id;
 
   const initialId = searchParams.get("id") || searchParams.get("drawingId") || searchParams.get("docId");
-
-  // command_ui re-skin (SP5). The DrawingViewer is a standalone route (opened
-  // from the Drawings register / DMS / Punchlist / Production), NOT rendered
-  // inside the Detailing command shell — so [data-skin="command"] is not set
-  // here the way it is inside the hub. When the flag is on we (a) set it on
-  // <html> for as long as the viewer is mounted so the shipped
-  // `[data-skin="command"] .detailing-cc` token-alias block resolves, and
-  // (b) tag the root `.detailing-cc` (in the returned JSX) so it matches. This
-  // re-lights the surrounding chrome (header/toolbar/sidebar/hints) only; the
-  // dark drawing canvas + its floating overlays are untouched. Flag-off never
-  // sets the attribute nor the class, so the classic dark viewer is unchanged.
-  const commandUi = useFlag("command_ui");
-  useEffect(() => {
-    if (!commandUi) return undefined;
-    const root = document.documentElement;
-    const prev = root.getAttribute("data-skin");
-    root.setAttribute("data-skin", "command");
-    return () => {
-      if (prev) root.setAttribute("data-skin", prev);
-      else root.removeAttribute("data-skin");
-    };
-  }, [commandUi]);
 
   const [userId, setUserId] = useState(null);
   useEffect(() => {
@@ -464,7 +441,7 @@ export default function DrawingViewer() {
   };
 
   return (
-    <div className={`sb-dashboard-reference-page drawing-viewer-redesign${commandUi ? " detailing-cc" : ""}`} style={{ padding: 0 }}>
+    <div className="sb-dashboard-reference-page drawing-viewer-redesign detailing-cc" style={{ padding: 0 }}>
       <style>{drawingViewerStyles}</style>
 
       {/* ── Sheet List Sidebar (collapsible) ──────────────────────────────── */}

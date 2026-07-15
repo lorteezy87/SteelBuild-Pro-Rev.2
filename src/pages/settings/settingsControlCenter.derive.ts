@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Settings Control Center (command_ui redesign).
+ * Pure derivations for the Settings Control Center (canonical presentation redesign).
  * No React, no network calls. Only real, deterministic facts derived from
  * the user record + settings data already loaded by the parent page.
  *

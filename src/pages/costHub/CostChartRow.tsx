@@ -4,7 +4,7 @@
  * Lifted Recharts chart section from CostDashboard.jsx.
  * Pure presentational — receives already-derived data, renders 3 charts side
  * by side in a white-card grid. Wrapped in an inline-styled <section> per the
- * command_ui worktree constraint (no edits to command.css).
+ * canonical presentation worktree constraint (no edits to command.css).
  *
  * CSS classes you'd want centrally if this pattern repeats:
  *   .cmd-chart-section   — the outer <section> wrapper (3-col grid on wide, 1-col on ≤900)

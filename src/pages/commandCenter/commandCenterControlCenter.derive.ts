@@ -1,5 +1,5 @@
 /**
- * Pure derivations for CommandCenterControlCenter (command_ui redesign).
+ * Pure derivations for CommandCenterControlCenter (canonical presentation redesign).
  *
  * No React, no network. All inputs come from the same TanStack Query caches
  * CommandCenter.jsx already uses — we just reshape them into KPI + panel

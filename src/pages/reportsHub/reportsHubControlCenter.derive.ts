@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Reports & Insights Control Center (command_ui redesign).
+ * Pure derivations for the Reports & Insights Control Center (canonical presentation redesign).
  * No React, no network.
  *
  * DATA AVAILABILITY NOTE:

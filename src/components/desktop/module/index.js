@@ -1,4 +1,4 @@
-// Only the primitives the live command_ui pages consume remain (the desktop
+// Only the primitives the live canonical presentation pages consume remain (the desktop
 // shell + ModuleHeader/StatTile/DataTable/ModuleTabs/states were removed when
 // the desktop_shell subsystem was retired).
 export { default as SectionCard } from "./SectionCard";

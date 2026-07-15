@@ -1,5 +1,5 @@
 /**
- * Reports & Insights Control Center — command_ui reskin of ReportsHub.
+ * Reports & Insights Control Center — canonical presentation reskin of ReportsHub.
  *
  * Data note: the report catalog is fully static (registry.js). There is NO
  * per-report run telemetry, usage count, scheduled-run date, or last-run

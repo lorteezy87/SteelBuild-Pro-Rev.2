@@ -1,7 +1,7 @@
 /**
  * DashboardControlCenter — light Command UI redesign of the project Dashboard.
  *
- * Rendered via flag_branch in Dashboard.jsx when `command_ui` is enabled.
+ * Rendered unconditionally by Dashboard.jsx for the project-scoped view.
  * Receives the same prop bundle as ProjectDashboard — zero new data fetches.
  *
  * Structure (mirrors RfiControlCenter pattern):

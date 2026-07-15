@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Vendor Control Center (command_ui redesign).
+ * Pure derivations for the Vendor Control Center (canonical presentation redesign).
  * No React, no network. All inputs are plain data arrays.
  */
 

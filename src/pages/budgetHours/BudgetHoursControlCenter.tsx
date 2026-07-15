@@ -1,7 +1,7 @@
 /**
  * BudgetHoursControlCenter.tsx
  *
- * Command UI redesign for the Budget Hours page (flag: command_ui).
+ * Canonical presentation for the Budget Hours page.
  *
  * Composition:
  *   PageHero      — title, chips (scope item count, specialty count, misses)
@@ -18,7 +18,7 @@
  *                   Field Act, Field Δ%, Total Bud, Total Act, Total Δ%
  *
  * Data + mutations are owned by the parent BudgetHours.jsx and passed as props
- * so the classic path is completely untouched.
+ * while preserving the page-owned mutation path.
  *
  * CSS classes emitted as inline styles where command.css classes would be
  * needed. Wanted class names noted in a comment block at the bottom of the file
@@ -47,7 +47,7 @@ import {
 import type { BudgetHourRow, WorkPackageRow } from "./budgetHoursControlCenter.derive";
 import BhChartRow from "./BhChartRow";
 
-// ─── Variance color (mirrors classic page's varianceColor) ────────────────────
+// ─── Variance color (mirrors the page varianceColor helper) ────────────────────
 
 function varColor(pct: number): string {
   if (pct >= 10) return "var(--status-error)";
@@ -81,7 +81,7 @@ export interface BudgetHoursControlCenterProps {
   onSetUpTemplate: () => void;
   /** Export CSV. */
   onExport: () => void;
-  /** Open row edit (same popover/behavior as classic). */
+  /** Open row edit (same popover/behavior as the page-owned flow). */
   onRowClick?: (row: BudgetHourRow) => void;
   /** Open the scope-item modal in edit mode for this row. */
   onEditRow?: (row: BudgetHourRow) => void;

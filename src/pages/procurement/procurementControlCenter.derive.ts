@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Procurement Control Center (command_ui redesign).
+ * Pure derivations for the Procurement Control Center (canonical presentation redesign).
  * No React, no network. Works over the procurement-subset of the `deliveries`
  * table (rows where procurement_category IS NOT NULL and is_deleted = false).
  *

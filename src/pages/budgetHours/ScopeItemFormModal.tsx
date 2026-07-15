@@ -2,18 +2,18 @@
  * ScopeItemFormModal.tsx
  *
  * Create / edit form for a Budget Hours scope item (budget_hour_items row).
- * Used by the command_ui Budget Hours Control Center for full row-level CRUD —
- * the classic inline-edit path is untouched.
+ * Used by the canonical presentation Budget Hours Control Center for full row-level CRUD —
+ * the page-owned inline-edit path remains available.
  *
  * Fields: scope_item (name, required), category / is_specialty, shop hours
  * budget+actual, field hours budget+actual, notes. Save routes to the parent's
  * createMut (create) or updateMut ({ id, patch }) (edit) — the modal never
  * touches Supabase or the query cache itself, so audit + invalidation stay
- * owned by BudgetHours.jsx (mirrors how the classic page's mutations work).
+ * owned by BudgetHours.jsx (mirrors the page mutation contract).
  *
  * Styled with the shared design-system primitives (.sbd-input / .sbd-select /
  * .sbd-textarea, design tokens) so it reads correctly under the light command
- * skin AND the classic dark theme — no command.css edits (worktree constraint).
+ * skin and the existing dark theme — no command.css edits (worktree constraint).
  */
 
 import React, { useState } from "react";
@@ -45,7 +45,7 @@ export interface ScopeItemEditTarget {
   field_hours_actual?: number | null;
   notes?: string | null;
   /** Present when actuals roll up from linked work packages — actual fields are
-   *  then read-only (edited via the classic row popover, not here). */
+   *  then read-only (edited through the page-owned row flow). */
   metadata?: { linked_work_package_ids?: string[]; [key: string]: unknown } | null;
 }
 

@@ -1,7 +1,7 @@
 /**
  * costControlCenter.derive.ts
  *
- * Pure derivation functions for the Cost Control Center (command_ui redesign).
+ * Pure derivation functions for the Cost Control Center (canonical presentation redesign).
  * No React, no network. Lifted from CostDashboard.jsx and made fully testable.
  *
  * Money is FLOAT DOLLARS (same as CostDashboard — the integer-cents convention

@@ -29,33 +29,10 @@ import { entities, integrations } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
-import { CommandBar } from "@/components/design-system";
-import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
-import PhaseBadge from "@/components/field/PhaseBadge";
-import { canonicalFieldPhase, PHASE_SOURCE } from "@/lib/field/fieldPhase";
-import { derivePhase } from "@/utils/phases";
 import { compressImage } from "@/utils/compressImage";
 import { localToday } from "@/utils/dates";
-import {
-  ClipboardList,
-  Camera,
-  ClipboardCheck,
-  CalendarClock,
-  Users,
-  CheckCircle2,
-  WifiOff,
-} from "lucide-react";
-import {
-  PROGRESS_STEPS,
-  tasksForToday,
-  taskUrgency,
-  taskLabel,
-  taskCrew,
-  clampPercent,
-  progressPatch,
-} from "@/lib/field/fieldToday";
-import { useFlag } from "@/hooks/useFeatureFlag";
+import { tasksForToday, taskUrgency, clampPercent, progressPatch } from "@/lib/field/fieldToday";
 import { useOutbox } from "@/lib/field/OutboxContext";
 import {
   makeProgressOp,
@@ -94,26 +71,24 @@ export default function FieldToday() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const photoInputRef = useRef(null);
-  const commandUi = useFlag("command_ui");
 
   const [showPunch, setShowPunch] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // ── Command UI supplementary queries (photos + punchlist) ──
-  // These are needed only for the Control Center panels; classic path ignores them.
+  // Control-center supplementary queries (photos + punchlist).
   const todayIsoForQuery = localToday();
   const { data: allPhotos = [] } = useQuery({
     queryKey: ["field-hub-photos", projectId],
     queryFn: () =>
       projectId ? entities.Photo.filter({ project_id: projectId }) : [],
-    enabled: !!projectId && !!commandUi,
+    enabled: !!projectId,
     staleTime: 60 * 1000,
   });
   const { data: allPunchItems = [] } = useQuery({
     queryKey: ["field-hub-punchlist", projectId],
     queryFn: () =>
       projectId ? entities.PunchlistItem.filter({ project_id: projectId }) : [],
-    enabled: !!projectId && !!commandUi,
+    enabled: !!projectId,
     staleTime: 60 * 1000,
   });
 
@@ -290,11 +265,10 @@ export default function FieldToday() {
     reconcilePendingPhotos(new Set(loadQueue().map((op) => op.id)));
   }, []);
 
-  // ── Command UI flag-branch ──────────────────────────────────────────────────
+  // ── Canonical Field Today control center ──────────────────────────────────────────────────
   // All existing offline outbox + photo sync logic above is UNTOUCHED.
   // We pass the real handlers through as props so the Control Center's capture
   // buttons (Add Punch, Photo, Log Activity) call the exact same mutation paths.
-  if (commandUi) {
     const todayPhotos = allPhotos.filter((p) => p.taken_date === todayIsoForQuery);
 
     const modals = showPunch ? (
@@ -340,321 +314,4 @@ export default function FieldToday() {
         {modals}
       </div>
     );
-  }
-
-  // ── States ──
-  if (!projectId) {
-    return (
-      <div className="sb-dashboard-reference-page field-mobile-console" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <CommandBar eyebrow="Field" title="Field Today" />
-        <div className="sbd-card" style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>
-          Pick a project from the top bar to capture today's field progress.
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="sb-dashboard-reference-page field-mobile-console" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <CommandBar
-        eyebrow={activeProject?.name || "Field"}
-        title="Field Today"
-        count={todaysWork.length}
-        unit=" open"
-        subtitle={fmtShortDate(todayIso)}
-      />
-
-      {pendingSync > 0 && (
-        <div
-          role="status"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid color-mix(in srgb, var(--status-warning) 40%, var(--border-default))",
-            background: "color-mix(in srgb, var(--status-warning) 12%, var(--bg-surface-low))",
-            color: "var(--text-primary)",
-            fontSize: 12,
-          }}
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <WifiOff size={15} style={{ color: "var(--status-warning)", flexShrink: 0 }} />
-            <span>
-              {pendingSync} update{pendingSync === 1 ? "" : "s"} saved offline — syncs when you reconnect
-            </span>
-          </span>
-          <button
-            type="button"
-            onClick={() => flushOutbox()}
-            style={{
-              flexShrink: 0,
-              minHeight: 32,
-              padding: "6px 12px",
-              borderRadius: 8,
-              border: "1px solid var(--status-warning)",
-              background: "transparent",
-              color: "var(--status-warning)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            Sync now
-          </button>
-        </div>
-      )}
-
-      {/* Quick-capture rail — sticky thumb row on phones (styled in responsive.css) */}
-      <div className="field-fast-capture-rail" role="group" aria-label="Quick capture">
-        <button
-          type="button"
-          className="field-fast-action"
-          style={{ "--field-action-color": "var(--status-warning)" }}
-          onClick={() => setShowPunch(true)}
-        >
-          <span className="field-fast-action-icon"><ClipboardCheck size={18} /></span>
-          <span className="field-fast-action-copy">
-            <strong>Add Punch</strong>
-            <small>Log a deficiency</small>
-          </span>
-        </button>
-
-        <button
-          type="button"
-          className="field-fast-action"
-          style={{ "--field-action-color": "var(--accent)" }}
-          onClick={() => photoInputRef.current?.click()}
-          disabled={uploadingPhoto}
-        >
-          <span className="field-fast-action-icon"><Camera size={18} /></span>
-          <span className="field-fast-action-copy">
-            <strong>{uploadingPhoto ? "Uploading…" : "Photo"}</strong>
-            <small>Snap progress</small>
-          </span>
-        </button>
-
-        <button
-          type="button"
-          className="field-fast-action"
-          style={{ "--field-action-color": "var(--status-info)" }}
-          onClick={() => navigate("/DailyLogs?new=1")}
-        >
-          <span className="field-fast-action-icon"><ClipboardList size={18} /></span>
-          <span className="field-fast-action-copy">
-            <strong>Daily Log</strong>
-            <small>Today's report</small>
-          </span>
-        </button>
-      </div>
-
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        multiple
-        style={{ display: "none" }}
-        onChange={(e) => handlePhotoFiles(e.target.files)}
-      />
-
-      {/* Today's work */}
-      <div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            margin: "4px 2px 10px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "var(--text-secondary)",
-          }}
-        >
-          <CalendarClock size={14} /> Today's Work
-        </div>
-
-        {isLoading ? (
-          <LoadingSkeleton variant="list" />
-        ) : todaysWork.length === 0 ? (
-          <div
-            className="sbd-card"
-            style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}
-          >
-            <CheckCircle2 size={22} style={{ opacity: 0.6, marginBottom: 8 }} />
-            <div>No open tasks scheduled for today. Nice work.</div>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {sections.map((section) => {
-              const tone = URGENCY[section.bucket] || URGENCY.active;
-              return (
-                <div key={section.bucket} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "2px 2px",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 10,
-                      fontWeight: 800,
-                      letterSpacing: "0.10em",
-                      color: tone.color,
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{ width: 8, height: 8, borderRadius: 999, background: tone.color, flexShrink: 0 }}
-                    />
-                    {tone.label}
-                    <span style={{ color: "var(--text-muted)", fontWeight: 700 }}>· {section.tasks.length}</span>
-                  </div>
-                  {section.tasks.map((task) => (
-                    <TaskCaptureCard
-                      key={task.id}
-                      task={task}
-                      todayIso={todayIso}
-                      saving={progressMut.isPending && progressMut.variables?.id === task.id}
-                      onSetProgress={(pct) => setProgress(task, pct)}
-                    />
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {showPunch && (
-        <PunchlistFormModal
-          projectId={projectId}
-          onClose={() => setShowPunch(false)}
-          onSave={(data) => punchMut.mutate({ ...data, client_op_id: newClientOpId() })}
-          isSaving={punchMut.isPending}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── A single task row: name, crew, urgency, current %, and quick-set buttons ──
-function TaskCaptureCard({ task, todayIso, saving, onSetProgress }) {
-  const bucket = taskUrgency(task, todayIso);
-  const tone = URGENCY[bucket] || URGENCY.active;
-  const pct = clampPercent(task.percent_complete);
-  const crew = taskCrew(task);
-  // schedule_tasks.phase is a real column; fall back to the app-wide keyword
-  // derivation so older tasks that predate the column still identify a phase.
-  const phase = canonicalFieldPhase(task.phase || derivePhase({ task_name: taskLabel(task) }));
-  const phaseSource = task.phase ? PHASE_SOURCE.STORED : PHASE_SOURCE.DERIVED;
-
-  return (
-    <div
-      className="sbd-card field-action-row"
-      style={{
-        padding: 12,
-        borderLeft: `3px solid ${tone.color}`,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        opacity: saving ? 0.7 : 1,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 14,
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              lineHeight: 1.25,
-            }}
-          >
-            {taskLabel(task)}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-            <PhaseBadge phase={phase} source={phaseSource} />
-            {crew && (
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  fontSize: 11,
-                  color: "var(--text-muted)",
-                }}
-              >
-                <Users size={12} /> {crew}
-              </div>
-            )}
-          </div>
-        </div>
-        <span
-          style={{
-            flexShrink: 0,
-            fontFamily: "var(--font-mono)",
-            fontSize: 8,
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            color: tone.color,
-            border: `1px solid ${tone.color}`,
-            borderRadius: 999,
-            padding: "3px 8px",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {tone.label} · {fmtShortDate(task.end_date)}
-        </span>
-      </div>
-
-      {/* Progress bar + current value */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ flex: 1, height: 8, borderRadius: 999, background: "var(--bg-surface-low)", overflow: "hidden" }}>
-          <div style={{ width: `${pct}%`, height: "100%", background: tone.color, transition: "width 120ms ease" }} />
-        </div>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: "var(--text-primary)", minWidth: 42, textAlign: "right" }}>
-          {pct}%
-        </span>
-      </div>
-
-      {/* Quick-set buttons (thumb targets) */}
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${PROGRESS_STEPS.length}, 1fr)`, gap: 6 }}>
-        {PROGRESS_STEPS.map((step) => {
-          const active = pct === step;
-          return (
-            <button
-              key={step}
-              type="button"
-              disabled={saving}
-              onClick={() => onSetProgress(step)}
-              aria-pressed={active}
-              style={{
-                minHeight: 40,
-                borderRadius: 8,
-                border: `1px solid ${active ? tone.color : "var(--border-default)"}`,
-                background: active
-                  ? `color-mix(in srgb, ${tone.color} 18%, var(--bg-surface-low))`
-                  : "var(--bg-surface-low)",
-                color: active ? tone.color : "var(--text-secondary)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                fontWeight: 800,
-                cursor: saving ? "wait" : "pointer",
-              }}
-            >
-              {step === 100 ? "Done" : `${step}`}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
 }

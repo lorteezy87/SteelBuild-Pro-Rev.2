@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the SOV Control Center (command_ui redesign).
+ * Pure derivations for the SOV Control Center (canonical presentation redesign).
  * No React, no network calls, no side effects.
  *
  * MONEY UNITS: SOV stores float dollars (NOT cents). All arithmetic uses

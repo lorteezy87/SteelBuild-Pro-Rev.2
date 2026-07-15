@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Budget Hours Control Center (command_ui redesign).
+ * Pure derivations for the Budget Hours Control Center (canonical presentation redesign).
  * No React, no network calls. All inputs are already-loaded rows from
  * entities.BudgetHourItem and entities.WorkPackage.
  *

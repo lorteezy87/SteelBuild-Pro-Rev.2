@@ -198,7 +198,7 @@ const REGISTRY: Record<string, EntityRegistration> = {
   budget_hour_item: {
     primary:  (pid) => ["budget-hour-items", pid],
     families: (pid) => [
-      ["budget-hour-items", pid],   // BudgetHours.jsx (classic + command_ui)
+      ["budget-hour-items", pid],   // BudgetHours.jsx
       ["budget-hour-items"],
     ],
   },

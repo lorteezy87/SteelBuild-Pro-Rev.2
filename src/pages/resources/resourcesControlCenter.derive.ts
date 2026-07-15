@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Resources Control Center (command_ui redesign).
+ * Pure derivations for the Resources Control Center (canonical presentation redesign).
  * No React, no network. Operates on the same data ResourceManagement.jsx
  * loads: `resources` rows filtered by project_id, cross-referenced with
  * `work_packages` (via work_packages.crew text-match to resource.name).
