@@ -210,7 +210,7 @@ function buildSequence(seed, count) {
   );
 }
 
-export default function SubmittalBulkAddModal({ open, onCancel, onSubmit }) {
+export default function SubmittalBulkAddModal({ open, onCancel, onSubmit, busy = false }) {
   const [mode, setMode] = useState("csv");
   // CSV mode
   const [csvText, setCsvText] = useState("");
@@ -236,11 +236,13 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit }) {
   }, [mode, csvText, seqStart, seqCount, seqTitlePrefix]);
 
   const reset = () => {
+    if (busy) return;
     setCsvText(""); setSeqStart("S-001"); setSeqCount(10); setSeqTitlePrefix("");
     onCancel();
   };
 
   const commit = () => {
+    if (busy) return;
     if (parsed.rows.length === 0) return;
     // Apply defaults + DB-safety clamps at commit time so the parent
     // doesn't need to know about them. The submittals table requires
@@ -492,6 +494,7 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit }) {
         <div style={{ padding: "12px 18px", borderTop: "1px solid var(--divider)", display: "flex", justifyContent: "flex-end", gap: 8, background: "var(--bg-surface-low)" }}>
           <button
             onClick={reset}
+            disabled={busy}
             style={{
               padding: "8px 14px", background: "transparent", border: "1px solid var(--border-default)",
               borderRadius: 4, color: "var(--text-secondary)", cursor: "pointer",
@@ -502,7 +505,7 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit }) {
           </button>
           <button
             onClick={commit}
-            disabled={parsed.rows.length === 0}
+            disabled={busy || parsed.rows.length === 0}
             style={{
               padding: "8px 14px",
               background: parsed.rows.length === 0 ? "var(--bg-surface)" : "var(--accent)",
@@ -512,7 +515,7 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit }) {
               fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
             }}
           >
-            CREATE {parsed.rows.length}
+            {busy ? "ADDING..." : `CREATE ${parsed.rows.length}`}
           </button>
         </div>
       </div>

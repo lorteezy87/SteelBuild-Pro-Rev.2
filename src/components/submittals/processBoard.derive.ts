@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Detailing Process Board (command_ui re-skin, SP3).
+ * Pure derivations for the Detailing Process Board.
  *
  * No React, no network — reshapes the hub's `setPackages` + `submittals` read
  * models into the stage-bucketed board items the on-skin `ProcessBoardPanel`

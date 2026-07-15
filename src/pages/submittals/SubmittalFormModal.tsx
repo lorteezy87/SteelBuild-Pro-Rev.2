@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ComponentType } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./uiCompat";
@@ -39,11 +39,12 @@ interface SubmittalFormModalProps {
    * Default false — the picker is hidden and no `drawing_types` key is emitted.
    */
   drawingTypesEnabled?: boolean;
+  saving?: boolean;
   onClose: () => void;
   onSubmit: (record: Record<string, any>) => void | Promise<void>;
 }
 
-export default function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], existingNumbers, parentSubmittal = null, drawingTypesEnabled = false, onClose, onSubmit }: SubmittalFormModalProps) {
+export default function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], existingNumbers, parentSubmittal = null, drawingTypesEnabled = false, saving = false, onClose, onSubmit }: SubmittalFormModalProps) {
   // Only treat this as a spin-off when creating a NEW submittal from a parent —
   // never when editing an existing row (even a child row keeps its lineage via
   // its own parent_submittal_id, edited through the normal path, not re-split).
@@ -74,8 +75,10 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
 
   const setField = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
   const isEdit = !!initial.id;
+  const submitInFlight = useRef(false);
 
   const handleSubmit = async () => {
+    if (saving || submitInFlight.current) return;
     const number = form.submittal_number.trim();
     if (!number || !form.title.trim()) {
       toast.error("Submittal number + title are required");
@@ -110,7 +113,12 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
     if (drawingTypesEnabled && !isEdit && drawingTypes.length > 0) {
       record.drawing_types = drawingTypes;
     }
-    await onSubmit(record);
+    submitInFlight.current = true;
+    try {
+      await onSubmit(record);
+    } finally {
+      submitInFlight.current = false;
+    }
   };
 
   return (
@@ -273,15 +281,17 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
         <DialogFooter>
           <button
             onClick={onClose}
+            disabled={saving}
             style={{ padding: "8px 14px", background: "transparent", border: "1px solid var(--border-default)", borderRadius: 4, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
           >
             CANCEL
           </button>
           <button
             onClick={handleSubmit}
+            disabled={saving}
             style={{ padding: "8px 14px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
           >
-            {isSplit ? "CREATE CHILD" : isEdit ? "SAVE" : "CREATE"}
+            {saving ? "SAVING..." : isSplit ? "CREATE CHILD" : isEdit ? "SAVE" : "CREATE"}
           </button>
         </DialogFooter>
       </DialogContent>

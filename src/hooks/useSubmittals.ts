@@ -76,19 +76,21 @@ export async function lockLinkedSetsIfApproved(
     submittal.id ||
     "";
   const reason = `Auto-locked: submittal ${tag} reached "${submittal.status}"`.trim();
+  const failures: string[] = [];
   for (const setId of setIds) {
     try {
       await lockDrawingSet({ setId, reason });
     } catch (err) {
-      // Don't fail the submittal write on a lock failure — the workflow
-      // status update is the user-visible outcome; lock is a side effect.
-      // Surface to console for ops awareness.
+      failures.push(setId);
       // eslint-disable-next-line no-console
       console.warn(
         `[useSubmittals] Failed to lock drawing set ${setId} after approval:`,
         err,
       );
     }
+  }
+  if (failures.length > 0) {
+    throw new Error(`Failed to lock ${failures.length} linked drawing set(s): ${failures.join(", ")}`);
   }
 }
 
@@ -338,9 +340,9 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
     prevStatus: s.status ?? null,
     nextStatus: input.status,
   });
-  // Audit the status transition (fire-and-forget). Centralized here because every
-  // round-based status move — including the fab-release gate — flows through this.
-  logTransition("submittal", (updated as Submittal) || s, s.status ?? "—", input.status, { projectId: s.project_id }).catch(() => {});
+  // Await the audit write so the caller does not report a fully settled move
+  // before the transition record has been attempted.
+  await logTransition("submittal", (updated as Submittal) || s, s.status ?? "—", input.status, { projectId: s.project_id });
   return updated as Submittal;
 }
 

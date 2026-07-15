@@ -125,7 +125,7 @@ export function useSubmittalComponents(
     existing?: ComponentRef;
     date: string | null;
   }) =>
-    upsertMut.mutate({
+    upsertMut.mutateAsync({
       submittalId: args.submittalId,
       projectId: args.projectId,
       drawingType: args.drawingType,
@@ -144,7 +144,7 @@ export function useSubmittalComponents(
     existing?: ComponentRef;
     released: boolean;
   }) =>
-    upsertMut.mutate({
+    upsertMut.mutateAsync({
       submittalId: args.submittalId,
       projectId: args.projectId,
       drawingType: args.drawingType,
@@ -157,7 +157,7 @@ export function useSubmittalComponents(
   // ── Add a drawing type (create an empty component row). Used by the create
   //    form + detail-panel "+ add type" affordance.
   const addType = (args: { submittalId: string; projectId: string; drawingType: DrawingType }) =>
-    upsertMut.mutate({
+    upsertMut.mutateAsync({
       submittalId: args.submittalId,
       projectId: args.projectId,
       drawingType: args.drawingType,

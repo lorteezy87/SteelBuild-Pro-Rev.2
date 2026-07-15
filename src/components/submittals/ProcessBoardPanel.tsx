@@ -1,6 +1,6 @@
 /**
  * ProcessBoardPanel — the on-skin Detailing Process Board (process tab), SP3 of
- * the native command_ui conversion.
+ * the canonical detailing presentation.
  *
  * Presentation-only. Renders INSIDE the already-shipped DetailingCommandShell
  * light island (whole-<html> [data-skin="command"] + `.detailing-cc` token
