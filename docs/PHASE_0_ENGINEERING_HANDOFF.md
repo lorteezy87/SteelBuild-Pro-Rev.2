@@ -259,3 +259,24 @@ handoff delivery record and final task response.
 No production deployment, merge, migration application, Edge Function deploy,
 or production-data mutation occurred during Batch 40. PR #77 remains open and
 Draft.
+
+## Batch 41 remediation record
+
+Batch 41 started from `6a19ba15e4a50386792275840f64a39ca93375e7` and rechecked
+the P0/P1 register without changing remote state. No P0 release blocker is
+reproducible locally. Existing local auth, project-scope, Submittal, RFI, and
+fabrication-release tests passed their focused guards; the selected P1 findings
+are external or owner-controlled:
+
+| Finding | Severity | Reproduction and actual result | Expected behavior | Status |
+| --- | --- | --- | --- | --- |
+| B41-P1-001 legacy flat Storage isolation | P1 | Batch 40 remote evidence identifies 775 legacy flat objects; local source search cannot access remote Storage rows/policies | Cross-project legacy objects are unreadable outside the authorized scope | Requires staging and owner-run copy/backfill/verify/cut |
+| B41-P1-002 database/migration alignment | P1 | `supabase --version` and `supabase migration list --local` are unavailable locally | Staging schema, catalog migration, RPCs, and generated types agree | Requires staging; six seed migrations remain unapplied |
+| B41-P1-003 Edge Function deployment/configuration | P1 | Source inventory is available; local evidence cannot prove deployed revision or secrets | Required functions, secrets, quotas, and kill switches match staging | Requires staging |
+| B41-P1-004 critical smoke coverage | P1 | `e2e/` contains fixture-gated read-only and fab-release specs; no staging credentials are configured | Critical workflows execute against a dedicated non-production fixture | Requires staging |
+| B41-P1-005 branch protection | P1 | Read-only `gh api repos/.../branches/main/protection` returned HTTP 403 because the repository plan does not expose the feature | Required CI/review status is enforced before production merge | Blocked by repository plan; owner decision required |
+| B41-P1-006 backup/rollback readiness | P1 | No local command can prove remote backup freshness or rollback rehearsal | Restore and rollback procedures are tested before production approval | Requires owner/staging evidence |
+
+No migration, RLS policy, Edge Function, production configuration, or source
+workflow was changed. The final Batch 41 commit SHA is reported in the delivery
+record after commit; all external findings remain visibly open.

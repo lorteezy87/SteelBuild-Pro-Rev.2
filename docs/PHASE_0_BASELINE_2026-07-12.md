@@ -457,3 +457,13 @@ Selective, in-house consolidation is preferred over a full rewrite. Phase 1 prio
 - Bundle baseline: the production bundle report recorded 11,493 KB raw / 2,773.6 KB gzip assets, 875 KB raw / 255 KB gzip initial HTML, and 3,531.6 KB raw / 404 KB gzip for `web-ifc-api`. Material route chunks include `IfcModelViewer` 522.8 KB, `vendor-xlsx` 488.3 KB, `vendor-charts` 433.7 KB, `jspdf` 381.1 KB, `DrawingViewer` 239 KB, `Submittals` 157.1 KB, and `JobStatusReport` 82.1 KB. Existing warnings remain follow-up work, not suppressed.
 - Smoke matrix and promotion gates are maintained in [`docs/PHASE_0_ENGINEERING_HANDOFF.md`](PHASE_0_ENGINEERING_HANDOFF.md) and [`docs/PHASE_0_RELEASE_CHECKLIST.md`](PHASE_0_RELEASE_CHECKLIST.md). Local checks support a staging candidate; staging database, Edge Function, dedicated smoke, approval, backup, and production deployment gates remain external and unchecked.
 - The final closure commit SHA is recorded by `git rev-parse HEAD` after this document is committed and is reported with the final handoff. No deployment, merge, migration application, or Edge Function deployment occurred.
+
+## Batch 41: P0/P1 remediation gate
+
+- Starting HEAD: `6a19ba15e4a50386792275840f64a39ca93375e7` (`docs: close Phase 0 engineering baseline`). Branch: `agent/handoff-cleanup`; PR #77 remains open and Draft.
+- Pre-flight confirmed the branch, pushed Batch 40 HEAD, base `origin/main` at `11a28fced549840c0a44fc4b6d7182e834cdb363`, and preserved all unrelated modified and untracked files.
+- P0 register: no P0 release blocker is reproducible at the current HEAD. Existing local authentication, project-scope, Submittal, RFI, and fabrication-release tests cover the local safety boundaries.
+- P1 register: B41-P1-001 legacy flat Storage isolation, B41-P1-002 staging database/migration alignment, B41-P1-003 Edge Function deployment/configuration, B41-P1-004 critical staging smoke coverage, B41-P1-005 branch protection, and B41-P1-006 backup/rollback readiness.
+- Reproduction outcomes: B41-P1-001, 002, 003, 004, and 006 require remote data, deployment, credentials, or owner evidence and cannot be safely reproduced locally. B41-P1-005 was confirmed blocked by the repository plan: the read-only GitHub branch-protection API returned HTTP 403. No remote setting was changed.
+- Scope decision: no speculative source, RLS, migration, Edge Function, dependency, or date fix was selected. The existing critical local tests passed; external findings were added to the checklist with explicit staging/owner actions.
+- No migration, deployment, merge, production configuration, production data, or Edge Function action occurred. The final Batch 41 documentation commit SHA is reported in the final task response.

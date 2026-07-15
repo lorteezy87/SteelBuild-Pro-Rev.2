@@ -135,3 +135,27 @@ steps remain unchecked until an authorized owner completes them.
   dependency hygiene remain open.
 - P3 Post-release improvement: historical documentation and static-analysis
   false-positive cleanup remain open.
+
+## Batch 41 finding register
+
+- [ ] **B41-P1-001 - legacy flat Storage isolation:** staging-only copy,
+  reference backfill, verification, and policy cutover; no browser or
+  production action permitted in Batch 41.
+- [ ] **B41-P1-002 - staging database/migration alignment:** apply and verify
+  the six committed feature-flag seed migrations in staging only, then compare
+  RPCs and generated types.
+- [ ] **B41-P1-003 - Edge Function deployment/configuration:** verify the eight
+  relied-upon functions, environment variables, quotas, and kill switches in
+  staging.
+- [ ] **B41-P1-004 - critical smoke coverage:** provision a dedicated staging
+  test organization and run authentication, project selection, Drawings,
+  Submittals, RFIs, fabrication blocked/clean/override, and role restrictions.
+- [ ] **B41-P1-005 - branch protection:** owner must resolve the repository-plan
+  limitation or explicitly accept the missing required-check enforcement.
+- [ ] **B41-P1-006 - backup/rollback readiness:** owner must verify backups,
+  restore rehearsal, Vercel rollback, and Edge Function rollback procedures.
+
+Batch 41 found no reproducible local P0 defect and made no source or remote
+configuration change. Documentation does not mark any of these findings
+resolved; statuses are `requires staging` or `blocked` as recorded in the
+engineering handoff.

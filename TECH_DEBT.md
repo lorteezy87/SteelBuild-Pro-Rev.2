@@ -29,6 +29,39 @@ classified instead of hidden behind a green local report:
 Supabase `feature_flags` table document only the remaining operational flags;
 see [`docs/FEATURE_FLAG_AND_DEAD_PATH_INVENTORY.md`](docs/FEATURE_FLAG_AND_DEAD_PATH_INVENTORY.md).
 
+## Batch 41 P1 finding status
+
+These findings were rechecked against the Batch 40 HEAD. No local source defect
+was reproducible, so no speculative security, RLS, migration, or workflow fix
+was made:
+
+- **B41-P1-001 - legacy flat Storage isolation residual:** **requires staging**.
+  Batch 40's evidence identifies 775 legacy `app-files/uploads/...` objects
+  whose historical policy permits founding-org reads across projects. A local
+  repository search cannot verify remote objects, policy execution, or storage
+  references. The safe correction remains owner-run copy, reference backfill,
+  verification, then policy cutover; do not do this from the browser.
+- **B41-P1-002 - staging database and migration alignment:** **requires
+  staging**. `supabase --version` and `supabase migration list --local` are not
+  available in this environment. The six committed feature-flag seed
+  migrations remain unapplied by Batch 41 and require staging verification.
+- **B41-P1-003 - Edge Function deployment and configuration:** **requires
+  staging**. Local source identifies the eight function dependencies but cannot
+  prove deployed revisions, secrets, quotas, or kill-switch configuration.
+- **B41-P1-004 - critical staging smoke coverage:** **requires staging**.
+  Existing Playwright smoke and fab-release specs are fixture-gated and
+  nonblocking; no dedicated staging credentials or mutation fixture is present.
+- **B41-P1-005 - required branch protection:** **blocked by repository plan**.
+  The read-only GitHub API check returned HTTP 403: branch protection requires
+  GitHub Pro or a public repository. No repository setting was changed.
+- **B41-P1-006 - backup and rollback readiness:** **requires owner/staging
+  evidence**. Local source cannot prove remote backup freshness, restore
+  rehearsal, Vercel rollback, or Edge Function rollback readiness.
+
+The local Node 24 versus CI Node 20 difference remains a P2 environment
+deviation, not a source defect. The P1 findings remain visible in the release
+checklist and are not counted as resolved by documentation alone.
+
 ## Active items
 
 _Updated 2026-07-14. RLS is enabled everywhere and the **org boundary is wired
