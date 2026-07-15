@@ -1,10 +1,11 @@
 import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldCheck, Workflow } from "lucide-react";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
-import { effectiveDetailingState, hasGoverningSubmittal, isPackageRR } from "@/lib/detailingPackageState";
+import { DRAFTING_STATES, effectiveDetailingState, hasGoverningSubmittal, isPackageRR } from "@/lib/detailingPackageState";
 import { computeSequenceReadiness } from "@/lib/detailingReadiness";
 import { workingDaysBetween } from "@/lib/workingDays";
 import { todayLocalISO } from "@/lib/dateMath";
+import { pickMostRecentSubmittal, submittalStatusToStage } from "@/lib/submittalStageMapping";
 import type { CurrentRevisionInfo, Drawing, DrawingRevision, DrawingSet, DueInfo, SetPackage, Submittal, TriageItem } from "./types";
 
 // ── Design-system tokens ──────────────────────────────────────────────────
@@ -53,7 +54,7 @@ export const STATUS_COLORS: Record<string, string> = {
 // Out-For-Scrub → IFC → Release work (with its own due dates) ahead. Including
 // them here made a drawing set's due status flip to "Closed" the instant an
 // approved submittal was linked, hiding the real stage. Mirrors the canonical
-// set in components/submittals/SubmittalVisualBoard.jsx.
+// set in the canonical process board.
 //
 // NOT the same as useSubmittals' TERMINAL_APPROVED_STATUSES (which DOES include
 // Approved/AAN) — that set governs auto-LOCKING the linked drawing set from
@@ -211,6 +212,39 @@ export function dueDateWriteTargets(
   return { sheetIds: item._sheetIds ?? [] };
 }
 
+function isValidIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+/** Return a user-facing failure reason before a due-date mutation is sent. */
+export function validateDueDateWrite(
+  item: Partial<TriageItem> & { closed?: boolean },
+  date: unknown,
+): string | null {
+  if (item?.closed) return "Closed work cannot receive an active due date.";
+  if (!isValidIsoDate(date)) return "Enter a valid calendar date.";
+  const targets = dueDateWriteTargets(item as Pick<TriageItem, "_submittalId" | "_sheetIds">);
+  if ("sheetIds" in targets && targets.sheetIds.length === 0) return "No package sheets are available for a due-date update.";
+  return null;
+}
+
+const WORKFLOW_STAGE_STATES = new Set(["IFA", "OFA", "BFA", "OFS", "IFC", "Released", "Partially Released", "Released for Erection"]);
+
+/** Manual detailing state is a pre-submittal recovery action only. */
+export function validateDetailingStateWrite(
+  item: { _drawingSetId?: string | null; _submittalId?: string | null; detailingState?: string | null } | null | undefined,
+  next: unknown,
+): string | null {
+  if (!item?._drawingSetId) return "No drawing set is available for a detailing-state update.";
+  if (item._submittalId) return "Formal detailing state is owned by the linked Submittal.";
+  if (typeof next !== "string" || !DRAFTING_STATES.includes(next)) return "Only pre-submittal detailing states can be set here.";
+  if (WORKFLOW_STAGE_STATES.has(item.detailingState || "")) return "The package has reached the formal workflow and cannot move back to drafting here.";
+  return null;
+}
+
 export function getSetDisplayName({ parent, legacyName, fallback = "Ungrouped drawing set" }: { parent?: DrawingSet | null; legacyName?: string; fallback?: string } = {}): string {
   return (parent?.set_name || legacyName || fallback).trim();
 }
@@ -294,10 +328,20 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
   const parentsById = new Map<string, DrawingSet>(
     (drawingSets || []).filter((set) => !set?.is_deleted).map((set): [string, DrawingSet] => [set.id as string, set])
   );
+  const parentNameGroups = new Map<string, DrawingSet[]>();
+  for (const parent of parentsById.values()) {
+    const name = (parent.set_name || "").trim().toLowerCase();
+    if (!name) continue;
+    const group = parentNameGroups.get(name) || [];
+    group.push(parent);
+    parentNameGroups.set(name, group);
+  }
+  // A name-only legacy link is safe only when exactly one active parent owns
+  // that name. Ambiguous names remain unlinked instead of merging IDs.
   const parentsByName = new Map<string, DrawingSet>(
-    Array.from(parentsById.values())
-      .map((set): [string, DrawingSet] => [(set.set_name || "").trim().toLowerCase(), set])
-      .filter(([name]) => !!name)
+    Array.from(parentNameGroups.entries())
+      .filter(([, parents]) => parents.length === 1)
+      .map(([name, parents]) => [name, parents[0]])
   );
   const packages = new Map<string, SetPackage>();
 
@@ -339,17 +383,15 @@ export function buildSetPackages(drawings: Drawing[], drawingSets: DrawingSet[],
     if (ids.length) {
       ids.forEach((setId) => {
         const parent = parentsById.get(setId);
-        ensurePackage({ setId, legacyName: parent?.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
+        if (parent) ensurePackage({ setId, legacyName: parent.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
       });
       continue;
     }
     if (submittal.drawing_set_name) {
       const parent = parentsByName.get(submittal.drawing_set_name.trim().toLowerCase()) || null;
-      ensurePackage({
-        setId: parent?.id || null,
-        legacyName: submittal.drawing_set_name,
-        parent,
-      }).submittals.push(submittal);
+      // No unique active parent means this is an actionable unlinked
+      // Submittal, not a synthetic package that could imply the wrong owner.
+      if (parent) ensurePackage({ setId: parent.id, legacyName: parent.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
     }
   }
 
@@ -457,7 +499,7 @@ export function buildDrawingKpis(drawings: any[], setPackages: SetPackage[]) {
   const released = setPackages.filter(isClosedPackage).length;
   // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
   const inReview = setPackages.filter((pkg) =>
-    pkg.sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage ?? ""))
+    ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets))
   ).length;
   const overdueDrawings = setPackages.filter((pkg) =>
     pkg.sheets.some((d) => dueInfo(getDrawingDueDate(d), isClosedDrawing(d)).overdue)
@@ -479,7 +521,7 @@ export function buildDrawingKpis(drawings: any[], setPackages: SetPackage[]) {
  *  caller — pure fns never read the flag) makes the countdown WORKING-day-aware
  *  for SUBMITTAL-governed dues only. Drawing-set dues (the earliestDate() sheet
  *  fallback when no submittal governs) stay calendar-day regardless. Defaults
- *  false so the flag-off path is byte-identical to today. */
+ *  false so the canonical read model retains the existing calendar-day behavior. */
 export function buildTriage(
   submittals: any[],
   setPackages: SetPackage[],
@@ -489,10 +531,11 @@ export function buildTriage(
     const activeSubmittals = submittals.filter((s) => !s.is_deleted) as any[];
 
     const setItems = setPackages.map((pkg) => {
-      const sortedSubmittals = pkg.submittals
-        .slice()
-        .sort((a, b) => (b.round_number || 1) - (a.round_number || 1));
-      const latestSubmittal = sortedSubmittals[0] || null;
+      const governingSubmittal = pickMostRecentSubmittal(
+        pkg.submittals.filter((submittal) =>
+          !submittal.is_deleted && submittalStatusToStage(submittal.status, submittal.ball_in_court, submittal.approved_date) !== null,
+        ),
+      );
       // Coalesced operational state (drafting → submittal → release). Kept
       // alongside `status` (additive) so the existing pipeline/row display is
       // unchanged; surfaced as its own chip + drives the drafting control.
@@ -511,27 +554,28 @@ export function buildTriage(
       // display fall back to the earliest sheet due. Track WHICH source won so
       // the countdown is working-day-aware for submittal-governed dues but stays
       // calendar-day for drawing-set (sheet) dues.
-      const submittalDue = getSubmittalDueDate(latestSubmittal);
+      const submittalDue = getSubmittalDueDate(governingSubmittal);
       const dueDate = submittalDue || earliestDate(pkg.sheets.map(getDrawingDueDate));
       const dueBySubmittal = !!submittalDue;
       // Only surface "needs action" when the package is OPEN (closed items
       // never reach the hit list anyway, but guard against stale per-sheet
       // Rejected/Returned stages on packages that have since been released).
       const needsAction = !closed && (
-        (latestSubmittal && ACTION_STATUSES.has(latestSubmittal.status ?? "")) ||
+        (governingSubmittal && ACTION_STATUSES.has(governingSubmittal.status ?? "")) ||
         pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage ?? ""))
       );
-      const status = latestSubmittal?.status || rollupDrawingStage(pkg.sheets);
+      const status = governingSubmittal?.status || rollupDrawingStage(pkg.sheets);
       const canDraft = !hasGoverningSubmittal(pkg.submittals);
+      const firstSheet = pkg.sheets[0] || null;
       const owner =
-        latestSubmittal?.ball_in_court ||
-        latestSubmittal?.assigned_to ||
-        latestSubmittal?.reviewer ||
-        pkg.sheets.find((drawing) => drawing.ball_in_court || drawing.assigned_to || drawing.reviewer)?.ball_in_court ||
-        pkg.sheets.find((drawing) => drawing.assigned_to)?.assigned_to ||
-        pkg.sheets.find((drawing) => drawing.reviewer)?.reviewer ||
+        governingSubmittal?.ball_in_court ||
+        governingSubmittal?.assigned_to ||
+        governingSubmittal?.reviewer ||
+        firstSheet?.ball_in_court ||
+        firstSheet?.assigned_to ||
+        firstSheet?.reviewer ||
         "Unassigned";
-      const submittalLabel = latestSubmittal?.submittal_number ? `Submittal ${latestSubmittal.submittal_number}` : "No linked submittal";
+      const submittalLabel = governingSubmittal?.submittal_number ? `Submittal ${governingSubmittal.submittal_number}` : "No linked submittal";
       return {
         id: `set-${pkg.key}`,
         kind: "Drawing Set",
@@ -552,8 +596,9 @@ export function buildTriage(
         _detailingStateRaw: pkg.parent?.detailing_state ?? null,
         _readiness: readinessByKey.get(pkg.key) || null,
         // Entity references for inline editing
-        _submittalId: latestSubmittal?.id || null,
+        _submittalId: governingSubmittal?.id || null,
         _drawingSetId: pkg.setId || null,
+        _ownerScope: governingSubmittal ? "Submittal BIC" : firstSheet ? "First sheet owner" : "No owner target",
         _firstSheetId: pkg.sheets[0]?.id || null,
         // All sheet ids in the package — the due-date mutation writes every one
         // of these so earliestDate() always reflects the board-level edit.
@@ -590,6 +635,7 @@ export function buildTriage(
         _submittalId: submittal.id,
         _drawingSetId: null as string | null,
         _firstSheetId: null as string | null,
+        _ownerScope: "Submittal BIC",
         // Unlinked submittals always dispatch through the submittal branch, so [].
         _sheetIds: [] as string[],
       };
@@ -689,8 +735,8 @@ export function fmtDate(d: any): string {
  * `useWorkdays` (resolved from `submittal_workday_dues` by the caller) makes each
  * row's Due-Status chip working-day-aware. Every matrix due is a SUBMITTAL date
  * (getSubmittalDueDate over the linked submittals), so — unlike buildTriage —
- * there is no drawing-date fallback to exclude here. Defaults false (flag off →
- * byte-identical calendar-day behavior).
+ * there is no drawing-date fallback to exclude here. Defaults false so the
+ * canonical read model retains calendar-day behavior.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], search = "", useWorkdays = false): any[] {

@@ -1,14 +1,9 @@
 /**
- * ApprovalMatrixPanel — the on-skin Detailing Approval Matrix (matrix tab), SP3
- * of the native command_ui conversion.
+ * ApprovalMatrixPanel — the canonical Detailing Approval Matrix (matrix tab).
  *
- * Presentation-only. Renders INSIDE the DetailingCommandShell light island
- * (`.detailing-cc` token cascade). The hub owns every query/mutation; this panel
- * receives the exact same drawingSets / submittals / roundsBySubmittal /
- * useWorkdays props the legacy `ApprovalMatrix` receives. All matrix math is the
- * pure `buildApprovalMatrixRows` / `summarizeApprovalMatrix` in format.ts — the
- * SAME functions the legacy component calls — so rows, sort, and counts are
- * byte-identical.
+ * Presentation-only. Renders inside the DetailingCommandShell light island
+ * (`.detailing-cc` token cascade). The hub owns every query/mutation and this
+ * panel owns only the matrix presentation and pure formatting.
  *
  * What this converts to kit primitives: the summary/search chrome (kit FilterBar
  * + Pills) and the matrix table + expandable child rows (on `cmd-table`). The
@@ -18,7 +13,7 @@
  *
  * ⚠ Working-day due display (`submittal_workday_dues`, Phase 5): `useWorkdays`
  * is threaded into `buildApprovalMatrixRows` (main-row dues) AND the expanded
- * child rows' inline `dueInfoFor` — identical to the legacy component. Every
+ * child rows' inline `dueInfoFor`. Every
  * matrix due is a submittal date (no drawing carve-out here), so no source-gate.
  */
 import { Fragment, useMemo, useState } from "react";
@@ -56,7 +51,7 @@ interface ApprovalMatrixPanelProps {
   useWorkdays?: boolean;
 }
 
-/** Submittal status → kit Pill tone. Mirrors the legacy StatusChip colour
+/** Submittal status → kit Pill tone. Uses the shared status colour
  *  families (approved → good, R&R/rejected → review, closed → neutral, else
  *  warn/pending). */
 function statusTone(status?: string | null): PillTone {

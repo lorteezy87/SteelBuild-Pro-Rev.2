@@ -8,6 +8,8 @@ import {
   currentRevisionForPackage,
   dueInfo,
   dueDateWriteTargets,
+  validateDetailingStateWrite,
+  validateDueDateWrite,
   fmtDate,
   getOperationalStateColor,
   getStatusColor,
@@ -364,6 +366,49 @@ describe("buildSetPackages (the set↔submittal join behind every matrix row)", 
     expect(buildSetPackages([], sets as any, [])).toHaveLength(2);
     expect(buildSetPackages([], [], [])).toHaveLength(0);
   });
+
+  it("keeps same-name set IDs separate and leaves ambiguous name-only submittals unlinked", () => {
+    const duplicateSets = [
+      { id: "dup-1", set_name: "Duplicate" },
+      { id: "dup-2", set_name: "Duplicate" },
+      { id: "deleted", set_name: "Duplicate", is_deleted: true },
+    ];
+    const duplicateDrawings = [
+      { id: "sheet-1", drawing_set_id: "dup-1" },
+      { id: "sheet-2", drawing_set_id: "dup-2" },
+    ];
+    const ambiguous = [{ id: "ambiguous", drawing_set_name: "Duplicate" }];
+    const pkgs = buildSetPackages(duplicateDrawings as any, duplicateSets as any, ambiguous as any);
+    expect(pkgs.filter((p) => p.setId).map((p) => p.setId)).toEqual(["dup-1", "dup-2"]);
+    expect(pkgs.flatMap((p) => p.submittals)).toEqual([]);
+    expect(buildTriage(ambiguous as any, pkgs, new Map()).unlinkedSubmittalItems.map((i) => i._submittalId)).toEqual(["ambiguous"]);
+  });
+
+  it("does not roll a linked package from a stale sheet stage when its Submittal governs", () => {
+    const pkgs = buildSetPackages(
+      [{ id: "d1", drawing_set_id: "s1", stage: "Released" }] as any,
+      [{ id: "s1", set_name: "Main Steel" }] as any,
+      [{ id: "sub1", drawing_set_ids: ["s1"], status: "Approved", ball_in_court: "EOR" }] as any,
+    );
+    expect(buildDrawingKpis([{ id: "d1", drawing_set_id: "s1" }] as any, pkgs).inReview).toBe(1);
+    const triage = buildTriage(pkgs[0].submittals, pkgs, new Map());
+    expect(triage.setItems[0]._submittalId).toBe("sub1");
+    expect(triage.setItems[0]._ownerScope).toBe("Submittal BIC");
+  });
+
+  it("ignores a Void submittal for governing owner and due-date dispatch", () => {
+    const pkgs = buildSetPackages(
+      [{ id: "d1", drawing_set_id: "s1", assigned_to: "Sheet owner" }] as any,
+      [{ id: "s1", set_name: "Main Steel" }] as any,
+      [
+        { id: "void", drawing_set_ids: ["s1"], status: "Void", round_number: 9, ball_in_court: "Void owner" },
+        { id: "active", drawing_set_ids: ["s1"], status: "Submitted", round_number: 1, ball_in_court: "EOR" },
+      ] as any,
+    );
+    const item = buildTriage(pkgs[0].submittals, pkgs, new Map()).setItems[0];
+    expect(item._submittalId).toBe("active");
+    expect(item.owner).toBe("EOR");
+  });
 });
 
 describe("itemUrgency (triage ordering)", () => {
@@ -487,6 +532,22 @@ describe("dueDateWriteTargets (due-date write-target dispatch)", () => {
     const result = dueDateWriteTargets({ _submittalId: "sub-xyz", _sheetIds: ["d1"] });
     expect("submittalId" in result).toBe(true);
     expect("sheetIds" in result).toBe(false);
+  });
+
+  it("rejects invalid, closed, and empty-target writes before mutation", () => {
+    expect(validateDueDateWrite({ _submittalId: "sub-1", _sheetIds: [] }, "2026-02-30")).toBe("Enter a valid calendar date.");
+    expect(validateDueDateWrite({ _submittalId: "sub-1", _sheetIds: [], closed: true }, "2026-07-20")).toMatch(/Closed/);
+    expect(validateDueDateWrite({ _submittalId: null, _sheetIds: [] }, "2026-07-20")).toMatch(/No package sheets/);
+    expect(validateDueDateWrite({ _submittalId: "sub-1", _sheetIds: [] }, "2026-07-20")).toBeNull();
+  });
+});
+
+describe("validateDetailingStateWrite", () => {
+  it("allows only pre-submittal drafting states for an eligible package", () => {
+    expect(validateDetailingStateWrite({ _drawingSetId: "set-1", _submittalId: null, detailingState: "In Detailing" }, "Ready to Submit")).toBeNull();
+    expect(validateDetailingStateWrite({ _drawingSetId: "set-1", _submittalId: "sub-1", detailingState: "IFA" }, "Ready to Submit")).toMatch(/Submittal/);
+    expect(validateDetailingStateWrite({ _drawingSetId: "set-1", _submittalId: null, detailingState: "IFC" }, "Ready to Submit")).toMatch(/formal workflow/);
+    expect(validateDetailingStateWrite({ _drawingSetId: "set-1", _submittalId: null }, "Released")).toMatch(/pre-submittal/);
   });
 });
 

@@ -133,8 +133,9 @@ export default function ModelElementImportModal({
       }
 
       setLastResult({ created, updated, failed });
-      invalidateEntity(qc, "model_element", projectId);
-      toast.success(
+      await invalidateEntity(qc, "model_element", projectId);
+      const outcomeToast = failed ? toast.warning : toast.success;
+      outcomeToast(
         `${created} member${created === 1 ? "" : "s"} imported`
         + (updated ? `, ${updated} updated` : "")
         + (failed ? `, ${failed} failed` : ""),

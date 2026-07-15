@@ -1,9 +1,9 @@
 /**
- * Pure derivations for the Detailing Control Board (command_ui re-skin, Slice 1).
+ * Pure derivations for the canonical Detailing Control Board.
  *
  * No React, no network — reshapes the hub's already-computed `triage` read-model
- * into the queues/focus the on-skin `ControlBoardPanel` renders. Every value here
- * is byte-identical to what the legacy `TriageBoard` computes inline today
+ * into the queues/focus the `ControlBoardPanel` renders. Every value here
+ * remains derived from the hub read model.
  * (triageBoard.tsx focusItem / criticalItems / topStatuses / dueSoon / noDate),
  * so the conversion is behavior-preserving. Independently typed + unit-tested so
  * it stays strict-null / no-implicit-any clean.
@@ -40,7 +40,7 @@ export interface ControlBoardModel {
 
 /**
  * Reshape `triage` into the Control Board's focus card + capped queues.
- * Pure over its input; mirrors the legacy TriageBoard inline computation.
+ * Pure over its input; shared by the canonical Control Board.
  */
 export function buildControlBoardModel(triage: TriageModel): ControlBoardModel {
   const focusItem: TriageItem | null =

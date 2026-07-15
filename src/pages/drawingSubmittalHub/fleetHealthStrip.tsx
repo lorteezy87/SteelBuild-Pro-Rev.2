@@ -1,6 +1,5 @@
 import type { ComponentType } from "react";
 import { Dialog as DialogRaw, DialogContent as DialogContentRaw, DialogHeader as DialogHeaderRaw, DialogTitle as DialogTitleRaw } from "@/components/ui/dialog";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import {
   border,
   error,
@@ -21,13 +20,9 @@ const DialogHeader = DialogHeaderRaw as unknown as ComponentType<AnyProps>;
 const DialogTitle = DialogTitleRaw as unknown as ComponentType<AnyProps>;
 // ── Drawing health (slice 2 of the Hub Command Center) ─────────────────────
 export function HealthBreakdownDialog({ health, onClose }: { health: any; onClose: () => void }) {
-  // SP4: portaled Radix dialog. Under command_ui, tag `.detailing-cc` (light
-  // token-alias) and swap the hardcoded dark `--bg-base` to the alias-remapped
-  // `--bg-surface`. Flag off → byte-identical dark dialog.
-  const commandUi = useFlag("command_ui");
   return (
     <Dialog open onOpenChange={(o: boolean) => !o && onClose()}>
-      <DialogContent className={commandUi ? "detailing-cc" : undefined} style={{ maxWidth: 460, background: commandUi ? "var(--bg-surface)" : "var(--bg-base, #0D1117)", border: `1px solid ${border}` }}>
+      <DialogContent className="detailing-cc" style={{ maxWidth: 460, background: "var(--bg-surface)", border: `1px solid ${border}` }}>
         <DialogHeader>
           <DialogTitle>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
