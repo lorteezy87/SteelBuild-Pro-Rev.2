@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Submittal Register (command_ui re-skin, Slice 2b).
+ * Pure derivations for the canonical Submittal Register.
  *
  * No React, no network — reshapes the submittal `rows` read-model into the
  * filtered/sorted list + the KPI counts the register renders. Every value here
@@ -41,6 +41,19 @@ export interface SubmittalStats {
   approved: number;
   rejected: number;
   overdue: number;
+}
+
+/** Selection state is derived from the visible filtered rows only. */
+export function getVisibleSelectionState(
+  rows: Array<{ id?: string | null }>,
+  selectedIds: Set<string>,
+): { allSelected: boolean; selectedVisibleCount: number } {
+  const visibleIds = rows.map((row) => row.id).filter((id): id is string => !!id);
+  const selectedVisibleCount = visibleIds.filter((id) => selectedIds.has(id)).length;
+  return {
+    allSelected: visibleIds.length > 0 && selectedVisibleCount === visibleIds.length,
+    selectedVisibleCount,
+  };
 }
 
 /**

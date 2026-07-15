@@ -49,6 +49,7 @@ export default function NewRoundModal({
   seededNotes = "",
   onClose,
   onSubmit,
+  busy = false,
 }) {
   const nextRoundNum = (previousRound?.round_number || submittal?.round_number || 0) + 1;
   const carriedSetIds = previousRound?.drawing_set_ids || submittal?.drawing_set_ids || [];
@@ -64,7 +65,8 @@ export default function NewRoundModal({
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (busy) return;
     if (!form.submitted_date) {
       toast.error("Submitted date is required");
       return;
@@ -80,7 +82,7 @@ export default function NewRoundModal({
       response_notes: form.response_notes || null,
       status: "Submitted",
     };
-    onSubmit(roundData);
+    await onSubmit(roundData);
   };
 
   return (
@@ -330,6 +332,7 @@ export default function NewRoundModal({
         <DialogFooter>
           <button
             onClick={onClose}
+            disabled={busy}
             style={{
               padding: "8px 14px",
               background: "transparent",
@@ -347,6 +350,7 @@ export default function NewRoundModal({
           </button>
           <button
             onClick={handleSubmit}
+            disabled={busy}
             style={{
               padding: "8px 14px",
               background: "var(--accent)",
@@ -360,7 +364,7 @@ export default function NewRoundModal({
               letterSpacing: "0.06em",
             }}
           >
-            CREATE ROUND
+            {busy ? "CREATING..." : "CREATE ROUND"}
           </button>
         </DialogFooter>
       </DialogContent>

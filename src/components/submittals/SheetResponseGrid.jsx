@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 
 /**
  * SheetResponseGrid — per-sheet response entry when a submittal round
@@ -39,6 +39,7 @@ export default function SheetResponseGrid({
   existingResponses = [],
   onSave,
   onClose,
+  saving = false,
 }) {
   // Build initial state from existing responses or default
   const initialRows = useMemo(() => {
@@ -50,6 +51,7 @@ export default function SheetResponseGrid({
     return drawings.map((d) => {
       const existing = existingMap.get(d.id);
       return {
+        id: existing?.id,
         drawing_id: d.id,
         sheet_number: d.sheet_number || d.drawing_number || "",
         title: d.title || d.drawing_title || "",
@@ -77,14 +79,22 @@ export default function SheetResponseGrid({
     setRows((prev) => prev.map((r) => ({ ...r, response_status: status })));
   }, []);
 
-  const handleSave = () => {
+  const saveInFlight = useRef(false);
+  const handleSave = async () => {
+    if (saving || saveInFlight.current) return;
+    saveInFlight.current = true;
     const responses = rows.map((r) => ({
+      id: r.id,
       drawing_id: r.drawing_id,
       sheet_number: r.sheet_number,
       response_status: r.response_status,
       reviewer_comment: r.reviewer_comment || null,
     }));
-    onSave(responses);
+    try {
+      await onSave(responses);
+    } finally {
+      saveInFlight.current = false;
+    }
   };
 
   // Table styles
@@ -345,9 +355,9 @@ export default function SheetResponseGrid({
         >
           CANCEL
         </button>
-        <button
-          onClick={handleSave}
-          disabled={rows.length === 0}
+          <button
+            onClick={handleSave}
+            disabled={saving || rows.length === 0}
           style={{
             padding: "8px 14px",
             background: rows.length === 0 ? "var(--text-muted)" : "var(--accent)",
@@ -361,7 +371,7 @@ export default function SheetResponseGrid({
             letterSpacing: "0.06em",
           }}
         >
-          SAVE RESPONSES
+            {saving ? "SAVING..." : "SAVE RESPONSES"}
         </button>
       </div>
     </div>

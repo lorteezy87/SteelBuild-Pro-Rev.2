@@ -5,6 +5,7 @@ import {
   filterAndSortSubmittals,
   computeSubmittalStats,
   STATUS_GROUPS,
+  getVisibleSelectionState,
 } from "../submittalRegister.derive";
 import type { DrawingSetsById, Submittal } from "../types";
 
@@ -147,5 +148,19 @@ describe("computeSubmittalStats", () => {
     ];
     const s = computeSubmittalStats(rows, "2026-07-05");
     expect(s.overdue).toBe(1);
+  });
+});
+
+describe("getVisibleSelectionState", () => {
+  it("selects only visible filtered rows, not hidden rows", () => {
+    const rows = [sub({ id: "visible-a" }), sub({ id: "visible-b" })];
+    expect(getVisibleSelectionState(rows, new Set(["visible-a", "hidden"]))).toEqual({
+      allSelected: false,
+      selectedVisibleCount: 1,
+    });
+    expect(getVisibleSelectionState(rows, new Set(["visible-a", "visible-b", "hidden"]))).toEqual({
+      allSelected: true,
+      selectedVisibleCount: 2,
+    });
   });
 });
