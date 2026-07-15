@@ -363,3 +363,26 @@ protection; no setting was changed.
 **Disposition:** OWNER ACTION REQUIRED / BLOCKED. Rerun Batch 43 only after
 backup identity/restorability, Vercel staging environment, Edge Function secret
 names, fixture isolation, and smoke prerequisites are independently evidenced.
+
+## Batch 43B verified staging evidence
+
+A follow-up read-only audit verified that the public staging bundle is not a
+usable candidate build: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are
+both inlined as empty strings, and the application validator rejects missing
+configuration. The staging Supabase project identity remains correct, but the
+frontend cannot be treated as connected to it until Vercel environment values
+are set and a separately approved redeploy is completed.
+
+The Supabase organization is Pro, so daily physical backups are available by
+tier. The exact current backup/restore-point receipt and PITR status remain
+owner-controlled evidence and were not available through the MCP. Staging
+`billing_config` is empty, so Stripe test mode is also unverified. The public
+bundle uses the built-in fallback Sentry DSN rather than a staging-specific DSN;
+this is an observability-isolation follow-up, not a secret exposure.
+
+No production endpoint, credential, webhook, project, migration, Edge Function,
+fixture, upload, or redeploy was used. Static production host strings in shared
+metadata/default-origin code are not treated as runtime environment proof.
+
+**Disposition:** BLOCKED pending owner correction of Vercel staging browser
+configuration, backup evidence, Sentry isolation, and Stripe test-mode setup.

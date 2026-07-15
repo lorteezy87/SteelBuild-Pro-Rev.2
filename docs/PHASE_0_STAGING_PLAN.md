@@ -275,3 +275,36 @@ fixture mutation, upload, or repository-setting change was used.
 restorable backup identifier for `abbeavtbifuddtrifvae`, verify the staging
 Vercel environment values and Edge Function secret names, then rerun the
 migration and deployment gates. Do not use production data or credentials.
+
+## Batch 43B verified staging evidence
+
+The public staging alias was rechecked read-only on 2026-07-15.
+
+- The staging Supabase organization is on the Pro plan, which provides daily
+  physical backups by tier. The exact latest backup identifier, restore-point
+  timestamp, creation time, and effective retention were not exposed by the
+  available provider tooling. PITR enablement was not verified. This remains a
+  recovery-evidence blocker; plan tier alone is not a backup receipt.
+- The public Vercel staging entry bundle inlines both `VITE_SUPABASE_URL` and
+  `VITE_SUPABASE_ANON_KEY` as empty strings. The bundle also contains the
+  environment validator, so the served build cannot initialize the Supabase
+  client and is not a valid staging application build. This is verified from
+  public bundle content; no secret value was read.
+- The entry bundle contains the built-in fallback Sentry DSN rather than a
+  staging-specific override. The fallback is public ingest configuration, not a
+  secret, but staging observability is not isolated from production by DSN.
+- The Supabase project is still `abbeavtbifuddtrifvae`; no production Supabase
+  ref was found in the inspected entry bundle. Static production host strings
+  remain in shared marketing/default-origin code and are not evidence of the
+  runtime Supabase target.
+- Staging `billing_config` has no rows, so Stripe test mode is not confirmed.
+  The source selects `STRIPE_SK_TEST` only when `livemode=false`; the owner must
+  provision an explicit staging test-mode configuration before billing smoke.
+
+Required owner action before any redeploy: set staging-only
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the Vercel staging project,
+provide the backup receipt and PITR status, isolate Sentry configuration, and
+set/verify test-mode Stripe configuration. Redeployment remains a separate,
+explicitly approved action.
+
+**Batch 43B decision: BLOCKED.**

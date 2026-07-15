@@ -252,3 +252,21 @@ engineering handoff.
 Batch 43A remains blocked by backup evidence, staging environment/secret
 verification, Edge Function parity, fixture provisioning, and smoke execution.
 No repository settings were changed.
+
+## Batch 43B verified staging evidence
+
+- [x] Supabase staging identity and Pro plan verified read-only.
+- [ ] Owner-provided backup identifier, restore point, creation time, retention,
+  and restore evidence recorded.
+- [x] Vercel staging project identity and candidate deployment identity verified.
+- [ ] `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` verified in the deployed
+  build; current public bundle contains empty values.
+- [ ] Staging-specific Sentry configuration verified; current bundle uses the
+  built-in fallback DSN.
+- [ ] Stripe test mode verified; staging `billing_config` is empty.
+- [ ] Migrations, Edge Functions, fixtures, uploads, and smoke tests remain
+  blocked and were not run.
+
+Batch 43B is blocked until the owner corrects the staging Vercel environment,
+provides recovery evidence, isolates staging observability, and verifies
+Stripe test mode. No redeploy or remote configuration change was made.
