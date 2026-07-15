@@ -205,7 +205,7 @@
   - Kept `P0-07` in progress.
 
 ### Open items
-- **IN PROGRESS:** batches 14–30 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Organization Members, Field Hub, Backcharge Defense, Expenses, Deliveries, Documents, and Change Orders; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
+- **IN PROGRESS:** batches 14–37 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Organization Members, Field Hub, Backcharge Defense, Expenses, Deliveries, Documents, Change Orders, Work Packages, RFIs, Submittals, Drawings, and Detailing Control Center; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
   - Budget Control
   - Reports & Insights
   - Resource Register
@@ -223,6 +223,20 @@
   - Deliveries
   - Change Orders
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
+
+## Batch 37: Detailing Control Center canonicalization
+
+- Starting commit: `fbf9b637a74d6cc6cc979e359fe78a310a69c769` (Batch 36 HEAD; pushed on `agent/handoff-cleanup`).
+- Scope: made `DetailingCommandShell` the unconditional Detailing Control Center presentation while preserving the `hub_tab` contract, invalid-tab fallback, project/no-project behavior, lazy loading, retry handling, loading/error boundaries, and all supported workflow tabs.
+- Canonical panels: `ControlBoardPanel`, `ProcessBoardPanel`, `DrawingRegisterPanel`, `ApprovalMatrixPanel`, and `RevisionImpactPanel` now render through the canonical shell without a `command_ui` presentation branch or classic page fallback. Operational flags `viewer_3d`, `revision_ai_diff`, and `submittal_workday_dues` remain active for their supported workflows.
+- Preserved workflow behavior: submittal status/round/BIC/due authority, drawing-set identity/files/metadata, drawing-row metadata, revision data, work-package and schedule dates, RFI and change-order escalation, model import, rollups, permissions, navigation, cache invalidation, revision summaries, and specialized register workflows.
+- Integrity hardening: ambiguous name-only package links no longer merge same-name drawing sets; governing active submittals control stage, owner, due, and action state; owner and due writes validate their actual target scope; direct detailing-state writes reject governed/released packages; revision-summary persistence and cache invalidation are awaited; partial model-import outcomes are reported accurately.
+- Source measurements: `DrawingSubmittalHub.tsx` is 721 lines; `ControlBoardPanel.tsx` is 257 lines; `DetailingCommandShell.tsx` is 251 lines; `DrawingRegisterPanel.tsx` is 319 lines; `ApprovalMatrixPanel.tsx` is 301 lines; `RevisionImpactPanel.tsx` is 221 lines; focused format tests are 751 lines.
+- Changed Batch 37 files: `src/pages/DrawingSubmittalHub.tsx`, `src/pages/drawingSubmittalHub/format.ts`, `src/pages/drawingSubmittalHub/ControlBoardPanel.tsx`, `src/pages/drawingSubmittalHub/DetailingCommandShell.tsx`, `src/pages/drawingSubmittalHub/DrawingRegisterPanel.tsx`, `src/pages/drawingSubmittalHub/ApprovalMatrixPanel.tsx`, `src/pages/drawingSubmittalHub/RevisionImpactPanel.tsx`, `src/pages/drawingSubmittalHub/EscalateModal.tsx`, `src/pages/drawingSubmittalHub/fleetHealthStrip.tsx`, `src/pages/drawingSubmittalHub/triageBoard.tsx`, `src/pages/drawingSubmittalHub/drawingControlCenter.derive.ts`, `src/pages/drawingSubmittalHub/drawingRegister.derive.ts`, `src/pages/drawingSubmittalHub/revisionImpact.derive.ts`, `src/pages/drawingSubmittalHub/__tests__/format.test.ts`, `src/components/submittals/ProcessBoardPanel.tsx`, `src/components/drawings/ModelElementImportModal.jsx`, and this baseline document. Unrelated worktree changes remained untouched and excluded.
+- Focused validation passed: 9 detailing-related test files and 162 tests. Full validation passed: 248 test files and 2,965 tests.
+- Quality gates passed: `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, and `npm run typecheck:noimplicitany`. Strict and noImplicitAny reported only the repository's existing grandfathered ignored errors; no enforced errors were present.
+- Production build passed with 4,320 transformed modules. `DrawingSubmittalHub` is 151.01 KB. Existing chunks larger than 500 KB still produce the established Vite warnings.
+- Commit: `refactor: canonicalize Detailing Control Center`. PR #77 remains open and Draft. No deployment, production-data change, migration, or merge occurred.
 
 ### Batch 27 — Expenses canonicalization
 - ✅ `ExpensesControlCenter` is now the only route-level Expenses presentation.

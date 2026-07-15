@@ -643,9 +643,10 @@ interface InlineOwnerControlProps {
   currentOwner: string;
   onAssign: (owner: string) => void;
   disabled: boolean;
+  label?: string;
 }
 
-export function InlineOwnerControl({ currentOwner, onAssign, disabled }: InlineOwnerControlProps) {
+export function InlineOwnerControl({ currentOwner, onAssign, disabled, label = "Owner" }: InlineOwnerControlProps) {
   const [open, setOpen] = useState(false);
   const isUnassigned = !currentOwner || currentOwner === "Unassigned";
 
@@ -663,7 +664,7 @@ export function InlineOwnerControl({ currentOwner, onAssign, disabled }: InlineO
         display: "flex", alignItems: "center", gap: 5,
       }}>
         <User size={10} />
-        Owner
+        {label}
       </div>
       {!open ? (
         <button
@@ -688,7 +689,7 @@ export function InlineOwnerControl({ currentOwner, onAssign, disabled }: InlineO
             whiteSpace: "nowrap",
             textAlign: "left",
           }}
-          title="Click to assign owner"
+          title={`Click to assign ${label.toLowerCase()}`}
         >
           {isUnassigned ? "Assign..." : currentOwner}
         </button>

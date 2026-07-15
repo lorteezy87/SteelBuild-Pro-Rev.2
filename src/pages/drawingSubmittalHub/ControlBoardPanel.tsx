@@ -1,12 +1,11 @@
 /**
- * ControlBoardPanel — the on-skin Detailing Control Board (overview tab), Slice 1
- * of the native command_ui conversion.
+ * ControlBoardPanel — the canonical Detailing Control Board (overview tab).
  *
- * Presentation-only. Renders INSIDE the already-shipped DetailingCommandShell
+ * Presentation-only. Renders inside the canonical DetailingCommandShell
  * light island (whole-<html> [data-skin="command"]), so the kit's `cmd-*`
  * classes resolve. The hub (DrawingSubmittalHub.tsx) still owns every query,
  * mutation, cache key, and piece of state — this panel receives the exact same
- * read-models + handler callbacks the legacy TriageBoard receives, so behavior
+ * read-models + handler callbacks shared by the hub, so behavior
  * is preserved.
  *
  * What this slice CONVERTS to kit primitives: the Next-Decision focus card, the
@@ -70,7 +69,7 @@ export interface ControlBoardPanelProps {
   onImportModelElements?: () => void;
 }
 
-/** Map a triage item's due/action state to a kit Pill tone. Mirrors the legacy
+/** Map a triage item's due/action state to a kit Pill tone.
  *  board's colour semantics (overdue → danger, needs-action → review,
  *  due-soon → warn, else neutral). */
 function itemTone(item: any): PillTone {
@@ -80,8 +79,7 @@ function itemTone(item: any): PillTone {
   return "neutral";
 }
 
-/** One clickable queue row. Routes to the item's tab, exactly like the legacy
- *  TriageItemRow onOpen. */
+/** One clickable queue row that routes to the item's tab. */
 function QueueRow({ item, onOpenTab }: { item: any; onOpenTab: (k: string) => void }) {
   return (
     <div
@@ -120,7 +118,7 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
   const model = buildControlBoardModel(triage);
   // `focus` carries runtime-only fields the container augments (isRR,
   // _canDraft, _detailingStateRaw, _readiness) that aren't on the strict
-  // TriageItem type — accessed loosely here exactly as the legacy TriageBoard
+  // TriageItem type — accessed loosely here at the read-model boundary
   // does (its triage prop is `any`). The derive layer stays strictly typed.
   const focus: any = model.focusItem;
   const focusRoute = focus?.routeTab || "matrix";
@@ -146,6 +144,7 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
                 currentOwner={focus.owner}
                 onAssign={(owner: string) => onUpdateOwner(focus, owner)}
                 disabled={isSaving}
+                label={focus._ownerScope || "Owner"}
               />
               <InlineDateControl
                 currentDate={focus.dueDate}
