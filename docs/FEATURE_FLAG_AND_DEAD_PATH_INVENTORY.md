@@ -101,3 +101,11 @@ No empty mutation handlers or new false-success controls were introduced by Batc
 - Existing feature-flag resolver tests remain the authority for server loading, disabled-until-resolved behavior, and case-insensitive per-user overrides.
 - Required route and source searches, lint, type gates, full tests, and production build are recorded in the Phase 0 baseline after execution.
 - No deployment, production migration, or merge is part of this batch. PR #77 remains Draft.
+
+## Batch 40 closure reconciliation
+
+- No new runtime flag or dead-path disposition was introduced in the closure batch.
+- `command_ui` remains a historical SQL catalog row only. It is absent from the typed production key allowlist and has zero runtime consumers. Its remote rollout state is intentionally not cleared by migration.
+- The eight operational flags remain server-backed, disabled-by-default catalog capabilities: `account_deletion`, `revision_ai_diff`, `submittal_approved_to_scrub`, `submittal_drawing_types`, `submittal_revision_autobump`, `submittal_splitting`, `submittal_workday_dues`, and `viewer_3d`.
+- Browser local-storage, query-string, and client fallback flag systems remain prohibited. Personal email addresses and personal override payloads remain prohibited in source-controlled migrations.
+- Batch 40 guards passed for command-ui retirement, routes, feature catalog keys, function dispatch, and email settings. No migration was applied and no Edge Function was deployed.
