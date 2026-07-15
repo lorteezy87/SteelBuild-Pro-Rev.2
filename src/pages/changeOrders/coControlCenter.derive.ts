@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Change Order Control Center (command_ui redesign).
+ * Pure derivations for the canonical Change Order Control Center.
  * No React, no network. All financial math stays integer-safe (multiply/round
  * at the aggregation layer; amounts stored as plain Numbers from the DB).
  */

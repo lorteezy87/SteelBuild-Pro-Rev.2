@@ -205,7 +205,7 @@
   - Kept `P0-07` in progress.
 
 ### Open items
-- **IN PROGRESS:** batches 14–29 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Organization Members, Field Hub, Backcharge Defense, Expenses, Deliveries, and Documents; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
+- **IN PROGRESS:** batches 14–30 canonicalized Budget Control, Reports, Resources, Portfolio, Risk, Billing, Settings, Vendors, Pay Applications, Production Status, Team, Organization Members, Field Hub, Backcharge Defense, Expenses, Deliveries, Documents, and Change Orders; distinct secondary workflows remain; legacy URLs redirect to selected surfaces
   - Budget Control
   - Reports & Insights
   - Resource Register
@@ -221,6 +221,7 @@
   - Backcharge Defense
   - Expenses
   - Deliveries
+  - Change Orders
 - P0-07 remains in progress: continued migration away from `command_ui` fallback patterns.
 
 ### Batch 27 — Expenses canonicalization
@@ -290,3 +291,19 @@ Selective, in-house consolidation is preferred over a full rewrite. Phase 1 prio
 - Validation passed: focused Documents derivation tests (1 file, 39 tests), `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, `npm run typecheck:noimplicitany`, and the full suite (245 files, 2,931 tests).
 - Production build passed with 4,317 transformed modules. Existing large-chunk warnings remain; the Documents chunk is 93.36 KB.
 - Batch 28 baseline wording was reconciled to the authoritative starting SHA above. The Batch 29 focused canonicalization commit is recorded in git history and in the handoff report. No deployment or merge was performed.
+
+## Batch 30: Change Orders canonicalization
+
+- Starting commit: `92d00a8633e6628523b71f35d235781ad1affd43` (`phase0: canonicalize documents UI`).
+- `CoControlCenter` is now the sole Change Orders presentation path. The classic Operations shell, duplicate KPI/filter/table rendering, lifecycle chevron, and `command_ui` branch were removed.
+- Preserved project scoping, no-project/loading states, RFI `?fromRfi` conversion and source labeling, SOV context, permissions, CRUD dialogs, CSV export, import, cost-rollup authority, server-backed number allocation, and cache invalidation.
+- Hardened bulk submit, approve, and delete: each action captures selected IDs, uses `batchProcess`, disables duplicate pending clicks, records approval identity, reports complete/partial/total failure accurately, invalidates the registered Change Order family once, and reconciles selection without hiding failed rows.
+- Filtered select-all now checks membership of every visible row, so hidden selections cannot produce a false checked state. Row opening and checkbox isolation remain supported.
+- The lifecycle chevron was intentionally retired as duplicate page chrome; status chips, status filtering, decision queues, and risk/exposure summary remain in the canonical center.
+- Working-tree line counts: `ChangeOrders.jsx` 746 -> `496` lines; the canonical parent still owns the active mutation/query boundary.
+- Changed files: `src/pages/ChangeOrders.jsx`, `src/pages/changeOrders/CoControlCenter.tsx`, `src/pages/changeOrders/coControlCenter.derive.ts`, `src/pages/changeOrders/changeOrderBulk.ts`, `src/pages/changeOrders/__tests__/changeOrderBulk.test.ts`, and this baseline document. No Change Orders workflow implementation was deleted.
+- Stale-path search passed: no `command_ui`, `commandUi`, `OperationsPageShell`, duplicate KPI/filter/table shell, lifecycle chevron, or classic Change Orders return remains in the canonical page/control-center path. `CoRow.jsx` remains unimported and was not deleted because the requested cleanup was scoped to the route presentation.
+- Focused validation passed: 5 files and 86 tests covering Change Order derivations, bulk transition contracts, cost rollups, number allocation, and cache registry behavior.
+- Validation passed: `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, and `npm run typecheck:noimplicitany`. Existing grandfathered strict errors remained ignored by the repository ratchet; no new enforced errors were present.
+- Full suite passed: 246 test files and 2,938 tests. Production build passed with 4,317 transformed modules; the Change Orders chunk is 45.28 KB. Existing chunks larger than 500 KB still produce the established build warnings.
+- Batch 30 commit: this focused commit; the final SHA is reported in the handoff. PR #77 remains Draft. No conflicts or deviations from the requested Change Orders scope, database migration, deployment, merge, or PR readiness change occurred; unrelated worktree changes remained untouched.
