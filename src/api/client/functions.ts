@@ -17,7 +17,8 @@ import type { FunctionInvokeResult } from './supabaseTypes';
 export const functions = {
   /**
    * Invoke a named backend function.
-   * Implements client-side versions of critical functions; others fall back gracefully.
+   * Implements the explicit supported function allowlist. Unsupported names
+   * reject instead of returning a null result that could be mistaken for success.
    */
   invoke: async (name: string, params: Record<string, unknown> = {}): Promise<FunctionInvokeResult> => {
     switch (name) {
@@ -79,8 +80,7 @@ export const functions = {
         }
 
       default:
-        console.warn(`functions.invoke('${name}') is not implemented. Deploy a Supabase Edge Function.`);
-        return { data: null };
+        throw new Error(`Unsupported backend function: ${name}`);
     }
   },
 };

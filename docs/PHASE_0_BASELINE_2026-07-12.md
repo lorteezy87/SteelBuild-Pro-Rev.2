@@ -426,3 +426,16 @@ Selective, in-house consolidation is preferred over a full rewrite. Phase 1 prio
 - Visible DMS provider/sync controls remain classified HIDE, and the generic unsupported-function warning remains classified FINISH; neither unrelated workflow was changed in this batch.
 - No implementation files, migrations, schemas, RLS policies, RPCs, or operational flags were deleted. Canonical control-center components and their command stylesheet remain active code, not fallback infrastructure.
 - Required validation, final commit SHA, and exact changed-file list are recorded in the final handoff after execution. PR #77 remains open and Draft. No deployment, merge, or production migration occurred.
+
+## Batch 39: user-visible dead-end remediation
+
+- Starting commit: `f77a0a6bf0b1035f32220bda429c8366e9a3df7b` (`chore: retire command UI flag and inventory dead paths`).
+- The actionable Batch 38 inventory rows were reconciled without touching unrelated local worktree changes. The DMS provider and Folder Sync controls were already disabled in the pre-existing source state and remain HIDE dispositions; no DMS file was staged.
+- Unsupported `functions.invoke` names now reject explicitly instead of returning a null result that could be mistaken for success. Supported alert, LLM, agent-memory, and atomic sequence paths remain unchanged.
+- The unavailable Outlook OAuth connector selector and unreachable Azure AD panel were removed from Email Account Settings. Manual Forward and Power Automate remain supported.
+- Batch measurements: 1 FINISH, 3 HIDE dispositions (2 pre-satisfied), 0 RETIRE, 0 route changes, 0 deleted implementation files. Source changes were limited to the dispatcher and email surface; focused tests were added for both.
+- Focused validation passed: 3 files and 3 tests, covering the unsupported-function rejection, unavailable Outlook OAuth removal, and the Batch 38 command UI retirement guard.
+- Repository validation passed: `npm run lint`, `npm run typecheck`, `npm run typecheck:js`, `npm run typecheck:strict`, `npm run typecheck:noimplicitany`, and `npm test -- --run`. The full suite passed with 251 test files and 2,968 tests; strict/noImplicitAny retained only the existing grandfathered ignored errors.
+- Production build passed with 4,282 transformed modules. Existing chunks larger than 500 kB remain warned by Vite.
+- Primary commit SHA and the exact final changed-file list are recorded in the final handoff after execution.
+- PR #77 remains open and Draft. No deployment, merge, database migration, or production data change occurred. The next follow-up is owner-reviewed DMS source cleanup once its unrelated local edits are committed or otherwise reconciled.

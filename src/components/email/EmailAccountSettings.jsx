@@ -2,7 +2,7 @@
  * EmailAccountSettings.jsx — per-project email account management.
  *
  * Shows connected email accounts for the current project with controls
- * for adding new sources (manual forward or OAuth) and toggling state.
+ * for adding new sources (manual forward or Power Automate) and toggling state.
  * Designed to be embedded on the Integrations page or rendered as a
  * standalone settings drawer.
  */
@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import {
   Mail, Plus, Trash2, Power, PowerOff, Clock, Copy,
-  Check, AlertTriangle,
+  Check,
 } from "lucide-react";
 
 // ── Time helper ────────────────────────────────────────────────────────
@@ -182,13 +182,6 @@ export default function EmailAccountSettings({ projectId }) {
               active={addType === "power_automate"}
               onClick={() => setAddType("power_automate")}
             />
-            <TypeButton
-              label="Outlook OAuth"
-              active={addType === "oauth"}
-              onClick={() => setAddType("oauth")}
-              disabled
-              tooltip="Coming Soon — requires Azure AD app registration"
-            />
           </div>
 
           {/* ── Manual Forward ──────────────────────────────────────── */}
@@ -317,19 +310,6 @@ export default function EmailAccountSettings({ projectId }) {
             </>
           )}
 
-          {/* ── Outlook OAuth (disabled) ────────────────────────────── */}
-          {addType === "oauth" && (
-            <div style={{
-              padding: 20, textAlign: "center", color: "var(--text-muted)",
-              fontFamily: "var(--font-body)", fontSize: 12, lineHeight: 1.5,
-            }}>
-              <AlertTriangle size={20} strokeWidth={1.5} style={{ marginBottom: 8, color: "var(--warning)" }} />
-              <br />
-              Direct Outlook OAuth connection requires Azure AD app registration.
-              <br />
-              Use <strong>Power Automate</strong> for the fastest path to live email ingestion.
-            </div>
-          )}
         </div>
       )}
 
