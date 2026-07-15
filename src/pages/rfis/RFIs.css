@@ -388,6 +388,14 @@
   box-shadow: 0 10px 24px rgba(0,0,0,0.16);
 }
 
+.rfi-filter-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .rfi-search-box {
   position: relative;
   min-width: 0;

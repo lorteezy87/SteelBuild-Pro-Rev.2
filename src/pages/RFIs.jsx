@@ -34,19 +34,13 @@ import { batchProcess } from "@/utils/batchProcess";
 
 import { BulkActionBar } from "@/components/design-system";
 
-import { exportRFIsToCSV, buildRfiCounts, filterAndSortRfis, buildProjectNameMap } from "./rfis/utils";
+import { exportRFIsToCSV, filterAndSortRfis, buildProjectNameMap } from "./rfis/utils";
 import { useRfiSelection, useRfiDensity, useRfiInsightsCollapsed } from "./rfis/useRfiViewState";
 import { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
 import { RFI_ROW_GRID } from "./rfis/RfiRow";
-import RfiFilterToolbar from "./rfis/RfiFilterToolbar";
-import RfiTable from "./rfis/RfiTable";
 import RfiDetailModal from "./rfis/RfiDetailModal";
 import NudgeDraftModal from "./rfis/NudgeDraftModal";
-import RfiInsightsStrip from "./rfis/RfiInsightsStrip";
-import RfiCommandCenter from "./rfis/RfiCommandCenter";
-import AgendaPanel from "./rfis/AgendaPanel";
 import { buildRfiAgenda } from "@/lib/commandCenter/rfiAgenda";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import RfiControlCenter from "./rfis/RfiControlCenter";
 import { calcWpProgress } from "@/utils/projectKpis";
 
@@ -56,7 +50,6 @@ export default function RFIs() {
   const projectId = useProjectId();
   const qc = useQueryClient();
   const { can } = usePermissions();
-  const commandUi = useFlag("command_ui");
 
   const [filter, setFilter] = useState("all");
   const [disciplineFilter, setDisciplineFilter] = useState("All");
@@ -71,6 +64,7 @@ export default function RFIs() {
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [seqFilter, setSeqFilter] = useState(null);
   const [savingAttachments, setSavingAttachments] = useState(false);
+  const saveInFlightRef = useRef(false);
   const { density, densityPreset, setDensity: handleDensityChange } = useRfiDensity();
   const { insightsCollapsed, toggleInsights: handleToggleInsights } = useRfiInsightsCollapsed();
 
@@ -140,7 +134,7 @@ export default function RFIs() {
     mutationFn: (id) => entities.RFI.delete(id),
     onSuccess: async (_, deletedId) => {
       removeRecordFromCaches(qc, rfiQueryKeys, deletedId);
-      if (selectedRFI?.id === deleteTarget?.id) setSelectedRFI(null);
+      if (selectedRFI?.id === deletedId) setSelectedRFI(null);
       setDeleteTarget(null);
       await invalidateCrudQueries(qc, rfiQueryKeys);
       toast.success("RFI deleted");
@@ -157,7 +151,8 @@ export default function RFIs() {
       return results;
     },
     onSuccess: async (results) => {
-      setSelectedIds(new Set());
+      const succeededIds = new Set(results.succeeded.map(({ item }) => item));
+      setSelectedIds((current) => new Set([...current].filter((id) => !succeededIds.has(id))));
       await invalidateCrudQueries(qc, rfiQueryKeys);
       if (results.failed.length > 0) {
         toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
@@ -178,9 +173,10 @@ export default function RFIs() {
     },
     onSuccess: async (results) => {
       const count = results.succeeded.length;
-      setSelectedIds(new Set());
+      const deletedIds = new Set(results.succeeded.map(({ item }) => item));
+      setSelectedIds((current) => new Set([...current].filter((id) => !deletedIds.has(id))));
       setShowBulkDelete(false);
-      if (selectedRFI && [...selectedIds].includes(selectedRFI.id)) setSelectedRFI(null);
+      if (selectedRFI && deletedIds.has(selectedRFI.id)) setSelectedRFI(null);
       await invalidateCrudQueries(qc, rfiQueryKeys);
       if (results.failed.length > 0) {
         toast.warning(`${count} deleted, ${results.failed.length} failed`);
@@ -198,15 +194,20 @@ export default function RFIs() {
   // agenda toggle; drive its "urgent" treatment off that count.
   const agendaUrgent = (agenda.counts?.overdue ?? 0) + (agenda.counts?.blocking ?? 0);
 
-  /* ── Counts & filtered list ── */
-  const counts = useMemo(() => buildRfiCounts(rfis), [rfis]);
-
+  /* ── Filtered list and selection ── */
   const filtered = useMemo(
     () => filterAndSortRfis(rfis, { filter, disciplineFilter, seqFilter, search }, matchesSequenceFilter),
     [rfis, filter, disciplineFilter, seqFilter, search],
   );
 
   const { selectedIds, setSelectedIds, toggleSelect, toggleAll } = useRfiSelection(filtered);
+  useEffect(() => {
+    const sourceIds = new Set(rfis.map((r) => r.id));
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => sourceIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [rfis, setSelectedIds]);
 
   /* ── Overdue → Alert background effect ── */
   const projectMap = useMemo(() => buildProjectNameMap(projects), [projects]);
@@ -274,9 +275,11 @@ export default function RFIs() {
   });
 
   const uploadRfiPdfDocuments = async (rfiRecord, files = []) => {
-    if (!rfiRecord?.id || !files.length) return;
+    if (!rfiRecord?.id || !files.length) return { succeeded: 0, failed: [] };
 
     setSavingAttachments(true);
+    const failed = [];
+    let succeeded = 0;
     try {
       const uploadedBy = await auth.me?.()
         .then((user) => user?.email)
@@ -285,33 +288,47 @@ export default function RFIs() {
       const now = new Date().toISOString();
 
       for (const file of files) {
-        const uploaded = await integrations.Core.UploadFile({ file, workflow: "attachment" });
-        await entities.Document.create({
-          project_id: rfiRecord.project_id || projectId,
-          project_name: rfiRecord.project_name || project?.name || "",
-          rfi_id: rfiRecord.id,
-          display_name: file.name,
-          description: `Attachment for ${rfiRecord.rfi_number || "RFI"}`,
-          file_name: file.name,
-          file_url: uploaded.file_url,
-          file_type: "pdf",
-          file_size_kb: Math.max(1, Math.round(file.size / 1024)),
-          mime_type: file.type || "application/pdf",
-          category: "RFI",
-          document_type: "RFI Attachment",
-          discipline: rfiRecord.discipline || "Other",
-          status: "Current",
-          revision_number: "0",
-          revision_date: now.slice(0, 10),
-          uploaded_by: uploadedBy || "Unknown",
-          uploaded_date: now,
-          tags: ["RFI", rfiRecord.rfi_number || rfiRecord.id].filter(Boolean),
-        });
+        try {
+          const uploaded = await integrations.Core.UploadFile({ file, workflow: "attachment" });
+          await entities.Document.create({
+            project_id: rfiRecord.project_id || projectId,
+            project_name: rfiRecord.project_name || project?.name || "",
+            rfi_id: rfiRecord.id,
+            display_name: file.name,
+            description: `Attachment for ${rfiRecord.rfi_number || "RFI"}`,
+            file_name: file.name,
+            file_url: uploaded.file_url,
+            file_type: "pdf",
+            file_size_kb: Math.max(1, Math.round(file.size / 1024)),
+            mime_type: file.type || "application/pdf",
+            category: "RFI",
+            document_type: "RFI Attachment",
+            discipline: rfiRecord.discipline || "Other",
+            status: "Current",
+            revision_number: "0",
+            revision_date: now.slice(0, 10),
+            uploaded_by: uploadedBy || "Unknown",
+            uploaded_date: now,
+            tags: ["RFI", rfiRecord.rfi_number || rfiRecord.id].filter(Boolean),
+          });
+          succeeded += 1;
+        } catch (error) {
+          failed.push({ name: file.name, message: error?.message || "Upload failed" });
+        }
       }
 
-      await qc.invalidateQueries({ queryKey: ["rfi-documents", rfiRecord.id] });
-      await qc.invalidateQueries({ queryKey: ["documents", rfiRecord.project_id || projectId] });
-      toast.success(`${files.length} PDF${files.length === 1 ? "" : "s"} attached to ${rfiRecord.rfi_number || "RFI"}`);
+      if (succeeded > 0) {
+        await qc.invalidateQueries({ queryKey: ["rfi-documents", rfiRecord.id] });
+        await qc.invalidateQueries({ queryKey: ["documents", rfiRecord.project_id || projectId] });
+      }
+      if (failed.length > 0 && succeeded > 0) {
+        toast.warning(`${succeeded} PDF${succeeded === 1 ? "" : "s"} attached; ${failed.length} failed. RFI was saved.`);
+      } else if (failed.length > 0) {
+        toast.error(`RFI was saved, but ${failed.length} PDF attachment${failed.length === 1 ? "" : "s"} failed.`);
+      } else {
+        toast.success(`${succeeded} PDF${succeeded === 1 ? "" : "s"} attached to ${rfiRecord.rfi_number || "RFI"}`);
+      }
+      return { succeeded, failed };
     } finally {
       setSavingAttachments(false);
     }
@@ -401,6 +418,8 @@ export default function RFIs() {
           open={showForm}
           onClose={() => { setShowForm(false); setEditingRFI(null); }}
           onSave={async (data, pdfFiles = []) => {
+            if (saveInFlightRef.current) return;
+            saveInFlightRef.current = true;
             try {
               if (editingRFI) {
                 const updated = await updateMut.mutateAsync({
@@ -416,15 +435,18 @@ export default function RFIs() {
                 });
                 await uploadRfiPdfDocuments(updated || { ...editingRFI, ...data }, pdfFiles);
               } else {
+                const allocationProjectId = data.project_id || projectId;
+                if (!allocationProjectId) throw new Error("Select a project before creating an RFI.");
                 const num =
                   data.rfi_number ||
                   (await getNextFormattedNumber({
-                    projectId: data.project_id || projectId,
+                    projectId: allocationProjectId,
                     recordType: "RFI",
                     entityName: "RFI",
                     fieldName: "rfi_number",
                     prefix: "RFI #",
                   }));
+                if (!num) throw new Error("RFI number allocation failed. The RFI was not saved.");
                 const created = await createMut.mutateAsync({
                   ...data,
                   rfi_number: num,
@@ -439,6 +461,8 @@ export default function RFIs() {
               setEditingRFI(null);
             } catch (error) {
               toastCrudError(error, "Failed to save RFI");
+            } finally {
+              saveInFlightRef.current = false;
             }
           }}
           saving={createMut.isPending || updateMut.isPending || savingAttachments}
@@ -464,57 +488,6 @@ export default function RFIs() {
     </>
   );
 
-  if (commandUi) {
-    return (
-      <div
-        className="sb-dashboard-reference-page rfi-page"
-        style={{
-          "--density-row-height": `${densityPreset.rowHeight}px`,
-          "--rfi-row-grid": RFI_ROW_GRID,
-        }}
-      >
-        <ListTruncationNotice count={rfis.length} label="RFIs" />
-        <RfiControlCenter
-          projectName={activeProjectName}
-          rfis={rfis}
-          filtered={filtered}
-          search={search}
-          onSearch={setSearch}
-          disciplineFilter={disciplineFilter}
-          onDisciplineChange={setDisciplineFilter}
-          onFilterChange={setFilter}
-          onOpenRfi={setSelectedRFI}
-          onExport={() => exportRFIsToCSV(filtered)}
-          onCreate={can("create", "rfi") ? () => { setEditingRFI(null); setShowForm(true); } : null}
-          onImport={can("create", "rfi") ? () => setShowLogImport(true) : null}
-          projectHealth={projectHealth}
-          percentComplete={percentComplete}
-          selectedIds={selectedIds}
-          onToggleSelect={toggleSelect}
-          onToggleAll={toggleAll}
-        />
-        <BulkActionBar
-          count={selectedIds.size}
-          onClear={() => setSelectedIds(new Set())}
-          actions={[
-            { label: "MARK ANSWERED", icon: "check", onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Answered", date_answered: new Date().toISOString().split("T")[0] } }) },
-            { label: "MARK UNDER REVIEW", icon: "clock", onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Under Review" } }) },
-            { label: "BULK EDIT", icon: "edit", onClick: () => setShowBulkEdit(true) },
-            { label: "EXPORT", icon: "download", onClick: () => exportRFIsToCSV(filtered.filter((r) => selectedIds.has(r.id))) },
-            ...(can("delete", "rfi") ? [{ label: "DELETE", icon: "x", variant: "danger", onClick: () => setShowBulkDelete(true) }] : []),
-          ]}
-        />
-        <RfiBulkEditModal
-          open={showBulkEdit}
-          count={selectedIds.size}
-          onCancel={() => setShowBulkEdit(false)}
-          onSubmit={(data) => { bulkUpdateMut.mutate({ ids: [...selectedIds], data }); setShowBulkEdit(false); }}
-        />
-        {modals}
-      </div>
-    );
-  }
-
   return (
     <div
       className="sb-dashboard-reference-page rfi-page"
@@ -523,13 +496,32 @@ export default function RFIs() {
         "--rfi-row-grid": RFI_ROW_GRID,
       }}
     >
-      <ListTruncationNotice count={rfis.length} label="RFIs" />
-      <RfiCommandCenter
+      <RfiControlCenter
         projectName={activeProjectName}
-        counts={counts}
         rfis={rfis}
+        filtered={filtered}
+        search={search}
+        onSearch={setSearch}
         filter={filter}
         onFilterChange={setFilter}
+        disciplineFilter={disciplineFilter}
+        onDisciplineChange={setDisciplineFilter}
+        onClearFilters={() => {
+          setFilter("all");
+          setDisciplineFilter("All");
+          setSearch("");
+          setSeqFilter(null);
+        }}
+        density={density}
+        onDensityChange={handleDensityChange}
+        seqFilter={seqFilter}
+        onSeqFilter={setSeqFilter}
+        agendaOpen={agendaOpen}
+        onToggleAgenda={() => setAgendaOpen((value) => !value)}
+        agenda={agenda}
+        agendaUrgent={agendaUrgent}
+        insightsCollapsed={insightsCollapsed}
+        onToggleInsights={handleToggleInsights}
         onOpenRfi={setSelectedRFI}
         onExport={() => exportRFIsToCSV(filtered)}
         onImport={can("create", "rfi") ? () => setShowLogImport(true) : null}
@@ -537,96 +529,64 @@ export default function RFIs() {
           setEditingRFI(null);
           setShowForm(true);
         } : null}
-      />
-
-      <RfiInsightsStrip
-        rfis={rfis}
-        collapsed={insightsCollapsed}
-        onToggleCollapsed={handleToggleInsights}
-      />
-      <RfiFilterToolbar
-        search={search}
-        onSearch={setSearch}
-        disciplineFilter={disciplineFilter}
-        onDisciplineChange={setDisciplineFilter}
-        density={density}
-        onDensityChange={handleDensityChange}
-        rfis={rfis}
-        seqFilter={seqFilter}
-        onSeqFilter={setSeqFilter}
-        agendaOpen={agendaOpen}
-        onToggleAgenda={() => setAgendaOpen((v) => !v)}
-        agenda={agenda}
-        agendaUrgent={agendaUrgent}
-        filteredCount={filtered.length}
-        totalCount={rfis.length}
-      />
-
-      {agendaOpen && (
-        <AgendaPanel
-          agenda={agenda}
-          onOpenRfi={setSelectedRFI}
-          onClose={() => setAgendaOpen(false)}
-        />
-      )}
-
-      {/* Table */}
-      <RfiTable
-        rows={filtered}
-        totalCount={rfis.length}
+        projectHealth={projectHealth}
+        percentComplete={percentComplete}
         selectedIds={selectedIds}
-        onToggleAll={toggleAll}
         onToggleSelect={toggleSelect}
-        onOpen={setSelectedRFI}
+        onToggleAll={toggleAll}
+        listTruncationNotice={<ListTruncationNotice count={rfis.length} label="RFIs" />}
+        bulkActions={(
+          <BulkActionBar
+            count={selectedIds.size}
+            onClear={() => setSelectedIds(new Set())}
+            actions={[
+              {
+                label: "MARK ANSWERED",
+                icon: "check",
+                disabled: bulkUpdateMut.isPending,
+                onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Answered", date_answered: new Date().toISOString().split("T")[0] } }),
+              },
+              {
+                label: "MARK UNDER REVIEW",
+                icon: "clock",
+                disabled: bulkUpdateMut.isPending,
+                onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Under Review" } }),
+              },
+              {
+                label: "BULK EDIT",
+                icon: "edit",
+                disabled: bulkUpdateMut.isPending,
+                onClick: () => setShowBulkEdit(true),
+              },
+              {
+                label: "EXPORT",
+                icon: "download",
+                disabled: !filtered.some((r) => selectedIds.has(r.id)),
+                onClick: () => exportRFIsToCSV(filtered.filter((r) => selectedIds.has(r.id))),
+              },
+              ...(can("delete", "rfi") ? [{
+                label: "DELETE",
+                icon: "x",
+                variant: "danger",
+                disabled: bulkDeleteMut.isPending,
+                onClick: () => setShowBulkDelete(true),
+              }] : []),
+            ]}
+          />
+        )}
+        bulkEditModal={(
+          <RfiBulkEditModal
+            open={showBulkEdit}
+            count={selectedIds.size}
+            onCancel={() => setShowBulkEdit(false)}
+            onSubmit={(data) => {
+              bulkUpdateMut.mutate({ ids: [...selectedIds], data });
+              setShowBulkEdit(false);
+            }}
+          />
+        )}
+        modals={modals}
       />
-
-      {/* Bulk actions */}
-      <BulkActionBar
-        count={selectedIds.size}
-        onClear={() => setSelectedIds(new Set())}
-        actions={[
-          {
-            label: "MARK ANSWERED",
-            icon: "check",
-            onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Answered", date_answered: new Date().toISOString().split("T")[0] } }),
-          },
-          {
-            label: "MARK UNDER REVIEW",
-            icon: "clock",
-            onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Under Review" } }),
-          },
-          {
-            // Full bulk-edit modal — lets users update priority, BIC,
-            // required date, etc. on the whole selection at once.
-            label: "BULK EDIT",
-            icon: "edit",
-            onClick: () => setShowBulkEdit(true),
-          },
-          {
-            label: "EXPORT",
-            icon: "download",
-            onClick: () => exportRFIsToCSV(filtered.filter((r) => selectedIds.has(r.id))),
-          },
-          ...(can("delete", "rfi") ? [{
-            label: "DELETE",
-            icon: "x",
-            variant: "danger",
-            onClick: () => setShowBulkDelete(true),
-          }] : []),
-        ]}
-      />
-
-      <RfiBulkEditModal
-        open={showBulkEdit}
-        count={selectedIds.size}
-        onCancel={() => setShowBulkEdit(false)}
-        onSubmit={(data) => {
-          bulkUpdateMut.mutate({ ids: [...selectedIds], data });
-          setShowBulkEdit(false);
-        }}
-      />
-
-      {modals}
     </div>
   );
 }

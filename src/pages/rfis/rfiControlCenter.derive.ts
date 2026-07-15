@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the RFI Control Center (command_ui redesign).
+ * Pure derivations for the canonical RFI Control Center.
  * No React, no network. Reuses the canonical helpers in ./utils so the
  * redesigned page computes identically to the classic one.
  */
@@ -58,7 +58,7 @@ export function daysUntil(dateStr?: string | null): number | null {
   return Math.ceil((due.getTime() - today.getTime()) / 86400000);
 }
 
-/** Urgency score — copied 1:1 from the classic RfiCommandCenter so both paths rank identically. */
+/** Urgency score used by the canonical RFI work queues. */
 export function riskScore(rfi: RfiRecord): number {
   const age = daysOpen(rfi);
   const due = daysUntil(rfi.date_required);

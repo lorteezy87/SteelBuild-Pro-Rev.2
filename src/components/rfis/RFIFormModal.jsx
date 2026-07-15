@@ -236,7 +236,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     staleTime: 60_000,
   });
 
-  // Fallback internal mutation — only used when parent does NOT supply onSave
+  // Shared-entry mutation used only when the parent does not supply onSave.
   const internalMutation = useMutation({
     mutationFn: async (data) => {
       // Coerce empty-string numeric fields to null so Postgres doesn't reject them
@@ -248,24 +248,15 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       if (rfi) {
         return entities.RFI.update(rfi.id, clean);
       }
-      let rfiNumber;
-      if (clean.project_id) {
-        rfiNumber = await getNextFormattedNumber({
-          projectId: clean.project_id,
-          recordType: "RFI",
-          entityName: "RFI",
-          fieldName: "rfi_number",
-          prefix: "RFI #",
-        });
-      } else {
-        // No project — scan ALL RFIs to find the global max number
-        const allRFIs = await entities.RFI.list();
-        const maxNum = (allRFIs || []).reduce((max, r) => {
-          const m = String(r.rfi_number || "").match(/(\d+)(?!.*\d)/);
-          return m ? Math.max(max, Number(m[1])) : max;
-        }, 0);
-        rfiNumber = `RFI #${String(maxNum + 1).padStart(3, "0")}`;
-      }
+      if (!clean.project_id) throw new Error("Select a project before creating an RFI.");
+      const rfiNumber = await getNextFormattedNumber({
+        projectId: clean.project_id,
+        recordType: "RFI",
+        entityName: "RFI",
+        fieldName: "rfi_number",
+        prefix: "RFI #",
+      });
+      if (!rfiNumber) throw new Error("RFI number allocation failed. The RFI was not saved.");
       return entities.RFI.create({
         ...clean,
         rfi_number: rfiNumber,
@@ -281,6 +272,8 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     onError: (err) =>
       toast.error("Failed to save RFI: " + (err?.message || "Unknown error")),
   });
+
+  const submitInFlightRef = useRef(false);
 
   const quickStatusMut = useMutation({
     mutationFn: (status) => entities.RFI.update(rfi.id, { status }),
@@ -385,14 +378,25 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
 
     const payload = buildPayload(pf, !pf.passed ? overrideReason.trim() : null);
 
-    // If parent supplied onSave, delegate to it (parent handles persistence + cache)
+    // If parent supplied onSave, delegate to it (parent handles persistence + cache).
     if (typeof onSave === "function") {
-      onSave(payload, pendingPdfFiles);
+      if (submitInFlightRef.current) return;
+      submitInFlightRef.current = true;
+      Promise.resolve()
+        .then(() => onSave(payload, pendingPdfFiles))
+        .then(
+          () => { submitInFlightRef.current = false; },
+          () => { submitInFlightRef.current = false; },
+        );
       return;
     }
 
-    // Otherwise use our internal mutation as fallback
-    internalMutation.mutate(payload);
+    // Otherwise use the same RPC-backed mutation for shared entry points.
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
+    internalMutation.mutate(payload, {
+      onSettled: () => { submitInFlightRef.current = false; },
+    });
   };
 
   const statusBtnStyle = (s) => ({
