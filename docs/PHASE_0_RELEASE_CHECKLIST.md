@@ -302,3 +302,35 @@ The key value was not exposed or committed. The existing deployment remains inva
 The exact approved candidate remains `270b993ef35ec79517c635114321f4bdc8420760`. No redeployment was performed because the available Vercel connector cannot safely pin a new deployment to that exact commit, and no authenticated Vercel CLI or token is available locally. The current branch head must not be deployed as a substitute.
 
 Edge Function custom secret-name presence remains unverified through available provider tools. Only `account-delete` is deployed in staging and it uses platform-injected Supabase defaults. No Edge Functions were deployed.
+
+## Batch 43B candidate redeployment verification update
+
+Owner-provided Vercel evidence and deployment metadata verify:
+
+- Project: `steelbuild-pro-staging`
+- Project ID: `prj_W0dhGzRfU3uQPkqxZLhnzwXTMQO8`
+- Deployment: `dpl_2NanBCWNq9bUJBGKTgZmGR97hyQn`
+- Candidate: `270b993ef35ec79517c635114321f4bdc8420760`
+- Source branch: `agent/handoff-cleanup`
+- Environment: Preview
+- State: Ready
+- Custom-domain assignment: skipped
+- Production domain: not assigned
+
+The deployment was rebuilt after the owner corrected `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the isolated staging Vercel project. The prior staging deployment remains configuration-invalid because it was built with placeholder Supabase values.
+
+Build-log warning classification:
+
+- Floating Node engine range (`>=20`) may auto-select a future major Node version; this is a configuration-hardening follow-up, not a deployment failure.
+- `whatwg-encoding@3.1.1` is deprecated; this is a dependency follow-up and did not fail the build.
+- Vite reports chunks over the 500 kB threshold, including `vendor-xlsx`, `IfcModelViewer`, and `web-ifc-api`; these are performance warnings, not runtime health evidence.
+- The available Vercel build-log API exposes these warning categories but does not expose four discrete warning records; a fourth warning cannot be classified without the deployment dashboard record.
+
+Deployment-check classification:
+
+- Skipped custom-domain assignment is expected for an isolated Preview deployment.
+- No production-domain assignment is expected and confirms no production-domain promotion was performed.
+
+Runtime status remains incomplete. Direct unauthenticated requests to the protected preview returned Vercel fallback/login content rather than the application, so bundle target, placeholder absence, runtime request, manifest, service-worker, WASM, and lazy-route checks are not marked passed. A browser session with access to the protected preview is required.
+
+The physical staging database backup identifier remains `15 Jul 2026 05:54:28 UTC`. Do not promote the preview, apply migrations, or deploy Edge Functions until browser runtime checks and required staging secret-name/function readiness checks are complete.
