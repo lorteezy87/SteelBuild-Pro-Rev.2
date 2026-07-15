@@ -405,3 +405,16 @@ Owner-provided evidence verifies the separate SteelBuild-Pro Staging project:
 - The `main / PRODUCTION` badge is the primary-branch designation inside this separate staging project and does not change the staging ref
 
 Vercel staging environment identity and required secret-name presence remain outstanding. Do not apply migrations or deploy Edge Functions until those checks are verified.
+
+## Batch 43B owner-confirmed Vercel staging environment update
+
+Owner confirmation verifies that the isolated Vercel project `steelbuild-pro-staging` (`prj_W0dhGzRfU3uQPkqxZLhnzwXTMQO8`) has the following browser configuration saved for both Production and Preview targets:
+
+- `VITE_SUPABASE_URL` is configured for Supabase staging ref `abbeavtbifuddtrifvae`
+- `VITE_SUPABASE_ANON_KEY` is configured with the publishable/anon key for staging ref `abbeavtbifuddtrifvae`
+
+The key value was not exposed or committed. The existing deployment remains invalid for runtime verification because it was built before this correction and contains placeholder configuration.
+
+The exact approved candidate remains `270b993ef35ec79517c635114321f4bdc8420760`. No redeployment was performed because the available Vercel connector cannot safely pin a new deployment to that exact commit, and no authenticated Vercel CLI or token is available locally. The current branch head must not be deployed as a substitute.
+
+Edge Function custom secret-name presence remains unverified through available provider tools. Only `account-delete` is deployed in staging and it uses platform-injected Supabase defaults. No Edge Functions were deployed.
