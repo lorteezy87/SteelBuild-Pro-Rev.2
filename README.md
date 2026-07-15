@@ -69,9 +69,12 @@ and the status×ball-in-court → stage mapping.
 Requires Node 20+.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
+
+`npm ci` is the reproducible install path for the committed lockfile. Use
+`npm install` only when intentionally changing dependency metadata.
 
 Create `.env.local` with the two required variables:
 
@@ -120,7 +123,7 @@ public/          static assets, web-ifc wasm, pdf workers
 ## Database migrations
 
 Migrations live in `supabase/migrations/` (mixed legacy `NNN_name.sql` and
-timestamped `YYYYMMDDhhmmss_name.sql` — the history was **re-baselined** (≈7
+timestamped `YYYYMMDDhhmmss_name.sql` — the history was **re-baselined** (29
 active files; ~190 legacy migrations archived), so inspect the directory for the
 latest rather than assuming a number). Apply live changes via
 the Supabase MCP (`apply_migration`) and commit the same SQL so repo history
@@ -176,15 +179,18 @@ flag (off by default) and a type-the-name confirmation.
 
 ## Testing
 
-~2,450 Vitest tests: pure-helper suites (default `node` env) + jsdom integration
-tests (`// @vitest-environment jsdom`) that drive real components/import flows
-with the Supabase client mocked. No full-browser E2E yet (see `TECH_DEBT.md`).
-(The count keeps climbing as large components are thinned — their extracted logic
-lands in tested helper modules; see `TECH_DEBT.md` → large-component decomposition.)
+The Phase 0 closure baseline is 251 Vitest files and 2,968 tests: pure-helper
+suites (default `node` env) plus jsdom integration tests
+(`// @vitest-environment jsdom`) that drive real components/import flows with the
+Supabase client mocked. Playwright smoke and fab-release gate specs are available
+under `e2e/`, but remain opt-in and nonblocking until dedicated test fixtures are
+configured. Counts change as tested helper modules are added; run `npm test --
+--run` for the current total.
 
 ## CI/CD
 
-`.github/workflows/ci.yml` runs on every push / PR: lint, four typecheck gates
+`.github/workflows/ci.yml` runs on configured push branches and pull requests
+targeting the supported bases: lint, four typecheck gates
 (TS, JS/JSX, the **strictNullChecks** ratchet, and the **noImplicitAny**
 ratchet), Vitest, and a production build — all blocking. Only a green `ci` job
 lets the gated `deploy` job publish to Vercel, followed by a post-deploy health
@@ -194,8 +200,8 @@ redundant runs (but never a `main`/`staging` run mid-deploy).
 
 ## Deployment
 
-Feature work lands on a `claude/*` branch (or directly on `main` for the
-agent-driven flow). A push to **`main`** runs the `ci` job; **only if it passes**
+Feature work lands on a feature branch and is reviewed through a pull request. A
+push to **`main`** runs the `ci` job; **only if it passes**
 does the `deploy` job ship the prebuilt output to Vercel
 (`vercel pull/build/deploy --prebuilt --prod`). A red run cannot deploy —
 production stays on the last good build. Vercel's git auto-deploy is disabled
@@ -228,15 +234,20 @@ separate LLM-spend table.
 
 ## Feature flags
 
-Lightweight homegrown system (`feature_flags` Supabase table). Admin UI at
-`/FeatureFlagsAdmin`. Read flags via:
+`feature_flags` in Supabase is the only runtime authority. Every production flag
+must exist in the typed catalog at `src/config/featureFlags.ts` and the catalog
+seed migration. Admin UI is at `/FeatureFlagsAdmin`; global enablement and
+administrator-managed per-user overrides are environment state, not committed
+personal data. The retired `command_ui` presentation flag is no longer consumed
+by runtime code. The eight remaining operational flags are read server-side via:
 
 ```js
 import { useFlag, useAllFlags } from "@/hooks/useFeatureFlag";
 const show3dViewer = useFlag("viewer_3d");
 ```
 
-Per-email overrides via `feature_flags.user_overrides` jsonb map.
+Per-user overrides use `feature_flags.user_overrides` as a jsonb map and must not
+contain personal email addresses in source-controlled seeds.
 
 ## Notes on viewers
 
