@@ -39,8 +39,8 @@ function stripeClient(livemode: boolean): Stripe {
   return new Stripe(key, { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
 }
 
-const json = (obj: unknown, status = 200) =>
-  new Response(JSON.stringify(obj), { status, headers: { ...corsHeaders(), "Content-Type": "application/json" } });
+const json = (obj: unknown, status = 200, req?: Request) =>
+  new Response(JSON.stringify(obj), { status, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
 
 // BillingConfig + the pure webhook->org mapping live in ./webhookLogic.ts (unit-tested).
 
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
     // any escape here is an app-action or config failure where CORS matters.
     console.error("stripe-billing unhandled error", e);
     const message = e instanceof Error ? e.message : String(e);
-    return json({ error: `Internal error: ${message}` }, 500);
+    return json({ error: `Internal error: ${message}` }, 500, req);
   }
 });
 
@@ -183,20 +183,20 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // ── App actions: checkout / portal (JWT-verified) ──
   let body: { action?: string; org_id?: string; plan?: string };
-  try { body = await req.json(); } catch { return json({ error: "Invalid request body" }, 400); }
+  try { body = await req.json(); } catch { return json({ error: "Invalid request body" }, 400, req); }
   const { action, org_id, plan } = body;
-  if (!org_id) return json({ error: "org_id is required" }, 400);
+  if (!org_id) return json({ error: "org_id is required" }, 400, req);
 
   const authHeader = req.headers.get("Authorization") ?? "";
   const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
   const { data: { user } } = await userClient.auth.getUser();
-  if (!user) return json({ error: "Not authenticated" }, 401);
+  if (!user) return json({ error: "Not authenticated" }, 401, req);
 
   // Only an owner/admin of the org may manage its billing.
   const { data: membership } = await admin
     .from("organization_members").select("role").eq("org_id", org_id).eq("user_id", user.id).maybeSingle();
   if (!membership || !["owner", "admin"].includes(membership.role)) {
-    return json({ error: "You don't have permission to manage this workspace's billing" }, 403);
+    return json({ error: "You don't have permission to manage this workspace's billing" }, 403, req);
   }
 
   // Validate the Origin before it's baked into Stripe redirect URLs (#12). An
@@ -209,7 +209,7 @@ async function handleRequest(req: Request): Promise<Response> {
   if (action === "checkout") {
     const PRICE: Record<string, string> = { pro: cfg.pricePro, business: cfg.priceBusiness };
     const priceId = plan ? PRICE[plan] : "";
-    if (!priceId) return json({ error: `Plan "${plan}" isn't available for checkout yet` }, 400);
+    if (!priceId) return json({ error: `Plan "${plan}" isn't available for checkout yet` }, 400, req);
 
     const { data: org } = await admin.from("organizations").select("stripe_customer_id, name").eq("id", org_id).single();
     let customerId = org?.stripe_customer_id ?? null;
@@ -230,15 +230,15 @@ async function handleRequest(req: Request): Promise<Response> {
       success_url: `${origin}/Billing?status=success`,
       cancel_url: `${origin}/Billing?status=cancel`,
     });
-    return json({ url: session.url });
+    return json({ url: session.url }, 200, req);
   }
 
   if (action === "portal") {
     const { data: org } = await admin.from("organizations").select("stripe_customer_id").eq("id", org_id).single();
-    if (!org?.stripe_customer_id) return json({ error: "No billing account yet — start a subscription first" }, 400);
+    if (!org?.stripe_customer_id) return json({ error: "No billing account yet — start a subscription first" }, 400, req);
     const portal = await stripe.billingPortal.sessions.create({ customer: org.stripe_customer_id, return_url: `${origin}/Billing` });
-    return json({ url: portal.url });
+    return json({ url: portal.url }, 200, req);
   }
 
-  return json({ error: "Unknown action" }, 400);
+  return json({ error: "Unknown action" }, 400, req);
 }

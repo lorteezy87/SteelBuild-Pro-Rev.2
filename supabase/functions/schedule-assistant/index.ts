@@ -16,6 +16,7 @@
 // signing, which produced the "Unsupported JWT algorithm ES256" 401
 // error whenever the edge function called supabase.auth.getUser(token).
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
+import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { schedulingTools } from "./tool-schemas.ts";
 import { executeToolCall } from "./tool-handlers.ts";
 
@@ -140,17 +141,17 @@ If any tool returned \`staleness_warnings\` or \`data_gaps\`:
 // ---------------------------------------------------------------------------
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders() });
+    return new Response(null, { headers: corsHeaders(req) });
   }
   if (req.method !== "POST") {
-    return json({ error: "POST required" }, 405);
+    return json({ error: "POST required" }, 405, req);
   }
 
   try {
     const { project_id, messages, model } = await req.json();
 
     if (!project_id || !Array.isArray(messages)) {
-      return json({ error: "project_id and messages[] required" }, 400);
+      return json({ error: "project_id and messages[] required" }, 400, req);
     }
 
     const authHeader = req.headers.get("Authorization");
@@ -158,6 +159,7 @@ Deno.serve(async (req: Request) => {
       return json(
         { error: "Unauthorized — valid Bearer JWT required" },
         401,
+        req,
       );
     }
 
@@ -177,7 +179,7 @@ Deno.serve(async (req: Request) => {
     const supabaseAnon = Deno.env.get("SUPABASE_ANON_KEY");
     if (!supabaseUrl || !supabaseAnon) {
       console.error("Missing SUPABASE_URL or SUPABASE_ANON_KEY env");
-      return json({ error: "Edge function not configured" }, 500);
+      return json({ error: "Edge function not configured" }, 500, req);
     }
 
     let userData: { id: string; email?: string } | null = null;
@@ -199,16 +201,17 @@ Deno.serve(async (req: Request) => {
             error: `Invalid or expired session (auth/user ${userResp.status})`,
           },
           401,
+          req,
         );
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("Auth /user fetch threw:", msg);
-      return json({ error: `Auth service unreachable: ${msg}` }, 502);
+      return json({ error: `Auth service unreachable: ${msg}` }, 502, req);
     }
 
     if (!userData) {
-      return json({ error: "Invalid or expired session — no user returned" }, 401);
+      return json({ error: "Invalid or expired session — no user returned" }, 401, req);
     }
 
     const result = await runAgentLoop({
@@ -220,12 +223,13 @@ Deno.serve(async (req: Request) => {
       model: typeof model === "string" && model.trim() ? model.trim() : DEFAULT_MODEL,
     });
 
-    return json(result, 200);
+    return json(result, 200, req);
   } catch (err) {
     console.error("Edge function error:", err);
     return json(
       { error: err instanceof Error ? err.message : "Unknown error" },
       500,
+      req,
     );
   }
 });
@@ -508,23 +512,6 @@ async function persistAuditLog(
 // ---------------------------------------------------------------------------
 // HTTP helpers
 // ---------------------------------------------------------------------------
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    // supabase-js sends apikey + x-client-info + x-supabase-auth on every
-    // call via functions.invoke(). Browsers strict-check these against the
-    // preflight response — leaving any off returns a generic "Failed to
-    // send a request to the Edge Function" CORS block in the client.
-    "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, apikey, x-client-info, x-supabase-auth",
-    "Access-Control-Max-Age": "86400",
-  };
-}
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...corsHeaders() },
-  });
+function json(body: unknown, status = 200, req?: Request) {
+  return jsonResponse(body, status, req);
 }
