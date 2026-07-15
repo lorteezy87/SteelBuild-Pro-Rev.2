@@ -338,3 +338,17 @@ The physical staging database backup identifier remains `15 Jul 2026 05:54:28 UT
 ## Batch 43B Edge Function secret evidence update
 
 Owner evidence confirms that staging has no custom Edge Function secrets. The exact per-function deployment order, minimum custom secret set, optional-secret behavior, smoke requests, rollback anchors, and missing-secret matrix are maintained in [PHASE_0_EDGE_FUNCTION_SECRET_MATRIX.md](PHASE_0_EDGE_FUNCTION_SECRET_MATRIX.md). Only `account-delete` is currently deployed; it must not be invoked. The Supabase dashboard technical-issue and outstanding-invoice notices remain external environment conditions. Batch 43B remains owner-blocked.
+
+## Batch 43E source correction gate
+
+- [x] Shared CORS source correction committed at `f453abbd`; configured `ALLOWED_ORIGINS` is an exact allowlist and response paths receive the request origin.
+- [x] CORS regression suite passed: 1 file, 5 tests.
+- [x] Local blocking gates passed: lint, TypeScript, JavaScript/JSX, strict, noImplicitAny, full Vitest (252 files, 2,973 tests), and production build (4,282 transformed modules).
+- [x] Read-only staging probes and migration/function inventory were reviewed without invoking `account-delete` or changing staging state.
+- [ ] Rebuild/deploy `_shared`, `health`, `project-export`, and `schedule-assistant` from the exact source candidate after explicit staging approval.
+- [ ] Verify protected preview runtime bundle, manifest, service worker, WASM, lazy routes, and console errors with an authorized browser session.
+- [ ] Create a dedicated staging fixture and authenticated JWT for project-export smoke; do not use production data.
+- [ ] Classify schedule-assistant functional smoke after confirming whether a nonpersistent path exists; no LLM secret is configured in this pass.
+- [ ] Obtain provider deployment-history evidence for frozen `account-delete` version 2 before any future action.
+
+Current disposition: **OWNER/STAGING ACTION REQUIRED**. Production remains untouched and PR #77 remains Draft.

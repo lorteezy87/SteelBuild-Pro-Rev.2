@@ -376,3 +376,17 @@ The physical staging database backup identifier remains `15 Jul 2026 05:54:28 UT
 ## Batch 43B Edge Function secret evidence update
 
 Owner evidence confirms that staging has no custom Edge Function secrets. The exact per-function deployment order, minimum custom secret set, optional-secret behavior, smoke requests, rollback anchors, and missing-secret matrix are maintained in [PHASE_0_EDGE_FUNCTION_SECRET_MATRIX.md](PHASE_0_EDGE_FUNCTION_SECRET_MATRIX.md). Only `account-delete` is currently deployed; it must not be invoked. The Supabase dashboard technical-issue and outstanding-invoice notices remain external environment conditions. Batch 43B remains owner-blocked.
+
+## Batch 43E source correction and staging disposition
+
+- Source candidate commit: `f453abbd` (`fix: enforce configured Edge Function CORS origins`).
+- The shared CORS parser now treats a non-empty `ALLOWED_ORIGINS` value as the complete exact allowlist. The owner-confirmed staging value is `https://steelbuild-pro-staging.vercel.app,https://steelbuild-pro-staging-h7gds390x-lorteezy87s-projects.vercel.app`. Wildcards, arbitrary Vercel previews, localhost, production origins, malformed origins, paths, credentials, and disallowed-origin production fallbacks are rejected. Health, project-export, schedule-assistant, email-send, stripe-billing, and llm-proxy response paths use the shared request-aware policy.
+- Read-only staging probes remain healthy for `health` (`200`), `project-export` OPTIONS (`200`) and unauthenticated POST (`401`), and `schedule-assistant` OPTIONS (`200`) and unauthenticated POST (`401`). No function was deployed or invoked by this batch.
+- Staging currently reports 30 migration records, including all 13 candidate migrations and the recorded `20260703170000_hard_erasure_rpcs`; the earlier six-pending planning statement is superseded by the current read-only evidence. No migration was applied or changed by this batch.
+- `account-delete` reports active version 2. Its current reported source hash matches the previously recorded hash, but provider evidence does not expose the v1/v2 actor, timestamps, or rollback revision. Classification is insufficient evidence for executable drift; treat this as a P1 external-history requirement, keep the function frozen, and do not invoke, redeploy, or modify it.
+- `project-export` staging source was reported with comment/source drift from the approved candidate. The next deployment must use the exact clean source candidate; no redeployment occurred here.
+- The protected Vercel preview still prevents unauthenticated bundle/runtime verification. Authenticated project-export smoke requires a dedicated staging fixture and JWT. Schedule-assistant functional smoke remains unavailable without an LLM provider or a proven nonpersistent path.
+- Existing Vercel warnings remain: future-major Node engine range, deprecated `whatwg-encoding`, large chunks, and one dashboard warning without an available detailed record. These are not source-correction failures.
+- Local validation at this source commit passed: focused CORS tests (1 file, 5 tests), lint, all five type gates, full Vitest (252 files, 2,973 tests), and production build (4,282 transformed modules). No production endpoint, credential, migration, function deployment, merge, or PR readiness change occurred.
+
+Batch 43E source correction is ready for a separately approved staging redeploy, not for production promotion. Remaining gates are documented owner/staging actions.
