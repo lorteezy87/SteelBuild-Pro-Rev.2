@@ -311,3 +311,55 @@ Authenticated staging smoke, migration application, Edge Function deployment,
 Storage verification, backup/restore, and production approval remain
 unchecked external gates. No deployment, merge, migration application,
 production data mutation, or remote configuration change occurred.
+
+## Batch 43A staging prerequisite audit
+
+The read-only audit was run from candidate `270b993ef35ec79517c635114321f4bdc8420760`
+on `agent/handoff-cleanup`. PR #77 remains open and Draft. The approved Vercel
+project and Supabase ref were verified exactly; no production project, alias,
+credential, database, function, or data mutation was used.
+
+The candidate frontend is present in a READY deployment in the isolated staging
+Vercel project and its staging URL returns HTTP 200. This is evidence of an
+existing staging frontend deployment, not a new deployment initiated by Batch
+43A. The deployed entry asset did not independently prove the embedded
+`VITE_SUPABASE_URL`, so Vercel environment verification remains open.
+
+Supabase staging is healthy and currently ends at migration
+`20260703191034_hard_erasure_rpcs`. The six approved Phase 0 feature-flag
+migrations are pending. The `feature_flags` schema exists, but its catalog is
+empty in staging. Pre-migration postconditions must verify all nine typed
+catalog keys, descriptions, safe defaults, and preservation of any existing
+`enabled` or `user_overrides` values.
+
+The source-level Edge Function manifest is complete, but staging currently
+reports only `account-delete` active. The source-level function dependencies
+include the `hard_delete_organization` RPC for account deletion and table/RLS
+access for the health, export, scheduling, email, AI, and billing paths. Required
+secret names are known from source, but secret presence and values were not
+verified. No function was invoked or deployed.
+
+Staging Storage contains private `app-files` and `email-attachments` buckets
+with authenticated object policies. Source uploads use organization-scoped
+paths. Policy predicates, cross-tenant denial, signed URLs, and file behavior
+remain staging tests, not verified claims.
+
+The backup gate failed closed: the repository runbooks describe daily backups,
+PITR, and restore procedures, but no current staging backup identifier or
+verified restorable dump/restore point was available. No migration, function
+deployment, test fixture, upload, or destructive operation is permitted until
+that owner-controlled evidence is recorded.
+
+### Branch protection recommendation
+
+The production branch should require a PR, one approval, the blocking
+`Lint + Typecheck + Test + Build` check, stale-approval dismissal, resolved
+conversations, force-push prevention, deletion prevention, and administrator
+inclusion. The advisory dependency audit should not be represented as a blocking
+check until its policy is explicitly changed. The prior read-only GitHub API
+check returned HTTP 403 because the repository plan does not expose branch
+protection; no setting was changed.
+
+**Disposition:** OWNER ACTION REQUIRED / BLOCKED. Rerun Batch 43 only after
+backup identity/restorability, Vercel staging environment, Edge Function secret
+names, fixture isolation, and smoke prerequisites are independently evidenced.

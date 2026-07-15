@@ -1,6 +1,6 @@
 # Phase 0 Staging Candidate Plan
 
-Status: ready for controlled staging deployment after explicit target approval; not deployed.
+Status: Batch 43A read-only audit complete; candidate frontend staging deployment observed, database and Edge Functions not deployed by this audit.
 
 This plan is an execution checklist for the owner/operator. It contains names,
 commands, and expected values only. Credentials, tokens, passwords, service
@@ -226,3 +226,52 @@ Staging promotion requires all of the following evidence:
 - Product/legal owner approval recorded before any production consideration.
 
 Batch 42 prepares these gates but does not execute staging deployment.
+
+## Batch 43A read-only prerequisite audit
+
+Batch 43A rechecked candidate `270b993ef35ec79517c635114321f4bdc8420760`
+against the explicitly approved staging targets only. No production target,
+production alias, production credential, migration, Edge Function deployment,
+fixture mutation, upload, or repository-setting change was used.
+
+- Vercel identity is verified as project `steelbuild-pro-staging`, project ID
+  `prj_W0dhGzRfU3uQPkqxZLhnzwXTMQO8`, with the candidate SHA present in a READY
+  staging deployment. The canonical staging URL returned HTTP 200.
+- Supabase identity is verified as `SteelBuild-Pro Staging`, ref
+  `abbeavtbifuddtrifvae`, URL `https://abbeavtbifuddtrifvae.supabase.co`, and
+  status `ACTIVE_HEALTHY`.
+- Backup readiness is **blocked**. The documented daily-backup/PITR mechanism
+  and restore instructions exist, but no current staging timestamp, restore
+  point, custom-format dump, checksum, retention record, or verified backup
+  identifier was available through the authorized read-only tooling. Migrations
+  must not be applied until the owner supplies that evidence.
+- Staging migration history ends at `20260703191034_hard_erasure_rpcs`. The six
+  approved Phase 0 migrations remain pending: the five sanitized submittal flag
+  seeds and `20260712000000_seed_feature_flag_catalog.sql`. The `feature_flags`
+  table and expected columns exist, but the read-only catalog query returned zero
+  rows. Migration checksums were not available from the project metadata API.
+- The candidate source contains `_shared` plus all eight manifest-listed Edge
+  Function directories. Only `account-delete` is currently deployed in staging.
+  No function was invoked or deployed. Secret presence could not be verified by
+  name with the available tooling. Required names are documented in the handoff;
+  values must remain in the Supabase secret store.
+- The staging SQL catalog reports private `app-files` and `email-attachments`
+  buckets and authenticated Storage object policies. Source upload paths use
+  organization-scoped `<org_id>/uploads/...` keys. Cross-tenant denial and
+  signed-URL behavior remain unverified because no staging users or files were
+  created.
+- The Vercel project and deployment are staging-only, but the deployed entry
+  asset did not independently prove the embedded `VITE_SUPABASE_URL`. Owner
+  verification of the staging Vercel environment variables is still required;
+  no production URL was assumed.
+- No staging accounts, organizations, projects, drawings, Submittals, RFI
+  fixtures, or fabrication-release fixtures were created. The fixture plan
+  remains Organization A/B, owner/admin, PM/editor, viewer, one project per org,
+  clean and blocked fabrication cases, drawing upload, and Submittal round data.
+- Existing `backup-dr.md` and `rollback.md` provide restore and rollback
+  procedures, but no backup receipt or restore rehearsal evidence exists.
+
+**Batch 43A decision: OWNER ACTION REQUIRED / BLOCKED.** Obtain a current,
+restorable backup identifier for `abbeavtbifuddtrifvae`, verify the staging
+Vercel environment values and Edge Function secret names, then rerun the
+migration and deployment gates. Do not use production data or credentials.
