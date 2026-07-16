@@ -1,14 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const migrationPath = path.resolve(
-  process.cwd(),
-  "supabase/migrations/20260715235514_restrict_security_definer_execution.sql",
+const here = path.dirname(fileURLToPath(import.meta.url));
+const migration = fs.readFileSync(
+  path.join(here, "..", "20260715235514_restrict_security_definer_execution.sql"),
+  "utf8",
 );
-const migration = fs.readFileSync(migrationPath, "utf8");
 
-const triggerOnlyFunctions = [
+const internalFunctions = [
+  "escalate_rfi_sla()",
+  "reconcile_stuck_extractions()",
+  "raise_if_drawing_set_locked(uuid)",
+  "recompute_schedule_summary(uuid)",
   "activities_stamp_actor()",
   "audit_log_trigger()",
   "demo_requests_throttle()",
@@ -43,7 +48,7 @@ const triggerOnlyFunctions = [
   "rls_auto_enable()",
 ];
 
-const retainedAuthenticatedFunctions = [
+const authenticatedFunctions = [
   "accept_invitation(uuid)",
   "create_organization(text, text)",
   "create_project(jsonb)",
@@ -68,63 +73,48 @@ const retainedAuthenticatedFunctions = [
   "users_share_org(uuid, uuid)",
 ];
 
-const revokeLine = (signature) =>
-  `revoke all on function public.${signature} from public, anon, authenticated, service_role;`;
+const revokeLine = (identity) =>
+  "revoke all on function public." +
+  identity +
+  " from public, anon, authenticated, service_role;";
+const grantLine = (identity, role) =>
+  "grant execute on function public." + identity + " to " + role + ";";
 
-describe("Security Definer execution restrictions migration", () => {
-  it("does not grant SECURITY DEFINER execution to PUBLIC or anon", () => {
+describe("SECURITY DEFINER execution migration contract", () => {
+  it("does not grant direct execution to PUBLIC or anon", () => {
     expect(migration).not.toMatch(
-      /grant\s+execute\s+on\s+function[^;]+\s+to\s+(?:public|anon)\s*;/i,
-    );
-
-    expect(migration.match(/grant\s+execute\s+on\s+function/gi)).toHaveLength(
-      retainedAuthenticatedFunctions.length + 1,
+      /grant\\s+execute\\s+on\\s+function[^;]+\\s+to\\s+(?:public|anon)\\s*;/i,
     );
   });
 
-  it("locks every trigger-only SECURITY DEFINER function from API roles", () => {
-    for (const signature of triggerOnlyFunctions) {
-      expect(migration).toContain(revokeLine(signature));
-      expect(migration).not.toMatch(
-        new RegExp(
-          `grant\\s+execute\\s+on\\s+function\\s+public\\.${signature.replace(/[()[\], ]/g, "\\$&")}\\s+to\\s+(?:anon|authenticated|service_role)`,
-          "i",
-        ),
-      );
+  it("denies direct execution for every internal trigger and maintenance function", () => {
+    for (const identity of internalFunctions) {
+      expect(migration).toContain(revokeLine(identity));
     }
   });
 
-  it("denies maintenance RPCs and keeps the quota RPC service-role-only", () => {
-    for (const signature of [
-      "escalate_rfi_sla()",
-      "reconcile_stuck_extractions()",
-    ]) {
-      expect(migration).toContain(revokeLine(signature));
-      expect(migration).not.toMatch(
-        new RegExp(
-          `grant\\s+execute\\s+on\\s+function\\s+public\\.${signature.replace(/[()[\], ]/g, "\\$&")}\\s+to\\s+(?:anon|authenticated)`,
-          "i",
-        ),
-      );
+  it("keeps browser and RLS helper execution authenticated-only", () => {
+    for (const identity of authenticatedFunctions) {
+      expect(migration).toContain(revokeLine(identity));
+      expect(migration).toContain(grantLine(identity, "authenticated"));
     }
-
-    const quota = "get_llm_usage_window(uuid, timestamptz)";
-    expect(migration).toContain(revokeLine(quota));
-    expect(migration).toContain(
-      `grant execute on function public.${quota} to service_role;`,
-    );
-    expect(migration).not.toMatch(
-      /grant\s+execute\s+on\s+function\s+public\.get_llm_usage_window\([^;]+\)\s+to\s+(?:anon|authenticated)\s*;/i,
-    );
   });
 
-  it("matches the explicitly retained authenticated RPC catalog", () => {
-    const actual = [
-      ...migration.matchAll(
-        /grant\s+execute\s+on\s+function\s+public\.([^;]+?)\s+to\s+authenticated\s*;/gi,
-      ),
-    ].map((match) => match[1]);
+  it("keeps the LLM quota aggregate service-role-only", () => {
+    const identity = "get_llm_usage_window(uuid, timestamptz)";
+    expect(migration).toContain(revokeLine(identity));
+    expect(migration).toContain(grantLine(identity, "service_role"));
+    expect(migration).not.toContain(grantLine(identity, "anon"));
+    expect(migration).not.toContain(grantLine(identity, "authenticated"));
+  });
 
-    expect(actual).toEqual(retainedAuthenticatedFunctions);
+  it("does not include the frozen hard-delete RPCs", () => {
+    expect(migration).not.toMatch(/hard_delete_(organization|project)/);
+  });
+
+  it("contains only the explicit authenticated catalog plus service-role quota grant", () => {
+    expect(migration.match(/grant\\s+execute\\s+on\\s+function/gi)).toHaveLength(
+      authenticatedFunctions.length + 1,
+    );
   });
 });

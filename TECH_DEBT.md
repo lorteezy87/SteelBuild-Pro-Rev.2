@@ -509,3 +509,21 @@ Remaining:
 - Batch 42 adds execution plans and evidence requirements only. It does not
   deploy, apply migrations, modify remote configuration, or change application
   behavior.
+## Batch 44A staging remediation status
+
+- The staging-only Security DEFINER ACL remediation is applied as migration
+  `20260715235514_restrict_security_definer_execution`. Anonymous execution of
+  internal maintenance and trigger-only functions is closed; reviewed
+  authenticated browser/RLS RPC grants remain intentional.
+- The exact candidate was deployed only to the isolated Vercel staging project.
+  The protected bundle targets the staging Supabase ref and does not contain the
+  placeholder or production ref.
+- **P1 requires staging:** authenticated tenant isolation, Storage isolation,
+  authenticated project export, fabrication-release safety, and protected
+  browser console/route smoke still need owner-provisioned fixtures and session
+  evidence.
+- **P1 requires external verification:** scheduled maintenance-job ownership
+  could not be inspected with the available staging SQL role. Supabase advisor
+  informational notices for `billing_config` and `billing_events` remain open.
+- The frozen `account-delete` function and disabled integrations were not
+  invoked, redeployed, or modified. No production action occurred.

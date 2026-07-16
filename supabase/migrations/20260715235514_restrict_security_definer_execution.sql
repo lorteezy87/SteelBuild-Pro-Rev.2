@@ -9,11 +9,16 @@
 -- EXECUTE privileges, so those functions can be denied to every API role
 -- without changing trigger behavior.
 
+-- Internal maintenance and lock/trigger routines. These have no supported
+-- browser or Edge Function caller. pg_cron, when installed, runs its jobs as
+-- the job owner rather than through the PostgREST API roles.
 revoke all on function public.escalate_rfi_sla() from public, anon, authenticated, service_role;
 revoke all on function public.reconcile_stuck_extractions() from public, anon, authenticated, service_role;
 revoke all on function public.raise_if_drawing_set_locked(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.recompute_schedule_summary(uuid) from public, anon, authenticated, service_role;
 
+-- Trigger-only functions. Trigger execution is preserved after these direct
+-- RPC grants are removed.
 revoke all on function public.activities_stamp_actor() from public, anon, authenticated, service_role;
 revoke all on function public.audit_log_trigger() from public, anon, authenticated, service_role;
 revoke all on function public.demo_requests_throttle() from public, anon, authenticated, service_role;
@@ -47,6 +52,9 @@ revoke all on function public.trg_projects_seed_handoff_items() from public, ano
 revoke all on function public.vendors_set_org() from public, anon, authenticated, service_role;
 revoke all on function public.rls_auto_enable() from public, anon, authenticated, service_role;
 
+-- Browser RPCs. These are called from authenticated application workflows or
+-- are referenced by authenticated RLS policies. Anonymous and PUBLIC execution
+-- is removed while the authenticated contract is preserved explicitly.
 revoke all on function public.accept_invitation(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.accept_invitation(uuid) to authenticated;
 revoke all on function public.create_organization(text, text) from public, anon, authenticated, service_role;
@@ -92,10 +100,13 @@ grant execute on function public.user_org_role_at_least(uuid, text) to authentic
 revoke all on function public.users_share_org(uuid, uuid) from public, anon, authenticated, service_role;
 grant execute on function public.users_share_org(uuid, uuid) to authenticated;
 
+-- Internal LLM quota aggregate. The only repository caller uses the service
+-- role from the llm-proxy Edge Function; browser and anonymous execution stay
+-- denied even if that integration is disabled in staging.
 revoke all on function public.get_llm_usage_window(uuid, timestamptz) from public, anon, authenticated, service_role;
 grant execute on function public.get_llm_usage_window(uuid, timestamptz) to service_role;
 
--- The hard-delete RPCs are intentionally excluded: account-delete is frozen
--- in Batch 44A, and its existing authenticated/admin-gated contract is unchanged.
+-- The hard-delete RPCs are intentionally excluded: account-delete is frozen in
+-- Batch 44A, and its existing authenticated/admin-gated contract is unchanged.
 
 notify pgrst, 'reload schema';
