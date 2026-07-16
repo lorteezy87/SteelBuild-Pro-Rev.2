@@ -83,7 +83,7 @@ const grantLine = (identity, role) =>
 describe("SECURITY DEFINER execution migration contract", () => {
   it("does not grant direct execution to PUBLIC or anon", () => {
     expect(migration).not.toMatch(
-      /grant\\s+execute\\s+on\\s+function[^;]+\\s+to\\s+(?:public|anon)\\s*;/i,
+      /grant\s+execute\s+on\s+function[^;]+\s+to\s+(?:public|anon)\s*;/i,
     );
   });
 
@@ -113,7 +113,7 @@ describe("SECURITY DEFINER execution migration contract", () => {
   });
 
   it("contains only the explicit authenticated catalog plus service-role quota grant", () => {
-    expect(migration.match(/grant\\s+execute\\s+on\\s+function/gi)).toHaveLength(
+    expect(migration.match(/grant\s+execute\s+on\s+function/gi)).toHaveLength(
       authenticatedFunctions.length + 1,
     );
   });
