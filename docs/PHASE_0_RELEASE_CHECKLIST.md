@@ -352,3 +352,20 @@ Owner evidence confirms that staging has no custom Edge Function secrets. The ex
 - [ ] Obtain provider deployment-history evidence for frozen `account-delete` version 2 before any future action.
 
 Current disposition: **OWNER/STAGING ACTION REQUIRED**. Production remains untouched and PR #77 remains Draft.
+## Batch 44A staging remediation gate
+
+- [x] Exact detached source candidate used: `f453abbdc5d60a1f2013aa609fc4e0b75e8155de`.
+- [x] Vercel link verified against the isolated staging project and organization IDs.
+- [x] Preview deployment is READY with no production-domain assignment.
+- [x] Staging Supabase ref verified as `abbeavtbifuddtrifvae`.
+- [x] ACL-only Security DEFINER migration applied to staging as `20260715235514_restrict_security_definer_execution`.
+- [x] No anonymous execution remains for internal or trigger-only Security DEFINER functions.
+- [x] Health GET returned `200`; unauthenticated project export returned `401`.
+- [x] Placeholder and production Supabase references are absent from inspected protected bundles.
+- [x] Manifest, service worker, lazy-route probes, and `/wasm/web-ifc.wasm` passed read-only checks.
+- [ ] Dedicated authenticated staging fixture exists for tenant and Storage isolation tests.
+- [ ] Authenticated project-export and schedule workflow smoke is complete.
+- [ ] Protected-browser console and route smoke is complete.
+- [ ] Scheduled maintenance-job ownership is verified; the available SQL role could not inspect `cron.job`.
+
+The release gate remains blocked until the unchecked staging evidence exists. No production action is authorized by this record.
