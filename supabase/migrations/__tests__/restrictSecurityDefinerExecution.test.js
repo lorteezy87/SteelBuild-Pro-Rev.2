@@ -74,11 +74,19 @@ const authenticatedFunctions = [
 ];
 
 const revokeLine = (identity) =>
-  `revoke all on function public.${identity} from public, anon, authenticated, service_role;`;
+  "revoke all on function public." +
+  identity +
+  " from public, anon, authenticated, service_role;";
 const grantLine = (identity, role) =>
-  `grant execute on function public.${identity} to ${role};`;
+  "grant execute on function public." + identity + " to " + role + ";";
 
 describe("SECURITY DEFINER execution migration contract", () => {
+  it("does not grant direct execution to PUBLIC or anon", () => {
+    expect(migration).not.toMatch(
+      /grant\s+execute\s+on\s+function[^;]+\s+to\s+(?:public|anon)\s*;/i,
+    );
+  });
+
   it("denies direct execution for every internal trigger and maintenance function", () => {
     for (const identity of internalFunctions) {
       expect(migration).toContain(revokeLine(identity));
@@ -102,5 +110,11 @@ describe("SECURITY DEFINER execution migration contract", () => {
 
   it("does not include the frozen hard-delete RPCs", () => {
     expect(migration).not.toMatch(/hard_delete_(organization|project)/);
+  });
+
+  it("contains only the explicit authenticated catalog plus service-role quota grant", () => {
+    expect(migration.match(/grant\s+execute\s+on\s+function/gi)).toHaveLength(
+      authenticatedFunctions.length + 1,
+    );
   });
 });
