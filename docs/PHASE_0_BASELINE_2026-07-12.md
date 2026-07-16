@@ -485,3 +485,17 @@ Selective, in-house consolidation is preferred over a full rewrite. Phase 1 prio
 - Read-only evidence now reports 30 staging migration records and all 13 candidate migrations present, superseding earlier six-pending planning text. No migration, schema change, function deployment, flag change, fixture creation, production action, merge, or PR readiness change occurred.
 - `account-delete` is reported active at version 2 with the previously recorded source hash, but deployment-history metadata and rollback revision are unavailable; it remains frozen and is a P1 external evidence gate. Reported `project-export` source drift requires a future exact-candidate redeploy.
 - Protected-preview runtime verification, authenticated project-export smoke, and schedule-assistant functional smoke remain staging/owner gates. Local validation passed: focused CORS tests 1 file/5 tests, lint, all five type gates, full Vitest 252 files/2,973 tests, and build with 4,282 transformed modules.
+## Batch 44A — Security Definer remediation and staging recovery
+
+- Source candidate: `f453abbdc5d60a1f2013aa609fc4e0b75e8155de`.
+- Isolated Vercel target: `steelbuild-pro-staging`, project `prj_W0dhGzRfU3uQPkqxZLhnzwXTMQO8`, organization `team_lW5DhJqSLrPNwEvroR2NDsk0`.
+- Preview deployment: `dpl_F1RRvqYyb2RXKzV3fgqA8W4zuFwB`, READY; no production domain assigned.
+- Staging Supabase ref: `abbeavtbifuddtrifvae`.
+- Applied staging-only ACL migration: `20260715235514_restrict_security_definer_execution`. The migration is privilege-only and preserves reviewed authenticated RPC access; it does not alter bodies, schema, data, RLS, triggers, or frozen account-delete functions.
+- Supabase migration history contains the six approved feature-flag migrations and the ACL migration; no additional migration is pending for this candidate.
+- Read-only function evidence: health `200`, unauthenticated project-export `401`, schedule-assistant not invoked without an LLM secret, account-delete not invoked.
+- Protected bundle evidence: staging Supabase endpoint present; placeholder and production Supabase references absent; manifest, service worker, lazy routes, and `/wasm/web-ifc.wasm` passed.
+- Local and remote production builds passed with 4,282 transformed modules. Existing large-chunk warnings remain; the remote Node engine range warning remains a configuration follow-up.
+- Authenticated tenant isolation, Storage isolation, critical workflow smoke, and protected-browser console checks remain staging prerequisites. No fixture account, project, file, migration to production, Edge Function deployment, or production action occurred.
+
+**Batch 44A status: BLOCKED pending dedicated staging fixtures and authenticated protected-browser evidence.**

@@ -390,3 +390,23 @@ Owner evidence confirms that staging has no custom Edge Function secrets. The ex
 - Local validation at this source commit passed: focused CORS tests (1 file, 5 tests), lint, all five type gates, full Vitest (252 files, 2,973 tests), and production build (4,282 transformed modules). No production endpoint, credential, migration, function deployment, merge, or PR readiness change occurred.
 
 Batch 43E source correction is ready for a separately approved staging redeploy, not for production promotion. Remaining gates are documented owner/staging actions.
+## Batch 44A staging remediation evidence
+
+Batch 44A used the exact clean source candidate `f453abbdc5d60a1f2013aa609fc4e0b75e8155de` in a detached worktree. The existing production-named `.vercel/project.json` was not reused. A separate Vercel link resolved to project `steelbuild-pro-staging`, project ID `prj_W0dhGzRfU3uQPkqxZLhnzwXTMQO8`, and organization ID `team_lW5DhJqSLrPNwEvroR2NDsk0`.
+
+The resulting Preview deployment is `dpl_F1RRvqYyb2RXKzV3fgqA8W4zuFwB`, READY at `https://steelbuild-pro-staging-7thn6flso-lorteezy87s-projects.vercel.app`. No production domain was assigned. The remote build transformed 4,282 modules and retained the existing large-chunk warning. The Node engine range warning is a configuration follow-up, not a build failure.
+
+The staging Supabase project remains `abbeavtbifuddtrifvae`. The ACL-only migration `20260715235514_restrict_security_definer_execution` was applied to staging and is recorded as the final migration. It changes function privileges only; it does not change function bodies, tables, RLS policies, data, or triggers. The six feature-flag migrations are already recorded before it. No production migration was applied.
+
+Read-only evidence after the migration:
+
+- Anonymous `EXECUTE` on the internal and trigger-only SECURITY DEFINER function sets is zero.
+- Approved authenticated browser/RLS RPC grants remain intentional and are still reported by the Supabase advisor.
+- The frozen hard-delete RPCs remain an explicit review item and were not changed.
+- `billing_config` and `billing_events` still report informational RLS-without-policy notices.
+- The staging health function returned `200`; unauthenticated `project-export` returned `401`.
+- `schedule-assistant` was not invoked because no LLM provider secret is configured. `account-delete` remained frozen and was not invoked or redeployed.
+
+The protected Preview was inspected through authenticated, read-only Vercel CLI requests. The Vite application bundles contain the staging Supabase endpoint only; the placeholder and production Supabase references were absent. Manifest, service worker, selected lazy-route assets, and `/wasm/web-ifc.wasm` were reachable. Authenticated tenant isolation, Storage isolation, workflow mutation smoke, and browser console checks remain pending because no dedicated staging fixture account, project, Storage objects, or protected-browser session is available.
+
+**Batch 44A decision: BLOCKED pending staging fixture and browser-session evidence.** Do not promote the Preview, invoke frozen account deletion, deploy disabled integrations, or touch production.

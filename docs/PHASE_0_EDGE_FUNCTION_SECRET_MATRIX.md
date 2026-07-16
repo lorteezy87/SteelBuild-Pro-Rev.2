@@ -177,3 +177,16 @@ Batch 43B remains owner-blocked. Do not apply migrations, deploy functions, set 
 - The current read-only staging function inventory reports 30 migration records and all 13 candidate migrations present. This supersedes the earlier six-pending statement. No migration or function deployment occurred in Batch 43E.
 - The current account-delete version discrepancy is insufficient evidence for executable drift because the reported hash matches the prior recorded hash; provider deployment-history evidence is still required for actor, timestamps, and rollback. Keep it as a P1 external gate.
 - Project-export source drift was reported on the deployed staging revision. Redeploy only from the exact clean source candidate after explicit approval.
+## Batch 44A deployment state
+
+Staging currently has no custom Edge Function secrets. The active staging functions are `account-delete` version 2, `health` version 2, `project-export` version 2, and `schedule-assistant` version 2. Batch 44A did not redeploy any function because the approved function source/configuration was unchanged by the database ACL remediation.
+
+Read-only status:
+
+- `health`: invoked with GET and returned `200`.
+- `project-export`: invoked without credentials and returned `401`; an authenticated project fixture is still required.
+- `schedule-assistant`: not invoked because no LLM provider secret or proven nonpersistent path is configured.
+- `account-delete`: frozen; not invoked, redeployed, modified, or tested.
+- Email, LLM proxy, and Stripe integrations: not deployed or invoked in this staging pass.
+
+The minimum custom-secret matrix remains unchanged. Built-in deprecated Supabase keys must not be copied into browser configuration. Deployment and functional smoke remain blocked until owner-provisioned staging fixtures and the approved protected-browser session are available.
