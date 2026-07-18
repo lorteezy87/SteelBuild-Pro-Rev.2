@@ -133,7 +133,7 @@ export default function ItemDetailDrawer({ item, onClose }) {
 
   // Resolve a navigation target for the "Go to item" button. Prefer the feed
   // item's own quickAction.route (the legacy command-center path supplies it),
-  // else derive one from the item's type + project — the command_ui path's
+  // else derive one from the item's type + project — the canonical presentation path's
   // ActionItems don't carry quickAction, which is why the button used to be a
   // permanent no-op there. Routes map to the page registry (src/config/routes.js).
   const PAGE_FOR_TYPE = {

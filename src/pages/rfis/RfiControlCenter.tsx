@@ -1,47 +1,59 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import type { ComponentType, PropsWithChildren, ReactNode } from "react";
 import { HelpCircle, Clock, FileWarning, AlertTriangle, Gauge, DollarSign, CalendarClock } from "lucide-react";
 import "@/styles/command.css";
 import {
-  PageHero, KpiStrip, DecisionPanel, Pill, statusTone, priorityTone,
-  FilterBar, DataTable, useCommandSkin,
+  PageHero, KpiStrip, DecisionPanel, Pill, priorityTone, useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
+import type { KpiCellDef } from "@/components/command";
 import { buildRfiSummary } from "./rfiControlCenter.derive";
 import type { RfiRecord } from "./rfiControlCenter.derive";
 import { daysOpen, isOverdue } from "./utils";
+import RfiInsightsStrip from "./RfiInsightsStrip";
+import RfiFilterToolbar from "./RfiFilterToolbar";
+import AgendaPanel from "./AgendaPanel";
+import RfiTable from "./RfiTable";
 
-const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
+type AnyProps = PropsWithChildren<Record<string, unknown>>;
+const RfiInsightsStripView = RfiInsightsStrip as unknown as ComponentType<AnyProps>;
+const RfiFilterToolbarView = RfiFilterToolbar as unknown as ComponentType<AnyProps>;
+const AgendaPanelView = AgendaPanel as unknown as ComponentType<AnyProps>;
+const RfiTableView = RfiTable as unknown as ComponentType<AnyProps>;
 
-function fmtMoney(n: number): string { return n ? `$${n.toLocaleString()}` : "$0"; }
+type RfiAgenda = {
+  total: number;
+  counts?: {
+    overdue?: number;
+    blocking?: number;
+    dueSoon?: number;
+    awaiting?: number;
+  };
+  items?: unknown[];
+  groups?: Record<string, unknown[]>;
+};
 
-function dueCell(rfi: RfiRecord) {
-  if (!rfi.date_required) return <span className="cmd-row__meta">No due date</span>;
-  if (isOverdue(rfi)) return <span className="cmd-overdue">{rfi.date_required} · overdue</span>;
-  return <span>{rfi.date_required}</span>;
-}
-
-/** Cost/Schedule impact badge derived from the real impact flags. */
-function impactCell(rfi: RfiRecord) {
-  const parts: string[] = [];
-  if (rfi.cost_impact) parts.push("Cost");
-  if (rfi.schedule_impact) parts.push("Schedule");
-  return parts.length ? <Pill tone="warn">{parts.join(" + ")}</Pill> : <span className="cmd-row__meta">None</span>;
-}
-
-/** Reveal the full table below the summary panels when a panel's "View all" fires. */
-function scrollToTable() {
-  document.querySelector(".rfi-cc .cmd-table-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
+/** Canonical RFI presentation shell. RFIs.jsx remains the data and mutation authority. */
 export interface RfiControlCenterProps {
   projectName: string;
   rfis: RfiRecord[];
   filtered: RfiRecord[];
   search: string;
   onSearch: (v: string) => void;
+  filter?: string;
+  onFilterChange?: (v: string) => void;
   disciplineFilter: string;
   onDisciplineChange: (v: string) => void;
-  onFilterChange: (v: string) => void;
+  onClearFilters?: () => void;
+  density?: string;
+  onDensityChange?: (v: string) => void;
+  seqFilter?: unknown;
+  onSeqFilter?: (v: unknown) => void;
+  agendaOpen?: boolean;
+  onToggleAgenda?: () => void;
+  agenda?: RfiAgenda;
+  agendaUrgent?: number;
+  insightsCollapsed?: boolean;
+  onToggleInsights?: () => void;
   onOpenRfi: (rfi: RfiRecord) => void;
   onExport: () => void;
   onImport?: (() => void) | null;
@@ -51,18 +63,56 @@ export interface RfiControlCenterProps {
   percentComplete?: number | null;
   /** Wide jobsite photo for the hero band. */
   photoSrc?: string;
-  /** Bulk selection (drives the checkbox column + the parent's bulk action bar). */
+  /** Bulk selection (drives the register checkbox column + parent bulk actions). */
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onToggleAll?: (checked: boolean) => void;
+  listTruncationNotice?: ReactNode;
+  bulkActions?: ReactNode;
+  bulkEditModal?: ReactNode;
+  modals?: ReactNode;
 }
+
+function fmtMoney(n: number): string { return n ? `$${n.toLocaleString()}` : "$0"; }
 
 export default function RfiControlCenter(props: RfiControlCenterProps) {
   const {
-    projectName, rfis, filtered, search, onSearch, disciplineFilter, onDisciplineChange,
-    onFilterChange, onOpenRfi, onExport, onImport, onCreate, projectHealth, percentComplete, photoSrc,
-    selectedIds, onToggleSelect, onToggleAll,
+    projectName,
+    rfis,
+    filtered,
+    search,
+    onSearch,
+    filter = "all",
+    onFilterChange = () => {},
+    disciplineFilter,
+    onDisciplineChange,
+    onClearFilters = () => {},
+    density = "normal",
+    onDensityChange = () => {},
+    seqFilter = null,
+    onSeqFilter = () => {},
+    agendaOpen = false,
+    onToggleAgenda = () => {},
+    agenda = { total: 0, counts: {}, items: [], groups: {} },
+    agendaUrgent = 0,
+    insightsCollapsed,
+    onToggleInsights = () => {},
+    onOpenRfi,
+    onExport,
+    onImport,
+    onCreate,
+    projectHealth,
+    percentComplete,
+    photoSrc,
+    selectedIds = new Set<string>(),
+    onToggleSelect = () => {},
+    onToggleAll = () => {},
+    listTruncationNotice,
+    bulkActions,
+    bulkEditModal,
+    modals,
   } = props;
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   useCommandSkin();
   const s = useMemo(() => buildRfiSummary(rfis), [rfis]);
 
@@ -86,35 +136,14 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
     { label: "Schedule Impact", value: `${s.scheduleExposure}d`, sublabel: "active impact", tone: s.scheduleExposure ? "warn" : "info", Icon: CalendarClock },
   ];
 
-  const selectable = !!(selectedIds && onToggleSelect && onToggleAll);
-  const allSelected = selectable && filtered.length > 0 && selectedIds!.size === filtered.length;
-
-  const columns: Column<RfiRecord>[] = [
-    ...(selectable
-      ? ([{
-          key: "sel",
-          header: (
-            <input type="checkbox" className="cmd-check" checked={allSelected} onChange={(e) => onToggleAll!(e.target.checked)} aria-label="Select all RFIs" />
-          ),
-          render: (r: RfiRecord) => (
-            <input type="checkbox" className="cmd-check" checked={selectedIds!.has(r.id || "")} onClick={(e) => e.stopPropagation()} onChange={() => onToggleSelect!(r.id || "")} aria-label="Select RFI" />
-          ),
-        }] as Column<RfiRecord>[])
-      : []),
-    { key: "num", header: "RFI #", render: (r) => <span className="cmd-row__num">{r.rfi_number || "—"}</span> },
-    { key: "subject", header: "Subject", render: (r) => r.title || "Untitled RFI" },
-    { key: "discipline", header: "Discipline", render: (r) => r.discipline || "—" },
-    { key: "status", header: "Status", render: (r) => <Pill tone={statusTone(r.status)}>{r.status || "Open"}</Pill> },
-    { key: "priority", header: "Priority", render: (r) => <Pill tone={priorityTone(r.priority)}>{r.priority || "—"}</Pill> },
-    { key: "bic", header: "Ball in Court", render: (r) => r.ball_in_court || "Contractor" },
-    { key: "age", header: "Age", align: "right", render: (r) => `${daysOpen(r)}d` },
-    { key: "due", header: "Response Due", render: dueCell },
-    { key: "impact", header: "Impact", render: impactCell },
-    { key: "cost", header: "Cost Exposure", align: "right", render: (r) => (r.cost_impact && r.cost_impact_amount ? fmtMoney(Number(r.cost_impact_amount)) : "—") },
-  ];
+  const scrollToBody = () => {
+    bodyRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="rfi-cc">
+      {listTruncationNotice}
+
       <PageHero
         Icon={HelpCircle}
         title="RFI Control Center"
@@ -128,7 +157,7 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
       <KpiStrip cells={kpiCells} />
 
       <div className="cmd-panels">
-        <DecisionPanel title="RFI Work Queue" onViewAll={() => { onFilterChange("open"); scrollToTable(); }}>
+        <DecisionPanel title="RFI Work Queue" onViewAll={() => { onFilterChange("open"); scrollToBody(); }}>
           {s.workQueue.map((r) => (
             <div className="cmd-row is-clickable" key={r.id} onClick={() => onOpenRfi(r)}>
               <div>
@@ -144,7 +173,7 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
           {s.workQueue.length === 0 ? <div className="cmd-row__meta">Nothing in the queue.</div> : null}
         </DecisionPanel>
 
-        <DecisionPanel title="Ball-in-Court" onViewAll={scrollToTable}>
+        <DecisionPanel title="Ball-in-Court" onViewAll={scrollToBody}>
           {s.ballInCourt.map((b) => (
             <div className="cmd-row" key={b.company}>
               <div className="cmd-row__num">{b.company}</div>
@@ -154,7 +183,7 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
           {s.ballInCourt.length === 0 ? <div className="cmd-row__meta">No open RFIs.</div> : null}
         </DecisionPanel>
 
-        <DecisionPanel title="Highest-Risk RFIs" onViewAll={scrollToTable}>
+        <DecisionPanel title="Highest-Risk RFIs" onViewAll={scrollToBody}>
           {s.riskQueue.map((r) => (
             <div className="cmd-row is-clickable" key={r.id} onClick={() => onOpenRfi(r)}>
               <div>
@@ -168,24 +197,60 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
         </DecisionPanel>
       </div>
 
-      <FilterBar
-        search={search}
-        onSearch={onSearch}
-        searchPlaceholder="Search RFI number, title, drawing, question, or answer"
-        onImport={onImport}
-        onExport={onExport}
-        primaryLabel="New RFI"
-        onPrimary={onCreate || null}
-        filters={
-          <>
-            {DISCIPLINES.map((d) => (
-              <button key={d} type="button" className={`cmd-chip-btn${disciplineFilter === d ? " is-active" : ""}`} onClick={() => onDisciplineChange(d)}>{d}</button>
-            ))}
-          </>
-        }
-      />
+      <div ref={bodyRef} className="rfi-cc-body">
+        {insightsCollapsed !== undefined ? (
+          <RfiInsightsStripView
+            rfis={rfis}
+            collapsed={insightsCollapsed}
+            onToggleCollapsed={onToggleInsights}
+          />
+        ) : null}
 
-      <DataTable columns={columns} rows={filtered} onRowClick={onOpenRfi} emptyMessage="No RFIs match your filters." />
+        <RfiFilterToolbarView
+          search={search}
+          onSearch={onSearch}
+          filter={filter}
+          onFilterChange={onFilterChange}
+          disciplineFilter={disciplineFilter}
+          onDisciplineChange={onDisciplineChange}
+          density={density}
+          onDensityChange={onDensityChange}
+          rfis={rfis}
+          seqFilter={seqFilter}
+          onSeqFilter={onSeqFilter}
+          agendaOpen={agendaOpen}
+          onToggleAgenda={onToggleAgenda}
+          agenda={agenda}
+          agendaUrgent={agendaUrgent}
+          filteredCount={filtered.length}
+          totalCount={rfis.length}
+          onClearFilters={onClearFilters}
+          onImport={onImport}
+          onExport={onExport}
+          onCreate={onCreate}
+        />
+
+        {agendaOpen ? (
+          <AgendaPanelView
+            agenda={agenda}
+            onOpenRfi={onOpenRfi}
+            onClose={onToggleAgenda}
+          />
+        ) : null}
+
+        <RfiTableView
+          rows={filtered}
+          totalCount={rfis.length}
+          selectedIds={selectedIds}
+          onToggleAll={onToggleAll}
+          onToggleSelect={onToggleSelect}
+          onOpen={onOpenRfi}
+        />
+
+        {bulkActions}
+        {bulkEditModal}
+        {modals}
+      </div>
     </div>
   );
 }

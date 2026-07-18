@@ -1,12 +1,12 @@
 /**
- * Pure derivations for the Detailing Revision Impact board (command_ui re-skin,
- * SP3). No React, no network. The board's rows arrive PRE-ENRICHED from the hub
+ * Pure derivations for the canonical Detailing Revision Impact board.
+ * No React, no network. The board's rows arrive PRE-ENRICHED from the hub
  * (joined to work packages / RFIs / fab-blocked / affected pieces), so the only
  * derivation is the search filter + the severity → downstream-label/tone
- * mapping. Byte-identical to the legacy `revisionImpactBoard.tsx` inline compute.
+ * mapping. The canonical panel owns the presentation.
  */
 
-/** Downstream severity → { label, kit Pill tone }. Mirrors the legacy
+/** Downstream severity → { label, kit Pill tone }. Uses the canonical
  *  REV_DOWNSTREAM map + `severityTone` helper. */
 export interface DownstreamMeta {
   label: string;
@@ -21,13 +21,13 @@ const DOWNSTREAM: Record<string, DownstreamMeta> = {
 };
 
 /** Resolve a row's severity to its downstream label + Pill tone. Unknown
- *  severities fall back to "low" exactly as the legacy board did. */
+ *  severities fall back to "low" for a stable triage display. */
 export function downstreamFor(severity: string | null | undefined): DownstreamMeta {
   return DOWNSTREAM[severity ?? ""] || DOWNSTREAM.low;
 }
 
 /** Filter the pre-enriched rows by the search query (sheet / set / WP names).
- *  Byte-identical to the legacy `filtered` memo. */
+ *  Shared by the canonical revision-impact panel's table and grid. */
 export function filterRevisionImpactRows<T extends { sheetNumber?: string; setName?: string; wpNames?: string[] }>(
   rows: T[],
   search: string,
@@ -41,7 +41,7 @@ export function filterRevisionImpactRows<T extends { sheetNumber?: string; setNa
 }
 
 /** Above this many filtered rows, render the virtualized grid instead of a full
- *  table (same threshold the legacy board used). */
+ *  table (same threshold used by the canonical panel). */
 export const REVISION_VIRTUALIZE_THRESHOLD = 100;
 
 export function shouldVirtualizeRevisionImpact(rowCount: number): boolean {

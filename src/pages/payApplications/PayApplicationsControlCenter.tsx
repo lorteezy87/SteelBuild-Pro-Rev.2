@@ -1,10 +1,9 @@
 /**
- * PayApplicationsControlCenter — Command UI skin for the Pay Applications page.
+ * PayApplicationsControlCenter — canonical Pay Applications presentation.
  *
- * Rendered only when the `command_ui` feature flag is on. The parent
- * (PayApplications.jsx) owns all data, mutations, and modal state and passes
- * them down. This component is pure-presentation: no network calls, no state
- * beyond what the command kit needs.
+ * The parent (PayApplications.jsx) owns all data, mutations, and modal state
+ * and passes them down. This component is pure presentation: no network calls,
+ * no state beyond what the command kit needs.
  *
  * Money contract: every value received from the parent is in DOLLARS (the
  * money.ts convention — integer-cent math at the boundary, stored/passed as

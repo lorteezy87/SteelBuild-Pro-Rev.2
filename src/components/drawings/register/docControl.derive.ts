@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Doc Control views (command_ui re-skin, Slice 2c).
+ * Pure derivations for the Doc Control views (canonical presentation re-skin, Slice 2c).
  *
  * No React, no network — these reshape the hooks' already-fetched read-models
  * into exactly what the on-skin panels render. Every value here is byte-identical

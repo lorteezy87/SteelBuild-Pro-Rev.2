@@ -4,18 +4,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import ActionItemFormModal from "@/components/actionitems/ActionItemFormModal";
-import ActionItemList from "@/components/actionitems/ActionItemList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
-import { CommandBar, KpiTile, BulkActionBar } from "@/components/design-system";
-import { Plus, Search, ClipboardCheck, ChevronDown, ChevronRight } from "lucide-react";
+import { BulkActionBar } from "@/components/design-system";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 import { daysUntil } from "@/lib/dateMath";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import { calcWpProgress } from "@/utils/projectKpis";
 import ActionItemsControlCenter from "./actionItems/ActionItemsControlCenter";
 
-/** Lightweight CSV export for the command_ui path. */
+/** Lightweight CSV export for the canonical presentation path. */
 function exportActionItemsToCSV(items) {
   const rows = [
     ["ID", "Title", "Status", "Priority", "Assigned To", "Due Date", "Category", "Project Area", "Meeting Reference"],
@@ -75,7 +72,6 @@ function shiftDate(dateStr, days) {
 export default function ActionItems() {
   const projectId = useProjectId();
   const qc = useQueryClient();
-  const commandUi = useFlag("command_ui");
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
@@ -215,7 +211,7 @@ export default function ActionItems() {
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
-    enabled: !!projectId && commandUi,
+    enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -322,7 +318,7 @@ export default function ActionItems() {
     setShowAssignDropdown(false);
   };
 
-  // ─── Shared modals (used by both command_ui and classic paths) ────────────
+  // Shared modals remain page-owned while the control center owns presentation.
   const modals = (
     <>
       {(showForm || editingItem) && (
@@ -349,8 +345,7 @@ export default function ActionItems() {
     </>
   );
 
-  // ─── Command UI path (behind feature flag) ─────────────────────────────────
-  if (commandUi) {
+  // Canonical Action Items control center ─────────────────────────────────
     const activeProject = projects.find((p) => p.id === projectId);
     const projectHealth = activeProject?.health_status || null;
     const percentComplete =
@@ -360,7 +355,7 @@ export default function ActionItems() {
         ? calcWpProgress(workPackages).pct
         : null;
 
-    // command_ui filter state maps "All" → "all" for the classic filter helpers,
+    // filter state maps "All" → "all" for the shared filter helpers,
     // and passes display-friendly values (e.g. "Open") through unchanged.
     const ccStatusFilter = filterStatus === "all" ? "All" : filterStatus;
     const ccPriorityFilter = filterPriority === "all" ? "All" : filterPriority;
@@ -411,496 +406,4 @@ export default function ActionItems() {
         {modals}
       </div>
     );
-  }
-
-  // ─── Stat cards ──────────────────────────────────────────────────────────
-  const statCards = [
-    { label: "Total",       value: stats.total,       color: "var(--accent)",         filterKey: null },
-    { label: "Open",        value: stats.open,        color: "var(--status-warning)", filterKey: ACTION_ITEM_STATUS.OPEN },
-    { label: "In Progress", value: stats.inProgress,  color: "var(--status-info)",    filterKey: ACTION_ITEM_STATUS.IN_PROGRESS },
-    { label: "Complete",    value: stats.complete,    color: "var(--status-success)", filterKey: ACTION_ITEM_STATUS.COMPLETE },
-    { label: "Cancelled",   value: stats.cancelled,   color: "var(--text-muted)",     filterKey: ACTION_ITEM_STATUS.CANCELLED },
-    { label: "Critical",    value: stats.critical,    color: "var(--status-error)",   filterKey: null, priorityKey: PRIORITY.CRITICAL },
-  ];
-
-  return (
-    <div className="sb-dashboard-reference-page">
-      <CommandBar
-        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
-        title="Action Items"
-        count={filtered.length}
-        unit=" · ITEMS"
-        subtitle={`${stats.open} open · ${stats.critical} critical · ${stats.complete} complete`}
-      >
-        <div style={{ position: "relative" }}>
-          <Search size={12} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
-          <input
-            type="text"
-            placeholder="Search items..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-default)",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 12px 8px 30px",
-              fontFamily: "var(--font-body)",
-              fontSize: 11,
-              color: "var(--text-primary)",
-              outline: "none",
-              width: 200,
-            }}
-          />
-        </div>
-        <button
-          onClick={() => { setEditingItem(null); setShowForm(true); }}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> New Action Item
-        </button>
-      </CommandBar>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
-        {statCards.map((stat) => {
-          const isActive = stat.filterKey
-            ? filterStatus === stat.filterKey
-            : stat.priorityKey
-            ? filterPriority === stat.priorityKey
-            : filterStatus === "all" && filterPriority === "all";
-          const clickable = !!(stat.filterKey || stat.priorityKey || stat.label === "Total");
-          return (
-            <KpiTile
-              key={stat.label}
-              compact
-              label={stat.label}
-              value={stat.value}
-              color={stat.color}
-              active={isActive}
-              onClick={
-                clickable
-                  ? () => {
-                      if (stat.label === "Total") {
-                        setFilterStatus("all");
-                        setFilterPriority("all");
-                      } else if (stat.filterKey) {
-                        setFilterStatus((prev) => (prev === stat.filterKey ? "all" : stat.filterKey));
-                      } else if (stat.priorityKey) {
-                        setFilterPriority((prev) => (prev === stat.priorityKey ? "all" : stat.priorityKey));
-                      }
-                    }
-                  : undefined
-              }
-            />
-          );
-        })}
-      </div>
-
-      {/* ─── Project Setup Checklist ─────────────────────────────────── */}
-      {setupItems.length > 0 && projectId && (
-        <div style={{
-          background: "var(--bg-surface)",
-          border: `1px solid ${setupStats.pct === 100 ? "rgba(0,214,143,0.25)" : "var(--accent-border)"}`,
-          borderRadius: "var(--radius-card)",
-          overflow: "hidden",
-          transition: "border-color 0.3s",
-        }}>
-          {/* Header — clickable to collapse */}
-          <button
-            type="button"
-            onClick={() => setSetupCollapsed((v) => !v)}
-            style={{
-              width: "100%",
-              display: "flex", alignItems: "center", gap: 12,
-              padding: "14px 16px",
-              background: "none", border: "none", cursor: "pointer",
-              borderBottom: setupCollapsed ? "none" : "1px solid var(--divider)",
-            }}
-          >
-            {setupCollapsed
-              ? <ChevronRight size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-              : <ChevronDown size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-            }
-            <ClipboardCheck size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
-            <div style={{ flex: 1, textAlign: "left" }}>
-              <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800,
-                letterSpacing: "0.12em", textTransform: "uppercase",
-                color: setupStats.pct === 100 ? "var(--status-success)" : "var(--accent)",
-              }}>
-                Project Setup Checklist
-              </span>
-              <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-                marginLeft: 10,
-              }}>
-                {setupStats.complete}/{setupStats.total} complete
-              </span>
-            </div>
-            {/* Progress bar */}
-            <div style={{ width: 120, height: 4, borderRadius: 2, background: "var(--bg-surface-low)", flexShrink: 0 }}>
-              <div style={{
-                height: "100%", borderRadius: 2,
-                width: `${setupStats.pct}%`,
-                background: setupStats.pct === 100 ? "var(--status-success)" : "var(--accent)",
-                transition: "width 0.4s ease",
-              }} />
-            </div>
-            <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              color: setupStats.pct === 100 ? "var(--status-success)" : "var(--accent)",
-              minWidth: 32, textAlign: "right",
-            }}>
-              {setupStats.pct}%
-            </span>
-          </button>
-
-          {/* Checklist rows */}
-          {!setupCollapsed && (
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {setupItems.map((item, idx) => {
-                const done = item.status === ACTION_ITEM_STATUS.COMPLETE;
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 12,
-                      padding: "10px 16px 10px 46px",
-                      borderBottom: idx < setupItems.length - 1 ? "1px solid var(--divider)" : "none",
-                      opacity: done ? 0.55 : 1,
-                      transition: "opacity 0.2s, background 0.15s",
-                      cursor: "pointer",
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                    onClick={() => setEditingItem(item)}
-                  >
-                    {/* Resolve checkbox */}
-                    <div
-                      onClick={(e) => { e.stopPropagation(); handleResolve(item); }}
-                      style={{
-                        width: 20, height: 20, borderRadius: 5, flexShrink: 0,
-                        border: done ? "1.5px solid var(--status-success)" : "1.5px solid var(--border-strong)",
-                        background: done ? "rgba(0,214,143,0.15)" : "transparent",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        cursor: "pointer", transition: "all 0.15s",
-                      }}
-                    >
-                      {done && <span style={{ color: "var(--status-success)", fontSize: 12, fontWeight: 900, lineHeight: 1 }}>{"✓"}</span>}
-                    </div>
-
-                    {/* Title + description */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600,
-                        color: done ? "var(--text-muted)" : "var(--text-primary)",
-                        textDecoration: done ? "line-through" : "none",
-                        lineHeight: 1.3,
-                      }}>
-                        {item.title}
-                      </div>
-                      {item.description && !done && (
-                        <div style={{
-                          fontFamily: "var(--font-body)", fontSize: 11,
-                          color: "var(--text-muted)", lineHeight: 1.4, marginTop: 2,
-                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                        }}>
-                          {item.description}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Assignee */}
-                    {item.assigned_to && (
-                      <span style={{
-                        fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-                        flexShrink: 0,
-                      }}>
-                        {item.assigned_to}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {executionQueue.length > 0 && (
-        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--divider)" }}>
-            <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", color: "var(--accent)", textTransform: "uppercase" }}>
-                Today's Execution Queue
-              </div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
-                Auto-ranked by due date, priority, missing owner, and production-meeting origin.
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => { setFilterStatus("all"); setFilterPriority("all"); setSearch(""); }}
-              style={{ background: "var(--bg-surface-low)", color: "var(--text-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "7px 12px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}
-            >
-              Show All
-            </button>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 0 }}>
-            {executionQueue.map((item) => {
-              const overdue = item._daysUntil !== null && item._daysUntil < 0;
-              const dueToday = item._daysUntil === 0;
-              const priorityColor = PRIORITY_COLORS[item.priority] || "var(--text-muted)";
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setEditingItem(item)}
-                  style={{ textAlign: "left", background: overdue ? "rgba(239,68,68,0.06)" : dueToday ? "rgba(245,158,11,0.06)" : "transparent", border: "none", borderRight: "1px solid var(--divider)", borderBottom: "1px solid var(--divider)", padding: 14, cursor: "pointer" }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = overdue ? "rgba(239,68,68,0.06)" : dueToday ? "rgba(245,158,11,0.06)" : "transparent"}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", marginBottom: 8 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: priorityColor, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                      {item.priority || "Normal"}
-                    </span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "var(--status-error)" : dueToday ? "var(--status-warning)" : "var(--text-muted)", fontWeight: 800 }}>
-                      {item._daysUntil === null ? "NO DATE" : overdue ? `${Math.abs(item._daysUntil)}D OVERDUE` : dueToday ? "DUE TODAY" : `${item._daysUntil}D`}
-                    </span>
-                  </div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.35 }}>
-                    {item.title}
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-                    <span>{item.assigned_to || "Unassigned"}</span>
-                    {item.metadata?.impact_area && <span>{item.metadata.impact_area}</span>}
-                    {item.metadata?.task_type && <span>{item.metadata.task_type}</span>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="filter-bar-responsive" style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginRight: 2 }}>Status:</span>
-          {["all", "Open", "In Progress", "Complete", "Cancelled"].map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilterStatus(status)}
-              style={{
-                background: filterStatus === status ? "var(--accent)" : "var(--bg-surface-low)",
-                color: filterStatus === status ? "white" : "var(--text-secondary)",
-                border: filterStatus === status ? "1px solid var(--accent)" : "1px solid var(--border-default)",
-                borderRadius: "var(--radius-btn)",
-                padding: "5px 12px",
-                fontFamily: "var(--font-body)",
-                fontSize: "9px",
-                fontWeight: 700,
-                cursor: "pointer",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                transition: "all 0.12s",
-              }}
-            >
-              {status === "all" ? "All" : status}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginRight: 2 }}>Priority:</span>
-          {["all", ...priorities].map((priority) => {
-            const pColor = PRIORITY_COLORS[priority];
-            const isActive = filterPriority === priority;
-            return (
-              <button
-                key={priority}
-                onClick={() => setFilterPriority(priority)}
-                style={{
-                  background: isActive ? (pColor || "var(--accent)") : "var(--bg-surface-low)",
-                  color: isActive ? "white" : pColor || "var(--text-secondary)",
-                  border: isActive ? `1px solid ${pColor || "var(--accent)"}` : "1px solid var(--border-default)",
-                  borderRadius: "var(--radius-btn)",
-                  padding: "5px 12px",
-                  fontFamily: "var(--font-body)",
-                  fontSize: "9px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  transition: "all 0.12s",
-                }}
-              >
-                {priority === "all" ? "All" : priority === "Critical" ? `\u{1F525} ${priority}` : priority}
-              </button>
-            );
-          })}
-        </div>
-
-        {(filterStatus !== "all" || filterPriority !== "all" || search) && (
-          <button
-            onClick={() => { setFilterStatus("all"); setFilterPriority("all"); setSearch(""); }}
-            style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em", textDecoration: "underline" }}
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
-
-      {/* List — with loading, empty, and populated states */}
-      {isLoading ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "24px 0" }}>
-          {[1, 2, 3].map(i => (
-            <div key={i} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "16px 20px", height: 56, animation: "pulse 1.5s ease-in-out infinite", opacity: 0.5 }} />
-          ))}
-        </div>
-      ) : actionItems.length === 0 ? (
-        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "64px 24px", textAlign: "center" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>{"✅"}</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>No Action Items Yet</div>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 24, maxWidth: 360, margin: "0 auto 24px" }}>
-            Track tasks, follow-ups, and field issues. Assign them to your crew and monitor due dates in one place.
-          </div>
-          <button
-            onClick={() => { setEditingItem(null); setShowForm(true); }}
-            style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "10px 24px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
-          >
-            Assign Your First Action Item
-          </button>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "40px", textAlign: "center" }}>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No items match your filters</p>
-        </div>
-      ) : (
-        <ActionItemList
-          actionItems={filtered}
-          onEdit={(item) => setEditingItem(item)}
-          onResolve={handleResolve}
-          onDelete={(item) => setDeleteTarget(item)}
-          selectionEnabled={true}
-          selectedIds={selectedIds}
-          onToggleSelect={handleToggleSelect}
-          onSelectAll={(checked) => handleSelectAll(checked, filtered)}
-        />
-      )}
-
-      {/* Bulk Action Bar — appears when 1+ items selected */}
-      <BulkActionBar
-        count={selectedIds.size}
-        onClear={clearSelection}
-        actions={[
-          {
-            label: "Bump +1 Day",
-            icon: "schedule",
-            variant: "secondary",
-            onClick: handleBulkBumpDay,
-            disabled: bulkUpdateMut.isPending,
-          },
-          {
-            label: "Assign To",
-            icon: "crew",
-            variant: "secondary",
-            onClick: () => setShowAssignDropdown((v) => !v),
-            disabled: bulkPatchMut.isPending,
-          },
-          {
-            label: "Mark Complete",
-            icon: "check",
-            variant: "primary",
-            onClick: handleBulkComplete,
-            disabled: bulkPatchMut.isPending,
-          },
-        ]}
-      />
-
-      {/* Assign-to dropdown — positioned above the bulk bar */}
-      {showAssignDropdown && selectedIds.size > 0 && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 64,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "var(--bg-surface-high)",
-            backdropFilter: "blur(20px) saturate(140%)",
-            WebkitBackdropFilter: "blur(20px) saturate(140%)",
-            border: "1px solid var(--accent-border)",
-            borderRadius: "var(--radius-card)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.55), 0 0 20px color-mix(in srgb, var(--accent) 15%, transparent)",
-            padding: "8px 4px",
-            zIndex: 210,
-            minWidth: 200,
-            maxHeight: 240,
-            overflowY: "auto",
-          }}
-        >
-          <div style={{ padding: "6px 12px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase" }}>
-            Assign to
-          </div>
-          {knownAssignees.length === 0 && (
-            <div style={{ padding: "10px 12px", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)" }}>
-              No assignees found. Add assignees to items first.
-            </div>
-          )}
-          {knownAssignees.map((name) => (
-            <button
-              key={name}
-              onClick={() => handleBulkAssign(name)}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                padding: "8px 12px",
-                background: "transparent",
-                border: "none",
-                borderRadius: 6,
-                color: "var(--text-primary)",
-                fontFamily: "var(--font-body)",
-                fontSize: 12,
-                cursor: "pointer",
-                transition: "background 0.1s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              {name}
-            </button>
-          ))}
-          <div style={{ borderTop: "1px solid var(--divider)", margin: "4px 0" }} />
-          <button
-            onClick={() => setShowAssignDropdown(false)}
-            style={{
-              display: "block",
-              width: "100%",
-              textAlign: "left",
-              padding: "6px 12px",
-              background: "transparent",
-              border: "none",
-              color: "var(--text-muted)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {modals}
-
-      {/* Spacer so the bulk bar doesn't overlap the last item */}
-      {selectedIds.size > 0 && <div style={{ height: 72 }} />}
-    </div>
-  );
 }

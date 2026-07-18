@@ -1,15 +1,8 @@
 /**
- * ScheduleBody — the shared Schedule page body (phase-filter tiles → bulk
- * action toolbar). This block was previously duplicated byte-for-byte between
- * the command_ui render path (as `existingBody`) and the legacy return path in
- * Schedule.tsx. It is extracted verbatim here so both paths render one copy.
- *
- * The ONLY difference between the two original copies was the bulk "Set Parent"
- * modal backdrop color, which is passed in via `bulkParentBackdrop`.
- *
- * This component owns no state and fires no mutations of its own — every piece
- * of state, every mutation object, and every handler is passed in from
- * Schedule.tsx so behavior is identical to the inline copies.
+ * ScheduleBody — the canonical operational Schedule workspace (phase-filter
+ * tiles, view tabs, Gantt/lookahead/list views, and bulk action toolbar).
+ * It owns no state and fires no mutations; Schedule.tsx supplies the data,
+ * state, mutation objects, and handlers.
  */
 import { Suspense } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
@@ -59,8 +52,7 @@ const WbsBuilderModal = lazyWithRetry(
 ) as unknown as ComponentType<AnyProps>;
 
 interface ScheduleBodyProps {
-  // Backdrop for the bulk "Set Parent" modal — the sole visual difference
-  // between the two original body copies.
+  // Backdrop for the bulk "Set Parent" modal.
   bulkParentBackdrop: string;
 
   // Derived data

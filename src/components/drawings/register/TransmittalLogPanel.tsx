@@ -1,7 +1,7 @@
 /**
  * TransmittalLogPanel — the on-skin Doc Control "Transmittals" view (Slice 2c).
  *
- * Presentation-only re-skin of TransmittalLog onto the command_ui kit. The create
+ * Presentation-only re-skin of TransmittalLog onto the canonical presentation kit. The create
  * mutation (transmittal header + per-sheet item attachment), the incoming/outgoing
  * field routing, permission gate, and cache invalidation are UNCHANGED — reused
  * verbatim; only the chrome (card / log form / sheet-picker / table / direction

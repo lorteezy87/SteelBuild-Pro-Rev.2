@@ -1,11 +1,11 @@
 /**
- * DetailingCommandShell — command-UI wrapper for the Detailing Control Center.
+ * DetailingCommandShell — canonical shell for the Detailing Control Center.
  *
  * SHELL ONLY. Every tab panel, modal, mutation, escalation, and data-fetch
  * lives in DrawingSubmittalHub.tsx and is passed through via `children`.
  * This file never touches data or workflow logic.
  *
- * Rendered only when the `command_ui` feature flag is true.
+ * Rendered unconditionally by DrawingSubmittalHub.
  */
 
 import type { ComponentType, ReactNode } from "react";

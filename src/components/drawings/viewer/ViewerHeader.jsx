@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, FileText, Home, Layers, Lock, Unlock } from "lucide-react";
-import { useAppSecurity } from "@/components/shared/useAppSecurity";
+import { usePermissions } from "@/services/permissions";
 import { createPageUrl } from "@/utils";
 import { STAGES, STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
@@ -10,7 +10,7 @@ const mono = { fontFamily: "var(--font-mono)" };
 
 export default function ViewerHeader({ projectName, activeDrawing, drawingSet, onUnlock }) {
   const navigate = useNavigate();
-  const { isAdmin } = useAppSecurity();
+  const { isAdmin } = usePermissions();
   const isLocked = !!drawingSet?.is_locked;
   const [unlocking, setUnlocking] = useState(false);
   const [reason, setReason] = useState("");

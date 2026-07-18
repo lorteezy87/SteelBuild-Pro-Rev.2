@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Billing Control Center (command_ui redesign).
+ * Pure derivations for the Billing Control Center (canonical presentation redesign).
  * No React, no network. All KPIs are derived from the real org subscription
  * fields exposed by OrgContext + usePlan — no invented invoice/AR data.
  *

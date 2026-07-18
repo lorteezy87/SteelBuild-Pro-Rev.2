@@ -1,27 +1,23 @@
 /**
- * ExpensesControlCenter — light Command UI skin for the Expenses page.
- * Rendered behind the `command_ui` feature flag from Expenses.jsx.
- * All data + mutations live in the parent; this component is pure presentation.
+ * ExpensesControlCenter is the canonical Expenses page shell.
+ * All data, filters, mutations, and dialogs remain owned by Expenses.jsx.
+ * Specialized expense analytics and actions are composed inside this shell.
  *
  * Inline styles only — do not edit src/styles/command.css from here.
- * CSS wants are listed in the component docblock at the bottom.
  */
 
-import { useMemo } from "react";
-import { Receipt, Clock, CheckCircle2, AlertCircle, TrendingUp, DollarSign, CalendarDays } from "lucide-react";
+import { type ReactNode, useMemo } from "react";
+import { Receipt, Clock, CheckCircle2, AlertCircle, TrendingUp, DollarSign, CalendarDays, RefreshCw } from "lucide-react";
 import "@/styles/command.css";
 import {
   PageHero,
   KpiStrip,
   DecisionPanel,
-  Pill,
-  FilterBar,
-  DataTable,
   useCommandSkin,
 } from "@/components/command";
-import type { Column, KpiCellDef } from "@/components/command";
+import type { KpiCellDef } from "@/components/command";
 import { photoFor } from "@/config/launcherConfig";
-import { buildExpensesSummary, expenseStatusTone } from "./expensesControlCenter.derive";
+import { buildExpensesSummary } from "./expensesControlCenter.derive";
 import type { ExpenseRecord } from "./expensesControlCenter.derive";
 import { formatMoney } from "@/lib/money";
 
@@ -37,12 +33,9 @@ function fmtMoneyShort(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-// ── Status chips for the FilterBar ───────────────────────────────────────
-const STATUS_OPTIONS = ["All", "Paid", "Unpaid", "Pending Approval", "Voided"] as const;
-
 // ── Scroll to data table ──────────────────────────────────────────────────
 function scrollToTable() {
-  document.querySelector(".exp-cc .cmd-table-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.querySelector(".exp-cc .sbd-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────
@@ -58,6 +51,8 @@ export interface ExpensesControlCenterProps {
   onImport?: (() => void) | null;
   onCreate?: (() => void) | null;
   onOpenExpense: (e: ExpenseRecord) => void;
+  onRefresh?: () => void;
+  children?: ReactNode;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -65,15 +60,10 @@ export default function ExpensesControlCenter(props: ExpensesControlCenterProps)
   const {
     projectName,
     expenses,
-    filtered,
-    search,
-    onSearch,
-    statusFilter,
     onStatusFilter,
-    onExport,
-    onImport,
-    onCreate,
     onOpenExpense,
+    onRefresh,
+    children,
   } = props;
 
   useCommandSkin();
@@ -132,64 +122,12 @@ export default function ExpensesControlCenter(props: ExpensesControlCenterProps)
     },
   ];
 
-  // Table columns — real fields only
-  const columns: Column<ExpenseRecord>[] = [
-    {
-      key: "date",
-      header: "Date",
-      render: (e) => <span style={{ fontVariantNumeric: "tabular-nums" }}>{e.expense_date || "—"}</span>,
-    },
-    {
-      key: "num",
-      header: "Expense #",
-      render: (e) => <span className="cmd-row__num">{e.expense_number || "—"}</span>,
-    },
-    {
-      key: "desc",
-      header: "Description",
-      render: (e) => (
-        <span style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }}>
-          {e.description || "—"}
-        </span>
-      ),
-    },
-    {
-      key: "vendor",
-      header: "Vendor",
-      render: (e) => e.vendor || <span className="cmd-row__meta">—</span>,
-    },
-    {
-      key: "type",
-      header: "Type",
-      render: (e) => e.expense_type ? <Pill tone="neutral">{e.expense_type}</Pill> : <span className="cmd-row__meta">—</span>,
-    },
-    {
-      key: "cost_code",
-      header: "Cost Code",
-      render: (e) => e.cost_code_name || e.cost_code || <span className="cmd-row__meta">—</span>,
-    },
-    {
-      key: "amount",
-      header: "Amount",
-      align: "right" as const,
-      render: (e) => (
-        <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-          {e.amount != null ? fmtMoney(Number(e.amount)) : "—"}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (e) => <Pill tone={expenseStatusTone(e.payment_status)}>{e.payment_status || "—"}</Pill>,
-    },
-  ];
 
   return (
     <div className="exp-cc">
       <PageHero
         Icon={Receipt}
-        title="Expenses Control Center"
+        title="Expenses"
         subtitle="Track committed costs, approvals, and vendor spend across this project."
         projectName={projectName}
         chips={chips}
@@ -267,36 +205,18 @@ export default function ExpensesControlCenter(props: ExpensesControlCenterProps)
         </DecisionPanel>
       </div>
 
-      <FilterBar
-        search={search}
-        onSearch={onSearch}
-        searchPlaceholder="Search expense number, description, or vendor"
-        onImport={onImport}
-        onExport={onExport}
-        primaryLabel="New Expense"
-        onPrimary={onCreate || null}
-        filters={
-          <>
-            {STATUS_OPTIONS.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                className={`cmd-chip-btn${statusFilter === opt || (opt === "All" && statusFilter === "all") ? " is-active" : ""}`}
-                onClick={() => onStatusFilter(opt === "All" ? "all" : opt)}
-              >
-                {opt}
-              </button>
-            ))}
-          </>
-        }
-      />
-
-      <DataTable
-        columns={columns}
-        rows={filtered}
-        onRowClick={onOpenExpense}
-        emptyMessage="No expenses match your filters."
-      />
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={!onRefresh}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 11px", border: "1px solid var(--border-default)", borderRadius: 7, background: "var(--bg-surface)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.06em", cursor: onRefresh ? "pointer" : "default", opacity: onRefresh ? 1 : 0.6 }}
+        >
+          <RefreshCw size={12} />
+          Refresh
+        </button>
+      </div>
+      {children}
     </div>
   );
 }

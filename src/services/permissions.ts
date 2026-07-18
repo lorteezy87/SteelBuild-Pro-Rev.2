@@ -1,16 +1,19 @@
 /**
  * permissions.ts — Server-authoritative permission model.
  *
- * Problem: useAppSecurity stores roles in localStorage (bypassable).
- *          can() returns true for ALL authenticated users.
+ * Sole client-side authorization resolver in the UI.
+ * Authorization is combined from:
+ * - `user_profiles.role` (global account role),
+ * - `get_my_project_role(project_id)` (active-project role) with global-admin override.
  *
- * Solution: Fetch role from user_profiles table (server truth).
- *           Frontend role logic is DISPLAY ONLY — never gates mutations.
- *           All mutation guards use validateTransition() which checks role.
+ * Frontend checks are intentional display behavior only:
+ * - `can()` and `canPerform()` gate what the UI enables.
+ * - RLS and RPC policies still block unauthorized reads/writes.
+ * - Domain transition behavior is enforced by live domain commands or database RPCs.
  *
  * Usage:
  *   import { usePermissions } from "@/services/permissions";
- *   const { role, can, canTransition } = usePermissions();
+ *   const { role, can } = usePermissions();
  *   if (!can("edit", "change_order")) { /* show read-only UI * / }
  */
 
@@ -19,7 +22,6 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectRole } from "@/hooks/useProjectRole";
-import { validateTransition, type TransitionResult } from "./workflowEngine";
 import type { AppRole, PermissionAction } from "@/types/rbac";
 
 // ─── Role hierarchy ─────────────────────────────────────────────────────
@@ -32,7 +34,7 @@ import type { AppRole, PermissionAction } from "@/types/rbac";
 // 'owner' mirrors 'admin'. A global 'user' maps to PM-level (full create/edit/
 // approve/export/view; delete/void/bulk_delete reserved for admins) — used only
 // when no project is active. This gate is display-only — the authoritative
-// guards are RLS and workflowEngine.validateTransition.
+// guards are RLS and domain command/RPC checks.
 const ROLE_RANK: Record<AppRole, number> & Record<string, number> = {
   owner: 0,
   admin: 0,
@@ -78,7 +80,7 @@ const ENTITY_OVERRIDES: Record<string, AppRole> = {
 // ─── Pure permission check ──────────────────────────────────────────────
 /**
  * Resolve whether `role` may perform `action` on an optional `entity`.
- * UI gating only — the authoritative guard is workflowEngine.validateTransition.
+ * UI gating only — the authoritative guard is domain command/RPC checks + RLS.
  *
  * Lower rank = more privileged; you may act when your rank is at least as
  * privileged as the floor. Entity-specific overrides win over the
@@ -144,8 +146,8 @@ export function usePermissions() {
   // viewer should see read-only controls even if their global role is "user".
   // A GLOBAL admin overrides to admin everywhere. With no active project
   // (portfolio / admin screens) fall back to the global role so those UIs
-  // aren't over-restricted. Still display-only — RLS + validateTransition are
-  // the authoritative guards.
+  // aren't over-restricted. Still display-only — RLS + domain command/RPC checks
+  // are the authoritative guards.
   const projectId = useProjectId();
   const { role: projectRole } = useProjectRole(projectId);
 
@@ -156,36 +158,18 @@ export function usePermissions() {
     : projectId
       ? (projectRole ?? "viewer")
       : globalRole;
+  // Keep least-privilege display behavior while project role data is loading.
   const roleRank = ROLE_RANK[role] ?? 99;
 
   /**
    * Can the current user perform an action on an entity? Resolved against the
    * effective per-project role above. UI gating only — the real guard is RLS +
-   * workflowEngine.validateTransition.
+   * domain command/RPC checks.
    */
   const can = useCallback(
     (action: PermissionAction, entity: string | null = null): boolean =>
       canPerform(role, action, entity),
     [role]
-  );
-
-  /**
-   * Can the current user trigger a specific workflow transition?
-   * Delegates to workflowEngine.validateTransition for the real check.
-   */
-  const canTransition = useCallback(
-    (
-      workflowName: string,
-      fromStatus: string,
-      toStatus: string,
-      record: Record<string, any> = {},
-    ): TransitionResult => {
-      return validateTransition(workflowName, fromStatus, toStatus, {
-        user: userInfo,
-        record,
-      });
-    },
-    [userInfo]
   );
 
   /**
@@ -200,7 +184,6 @@ export function usePermissions() {
     userId: userInfo?.id,
     user: userInfo,
     can,
-    canTransition,
     isAdmin,
     roleRank,
   };

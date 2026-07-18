@@ -25,7 +25,7 @@ import {
 
 import { createPageUrl } from "@/utils";
 import { useProjectId } from "@/hooks/useProjectId";
-import { useAppSecurity } from "@/components/shared/useAppSecurity";
+import { usePermissions } from "@/services/permissions";
 import EmailAccountSettings from "@/components/email/EmailAccountSettings";
 import DocumentStorageSettings from "@/components/dms/DocumentStorageSettings";
 import {
@@ -162,7 +162,7 @@ function SelectPill({ label, value, onChange, options }) {
 export default function Integrations() {
   const navigate = useNavigate();
   const projectId = useProjectId();
-  const { isAdmin } = useAppSecurity();
+  const { isAdmin } = usePermissions();
   const [category, setCategory] = useState("All");
   const [status, setStatus] = useState("All");
   const [customerStatusFilter, setCustomerStatusFilter] = useState("All");

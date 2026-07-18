@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
-import { formatLocalDate, localToday } from "@/utils/dates";
+import { localToday } from "@/utils/dates";
 import { formatMoney, sumMoney } from "@/lib/money";
 import { logActivity } from "@/services/auditLogger";
 import {
@@ -26,7 +26,6 @@ import {
 import { computeG702, lineFigures } from "@/lib/payapp/g702";
 import { PAY_APP_STATUSES, PAY_APP_STATUS_LABELS } from "@/lib/payapp/types";
 import { buildPayAppPdf, suggestPayAppFilename } from "@/lib/payapp/payAppPdf";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import PayApplicationsControlCenter from "./payApplications/PayApplicationsControlCenter";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
@@ -67,12 +66,10 @@ export default function PayApplications() {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
-  const commandUi = useFlag("command_ui");
-  // Command UI filter state (not used by the classic path — zero overhead)
   const [ccSearch, setCcSearch] = useState("");
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
 
-  const { data: payApps = [], isLoading } = useQuery({ queryKey: ["pay_applications", projectId], queryFn: () => listPayApplications(projectId), enabled: !!projectId });
+  const { data: payApps = [] } = useQuery({ queryKey: ["pay_applications", projectId], queryFn: () => listPayApplications(projectId), enabled: !!projectId });
   const { data: sovItems = [] } = useQuery({
     queryKey: ["sov_items_payapp", projectId],
     queryFn: async () => {
@@ -137,8 +134,7 @@ export default function PayApplications() {
 
   if (!projectId) return <div style={{ ...mono, padding: 24, color: "var(--text-muted)" }}>Select a project to manage pay applications.</div>;
 
-  // G702 summary rows — computed here so both the classic path and the
-  // commandUi branch (which embeds the G702 panel inline) can reference it.
+  // G702 summary rows used by the canonical control-center editor.
   const summary = g702 && [
     ["1 Original contract sum", g702.originalContractSum],
     ["2 Net change orders", g702.netChangeOrders],
@@ -151,7 +147,7 @@ export default function PayApplications() {
     ["9 Balance to finish", g702.balanceToFinish],
   ];
 
-  // Command UI: filtered list used only by the CC table
+  // Filtered list used by the canonical control-center table.
   const ccFiltered = payApps.filter((a) => {
     if (a.is_deleted) return false;
     if (ccStatusFilter !== "all" && a.status !== ccStatusFilter) return false;
@@ -165,8 +161,7 @@ export default function PayApplications() {
     return true;
   });
 
-  if (commandUi) {
-    return (
+  return (
       <>
         <PayApplicationsControlCenter
           projectName={activeProject?.name || "Project"}
@@ -181,7 +176,6 @@ export default function PayApplications() {
           onCreate={sovItems.length > 0 ? () => setNewOpen(true) : null}
           canCreate={sovItems.length > 0}
         />
-        {/* Classic modals re-used unchanged — the CC opens apps via setSelectedId */}
         {selectedApp && (
           <div style={{ padding: "0 20px 20px", maxWidth: 1240, margin: "0 auto" }}>
             <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, alignItems: "start" }}>
@@ -265,113 +259,4 @@ export default function PayApplications() {
         />
       </>
     );
-  }
-
-  return (
-    <div className="sb-dashboard-reference-page" style={{ padding: 20, maxWidth: 1240, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, color: "var(--text-primary)" }}>Pay Applications</h1>
-          <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>AIA G702/G703 from the SOV — enter progress, export the certificate.</div>
-        </div>
-        <button style={btnP} disabled={sovItems.length === 0} title={sovItems.length === 0 ? "Add SOV line items first" : undefined} onClick={() => setNewOpen(true)}>+ New Application</button>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {isLoading ? <span style={{ ...mono, fontSize: 12, color: "var(--text-muted)" }}>Loading…</span>
-          : payApps.length === 0 ? <span style={{ ...mono, fontSize: 12, color: "var(--text-muted)" }}>No pay applications yet.</span>
-            : payApps.map((a) => (
-              <button key={a.id} onClick={() => setSelectedId(a.id)} style={{
-                ...card, padding: "10px 14px", cursor: "pointer", textAlign: "left",
-                borderColor: selectedId === a.id ? "var(--accent)" : "var(--border-default)",
-                background: selectedId === a.id ? "var(--accent-muted)" : "var(--bg-surface-secondary)",
-              }}>
-                <div style={{ ...mono, fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>App #{a.application_number}</div>
-                <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>{a.period_to ? formatLocalDate(a.period_to) : "—"} · {PAY_APP_STATUS_LABELS[a.status] || a.status}</div>
-                <div style={{ ...mono, fontSize: 12, color: "var(--accent)", marginTop: 2 }}>{formatMoney(a.current_payment_due)}</div>
-              </button>
-            ))}
-      </div>
-
-      {selectedApp && (
-        <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, alignItems: "start" }}>
-          <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>G702 Summary</div>
-              <button onClick={() => setSelectedId(null)} style={{ ...btn, padding: "3px 7px" }}>✕</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 12 }}>
-              {summary.map(([k, v], i) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3px 0", borderTop: i > 0 ? "1px solid var(--border-subtle, var(--border-default))" : "none" }}>
-                  <span style={{ ...mono, fontSize: 10, color: k.includes("CURRENT") ? "var(--accent)" : "var(--text-muted)", fontWeight: k.includes("CURRENT") ? 700 : 400 }}>{k}</span>
-                  <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: k.includes("CURRENT") ? "var(--accent)" : "var(--text-primary)" }}>{formatMoney(v)}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <select style={{ ...input, width: "auto" }} value={selectedApp.status} onChange={(e) => statusMut.mutate({ id: selectedApp.id, status: e.target.value })}>
-                {PAY_APP_STATUSES.map((s) => <option key={s} value={s}>{PAY_APP_STATUS_LABELS[s]}</option>)}
-              </select>
-              <button style={btnP} onClick={exportPdf}>Export PDF</button>
-              <button style={{ ...btn, color: "var(--status-error)", borderColor: "var(--status-error)", opacity: isDraft ? 1 : 0.4, cursor: isDraft ? "pointer" : "not-allowed" }} disabled={!isDraft} title={isDraft ? "" : "Only a draft pay application can be deleted — set status to void instead."} onClick={() => { if (confirm("Delete this pay application?")) delMut.mutate(selectedApp.id); }}>Delete</button>
-            </div>
-          </div>
-
-          <div style={{ ...card, overflowX: "auto" }}>
-            <div style={{ ...lbl, marginBottom: 8 }}>G703 Continuation Sheet — {isDraft ? "enter % complete & stored" : <span style={{ color: "var(--status-warning, var(--accent))" }}>🔒 {PAY_APP_STATUS_LABELS[selectedApp.status] || selectedApp.status} — figures locked</span>}</div>
-            <table style={{ ...mono, width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-              <thead>
-                <tr style={{ color: "var(--text-muted)", textAlign: "right" }}>
-                  <th style={{ textAlign: "left", padding: 4 }}>#</th>
-                  <th style={{ textAlign: "left", padding: 4 }}>Description</th>
-                  <th style={{ padding: 4 }}>Scheduled</th>
-                  <th style={{ padding: 4 }}>Previous</th>
-                  <th style={{ padding: 4 }}>This period</th>
-                  <th style={{ padding: 4 }}>% compl</th>
-                  <th style={{ padding: 4 }}>Stored</th>
-                  <th style={{ padding: 4 }}>Total</th>
-                  <th style={{ padding: 4 }}>Balance</th>
-                  <th style={{ padding: 4 }}>Retainage</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((l) => {
-                  const f = lineFigures(l);
-                  return (
-                    <tr key={l.id} style={{ borderTop: "1px solid var(--border-default)", textAlign: "right" }}>
-                      <td style={{ textAlign: "left", padding: 4, color: "var(--text-muted)" }}>{l.line_item_number}</td>
-                      <td style={{ textAlign: "left", padding: 4, color: "var(--text-primary)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.description}</td>
-                      <td style={{ padding: 4, color: "var(--text-secondary)" }}>{formatMoney(l.scheduled_value)}</td>
-                      <td style={{ padding: 4, color: "var(--text-muted)" }}>{formatMoney(l.work_completed_previous)}</td>
-                      <td style={{ padding: 4, color: "var(--text-primary)" }}>{formatMoney(l.work_completed_this_period)}</td>
-                      <td style={{ padding: 4 }}>
-                        <input style={{ ...input, width: 56, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.percent_complete)} disabled={!isDraft}
-                          onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.percent_complete)) lineMut.mutate({ line: l, edit: { percentComplete: v } }); }} />
-                      </td>
-                      <td style={{ padding: 4 }}>
-                        <input style={{ ...input, width: 76, textAlign: "right", padding: "3px 5px", opacity: isDraft ? 1 : 0.55 }} type="number" defaultValue={num(l.materials_stored)} disabled={!isDraft}
-                          onBlur={(e) => { const v = num(e.target.value); if (v !== num(l.materials_stored)) lineMut.mutate({ line: l, edit: { materialsStored: v } }); }} />
-                      </td>
-                      <td style={{ padding: 4, color: "var(--text-primary)", fontWeight: 700 }}>{formatMoney(f.totalCompletedStored)}</td>
-                      <td style={{ padding: 4, color: "var(--text-muted)" }}>{formatMoney(f.balanceToFinish)}</td>
-                      <td style={{ padding: 4, color: "var(--text-secondary)" }}>{formatMoney(l.retainage)}</td>
-                    </tr>
-                  );
-                })}
-                {lines.length === 0 && <tr><td colSpan={10} style={{ padding: 10, color: "var(--text-muted)", textAlign: "center" }}>No lines.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      <NewAppModal
-        open={newOpen}
-        defaultRetainage={contract.retainagePercent}
-        busy={createMut.isPending}
-        onClose={() => setNewOpen(false)}
-        onCreate={(input) => createMut.mutate(input)}
-      />
-    </div>
-  );
 }

@@ -1012,20 +1012,6 @@ export default function ResourceScheduling() {
             >
               + Add First Resource
             </button>
-            <button
-              onClick={() => toast.info("Company resource sync coming soon")}
-              style={{
-                background: "transparent", color: "var(--text-muted)",
-                border: "1px solid var(--border-strong)", borderRadius: "var(--radius-btn)",
-                padding: "10px 20px", fontFamily: "var(--font-display)", fontSize: 12,
-                fontWeight: 600, cursor: "pointer", textTransform: "uppercase",
-                letterSpacing: "0.08em", minHeight: 44, transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-            >
-              Sync Company Resources
-            </button>
           </div>
         </div>
       )}

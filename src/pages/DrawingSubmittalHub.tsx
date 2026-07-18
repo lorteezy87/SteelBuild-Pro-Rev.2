@@ -10,7 +10,7 @@
  * strip, a shared CommandBar with tab navigation, and the Approval Matrix.
  */
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useSearchParams } from "react-router-dom";
@@ -23,7 +23,6 @@ import { toast } from "sonner";
 import ErrorBoundaryRaw from "@/components/shared/ErrorBoundary";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
-import { CommandBar as CommandBarRaw, KpiTile as KpiTileRaw } from "@/components/design-system";
 import { computeFabReady } from "@/lib/submittalAnalytics";
 import { computeDetailingReadiness } from "@/lib/detailingReadiness";
 import { summarizeElementStatuses } from "@/services/modelElementStatus";
@@ -32,35 +31,25 @@ import { computeRevisionImpact } from "@/lib/detailingRevisionImpact";
 import { DEFAULT_LEAD_DAYS, resolveLeadDays } from "@/lib/detailingSchedule";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { usePermissions } from "@/services/permissions";
-import { AlertTriangle, Box, CalendarClock, Gauge, Link2 } from "lucide-react";
+import { Box } from "lucide-react";
 import { useFlag } from "@/hooks/useFeatureFlag";
-import Model3DTab from "@/components/viewer3d/Model3DTab";
 import EscalateModal from "./drawingSubmittalHub/EscalateModal";
 import type { EscalationKind } from "./drawingSubmittalHub/EscalateModal";
 import { DetailingCommandShell } from "./drawingSubmittalHub/DetailingCommandShell";
 import ModelElementImportModalRaw from "@/components/drawings/ModelElementImportModal";
 import {
   TABS,
-  accent,
-  border,
   buildCurrentRevisionMap,
   buildDrawingKpis,
   buildSequenceReadiness,
   buildSetPackages,
   buildTriage,
   dueDateWriteTargets,
-  error,
-  info,
-  mono,
-  review,
-  success,
-  surface2,
-  textMuted,
-  textPrimary,
-  warning,
+  validateDetailingStateWrite,
+  validateDueDateWrite,
 } from "./drawingSubmittalHub/format";
 import type { Drawing as HubDrawing, DrawingRevision as HubDrawingRevision, DrawingSet as HubDrawingSet, Submittal as HubSubmittal } from "./drawingSubmittalHub/types";
-import { ApprovalMatrix, DrawingRegisterTable, FleetHealthStrip, HeaderSignal, LeadTimesModal, RevisionImpactBoard, TriageBoard } from "./drawingSubmittalHub/components";
+import { FleetHealthStrip, LeadTimesModal } from "./drawingSubmittalHub/components";
 import ControlBoardPanel from "./drawingSubmittalHub/ControlBoardPanel";
 import DrawingRegisterPanel from "./drawingSubmittalHub/DrawingRegisterPanel";
 import RevisionImpactPanel from "./drawingSubmittalHub/RevisionImpactPanel";
@@ -81,11 +70,6 @@ const SubmittalsPage = lazyWithRetry(() => import("@/pages/Submittals"));
 // Heavy tab panels — each only renders on its own tab, so code-split them off
 // the hub's route chunk. They already mount conditionally inside the <Suspense>
 // boundary below, so deferring the import is behavior-preserving.
-const SubmittalVisualBoard = lazyWithRetry(
-  () => import("@/components/submittals/SubmittalVisualBoard"),
-) as unknown as ComponentType<AnyProps>;
-// On-skin Process Board (SP3 native command_ui conversion). Swapped in only when
-// `command_ui` is on; the legacy SubmittalVisualBoard stays for the flag-off path.
 const ProcessBoardPanel = lazyWithRetry(
   () => import("@/components/submittals/ProcessBoardPanel"),
 ) as unknown as ComponentType<AnyProps>;
@@ -98,12 +82,16 @@ const DocControlPanel = lazyWithRetry(() =>
 const RevisionCompareModalLazy = lazyWithRetry(
   () => import("@/components/drawings/RevisionCompareModal"),
 ) as unknown as ComponentType<AnyProps>;
+// 3D remains out of the normal Detailing path; its interaction subsystem is loaded
+// separately, web-ifc stays a second-level dynamic import, and the feature is
+// already guarded by the feature flag.
+const Model3DTab = lazyWithRetry(
+  () => import("@/components/viewer3d/Model3DTab")
+);
 
 // The design-system primitives + these shared screens are still .jsx; cast
 // at the boundary (removable once the shared layer is typed).
 type AnyProps = PropsWithChildren<Record<string, any>>;
-const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
-const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const ErrorBoundary = ErrorBoundaryRaw as unknown as ComponentType<AnyProps>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
 const ModelElementImportModal = ModelElementImportModalRaw as unknown as ComponentType<AnyProps>;
@@ -123,6 +111,7 @@ export default function DrawingSubmittalHub() {
   const [deepDiveSet, setDeepDiveSet] = useState<any | null>(null);
   const [rfiDraft, setRfiDraft] = useState<any | null>(null);
   const [savingRfi, setSavingRfi] = useState(false);
+  const summaryInFlight = useRef(new Set<string>());
   const qc = useQueryClient();
   const { can } = usePermissions();
   const projectId = activeProject?.id as string | undefined;
@@ -130,8 +119,6 @@ export default function DrawingSubmittalHub() {
 
   // The 3D model viewer is flag-gated until verified against real models in prod.
   const show3d = useFlag("viewer_3d");
-  // Command UI re-skin — wraps the hub in the light command chrome when on.
-  const commandUi = useFlag("command_ui");
   // Phase 5 display: count SUBMITTAL due-date countdowns in working days (Mon–Fri)
   // rather than calendar days when on. Drawing-set dues stay calendar-day. Threaded
   // as a param into the pure formatters (buildTriage / buildApprovalMatrixRows) and
@@ -204,7 +191,7 @@ export default function DrawingSubmittalHub() {
     // fab colors that "didn't stick" (the assigned pieces weren't in the 1000).
     // fetchAllModelElements pages with .range() so the WHOLE roster loads.
     queryFn: () => fetchAllModelElements(projectId),
-    enabled: !!projectId,
+    enabled: !!projectId && show3d && activeTab === "model3d",
     staleTime: 60_000,
   });
 
@@ -241,36 +228,53 @@ export default function DrawingSubmittalHub() {
   // upload), persist a snapshot, and show the card. AI deep-dive stays on demand.
   const aiDiff = useFlag("revision_ai_diff");
   const handleRevisionUploaded = async (pkgKey: string) => {
-    if (!projectId) return;
+    if (!projectId || summaryInFlight.current.has(pkgKey)) return;
+    summaryInFlight.current.add(pkgKey);
     try {
-      await qc.invalidateQueries({ queryKey: ["drawing-revisions", projectId] });
+      await Promise.all([
+        invalidateEntity(qc, "drawing_revision", projectId),
+        invalidateEntity(qc, "drawingSet", projectId),
+      ]);
       const freshRevisions = await qc.fetchQuery({
         queryKey: ["drawing-revisions", projectId],
         queryFn: () => entities.DrawingRevision.filter({ project_id: projectId }),
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const pkg = setPackages.find((p: any) => p.key === pkgKey);
-      if (!pkg) return;
-      const summary = buildRevisionSummary({
-        set: pkg,
-        revisions: freshRevisions as any[],
-        rfis: rfis as any[],
-        drawingSets: drawingSets as any[],
-        workPackages: workPackages as any[],
-        modelElements: modelElements as any[],
-      });
-      saveRevisionSummary({ projectId, drawingSetId: pkg.setId, summary, generatedBy: null })
-        .then(() => qc.invalidateQueries({ queryKey: ["revision-summaries", projectId] }))
-        .catch((err) => {
-          // The card already shows (best-effort), but persistence failed — surface it
-          // so a missing "revised · N" set badge isn't a silent mystery (e.g. an RLS
-          // reject below the ≥field insert floor, or a transient DB error).
-          console.warn("[revision-summary] persist failed:", err);
-          toast.warning("Revision summary shown, but couldn't be saved — the set badge may not persist.");
+      if (!pkg) {
+        toast.warning("Revision uploaded, but its summary could not be generated because the set is no longer visible.");
+        return;
+      }
+      let summary: any;
+      try {
+        summary = buildRevisionSummary({
+          set: pkg,
+          revisions: freshRevisions as any[],
+          rfis: rfis as any[],
+          drawingSets: drawingSets as any[],
+          workPackages: workPackages as any[],
+          modelElements: modelElements as any[],
         });
+      } catch (err) {
+        console.warn("[revision-summary] generation failed:", err);
+        toast.warning("Revision uploaded, but the revision summary could not be generated.");
+        return;
+      }
       setSummaryCard(summary);
-    } catch {
-      /* the summary is best-effort — never block the upload flow */
+      try {
+        await saveRevisionSummary({ projectId, drawingSetId: pkg.setId, summary, generatedBy: null });
+        await invalidateEntity(qc, "drawing_revision", projectId);
+        await invalidateEntity(qc, "drawingSet", projectId);
+        await qc.invalidateQueries({ queryKey: ["revision-summaries", projectId] });
+      } catch (err) {
+        console.warn("[revision-summary] persistence failed:", err);
+        toast.warning("Revision uploaded and summary shown, but the summary could not be saved.");
+      }
+    } catch (err) {
+      console.warn("[revision-summary] refresh failed:", err);
+      toast.warning("Revision uploaded, but the revision summary could not be refreshed.");
+    } finally {
+      summaryInFlight.current.delete(pkgKey);
     }
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -294,7 +298,7 @@ export default function DrawingSubmittalHub() {
       const created = await createRfiAndLink({ projectId, formData, deltaId: undefined });
       setRfiDraft(null);
       toast.success(`Created ${created?.rfi_number || "RFI"} from revision summary`);
-      qc.invalidateQueries({ queryKey: ["rfis", projectId] });
+      await invalidateEntity(qc, "rfi", projectId);
     } catch (err: any) {
       toast.error("Failed to create RFI: " + (err?.message || "Unknown"));
     } finally {
@@ -430,27 +434,29 @@ export default function DrawingSubmittalHub() {
   }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSets, kpis.total, drawingSets]);
 
   // ── Inline quick-action mutations (Next Decision card) ────────────────
-  const invalidateHub = () => {
+  const invalidateHub = async () => {
     // Sets read under both "drawing-sets" (hub) and "drawing_sets" (Drawings/
     // Submittals) keys — invalidate both spellings + the register view so a hub
     // edit reflects everywhere (and vice-versa).
-    invalidateEntity(qc, "drawingSet", projectId);
-    qc.invalidateQueries({ queryKey: ["drawings", projectId] });
-    qc.invalidateQueries({ queryKey: ["submittals", projectId] });
+    await Promise.all([
+      invalidateEntity(qc, "drawingSet", projectId),
+      invalidateEntity(qc, "drawing", projectId),
+      invalidateEntity(qc, "submittal", projectId),
+    ]);
   };
 
   const updateOwnerMut = useMutation({
     mutationFn: async ({ item, owner }: { item: any; owner: string }) => {
       if (item._submittalId) {
         await entities.Submittal.update(item._submittalId, { ball_in_court: owner });
-      } else if (item._firstSheetId) {
+      } else if (item._ownerScope === "First sheet owner" && item._firstSheetId) {
         await entities.Drawing.update(item._firstSheetId, { assigned_to: owner } as any);
       } else {
-        throw new Error("No entity available to assign owner");
+        throw new Error("No package-level owner field exists; assign the first sheet instead.");
       }
     },
-    onSuccess: (_data, { owner }) => {
-      invalidateHub();
+    onSuccess: async (_data, { owner }) => {
+      await invalidateHub();
       toast.success(`Owner assigned: ${owner}`);
     },
     onError: (err) => toast.error("Failed to assign owner: " + (err?.message || "Unknown")),
@@ -458,6 +464,8 @@ export default function DrawingSubmittalHub() {
 
   const updateDueDateMut = useMutation({
     mutationFn: async ({ item, date }: { item: any; date: string }) => {
+      const dueDateError = validateDueDateWrite(item, date);
+      if (dueDateError) throw new Error(dueDateError);
       // dueDateWriteTargets (format.ts, unit-tested) is the single source of truth
       // for the submittal-vs-sheets dispatch — the mutation just executes its result.
       const targets = dueDateWriteTargets(item);
@@ -477,8 +485,8 @@ export default function DrawingSubmittalHub() {
         await entities.Drawing.bulkUpdate(ids, { due_date: date });
       }
     },
-    onSuccess: () => {
-      invalidateHub();
+    onSuccess: async () => {
+      await invalidateHub();
       toast.success("Due date set");
     },
     onError: (err) => toast.error("Failed to set due date: " + (err?.message || "Unknown")),
@@ -489,11 +497,12 @@ export default function DrawingSubmittalHub() {
   // machine owns the middle of the flow); the UI gates the control accordingly.
   const updateDetailingStateMut = useMutation({
     mutationFn: async ({ item, next }: { item: any; next: string }) => {
-      if (!item?._drawingSetId) throw new Error("No drawing set to update");
+      const stateError = validateDetailingStateWrite(item, next);
+      if (stateError) throw new Error(stateError);
       await entities.DrawingSet.update(item._drawingSetId, { detailing_state: next } as any);
     },
-    onSuccess: (_data, { next }) => {
-      invalidateHub();
+    onSuccess: async (_data, { next }) => {
+      await invalidateHub();
       toast.success(`Detailing state → ${next}`);
     },
     onError: (err) => toast.error("Failed to set detailing state: " + (err?.message || "Unknown")),
@@ -505,8 +514,8 @@ export default function DrawingSubmittalHub() {
       if (!item?._drawingSetId) throw new Error("No drawing set to update");
       await entities.DrawingSet.update(item._drawingSetId, { [field]: value } as any);
     },
-    onSuccess: (_data, { field, value }) => {
-      invalidateHub();
+    onSuccess: async (_data, { field, value }) => {
+      await invalidateHub();
       const label = field === "material_impacted" ? "Material impacted" : "Long-lead impact";
       toast.success(`${label} ${value ? "flagged" : "cleared"}`);
     },
@@ -531,163 +540,74 @@ export default function DrawingSubmittalHub() {
   });
 
   // ── Shared tab-panel renderer ─────────────────────────────────────────
-  // Used by BOTH the classic shell and the command-UI shell. The content is
-  // identical — only the chrome around it changes. Nothing inside is touched.
+  // The canonical shell owns the presentation; this renderer keeps each
+  // workflow tab isolated behind the shared loading and error boundaries.
   const activeTabPanel = (
     <ErrorBoundary>
       <Suspense fallback={<LoadingSkeleton />}>
         {activeTab === "overview" && (
           <>
           <FleetHealthStrip fleet={fleetHealth} onOpenRegister={() => setActiveTab("drawings")} />
-          {/* Control Board: the on-skin ControlBoardPanel under command_ui
-              (Slice 1 native conversion), else the legacy bespoke TriageBoard.
-              Both take the identical prop/handler set, so the write paths,
-              mutations, and cache keys are unchanged — presentation only. */}
-          {commandUi ? (
-            <ControlBoardPanel
-              triage={triage}
-              kpis={kpis}
-              drawingKpis={drawingKpis}
-              isLoading={isLoading}
-              onOpenTab={setActiveTab}
-              onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
-              onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
-              onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
-              onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
-              sequenceReadiness={sequenceReadiness}
-              revisionImpact={revisionImpact}
-              isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
-              onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
-              onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
-              modelMapping={modelMappingSummary}
-              modelElementRows={modelElements as any[]}
-              onImportModelElements={() => setImportModelOpen(true)}
-            />
-          ) : (
-            <TriageBoard
-              triage={triage}
-              kpis={kpis}
-              drawingKpis={drawingKpis}
-              isLoading={isLoading}
-              onOpenTab={setActiveTab}
-              onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
-              onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
-              onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
-              onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
-              sequenceReadiness={sequenceReadiness}
-              revisionImpact={revisionImpact}
-              isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
-              onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
-              onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
-              modelMapping={modelMappingSummary}
-              modelElementRows={modelElements as any[]}
-              onImportModelElements={() => setImportModelOpen(true)}
-            />
-          )}
+          <ControlBoardPanel
+            triage={triage}
+            kpis={kpis}
+            drawingKpis={drawingKpis}
+            isLoading={isLoading}
+            onOpenTab={setActiveTab}
+            onUpdateOwner={(item, owner) => updateOwnerMut.mutate({ item, owner })}
+            onUpdateDueDate={(item, date) => updateDueDateMut.mutate({ item, date })}
+            onAdvanceDetailing={(item, next) => updateDetailingStateMut.mutate({ item, next })}
+            onToggleReadiness={(item, field, value) => updateReadinessFlagMut.mutate({ item, field, value })}
+            sequenceReadiness={sequenceReadiness}
+            revisionImpact={revisionImpact}
+            isSaving={updateOwnerMut.isPending || updateDueDateMut.isPending || updateDetailingStateMut.isPending || updateReadinessFlagMut.isPending}
+            onEscalate={canEscalate ? (item: any, kind: EscalationKind) => { setEscalateItem(item); setEscalateKind(kind); } : undefined}
+            onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
+            modelMapping={modelMappingSummary}
+            modelElementRows={modelElements as any[]}
+            onImportModelElements={() => setImportModelOpen(true)}
+          />
           </>
         )}
         {activeTab === "process" && (
-          // Process Board: the on-skin ProcessBoardPanel under command_ui (SP3
-          // native conversion), else the legacy SubmittalVisualBoard. Both take
-          // the identical prop set — including `useWorkdays` for the working-day
-          // due display — so the board math, routing, and cache paths are
-          // unchanged; presentation only.
-          commandUi ? (
-            <ProcessBoardPanel
-              setPackages={setPackages}
-              submittals={submittals}
-              isLoading={isLoading}
-              onOpenTab={setActiveTab}
-              useWorkdays={workdayDues}
-            />
-          ) : (
-            <SubmittalVisualBoard
-              setPackages={setPackages}
-              submittals={submittals}
-              isLoading={isLoading}
-              onOpenTab={setActiveTab}
-              useWorkdays={workdayDues}
-            />
-          )
+          <ProcessBoardPanel
+            setPackages={setPackages}
+            submittals={submittals}
+            isLoading={isLoading}
+            onOpenTab={setActiveTab}
+            useWorkdays={workdayDues}
+          />
         )}
         {activeTab === "drawings" && (
-          // Drawing Register: the on-skin DrawingRegisterPanel under command_ui
-          // (Slice 2a native conversion), else the legacy DrawingRegisterTable.
-          // Both take the identical prop set; the register's data, queries,
-          // mutations, and the ["drawing-register", projectId] cache key are
-          // unchanged — presentation only.
-          commandUi ? (
-            <DrawingRegisterPanel
-              setPackages={setPackages}
-              projectId={projectId}
-              activeProject={activeProject}
-              drawingSets={drawingSets}
-              isLoading={isLoading}
-              healthByKey={healthByKey}
-              currentRevByDrawingId={currentRevByDrawingId}
-              summariesBySet={summariesBySet}
-              onRevisionUploaded={handleRevisionUploaded}
-              onOpenSummary={setSummaryCard}
-            />
-          ) : (
-            <DrawingRegisterTable
-              setPackages={setPackages}
-              projectId={projectId}
-              activeProject={activeProject}
-              drawingSets={drawingSets}
-              isLoading={isLoading}
-              healthByKey={healthByKey}
-              currentRevByDrawingId={currentRevByDrawingId}
-              summariesBySet={summariesBySet}
-              onRevisionUploaded={handleRevisionUploaded}
-              onOpenSummary={setSummaryCard}
-            />
-          )
+          <DrawingRegisterPanel
+            setPackages={setPackages}
+            projectId={projectId}
+            activeProject={activeProject}
+            drawingSets={drawingSets}
+            isLoading={isLoading}
+            healthByKey={healthByKey}
+            currentRevByDrawingId={currentRevByDrawingId}
+            summariesBySet={summariesBySet}
+            onRevisionUploaded={handleRevisionUploaded}
+            onOpenSummary={setSummaryCard}
+          />
         )}
         {activeTab === "submittals" && <SubmittalsPage />}
         {activeTab === "matrix" && (
-          // Approval Matrix: the on-skin ApprovalMatrixPanel under command_ui
-          // (SP3 native conversion), else the legacy ApprovalMatrix. Both take
-          // the identical prop set — including `useWorkdays` for the working-day
-          // due display — and both call the same buildApprovalMatrixRows /
-          // summarizeApprovalMatrix in format.ts, so rows, sort, counts, and the
-          // cycle-time / aging analytics are unchanged; presentation only.
-          commandUi ? (
-            <ApprovalMatrixPanel
-              drawingSets={drawingSets}
-              submittals={submittals as unknown as HubSubmittal[]}
-              roundsBySubmittal={roundsBySubmittal}
-              isLoading={isLoading}
-              useWorkdays={workdayDues}
-            />
-          ) : (
-            <ApprovalMatrix
-              drawingSets={drawingSets}
-              submittals={submittals as unknown as HubSubmittal[]}
-              roundsBySubmittal={roundsBySubmittal}
-              isLoading={isLoading}
-              useWorkdays={workdayDues}
-            />
-          )
+          <ApprovalMatrixPanel
+            drawingSets={drawingSets}
+            submittals={submittals as unknown as HubSubmittal[]}
+            roundsBySubmittal={roundsBySubmittal}
+            isLoading={isLoading}
+            useWorkdays={workdayDues}
+          />
         )}
         {activeTab === "revimpact" && (
-          // Revision Impact: the on-skin RevisionImpactPanel under command_ui
-          // (SP3 native conversion), else the legacy RevisionImpactBoard. Rows
-          // arrive pre-enriched from the hub and the Compare handler is passed
-          // through unchanged — presentation only.
-          commandUi ? (
-            <RevisionImpactPanel
-              rows={revisionImpactRows}
-              onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
-              isLoading={isLoading}
-            />
-          ) : (
-            <RevisionImpactBoard
-              rows={revisionImpactRows}
-              onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
-              isLoading={isLoading}
-            />
-          )
+          <RevisionImpactPanel
+            rows={revisionImpactRows}
+            onCompareRevision={(drawingId: string) => setCompareDrawingId(drawingId)}
+            isLoading={isLoading}
+          />
         )}
         {activeTab === "doccontrol" && <DocControlPanel projectId={projectId} />}
         {activeTab === "model3d" && (
@@ -698,8 +618,8 @@ export default function DrawingSubmittalHub() {
   );
 
   // ── Shared modals ─────────────────────────────────────────────────────
-  // Rendered by BOTH paths — command-UI and classic. Zero change to any modal,
-  // escalation handler, revision-compare logic, or unlock/audit flow.
+  // These remain outside the shell's panel slot so portaled and non-portaled
+  // dialogs keep their existing focus, audit, and workflow behavior.
   const sharedModals = (
     <>
       {leadModalOpen && (
@@ -765,240 +685,37 @@ export default function DrawingSubmittalHub() {
     </>
   );
 
-  // ── Command-UI path (flag: command_ui) ────────────────────────────────
-  // The hub's data, mutations, and tab panels are 100% unchanged.
-  // Only the chrome — hero, KPI strip, tab bar — is swapped to the command kit.
-  if (commandUi) {
-    return (
-      <>
-        <ListTruncationNotice count={drawings.length} label="drawing sheets" />
-        <DetailingCommandShell
-          tabs={tabs}
-          activeTab={activeTab}
-          onTab={setActiveTab}
-          kpis={{
-            totalSets: drawingKpis.totalSets,
-            totalSheets: drawingKpis.totalSheets,
-            released: drawingKpis.released,
-            inReview: drawingKpis.inReview,
-            submittalsTotal: kpis.total,
-            submittalsPending: kpis.pending,
-            needsAction: kpis.rejected,
-            overdue: triage.overdue.length,
-            atRisk: triage.atRiskCount,
-            overdueDrawingSets: triage.overdueDrawingSets,
-            overdueUnlinkedSubmittals: triage.overdueUnlinkedSubmittals,
-            fabReadyNumerator: fabReady.numerator,
-            fabReadyDenominator: fabReady.denominator,
-            fabReadyPercent: fabReady.percent,
-            openItems: triage.openItems.length,
-            fleetAverageScore: fleetHealth.count > 0 ? fleetHealth.averageScore : null,
-          }}
-          projectName={projectName}
-          tabCounts={tabCounts}
-        >
-          {activeTabPanel}
-        </DetailingCommandShell>
-        {/* SP4: under command_ui, wrap the shared modals in `.detailing-cc` so
-            the NON-portaled ones (LeadTimes / ModelElementImport / RFIForm —
-            plain `position:fixed`, not React portals) inherit the shell's light
-            token cascade. The portaled Radix modals (Escalate / RevisionCompare
-            / RevisionSummary / RevisionImpactReport) escape this wrapper and
-            carry `.detailing-cc` on their own DialogContent instead. Wrapper
-            lives in the command branch only → flag-off path is byte-identical. */}
-        <div className="detailing-cc">{sharedModals}</div>
-      </>
-    );
-  }
-
-  // ── Classic / desktop-shell path (unchanged) ──────────────────────────
   return (
-    <div
-      className="sb-dashboard-reference-page drawing-submittal-hub"
-      style={{
-        minHeight: "100vh",
-        background: "var(--bg-page)",
-        color: "var(--text-primary)",
-      }}
-    >
+    <>
       <ListTruncationNotice count={drawings.length} label="drawing sheets" />
-      {/* ── Command Bar ─────────────────────────────────────────────── */}
-        <CommandBar
-          eyebrow={projectName ? `Detailing control - ${projectName}` : "Detailing control"}
-          title="Drawing & Submittal Control"
-          count={drawingKpis.totalSets}
-          unit={` sets | ${drawingKpis.totalSheets} sheets`}
-          subtitle="Set-level drawing packages, submittal status, due dates, ownership, and fabrication-release readiness."
-        >
-          <HeaderSignal
-            icon={AlertTriangle}
-            label="Overdue"
-            value={triage.overdue.length}
-            tone={triage.overdue.length ? error : success}
-          />
-          <HeaderSignal
-            icon={CalendarClock}
-            label="At Risk"
-            value={triage.atRiskCount}
-            tone={triage.atRiskCount ? warning : success}
-          />
-          <HeaderSignal
-            icon={Gauge}
-            label="In Review"
-            value={drawingKpis.inReview}
-            tone={drawingKpis.inReview > 0 ? info : textMuted}
-          />
-          <HeaderSignal
-            icon={Link2}
-            label="Unlinked"
-            value={triage.unlinkedSubmittalItems.length}
-            tone={triage.unlinkedSubmittalItems.length ? warning : textMuted}
-          />
-          <button
-            type="button"
-            className="sbd-btn-ghost"
-            onClick={() => setLeadModalOpen(true)}
-            title="Edit the project's detailing lead times (drives the backward schedule)"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
-          >
-            <CalendarClock size={14} />
-            Lead Times
-          </button>
-        </CommandBar>
-
-      {/* ── KPI Strip ────────────────────────────────────────────────── */}
-      <div className="sbp-hub-kpi-strip" style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-        gap: 10,
-        marginBottom: 14,
-      }}>
-        <KpiTile compact label="Drawing Sets" value={drawingKpis.totalSets} sub={`${drawingKpis.totalSheets} active sheets`} color={accent} loading={isLoading} />
-        <KpiTile compact label="Sets Released" value={drawingKpis.released} color={success} loading={isLoading} />
-        <KpiTile compact label="Sets In Review" value={drawingKpis.inReview} color={info} loading={isLoading} />
-        <KpiTile compact label="Submittals" value={kpis.total} sub={`${kpis.pending} pending`} color={accent} loading={isLoading} />
-        <KpiTile compact label="Needs Action" value={kpis.rejected} color={review} loading={isLoading} />
-        <KpiTile
-          compact
-          label="Overdue"
-          value={triage.overdue.length}
-          sub={
-            triage.overdueDrawingSets > 0 && triage.overdueUnlinkedSubmittals > 0
-              ? `${triage.overdueDrawingSets} set${triage.overdueDrawingSets === 1 ? "" : "s"} · ${triage.overdueUnlinkedSubmittals} unlinked sub${triage.overdueUnlinkedSubmittals === 1 ? "" : "s"}`
-              : triage.overdueUnlinkedSubmittals > 0
-              ? `${triage.overdueUnlinkedSubmittals} unlinked sub${triage.overdueUnlinkedSubmittals === 1 ? "" : "s"}`
-              : triage.overdueDrawingSets > 0
-              ? `${triage.overdueDrawingSets} drawing set${triage.overdueDrawingSets === 1 ? "" : "s"}`
-              : "packages + unlinked subs"
-          }
-          color={error}
-          loading={isLoading}
-        />
-        <KpiTile compact label="Fab Ready" value={`${fabReady.numerator}/${fabReady.denominator}`} sub={`${fabReady.percent}% released`} color={success} loading={isLoading} />
-      </div>
-
-      {/* ── Zero-state legibility note ───────────────────────────────── */}
-      {/* Only shown when there are NO drawing sets yet but submittals exist —
-          the situation where drawing-set tiles read 0 while Overdue is non-zero.
-          Hidden for normal projects where setPackages is populated. */}
-      {setPackages.length === 0 && submittals.filter((s) => !s.is_deleted).length > 0 && (
-        <div
-          role="note"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 12,
-            padding: "7px 12px",
-            borderRadius: 8,
-            border: `1px solid color-mix(in srgb, ${warning} 28%, ${border})`,
-            background: `color-mix(in srgb, ${warning} 6%, var(--bg-surface-low))`,
-            fontFamily: mono,
-            fontSize: 11,
-            color: textMuted,
-            lineHeight: 1.4,
-          }}
-        >
-          <AlertTriangle size={12} color={warning} style={{ flexShrink: 0 }} />
-          <span>
-            No drawing sets linked yet — set-level tiles above show 0.{" "}
-            Overdue items below are unlinked submittals.{" "}
-            Link submittals to a drawing set (or upload drawings) to populate set-level metrics.
-          </span>
-        </div>
-      )}
-
-      {/* ── Tab Bar ──────────────────────────────────────────────────── */}
-      <div className="sbp-hub-tabbar" style={{
-        display: "flex",
-        gap: 8,
-        flexWrap: "wrap",
-        alignItems: "center",
-        padding: 6,
-        marginBottom: 16,
-        marginTop: 0,
-        background: "color-mix(in srgb, var(--bg-surface) 82%, transparent)",
-        border: `1px solid ${border}`,
-        borderRadius: 14,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-      }}>
-        {tabs.map((tab) => {
-          const isActive = tab.key === activeTab;
-          const Icon = tab.icon;
-          return (
-            <button
-              className={`sbp-hub-tab${isActive ? " is-active" : ""}`}
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                minHeight: 40,
-                padding: "8px 12px",
-                borderRadius: 10,
-                border: `1px solid ${isActive ? accent : "transparent"}`,
-                background: isActive
-                  ? "color-mix(in srgb, var(--accent) 14%, var(--bg-surface-high) 86%)"
-                  : "transparent",
-                color: isActive ? textPrimary : textMuted,
-                fontFamily: mono,
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-              }}
-            >
-              <Icon size={14} />
-              <span>{tab.label}</span>
-              <span
-                className="sbd-num"
-                data-hub-tab-count="true"
-                style={{
-                  padding: "2px 7px",
-                  borderRadius: 999,
-                  background: isActive ? "color-mix(in srgb, var(--accent) 18%, transparent)" : surface2,
-                  border: `1px solid ${isActive ? "color-mix(in srgb, var(--accent) 32%, transparent)" : border}`,
-                  color: isActive ? accent : textMuted,
-                  fontSize: 10,
-                  lineHeight: 1.2,
-                }}
-              >
-                {tabCounts[tab.key as keyof typeof tabCounts] ?? 0}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Tab Content ──────────────────────────────────────────────── */}
-      <div style={{ minHeight: 0, position: "relative" }}>
+      <DetailingCommandShell
+        tabs={tabs}
+        activeTab={activeTab}
+        onTab={setActiveTab}
+        kpis={{
+          totalSets: drawingKpis.totalSets,
+          totalSheets: drawingKpis.totalSheets,
+          released: drawingKpis.released,
+          inReview: drawingKpis.inReview,
+          submittalsTotal: kpis.total,
+          submittalsPending: kpis.pending,
+          needsAction: kpis.rejected,
+          overdue: triage.overdue.length,
+          atRisk: triage.atRiskCount,
+          overdueDrawingSets: triage.overdueDrawingSets,
+          overdueUnlinkedSubmittals: triage.overdueUnlinkedSubmittals,
+          fabReadyNumerator: fabReady.numerator,
+          fabReadyDenominator: fabReady.denominator,
+          fabReadyPercent: fabReady.percent,
+          openItems: triage.openItems.length,
+          fleetAverageScore: fleetHealth.count > 0 ? fleetHealth.averageScore : null,
+        }}
+        projectName={projectName}
+        tabCounts={tabCounts}
+      >
         {activeTabPanel}
-      </div>
-
-      {sharedModals}
-    </div>
+      </DetailingCommandShell>
+      <div className="detailing-cc">{sharedModals}</div>
+    </>
   );
 }

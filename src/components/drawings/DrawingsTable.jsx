@@ -509,7 +509,7 @@ function GroupRow({
           </span>
         ) : !group.isUngrouped ? (
           <button
-            onClick={() => onSetApproval(group.name)}
+            onClick={() => onSetApproval(group)}
             style={{
               ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px",
               borderRadius: "var(--radius-badge)",
@@ -942,7 +942,9 @@ export default function DrawingsTable({
     });
   };
 
-  const allSelected = selected.size === drawings.length && drawings.length > 0;
+  const visibleSelectedCount = drawings.filter((drawing) => selected.has(drawing.id)).length;
+  const allSelected = visibleSelectedCount === drawings.length && drawings.length > 0;
+  const someSelected = visibleSelectedCount > 0 && !allSelected;
 
   const thStyle = {
     ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em",
@@ -1024,7 +1026,13 @@ export default function DrawingsTable({
           <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--bg-surface)" }}>
             <tr>
               <th style={{ ...thStyle, width: 36 }}>
-                <input type="checkbox" checked={allSelected} onChange={onToggleAll} style={{ cursor: "pointer" }} />
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                  onChange={onToggleAll}
+                  style={{ cursor: "pointer" }}
+                />
               </th>
               <SortableTh field="sheet_number"    label="SET / SHEET #" />
               <SortableTh field="title"           label="TITLE" />

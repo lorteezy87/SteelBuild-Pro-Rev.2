@@ -1,7 +1,7 @@
 /**
  * CostControlCenter.tsx
  *
- * Command UI redesign for the Cost / Budget module (flag: command_ui).
+ * Canonical presentation for the Cost / Budget module.
  *
  * Composition:
  *   PageHero    — title, chips, stats

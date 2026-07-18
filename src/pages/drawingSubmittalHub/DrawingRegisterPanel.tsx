@@ -1,19 +1,16 @@
 /**
- * DrawingRegisterPanel — the on-skin Drawing Register (drawings tab), Slice 2a of
- * the native command_ui conversion.
+ * DrawingRegisterPanel — the canonical Drawing Register (drawings tab).
  *
- * Presentation-only. Renders INSIDE the shipped DetailingCommandShell light
+ * Presentation-only. Renders inside the canonical DetailingCommandShell light
  * island (whole-<html> [data-skin="command"]). The register's data, queries,
  * mutations, and the `["drawing-register", projectId]` cache-key invalidation are
- * UNCHANGED — this panel reuses the exact same row model (drawingRegister.derive),
- * the same cell content, the same row actions, and the same modals as the legacy
- * DrawingRegisterTable; only the chrome is swapped to the kit (FilterBar + kit
- * table / a re-skinned virtual grid).
+ * The hub owns data, queries, and mutations; this panel reuses the shared row
+ * model, row actions, and full-editor navigation.
  *
  * Virtualization is preserved: <100 rows render the kit `cmd-table`; ≥100 rows
- * render a virtualized CSS-grid (large-project perf, same threshold as legacy).
- * Both paths share ONE `columns` definition, so there is no "edit both places"
- * mirror hazard the legacy file warned about.
+ * render a virtualized CSS-grid for large-project performance.
+ * The table and virtualized views share ONE `columns` definition, so there is
+ * no duplicated column contract to drift.
  */
 import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, ReactNode } from "react";
@@ -25,7 +22,8 @@ import { FilterBar } from "@/components/command";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { useFlag } from "@/hooks/useFeatureFlag";
-import { useAppSecurity } from "@/components/shared/useAppSecurity";
+import { usePermissions } from "@/services/permissions";
+import { invalidateEntities } from "@/services/cacheRegistry";
 import { accent, border, mono, success, textMuted, textPrimary } from "./format";
 import type { CurrentRevisionInfo } from "./types";
 import { DueChip, HealthChip, ModalLoadingFallback } from "./primitives";
@@ -40,7 +38,7 @@ import type { DrawingRegisterRow } from "./drawingRegister.derive";
 
 type AnyProps = Record<string, any>;
 const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>;
-// Same lazy modals as the legacy register — upload modals use lazyWithRetry so a
+// Upload modals use lazyWithRetry so a
 // stale-chunk 404 after a deploy triggers ONE reload instead of silently failing.
 const RevisionUploadModal = lazyWithRetry(() => import("@/components/drawings/RevisionUploadModal")) as unknown as ComponentType<AnyProps>;
 const RevisionImpactReportModal = lazy(() => import("@/components/drawings/RevisionImpactReportModal")) as unknown as ComponentType<AnyProps>;
@@ -49,8 +47,7 @@ const DrawingLogImportModal = lazyWithRetry(() => import("@/components/drawings/
 
 const VIRTUALIZE_THRESHOLD = 100;
 
-/** Map the coalesced operational state string to a kit StatusPill tone — the same
- *  mapping the legacy register Status cell uses. */
+/** Map the coalesced operational state string to a kit StatusPill tone. */
 function stateTone(state: string): string {
   if (/Released for Fabrication|Approved|Partially Released|Released for Erection/i.test(state)) return "done";
   if (/Internal Review|OFA|BFA|OFS|IFC/i.test(state)) return "review";
@@ -220,8 +217,8 @@ export default function DrawingRegisterPanel({
   const workdayDues = useFlag("submittal_workday_dues");
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { can } = useAppSecurity() as any;
-  const canEdit = !can || can("edit", "drawing");
+  const { can } = usePermissions();
+  const canEdit = can("edit", "drawing");
   const [search, setSearch] = useState("");
   const [revisionSet, setRevisionSet] = useState<any>(null);
   const [reportSet, setReportSet] = useState<any>(null);
@@ -232,13 +229,8 @@ export default function DrawingRegisterPanel({
 
   const allSheets = useMemo(() => (setPackages || []).flatMap((p: any) => p.sheets || []), [setPackages]);
   const existingSetNames = useMemo(() => [...new Set((setPackages || []).map((p: any) => p.name).filter(Boolean))], [setPackages]);
-  const refetchDrawings = () => {
-    qc.invalidateQueries({ queryKey: ["drawings"] });
-    qc.invalidateQueries({ queryKey: ["drawing-sets", projectId] });
-    qc.invalidateQueries({ queryKey: ["drawing-revisions", projectId] });
-    // Doc Control register reads the current revision from drawing_register_view
-    // under this key — keep it so the register never serves a stale revision.
-    qc.invalidateQueries({ queryKey: ["drawing-register", projectId] });
+  const refetchDrawings = async () => {
+    await invalidateEntities(qc, ["drawing", "drawingSet", "drawing_revision", "submittal"], projectId);
   };
 
   const rowBtn: CSSProperties = {

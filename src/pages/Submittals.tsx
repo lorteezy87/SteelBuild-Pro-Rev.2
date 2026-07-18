@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
@@ -9,13 +9,8 @@ import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { localToday } from "@/utils/dates";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import {
-  CommandBar as CommandBarRaw,
-  KpiTile as KpiTileRaw,
-  Button as ButtonRaw,
   BulkActionBar as BulkActionBarRaw,
 } from "@/components/design-system";
-import { PhoenixPanel as PhoenixPanelRaw } from "@/components/shared/PhoenixPanel";
-import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { toast } from "sonner";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import SubmittalBulkEditModal from "@/components/submittals/SubmittalBulkEditModal";
@@ -38,11 +33,10 @@ import type { DrawingType } from "@/lib/submittalComponents";
 import { CLOSED_SUBMITTAL_STATUSES, submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { shouldBumpRevisionOnResubmit } from "@/lib/submittalRevision";
 import { decideWorkdayDue } from "@/lib/submittalWorkdayDue";
-import { BIC_CHOICES, STATUSES } from "./submittals/format";
-import { Dialog, DialogContent, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./submittals/uiCompat";
+import { Dialog, DialogContent } from "./submittals/uiCompat";
 import { SubmittalDetail, SubmittalVirtualList } from "./submittals/components";
 import SubmittalRegisterPanel from "./submittals/SubmittalRegisterPanel";
-import { computeSubmittalStats, filterAndSortSubmittals } from "./submittals/submittalRegister.derive";
+import { computeSubmittalStats, filterAndSortSubmittals, getVisibleSelectionState } from "./submittals/submittalRegister.derive";
 import SubmittalFormModal from "./submittals/SubmittalFormModal";
 import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types";
 
@@ -54,22 +48,14 @@ import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types"
  * sent, when, to whom, which round, current status, who the ball is
  * with.
  *
- * Layout mirrors the RFI page — list on the left, detail panel on the
- * right, stage pills across the top. Comment thread is embedded in the
- * detail panel.
+ * The SubmittalRegisterPanel is the canonical route presentation. The page
+ * remains the owner of queries, mutations, workflow flags, and detail panels.
  */
 
-// The design-system primitives + PhoenixPanel are still .jsx; these casts
-// are removable once the shared layer is typed.
+// These modals and the bulk action bar are still .jsx, so TS infers their array
+// props from [] defaults; casts keep the typed parent boundary explicit.
 type AnyProps = PropsWithChildren<Record<string, unknown>>;
-const CommandBar = CommandBarRaw as unknown as ComponentType<AnyProps>;
-const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
-const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
-const PhoenixPanel = PhoenixPanelRaw as unknown as ComponentType<AnyProps>;
-// These modals are still .jsx, so TS infers their array props from `[]` default
-// params as `never[]`; cast at the boundary (removable once each is typed) so
-// the typed parent can pass real arrays. Runtime is unchanged.
 const NewRoundModal = NewRoundModalRaw as unknown as ComponentType<AnyProps>;
 const ReleaseGateOverrideModal = ReleaseGateOverrideModalRaw as unknown as ComponentType<AnyProps>;
 const SheetResponseGrid = SheetResponseGridRaw as unknown as ComponentType<AnyProps>;
@@ -230,29 +216,6 @@ export default function Submittals() {
   // display is unchanged. The learned forecast (submittalForecast) is untouched.
   const workdayDuesEnabled = useFlag("submittal_workday_dues");
 
-  // command_ui re-skin (Slice 2b): when on, the register chrome (header / KPI
-  // strip / filter bar) renders on the light kit via SubmittalRegisterPanel.
-  // Off → the legacy CommandBar + KpiTile + PhoenixPanel chrome, byte-identical.
-  // The list + detail bodies are the SAME elements in both paths.
-  const commandUi = useFlag("command_ui");
-
-  // Apply [data-skin="command"] on the standalone /Submittals route so the kit's
-  // `cmd-*` classes resolve there too. Inside the DCC hub the shell
-  // (DetailingCommandShell) already sets it whole-<html>; setting it again is
-  // idempotent (same value) and the nested cleanup restores "command", so the
-  // hub path is unaffected. Gated on the flag (the effect always runs — the
-  // hooks-rules-safe form of useCommandSkin, which can't be called
-  // conditionally). Flag off → skin untouched, legacy chrome unchanged.
-  useEffect(() => {
-    if (!commandUi) return;
-    const root = document.documentElement;
-    const prev = root.getAttribute("data-skin");
-    root.setAttribute("data-skin", "command");
-    return () => {
-      if (prev) root.setAttribute("data-skin", prev);
-      else root.removeAttribute("data-skin");
-    };
-  }, [commandUi]);
   const {
     bySubmittal: componentsBySubmittal,
     setReceived: setComponentReceived,
@@ -261,22 +224,27 @@ export default function Submittals() {
     remove: removeComponentMut,
   } = useSubmittalComponents(projectId, drawingTypesEnabled);
 
-  const invalidate = useCallback(() => {
-    qc.invalidateQueries({ queryKey: ["submittals", projectId] });
-    qc.invalidateQueries({ queryKey: ["submittal-rounds", projectId] });
-    qc.invalidateQueries({ queryKey: ["sheet-responses", projectId] });
-    // Status moves can auto-queue a detailing task (submittalSmartTriggers).
-    qc.invalidateQueries({ queryKey: ["action-items", projectId] });
-    qc.invalidateQueries({ queryKey: ["action-items"] });
-    // Approving/releasing a submittal auto-locks its linked drawing sets
-    // (lockLinkedSetsIfApproved). Fan out the drawingSet family so the Doc Control
-    // grid + Hub register (drawing_register_view) reflect the lock immediately.
-    void invalidateEntity(qc, "drawingSet", projectId);
+  const invalidate = useCallback(async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["submittals", projectId] }),
+      qc.invalidateQueries({ queryKey: ["submittal-rounds", projectId] }),
+      qc.invalidateQueries({ queryKey: ["sheet-responses", projectId] }),
+      // Status moves can auto-queue a detailing task (submittalSmartTriggers).
+      qc.invalidateQueries({ queryKey: ["action-items", projectId] }),
+      qc.invalidateQueries({ queryKey: ["action-items"] }),
+    ]);
+    // Approving/releasing a submittal auto-locks its linked drawing sets.
+    // Fan out the drawingSet family so Doc Control reflects the settled write.
+    await invalidateEntity(qc, "drawingSet", projectId);
   }, [qc, projectId]);
 
   const createMut = useMutation({
     mutationFn: (data: any) => entities.Submittal.create(data),
-    onSuccess: (row) => { invalidate(); logActivity("submittal", "created", row, { projectId }); setSelectedId(row?.id || null); toast.success("Submittal created"); },
+    onSuccess: async (row) => {
+      await invalidate();
+      await logActivity("submittal", "created", row, { projectId });
+      setSelectedId(row?.id || null);
+    },
     onError: (err: any) => {
       const msg = String(err?.message || "");
       toast.error(
@@ -299,13 +267,13 @@ export default function Submittals() {
       // draft detailing task (deduped inside; never throws).
       if (typeof data.status === "string") {
         await runSubmittalStatusTriggers({ submittal: updated as any, prevStatus, nextStatus: data.status });
-        logTransition("submittal", updated as any, prevStatus ?? "—", data.status, { projectId });
+        await logTransition("submittal", updated as any, prevStatus ?? "—", data.status, { projectId });
       } else {
-        logActivity("submittal", "updated", updated as any, { projectId });
+        await logActivity("submittal", "updated", updated as any, { projectId });
       }
       return updated;
     },
-    onSuccess: () => { invalidate(); toast.success("Updated"); },
+    onSuccess: async () => { await invalidate(); toast.success("Updated"); },
     onError: (err: any) => {
       const msg = String(err?.message || "");
       toast.error(
@@ -321,7 +289,7 @@ export default function Submittals() {
   // patches + auto-locks, atomically (activates the previously-empty round log).
   const advanceMut = useMutation({
     mutationFn: (input: Parameters<typeof addSubmittalRound>[0]) => addSubmittalRound(input),
-    onSuccess: () => { invalidate(); toast.success("Round logged"); setReleaseBlock(null); },
+    onSuccess: async () => { await invalidate(); toast.success("Round logged"); setReleaseBlock(null); },
     onError: (err: any, variables) => {
       // A blocked "Release for Fabrication" opens the override dialog with the
       // pending move so a PM can release with a reason (or cancel + resolve).
@@ -332,11 +300,17 @@ export default function Submittals() {
       }
     },
   });
+  const advanceInFlight = useRef(false);
+  const runAdvance = useCallback((input: Parameters<typeof addSubmittalRound>[0]) => {
+    if (advanceInFlight.current) return;
+    advanceInFlight.current = true;
+    advanceMut.mutate(input, { onSettled: () => { advanceInFlight.current = false; } });
+  }, [advanceMut]);
   const deleteMut = useMutation({
     mutationFn: (id: string) => entities.Submittal.delete(id),
-    onSuccess: (_d, id) => {
-      logActivity("submittal", "deleted", rows.find((r: any) => r.id === id) || { id, project_id: projectId }, { projectId });
-      invalidate(); setSelectedId(null); setToDelete(null); toast.success("Deleted");
+    onSuccess: async (_d, id) => {
+      await logActivity("submittal", "deleted", rows.find((r: any) => r.id === id) || { id, project_id: projectId }, { projectId });
+      await invalidate(); setSelectedId(null); setToDelete(null); toast.success("Deleted");
     },
     onError: (err: any) => toast.error(`Delete failed: ${err.message}`),
   });
@@ -370,23 +344,30 @@ export default function Submittals() {
         // §20: a bulk move to a terminal-approved status must auto-lock the
         // linked drawing sets, exactly like the single-row updateMut — otherwise
         // bulk-approving releases a package to fab without locking it. The
-        // canonical helper no-ops for non-approved statuses and swallows lock
-        // failures (best-effort, never breaks the batch).
+        // canonical helper no-ops for non-approved statuses and rejects lock
+        // failures so a batch cannot report a completed approval without locks.
         if (patchHasStatus) await lockLinkedSetsIfApproved(updated as any);
         return updated;
       });
     },
-    onSuccess: (results, variables) => {
-      invalidate();
+    onSuccess: async (results, variables) => {
+      await invalidate();
       const patchStatus = (variables as any)?.data?.status;
-      results.succeeded.forEach(({ value, item }: any) => {
-        if (patchStatus) logActivity("submittal", "status_changed", value || { id: item, project_id: projectId }, { projectId, description: `→ ${patchStatus}` });
-        else logActivity("submittal", "updated", value || { id: item, project_id: projectId }, { projectId });
-      });
-      setSelectedIds(new Set());
+      await Promise.all(results.succeeded.map(async ({ value, item }: any) => {
+        if (patchStatus) await logActivity("submittal", "status_changed", value || { id: item, project_id: projectId }, { projectId, description: `→ ${patchStatus}` });
+        else await logActivity("submittal", "updated", value || { id: item, project_id: projectId }, { projectId });
+      }));
       const ok = results.succeeded.length;
-      if (results.failed.length > 0) {
-        toast.warning(`${ok} updated, ${results.failed.length} failed`);
+      const failed = results.failed.length;
+      const succeededIds = new Set(results.succeeded.map(({ item }: any) => item));
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !succeededIds.has(id))));
+      if (ok > 0) setShowBulkEdit(false);
+      if (ok === 0 && failed > 0) {
+        toast.error(`No submittals updated; ${failed} failed. The selection remains for retry.`);
+        return;
+      }
+      if (failed > 0) {
+        toast.warning(`${ok} updated, ${failed} failed. Failed rows remain selected.`);
       } else {
         toast.success(`Updated ${ok} submittal${ok === 1 ? "" : "s"}`);
       }
@@ -396,16 +377,22 @@ export default function Submittals() {
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids: string[]) => batchProcess(ids, (id) => entities.Submittal.delete(id)),
-    onSuccess: (results) => {
-      invalidate();
-      results.succeeded.forEach(({ item }: any) =>
-        logActivity("submittal", "deleted", rows.find((r: any) => r.id === item) || { id: item, project_id: projectId }, { projectId }));
+    onSuccess: async (results) => {
+      await invalidate();
+      await Promise.all(results.succeeded.map(({ item }: any) =>
+        logActivity("submittal", "deleted", rows.find((r: any) => r.id === item) || { id: item, project_id: projectId }, { projectId })));
       const ok = results.succeeded.length;
-      if (selectedId && [...selectedIds].includes(selectedId)) setSelectedId(null);
-      setSelectedIds(new Set());
-      setShowBulkDelete(false);
-      if (results.failed.length > 0) {
-        toast.warning(`${ok} deleted, ${results.failed.length} failed`);
+      const failed = results.failed.length;
+      const deletedIds = new Set(results.succeeded.map(({ item }: any) => item));
+      if (selectedId && deletedIds.has(selectedId)) setSelectedId(null);
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !deletedIds.has(id))));
+      if (ok > 0) setShowBulkDelete(false);
+      if (ok === 0 && failed > 0) {
+        toast.error(`No submittals deleted; ${failed} failed. The selection remains for retry.`);
+        return;
+      }
+      if (failed > 0) {
+        toast.warning(`${ok} deleted, ${failed} failed. Failed rows remain selected.`);
       } else {
         toast.success(`Deleted ${ok} submittal${ok === 1 ? "" : "s"}`);
       }
@@ -422,14 +409,19 @@ export default function Submittals() {
         ...row,
       }),
     ),
-    onSuccess: (results) => {
-      invalidate();
-      results.succeeded.forEach(({ value, item }: any) =>
-        logActivity("submittal", "created", value || item || { project_id: projectId }, { projectId }));
-      setShowBulkAdd(false);
+    onSuccess: async (results) => {
+      await invalidate();
+      await Promise.all(results.succeeded.map(({ value, item }: any) =>
+        logActivity("submittal", "created", value || item || { project_id: projectId }, { projectId })));
       const ok = results.succeeded.length;
-      if (results.failed.length > 0) {
-        toast.warning(`${ok} added, ${results.failed.length} failed`);
+      const failed = results.failed.length;
+      if (ok === 0 && failed > 0) {
+        toast.error(`No submittals added; ${failed} failed. Review the input and retry.`);
+        return;
+      }
+      if (ok > 0) setShowBulkAdd(false);
+      if (failed > 0) {
+        toast.warning(`${ok} added, ${failed} failed`);
       } else {
         toast.success(`Added ${ok} submittal${ok === 1 ? "" : "s"}`);
       }
@@ -440,23 +432,32 @@ export default function Submittals() {
   // ── Round mutations ───────────────────────────────────────────────
   const createRoundMut = useMutation({
     mutationFn: async (data: any) => {
-      const round = await entities.SubmittalRound.create({
-        ...data,
-        project_id: projectId,
-      });
-      // Update parent submittal
-      if (round?.id && data.submittal_id) {
-        await entities.Submittal.update(data.submittal_id, {
-          current_round_id: round.id,
-          total_rounds: data.round_number || 1,
-          status: "Submitted",
-          ball_in_court: data.ball_in_court || "EOR",
-          submitted_date: data.submitted_date || new Date().toISOString().split("T")[0],
-        });
+      let round: any = null;
+      try {
+        round = await entities.SubmittalRound.create({ ...data, project_id: projectId });
+        if (round?.id && data.submittal_id) {
+          await entities.Submittal.update(data.submittal_id, {
+            current_round_id: round.id,
+            total_rounds: data.round_number || 1,
+            status: "Submitted",
+            ball_in_court: data.ball_in_court || "EOR",
+            submitted_date: data.submitted_date || new Date().toISOString().split("T")[0],
+          });
+          await logActivity("submittal", "round_created", {
+            id: data.submittal_id,
+            project_id: projectId,
+            round_number: data.round_number,
+          }, { projectId, description: `Round ${data.round_number || 1} created` });
+        }
+        return round;
+      } catch (err) {
+        if (round?.id) {
+          try { await entities.SubmittalRound.delete(round.id); } catch { /* preserve original failure */ }
+        }
+        throw err;
       }
-      return round;
     },
-    onSuccess: () => { invalidate(); toast.success("Round created — submittal resubmitted"); setShowNewRound(false); },
+    onSuccess: async () => { await invalidate(); toast.success("Round created — submittal resubmitted"); setShowNewRound(false); },
     onError: (err: any) => toast.error(`Failed to create round: ${err.message}`),
   });
 
@@ -492,12 +493,17 @@ export default function Submittals() {
       }
       return results;
     },
-    onSuccess: (results) => {
-      invalidate();
-      setShowSheetResponse(null);
+    onSuccess: async (results) => {
+      await invalidate();
       if (results.failed > 0) {
+        if (results.succeeded === 0) {
+          toast.error(`No sheet responses saved; ${results.failed} failed. The dialog remains open for retry.`);
+          return;
+        }
+        setShowSheetResponse(null);
         toast.warning(`${results.succeeded} saved, ${results.failed} failed`);
       } else {
+        setShowSheetResponse(null);
         toast.success(`${results.succeeded} sheet response(s) saved`);
       }
     },
@@ -567,7 +573,7 @@ export default function Submittals() {
   // `filtered` is the domain `Submittal[]` view (id modeled optional); rows
   // always carry an id at runtime, so cast at the Set boundary — the same
   // `r.id as string` bridge SubmittalVirtualList already uses.
-  const allSelected = filtered.length > 0 && filtered.every((r) => selectedIds.has(r.id as string));
+  const { allSelected } = getVisibleSelectionState(filtered, selectedIds);
   const toggleAll = useCallback(() => {
     setSelectedIds((prev) => {
       if (filtered.length > 0 && filtered.every((r) => prev.has(r.id as string))) return new Set();
@@ -577,12 +583,10 @@ export default function Submittals() {
     });
   }, [filtered]);
 
-  // ── Register list + detail elements ───────────────────────────────────
-  // Built ONCE and shared by both chrome paths (legacy PhoenixPanel + the
-  // on-skin SubmittalRegisterPanel). Because both paths render the SAME
-  // elements with the SAME props, every list/detail behavior — splitting /
-  // lineage grouping, per-type S/E/P chips, working-day due display, revision —
-  // is byte-identical regardless of skin; only the surrounding chrome changes.
+  // ── Canonical register list + detail elements ───────────────────────────
+  // The canonical panel owns presentation; these elements retain the complete
+  // operational list/detail behavior — splitting, lineage, type chips,
+  // working-day due display, revision, and workflow actions.
   const listEl = (
     <SubmittalVirtualList
       filtered={filteredView}
@@ -692,7 +696,7 @@ export default function Submittals() {
             flagEnabled: workdayDuesEnabled,
             projectMeta: activeProject?.metadata ?? null,
           });
-          advanceMut.mutate({
+          runAdvance({
             submittal: selected as any,
             status,
             ball_in_court: selected.ball_in_court ?? null,
@@ -748,7 +752,7 @@ export default function Submittals() {
         const extraPatch: Record<string, unknown> = {};
         if (action.chainStepIndex != null) extraPatch.approval_chain_step = action.chainStepIndex;
         if (workdayDue.requiredDate) extraPatch.required_date = workdayDue.requiredDate;
-        advanceMut.mutate({
+        runAdvance({
           submittal: selected as any,
           status: action.nextStatus,
           ball_in_court: action.nextBallInCourt,
@@ -773,7 +777,7 @@ export default function Submittals() {
   );
 
   if (!projectId) return (
-    <div className="sb-dashboard-reference-page" style={{ textAlign: "center" }}>
+    <div className="submittals-page" style={{ textAlign: "center" }}>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>
         Select a project to view Submittals
       </div>
@@ -781,125 +785,28 @@ export default function Submittals() {
   );
 
   return (
-    <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" }}>
-      {commandUi ? (
-        // Slice 2b — on-skin register chrome. The list + detail bodies are the
-        // SAME elements as the legacy path (built above), so splitting/lineage,
-        // per-type chips, working-day due, and revision are all preserved.
-        <SubmittalRegisterPanel
-          filtered={filteredView}
-          rows={rowsView}
-          stats={stats}
-          reviewsAtRisk={reviewsAtRisk}
-          filterStatus={filterStatus}
-          filterBIC={filterBIC}
-          search={search}
-          onFilterStatus={setFilterStatus}
-          onFilterBIC={setFilterBIC}
-          onSearch={setSearch}
-          selectedIds={selectedIds}
-          allSelected={allSelected}
-          toggleAll={toggleAll}
-          projectLabel={activeProject?.project_name || "Project"}
-          canCreate={can("create", "submittal")}
-          onNewSubmittal={() => setShowCreate(true)}
-          onBulkAdd={() => setShowBulkAdd(true)}
-          list={listEl}
-          detail={detailEl}
-        />
-      ) : (
-        <>
-          <CommandBar
-            eyebrow={`${activeProject?.project_name || "PROJECT"} · SUBMITTALS`}
-            title="Submittal Register"
-            count={filtered.length}
-            unit={filtered.length !== rows.length ? ` OF ${rows.length}` : ""}
-            subtitle={stats.overdue > 0
-              ? `${stats.overdue} overdue · ${stats.pending} awaiting review`
-              : `${stats.pending} awaiting review · ${stats.approved} approved`}
-          >
-            {can("create", "submittal") && (
-              <Button variant="secondary" icon="upload" onClick={() => setShowBulkAdd(true)}>
-                BULK ADD
-              </Button>
-            )}
-            {can("create", "submittal") && (
-              <Button variant="primary" icon="plus" onClick={() => setShowCreate(true)}>
-                NEW SUBMITTAL
-              </Button>
-            )}
-          </CommandBar>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-            <KpiTile compact label="Total"   value={stats.total}    color="var(--accent)"
-              active={filterStatus === "all" && filterBIC === "all"}
-              onClick={() => { setFilterStatus("all"); setFilterBIC("all"); }} />
-            <KpiTile compact label="Pending" value={stats.pending}  color="var(--status-warning)"
-              active={filterStatus === "__pending"}
-              onClick={() => setFilterStatus("__pending")} />
-            <KpiTile compact label="Approved" value={stats.approved} color="var(--status-success)"
-              active={filterStatus === "__approved"}
-              onClick={() => setFilterStatus("__approved")} />
-            <KpiTile compact label="Rejected" value={stats.rejected} color="var(--status-error)"
-              active={filterStatus === "__rejected"}
-              onClick={() => setFilterStatus("__rejected")} />
-            <KpiTile compact label="Overdue" value={stats.overdue} color="var(--status-error)" />
-            <KpiTile compact label="At risk" value={reviewsAtRisk} color="var(--status-warning)" sub="forecast" />
-          </div>
-
-          <ListTruncationNotice count={rows.length} label="submittals" />
-
-          <PhoenixPanel style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            {/* Filter bar */}
-            <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--divider)", background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 76%, #000 24%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)", alignItems: "center", backdropFilter: "blur(14px) saturate(145%)", WebkitBackdropFilter: "blur(14px) saturate(145%)" }}>
-              {/* Master checkbox — operates on the *filtered* list so it
-                  respects the active status / BIC filters. The
-                  indeterminate state is set imperatively because <input>
-                  doesn't expose it as a controllable React prop. */}
-              <input
-                type="checkbox"
-                aria-label="Select all visible submittals"
-                ref={(el) => {
-                  if (!el) return;
-                  const some = filtered.some((r) => selectedIds.has(r.id as string));
-                  el.indeterminate = some && !allSelected;
-                }}
-                checked={allSelected}
-                onChange={toggleAll}
-                disabled={filtered.length === 0}
-                style={{ margin: 0, marginRight: 4, cursor: filtered.length === 0 ? "not-allowed" : "pointer", accentColor: "var(--accent)" }}
-              />
-              <input
-                className="sbd-input"
-                aria-label="Search submittals"
-                placeholder="Search # / title / spec section"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ flex: 1, maxWidth: 360, padding: "8px 12px", fontSize: 12, borderRadius: 999 }}
-              />
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterBIC} onValueChange={setFilterBIC}>
-                <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="Ball-in-court" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Any Ball-in-Court</SelectItem>
-                  {BIC_CHOICES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
-              {listEl}
-              {detailEl}
-            </div>
-          </PhoenixPanel>
-        </>
-      )}
+    <div className="submittals-page" style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" }}>
+      <SubmittalRegisterPanel
+        filtered={filteredView}
+        rows={rowsView}
+        stats={stats}
+        reviewsAtRisk={reviewsAtRisk}
+        filterStatus={filterStatus}
+        filterBIC={filterBIC}
+        search={search}
+        onFilterStatus={setFilterStatus}
+        onFilterBIC={setFilterBIC}
+        onSearch={setSearch}
+        selectedIds={selectedIds}
+        allSelected={allSelected}
+        toggleAll={toggleAll}
+        projectLabel={activeProject?.project_name || "Project"}
+        canCreate={can("create", "submittal")}
+        onNewSubmittal={() => setShowCreate(true)}
+        onBulkAdd={() => setShowBulkAdd(true)}
+        list={listEl}
+        detail={detailEl}
+      />
 
       {(showCreate || editing || spinOffParent) && (
         <SubmittalFormModal
@@ -914,6 +821,7 @@ export default function Submittals() {
           allRfis={allRfis}
           parentSubmittal={spinOffParent as Submittal | null}
           drawingTypesEnabled={drawingTypesEnabled}
+          saving={createMut.isPending || updateMut.isPending}
           existingNumbers={new Set(
             rows
               .filter((r: any) => r.id !== editing?.id)
@@ -935,6 +843,7 @@ export default function Submittals() {
               // Covers both a plain create and a spin-off child (the record
               // already carries parent_submittal_id + split_reason when split).
               const created = await createMut.mutateAsync(submittalData);
+              let componentWriteAttempted = false;
               // Jump the detail panel to the freshly-created child so its lineage
               // is immediately visible (createMut also selects it, belt+braces).
               if (created?.id) {
@@ -942,11 +851,22 @@ export default function Submittals() {
                 if (drawingTypesEnabled && Array.isArray(chosenTypes) && chosenTypes.length > 0) {
                   const pid = (created.project_id as string) || projectId;
                   if (pid) {
-                    for (const t of chosenTypes) {
-                      addComponentType({ submittalId: created.id, projectId: pid, drawingType: t });
+                    componentWriteAttempted = true;
+                    const componentResults = await Promise.allSettled(
+                      chosenTypes.map((t) => addComponentType({ submittalId: created.id, projectId: pid, drawingType: t })),
+                    );
+                    const failedComponents = componentResults.filter((result) => result.status === "rejected").length;
+                    if (failedComponents > 0) {
+                      toast.warning(`Submittal created, but ${failedComponents} drawing type component${failedComponents === 1 ? "" : "s"} failed. Add them from the detail panel.`);
+                    }
+                    if (failedComponents < chosenTypes.length) {
+                      toast.success(`Submittal created with ${chosenTypes.length - failedComponents} drawing type component${chosenTypes.length - failedComponents === 1 ? "" : "s"}`);
                     }
                   }
                 }
+              }
+              if (!componentWriteAttempted) {
+                toast.success("Submittal created");
               }
             }
             setShowCreate(false);
@@ -960,6 +880,7 @@ export default function Submittals() {
         <DeleteDialog
           open={!!toDelete}
           onClose={() => setToDelete(null)}
+          busy={deleteMut.isPending}
           onConfirm={() => deleteMut.mutate(toDelete)}
           title="Delete submittal"
           description="This submittal and its comment thread will be soft-deleted. This cannot be undone from the UI."
@@ -991,21 +912,23 @@ export default function Submittals() {
         open={showBulkEdit}
         count={selectedIds.size}
         onCancel={() => setShowBulkEdit(false)}
+        busy={bulkUpdateMut.isPending}
         onSubmit={(data) => {
           bulkUpdateMut.mutate({ ids: [...selectedIds], data });
-          setShowBulkEdit(false);
         }}
       />
 
       <SubmittalBulkAddModal
         open={showBulkAdd}
         onCancel={() => setShowBulkAdd(false)}
+        busy={bulkCreateMut.isPending}
         onSubmit={(newRows) => bulkCreateMut.mutate(newRows)}
       />
 
       <DeleteDialog
         open={showBulkDelete}
         onClose={() => setShowBulkDelete(false)}
+        busy={bulkDeleteMut.isPending}
         onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
         title={`Delete ${selectedIds.size} submittal${selectedIds.size === 1 ? "" : "s"}`}
         description={`Soft-delete ${selectedIds.size} selected submittal${selectedIds.size === 1 ? "" : "s"}? This cannot be undone from the UI.`}
@@ -1034,8 +957,9 @@ export default function Submittals() {
             carryItems={carryItems}
             carryFromRound={carryFromRound}
             seededNotes={seededNotes}
+            busy={createRoundMut.isPending}
             onClose={() => setShowNewRound(false)}
-            onSubmit={(data) => createRoundMut.mutate(data)}
+            onSubmit={(data) => createRoundMut.mutateAsync(data)}
           />
         );
       })()}
@@ -1048,7 +972,7 @@ export default function Submittals() {
         busy={advanceMut.isPending}
         onClose={() => setReleaseBlock(null)}
         onConfirm={(reason: string) =>
-          releaseBlock && advanceMut.mutate({ ...releaseBlock.input, fabReleaseOverrideReason: reason })
+          releaseBlock && runAdvance({ ...releaseBlock.input, fabReleaseOverrideReason: reason })
         }
       />
 
@@ -1068,11 +992,12 @@ export default function Submittals() {
                 (r) => r.submittal_round_id === showSheetResponse.id
               )}
               onSave={(responses) =>
-                saveSheetResponsesMut.mutate({
+                saveSheetResponsesMut.mutateAsync({
                   roundId: showSheetResponse.id,
                   responses,
                 })
               }
+              saving={saveSheetResponsesMut.isPending}
               onClose={() => setShowSheetResponse(null)}
             />
           </DialogContent>

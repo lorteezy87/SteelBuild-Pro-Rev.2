@@ -37,12 +37,12 @@ const QUICK_NAV = [
   { icon: "▦", name: "Drawings",     page: "Drawings",                group: "Navigate" },
   { icon: "☰", name: "Work Packages",page: "WorkPackages",            group: "Navigate" },
   { icon: "📦", name: "Deliveries",  page: "Deliveries",              group: "Navigate" },
-  { icon: "◎", name: "Financials",   page: "Financials",              group: "Navigate" },
+  { icon: "◎", name: "Budget Control",   page: "CostHub",              group: "Navigate" },
   { icon: "▨", name: "Resources",    page: "ResourceScheduling",      group: "Navigate" },
   { icon: "📋", name: "Daily Logs",  page: "DailyLogs",               group: "Navigate" },
   { icon: "$", name: "Change Orders", page: "ChangeOrders",            group: "Navigate" },
   { icon: "👥", name: "Contacts",    page: "Contacts",                group: "Navigate" },
-  { icon: "✨", name: "Portfolio",   page: "AIInsights",              group: "Navigate" },
+  { icon: "✨", name: "Portfolio",              page: "PortfolioHub",              group: "Navigate" },
 ];
 
 const SCOPE_OPTIONS = [
@@ -614,3 +614,4 @@ export default function GlobalSearchModal({ open, onClose }) {
     </>
   );
 }
+

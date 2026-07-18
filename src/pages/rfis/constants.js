@@ -53,8 +53,7 @@ export const KPI_ACCENT_MAP = {
 export const BIC_PARTIES = ["Contractor", "GC", "Engineer", "Architect", "Owner"];
 export const PRIORITIES  = ["Critical", "High", "Medium", "Low"];
 
-// Discipline filter chips on the RFI page. (A verbatim copy also lives in
-// RfiControlCenter.tsx, which is owner-locked — do not touch that one.)
+// Discipline filter chips used by the canonical RFI control center.
 export const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
 
 // Density presets persist in localStorage. "Compact" tightens the row

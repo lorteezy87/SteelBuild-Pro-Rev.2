@@ -1,10 +1,9 @@
 /**
- * Pure derivations for the Drawing Register (command_ui re-skin, Slice 2a).
+ * Pure derivations for the canonical Drawing Register.
  *
  * No React, no network — reshapes `setPackages` (+ health / current-revision /
  * summary maps) into the per-set register row model, then filter + sort helpers.
- * Byte-identical to the legacy `rows` useMemo in drawingRegisterTable.tsx, so the
- * on-skin panel is behavior-preserving. Independently typed + unit-tested so it
+ * Shared by the register's row model and independently unit-tested so it
  * stays strict-null / no-implicit-any clean. Mirrors drawingControlCenter.derive.ts.
  */
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";

@@ -1,16 +1,14 @@
 /**
- * SubmittalRegisterPanel — the on-skin Submittal Register (Slice 2b of the
- * native command_ui conversion).
+ * SubmittalRegisterPanel — the canonical Submittal Register route surface.
  *
- * Presentation-only. Renders under the command skin (the hub's whole-<html>
- * DetailingCommandShell island, or the standalone /Submittals route once the
- * page root carries [data-skin]) using the kit's `cmd-*` classes + primitives.
+ * Presentation-only. Owns the command skin and renders the kit's `cmd-*`
+ * classes + primitives for the standalone route and detailing hub.
  * Every query, mutation, cache key, and piece of state stays in the owning
  * `Submittals.tsx` page — this panel receives the derived register model +
  * handler callbacks and renders the CHROME (header / KPI strip / filter bar)
  * onto the kit.
  *
- * What this slice CONVERTS to kit primitives: the header (title + count + New /
+ * The canonical surface owns the header (title + count + New /
  * Bulk-Add actions via FilterBar's action slots), the KPI strip (kit `cmd-kpi`
  * cells, still click-to-filter), and the filter bar (kit `FilterBar` search +
  * `sbd-select` Status/BIC filters + the master select-all checkbox).
@@ -33,7 +31,7 @@
  */
 import type { ComponentType, ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardList, Clock3, ShieldAlert, TrendingUp } from "lucide-react";
-import { FilterBar } from "@/components/command";
+import { FilterBar, useCommandSkin } from "@/components/command";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { BIC_CHOICES, STATUSES } from "./format";
 import type { SubmittalStats } from "./submittalRegister.derive";
@@ -108,7 +106,7 @@ export interface SubmittalRegisterPanelProps {
   onBulkAdd: () => void;
 
   /** The register list + detail panel, built once by the page and passed
-   *  through verbatim (identical props to the legacy layout) so every list /
+   *  through verbatim so every list /
    *  detail behavior — splitting/lineage, S/E/P chips, working-day due,
    *  revision — is byte-identical. This panel only owns the CHROME. */
   list: ReactNode;
@@ -122,6 +120,7 @@ export default function SubmittalRegisterPanel({
   projectLabel, canCreate, onNewSubmittal, onBulkAdd,
   list, detail,
 }: SubmittalRegisterPanelProps) {
+  useCommandSkin();
   const countUnit = filtered.length !== rows.length ? ` of ${rows.length}` : "";
   const subtitle = stats.overdue > 0
     ? `${stats.overdue} overdue · ${stats.pending} awaiting review`
@@ -187,9 +186,9 @@ export default function SubmittalRegisterPanel({
         }
         filters={
           <>
-            {/* Master select-all — operates on the *filtered* list so it respects
-                the active Status / BIC filters (matches the legacy master
-                checkbox). Indeterminate is set imperatively (React has no prop). */}
+            {/* Master select-all operates on the filtered list so it respects
+                the active Status / BIC filters. Indeterminate is set
+                imperatively because React has no checkbox prop for it. */}
             <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--cmd-text-muted)", cursor: filtered.length === 0 ? "not-allowed" : "pointer" }}>
               <input
                 type="checkbox"

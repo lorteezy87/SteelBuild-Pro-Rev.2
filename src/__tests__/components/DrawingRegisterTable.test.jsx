@@ -50,7 +50,10 @@ vi.mock("@/hooks/useFeatureFlag", () => ({ useFlag: () => false, useFeatureFlag:
 // Configurable permission so the gating test can flip to a read-only user.
 const { security } = vi.hoisted(() => ({ security: { can: () => true } }));
 vi.mock("@/components/shared/useAppSecurity", () => ({
-  useAppSecurity: () => ({ can: (...args) => security.can(...args), user: { email: "test@example.com" } }),
+  useAppSecurity: () => ({ user: { email: "test@example.com" } }),
+}));
+vi.mock("@/services/permissions", () => ({
+  usePermissions: () => ({ can: (...args) => security.can(...args) }),
 }));
 
 import { DrawingRegisterTable } from "@/pages/drawingSubmittalHub/components";

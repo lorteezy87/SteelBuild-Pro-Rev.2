@@ -178,9 +178,17 @@ export default function DrawingLogImportModal({ open, projectId, projectName, on
       }
 
       setLastResult({ created, updated, failed });
-      invalidateEntity(qc, "drawing", projectId);
-      invalidateEntity(qc, "drawing_set", projectId);
-      toast.success(`${created} sheet${created === 1 ? "" : "s"} added` + (updated ? `, ${updated} enriched` : "") + (failed ? `, ${failed} failed` : ""));
+      await invalidateEntity(qc, "drawing", projectId);
+      await invalidateEntity(qc, "drawingSet", projectId);
+      await invalidateEntity(qc, "submittal", projectId);
+      const summary = `${created} sheet${created === 1 ? "" : "s"} added` + (updated ? `, ${updated} enriched` : "");
+      if (created + updated === 0) {
+        setErr(`No rows were saved. ${failed} row${failed === 1 ? "" : "s"} failed.`);
+        setStep("preview");
+        return;
+      }
+      if (failed > 0) toast.warning(`${summary}, ${failed} failed`);
+      else toast.success(summary);
       onImported?.({ created, updated, failed });
       setStep("done");
       setTimeout(() => { reset(); onClose(); }, 1800);

@@ -1,19 +1,31 @@
 /**
- * Classic-branch filter toolbar for the RFIs page: search box, discipline
- * chips, density chips, sequence filter, the Today's-Agenda toggle, and the
- * "N of M" count. Presentational — extracted verbatim from RFIs.jsx.
+ * Canonical RFI filter toolbar: search, status and discipline filters, density,
+ * sequence, Today's Agenda, export/import/create actions, and the visible-row
+ * count. Presentational only; RFIs.jsx owns the data and mutations.
  */
 import { Icon } from "@/components/design-system";
 import SequenceFilter from "@/components/shared/SequenceFilter";
 import { DISCIPLINES, DENSITY_PRESETS } from "./constants";
 
+const STATUS_FILTERS = [
+  ["all", "All"],
+  ["open", "Open"],
+  ["review", "Under Review"],
+  ["incomplete", "Incomplete"],
+  ["answered", "Answered"],
+  ["closed", "Closed"],
+];
+
 export default function RfiFilterToolbar({
   search, onSearch,
+  filter = "all", onFilterChange = () => {},
   disciplineFilter, onDisciplineChange,
   density, onDensityChange,
   rfis, seqFilter, onSeqFilter,
   agendaOpen, onToggleAgenda, agenda, agendaUrgent,
   filteredCount, totalCount,
+  onClearFilters = () => {},
+  onImport, onExport, onCreate,
 }) {
   return (
     <div className="rfi-filter-toolbar">
@@ -44,6 +56,20 @@ export default function RfiFilterToolbar({
       </div>
 
       <div className="rfi-filter-group">
+        <span className="rfi-filter-label">Status</span>
+        {STATUS_FILTERS.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={`rfi-chip${filter === value ? " is-active" : ""}`}
+            onClick={() => onFilterChange(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="rfi-filter-group">
         <span className="rfi-filter-label">Density</span>
         {Object.entries(DENSITY_PRESETS).map(([id, preset]) => (
           <button
@@ -68,12 +94,35 @@ export default function RfiFilterToolbar({
       >
         <span className="rfi-agenda-toggle__icon" aria-hidden="true">⚑</span>
         Today's Agenda
-        {agenda.total > 0 ? (
+        {agenda?.total > 0 ? (
           <span className="rfi-agenda-toggle__count">{agenda.total}</span>
         ) : null}
       </button>
 
       <span className="rfi-toolbar-count">{filteredCount} of {totalCount}</span>
+
+      <div className="rfi-filter-actions">
+        {onClearFilters ? (
+          <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onClearFilters}>
+            Clear
+          </button>
+        ) : null}
+        {onImport ? (
+          <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImport}>
+            <Icon name="upload" size={13} /> Import
+          </button>
+        ) : null}
+        {onExport ? (
+          <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onExport}>
+            <Icon name="download" size={13} /> Export
+          </button>
+        ) : null}
+        {onCreate ? (
+          <button type="button" className="cmd-btn cmd-btn--primary" onClick={onCreate}>
+            <Icon name="plus" size={13} /> New RFI
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

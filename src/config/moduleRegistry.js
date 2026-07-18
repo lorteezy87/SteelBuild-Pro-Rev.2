@@ -22,12 +22,12 @@ export const PRIMARY_TABS = [
   // folded into FIELD — fewer logical groups, and every page stays reachable
   // (these arrays drive route-reachability + tab mapping, not a visible tab bar).
   // FieldPlan added here so it's no longer orphaned from the registry.
-  { label: "FABRICATION", pages: ["WorkPackages", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "MarginRisk", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling", "ResourceManagement"] },
+  { label: "FABRICATION", pages: ["WorkPackages", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldToday", "FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
-  { label: "COST",        pages: ["CostHub", "Financials", "CostDashboard", "ChangeOrders", "Backcharges", "SOV", "PayApplications", "ContractManagement"] },
-  { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "AIInsights", "JobStatusReport", "DecisionLog", "Reports", "AlertsCenter", "Activity"] },
+  { label: "COST",        pages: ["CostHub", "ChangeOrders", "Backcharges", "SOV", "PayApplications", "ContractManagement"] },
+  { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "JobStatusReport", "DecisionLog", "Reports", "AlertsCenter", "Activity"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
 
@@ -66,7 +66,6 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDEA7", name: "Constraints",        group: "Fab",           page: "Constraints" },
   { icon: "\uD83C\uDFED", name: "Fab Release",        group: "Fabrication",   page: "FabRelease" },
   { icon: "\uD83D\uDEE0", name: "Production Status",   group: "Fabrication",   page: "ProductionStatus" },
-  { icon: "\u26A0", name: "Margin Risk",        group: "Fabrication",   page: "MarginRisk" },
   { icon: "⏱", name: "Budget Hours",            group: "Fabrication",   page: "BudgetHours" },
   { icon: "\uD83D\uDCE6", name: "Procurement",        group: "Fabrication",   page: "Procurement" },
   { icon: "\uD83D\uDC41", name: "Look-Ahead",         group: "Fab",           page: "LookAheadSchedule" },
@@ -82,18 +81,15 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDCCB", name: "Daily Logs",         group: "Field",         page: "DailyLogs" },
   { icon: "\uD83D\uDCF7", name: "Photos",             group: "Field",         page: "Photos" },
   { icon: "\u25CE", name: "Budget Control",           group: "Cost",          page: "CostHub" },
-  { icon: "\u25CE", name: "Budget Detail",            group: "Cost",          page: "Financials" },
-  { icon: "\uD83D\uDCB0", name: "Cost Dashboard",     group: "Cost",          page: "CostDashboard" },
   { icon: "\uD83D\uDCCA", name: "SOV",                group: "Cost",          page: "SOV" },
   { icon: "$",  name: "Change Orders",               group: "Cost",          page: "ChangeOrders" },
   { icon: "⚖", name: "Backcharge Defense",      group: "Cost",          page: "Backcharges" },
   { icon: "🧾", name: "Pay Applications",   group: "Cost",          page: "PayApplications" },
   { icon: "\uD83D\uDC65", name: "Resources",          group: "Fabrication",   page: "ResourceHub" },
-  { icon: "\uD83D\uDC65", name: "Resource Register",  group: "Resources",     page: "ResourceManagement" },
   { icon: "\u25A8", name: "Crew Scheduling",          group: "Resources",     page: "ResourceScheduling" },
   { icon: "\uD83D\uDCCB", name: "Reports",            group: "Reporting",     page: "ReportsHub" },
   { icon: "\uD83D\uDCCB", name: "Job Status Report",  group: "Reporting",     page: "JobStatusReport" },
-  { icon: "\u2728", name: "Portfolio Analytics",      group: "Reporting",     page: "AIInsights" },
+
   { icon: "\uD83D\uDCCA", name: "Activity Log",       group: "Reporting",     page: "Activity" },
   { icon: "\uD83D\uDD0D", name: "Inspections",        group: "Quality",       page: "Inspections" },
   { icon: "\u26A0", name: "Safety",                   group: "Quality",       page: "Safety" },
@@ -384,3 +380,6 @@ if (import.meta.env.DEV) {
     });
   });
 }
+
+
+

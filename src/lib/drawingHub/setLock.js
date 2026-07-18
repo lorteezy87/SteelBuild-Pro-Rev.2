@@ -15,7 +15,7 @@
  * with drawing_set_id = NULL) are always considered unlocked, since
  * there's no parent record to flip.
  *
- * Admin-only unlock is gated client-side via useAppSecurity().isAdmin in
+ * Admin-only unlock is gated client-side via usePermissions().isAdmin in
  * the UI layer; this module enforces nothing about WHO can lock or
  * unlock — RLS handles project membership and the UI gates the action.
  */

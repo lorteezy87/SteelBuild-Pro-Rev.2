@@ -2,9 +2,9 @@
 /**
  * Guards the edit affordance on the Resources Control Center.
  *
- * The command_ui skin shipped as a read-only table: no edit control, no row
+ * The legacy presentation skin shipped as a read-only table: no edit control, no row
  * click, and a dead "New Resource" button (ResourceHub rendered it with no
- * props). Because command_ui is on globally and the Crew Schedule board is
+ * props). Because the legacy presentation path was globally selected and the Crew Schedule board is
  * create-only, that left users with no way to edit a resource once created.
  * These tests pin the affordances so the read-only regression can't return.
  */

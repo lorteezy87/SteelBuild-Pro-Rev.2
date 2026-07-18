@@ -31,7 +31,7 @@ import {
 } from "@/components/drawings/drawingsConfig";
 import {
   exportTransmittal, computeStatsFromSubmittals, computeDisciplineCounts, buildRevisionAlerts,
-  validateStageTransition, buildRfiMap, buildSubmittalsBySetId, filterDrawings,
+  validateStageTransition, classifyDrawingStageMutation, buildRfiMap, buildSubmittalsBySetId, filterDrawings,
   groupByDrawingSetName, computeExistingSetNames, buildDrawingSetMap, computeSelectedSetName,
   computeStagePipeline,
 } from "@/components/drawings/drawingsUtils";
@@ -221,19 +221,20 @@ export default function Drawings({ embedded = false } = {}) {
   // trigger which updates sheet_count / processed_count / needs_review_count
   // / failed_count on the parent row. Without invalidating both, the group
   // summary badge lies for up to staleTime (30s) after every action.
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["drawings", projectId] });
-    // Sets are read under both "drawing_sets" and "drawing-sets" keys across the
-    // app (Drawings/Submittals vs the Detailing Control Center hub). Invalidate
-    // both spellings + the register view so a set delete/edit never lingers in
-    // another view's cache.
-    invalidateEntity(qc, "drawingSet", projectId);
+  const invalidate = async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["drawings", projectId] }),
+      // Sets are read under both "drawing_sets" and "drawing-sets" keys across
+      // the app; the registry handles both spellings plus the register view.
+      invalidateEntity(qc, "drawingSet", projectId),
+      invalidateEntity(qc, "submittal", projectId),
+    ]);
   };
 
   const createMut = useMutation({
     mutationFn: (data) => entities.Drawing.create({ ...data, project_id: projectId, project_name: activeProject?.name }),
     onSuccess: async (created) => {
-      invalidate();
+      await invalidate();
       toast.success("Sheet added");
       setShowModal(false);
       // Always auto-create the matching Detailing/Submittal schedule task.
@@ -260,8 +261,8 @@ export default function Drawings({ embedded = false } = {}) {
     // open while editing was cleared caused a second save click to route
     // into the create path with the edited row's id still in form state,
     // triggering a drawings_pkey duplicate.
-    onSuccess: () => {
-      invalidate();
+    onSuccess: async () => {
+      await invalidate();
       toast.success("Sheet updated");
       setEditing(null);
       setShowModal(false);
@@ -274,8 +275,8 @@ export default function Drawings({ embedded = false } = {}) {
   // action button that does exactly that.
   const deleteMut = useMutation({
     mutationFn: (id) => entities.Drawing.delete(id),
-    onSuccess: (_data, id) => {
-      invalidate();
+    onSuccess: async (_data, id) => {
+      await invalidate();
       setSelected(new Set());
       toast.success("Sheet deleted", {
         action: {
@@ -283,7 +284,7 @@ export default function Drawings({ embedded = false } = {}) {
           onClick: async () => {
             try {
               await entities.Drawing.update(id, { is_deleted: false, deleted_at: null });
-              invalidate();
+              await invalidate();
               toast.success("Sheet restored");
             } catch (err) {
               toast.error("Restore failed: " + (err?.message || "unknown"));
@@ -312,16 +313,17 @@ export default function Drawings({ embedded = false } = {}) {
         return { deleted: result.deletedChildCount ?? sheetIds.length };
       }
       // Legacy fallback: no parent row, just sweep the children.
-      const { succeeded } = await batchProcess(sheetIds, (id) => entities.Drawing.delete(id));
-      return { deleted: succeeded.length };
+      const { succeeded, failed } = await batchProcess(sheetIds, (id) => entities.Drawing.delete(id));
+      return { deleted: succeeded.length, deletedSheetIds: succeeded, failed };
     },
-    onSuccess: ({ deleted, parentOnly }, { setId, sheetIds, setName }) => {
-      invalidate();
-      setSelected(new Set());
+    onSuccess: async ({ deleted, parentOnly, deletedSheetIds = [], failed = [] }, { setId, sheetIds, setName }) => {
+      await invalidate();
+      setSelected(failed.length > 0 ? new Set(failed) : new Set());
       const msg = parentOnly
         ? `Deleted set "${setName}"`
         : `Deleted "${setName}" and ${deleted} sheet${deleted === 1 ? "" : "s"}`;
-      toast.success(msg, {
+      const notify = failed.length > 0 ? toast.warning : toast.success;
+      notify(failed.length > 0 ? `${msg}; ${failed.length} sheet${failed.length === 1 ? "" : "s"} failed` : msg, {
         action: {
           label: "Undo",
           onClick: async () => {
@@ -329,12 +331,17 @@ export default function Drawings({ embedded = false } = {}) {
               if (setId) {
                 await entities.DrawingSet.update(setId, { is_deleted: false, deleted_at: null });
               }
-              if (sheetIds.length > 0) {
-                await batchProcess(sheetIds, (id) =>
+              const restoreIds = setId ? sheetIds : deletedSheetIds;
+              if (restoreIds.length > 0) {
+                const restore = await batchProcess(restoreIds, (id) =>
                   entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
                 );
+                if (restore.failed.length > 0) {
+                  setSelected(new Set(restore.failed));
+                  throw new Error(`${restore.failed.length} row(s) could not be restored`);
+                }
               }
-              invalidate();
+              await invalidate();
               toast.success(`Restored "${setName}"`);
             } catch (err) {
               toast.error("Restore failed: " + (err?.message || "unknown"));
@@ -405,16 +412,13 @@ export default function Drawings({ embedded = false } = {}) {
     const target = STAGE_ORDER[idx + 1];
     const v = validateStageTransition(drawing.stage, target);
     if (!v.ok) { toast.error(v.reason); setContextMenu(null); return; }
-    // Submittal-driven flow: open the dialog so the user can choose
-    // between the canonical "via submittal" path and the legacy direct
-    // sheet-stage mutation. The legacy fallback preserves the original
-    // behaviour for pre-Sprint-2 cleanup; the via-submittal path is the
-    // new primary action.
+    const stageMutation = classifyDrawingStageMutation(drawing, target, submittalsBySetId);
     setAdvanceTarget({
       drawingId: drawing.id,
       setId: drawing.drawing_set_id || null,
       currentStage: drawing.stage,
       targetStage: target,
+      allowLegacy: stageMutation.allowed,
     });
     setContextMenu(null);
   };
@@ -426,16 +430,17 @@ export default function Drawings({ embedded = false } = {}) {
       toast.error(`Cannot apply unknown stage "${bulkStage}"`);
       return;
     }
-    // Bulk-via-submittal isn't well-defined when the selection spans
-    // multiple drawing sets (which submittal would we touch?), so we
-    // keep the direct-mutation handler here and surface the workflow
-    // boundary as an info toast instead. The single-row "advance stage"
-    // flow does prompt the user to use a submittal — see handleAdvanceStage.
-    toast.info(
-      "Bulk apply updates sheet stages directly. For workflow status, use the Submittals page.",
-      { duration: 4000 },
-    );
     const ids = [...selected];
+    const blocked = ids
+      .map((id) => drawings.find((d) => d.id === id))
+      .filter(Boolean)
+      .map((drawing) => classifyDrawingStageMutation(drawing, bulkStage, submittalsBySetId))
+      .find((decision) => !decision.allowed);
+    if (blocked) {
+      toast.error("Bulk workflow stage changes must be performed from Submittals; the selection includes a linked set.");
+      return;
+    }
+    toast.info("Applying legacy sheet-stage recovery to sets without linked submittals.", { duration: 4000 });
     const { succeeded, failed } = await batchProcess(
       ids,
       (id) => {
@@ -453,7 +458,7 @@ export default function Drawings({ embedded = false } = {}) {
         return entities.Drawing.update(id, stageUpdatePatch(bulkStage));
       },
     );
-    invalidate();
+    await invalidate();
     if (failed.length > 0) {
       toast.warning(`${succeeded.length} updated, ${failed.length} failed`);
     } else {
@@ -472,8 +477,9 @@ export default function Drawings({ embedded = false } = {}) {
       run: async () => {
         const ids = [...selected];
         const { succeeded, failed } = await batchProcess(ids, (id) => entities.Drawing.delete(id));
-        invalidate();
+        await invalidate();
         if (failed.length > 0) {
+          setSelected(new Set(failed));
           toast.warning(`${succeeded.length} deleted, ${failed.length} failed`);
         } else {
           setSelected(new Set());
@@ -486,7 +492,7 @@ export default function Drawings({ embedded = false } = {}) {
                   await batchProcess(succeeded, (id) =>
                     entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
                   );
-                  invalidate();
+                    await invalidate();
                   toast.success(`Restored ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`);
                 } catch (err) {
                   toast.error("Restore failed: " + (err?.message || "unknown"));
@@ -508,8 +514,9 @@ export default function Drawings({ embedded = false } = {}) {
       ids,
       (id) => entities.Drawing.update(id, payload),
     );
-    invalidate();
+    await invalidate();
     if (failed.length > 0) {
+      setSelected(new Set(failed));
       toast.warning(`${succeeded.length} updated, ${failed.length} failed (${fieldCount} field${fieldCount === 1 ? "" : "s"})`);
     } else {
       setSelected(new Set());
@@ -529,19 +536,13 @@ export default function Drawings({ embedded = false } = {}) {
         approvalSet.setId ||
         approvalSet.sheets.map(s => s.drawing_set_id).find(Boolean);
       if (parentSetId) {
-        try {
-          await entities.DrawingSet.update(parentSetId, {
-            set_approval_status: status,
-            set_approved_date:   effectiveDate,
-            set_approved_by:     _approvedBy || null,
-            set_approval_notes:  notes || null,
-            ...(revision ? { revision } : {}),
-          });
-        } catch (parentErr) {
-          // Don't fail the whole operation on a parent-row update glitch —
-          // the per-sheet writes below still record the intent.
-          console.warn("Parent drawing_set approval update failed:", parentErr);
-        }
+        await entities.DrawingSet.update(parentSetId, {
+          set_approval_status: status,
+          set_approved_date:   effectiveDate,
+          set_approved_by:     _approvedBy || null,
+          set_approval_notes:  notes || null,
+          ...(revision ? { revision } : {}),
+        });
       }
 
       const sheetsToUpdate = applyToSheets ? approvalSet.sheets : [approvalSet.sheets[0]];
@@ -559,13 +560,13 @@ export default function Drawings({ embedded = false } = {}) {
       // terminal-approved status, useSubmittals.ts will lock the set
       // automatically. The document-side approval here just records the
       // legacy set_approval_status mirror.
-      invalidate();
+                  await invalidate();
       if (failed.length > 0) {
         toast.warning(`${succeeded.length} sheets updated, ${failed.length} failed`);
       } else {
         toast.success(`Set "${approvalSet.setName}" marked as ${status}`);
+        setApprovalSet(null);
       }
-      setApprovalSet(null);
     } catch (err) {
       toast.error("Approval update failed: " + (err?.message || "Unknown error"));
     } finally {
@@ -573,13 +574,15 @@ export default function Drawings({ embedded = false } = {}) {
     }
   };
 
-  const openSetApproval = (setName) => {
-    const sheets = drawingSets[setName] || [];
+  const openSetApproval = (target) => {
+    const normalized = typeof target === "string" ? { name: target } : (target || {});
+    const setId = normalized.setId || normalized.drawing_set_id || null;
+    const sheets = setId
+      ? drawings.filter((d) => d.drawing_set_id === setId)
+      : drawings.filter((d) => !d.drawing_set_id && d.drawing_set_name?.trim() === normalized.name?.trim());
     if (!sheets.length) return;
-    // Prefer the parent FK if any child sheet has one — that's what we'll
-    // write approval state to.
-    const setId = sheets.map(s => s.drawing_set_id).find(Boolean) || null;
-    setApprovalSet({ setName, setId, sheets });
+    const parentName = setId ? drawingSetMap[setId]?.set_name : null;
+    setApprovalSet({ setName: parentName || normalized.name || sheets[0]?.drawing_set_name || "Drawing set", setId, sheets });
   };
 
   const openRenameSet = (group) => {
@@ -629,11 +632,17 @@ export default function Drawings({ embedded = false } = {}) {
       // have a parent FK. Uses the same batch helper as bulk stage apply.
       const sheetIds = (sheets || []).map(s => s.id);
       if (sheetIds.length > 0) {
-        await batchProcess(sheetIds, (id) =>
+        const result = await batchProcess(sheetIds, (id) =>
           entities.Drawing.update(id, { drawing_set_name: newName })
         );
+        if (result.failed.length > 0) {
+          await invalidate();
+          setSelected(new Set(result.failed));
+          toast.warning(`Renamed parent, but ${result.failed.length} sheet${result.failed.length === 1 ? "" : "s"} failed`);
+          return;
+        }
       }
-      invalidate();
+      await invalidate();
       toast.success(`Renamed "${oldName}" → "${newName}"`);
       setRenameSet(null);
     } catch (err) {
@@ -650,8 +659,13 @@ export default function Drawings({ embedded = false } = {}) {
   };
 
   const toggleSelectAll = () => {
-    if (selected.size === filtered.length) setSelected(new Set());
-    else setSelected(new Set(filtered.map(d => d.id)));
+    const visibleIds = filtered.map((d) => d.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+    setSelected((previous) => {
+      const next = new Set(previous);
+      visibleIds.forEach((id) => (allVisibleSelected ? next.delete(id) : next.add(id)));
+      return next;
+    });
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -931,6 +945,7 @@ export default function Drawings({ embedded = false } = {}) {
         targetStage={advanceTarget?.targetStage}
         drawingId={advanceTarget?.drawingId}
         setId={advanceTarget?.setId}
+        allowLegacy={advanceTarget?.allowLegacy}
         onClose={() => setAdvanceTarget(null)}
         onLegacy={({ drawingId, targetStage }) => {
           // Pre-Sprint-2 fallback: mutate drawings.stage directly. The
@@ -983,7 +998,7 @@ export default function Drawings({ embedded = false } = {}) {
           onSaved={() => {
             // Pull fresh set rows so the templated indicator shows up
             // immediately on the row that was just marked.
-            invalidate();
+            void invalidate();
           }}
         />
       )}
@@ -992,7 +1007,7 @@ export default function Drawings({ embedded = false } = {}) {
         open={uploadSetOpen}
         onClose={() => setUploadSetOpen(false)}
         onComplete={() => {
-          invalidate();
+          void invalidate();
           qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
         }}
         activeProject={activeProject}
@@ -1006,7 +1021,7 @@ export default function Drawings({ embedded = false } = {}) {
         projectName={activeProject?.name}
         onClose={() => setLogImportOpen(false)}
         onImported={() => {
-          invalidate();
+          void invalidate();
           qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
         }}
       />
@@ -1016,7 +1031,7 @@ export default function Drawings({ embedded = false } = {}) {
       <RevisionUploadModal
         open={revisionOpen}
         onClose={() => setRevisionOpen(false)}
-        onComplete={() => { invalidate(); setRevisionOpen(false); }}
+        onComplete={() => { void invalidate(); setRevisionOpen(false); }}
         activeProject={activeProject}
         drawingSets={drawingSetRecords}
       />

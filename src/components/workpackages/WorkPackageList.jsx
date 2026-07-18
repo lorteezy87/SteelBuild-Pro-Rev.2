@@ -113,19 +113,6 @@ export default function WorkPackageList({
           >
             + Create Work Package
           </button>
-          <button
-            onClick={() => { /* CSV import placeholder */ }}
-            title="Import work packages from a CSV file (coming soon)"
-            style={{
-              padding: "8px 20px", borderRadius: "var(--radius-btn)",
-              border: "1px solid var(--border-strong)",
-              background: "transparent",
-              color: "var(--text-secondary)", fontFamily: "var(--font-mono)",
-              fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
-            }}
-          >
-            Import from CSV
-          </button>
         </div>
       </div>
     );

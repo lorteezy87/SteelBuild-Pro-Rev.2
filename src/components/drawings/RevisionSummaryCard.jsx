@@ -9,26 +9,18 @@
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertTriangle, Boxes, FileWarning, Layers, Sparkles } from "lucide-react";
-import { useFlag } from "@/hooks/useFeatureFlag";
 
 const mono = "var(--font-mono)";
 const IMPACT_COLOR = { none: "var(--text-muted)", low: "#3FB950", medium: "#D29922", high: "#F85149" };
 
 export default function RevisionSummaryCard({ summary, onClose, onRunDeepDive, onCreateRfi }) {
-  // SP4: this Radix dialog portals outside the shell's light island. Under
-  // command_ui, tag the content root `.detailing-cc` (inherits the light
-  // token-alias) AND swap the hardcoded dark `--bg-base` panel bg to the
-  // alias-remapped `--bg-surface` so the card body reads light too. The alias
-  // block does NOT remap `--bg-base`, so the class alone wouldn't lighten this
-  // one. Flag off → no class, original dark bg → byte-identical.
-  const commandUi = useFlag("command_ui");
   if (!summary) return null;
   const impactColor = IMPACT_COLOR[summary.impact?.level] || "var(--text-muted)";
   const empty = (summary.sheetsChanged || 0) === 0;
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose?.()}>
-      <DialogContent className={commandUi ? "detailing-cc" : undefined} style={{ maxWidth: 560, background: commandUi ? "var(--bg-surface)" : "var(--bg-base, #0D1117)", border: "1px solid var(--border-default)" }}>
+      <DialogContent className="detailing-cc" style={{ maxWidth: 560, background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
         <DialogHeader>
           <DialogTitle>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>

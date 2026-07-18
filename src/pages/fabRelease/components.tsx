@@ -259,6 +259,10 @@ interface ToolbarProps {
   filteredCount: number;
   totalCount: number;
   onClear: () => void;
+  onExport?: () => void;
+  onCreate?: (() => void) | null;
+  createPending?: boolean;
+  sequenceFilterActive?: boolean;
 }
 
 export function Toolbar({
@@ -273,8 +277,12 @@ export function Toolbar({
   filteredCount,
   totalCount,
   onClear,
+  onExport,
+  onCreate,
+  createPending = false,
+  sequenceFilterActive = false,
 }: ToolbarProps) {
-  const activeFilters = [search.trim(), stageFilter !== "all", riskFilter !== "all"].filter(Boolean).length;
+  const activeFilters = [search.trim(), stageFilter !== "all", riskFilter !== "all", sequenceFilterActive].filter(Boolean).length;
   return (
     <section className="fab-toolbar">
       <div className="fab-search">
@@ -308,6 +316,12 @@ export function Toolbar({
       </div>
       {activeFilters > 0 && (
         <Button variant="ghost" size="sm" onClick={onClear}>Clear</Button>
+      )}
+      {onExport && <Button variant="secondary" icon="download" onClick={onExport}>CSV</Button>}
+      {onCreate && (
+        <Button variant="primary" icon="plus" onClick={onCreate} disabled={createPending}>
+          New Package
+        </Button>
       )}
     </section>
   );
@@ -431,7 +445,7 @@ interface FlowViewProps {
   rows: EnrichedWorkPackage[];
   stageRollup: StageRollup[];
   onOpen: WpHandler;
-  onEdit: WpHandler;
+  onEdit: WpHandler | null;
   onComplete: WpHandler;
   isCompleting: boolean;
 }
@@ -459,7 +473,7 @@ export function FlowView({ rows, stageRollup, onOpen, onEdit, onComplete, isComp
                   key={wp.id}
                   wp={wp}
                   onOpen={() => onOpen(wp)}
-                  onEdit={() => onEdit(wp)}
+                  onEdit={onEdit ? () => onEdit(wp) : null}
                   onComplete={() => onComplete(wp)}
                   isCompleting={isCompleting}
                 />
@@ -477,7 +491,7 @@ export function FlowView({ rows, stageRollup, onOpen, onEdit, onComplete, isComp
 interface BoardViewProps {
   laneGroups: Record<string, EnrichedWorkPackage[]>;
   onOpen: WpHandler;
-  onEdit: WpHandler;
+  onEdit: WpHandler | null;
   onComplete: WpHandler;
   isCompleting: boolean;
 }
@@ -501,7 +515,7 @@ export function BoardView({ laneGroups, onOpen, onEdit, onComplete, isCompleting
                   wp={wp}
                   compact
                   onOpen={() => onOpen(wp)}
-                  onEdit={() => onEdit(wp)}
+                  onEdit={onEdit ? () => onEdit(wp) : null}
                   onComplete={() => onComplete(wp)}
                   isCompleting={isCompleting}
                 />
@@ -519,7 +533,7 @@ export function BoardView({ laneGroups, onOpen, onEdit, onComplete, isCompleting
 interface RegisterViewProps {
   rows: EnrichedWorkPackage[];
   onOpen: WpHandler;
-  onEdit: WpHandler;
+  onEdit: WpHandler | null;
   onComplete: WpHandler;
   isCompleting: boolean;
 }
@@ -559,7 +573,7 @@ export function RegisterView({ rows, onOpen, onEdit, onComplete, isCompleting }:
               <td>
                 <CardActions
                   wp={wp}
-                  onEdit={(event) => { event.stopPropagation(); onEdit(wp); }}
+                  onEdit={onEdit ? (event) => { event.stopPropagation(); onEdit(wp); } : null}
                   onComplete={(event) => { event.stopPropagation(); onComplete(wp); }}
                   isCompleting={isCompleting}
                 />
@@ -629,7 +643,7 @@ interface FabPackageCardProps {
   wp: EnrichedWorkPackage;
   compact?: boolean;
   onOpen: () => void;
-  onEdit: ActionHandler;
+  onEdit: ActionHandler | null;
   onComplete: ActionHandler;
   isCompleting: boolean;
 }
@@ -669,7 +683,7 @@ function FabPackageCard({ wp, compact = false, onOpen, onEdit, onComplete, isCom
 
 interface CardActionsProps {
   wp: EnrichedWorkPackage;
-  onEdit: ActionHandler;
+  onEdit: ActionHandler | null;
   onComplete: ActionHandler;
   isCompleting: boolean;
 }
@@ -677,11 +691,24 @@ interface CardActionsProps {
 function CardActions({ wp, onEdit, onComplete, isCompleting }: CardActionsProps) {
   return (
     <span className="fab-row-actions">
-      <button type="button" onClick={onEdit} title="Edit package" aria-label="Edit package">
-        <Pencil size={12} />
-      </button>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={(event) => { event.stopPropagation(); onEdit(event); }}
+          title="Edit package"
+          aria-label="Edit package"
+        >
+          <Pencil size={12} />
+        </button>
+      )}
       {wp._signals.stage !== "ready_to_ship" && (
-        <button type="button" onClick={onComplete} disabled={isCompleting} title="Mark ready to ship" aria-label="Mark ready to ship">
+        <button
+          type="button"
+          onClick={(event) => { event.stopPropagation(); onComplete(event); }}
+          disabled={isCompleting}
+          title="Mark ready to ship"
+          aria-label="Mark ready to ship"
+        >
           <Check size={12} />
         </button>
       )}

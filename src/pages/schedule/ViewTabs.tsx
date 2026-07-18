@@ -1,6 +1,5 @@
-// View-tab strip for the Schedule page (Gantt / 6-Week Lookahead / Task List)
-// plus the divider beneath it. Extracted verbatim from Schedule.tsx, where it
-// was byte-identical in both the command_ui and the legacy return paths.
+// View-tab strip for the canonical Schedule page (Gantt / 6-Week Lookahead /
+// Task List) plus the divider beneath it.
 
 interface ViewTabsProps {
   view: string;

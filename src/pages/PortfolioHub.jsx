@@ -1,17 +1,6 @@
 /**
- * PortfolioHub — consolidates the two portfolio-level analytics cockpits,
- * "Portfolio Overview" (AIInsights) and "Executive View" (ExecutiveView), under
- * one nav entry (module-consolidation Phase 2). Both compute portfolio rollups
- * over the same entity set, so they belong side-by-side rather than as two
- * separate modules.
- *
- * Thin tab shell (the DrawingSubmittalHub / ResourceHub / FieldHub pattern):
- * each tab lazy-loads the existing page unchanged; both stay independently
- * routable. `?pf_tab=` drives the active tab.
- *
- * Flag-branch: when `command_ui` is enabled, the "overview" tab renders
- * PortfolioControlCenter (light Command UI skin) instead of the classic
- * AIInsights page. Data is fetched here so the classic path is untouched.
+ * PortfolioHub — canonical Portfolio Overview shell with Executive View compatibility.
+ * `?pf_tab=` drives the active tab.
  */
 import { Suspense, useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -19,27 +8,23 @@ import { useQuery } from "@tanstack/react-query";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import { entities } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
 import PortfolioControlCenter from "./portfolio/PortfolioControlCenter";
 
-const PortfolioOverview = lazyWithRetry(() => import("@/pages/AIInsights"));
 const ExecutiveView = lazyWithRetry(() => import("@/pages/ExecutiveView"));
 
 const TABS = [
-  { key: "overview", label: "Portfolio Overview", Component: PortfolioOverview },
-  { key: "executive", label: "Executive View", Component: ExecutiveView },
+  { key: "overview", label: "Portfolio Overview" },
+  { key: "executive", label: "Executive View" },
 ];
 
 export default function PortfolioHub() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
-  const commandUi = useFlag("command_ui");
 
   const param = params.get("pf_tab");
   const activeKey = TABS.some((t) => t.key === param) ? param : "overview";
-  const Active = (TABS.find((t) => t.key === activeKey) || TABS[0]).Component;
   const setTab = (key) =>
     setParams(
       (prev) => {
@@ -50,11 +35,10 @@ export default function PortfolioHub() {
       { replace: true },
     );
 
-  // ── command_ui data (fetched only when flag is on and overview tab is active) ──
   const [search, setSearch] = useState("");
   const [healthFilter, setHealthFilter] = useState("All");
 
-  const fetchForCC = commandUi && activeKey === "overview";
+  const fetchForCC = activeKey === "overview";
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery({
     queryKey: ["projects"],
@@ -115,11 +99,11 @@ export default function PortfolioHub() {
     navigate(`${createPageUrl("Dashboard")}?project=${project.id}`);
   };
 
-  // ── command_ui overview branch ──
-  if (commandUi && activeKey === "overview") {
+  if (activeKey === "overview") {
     if (projectsLoading) {
       return <LoadingSkeleton variant="page" />;
     }
+
     return (
       <PortfolioControlCenter
         projects={projects}
@@ -133,7 +117,6 @@ export default function PortfolioHub() {
     );
   }
 
-  // ── Classic tab shell (unchanged) ──
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div
@@ -180,11 +163,13 @@ export default function PortfolioHub() {
       </div>
 
       <div style={{ minHeight: 0, position: "relative" }}>
-        <ErrorBoundary label="Portfolio">
-          <Suspense fallback={<LoadingSkeleton variant="page" />}>
-            <Active />
-          </Suspense>
-        </ErrorBoundary>
+        {activeKey === "executive" ? (
+          <ErrorBoundary label="Portfolio">
+            <Suspense fallback={<LoadingSkeleton variant="page" />}>
+              <ExecutiveView />
+            </Suspense>
+          </ErrorBoundary>
+        ) : null}
       </div>
     </div>
   );

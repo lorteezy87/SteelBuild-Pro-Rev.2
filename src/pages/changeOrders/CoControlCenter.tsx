@@ -1,5 +1,5 @@
 /**
- * CoControlCenter — command-kit presentation layer for the Change Orders page.
+ * CoControlCenter — canonical presentation layer for the Change Orders page.
  *
  * Composition:
  *   PageHero  →  KpiStrip (8 cells)  →  3 DecisionPanels  →  FilterBar  →  DataTable
@@ -124,7 +124,7 @@ export default function CoControlCenter(props: CoControlCenterProps) {
 
   // ── DataTable columns ─────────────────────────────────────────────────────
   const selectable = !!(selectedIds && onToggleSelect && onToggleAll);
-  const allSelected = selectable && filtered.length > 0 && selectedIds!.size === filtered.length;
+  const allSelected = selectable && filtered.length > 0 && filtered.every((co) => selectedIds!.has(co.id || ""));
 
   const columns: Column<CoRecord>[] = [
     ...(selectable

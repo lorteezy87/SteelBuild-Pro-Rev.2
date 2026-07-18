@@ -47,7 +47,7 @@ const controlSurfaceStyle = {
   colorScheme: "dark",
 };
 
-export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit }) {
+export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit, busy = false }) {
   const [status, setStatus] = useState("");
   const [bic, setBic] = useState("");
   const [discipline, setDiscipline] = useState("");
@@ -57,6 +57,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
   const [notesAppend, setNotesAppend] = useState("");
 
   const apply = () => {
+    if (busy) return;
     const data = {};
     if (status) data.status = status;
     if (bic) data.ball_in_court = bic;
@@ -77,6 +78,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
   };
 
   const reset = () => {
+    if (busy) return;
     setStatus("");
     setBic("");
     setDiscipline("");
@@ -236,6 +238,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
         >
           <button
             onClick={reset}
+            disabled={busy}
             style={{
               padding: "9px 14px",
               background: "rgba(255,255,255,0.02)",
@@ -253,6 +256,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
           </button>
           <button
             onClick={apply}
+            disabled={busy}
             style={{
               padding: "9px 16px",
               background: "linear-gradient(135deg, rgba(86,176,255,0.98) 0%, rgba(38,134,233,0.98) 100%)",
@@ -267,7 +271,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
               letterSpacing: "0.08em",
             }}
           >
-            APPLY TO {count}
+            {busy ? "APPLYING..." : `APPLY TO ${count}`}
           </button>
         </div>
       </div>

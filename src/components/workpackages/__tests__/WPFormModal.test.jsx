@@ -12,7 +12,7 @@ vi.mock("@/api/supabaseClient", () => ({
 
 import WPFormModal from "../WPFormModal";
 
-const projects = [{ id: "proj-1", name: "Skyport at Redfield" }];
+const projects = [{ id: "proj-1", name: "Rivergate Logistics Center" }];
 const drawings = [
   { id: "dwg-1", project_id: "proj-1", sheet_number: "S-201", title: "Framing Plan", stage: "IFC" },
 ];

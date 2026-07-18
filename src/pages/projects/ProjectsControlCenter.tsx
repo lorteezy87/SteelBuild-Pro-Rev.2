@@ -1,5 +1,5 @@
 /**
- * Projects Control Center — command_ui reskin of src/pages/Projects.jsx
+ * Projects Control Center — canonical presentation reskin of src/pages/Projects.jsx
  *
  * Org-wide portfolio view (NOT project-scoped).
  * Data and mutations are owned by the parent Projects.jsx shell; this

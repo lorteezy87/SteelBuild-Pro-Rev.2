@@ -1,7 +1,7 @@
 /**
- * DeliveryControlCenter — presentation-only command UI skin for the Deliveries page.
- * Gated behind the `command_ui` feature flag; the container (Deliveries.tsx) owns
- * all data, mutations, and state. This file composes purely from props.
+ * DeliveryControlCenter — canonical presentation for the Deliveries page.
+ * The container (Deliveries.tsx) owns all data, mutations, permissions, and
+ * state. This file composes the logistics workflows purely from props.
  *
  * Layout: PageHero → KpiStrip → 3 DecisionPanels → FilterBar (with view toggle
  * inline) → body (Register DataTable | Dispatch slot | Schedule slot).
@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { buildDeliveryPanels, deliveryStatusTone } from "./deliveryControlCenter.derive";
 import { formatDate, formatTons } from "./format";
+import { deliveryStyles } from "./styles";
 import type { DeliveryMetrics, DeliveryRecord } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -85,11 +86,16 @@ const viewToggleActiveStyle: CSSProperties = {
 
 export interface DeliveryControlCenterProps {
   projectName: string;
+  projectId?: string | null;
+  projectOptions?: Array<{ id: string; name?: string | null; project_name?: string | null }>;
+  onProjectChange?: (value: string) => void;
   deliveries: DeliveryRecord[];
   filtered: DeliveryRecord[];
   metrics: DeliveryMetrics;
   search: string;
   onSearch: (v: string) => void;
+  statusFilter: string;
+  onStatusFilterChange: (v: string) => void;
   /** Schedule filter chip value — matches SCHEDULE_FILTERS ids */
   scheduleFilter: string;
   onScheduleFilterChange: (v: string) => void;
@@ -102,7 +108,12 @@ export interface DeliveryControlCenterProps {
   onOpenDelivery: (delivery: DeliveryRecord) => void;
   onExport: () => void;
   onImport?: (() => void) | null;
+  onImportList?: (() => void) | null;
   onCreate?: (() => void) | null;
+  onClearFilters?: (() => void) | null;
+  sequenceFilter?: ReactNode;
+  truncationNotice?: ReactNode;
+  receivingPanel?: ReactNode;
   projectHealth?: string | null;
   percentComplete?: number | null;
   /** Bulk selection */
@@ -165,10 +176,15 @@ function scheduledCell(delivery: DeliveryRecord) {
 export default function DeliveryControlCenter(props: DeliveryControlCenterProps) {
   const {
     projectName,
+    projectId,
+    projectOptions = [],
+    onProjectChange,
     filtered,
     metrics,
     search,
     onSearch,
+    statusFilter,
+    onStatusFilterChange,
     scheduleFilter,
     onScheduleFilterChange,
     riskFilter,
@@ -178,7 +194,12 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
     onOpenDelivery,
     onExport,
     onImport,
+    onImportList,
     onCreate,
+    onClearFilters,
+    sequenceFilter,
+    truncationNotice,
+    receivingPanel,
     projectHealth,
     percentComplete,
     selectedIds,
@@ -322,6 +343,7 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
 
   return (
     <div className="dlv-cc">
+      <style>{deliveryStyles}</style>
       <PageHero
         Icon={Truck}
         title="Deliveries"
@@ -331,6 +353,8 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
         photoSrc={photoFor("Deliveries") ?? undefined}
         stats={heroStats}
       />
+
+      {receivingPanel}
 
       <KpiStrip cells={kpiCells} />
 
@@ -406,12 +430,60 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
         search={search}
         onSearch={onSearch}
         searchPlaceholder="Search vendor, PO, load, carrier, truck, work package..."
-        onImport={onImport}
+        onImport={null}
         onExport={onExport}
+        secondaryActions={
+          <>
+            {onImport && (
+              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImport}>
+                Import Ticket
+              </button>
+            )}
+            {onImportList && (
+              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onImportList}>
+                Import Shipping List
+              </button>
+            )}
+            {onClearFilters && (
+              <button type="button" className="cmd-btn cmd-btn--ghost" onClick={onClearFilters}>
+                Clear Filters
+              </button>
+            )}
+          </>
+        }
         primaryLabel="Schedule Load"
         onPrimary={onCreate || null}
         filters={
           <>
+            {!projectId && onProjectChange && (
+              <label className="cmd-filterbar__select" aria-label="Project">
+                <select value="" onChange={(event) => onProjectChange(event.target.value)}>
+                  <option value="">All Projects</option>
+                  {projectOptions.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name || project.project_name || project.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button
+              type="button"
+              className={`cmd-chip-btn${statusFilter === "all" ? " is-active" : ""}`}
+              onClick={() => onStatusFilterChange("all")}
+            >
+              All Status
+            </button>
+            {metrics.statusRollup.map((status) => (
+              <button
+                key={status.status}
+                type="button"
+                className={`cmd-chip-btn${statusFilter === status.status ? " is-active" : ""}`}
+                onClick={() => onStatusFilterChange(statusFilter === status.status ? "all" : status.status)}
+              >
+                {status.status} ({status.count})
+              </button>
+            ))}
             {SCHEDULE_CHIPS.map((chip) => (
               <button
                 key={chip.id}
@@ -437,9 +509,13 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
         }
       />
 
+      {truncationNotice}
+      {sequenceFilter}
+
       {/* View toggle — Register / Dispatch / Schedule */}
       {/*
-       * Coordinator CSS note: extract these inline styles to command.css as:
+       * Keep the view tabs local to this shell so Register, Dispatch, and
+       * Schedule remain distinct supported delivery workflows:
        *   .dlv-cc-view-toggle { display:flex; width:fit-content; border:1px solid #e4e8ee; border-radius:6px; overflow:hidden; background:#fff; margin-bottom:12px; }
        *   .dlv-cc-view-toggle button { padding:6px 16px; font-size:13px; font-weight:500; color:#1b2430; background:transparent; border:none; border-right:1px solid #e4e8ee; cursor:pointer; }
        *   .dlv-cc-view-toggle button:last-child { border-right:none; }

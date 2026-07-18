@@ -1,19 +1,18 @@
 /**
- * ProcessBoardPanel — the on-skin Detailing Process Board (process tab), SP3 of
- * the native command_ui conversion.
+ * ProcessBoardPanel — the canonical Detailing Process Board (process tab).
  *
- * Presentation-only. Renders INSIDE the already-shipped DetailingCommandShell
+ * Presentation-only. Renders inside the canonical DetailingCommandShell
  * light island (whole-<html> [data-skin="command"] + `.detailing-cc` token
  * cascade), so the kit's `cmd-*` classes and the aliased theme tokens resolve
  * light. The hub (DrawingSubmittalHub.tsx) still owns every query, mutation,
  * cache key, and piece of state — this panel receives the exact same
- * setPackages / submittals / onOpenTab / useWorkdays props the legacy
- * `SubmittalVisualBoard` receives, so behavior is preserved.
+ * setPackages / submittals / onOpenTab / useWorkdays props owned by the hub,
+ * so behavior remains in the shared workflow data layer.
  *
  * What this converts to kit primitives: the summary/search chrome (kit FilterBar
  * + Pills), the quick-filter chips (`cmd-chip-btn`), and the stage kanban
  * (columns + cards on `cmd-*` chrome). All board math is the pure
- * `processBoard.derive.ts` — byte-identical to the legacy inline compute.
+ * `processBoard.derive.ts` — the shared process-board read model.
  *
  * ⚠ Working-day due display (`submittal_workday_dues`, Phase 5): `useWorkdays`
  * is threaded straight into `buildBoardItems`, which reuses the shared
@@ -58,7 +57,7 @@ const STAGE_CAPTIONS: Record<string, string> = {
   Released: "Released for fab",
 };
 
-// Timezone-safe short date (matches the legacy board's fmtDate = formatShortDate).
+// Timezone-safe short date for the canonical process board.
 const fmtDate = (input: any) => formatShortDate(input);
 
 function getStageColor(stage: string): string {

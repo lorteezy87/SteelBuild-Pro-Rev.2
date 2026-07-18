@@ -24,7 +24,6 @@ import { selectChangedSheets, summarizePackageReport } from "@/lib/revisionPacka
 import RevisionDeltaCard, { SEV_COLOR } from "@/components/drawings/RevisionDeltaCard";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { toast } from "sonner";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import { buildRfiPrefillFromDelta, createRfiAndLink } from "@/lib/rfiFromDelta";
 import { BackchargeFormModal } from "@/pages/Backcharges";
 import { buildBackchargePrefillFromSheet, createBackchargeFromDelta, sheetsWithRevisionBackcharge } from "@/lib/backchargeFromDelta";
@@ -36,10 +35,6 @@ const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
 
 export default function RevisionImpactReportModal({ open, onClose, set, projectId }) {
   const { user } = useAppSecurity();
-  // SP4: portaled Radix dialog. Under command_ui, tag `.detailing-cc` (light
-  // token-alias) and swap the hardcoded dark `--bg-base` to the alias-remapped
-  // `--bg-surface`. Flag off → byte-identical dark dialog.
-  const commandUi = useFlag("command_ui");
   const setSheets = useMemo(() => (Array.isArray(set?.sheets) ? set.sheets : []), [set]);
 
   const { data: allRevisions = [], isLoading } = useQuery({
@@ -217,11 +212,11 @@ export default function RevisionImpactReportModal({ open, onClose, set, projectI
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className={commandUi ? "detailing-cc" : undefined}
+        className="detailing-cc"
         style={{
           maxWidth: "min(96vw, 1100px)", width: "96vw", height: "92vh",
           display: "flex", flexDirection: "column", gap: 12, padding: 16,
-          background: commandUi ? "var(--bg-surface)" : "var(--bg-base, #0D1117)", border: "1px solid var(--border-default)",
+          background: "var(--bg-surface)", border: "1px solid var(--border-default)",
         }}
       >
         <DialogHeader style={{ flexShrink: 0 }}>

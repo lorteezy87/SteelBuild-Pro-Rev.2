@@ -1,5 +1,5 @@
 /**
- * Pure derivations for the Action Items Control Center (command_ui redesign).
+ * Pure derivations for the Action Items Control Center (canonical presentation redesign).
  * No React, no network. All inputs come from the real action_items rows.
  */
 import { daysUntil as libDaysUntil } from "@/lib/dateMath";

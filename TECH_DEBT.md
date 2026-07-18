@@ -6,9 +6,65 @@ exactly what's needed.
 
 ---
 
+## Phase 0 closure status
+
+The Phase 0 release-candidate baseline is reconciled through Batch 40 on
+`agent/handoff-cleanup`. The local closure gates passed without a production
+deployment or migration application. Remaining items below are intentionally
+classified instead of hidden behind a green local report:
+
+- **P0 release blockers:** none found in the local source, test, lint, typecheck,
+  build, dependency-audit, or date/timezone checks.
+- **P1 required before production:** owner verification of staging database
+  state and migrations, Edge Function deployment/configuration, staging smoke
+  coverage, and required CI/branch-protection enforcement.
+- **P2 recommended stabilization:** nonblocking Playwright fixture coverage,
+  large-bundle follow-up, CSP enforcement review, and incremental date/type/
+  dependency hygiene.
+- **P3 post-release improvement:** historical handoff-document cleanup and
+  reduction of static-analysis false positives after the active workflows are
+  stable.
+
+`command_ui` is retired as a runtime presentation flag. The typed catalog and
+Supabase `feature_flags` table document only the remaining operational flags;
+see [`docs/FEATURE_FLAG_AND_DEAD_PATH_INVENTORY.md`](docs/FEATURE_FLAG_AND_DEAD_PATH_INVENTORY.md).
+
+## Batch 41 P1 finding status
+
+These findings were rechecked against the Batch 40 HEAD. No local source defect
+was reproducible, so no speculative security, RLS, migration, or workflow fix
+was made:
+
+- **B41-P1-001 - legacy flat Storage isolation residual:** **requires staging**.
+  Batch 40's evidence identifies 775 legacy `app-files/uploads/...` objects
+  whose historical policy permits founding-org reads across projects. A local
+  repository search cannot verify remote objects, policy execution, or storage
+  references. The safe correction remains owner-run copy, reference backfill,
+  verification, then policy cutover; do not do this from the browser.
+- **B41-P1-002 - staging database and migration alignment:** **requires
+  staging**. `supabase --version` and `supabase migration list --local` are not
+  available in this environment. The six committed feature-flag seed
+  migrations remain unapplied by Batch 41 and require staging verification.
+- **B41-P1-003 - Edge Function deployment and configuration:** **requires
+  staging**. Local source identifies the eight function dependencies but cannot
+  prove deployed revisions, secrets, quotas, or kill-switch configuration.
+- **B41-P1-004 - critical staging smoke coverage:** **requires staging**.
+  Existing Playwright smoke and fab-release specs are fixture-gated and
+  nonblocking; no dedicated staging credentials or mutation fixture is present.
+- **B41-P1-005 - required branch protection:** **blocked by repository plan**.
+  The read-only GitHub API check returned HTTP 403: branch protection requires
+  GitHub Pro or a public repository. No repository setting was changed.
+- **B41-P1-006 - backup and rollback readiness:** **requires owner/staging
+  evidence**. Local source cannot prove remote backup freshness, restore
+  rehearsal, Vercel rollback, or Edge Function rollback readiness.
+
+The local Node 24 versus CI Node 20 difference remains a P2 environment
+deviation, not a source defect. The P1 findings remain visible in the release
+checklist and are not counted as resolved by documentation alone.
+
 ## Active items
 
-_Updated 2026-07-01. RLS is enabled everywhere and the **org boundary is wired
+_Updated 2026-07-14. RLS is enabled everywhere and the **org boundary is wired
 into the access layer** (no cross-tenant reads), billing + plan enforcement are
 live, and data export works. A 2026-07-01 enterprise-readiness audit
 (`origin/main@642ce154`) is driving a remediation pass — see the entries below
@@ -87,17 +143,16 @@ follow-ups._
   modals → shared `lib/drawingUploadUtils.js`; the hub's Approval Matrix builders
   → `drawingSubmittalHub/format.ts`. The thinned containers are still large and
   still JS/JSX — converting them to `.tsx` is the follow-up.
-- **`command_ui` dual-render debt (LARGE, active)** — the `command_ui` flag is
-  globally on, yet ~27 route pages keep BOTH the legacy dark render path and the
-  new Control Center behind an `if (commandUi)` branch (`Deliveries.tsx`,
-  `Dashboard.jsx`, +25). The dead legacy branches still compile/ship/lint, and a
-  fix applied only to a legacy branch silently no-ops. Burn down page-by-page
-  after the owner field-verifies each Control Center, then retire the flag +
-  `LayoutRoute` theme coupling.
+- **`command_ui` dual-render debt — RESOLVED in Phase 0 Batches 14–39.** The
+  presentation flag and its runtime branches were retired route by route. The
+  remaining operational flags are server-backed and are not presentation-shell
+  selectors. Specialist registers and detailed workflows remain intentionally
+  supported secondary surfaces.
 - **alert() — DONE.** No `window.alert()` left in `src` (the last 4 validation/
   save sites use sonner `toast.error`).
-- **Full-browser E2E** — jsdom integration tests gate CI; no signed-in Playwright
-  flow yet (needs a seeded test user / self-signup against a non-prod project).
+- **Playwright E2E coverage** — read-only smoke and mutation-aware fab-release
+  specs exist, but remain opt-in/nonblocking until a dedicated test user, test
+  organization, and fixture project are provisioned against staging.
 - **A11y audit + mobile/iPad polish** on core workflows; **large-project
   performance** (virtualization, server-side filtering, narrow invalidation).
 - **Dependency vulnerabilities — CLEARED (`npm audit` = 0 advisories, verified
@@ -440,3 +495,35 @@ Remaining:
   Submittals live in `src/__tests__/components/`. Default vitest env
   stays `node` for pure-helper suites; component tests opt into jsdom
   with `// @vitest-environment jsdom`. See `ARCHITECTURE.md` Testing.
+
+## Batch 42 accepted staging disposition
+
+- **B41-P1-001 legacy flat Storage isolation:** accepted for the current
+  single-tenant staging candidate because the available evidence does not show
+  an active leak. This is not a resolution. Storage policy/object verification
+  remains required before organization #2 and is paired with the legal-review
+  gate.
+- **B41-P1-002 through B41-P1-006:** remain staging or owner-controlled gates
+  for migration alignment, Edge Function deployment/configuration, critical
+  smoke coverage, branch protection, and backup/rollback readiness.
+- Batch 42 adds execution plans and evidence requirements only. It does not
+  deploy, apply migrations, modify remote configuration, or change application
+  behavior.
+## Batch 44A staging remediation status
+
+- The staging-only Security DEFINER ACL remediation is applied as migration
+  `20260715235514_restrict_security_definer_execution`. Anonymous execution of
+  internal maintenance and trigger-only functions is closed; reviewed
+  authenticated browser/RLS RPC grants remain intentional.
+- The exact candidate was deployed only to the isolated Vercel staging project.
+  The protected bundle targets the staging Supabase ref and does not contain the
+  placeholder or production ref.
+- **P1 requires staging:** authenticated tenant isolation, Storage isolation,
+  authenticated project export, fabrication-release safety, and protected
+  browser console/route smoke still need owner-provisioned fixtures and session
+  evidence.
+- **P1 requires external verification:** scheduled maintenance-job ownership
+  could not be inspected with the available staging SQL role. Supabase advisor
+  informational notices for `billing_config` and `billing_events` remain open.
+- The frozen `account-delete` function and disabled integrations were not
+  invoked, redeployed, or modified. No production action occurred.

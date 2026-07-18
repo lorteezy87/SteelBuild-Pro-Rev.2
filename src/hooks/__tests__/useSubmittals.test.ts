@@ -176,7 +176,7 @@ describe("lockLinkedSetsIfApproved", () => {
     expect(mockLockSet).not.toHaveBeenCalled();
   });
 
-  it("does not throw when lockSet throws — surfaces a console warning instead", async () => {
+  it("rejects when any linked lock fails after attempting every set", async () => {
     mockLockSet.mockImplementationOnce(async () => {
       throw new Error("simulated lock failure");
     });
@@ -187,8 +187,9 @@ describe("lockLinkedSetsIfApproved", () => {
         status: "Approved",
         drawing_set_ids: ["set-a", "set-b"],
       }),
-    ).resolves.toBeUndefined();
-    // Both calls run — failure on one set must not block the next.
+    ).rejects.toThrow(/Failed to lock/);
+    // Both calls run — failure on one set must not block the next, but the
+    // workflow cannot report a settled approval without all locks.
     expect(mockLockSet).toHaveBeenCalledTimes(2);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();

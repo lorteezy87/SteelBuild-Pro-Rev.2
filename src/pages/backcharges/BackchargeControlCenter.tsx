@@ -1,8 +1,9 @@
 /**
- * BackchargeControlCenter — command_ui re-skin of the Backcharges page.
+ * BackchargeControlCenter — canonical Backcharge Defense register.
  *
  * Pure presentation: all data, mutations, and modal state live in the parent
- * Backcharges.jsx shell (same pattern as RfiControlCenter / RFIs.jsx).
+ * Backcharges.jsx shell. The parent also owns the detail workflow and RBAC-
+ * sensitive mutation handlers.
  * No network calls. No business logic. Re-uses the canonical command kit
  * components and the backchargeControlCenter.derive.ts engine.
  */
@@ -61,6 +62,7 @@ function scrollToTable() {
 
 const STATUS_FILTERS: { label: string; value: string }[] = [
   { label: "All", value: "all" },
+  { label: "Open", value: "open" },
   ...BACKCHARGE_STATUSES.map((s) => ({ label: BACKCHARGE_STATUS_LABELS[s], value: s })),
 ];
 
@@ -222,7 +224,7 @@ export default function BackchargeControlCenter(props: BackchargeControlCenterPr
         {/* Panel 1: Open backcharges — highest exposure first */}
         <DecisionPanel
           title="Open Backcharges"
-          onViewAll={() => { onStatusFilter("pending"); scrollToTable(); }}
+          onViewAll={() => { onStatusFilter("open"); scrollToTable(); }}
         >
           {s.openQueue.map((b) => (
             <div

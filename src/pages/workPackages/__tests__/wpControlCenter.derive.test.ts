@@ -3,6 +3,8 @@ import {
   wpStatusTone,
   riskTone,
   buildWpPanels,
+  areAllFilteredRowsSelected,
+  reconcileSelection,
 } from "../wpControlCenter.derive";
 import type { WpMetrics, EnrichedWp } from "../wpControlCenter.derive";
 
@@ -235,5 +237,19 @@ describe("buildWpPanels", () => {
     const metrics = makeMetrics();
     const panels = buildWpPanels(metrics);
     expect(panels.phaseRail).toBe(metrics.phaseRollup);
+  });
+});
+
+describe("selection helpers", () => {
+  it("treats all visible rows as selected without counting hidden rows", () => {
+    const selected = new Set(["wp-1", "hidden"]);
+    expect(areAllFilteredRowsSelected([{ id: "wp-1" }], selected)).toBe(true);
+    expect(areAllFilteredRowsSelected([{ id: "wp-1" }, { id: "wp-2" }], selected)).toBe(false);
+    expect(areAllFilteredRowsSelected([], selected)).toBe(false);
+  });
+
+  it("reconciles selection to the current visible rows", () => {
+    const next = reconcileSelection(new Set(["wp-1", "wp-2"]), ["wp-2", "wp-3"]);
+    expect([...next]).toEqual(["wp-2"]);
   });
 });

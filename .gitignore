@@ -57,6 +57,11 @@ scripts/.imgtools/
 # agent session worktrees are local-only state, never source
 .claude/worktrees/
 
+# Operational/customer exports and generated workbook deliverables are never source
+# code. Store them in approved project storage, not in this repository.
+exports/
+*.xlsm
+
 # transient scratch/snapshot copies dropped by tooling (never source; must not
 # be tracked or linted — a stale repo copy here otherwise fails `eslint .`)
 .tmp/

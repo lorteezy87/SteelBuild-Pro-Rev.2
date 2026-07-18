@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { entities, functions, resolveFileUrl } from "@/api/supabaseClient";
-import { Download, Loader2, CheckCircle2,
-  AlertCircle, Building2, RefreshCw, Search, X,
+import { entities } from "@/api/supabaseClient";
+import { CheckCircle2,
+  AlertCircle, Building2, Search, X,
   Eye, Filter, Clock, AlertTriangle, FileSpreadsheet,
 } from "lucide-react";
 import ProjectDrilldownModal from "../components/reports/ProjectDrilldownModal";
@@ -151,45 +151,30 @@ function KpiTile({ label, value, color, icon: Icon, sub }) {
 }
 
 /* ─── Table row ────────────────────────────────────────────────── */
-function ReportTableRow({ project, index, selected, onSelect, onDrilldown, onDownload, onPreview, downloadState }) {
+function ReportTableRow({ project, index, onDrilldown, onPreview }) {
   const health = HEALTH[project.health_status] || { color: "var(--text-muted)", label: "—" };
   const readiness = computeReadiness(project);
   const readyMeta = READINESS_META[readiness.status];
   const phaseColor = PHASE_TOKEN[project.phase] || "var(--text-muted)";
-  const isLoading = downloadState === "loading";
 
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "28px 2fr 110px 110px 120px 130px 1fr 140px",
+        gridTemplateColumns: "2fr 110px 110px 120px 130px 1fr 140px",
         gap: 0,
         alignItems: "center",
         padding: "10px 14px",
         borderBottom: "1px solid var(--divider)",
-        background: selected
-          ? "var(--accent-muted)"
-          : index % 2 === 1 ? "var(--bg-surface-lowest)" : "transparent",
-        borderLeft: `3px solid ${selected ? "var(--accent)" : phaseColor}`,
+        background: index % 2 === 1 ? "var(--bg-surface-lowest)" : "transparent",
+        borderLeft: `3px solid ${phaseColor}`,
         transition: "background 0.12s",
         cursor: "pointer",
       }}
-      onMouseEnter={e => { if (!selected) e.currentTarget.style.background = "var(--bg-row-hover)"; }}
-      onMouseLeave={e => { if (!selected) e.currentTarget.style.background = index % 2 === 1 ? "var(--bg-surface-lowest)" : "transparent"; }}
+      onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-row-hover)"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = index % 2 === 1 ? "var(--bg-surface-lowest)" : "transparent"; }}
       onClick={onDrilldown}
     >
-      {/* Select checkbox */}
-      <div onClick={e => { e.stopPropagation(); onSelect(); }} style={{ display: "flex", alignItems: "center" }}>
-        <div style={{
-          width: 14, height: 14, borderRadius: 3,
-          border: `1.5px solid ${selected ? "var(--accent)" : "var(--border-strong)"}`,
-          background: selected ? "var(--accent)" : "transparent",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          {selected && <CheckCircle2 size={10} color="var(--on-accent)" strokeWidth={3} />}
-        </div>
-      </div>
-
       {/* Project name + number */}
       <div style={{ minWidth: 0, paddingRight: 12 }}>
         <div style={{
@@ -307,35 +292,13 @@ function ReportTableRow({ project, index, selected, onSelect, onDrilldown, onDow
         >
           <Eye size={10} /> PREVIEW
         </button>
-        <button
-          title="Generate PDF"
-          disabled={isLoading}
-          onClick={onDownload}
-          style={{
-            display: "flex", alignItems: "center", gap: 4,
-            padding: "5px 11px", borderRadius: 4,
-            background: isLoading ? "var(--info-muted)"
-              : downloadState === "done" ? "var(--success-muted)"
-              : "var(--accent)",
-            border: `1px solid ${isLoading ? "var(--info-border)"
-              : downloadState === "done" ? "var(--success-border)"
-              : "var(--accent)"}`,
-            color: downloadState === "done" ? "var(--success)" : "var(--on-accent)",
-            fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
-            cursor: isLoading ? "not-allowed" : "pointer", letterSpacing: "0.08em",
-          }}
-        >
-          {isLoading ? <><Loader2 size={10} className="spin-icon" /> …</>
-            : downloadState === "done" ? <><CheckCircle2 size={10} /> DONE</>
-            : <><Download size={10} /> PDF</>}
-        </button>
       </div>
     </div>
   );
 }
 
 /* ─── Preview drawer ───────────────────────────────────────────── */
-function PreviewDrawer({ project, onClose, onGenerate }) {
+function PreviewDrawer({ project, onClose }) {
   if (!project) return null;
   const readiness = computeReadiness(project);
   const readyMeta = READINESS_META[readiness.status];
@@ -455,19 +418,9 @@ function PreviewDrawer({ project, onClose, onGenerate }) {
           }}>
             CLOSE
           </button>
-          <button onClick={onGenerate} style={{
-            flex: 2, padding: "9px 0", borderRadius: 6,
-            background: "var(--accent)", border: "none",
-            color: "var(--on-accent)",
-            fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-            cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          }}>
-            <Download size={11} /> GENERATE PDF
-          </button>
         </div>
       </div>
-    </>
+    </> 
   );
 }
 
@@ -479,17 +432,12 @@ export default function JobStatusReport() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const [bulkStatus, setBulkStatus] = useState("idle");
-  const [bulkResults, setBulkResults] = useState([]);
-  const [bulkError, setBulkError] = useState("");
   const [drilldownProject, setDrilldownProject] = useState(null);
   const [previewProject, setPreviewProject] = useState(null);
   const [search, setSearch] = useState("");
   const [healthFilter, setHealthFilter] = useState("all");
   const [readinessFilter, setReadinessFilter] = useState("all");
-  const [selectedIds, setSelectedIds] = useState(new Set());
   const [psrImportOpen, setPsrImportOpen] = useState(false);
-  const [rowStates, setRowStates] = useState({}); // id → 'idle'|'loading'|'done'|'error'
 
   /* ── Enrich projects with readiness ── */
   const enriched = useMemo(
@@ -532,85 +480,14 @@ export default function JobStatusReport() {
     });
   }, [enriched, search, healthFilter, readinessFilter]);
 
-  /* ── Selection ── */
-  const toggleSelect = (id) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-  const selectAllVisible = () => {
-    setSelectedIds(new Set(filtered.map(p => p.id)));
-  };
-  const clearSelection = () => setSelectedIds(new Set());
-
-  /* ── Single-row download ── */
-  const handleRowDownload = async (project) => {
-    setRowStates(s => ({ ...s, [project.id]: "loading" }));
-    try {
-      const response = await functions.invoke("generateExecutivePDF", { project_id: project.id });
-      const data = response.data;
-      let blob;
-      if (data instanceof ArrayBuffer || data?.byteLength !== undefined) {
-        blob = new Blob([data], { type: "application/pdf" });
-      } else if (data instanceof Blob) {
-        blob = data;
-      } else {
-        throw new Error(data?.error || "Unexpected response from server");
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `executive-summary-${project.project_number || project.id}-${new Date().toISOString().split("T")[0]}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setRowStates(s => ({ ...s, [project.id]: "done" }));
-      setTimeout(() => setRowStates(s => ({ ...s, [project.id]: "idle" })), 4000);
-    } catch {
-      setRowStates(s => ({ ...s, [project.id]: "error" }));
-      setTimeout(() => setRowStates(s => ({ ...s, [project.id]: "idle" })), 5000);
-    }
-  };
-
-  /* ── Bulk / batch generate ── */
-  const handleGenerateAll = async () => {
-    setBulkStatus("loading");
-    setBulkResults([]);
-    setBulkError("");
-    try {
-      const ids = selectedIds.size > 0 ? Array.from(selectedIds) : undefined;
-      const res = await functions.invoke("generateExecutivePDF", ids ? { project_ids: ids } : {});
-      const data = res.data;
-      if (data?.reports) {
-        setBulkResults(data.reports);
-        setBulkStatus("done");
-      } else {
-        throw new Error(data?.error || "Unexpected response");
-      }
-    } catch (err) {
-      setBulkError(err.message || "Failed to generate reports");
-      setBulkStatus("error");
-    }
-  };
-
-  const selectedCount = selectedIds.size;
-  const hasSelection = selectedCount > 0;
-
   return (
     <div className="sb-dashboard-reference-page" style={{ maxWidth: 1280, margin: "0 auto", paddingBottom: 40 }}>
-      <style>{`
-        .spin-icon { animation: spin 0.9s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
-
       <CommandBar
         eyebrow="OWNER REPORTING"
         title="Job Status Reports"
         count={projects.length}
         unit=" · PROJECTS"
-        subtitle={`${today} · Next auto-run: Mon 6:00 AM`}
+        subtitle={today}
       >
         <button
           onClick={() => setPsrImportOpen(true)}
@@ -629,29 +506,6 @@ export default function JobStatusReport() {
           }}
         >
           <FileSpreadsheet size={12} /> Import PSR
-        </button>
-        <button
-          onClick={handleGenerateAll}
-          disabled={bulkStatus === "loading" || projects.length === 0}
-          style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "8px 14px", borderRadius: "var(--radius-btn)",
-            background: bulkStatus === "done" ? "color-mix(in srgb, var(--status-success) 14%, transparent)" : "var(--accent)",
-            border: bulkStatus === "done" ? "1px solid var(--status-success)" : "none",
-            color: bulkStatus === "done" ? "var(--status-success)" : "var(--bg-base)",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            cursor: bulkStatus === "loading" ? "not-allowed" : "pointer",
-            letterSpacing: "0.08em", textTransform: "uppercase",
-            opacity: (bulkStatus === "loading" || projects.length === 0) ? 0.55 : 1,
-            transition: "all 0.15s",
-            whiteSpace: "nowrap",
-          }}
-          onMouseEnter={(e) => bulkStatus === "idle" && (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => bulkStatus === "idle" && (e.currentTarget.style.background = "var(--accent)")}
-        >
-          {bulkStatus === "loading" ? (<><Loader2 size={12} className="spin-icon" /> Generating…</>)
-            : bulkStatus === "done" ? (<><CheckCircle2 size={12} /> Done · {bulkResults.length}</>)
-            : (<><Download size={12} /> Generate {hasSelection ? `${selectedCount} Selected` : "All"}</>)}
         </button>
       </CommandBar>
 
@@ -733,41 +587,6 @@ export default function JobStatusReport() {
         </div>
       </div>
 
-      {/* ── Batch action toolbar ── */}
-      {hasSelection && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 10,
-          background: "var(--accent-muted)",
-          border: "1px solid var(--accent-border)",
-          borderRadius: 6,
-          padding: "8px 14px",
-          marginBottom: 10,
-        }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em" }}>
-            {selectedCount} SELECTED
-          </span>
-          <button onClick={handleGenerateAll} style={{
-            padding: "5px 11px", borderRadius: 4,
-            background: "var(--accent)", border: "none",
-            color: "var(--on-accent)",
-            fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
-            cursor: "pointer",
-          }}>
-            <Download size={9} style={{ marginRight: 4 }} /> GENERATE SELECTED
-          </button>
-          <button onClick={clearSelection} style={{
-            padding: "5px 11px", borderRadius: 4,
-            background: "transparent",
-            border: "1px solid var(--border-default)",
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
-            cursor: "pointer",
-          }}>
-            CLEAR
-          </button>
-        </div>
-      )}
-
       {/* ── Reporting table ── */}
       <div style={{
         background: "var(--bg-surface)",
@@ -779,23 +598,13 @@ export default function JobStatusReport() {
         {/* Sticky header */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "28px 2fr 110px 110px 120px 130px 1fr 140px",
+          gridTemplateColumns: "2fr 110px 110px 120px 130px 1fr 140px",
           gap: 0,
           padding: "10px 14px",
           background: "var(--bg-surface-low)",
           borderBottom: "1px solid var(--border-default)",
           position: "sticky", top: 0, zIndex: 2,
         }}>
-          <div onClick={selectedCount === filtered.length ? clearSelection : selectAllVisible} style={{ cursor: "pointer" }}>
-            <div style={{
-              width: 14, height: 14, borderRadius: 3,
-              border: `1.5px solid ${selectedCount === filtered.length && filtered.length > 0 ? "var(--accent)" : "var(--border-strong)"}`,
-              background: selectedCount === filtered.length && filtered.length > 0 ? "var(--accent)" : "transparent",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {selectedCount === filtered.length && filtered.length > 0 && <CheckCircle2 size={10} color="var(--on-accent)" strokeWidth={3} />}
-            </div>
-          </div>
           {["Project", "Phase", "Health", "Completeness", "Readiness", "Last Generated", "Actions"].map(col => (
             <div key={col} style={{
               fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
@@ -828,102 +637,17 @@ export default function JobStatusReport() {
               key={p.id}
               project={p}
               index={i}
-              selected={selectedIds.has(p.id)}
-              onSelect={() => toggleSelect(p.id)}
               onDrilldown={() => setDrilldownProject(p)}
               onPreview={() => setPreviewProject(p)}
-              onDownload={() => handleRowDownload(p)}
-              downloadState={rowStates[p.id] || "idle"}
             />
           ))
         )}
-      </div>
-
-      {/* Bulk results */}
-      {bulkStatus === "done" && bulkResults.length > 0 && (
-        <div style={{
-          marginTop: 14,
-          background: "var(--bg-surface-low)",
-          borderLeft: "2px solid var(--success)",
-          borderRadius: "var(--radius-card)",
-          padding: "14px 16px",
-        }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--success)", marginBottom: 10, letterSpacing: "0.10em" }}>
-            ✓ {bulkResults.length} REPORTS READY — CLICK TO DOWNLOAD
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {bulkResults.map(r => (
-              <div key={r.project_id} style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "7px 12px",
-                background: "var(--bg-surface)",
-                borderRadius: 4,
-              }}>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 500 }}>{r.project_name}</div>
-                {r.file_url && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        const url = await resolveFileUrl(r.file_url);
-                        if (url) window.open(url, "_blank", "noopener,noreferrer");
-                      } catch { /* silently fail */ }
-                    }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 4,
-                      fontFamily: "var(--font-mono)", fontSize: 8,
-                      color: "var(--info)", letterSpacing: "0.06em",
-                      cursor: "pointer",
-                      padding: "4px 10px",
-                      background: "var(--info-muted)",
-                      border: "1px solid var(--info-border)",
-                      borderRadius: 4,
-                    }}
-                  >
-                    <Download size={9} /> OPEN PDF
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {bulkStatus === "error" && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          background: "var(--danger-muted)",
-          border: "1px solid var(--danger-border)",
-          borderRadius: 6, padding: "10px 14px", marginTop: 12,
-        }}>
-          <AlertCircle size={13} color="var(--danger)" />
-          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--danger)" }}>
-            {bulkError || "Failed to generate reports."}
-          </span>
-        </div>
-      )}
-
-      {/* Automation footer */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        marginTop: 18,
-        padding: "8px 14px",
-        background: "var(--bg-surface-low)",
-        borderRadius: "var(--radius-card)",
-      }}>
-        <RefreshCw size={10} color="var(--text-disabled)" />
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
-          AUTOMATED GENERATION RUNS EVERY MONDAY AT 6:00 AM · INCLUDES BUDGET KPIS · COST BURN · EVM / CPI · CHANGE ORDERS · OPEN CRITICAL RFIS
-        </span>
       </div>
 
       {/* Preview drawer */}
       <PreviewDrawer
         project={previewProject}
         onClose={() => setPreviewProject(null)}
-        onGenerate={() => {
-          if (previewProject) handleRowDownload(previewProject);
-          setPreviewProject(null);
-        }}
       />
 
       {/* Drilldown modal */}

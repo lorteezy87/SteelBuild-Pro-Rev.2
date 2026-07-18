@@ -188,6 +188,13 @@ export function useFileUploadAndExtract({ files, meta, activeProject, state }) {
 
       if (cancelledRef.current) return;  // user cancelled — stay at step 0 (reset already called)
 
+      if (allSheets.length === 0) {
+        setFileResults(results);
+        setProcessError("No drawing sheets were extracted. Check the failed file details and try again.");
+        setStep(3);
+        return;
+      }
+
       // ── Merge AI-detected set metadata into meta state ──
       // Only fill fields the user left blank; never overwrite user input.
       const defaultIssueDate = new Date().toISOString().split("T")[0];

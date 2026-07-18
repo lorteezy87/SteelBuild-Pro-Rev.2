@@ -1,15 +1,15 @@
 /**
- * RevisionImpactPanel — the on-skin Detailing Revision Impact board (revimpact
- * tab), SP3 of the native command_ui conversion.
+ * RevisionImpactPanel — the canonical Detailing Revision Impact board
+ * (revimpact tab).
  *
  * Presentation-only. Renders INSIDE the DetailingCommandShell light island
  * (`.detailing-cc` token cascade). Rows arrive PRE-ENRICHED from the hub (joined
  * to work packages / RFIs / fab-blocked / affected pieces) and the Compare
  * action is passed straight through — no query/mutation change. The board math
  * is the pure `revisionImpact.derive.ts` (filter + severity mapping), byte-
- * identical to the legacy `revisionImpactBoard.tsx`.
+ * uses the shared enriched revision-impact rows from the hub.
  *
- * Improvement over the legacy board's "⚠ MIRROR of the table cells" hazard: the
+ * The table and virtualized branches share ONE `<RowCells>` render function, so
  * table and virtualized branches share ONE `<RowCells>` render function, so a
  * column change lands in both automatically.
  */
@@ -46,7 +46,7 @@ const COLUMNS: { label: string; align?: "right"; title?: string }[] = [
 /**
  * The 8 cells for one revision-impact row, as an ordered array of ReactNodes.
  * Shared by BOTH the <table> and the virtualized grid so the columns can never
- * drift apart. Content + semantics are byte-identical to the legacy board.
+ * drift apart in the canonical revision-impact panel.
  */
 function rowCells(r: any, onCompareRevision?: (drawingId: string) => void) {
   const dm = downstreamFor(r.severity);
@@ -91,7 +91,7 @@ function rowCells(r: any, onCompareRevision?: (drawingId: string) => void) {
 }
 
 /** Left-accent border for a row keyed to its severity (critical/high get a
- *  coloured rail, mirroring the legacy board). */
+ *  coloured rail). */
 function severityRail(severity: string): string {
   if (severity === "critical") return "3px solid var(--cmd-danger)";
   if (severity === "high") return "3px solid var(--cmd-warn)";

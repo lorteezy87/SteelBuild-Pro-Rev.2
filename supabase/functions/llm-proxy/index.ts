@@ -48,10 +48,9 @@
 //   SUPABASE_SERVICE_ROLE_KEY (the last is for telemetry inserts).
 //
 // Optional secrets:
-//   ALLOWED_ORIGINS            — CORS lockdown (OPT-IN). Unset or "*" → permissive.
-//                                Set to comma-separated real origins to enforce
-//                                (baked prod defaults + localhost + *.vercel.app
-//                                are always allowed alongside the configured ones).
+//   ALLOWED_ORIGINS            — exact comma-separated origin allowlist. Unset
+//                                preserves legacy permissive behavior; configured
+//                                values are authoritative and reject all others.
 //   LLM_KILL_SWITCH            — "1"/"true" halts ALL LLM calls (break-glass).
 //   LLM_DAILY_COST_LIMIT_USD   — per-user rolling-24h spend cap (see quota.ts).
 //   LLM_DAILY_REQUEST_LIMIT    — per-user rolling-24h request cap.
@@ -70,6 +69,7 @@ import { openaiClient }    from "./providers/openai.ts";
 import { computeCostUsd, isModelPriced } from "./providers/cost.ts";
 import { getProviderForUseCase } from "./router.ts";
 import { checkUserQuota } from "./quota.ts";
+import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 // Protocol versions:
 //   v3 = verify_jwt disabled
@@ -103,60 +103,8 @@ const EXPENSIVE_USE_CASES = new Set([
   "rfi-log-import",
 ]);
 
-// CORS is OPT-IN: permissive ("*") unless ALLOWED_ORIGINS is explicitly set to
-// real origins (non-"*"). A too-narrow baked default once silently blocked AI
-// calls (the preflight echoed a non-matching origin → the browser dropped the
-// POST), so the default stays permissive. Set ALLOWED_ORIGINS to lock down.
-const DEFAULT_ALLOWED_ORIGINS = [
-  "https://steelbuild-pro.com",
-  "https://www.steelbuild-pro.com",
-];
-
-// Explicit non-"*" origins from env — additions to the baked defaults.
-function envOrigins(): string[] {
-  const raw = Deno.env.get("ALLOWED_ORIGINS");
-  if (!raw) return [];
-  return raw.split(",").map((o) => o.trim()).filter((o) => o && o !== "*");
-}
-
-function corsLockedDown(): boolean {
-  const raw = Deno.env.get("ALLOWED_ORIGINS");
-  return !!raw && raw.trim() !== "*";
-}
-
-function corsHeaders(req?: Request): Record<string, string> {
-  // Permissive unless explicitly locked down (and for response helpers with no
-  // req). The preflight, which has the req, is where a locked-down config gates
-  // cross-origin browsers.
-  if (!req || !corsLockedDown()) {
-    return {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, sentry-trace, baggage",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-    };
-  }
-
-  const origin = req.headers.get("Origin") || "";
-  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-  const isVercelPreview = /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin);
-  // Disallowed origin → fall back to the canonical production origin so the
-  // browser's preflight fails (origin mismatch) and the request is blocked.
-  const allowOrigin = DEFAULT_ALLOWED_ORIGINS.includes(origin) || envOrigins().includes(origin) || isLocalhost || isVercelPreview
-    ? origin
-    : DEFAULT_ALLOWED_ORIGINS[0];
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, sentry-trace, baggage",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
-}
-
 function json(body: unknown, status = 200, req?: Request): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-  });
+  return jsonResponse(body, status, req);
 }
 
 async function authenticateRequest(req: Request): Promise<{ ok: true; userId: string } | { ok: false; response: Response }> {
@@ -311,6 +259,7 @@ async function handle(req: Request): Promise<Response> {
     return json(
       { error: `Invalid JSON body: ${err instanceof Error ? err.message : String(err)}`, protocol_version: PROTOCOL_VERSION },
       400,
+      req,
     );
   }
 
@@ -341,6 +290,7 @@ async function handle(req: Request): Promise<Response> {
     return json(
       { error: `Unknown provider: "${provider}". Use "anthropic" or "openai".`, protocol_version: PROTOCOL_VERSION },
       400,
+      req,
     );
   }
 
@@ -436,7 +386,7 @@ async function handle(req: Request): Promise<Response> {
       },
     });
 
-    return json(toWireEnvelope(result));
+    return json(toWireEnvelope(result), 200, req);
   } catch (err) {
     const latencyMs = Math.round(performance.now() - t0);
     const isLLMError = err instanceof LLMError;
@@ -476,6 +426,7 @@ async function handle(req: Request): Promise<Response> {
     return json(
       { error: `${provider} handler: ${message}`, protocol_version: PROTOCOL_VERSION },
       status,
+      req,
     );
   }
 }
@@ -496,6 +447,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         protocol_version: PROTOCOL_VERSION,
       },
       500,
+      req,
     );
   }
 });

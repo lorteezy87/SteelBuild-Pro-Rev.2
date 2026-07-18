@@ -14,10 +14,10 @@ describe("importPsrSpreadsheet", () => {
   it("parses the SOL PSR layout into staged schedule, docs, and RFI data", () => {
     const parsed = parsePsrRows([
       ["JOB STATUS REPORT"],
-      ["DATE RECEIVED", "Friday, November 28, 2025", "", "", "S & H #", "", "25531"],
-      ["CUSTOMER", "LGE"],
-      ["JOB NAME", "Skyport at Redfield"],
-      ["PROJECT MANAGER/TEAM", "Nicholas Lortz"],
+      ["DATE RECEIVED", "Friday, November 28, 2025", "", "", "S & H #", "", "90001"],
+      ["CUSTOMER", "NOVA"],
+      ["JOB NAME", "Rivergate Logistics Center"],
+      ["PROJECT MANAGER/TEAM", "Taylor Brooks"],
       ["DETAILER", "SOL"],
       ["LAST UPDATED", "11-May-26"],
       ["SCHEDULE"],
@@ -30,29 +30,29 @@ describe("importPsrSpreadsheet", () => {
       ["1. Structure Drawing Bldg.1 & 2 (Construction Set)", "31-Dec-25", "10-Feb-26"],
       ["2. Architecture Drawing Bldg.1 & 2 (Construction Set)", "31-Dec-25", ""],
       ["RFI #/ DESCRIPTION", "Client RFI#", "", "SENT", "RECEIVED", "STATUS", "", "", "Remark"],
-      ["25531_RFI#14 (Regarding ladder support.)", "S&H RFI#29", "", "6-Jan-26", "21-Mar-26", "", "", "", "NOTE#4 Not Answered."],
-      ["25531_RFI#47 (Regarding main steel BFA post review query.)", "S&H RFI#48", "", "10-Apr-26", "28-Apr-26", "Partially answered"],
-      ["25531_RFI#50 (Regarding panel connection.)", "", "", "28-Apr-26", "1-May-26", "Closed per Panel book IFC set"],
+      ["90001_RFI#14 (Regarding temporary shoring scope.)", "STEELCO RFI#29", "", "6-Jan-26", "21-Mar-26", "", "", "", "NOTE#4 Not Answered."],
+      ["90001_RFI#47 (Regarding beam seat tolerance query.)", "STEELCO RFI#48", "", "10-Apr-26", "28-Apr-26", "Partially answered"],
+      ["90001_RFI#50 (Regarding splice plate connection.)", "", "", "28-Apr-26", "1-May-26", "Closed per synthetic IFC revision"],
       ["QUERY #/ DESCRIPTION", "", "", "SENT", "RECEIVED", "COMMENTS"],
-      ["25531_Query#1 (Regarding stair quantities)", "", "", "11-Dec-25", "6-Feb-26", "Closed"],
+      ["90001_Query#1 (Regarding stair quantity rework)", "", "", "11-Dec-25", "6-Feb-26", "Closed"],
       ["COMMENTS"],
-      ["Joist BFA Drawings(04/06/2026)"],
-    ], { fileName: "051126=Skyport at Redfield (25531).xls", sheetName: "Sol Job #25483", now });
+      ["Joinery BFA Drawings(04/06/2026)"],
+    ], { fileName: "090101=Rivergate Logistics Center (90001).xls", sheetName: "Project 90001 Schedule", now });
 
-    expect(parsed.job_number).toBe("25531");
-    expect(parsed.job_name).toBe("Skyport at Redfield");
+    expect(parsed.job_number).toBe("90001");
+    expect(parsed.job_name).toBe("Rivergate Logistics Center");
     expect(parsed.schedule).toHaveLength(2);
     expect(parsed.schedule[0]).toMatchObject({ area: "BUILDING-1", package_name: "Anchor bolt" });
     expect(parsed.counts.pending_coordination_docs).toBe(1);
     expect(parsed.counts.open_rfis).toBe(2);
-    expect(parsed.comments).toEqual(["Joist BFA Drawings(04/06/2026)"]);
+    expect(parsed.comments).toEqual(["Joinery BFA Drawings(04/06/2026)"]);
     expect(parsed.proposed_health_status).toBe("At Risk");
   });
 
   it("matches parsed PSRs to projects by S&H number before fuzzy name", () => {
     const parsed = { job_number: "25645", job_name: "ALA Buckeye" };
     const match = matchPsrToProject(parsed, [
-      { id: "p1", project_number: "25531", name: "Skyport at Redfield" },
+      { id: "p1", project_number: "90001", name: "Rivergate Logistics Center" },
       { id: "p2", project_number: "25645", name: "ALA Buckeye" },
     ]);
 
@@ -109,26 +109,26 @@ describe("importPsrSpreadsheet", () => {
     ];
     const currentRows = [
       ["JOB STATUS REPORT"],
-      ["DATE RECEIVED", "Friday, November 28, 2025", "", "", "S & H #", "", "25531"],
-      ["JOB NAME", "Skyport at Redfield"],
+      ["DATE RECEIVED", "Friday, November 28, 2025", "", "", "S & H #", "", "90001"],
+      ["JOB NAME", "Rivergate Logistics Center"],
       ["LAST UPDATED", "11-May-26"],
       ["SCHEDULE"],
       ["Submittal Package", "IFA", "BFA"],
       ["Main steel", "9-Mar-26", "6-Apr-26"],
       ["RFI #/ DESCRIPTION", "Client RFI#", "", "SENT", "RECEIVED", "STATUS"],
-      ["25531_RFI#47 (Regarding main steel BFA post review query.)", "S&H RFI#48", "", "10-Apr-26", "", "Open"],
+      ["90001_RFI#47 (Regarding beam seat tolerance query.)", "STEELCO RFI#48", "", "10-Apr-26", "", "Open"],
     ];
 
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(legacyRows), "11130");
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(currentRows), "Sol Job #25483");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(legacyRows), "Project 90001");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(currentRows), "Project 90001 Schedule");
 
     const bytes = XLSX.write(workbook, { type: "array", bookType: "xls" });
-    const file = new File([bytes], "skyport-psr-051126.xls", { type: "application/vnd.ms-excel" });
+    const file = new File([bytes], "rivergate-psr-090101.xls", { type: "application/vnd.ms-excel" });
 
     const parsed = await readPsrSpreadsheetFile(file);
 
-    expect(parsed.job_number).toBe("25531");
-    expect(parsed.job_name).toBe("Skyport at Redfield");
-    expect(parsed.sheet_name).toBe("Sol Job #25483");
+    expect(parsed.job_number).toBe("90001");
+    expect(parsed.job_name).toBe("Rivergate Logistics Center");
+    expect(parsed.sheet_name).toBe("Project 90001 Schedule");
   });
 });

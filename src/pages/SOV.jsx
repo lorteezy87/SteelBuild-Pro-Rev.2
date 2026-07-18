@@ -3,19 +3,14 @@ import { useProjectContext } from "../components/shared/ProjectContext";
 import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import {
   Pencil, Trash2, Lock, Check, ChevronDown, ChevronRight,
   ClipboardList, AlertTriangle, CheckCircle, Download, Upload,
   CheckSquare, Square,
 } from "lucide-react";
 import { BulkActionBar } from "@/components/design-system";
-import KPIStrip from "../components/shared/KPIStrip";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import SOVFormModal from "../components/sov/SOVFormModal";
-import { CommandBar } from "@/components/design-system";
-import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatPercent, roundCurrency } from "../components/shared/formatters";
 import { getNextNumber } from "../components/shared/numberSequencing";
@@ -29,7 +24,6 @@ import {
   SOV_TEMPLATE_COLUMNS,
   SOV_TEMPLATE_SAMPLE,
 } from "../lib/importSovSpreadsheet";
-import { useFlag } from "@/hooks/useFeatureFlag";
 import SovControlCenter from "./sov/SovControlCenter";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
@@ -129,12 +123,11 @@ export default function SOV() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
   const { can } = usePermissions();
-  const commandUi = useFlag("command_ui");
 
   /* ── UI state ── */
   const [appFilter, setAppFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  /* command_ui search — used by SovControlCenter's FilterBar */
+  /* Canonical search used by SovControlCenter's FilterBar. */
   const [ccSearch, setCcSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -193,18 +186,17 @@ export default function SOV() {
   /* ── Mutations ── */
   const createMut = useMutation({
     mutationFn: async (d) => {
+      if (!activeProject?.id) {
+        throw new Error("Select a project before creating a SOV item.");
+      }
       let sovId;
       try {
-        sovId = activeProject?.id
-          ? await getNextNumber(activeProject.id, 'SOV')
-          : null;
+        sovId = await getNextNumber(activeProject.id, "SOV");
       } catch (e) {
-        console.warn('getNextNumber failed, using fallback:', e);
-        sovId = null;
+        console.warn("[SOV] getNextNumber failed:", e?.message);
+        throw new Error("Unable to reserve a SOV id. Please retry.");
       }
-      if (!sovId) {
-        sovId = `SOV-${String((sovs.length || 0) + 1).padStart(3, '0')}`;
-      }
+      if (!sovId) throw new Error("Unable to reserve a SOV id. Please retry.");
       return entities.SOVItem.create({
         ...d,
         sov_id: sovId,
@@ -459,7 +451,7 @@ export default function SOV() {
     }),
   [sovs, appFilter, statusFilter]);
 
-  /* command_ui path: status chip + text search filter (no app# tab needed) */
+  /* Canonical status chip and text search filter (no app# tab needed). */
   const ccFiltered = useMemo(() => {
     const q = ccSearch.trim().toLowerCase();
     return sovs
@@ -589,7 +581,7 @@ export default function SOV() {
     URL.revokeObjectURL(url);
   };
 
-  const nextSovId = `SOV-${String((sovs.length || 0) + 1).padStart(3, '0')}`;
+  const nextSovId = "";
   const COL_COUNT = 16;
 
   /* ═══════════════════════════════════════════════════════════════
@@ -874,11 +866,7 @@ export default function SOV() {
     </div>
   );
 
-  /* ═══════════════════════════════════════════════════════════════
-     command_ui flag branch — behavior-preserving light skin.
-     All data + mutations come from above; modals are shared.
-     ═══════════════════════════════════════════════════════════════ */
-  if (commandUi) {
+  // Canonical SOV control center. Data, mutations, and modals remain page-owned.
     const modals = (
       <>
         <SOVFormModal
@@ -968,321 +956,3 @@ export default function SOV() {
       </div>
     );
   }
-
-  /* ═══════════════════════════════════════════════════════════════
-     MAIN RENDER — classic skin
-     ═══════════════════════════════════════════════════════════════ */
-  return (
-    <div className="sb-dashboard-reference-page">
-      <ListTruncationNotice count={sovs.length} label="SOV line items" />
-      {/* ── Requirement 10: SOV Mismatch Alert Banner ── */}
-      {hasMismatch && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "10px 16px", marginBottom: 12, borderRadius: 8,
-          background: Math.abs(mismatchVariance) > projectBudget * 0.05
-            ? "var(--danger-muted)" : "var(--warning-muted)",
-          border: `1px solid ${Math.abs(mismatchVariance) > projectBudget * 0.05
-            ? "var(--danger-border)" : "var(--warning-border)"}`,
-        }}>
-          <AlertTriangle style={{
-            width: 18, height: 18, flexShrink: 0,
-            color: Math.abs(mismatchVariance) > projectBudget * 0.05
-              ? "var(--status-error)" : "var(--status-warning)",
-          }} />
-          <span style={{
-            fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,
-            color: Math.abs(mismatchVariance) > projectBudget * 0.05
-              ? "var(--status-error)" : "var(--status-warning)",
-          }}>
-            SOV MISMATCH: Total Scheduled Value ({formatCurrency(totalScheduledValue)}) differs from Budget ({formatCurrency(projectBudget)}) by {formatCurrency(Math.abs(mismatchVariance))}
-          </span>
-        </div>
-      )}
-
-      {/* ── Requirement 3: Sticky header zone (KPI + page header) ── */}
-      <div style={{ position: "sticky", top: 0, zIndex: 30, background: "var(--bg-page)", paddingBottom: 4 }}>
-
-        {/* Page heading + toolbar */}
-        <CommandBar
-          eyebrow={activeProject?.name || "BILLING"}
-          title="Schedule of Values"
-          count={sovs.length}
-          unit=" · LINE ITEMS"
-          subtitle={`${formatCurrency(totalScheduledValue || 0)} scheduled value · pay app billing control`}
-        >
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              {["Draft", "Submitted", "Certified", "Paid"].map(s =>
-                <SelectItem key={s} value={s}>{s}</SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-          <button
-            onClick={() => setGroupByPhase(v => !v)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: groupByPhase ? "var(--accent-muted)" : "var(--bg-surface)",
-              border: groupByPhase ? "1px solid var(--accent)" : "1px solid var(--border-default)",
-              color: groupByPhase ? "var(--accent)" : "var(--text-secondary)",
-              borderRadius: "var(--radius-btn)", padding: "8px 12px",
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-            }}
-          >
-            Group by Phase
-          </button>
-          <Select value={globalRetainage} onValueChange={setGlobalRetainage}>
-            <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Retainage" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="per-row">Per-Row Retainage</SelectItem>
-              <SelectItem value="5">Global 5%</SelectItem>
-              <SelectItem value="10">Global 10%</SelectItem>
-              <SelectItem value="custom">Custom %</SelectItem>
-            </SelectContent>
-          </Select>
-          {globalRetainage === "custom" && (
-            <Input
-              type="number" placeholder="%"
-              value={customRetainage}
-              onChange={e => setCustomRetainage(e.target.value)}
-              style={{ width: 64, height: 32, fontFamily: "var(--font-mono)", fontSize: 11 }}
-            />
-          )}
-          <button
-            onClick={downloadTemplate}
-            title="Download blank SOV CSV template"
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-              color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
-              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-            }}
-          >
-            <Download size={12} /> Template
-          </button>
-          <button
-            onClick={handleImportClick}
-            disabled={importing || !activeProject?.id}
-            title="Import SOV line items from CSV"
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-              color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
-              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: importing ? "not-allowed" : "pointer",
-              textTransform: "uppercase", opacity: importing ? 0.5 : 1,
-            }}
-          >
-            <Upload size={12} /> {importing ? "Importing…" : "Import"}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-            onChange={handleImportFile}
-            style={{ display: "none" }}
-          />
-          <button
-            onClick={exportCSV}
-            style={{
-              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-              color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
-              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-            }}
-          >
-            Export
-          </button>
-          <button
-            onClick={refetch}
-            style={{
-              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-              color: "var(--text-muted)", borderRadius: "var(--radius-btn)",
-              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-            }}
-          >
-            Refresh
-          </button>
-          {can("create", "sov_item") && (
-            <button
-              onClick={() => { setEditing(null); setModalOpen(true); }}
-              style={{
-                background: "var(--accent)", color: "var(--bg-base)", border: "none",
-                borderRadius: "var(--radius-btn)", padding: "8px 14px",
-                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-                letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-            >
-              + New Item
-            </button>
-          )}
-        </CommandBar>
-
-        {/* Requirement 9 — Application View Tabs */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
-          <TabButton
-            active={appFilter === "all"}
-            onClick={() => setAppFilter("all")}
-            label="All"
-            count={sovs.length}
-          />
-          {appNumbers.map(n => (
-            <TabButton
-              key={n}
-              active={appFilter === String(n)}
-              onClick={() => setAppFilter(String(n))}
-              label={`App #${n}`}
-              count={appCounts[String(n)] || 0}
-            />
-          ))}
-        </div>
-
-        {/* Requirement 3 — Sticky KPI strip */}
-        <KPIStrip items={kpis} />
-      </div>
-
-      {/* ── Main data table ── */}
-      <PhoenixPanel title="Schedule of Values" count={filtered.length}>
-        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxHeight: "calc(100vh - 380px)", overflowY: "auto" }}>
-          <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse" }}>
-            {/* Requirement 3 — Sticky thead */}
-            <thead>
-              <tr>
-                {columns.map((col, i) => (
-                  <th key={i} style={{
-                    fontFamily: "var(--font-body)", fontSize: 10, letterSpacing: "0.12em",
-                    textTransform: "uppercase", color: "var(--text-muted)",
-                    fontWeight: 700, padding: "12px 16px",
-                    background: "var(--bg-surface-low)",
-                    borderBottom: "1px solid var(--divider)",
-                    textAlign: col.right ? "right" : "left",
-                    whiteSpace: "nowrap",
-                    position: "sticky", top: 0, zIndex: 10,
-                  }}>{col.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr>
-                  <td colSpan={COL_COUNT} style={{
-                    textAlign: "center", padding: "40px 0",
-                    fontFamily: "var(--font-mono)", fontSize: 9,
-                    color: "rgba(200,210,230,0.30)", letterSpacing: "0.1em",
-                  }}>LOADING...</td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                renderEmptyState()
-              ) : groupByPhase ? (
-                <>
-                  {renderGroupedBody()}
-                  {renderTotalsRow()}
-                </>
-              ) : (
-                <>
-                  {filtered.map(s => renderRow(s))}
-                  {renderTotalsRow()}
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </PhoenixPanel>
-
-      {/* ── Modals ── */}
-      <SOVFormModal
-        open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditing(null); }}
-        onSave={handleSave}
-        sov={editing}
-        projects={projects}
-        nextId={nextSovId}
-        activeProject={activeProject}
-      />
-      <SovImportReviewModal
-        open={reviewOpen}
-        onClose={() => { setReviewOpen(false); setStagedImport([]); }}
-        staged={stagedImport}
-        onConfirm={handleConfirmImport}
-        importing={importing}
-      />
-      <DeleteDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
-        title="Delete SOV Item"
-        description={`Delete ${deleteTarget?.sov_id}?`}
-      />
-
-      <BulkActionBar
-        count={selectedIds.size}
-        onClear={() => setSelectedIds(new Set())}
-        actions={[
-          {
-            label: "Fill to 100%",
-            icon: Check,
-            onClick: () => bulkFillMut.mutate([...selectedIds]),
-          },
-          {
-            label: "Mark Draft",
-            onClick: () => bulkStatusMut.mutate({ ids: [...selectedIds], status: "Draft" }),
-          },
-          {
-            label: "Mark Submitted",
-            onClick: () => bulkStatusMut.mutate({ ids: [...selectedIds], status: "Submitted" }),
-          },
-          {
-            label: "Delete Selected",
-            icon: Trash2,
-            variant: "danger",
-            onClick: () => setBulkDeleteOpen(true),
-          },
-        ]}
-      />
-
-      <DeleteDialog
-        open={bulkDeleteOpen}
-        onClose={() => setBulkDeleteOpen(false)}
-        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
-        title="Delete SOV Items"
-        description={`Delete ${selectedIds.size} selected SOV item${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
-      />
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   Requirement 9 — Tab button component for Application View
-   ═══════════════════════════════════════════════════════════════════ */
-function TabButton({ active, onClick, label, count }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: "5px 14px", borderRadius: 6,
-        border: "1px solid var(--border-default)",
-        fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,
-        cursor: "pointer", transition: "all 0.15s",
-        background: active ? "var(--accent)" : "var(--bg-surface)",
-        color: active ? "var(--bg-base)" : "var(--text-secondary)",
-      }}
-    >
-      {label}
-      <span style={{
-        marginLeft: 6, fontFamily: "var(--font-mono)", fontSize: 9,
-        background: active ? "rgba(255,255,255,0.2)" : "var(--accent-muted)",
-        color: active ? "var(--bg-base)" : "var(--accent)",
-        borderRadius: 4, padding: "1px 5px", fontWeight: 700,
-      }}>
-        {count}
-      </span>
-    </button>
-  );
-}

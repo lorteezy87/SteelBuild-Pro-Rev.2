@@ -10,8 +10,11 @@
  */
 
 export {
+  ROUTE_LIFECYCLES,
   PAGE_LABELS,
+  PAGE_LIFECYCLES,
   PROJECT_SCOPED_PAGES,
   ALL_ROUTE_PATHS,
+  STATIC_ROUTE_METADATA,
   routeLabel,
 } from "@/config/routes";

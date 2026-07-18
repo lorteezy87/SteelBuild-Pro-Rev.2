@@ -7,8 +7,8 @@
 // (a head-only query is used purely to confirm reachability), so the endpoint is
 // safe to expose to an external monitor (Better Stack / Pingdom / UptimeRobot).
 //
-// Self-contained (permissive CORS inlined) — a health probe should carry no
-// shared dependencies and no secrets. It is a public, data-free endpoint.
+// Public, data-free endpoint. It uses the shared CORS policy so an explicit
+// staging allowlist is enforced consistently with authenticated functions.
 //
 // Auth: none (deploy with --no-verify-jwt). Method: GET or HEAD.
 // Secrets used: SUPABASE_URL + SUPABASE_ANON_KEY (already in the runtime).
@@ -19,16 +19,11 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@^2.47";
-
-const CORS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, HEAD, OPTIONS",
-  "access-control-allow-headers": "authorization, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS });
+    return new Response("ok", { headers: corsHeaders(req, "GET, HEAD, OPTIONS") });
   }
 
   const started = Date.now();
@@ -59,6 +54,10 @@ Deno.serve(async (req) => {
 
   return new Response(JSON.stringify(body), {
     status: ok ? 200 : 503,
-    headers: { ...CORS, "content-type": "application/json", "cache-control": "no-store" },
+    headers: {
+      ...corsHeaders(req, "GET, HEAD, OPTIONS"),
+      "content-type": "application/json",
+      "cache-control": "no-store",
+    },
   });
 });

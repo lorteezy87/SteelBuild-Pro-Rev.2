@@ -24,6 +24,20 @@ export function normalizeRevisionNumber(value, fallback = "0") {
   return String(value).trim() || fallback;
 }
 
+/** Validate the revision convention without changing legacy labels. */
+export function validateRevisionLabel(value, currentStage) {
+  const label = String(value || "").trim().toUpperCase();
+  if (!label) return { ok: false, reason: "A revision label is required." };
+  const postIfc = ["IFC", "RELEASED"].includes(String(currentStage || "").trim().toUpperCase());
+  const numeric = /(?:^|\s)(?:REV\s*)?\d+(?:\s|$)/.test(label) || /^\d+$/.test(label);
+  const letter = /^(?:REV\s*)?[A-Z]$/.test(label);
+  if (postIfc && !numeric) return { ok: false, reason: "Post-IFC revisions must use a numeric revision." };
+  if (!postIfc && !letter && !numeric && !/^(?:IFC|OFA|IFA|IFB|BID SET|ADDENDUM\s+\d+|FINAL IFC)$/.test(label)) {
+    return { ok: false, reason: "Use a letter revision before IFC or a numeric revision after IFC." };
+  }
+  return { ok: true };
+}
+
 /**
  * Race a promise against a timeout, rejecting with a retry-friendly message.
  * @param {Promise} promise
