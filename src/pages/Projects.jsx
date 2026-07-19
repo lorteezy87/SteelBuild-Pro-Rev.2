@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/components/shared/formatters";
 import ProjectFormModal from "@/components/projects/ProjectFormModal";
 import ProjectDetailView from "@/components/projects/ProjectDetailView";
+import SecureDeleteDialog from "@/components/shared/SecureDeleteDialog";
 import { toast } from "sonner";
 import { calcWpProgress, calcLaborBurn, calcContractValue, calcDaysToDeadline, calcRfiHealth } from "@/utils/projectKpis";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -13,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { usePlan } from "@/hooks/usePlan";
 import { withinLimit } from "@/lib/billing/plans";
+import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import ProjectsControlCenter from "./projects/ProjectsControlCenter";
 
 /* ─────────────────────────────────────────────
@@ -544,6 +546,9 @@ export default function Projects() {
   const [modalOpen,     setModalOpen]     = useState(false);
   const [editing,       setEditing]       = useState(null);
   const [detailProject, setDetailProject] = useState(null);
+  const [deleteTarget,  setDeleteTarget]  = useState(null);
+  const { role: detailProjectRole, isLoading: detailRoleLoading } = useProjectRole(detailProject?.id);
+  const canArchiveProject = !detailRoleLoading && roleAtLeast(detailProjectRole, "admin");
 
   /* ── Data fetching ──
      The /Projects page is the ONE place that sees on-hold projects. We
@@ -618,6 +623,7 @@ export default function Projects() {
       removeProject(id);
       qc.invalidateQueries();
       if (detailProject?.id === id) setDetailProject(null);
+      setDeleteTarget(null);
       toast.success("Project archived");
     },
     onError: (err) => toast.error(err.message),
@@ -627,9 +633,7 @@ export default function Projects() {
     else createMut.mutate(d);
   };
   const handleDelete = (project) => {
-    if (window.confirm(`Archive "${project.name}"? It will be hidden from active project lists, but its data and audit history will be retained.`)) {
-      deleteMut.mutate(project.id);
-    }
+    setDeleteTarget(project);
   };
 
   /* ── KPI calculations ──
@@ -692,8 +696,23 @@ export default function Projects() {
           <ProjectDetailView
             project={detailProject}
             onClose={() => setDetailProject(null)}
+            onArchive={canArchiveProject ? () => handleDelete(detailProject) : null}
           />
         )}
+        <SecureDeleteDialog
+          open={Boolean(deleteTarget)}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            if (deleteTarget && !deleteMut.isPending) deleteMut.mutate(deleteTarget.id);
+          }}
+          title="Archive Project"
+          description={`Archive "${deleteTarget?.name || "this project"}"? It will be removed from active project lists, while its data and audit history are retained.`}
+          record={deleteTarget}
+          requireTyped
+          typedValue={deleteTarget?.name || ""}
+          allowedOverride={canArchiveProject}
+          confirmLabel="ARCHIVE PROJECT"
+        />
       </>
     );
 }

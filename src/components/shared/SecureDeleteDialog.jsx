@@ -23,6 +23,8 @@ export default function SecureDeleteDialog({
   record       = null,
   requireTyped = false,
   typedValue   = 'DELETE',
+  allowedOverride = null,
+  confirmLabel = 'DELETE',
 }) {
   const trapRef = useFocusTrap(open);
   const { can } = usePermissions();
@@ -37,7 +39,7 @@ export default function SecureDeleteDialog({
   if (!open) return null;
 
   const permAction = requireTyped ? 'delete_project' : 'delete';
-  const allowed    = can(permAction);
+  const allowed    = allowedOverride ?? can(permAction);
   const isOwner    = !record?.created_by || record.created_by === userEmail;
   const typeOk     = !requireTyped || typed.trim() === typedValue;
   const canConfirm = allowed && typeOk;
@@ -217,7 +219,7 @@ export default function SecureDeleteDialog({
             onClick={handleConfirm}
             disabled={!canConfirm}
           >
-            DELETE
+            {confirmLabel}
           </button>
         </div>
 
