@@ -23,6 +23,31 @@ describe("piece-control slice 0 migration contract", () => {
     }
   });
 
+  it("defines one canonical pieces primary key before the self-reference", () => {
+    const piecesCreateStart = migration.indexOf(
+      "CREATE TABLE IF NOT EXISTS \"public\".\"pieces\"",
+    );
+    const piecesCreateEnd = migration.indexOf(
+      "ALTER TABLE \"public\".\"pieces\" OWNER TO \"postgres\";",
+    );
+    const piecesCreate = migration.slice(piecesCreateStart, piecesCreateEnd);
+    const primaryKey = "CONSTRAINT \"pieces_pkey\" PRIMARY KEY (\"id\")";
+    const selfReference =
+      "CONSTRAINT \"pieces_parent_piece_fk\" FOREIGN KEY (\"parent_piece_id\") REFERENCES \"public\".\"pieces\" (\"id\")";
+
+    expect(piecesCreateStart).toBeGreaterThanOrEqual(0);
+    expect(piecesCreateEnd).toBeGreaterThan(piecesCreateStart);
+    expect(piecesCreate.match(/PRIMARY KEY/g) ?? []).toHaveLength(1);
+    expect(migration.match(/CONSTRAINT "pieces_pkey" PRIMARY KEY/g) ?? []).toHaveLength(1);
+    expect(piecesCreate.indexOf(primaryKey)).toBeGreaterThanOrEqual(0);
+    expect(piecesCreate.indexOf(primaryKey)).toBeLessThan(
+      piecesCreate.indexOf(selfReference),
+    );
+    expect(migration).not.toMatch(
+      /ALTER TABLE "public"\."pieces"[\s\S]*ADD CONSTRAINT "pieces_pkey"/,
+    );
+  });
+
   it("defaults piece_control_mode to off", () => {
     expect(migration).toContain("ADD COLUMN IF NOT EXISTS \"piece_control_mode\" text NOT NULL DEFAULT 'off';");
     expect(migration).toContain(

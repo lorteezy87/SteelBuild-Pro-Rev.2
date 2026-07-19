@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS "public"."pieces" (
     "deleted_at" timestamp with time zone,
     "created_at" timestamp with time zone NOT NULL DEFAULT "now"(),
     "updated_at" timestamp with time zone NOT NULL DEFAULT "now"(),
+    CONSTRAINT "pieces_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "pieces_normalized_mark_not_empty_check" CHECK (length("normalized_piece_mark") > 0),
     CONSTRAINT "pieces_normalized_mark_matches_check" CHECK ("normalized_piece_mark" = upper(trim("piece_mark"))),
     CONSTRAINT "pieces_positive_quantity_check" CHECK ("quantity" > 0),
