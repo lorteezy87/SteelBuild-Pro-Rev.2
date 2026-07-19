@@ -22,7 +22,7 @@ export const PRIMARY_TABS = [
   // folded into FIELD — fewer logical groups, and every page stays reachable
   // (these arrays drive route-reachability + tab mapping, not a visible tab bar).
   // FieldPlan added here so it's no longer orphaned from the registry.
-  { label: "FABRICATION", pages: ["WorkPackages", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling"] },
+  { label: "FABRICATION", pages: ["WorkPackages", "PieceRegister", "RiskHub", "Constraints", "FabRelease", "ProductionStatus", "BudgetHours", "Procurement", "ResourceHub", "ResourceScheduling"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldToday", "FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
@@ -62,6 +62,7 @@ export const ALL_MODULES = [
   { icon: "\u2713", name: "Action Items",             group: "Comms",         page: "ActionItems" },
   { icon: "\u2709", name: "Email Inbox",              group: "Comms",         page: "EmailInbox" },
   { icon: "\u25A6", name: "Work Packages",            group: "Fab",           page: "WorkPackages" },
+  { icon: "\u25A6", name: "Piece Register",           group: "Fabrication",   page: "PieceRegister" },
   { icon: "\u26A0", name: "Risk",                 group: "Fabrication",   page: "RiskHub" },
   { icon: "\uD83D\uDEA7", name: "Constraints",        group: "Fab",           page: "Constraints" },
   { icon: "\uD83C\uDFED", name: "Fab Release",        group: "Fabrication",   page: "FabRelease" },
@@ -143,6 +144,7 @@ export const NAV_GROUPS = [
     label: "PRODUCTION",
     items: [
       { label: "Work Packages",     icon: "▦", page: "WorkPackages" },
+      { label: "Piece Register",    icon: "▦", page: "PieceRegister" },
       { label: "Fab Release",       icon: "🏭", page: "FabRelease" },
       { label: "Production Status", icon: "🛠", page: "ProductionStatus" },
       { label: "Procurement",       icon: "📦", page: "Procurement" },
@@ -246,6 +248,7 @@ export const SIDEBAR_GROUPS = [
     collapsible: true,
     items: [
       { label: "Work Packages",        icon: "▦", page: "WorkPackages" },
+      { label: "Piece Register",       icon: "▦", page: "PieceRegister" },
       { label: "Fab Release",          icon: "🏭", page: "FabRelease" },
       { label: "Production Status",    icon: "🛠", page: "ProductionStatus" },
       { label: "Procurement",          icon: "📦", page: "Procurement" },

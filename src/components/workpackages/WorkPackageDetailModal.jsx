@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { formatLocalDate } from "@/utils/dates";
+import PieceRelationshipManager from "@/components/pieceControl/PieceRelationshipManager";
+import CanonicalFabReleasePanel from "@/components/pieceControl/CanonicalFabReleasePanel";
+import { PieceProductionControl } from "@/components/pieceControl/PieceProductionControl";
+import { PieceLogisticsControl } from "@/components/pieceControl/PieceLogisticsControl";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -29,6 +34,7 @@ const STAGE_STYLES = {
 
 export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onEdit }) {
   const [tab, setTab] = useState("overview");
+  const { activeProject } = useProjectContext();
 
   const drawingMap = useMemo(() => {
     const m = {};
@@ -101,7 +107,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
         </div>
 
         <div style={{ display: "flex", gap: 10, padding: "10px 16px", borderBottom: "1px solid var(--divider)" }}>
-          {["overview", "drawings", "hours", "notes"].map((t) => (
+          {["overview", "piece control", "drawings", "hours", "notes"].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -145,6 +151,42 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
           {tab === "overview" && <OverviewTab wp={wp} phaseColor={phaseColor} statusColor={statusColorVal} percent={percent} />}
+          {tab === "piece control" && (
+            <>
+              <PieceRelationshipManager
+                projectId={wp.project_id}
+                focusedWorkPackageId={wp.id}
+                compact
+              />
+              <PieceProductionControl
+                projectId={wp.project_id}
+                workPackageId={wp.id}
+                pieceControlMode={
+                  activeProject?.id === wp.project_id
+                    ? String(activeProject?.piece_control_mode ?? "off")
+                    : "off"
+                }
+              />
+              <PieceLogisticsControl
+                projectId={wp.project_id}
+                workPackageId={wp.id}
+                pieceControlMode={
+                  activeProject?.id === wp.project_id
+                    ? String(activeProject?.piece_control_mode ?? "off")
+                    : "off"
+                }
+              />
+              <CanonicalFabReleasePanel
+                projectId={wp.project_id}
+                workPackageId={wp.id}
+                pieceControlMode={
+                  activeProject?.id === wp.project_id
+                    ? String(activeProject?.piece_control_mode ?? "off")
+                    : "off"
+                }
+              />
+            </>
+          )}
           {tab === "drawings" && <DrawingsTab wp={wp} drawingMap={drawingMap} />}
           {tab === "hours" && <HoursTab wp={wp} />}
           {tab === "notes" && <NotesTab notes={wp.notes} />}

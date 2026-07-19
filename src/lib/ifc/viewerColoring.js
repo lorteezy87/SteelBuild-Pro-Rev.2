@@ -12,6 +12,36 @@ import { FAB_STATUS_META } from "@/lib/fabStatus";
 
 export const TYPE_PALETTE = { beam: "#3b82f6", column: "#f97316", plate: "#22c55e", member: "#a855f7", other: "#94a3b8" };
 export const SEQ_PALETTE = ["#3b82f6", "#f97316", "#22c55e", "#a855f7", "#eab308", "#ef4444", "#14b8a6", "#ec4899", "#8b5cf6", "#84cc16", "#06b6d4", "#f59e0b"];
+export const CANONICAL_PIECE_COLORS = {
+  hold: "#dc2626",
+  not_started: "#64748b",
+  in_fabrication: "#2563eb",
+  fabricated: "#16a34a",
+  shipped: "#f59e0b",
+  delivered: "#0891b2",
+  erected: "#15803d",
+};
+
+export function canonicalPieceColor(piece) {
+  if (!piece) return null;
+  if (piece.on_hold) return CANONICAL_PIECE_COLORS.hold;
+  return CANONICAL_PIECE_COLORS[piece.lifecycle_status] ?? null;
+}
+
+export function buildCanonicalPieceByGuid(modelElements, pieces) {
+  const pieceById = new Map(
+    (pieces || [])
+      .filter((piece) => piece && !piece.is_deleted && !piece.deleted_at && !piece.is_container)
+      .map((piece) => [piece.id, piece]),
+  );
+  const map = new Map();
+  for (const element of modelElements || []) {
+    if (!element?.element_guid || !element.piece_id) continue;
+    const piece = pieceById.get(element.piece_id);
+    if (piece) map.set(element.element_guid, piece);
+  }
+  return map;
+}
 
 /** Stable categorical color for a sequence/phase label. */
 export function seqColor(seq) {
@@ -134,7 +164,17 @@ export function buildStatusByMark(modelMapping) {
  */
 export function colorFnFor(
   colorMode,
-  { statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark, perPieceFab = true } = {},
+  {
+    statusByGuid,
+    seqByGuid,
+    fabByGuid,
+    markByGuid,
+    statusByMark,
+    seqByMark,
+    fabByMark,
+    canonicalPieceByGuid,
+    perPieceFab = true,
+  } = {},
 ) {
   if (colorMode === "type") return (info) => TYPE_PALETTE[info.ifcType] || TYPE_PALETTE.other;
   const markOf = (info) => (info.guid ? markByGuid?.get(info.guid) : undefined);
@@ -153,6 +193,8 @@ export function colorFnFor(
   if (colorMode === "fab") {
     return (info) => {
       if (!info.guid) return null;
+      const canonicalPiece = canonicalPieceByGuid?.get(info.guid);
+      if (canonicalPiece) return canonicalPieceColor(canonicalPiece);
       const individual = fabByGuid?.get(info.guid);
       if (individual) return FAB_STATUS_META[individual]?.color ?? null;
       // No individual status. Per-piece mode (default) stops here — a piece with

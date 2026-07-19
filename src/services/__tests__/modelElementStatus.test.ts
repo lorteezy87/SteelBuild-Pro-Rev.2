@@ -23,6 +23,7 @@ import {
   resolveElementStatus,
   summarizeElementStatuses,
 } from "../modelElementStatus";
+import { normalizePieceMark as canonicalNormalizePieceMark } from "@/lib/pieceControl/identity";
 
 const readiness = (over = {}) => ({
   effectiveState: "IFA",
@@ -37,6 +38,10 @@ describe("normalizePieceMark", () => {
   it("trims and uppercases", () => {
     expect(normalizePieceMark(" 1b1 ")).toBe("1B1");
     expect(normalizePieceMark(null)).toBe("");
+  });
+
+  it("reuses canonical piece-control normalization", () => {
+    expect(normalizePieceMark(" 1b1 ")).toBe(canonicalNormalizePieceMark(" 1b1 "));
   });
 });
 
