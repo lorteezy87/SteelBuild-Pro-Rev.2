@@ -577,7 +577,9 @@
 }
 
 .rfi-table-header {
-  position: static;
+  position: sticky;
+  top: 64px;
+  z-index: 4;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-default);
   background: color-mix(in srgb, var(--bg-surface-low) 96%, #000 4%);
@@ -647,10 +649,6 @@
 }
 
 .rfi-row-title {
-  min-width: 0;
-}
-
-.rfi-row-number-stack {
   min-width: 0;
 }
 
