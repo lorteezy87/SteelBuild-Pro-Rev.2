@@ -16,7 +16,7 @@ function expectRpcSuccess(data: any, error: any, command: string) {
     data?.ok,
     `${command} structured failure: ${data?.error_message ?? "unknown"}`,
   ).not.toBe(false);
-  return data;
+  return data?.ok === true && data?.result !== undefined ? data.result : data;
 }
 
 test.describe("Piece Control pilot hardening", () => {
@@ -78,40 +78,49 @@ test.describe("Piece Control pilot hardening", () => {
     const { supabase } = await signInAsTestUser();
     const mark = `E2E-PC-${Date.now()}`;
 
+    const stageResponse = await supabase.rpc("stage_piece_import_batch", {
+      p_project_id: PROJECT_ID,
+      p_source_type: "manual",
+      p_source_name: `${mark}.json`,
+      p_rows: [
+        {
+          piece_mark: mark,
+          quantity: 2,
+          weight_each_lbs: 100,
+          profile: "W12X26",
+          material_grade: "A992",
+        },
+      ],
+    });
+
     const staged = expectRpcSuccess(
-      ...Object.values(
-        await supabase.rpc("stage_piece_import_batch", {
-          p_project_id: PROJECT_ID,
-          p_source_type: "manual",
-          p_source_name: `${mark}.json`,
-          p_rows: [
-            {
-              piece_mark: mark,
-              quantity: 2,
-              weight_each_lbs: 100,
-              profile: "W12X26",
-              material_grade: "A992",
-            },
-          ],
-        }),
-      ).slice(0, 2),
+      stageResponse.data,
+      stageResponse.error,
       "stage_piece_import_batch",
     );
+
     const batchId = staged.batch_id;
+    expect(batchId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+
+    const approveResponse = await supabase.rpc("approve_piece_import_batch", {
+      p_batch_id: batchId,
+    });
+
     expectRpcSuccess(
-      ...Object.values(
-        await supabase.rpc("approve_piece_import_batch", {
-          p_batch_id: batchId,
-        }),
-      ).slice(0, 2),
+      approveResponse.data,
+      approveResponse.error,
       "approve_piece_import_batch",
     );
+
+    const applyResponse = await supabase.rpc("apply_piece_import_batch", {
+      p_batch_id: batchId,
+    });
+
     expectRpcSuccess(
-      ...Object.values(
-        await supabase.rpc("apply_piece_import_batch", {
-          p_batch_id: batchId,
-        }),
-      ).slice(0, 2),
+      applyResponse.data,
+      applyResponse.error,
       "apply_piece_import_batch",
     );
 
@@ -146,58 +155,78 @@ test.describe("Piece Control pilot hardening", () => {
       "link_piece_drawing",
     );
 
+    const materialResponse = await supabase.rpc(
+      "create_material_requirement",
+      {
+        p_project_id: PROJECT_ID,
+        p_requirement_code: `E2E-MAT-${Date.now()}`,
+        p_description: "E2E canonical lifecycle material",
+        p_profile: "W12X26",
+        p_material_grade: "A992",
+        p_quantity_required: 2,
+        p_unit: "each",
+        p_source_system: "e2e",
+        p_external_ref: mark,
+      },
+    );
+
     const material = expectRpcSuccess(
-      ...Object.values(
-        await supabase.rpc("create_material_requirement", {
-          p_project_id: PROJECT_ID,
-          p_requirement_code: `E2E-MAT-${Date.now()}`,
-          p_description: "E2E canonical lifecycle material",
-          p_profile: "W12X26",
-          p_material_grade: "A992",
-          p_quantity_required: 2,
-          p_unit: "each",
-          p_source_system: "e2e",
-          p_external_ref: mark,
-        }),
-      ).slice(0, 2),
+      materialResponse.data,
+      materialResponse.error,
       "create_material_requirement",
     );
+
+    const materialRequirementId = material.id;
+    expect(materialRequirementId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+
+    const mapResponse = await supabase.rpc(
+      "map_material_requirement_to_pieces",
+      {
+        p_project_id: PROJECT_ID,
+        p_material_requirement_id: materialRequirementId,
+        p_piece_ids: [rootId],
+      },
+    );
+
     expectRpcSuccess(
-      ...Object.values(
-        await supabase.rpc("map_material_requirement_to_pieces", {
-          p_project_id: PROJECT_ID,
-          p_material_requirement_id: material.id,
-          p_piece_ids: [rootId],
-        }),
-      ).slice(0, 2),
+      mapResponse.data,
+      mapResponse.error,
       "map_material_requirement_to_pieces",
     );
+
+    const receiptResponse = await supabase.rpc(
+      "set_material_requirement_receipt_state",
+      {
+        p_project_id: PROJECT_ID,
+        p_material_requirement_id: materialRequirementId,
+        p_receipt_state: "on_hand",
+        p_received_quantity: 2,
+        p_receipt_source: "e2e",
+        p_receipt_reference: mark,
+        p_provenance: { test: true },
+      },
+    );
+
     expectRpcSuccess(
-      ...Object.values(
-        await supabase.rpc("set_material_requirement_receipt_state", {
-          p_project_id: PROJECT_ID,
-          p_material_requirement_id: material.id,
-          p_receipt_state: "on_hand",
-          p_received_quantity: 2,
-          p_receipt_source: "e2e",
-          p_receipt_reference: mark,
-          p_provenance: { test: true },
-        }),
-      ).slice(0, 2),
+      receiptResponse.data,
+      receiptResponse.error,
       "set_material_requirement_receipt_state",
     );
 
+    const splitResponse = await supabase.rpc("split_piece_lot", {
+      p_project_id: PROJECT_ID,
+      p_piece_id: rootId,
+      p_allocations: [
+        { lot_code: "A", quantity: 1 },
+        { lot_code: "B", quantity: 1 },
+      ],
+    });
+
     const split = expectRpcSuccess(
-      ...Object.values(
-        await supabase.rpc("split_piece_lot", {
-          p_project_id: PROJECT_ID,
-          p_piece_id: rootId,
-          p_allocations: [
-            { lot_code: "A", quantity: 1 },
-            { lot_code: "B", quantity: 1 },
-          ],
-        }),
-      ).slice(0, 2),
+      splitResponse.data,
+      splitResponse.error,
       "split_piece_lot",
     );
     expect(split.children).toHaveLength(2);
