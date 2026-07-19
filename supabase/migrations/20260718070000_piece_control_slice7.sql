@@ -86,7 +86,7 @@ ON "public"."piece_material_requirements" ("project_id", "piece_id");
 
 CREATE INDEX IF NOT EXISTS "material_requirements_project_receipt_idx"
 ON "public"."material_requirements" ("project_id", "receipt_state")
-WHERE "is_active" = true;
+WHERE "is_deleted" = false AND "deleted_at" IS NULL;
 
 CREATE INDEX IF NOT EXISTS "fab_releases_project_canonical_active_idx"
 ON "public"."fab_releases" ("project_id", "work_package_id")
@@ -273,7 +273,8 @@ BEGIN
               JOIN "public"."material_requirements" AS requirement
                 ON requirement."id" = mapping."material_requirement_id"
               WHERE mapping."piece_id" = piece."id"
-                AND requirement."is_active" = true
+                AND requirement."is_deleted" = false
+                AND requirement."deleted_at" IS NULL
                 AND requirement."receipt_state" IN ('received', 'on_hand')
             )
           )
