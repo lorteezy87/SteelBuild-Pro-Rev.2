@@ -5,7 +5,7 @@ ADD COLUMN IF NOT EXISTS "piece_control_mode" text NOT NULL DEFAULT 'off';
 
 ALTER TABLE "public"."projects"
 ADD CONSTRAINT "projects_piece_control_mode_check"
-CHECK ("piece_control_mode" = ANY (ARRAY['off'::"text", 'shadow'::"text", 'pilot'::"text", 'live'::"text"));
+CHECK ("piece_control_mode" IN ('off'::"text", 'shadow'::"text", 'pilot'::"text", 'live'::"text"));
 
 COMMENT ON COLUMN "public"."projects"."piece_control_mode" IS
   'Piece-control rollout mode: off = legacy workflows only; shadow = dual-write/observe only; pilot = read/write from new tables in scoped pilots; live = canonical piece-control cutover.';

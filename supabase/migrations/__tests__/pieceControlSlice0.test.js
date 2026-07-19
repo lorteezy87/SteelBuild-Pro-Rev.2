@@ -25,7 +25,9 @@ describe("piece-control slice 0 migration contract", () => {
 
   it("defaults piece_control_mode to off", () => {
     expect(migration).toContain("ADD COLUMN IF NOT EXISTS \"piece_control_mode\" text NOT NULL DEFAULT 'off';");
-    expect(migration).toContain("\"piece_control_mode\" = ANY");
+    expect(migration).toContain(
+      "CHECK (\"piece_control_mode\" IN ('off'::\"text\", 'shadow'::\"text\", 'pilot'::\"text\", 'live'::\"text\"));",
+    );
     expect(migration).toContain("'off'::\"text\"");
     expect(migration).toContain("'shadow'::\"text\"");
     expect(migration).toContain("'pilot'::\"text\"");
