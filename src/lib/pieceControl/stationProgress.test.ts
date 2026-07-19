@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateWeightedProductionProgress,
   earnedPercentForPiece,
+  type ProductionPiece,
   type StationCompletion,
   type StationConfiguration,
   validateStationConfiguration,
@@ -72,7 +73,7 @@ describe('canonical station progress', () => {
   });
 
   it('excludes split containers so parent and children are never double counted', () => {
-    const pieces = [
+    const pieces: ProductionPiece[] = [
       {
         id: 'container',
         quantity: 10,

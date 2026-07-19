@@ -4,9 +4,10 @@ import {
   nextLifecycleForAction,
   pieceLifecycleLabel,
   requiredLifecycleForAction,
+  type LogisticsEligibilityPiece,
 } from "./lifecycle";
 
-const fabricated = {
+const fabricated: LogisticsEligibilityPiece = {
   lifecycle_status: "fabricated",
   on_hold: false,
   is_container: false,

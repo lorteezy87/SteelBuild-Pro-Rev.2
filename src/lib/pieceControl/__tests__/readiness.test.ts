@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { evaluateWorkPackageReadiness, isDrawingApproved } from "../readiness";
+import {
+  evaluateWorkPackageReadiness,
+  isDrawingApproved,
+  type ReadinessDrawing,
+} from "../readiness";
 
-const drawing = {
+const drawing: ReadinessDrawing = {
   id: "drawing-1",
   project_id: "project-1",
   drawing_set_id: "set-1",

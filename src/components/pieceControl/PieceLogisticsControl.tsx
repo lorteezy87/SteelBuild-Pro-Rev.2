@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Construction, Loader2, MapPin, PackageCheck, Truck } from "lucide-react";
 import { toast } from "sonner";
@@ -219,7 +219,7 @@ export function PieceLogisticsControl({
                   key={key}
                   value={referenceByAction[action][key] ?? ""}
                   placeholder={placeholder}
-                  onChange={(event) =>
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
                     setReferenceByAction((current) => ({
                       ...current,
                       [action]: { ...current[action], [key]: event.target.value },

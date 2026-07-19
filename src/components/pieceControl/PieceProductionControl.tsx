@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ChangeEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -340,7 +340,9 @@ export function PieceProductionControl({
                 <Input
                   className="mt-3 bg-white"
                   value={overrideReason}
-                  onChange={(event) => setOverrideReason(event.target.value)}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    setOverrideReason(event.target.value)
+                  }
                   placeholder="Required override reason"
                 />
                 <div className="mt-3 flex gap-2">
@@ -386,7 +388,7 @@ export function PieceProductionControl({
               <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
                 <Input
                   value={row.lot_code}
-                  onChange={(event) =>
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
                     setSplitRows((current) =>
                       current.map((entry, rowIndex) =>
                         rowIndex === index
@@ -402,7 +404,7 @@ export function PieceProductionControl({
                   min="0"
                   step="any"
                   value={row.quantity || ''}
-                  onChange={(event) =>
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
                     setSplitRows((current) =>
                       current.map((entry, rowIndex) =>
                         rowIndex === index

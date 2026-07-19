@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { filterPieceRegisterRows, type PieceRegisterDisplayRow } from "../filter";
 
-const rows = [
+const rows: PieceRegisterDisplayRow[] = [
   {
     id: "1",
     project_id: "p1",
@@ -47,7 +47,7 @@ const rows = [
     updated_at: "2026-07-18T00:00:00Z",
     deleted_at: null,
   },
-] satisfies PieceRegisterDisplayRow[];
+];
 
 describe("Piece Register filters", () => {
   it("searches across marks, packages, profile, grade, and source", () => {

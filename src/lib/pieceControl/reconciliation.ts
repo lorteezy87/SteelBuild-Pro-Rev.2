@@ -200,7 +200,7 @@ export function reconcileImportRows(
     }
   }
 
-  return rows.map((row) => {
+  return rows.map((row): ReconciledImportRow => {
     const warnings = [...row.warnings];
     const root = roots.get(row.normalizedPieceMark);
 
