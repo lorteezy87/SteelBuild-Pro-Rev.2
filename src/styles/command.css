@@ -30,14 +30,15 @@
 [data-skin="command"] [class$="-cc"] { display: flex; flex-direction: column; gap: 14px; padding: 16px; background: var(--cmd-bg); color: var(--cmd-text); min-height: 100%; }
 [data-skin="command"] [class$="-cc"] * { border-color: var(--cmd-border); }
 
-/* Hero — light command surface with the shared SteelBuild Pro construction image. */
-[data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 14px; background-color: var(--cmd-surface); background-image: linear-gradient(90deg, var(--cmd-surface) 14%, rgba(255,255,255,0.42) 44%, rgba(255,255,255,0.00) 100%), var(--cmd-hero-photo, url("/photos/steelbuildpro-hero.svg")); background-size: cover; background-position: center, right center; background-repeat: no-repeat; overflow: hidden; }
+/* Hero — shared art sits on the right at a deliberately smaller scale so the
+   full construction scene reads as a scene rather than a close-up crop. */
+[data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 14px; background-color: var(--cmd-surface); background-image: linear-gradient(90deg, var(--cmd-surface) 14%, rgba(255,255,255,0.42) 44%, rgba(255,255,255,0.00) 100%), var(--cmd-hero-photo, url("/photos/steelbuildpro-hero.svg")); background-size: 100% 100%, min(54%, 820px) auto; background-position: center, right center; background-repeat: no-repeat; overflow: hidden; }
 /* The gradient sits above the image so each page title, status, and action stays
    readable. `PageHero` supplies the shared artwork; the fallback also covers any
    command hero rendered outside of that component. */
 [data-skin="command"] .cmd-hero--photo {
   background-image: linear-gradient(90deg, var(--cmd-surface) 14%, rgba(255,255,255,0.42) 44%, rgba(255,255,255,0.00) 100%), var(--cmd-hero-photo, url("/photos/steelbuildpro-hero.svg"));
-  background-size: cover;
+  background-size: 100% 100%, min(54%, 820px) auto;
   background-position: center, right center;
   background-repeat: no-repeat;
 }
