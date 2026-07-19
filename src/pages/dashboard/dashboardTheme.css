@@ -537,7 +537,7 @@
   border-radius: 0;
   background:
     linear-gradient(90deg, rgba(245, 247, 251, 0.98) 0%, rgba(245, 247, 251, 0.86) 38%, rgba(245, 247, 251, 0.3) 76%, rgba(245, 247, 251, 0.9) 100%),
-    url("/photos/desktop/FieldHub.webp") right 42% center / 760px auto no-repeat;
+    url("/photos/steelbuildpro-hero.svg") right 42% center / 760px auto no-repeat;
 }
 
 .sb-dashboard-hero::after {
@@ -1308,7 +1308,7 @@
     min-height: 150px;
     background:
       linear-gradient(180deg, rgba(245, 247, 251, 0.98) 0%, rgba(245, 247, 251, 0.84) 58%, rgba(245, 247, 251, 0.92) 100%),
-      url("/photos/desktop/FieldHub.webp") center / cover no-repeat;
+      url("/photos/steelbuildpro-hero.svg") center / cover no-repeat;
   }
 
   .sb-dashboard-hero h1 {
