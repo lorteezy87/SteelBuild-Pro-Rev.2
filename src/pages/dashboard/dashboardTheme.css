@@ -537,7 +537,7 @@
   border-radius: 0;
   background:
     linear-gradient(90deg, rgba(245, 247, 251, 0.98) 0%, rgba(245, 247, 251, 0.86) 38%, rgba(245, 247, 251, 0.3) 76%, rgba(245, 247, 251, 0.9) 100%),
-    url("/photos/steelbuildpro-hero.svg") right 42% center / 760px auto no-repeat;
+    url("/photos/steelbuildpro-hero.svg") right 42% center / 520px auto no-repeat;
 }
 
 .sb-dashboard-hero::after {
