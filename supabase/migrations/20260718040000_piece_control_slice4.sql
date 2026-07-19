@@ -59,6 +59,26 @@ WHERE "is_active" = true;
 CREATE INDEX IF NOT EXISTS "piece_station_completions_project_piece_idx"
 ON "public"."piece_station_completions" ("project_id", "piece_id", "sort_order");
 
+ALTER TABLE "public"."piece_station_configurations" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."piece_station_completions" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "piece_station_configuration_read"
+ON "public"."piece_station_configurations"
+FOR SELECT TO "authenticated"
+USING ("public"."user_has_project_access"("project_id"));
+
+CREATE POLICY "piece_station_completion_read"
+ON "public"."piece_station_completions"
+FOR SELECT TO "authenticated"
+USING ("public"."user_has_project_access"("project_id"));
+
+REVOKE ALL ON TABLE "public"."piece_station_configurations" FROM PUBLIC, "anon", "authenticated";
+REVOKE ALL ON TABLE "public"."piece_station_completions" FROM PUBLIC, "anon", "authenticated";
+GRANT SELECT ON TABLE "public"."piece_station_configurations" TO "authenticated";
+GRANT SELECT ON TABLE "public"."piece_station_completions" TO "authenticated";
+GRANT ALL ON TABLE "public"."piece_station_configurations" TO "service_role";
+GRANT ALL ON TABLE "public"."piece_station_completions" TO "service_role";
+
 CREATE OR REPLACE FUNCTION "public"."guard_piece_station_completion_immutable"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -182,26 +202,6 @@ DROP TRIGGER IF EXISTS "seed_default_piece_stations_after_project_insert" ON "pu
 CREATE TRIGGER "seed_default_piece_stations_after_project_insert"
 AFTER INSERT ON "public"."projects"
 FOR EACH ROW EXECUTE FUNCTION "public"."seed_default_piece_stations_for_project"();
-
-ALTER TABLE "public"."piece_station_configurations" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."piece_station_completions" ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "piece_station_configuration_read"
-ON "public"."piece_station_configurations"
-FOR SELECT TO "authenticated"
-USING ("public"."user_has_project_access"("project_id"));
-
-CREATE POLICY "piece_station_completion_read"
-ON "public"."piece_station_completions"
-FOR SELECT TO "authenticated"
-USING ("public"."user_has_project_access"("project_id"));
-
-REVOKE ALL ON TABLE "public"."piece_station_configurations" FROM PUBLIC, "anon", "authenticated";
-REVOKE ALL ON TABLE "public"."piece_station_completions" FROM PUBLIC, "anon", "authenticated";
-GRANT SELECT ON TABLE "public"."piece_station_configurations" TO "authenticated";
-GRANT SELECT ON TABLE "public"."piece_station_completions" TO "authenticated";
-GRANT ALL ON TABLE "public"."piece_station_configurations" TO "service_role";
-GRANT ALL ON TABLE "public"."piece_station_completions" TO "service_role";
 
 CREATE OR REPLACE FUNCTION "public"."set_project_station_configuration"(
   p_project_id uuid,
