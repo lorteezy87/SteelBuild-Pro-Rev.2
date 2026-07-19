@@ -214,7 +214,7 @@ export default function PieceRegister() {
   if (mode === "off") {
     return (
       <div className="min-h-[70vh] bg-[radial-gradient(circle_at_top_left,_#fef3c7,_transparent_36%),linear-gradient(135deg,#f8fafc,#eef2f7)] p-6">
-        <div className="mx-auto max-w-3xl rounded-3xl border border-amber-200 bg-white/90 p-10 shadow-sm">
+        <div className="mx-auto max-w-5xl rounded-3xl border border-amber-200 bg-white/90 p-10 shadow-sm">
           <ShieldCheck className="mb-5 h-11 w-11 text-amber-600" />
           <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Piece control disabled</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Piece Register is read-only and unavailable</h1>
@@ -222,6 +222,9 @@ export default function PieceRegister() {
             Enable piece control for this project before staging imports or viewing canonical pieces.
             Existing release, production, dashboard, and model workflows are unchanged.
           </p>
+          <div className="mt-8">
+            <PieceControlPilotReadiness projectId={projectId} currentMode="off" />
+          </div>
         </div>
       </div>
     );
