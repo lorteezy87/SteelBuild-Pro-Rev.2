@@ -91,6 +91,44 @@ npm run test:e2e           # run the smoke suite
 npm run test:e2e:ui        # interactive runner (debug selectors)
 ```
 
+## Piece Control pilot fixture (mutation-aware and irreversible)
+
+`piece-control-pilot.spec.ts` covers the server-mediated Slice 1–7 path:
+import/reconcile, assignment, drawing link, material receipt, lot split,
+release, all stations, shipment, delivery, erection, event history, and
+reporting. It also checks direct-table denial, cross-tenant isolation, and
+exception-release risk creation.
+
+Use a dedicated disposable test organization only. The canonical logistics
+events are immutable and the work package release is one-time, so the full
+workflow fixture must be pristine before each enabled run.
+
+| Variable | Requirement |
+|---|---|
+| `E2E_PIECE_PROJECT_ID` | Project in the dedicated test tenant; enables security checks |
+| `E2E_PIECE_OTHER_TENANT_PROJECT_ID` | Project the E2E user cannot access; enables cross-tenant checks |
+| `E2E_PIECE_FULL_WORKFLOW=true` | Explicit opt-in to irreversible lifecycle mutations |
+| `E2E_PIECE_WORK_PACKAGE_ID` | Unreleased, otherwise empty work package in the test project |
+| `E2E_PIECE_APPROVED_DRAWING_ID` | Active approved/approved-as-noted drawing in that project |
+| `E2E_PIECE_EXCEPTION_WORK_PACKAGE_ID` | Optional pristine package with canonical scope and a non-scope gate blocker |
+
+The project must already be `pilot` or `live`, the primary user must be a
+project admin/PM with command permissions, and all Slice 0–7 migrations must be
+applied. Leave `E2E_PIECE_FULL_WORKFLOW` unset to run only the non-destructive
+security checks.
+
+Parse/gating check without credentials:
+
+```bash
+npx playwright test e2e/piece-control-pilot.spec.ts --list
+```
+
+Full dedicated-fixture run:
+
+```bash
+npx playwright test e2e/piece-control-pilot.spec.ts
+```
+
 `global-setup.ts` signs in via the Supabase API and seeds the session into
 `e2e/.auth/state.json` (gitignored) — no login-modal automation, so the harness
 doesn't break when the sign-in UI changes. With nothing configured, the run

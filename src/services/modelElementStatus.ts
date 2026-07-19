@@ -19,6 +19,7 @@
  */
 
 import { DETAILING_STATE_ORDER } from "@/lib/detailingPackageState";
+import { normalizePieceMark as normalizePieceMarkFromPieceControl } from "@/lib/pieceControl/identity";
 
 export type ElementStatusKey =
   | "unmapped"
@@ -62,9 +63,7 @@ export interface PackageReadinessLike {
 }
 
 /** Trim/uppercase a piece mark for matching ("1b1 " -> "1B1"). */
-export function normalizePieceMark(mark: unknown): string {
-  return String(mark ?? "").trim().toUpperCase();
-}
+export const normalizePieceMark = normalizePieceMarkFromPieceControl;
 
 const IFA_IDX = DETAILING_STATE_ORDER.indexOf("IFA");
 

@@ -45,6 +45,7 @@ export const PAGE_ICON = {
   Documents: Folder,
 
   WorkPackages: Package,
+  PieceRegister: Package,
   Constraints: Shield,
   FabRelease: Wrench,
   ProductionStatus: Wrench,

@@ -12,14 +12,16 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ELEMENT_STATUS_META, normalizePieceMark } from "@/services/modelElementStatus";
-import { FAB_STATUS_META, FAB_STATUS_ORDER, resolveFabAssignment } from "@/lib/fabStatus";
-import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, buildMarkByGuid, buildStatusByMark, buildSeqByMark, buildFabByMark, colorFnFor } from "@/lib/ifc/viewerColoring";
+import { FAB_STATUS_META, FAB_STATUS_ORDER } from "@/lib/fabStatus";
+import { TYPE_PALETTE, seqColor, buildStatusByGuid, buildSeqByGuid, buildFabByGuid, buildMarkByGuid, buildStatusByMark, buildSeqByMark, buildFabByMark, buildCanonicalPieceByGuid, colorFnFor } from "@/lib/ifc/viewerColoring";
 import { extractIfcRoster } from "@/lib/ifc/extractIfcRoster";
 import { gzipBuffer, gunzipBuffer } from "@/lib/ifc/gzip";
 import { importIfcRoster, removeProjectModel } from "@/services/ifcRosterImport";
 import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
+import { useCanonicalReportingRealtime } from "@/hooks/useCanonicalReportingRealtime";
 
 const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer"));
 
@@ -64,6 +66,7 @@ const loadingChip = {
 
 export default function Model3DTab({ modelMapping, modelElementRows, projectId, rosterLoading }) {
   const qc = useQueryClient();
+  useCanonicalReportingRealtime(projectId);
   // canonical light presentation (SP5): the Detailing hub runs under the canonical light command
   // shell this tab is already inside `.detailing-cc`, so every var(--*) token +
   // sbd-* class in the side panel below flips light automatically via the shipped
@@ -124,6 +127,22 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     },
   });
 
+  const { data: canonicalPieces = [] } = useQuery({
+    queryKey: ["canonical-pieces-3d", projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const db = supabase;
+      const { data, error } = await db
+        .from("pieces")
+        .select("id,lifecycle_status,on_hold,is_container,is_deleted,deleted_at")
+        .eq("project_id", projectId)
+        .eq("is_deleted", false)
+        .is("deleted_at", null);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   useEffect(() => {
     if (!storedModel?.file_url || buffer || source === "picked") return;
     let cancelled = false;
@@ -173,11 +192,10 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     return map;
   }, [modelElementRows, optimisticFab]);
   const hasRoster = (modelElementRows?.length || 0) > 0;
-  const guidToMark = useMemo(() => {
-    const m = new Map();
-    for (const r of modelElementRows || []) if (r?.element_guid) m.set(r.element_guid, r.piece_mark);
-    return m;
-  }, [modelElementRows]);
+  const canonicalPieceByGuid = useMemo(
+    () => buildCanonicalPieceByGuid(modelElementRows, canonicalPieces),
+    [modelElementRows, canonicalPieces],
+  );
 
   // Mark-keyed fallback maps: color a part by its piece mark when its GUID isn't
   // directly on a roster row (CSV imports leave element_guid NULL; a CSV update
@@ -206,12 +224,13 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     () => colorFnFor(colorMode, {
       statusByGuid, seqByGuid, fabByGuid,
       markByGuid, statusByMark, seqByMark, fabByMark,
+      canonicalPieceByGuid,
       // Per-piece coloring: a roster GUID with no individual fab status stays
       // neutral instead of inheriting a same-mark sibling's color. Whole-assembly
       // mode keeps the broad mark fallback so flipping a mark paints every part.
       perPieceFab: fabScope === "piece",
     }),
-    [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark, fabScope],
+    [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark, canonicalPieceByGuid, fabScope],
   );
 
   // Persist a freshly-picked model so it auto-loads next time: upload the .ifc to
@@ -295,83 +314,47 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     }
   };
 
-  // Manual fab-status assignment. Two scopes:
-  //  - guid: per-piece — UPDATE only the selected element_guid(s), so only the
-  //    clicked piece changes (siblings sharing the mark are untouched).
-  //  - mark: whole-assembly (or guid-less fallback) — UPDATE every row sharing
-  //    the piece_mark, flipping the whole assembly.
-  // Null status clears the stage.
-  const assignFab = useMutation({
-    mutationFn: async ({ mode, guids, marks, status }) => {
-      let query = supabase
-        .from("model_elements")
-        .update({ fab_status: status })
-        .eq("project_id", projectId)
-        .eq("is_deleted", false);
-      query = mode === "guid"
-        ? query.in("element_guid", guids)
-        : query.in("piece_mark", marks);
-      const { error } = await query;
-      if (error) throw error;
-      return { mode, guids, marks, status };
+  const canonicalLogistics = useMutation({
+    mutationFn: ({ action, pieceIds }) =>
+      transitionPieceLots(action, projectId, pieceIds, { source: "3d_viewer" }),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["canonical-pieces-3d", projectId] });
+      qc.invalidateQueries({ queryKey: ["canonical-reporting", projectId] });
+      toast.success(`Canonical ${variables.action} action recorded.`);
     },
-    onSuccess: ({ mode, guids, marks, status }) => {
-      // Recolor NOW, scoped to match the write, so colors flip immediately
-      // without waiting on the (12k-row) refetch.
-      if (mode === "guid") {
-        // Per-piece: only the assigned GUID(s). Do NOT touch the mark map, so
-        // same-mark siblings keep their own (often native) color.
-        setOptimisticFab((prev) => {
-          const next = new Map(prev);
-          for (const g of guids) next.set(g, status);
-          return next;
-        });
-      } else {
-        // Whole-assembly: mirror onto the mark map (colors every part of the
-        // mark) AND set the loaded GUIDs of those marks so they paint at once.
-        const markSet = new Set(marks.map((m) => normalizePieceMark(m)));
-        setOptimisticFabByMark((prev) => {
-          const next = new Map(prev);
-          for (const m of marks) next.set(normalizePieceMark(m), status);
-          return next;
-        });
-        setOptimisticFab((prev) => {
-          const next = new Map(prev);
-          for (const r of modelElementRows || []) {
-            if (r?.element_guid && markSet.has(normalizePieceMark(r.piece_mark))) next.set(r.element_guid, status);
-          }
-          for (const g of selectedGuids) next.set(g, status);
-          return next;
-        });
-      }
-      setColorMode("fab");
-      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
-      const n = mode === "guid" ? guids.length : marks.length;
-      const unit = mode === "guid" ? "piece" : "mark";
-      toast.success(status
-        ? `${n} ${unit}${n === 1 ? "" : "s"} → ${FAB_STATUS_META[status].label}`
-        : "Fab status cleared");
-    },
-    onError: (e) => toast.error(e?.message || "Couldn't set fab status."),
+    onError: (error) => toast.error(error?.message || "Canonical logistics action failed."),
   });
 
-  // Assign a status to the current selection at the chosen scope. Per-piece
-  // targets the selected GUID(s) directly; whole-assembly (or a guid-less piece
-  // in per-piece mode) targets the piece mark(s).
+  // Canonical-linked selections may initiate only the immutable logistics
+  // commands supported here. Unlinked elements retain read-only legacy colors.
   const setFab = (status) => {
-    const target = resolveFabAssignment({ scope: fabScope, picked, selectedGuids, guidToMark });
-    if (target.mode === "none") {
-      toast.error(selectedGuids.length
-        ? "This piece has no roster row or Assembly/Part mark to set a status on."
-        : "Select a piece first.");
+    const selectedCanonical = selectedGuids
+      .map((guid) => canonicalPieceByGuid.get(guid))
+      .filter(Boolean);
+    if (selectedCanonical.length > 0) {
+      const pieceIds = [...new Set(selectedCanonical.map((piece) => piece.id))];
+      if (
+        status === "shipped" &&
+        selectedCanonical.every((piece) => piece.lifecycle_status === "fabricated")
+      ) {
+        canonicalLogistics.mutate({ action: "ship", pieceIds });
+        return;
+      }
+      if (
+        status === "erected" &&
+        selectedCanonical.every((piece) => piece.lifecycle_status === "delivered")
+      ) {
+        canonicalLogistics.mutate({ action: "erect", pieceIds });
+        return;
+      }
+      toast.error(
+        "Canonical-linked pieces are read-only in 3D. Use Piece Control for station and delivery actions.",
+      );
       return;
     }
-    if (target.fellBackToMark) {
-      // Per-piece couldn't scope by GUID (CSV roster / re-exported model) — be
-      // explicit that this flips the whole mark instead of just the clicked part.
-      toast.info("This piece isn't matched to the model by GlobalId, so the status applies to its whole mark.");
-    }
-    assignFab.mutate({ mode: target.mode, guids: target.guids, marks: target.marks, status });
+    toast.error(
+      "This unlinked element uses legacy color fallback only. 3D status is read-only.",
+    );
   };
 
   const legend = useMemo(() => {
@@ -592,11 +575,11 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
                             <button
                               key={s}
                               type="button"
-                              disabled={assignFab.isPending}
+                              disabled={canonicalLogistics.isPending}
                               onClick={() => setFab(current ? null : s)}
                               style={{
                                 display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
-                                padding: "6px 9px", borderRadius: 7, cursor: assignFab.isPending ? "default" : "pointer",
+                                padding: "6px 9px", borderRadius: 7, cursor: canonicalLogistics.isPending ? "default" : "pointer",
                                 border: `1px solid ${current ? FAB_STATUS_META[s].color : "var(--border-default)"}`,
                                 background: current ? `color-mix(in srgb, ${FAB_STATUS_META[s].color} 18%, var(--bg-surface-high))` : "var(--bg-surface-low)",
                                 color: current ? "var(--text-primary)" : "var(--text-secondary)",
