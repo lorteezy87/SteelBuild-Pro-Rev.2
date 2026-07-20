@@ -282,7 +282,7 @@ export function PieceControlPilotReadiness({
               disabled={
                 confirmation !== expectedConfirmation || modeMutation.isPending
               }
-              onClick={() => modeMutation.mutate()}
+              onClick={() => modeMutation.mutate(confirmation)}
               className="h-11 rounded-lg bg-slate-950 px-5 font-black text-white disabled:opacity-40"
             >
               Confirm mode change
