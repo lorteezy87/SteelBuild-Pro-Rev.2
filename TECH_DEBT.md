@@ -27,7 +27,8 @@ classified instead of hidden behind a green local report:
 
 `command_ui` is retired as a runtime presentation flag. The typed catalog and
 Supabase `feature_flags` table document only the remaining operational flags;
-see [`docs/FEATURE_FLAG_AND_DEAD_PATH_INVENTORY.md`](docs/FEATURE_FLAG_AND_DEAD_PATH_INVENTORY.md).
+See [`docs/PHASE_0_FINAL.md`](docs/PHASE_0_FINAL.md), which contains the
+consolidated feature-flag and dead-path disposition record.
 
 ## Batch 41 P1 finding status
 
