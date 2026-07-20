@@ -259,6 +259,59 @@ export default function PieceRegister() {
       <div className="min-h-screen bg-slate-100 p-4 md:p-6">
         <div className="mx-auto max-w-6xl space-y-5">
           <header className="overflow-hidden rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-300/40 md:px-8">
+            <div className="max-w-3xl">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-400">Fabrication control</p>
+              <h1 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">Set up the Piece Register</h1>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                Turn imported piece data into a controlled project register for lot tracking,
+                shop progress, shipping, delivery, and erection.
+              </p>
+            </div>
+          </header>
+
+          <section className="grid gap-4 md:grid-cols-3">
+            {[
+              ["1", "Enable controlled mode", "Start in shadow mode. Existing production and release workflows remain unchanged."],
+              ["2", "Stage a piece file", "Upload CSV or JSON, review matches and exceptions, then approve the batch."],
+              ["3", "Run the workflow", "Organize lots, advance shop stations, and record logistics from one project register."],
+            ].map(([step, title, description]) => (
+              <div key={step} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-sm font-black text-amber-900">
+                  {step}
+                </div>
+                <h2 className="mt-4 font-black text-slate-950">{title}</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+              </div>
+            ))}
+          </section>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950">
+            <div className="flex gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+              <div>
+                <div className="font-black">Admin setup required</div>
+                <p className="mt-1 text-amber-900/80">
+                  A project owner or admin must move this project from Off to Shadow below.
+                  Shadow mode creates the register without replacing current downstream workflows.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <PieceControlPilotReadiness
+            projectId={projectId}
+            currentMode="off"
+            onModeChanged={handleModeChanged}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_0%,_#fef3c7,_transparent_25%),linear-gradient(180deg,#f8fafc,#eef2f7)] p-4 md:p-6">
+      <div className="mx-auto max-w-[1680px] space-y-5">
+        <header className="overflow-hidden rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-300/40 md:px-8">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-400">Fabrication control</p>
@@ -349,70 +402,6 @@ export default function PieceRegister() {
             </section>
           </div>
         )}
-
-          <section className="grid gap-4 md:grid-cols-3">
-            {[
-              ["1", "Enable controlled mode", "Start in shadow mode. Existing production and release workflows remain unchanged."],
-              ["2", "Stage a piece file", "Upload CSV or JSON, review matches and exceptions, then approve the batch."],
-              ["3", "Run the workflow", "Organize lots, advance shop stations, and record logistics from one project register."],
-            ].map(([step, title, description]) => (
-              <div key={step} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-sm font-black text-amber-900">
-                  {step}
-                </div>
-                <h2 className="mt-4 font-black text-slate-950">{title}</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-              </div>
-            ))}
-          </section>
-
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950">
-            <div className="flex gap-3">
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-              <div>
-                <div className="font-black">Admin setup required</div>
-                <p className="mt-1 text-amber-900/80">
-                  A project owner or admin must move this project from Off to Shadow below.
-                  Shadow mode creates the register without replacing current downstream workflows.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <PieceControlPilotReadiness
-            projectId={projectId}
-            currentMode="off"
-            onModeChanged={handleModeChanged}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_0%,_#fef3c7,_transparent_25%),linear-gradient(180deg,#f8fafc,#eef2f7)] p-4 md:p-6">
-      <div className="mx-auto max-w-[1680px] space-y-5">
-        <header className="overflow-hidden rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-300/40 md:px-8">
-          <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-400">Canonical scope control</p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">Piece Register</h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-300">
-                Review root lots, physical metadata, provenance, and import exceptions without changing downstream workflows.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3">
-                <div className="text-2xl font-black">{displayRows.length}</div>
-                <div className="text-xs uppercase tracking-wider text-slate-400">Active rows</div>
-              </div>
-              <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-5 py-3">
-                <div className="text-2xl font-black text-amber-300">{mode.toUpperCase()}</div>
-                <div className="text-xs uppercase tracking-wider text-slate-400">Control mode</div>
-              </div>
-            </div>
-          </div>
-        </header>
 
         {activeView === "register" && (
           <>
