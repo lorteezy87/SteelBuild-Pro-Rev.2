@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Download, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import {
 interface PieceControlPilotReadinessProps {
   projectId: string;
   currentMode: PieceControlMode;
+  onModeChanged?: (nextMode: PieceControlMode) => void;
 }
 
 const nextModes: Record<PieceControlMode, PieceControlMode[]> = {
@@ -24,12 +25,19 @@ const nextModes: Record<PieceControlMode, PieceControlMode[]> = {
 export function PieceControlPilotReadiness({
   projectId,
   currentMode,
+  onModeChanged,
 }: PieceControlPilotReadinessProps) {
   const queryClient = useQueryClient();
   const [targetMode, setTargetMode] = useState<PieceControlMode>(
     nextModes[currentMode][0] ?? "shadow",
   );
   const [confirmation, setConfirmation] = useState("");
+
+  useEffect(() => {
+    setTargetMode(nextModes[currentMode][0] ?? "shadow");
+    setConfirmation("");
+  }, [currentMode]);
+
   const query = useQuery({
     queryKey: ["piece-control-pilot-readiness", projectId],
     queryFn: () => fetchPilotReadiness(projectId),
@@ -41,6 +49,7 @@ export function PieceControlPilotReadiness({
     mutationFn: () =>
       setPieceControlMode(projectId, targetMode, confirmation),
     onSuccess: async () => {
+      onModeChanged?.(targetMode);
       toast.success(`Piece Control moved to ${targetMode} mode.`);
       setConfirmation("");
       await Promise.all([
