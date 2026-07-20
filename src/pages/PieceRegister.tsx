@@ -2,11 +2,17 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Boxes,
   CheckCircle2,
   Database,
+  Factory,
   FileUp,
+  GitBranch,
+  PackageOpen,
   Search,
+  Settings2,
   ShieldCheck,
+  Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
@@ -39,6 +45,20 @@ const EMPTY_FILTERS: PieceRegisterFilters = {
   hold: "all",
 };
 
+type PieceControlMode = "off" | "shadow" | "pilot" | "live";
+
+const REGISTER_VIEWS = [
+  { id: "overview", label: "Overview", icon: Boxes },
+  { id: "register", label: "Piece register", icon: PackageOpen },
+  { id: "import", label: "Imports", icon: FileUp },
+  { id: "relationships", label: "Lots & links", icon: GitBranch },
+  { id: "production", label: "Production", icon: Factory },
+  { id: "logistics", label: "Logistics", icon: Truck },
+  { id: "settings", label: "Settings", icon: Settings2 },
+] as const;
+
+type PieceRegisterView = (typeof REGISTER_VIEWS)[number]["id"];
+
 const decisionTone: Record<string, string> = {
   new: "bg-emerald-50 text-emerald-800 border-emerald-200",
   unchanged: "bg-slate-50 text-slate-700 border-slate-200",
@@ -60,7 +80,7 @@ function SelectFilter({
   value: string;
   onChange: (value: string) => void;
   label: string;
-  options: string[];
+  options: Array<string | { value: string; label: string }>;
 }) {
   return (
     <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -71,18 +91,23 @@ function SelectFilter({
         className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-slate-800"
       >
         <option value="">All</option>
-        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        {options.map((option) => {
+          const value = typeof option === "string" ? option : option.value;
+          const optionLabel = typeof option === "string" ? option : option.label;
+          return <option key={value} value={value}>{optionLabel}</option>;
+        })}
       </select>
     </label>
   );
 }
 
 export default function PieceRegister() {
-  const { activeProject } = useProjectContext() as any;
+  const { activeProject, updateActiveProject } = useProjectContext() as any;
   const projectId = activeProject?.id as string | undefined;
   const mode = String(activeProject?.piece_control_mode ?? "off");
   const enabled = Boolean(projectId && mode !== "off");
   const queryClient = useQueryClient();
+  const [activeView, setActiveView] = useState<PieceRegisterView>("overview");
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [sourceType, setSourceType] = useState<PieceImportSourceType>("csv");
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -144,6 +169,19 @@ export default function PieceRegister() {
   const grades = useMemo(() => uniqueValues(displayRows.map((row) => row.material_grade)), [displayRows]);
   const lifecycles = useMemo(() => uniqueValues(displayRows.map((row) => row.lifecycle_status)), [displayRows]);
   const sources = useMemo(() => uniqueValues(displayRows.map((row) => row.source_system)), [displayRows]);
+  const pieceSummary = useMemo(
+    () => displayRows.reduce(
+      (summary, piece) => {
+        summary.quantity += Number(piece.quantity ?? 0);
+        summary.tons += pieceTons(piece) ?? 0;
+        if (piece.on_hold) summary.held += 1;
+        if (!piece.work_package_id) summary.unassigned += 1;
+        return summary;
+      },
+      { quantity: 0, tons: 0, held: 0, unassigned: 0 },
+    ),
+    [displayRows],
+  );
 
   const invalidate = async () => {
     await Promise.all([
@@ -187,6 +225,11 @@ export default function PieceRegister() {
     onError: (error: Error) => toast.error(error.message || "Unable to apply batch"),
   });
 
+  const handleModeChanged = (nextMode: PieceControlMode) => {
+    updateActiveProject?.({ piece_control_mode: nextMode });
+    if (nextMode !== "off") setActiveView("import");
+  };
+
   const handleFile = async (file: File | null) => {
     setImportFile(file);
     setImportRows([]);
@@ -213,18 +256,134 @@ export default function PieceRegister() {
 
   if (mode === "off") {
     return (
-      <div className="min-h-[70vh] bg-[radial-gradient(circle_at_top_left,_#fef3c7,_transparent_36%),linear-gradient(135deg,#f8fafc,#eef2f7)] p-6">
-        <div className="mx-auto max-w-5xl rounded-3xl border border-amber-200 bg-white/90 p-10 shadow-sm">
-          <ShieldCheck className="mb-5 h-11 w-11 text-amber-600" />
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Piece control disabled</p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Piece Register is read-only and unavailable</h1>
-          <p className="mt-4 max-w-2xl text-slate-600">
-            Enable piece control for this project before staging imports or viewing canonical pieces.
-            Existing release, production, dashboard, and model workflows are unchanged.
-          </p>
-          <div className="mt-8">
-            <PieceControlPilotReadiness projectId={projectId} currentMode="off" />
+      <div className="min-h-screen bg-slate-100 p-4 md:p-6">
+        <div className="mx-auto max-w-6xl space-y-5">
+          <header className="overflow-hidden rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-300/40 md:px-8">
+          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-400">Fabrication control</p>
+              <h1 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">Piece Register</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                The project source for piece quantities, lots, work-package assignments,
+                shop progress, shipping, delivery, and erection.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => setActiveView("import")}
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-black text-slate-950 hover:bg-amber-300"
+              >
+                <FileUp className="h-4 w-4" />
+                Import pieces
+              </button>
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
+                <div className="text-lg font-black text-white">{mode.toUpperCase()}</div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400">Control mode</div>
+              </div>
+            </div>
           </div>
+        </header>
+
+        <nav aria-label="Piece Register sections" className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          <div className="flex min-w-max gap-1">
+            {REGISTER_VIEWS.map(({ id, label, icon: Icon }) => {
+              const selected = activeView === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-current={selected ? "page" : undefined}
+                  onClick={() => setActiveView(id)}
+                  className={`inline-flex h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-bold transition ${selected ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {activeView === "overview" && (
+          <div className="space-y-5">
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              {[
+                ["Piece rows", displayRows.length.toLocaleString()],
+                ["Total quantity", pieceSummary.quantity.toLocaleString()],
+                ["Total tons", pieceSummary.tons.toFixed(1)],
+                ["On hold", pieceSummary.held.toLocaleString()],
+                ["Unassigned", pieceSummary.unassigned.toLocaleString()],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="text-2xl font-black text-slate-950">{value}</div>
+                  <div className="mt-1 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</div>
+                </div>
+              ))}
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                <div>
+                  <h2 className="text-lg font-black text-slate-950">Piece workflow</h2>
+                  <p className="mt-1 text-sm text-slate-600">A controlled path from source file to erection history.</p>
+                </div>
+                <button type="button" onClick={() => setActiveView(displayRows.length === 0 ? "import" : "register")} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-black text-white">
+                  {displayRows.length === 0 ? "Import the first pieces" : "Open the register"}
+                </button>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-4">
+                {[
+                  ["01", "Import & reconcile", "Stage source data and resolve conflicts before anything is written."],
+                  ["02", "Organize lots", "Assign work packages and split quantities while preserving traceability."],
+                  ["03", "Track production", "Advance released lots through controlled shop stations."],
+                  ["04", "Move to the field", "Record shipping, delivery, and erection with an immutable history."],
+                ].map(([step, title, description]) => (
+                  <div key={step} className="rounded-xl bg-slate-50 p-4">
+                    <div className="text-xs font-black uppercase tracking-wider text-amber-700">{step}</div>
+                    <div className="mt-2 font-black text-slate-900">{title}</div>
+                    <p className="mt-1 text-sm leading-5 text-slate-600">{description}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+
+          <section className="grid gap-4 md:grid-cols-3">
+            {[
+              ["1", "Enable controlled mode", "Start in shadow mode. Existing production and release workflows remain unchanged."],
+              ["2", "Stage a piece file", "Upload CSV or JSON, review matches and exceptions, then approve the batch."],
+              ["3", "Run the workflow", "Organize lots, advance shop stations, and record logistics from one project register."],
+            ].map(([step, title, description]) => (
+              <div key={step} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-sm font-black text-amber-900">
+                  {step}
+                </div>
+                <h2 className="mt-4 font-black text-slate-950">{title}</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+              </div>
+            ))}
+          </section>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950">
+            <div className="flex gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+              <div>
+                <div className="font-black">Admin setup required</div>
+                <p className="mt-1 text-amber-900/80">
+                  A project owner or admin must move this project from Off to Shadow below.
+                  Shadow mode creates the register without replacing current downstream workflows.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <PieceControlPilotReadiness
+            projectId={projectId}
+            currentMode="off"
+            onModeChanged={handleModeChanged}
+          />
         </div>
       </div>
     );
@@ -255,6 +414,8 @@ export default function PieceRegister() {
           </div>
         </header>
 
+        {activeView === "register" && (
+          <>
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-3 xl:grid-cols-[minmax(220px,2fr)_repeat(6,minmax(120px,1fr))]">
             <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -273,7 +434,10 @@ export default function PieceRegister() {
               label="Work package"
               value={filters.workPackageId}
               onChange={(value) => setFilters((current) => ({ ...current, workPackageId: value }))}
-              options={(workPackagesQuery.data ?? []).map((wp: any) => wp.id)}
+              options={(workPackagesQuery.data ?? []).map((wp: any) => ({
+                value: wp.id,
+                label: wp.wp_number || wp.name || wp.title || "Unnamed package",
+              }))}
             />
             <SelectFilter label="Profile" value={filters.profile} onChange={(value) => setFilters((current) => ({ ...current, profile: value }))} options={profiles} />
             <SelectFilter label="Grade" value={filters.grade} onChange={(value) => setFilters((current) => ({ ...current, grade: value }))} options={grades} />
@@ -312,7 +476,19 @@ export default function PieceRegister() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredRows.map((piece) => (
+                {piecesQuery.isLoading && (
+                  <tr><td colSpan={12} className="px-6 py-14 text-center text-slate-500">Loading the project piece register...</td></tr>
+                )}
+                {piecesQuery.error && (
+                  <tr>
+                    <td colSpan={12} className="px-6 py-12 text-center">
+                      <div className="font-black text-red-700">The Piece Register could not be loaded.</div>
+                      <div className="mt-1 text-sm text-slate-600">{(piecesQuery.error as Error).message}</div>
+                      <button type="button" onClick={() => piecesQuery.refetch()} className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-800">Try again</button>
+                    </td>
+                  </tr>
+                )}
+                {!piecesQuery.isLoading && !piecesQuery.error && filteredRows.map((piece) => (
                   <tr key={piece.id} className="hover:bg-amber-50/30">
                     <td className="px-4 py-3">
                       <div className="font-black text-slate-950">{piece.piece_mark}</div>
@@ -336,36 +512,62 @@ export default function PieceRegister() {
                     <td className="px-4 py-3 text-slate-600">{new Date(piece.updated_at).toLocaleString()}</td>
                   </tr>
                 ))}
-                {!piecesQuery.isLoading && filteredRows.length === 0 && (
-                  <tr><td colSpan={12} className="px-6 py-14 text-center text-slate-500">No canonical pieces match this view.</td></tr>
+                {!piecesQuery.isLoading && !piecesQuery.error && filteredRows.length === 0 && (
+                  <tr>
+                    <td colSpan={12} className="px-6 py-14 text-center">
+                      <PackageOpen className="mx-auto h-8 w-8 text-slate-300" />
+                      <div className="mt-3 font-black text-slate-800">
+                        {displayRows.length === 0 ? "No pieces have been imported yet." : "No pieces match these filters."}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => displayRows.length === 0 ? setActiveView("import") : setFilters(EMPTY_FILTERS)}
+                        className="mt-4 rounded-lg bg-slate-950 px-4 py-2 text-sm font-black text-white"
+                      >
+                        {displayRows.length === 0 ? "Import pieces" : "Clear filters"}
+                      </button>
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
           </div>
         </section>
+          </>
+        )}
 
-        <PieceControlPilotReadiness
-          projectId={projectId}
-          currentMode={mode as "off" | "shadow" | "pilot" | "live"}
-        />
+        {activeView === "settings" && (
+          <PieceControlPilotReadiness
+            projectId={projectId}
+            currentMode={mode as PieceControlMode}
+            onModeChanged={handleModeChanged}
+          />
+        )}
 
-        <section>
-          <PieceRelationshipManager
+        {activeView === "relationships" && (
+          <section>
+            <PieceRelationshipManager
+              projectId={projectId}
+              pieceControlMode={mode}
+            />
+          </section>
+        )}
+
+        {activeView === "production" && (
+          <PieceProductionControl
             projectId={projectId}
             pieceControlMode={mode}
           />
-        </section>
+        )}
 
-        <PieceProductionControl
-          projectId={projectId}
-          pieceControlMode={mode}
-        />
+        {activeView === "logistics" && (
+          <PieceLogisticsControl
+            projectId={projectId}
+            pieceControlMode={mode}
+          />
+        )}
 
-        <PieceLogisticsControl
-          projectId={projectId}
-          pieceControlMode={mode}
-        />
-
+        {activeView === "import" && (
         <section className="grid gap-5 xl:grid-cols-[420px_1fr]">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3">
@@ -478,6 +680,7 @@ export default function PieceRegister() {
             </div>
           </div>
         </section>
+        )}
       </div>
     </div>
   );
