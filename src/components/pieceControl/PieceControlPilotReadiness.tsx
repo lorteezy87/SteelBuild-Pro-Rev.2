@@ -46,8 +46,12 @@ export function PieceControlPilotReadiness({
   const isAdmin = ["admin", "owner"].includes(query.data?.role ?? "");
 
   const modeMutation = useMutation({
-    mutationFn: () =>
-      setPieceControlMode(projectId, targetMode, confirmation),
+    mutationFn: (confirmationOverride?: string) =>
+      setPieceControlMode(
+        projectId,
+        targetMode,
+        confirmationOverride ?? confirmation,
+      ),
     onSuccess: async () => {
       onModeChanged?.(targetMode);
       toast.success(`Piece Control moved to ${targetMode} mode.`);
@@ -113,6 +117,55 @@ export function PieceControlPilotReadiness({
   }
 
   const { report } = query.data;
+
+  if (currentMode === "off") {
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 text-xl font-black text-slate-950">
+              <ShieldCheck className="h-6 w-6 text-amber-700" />
+              Enable Piece Register
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Start in Shadow mode to import and review piece data without replacing
+              current release, production, or reporting workflows.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl bg-emerald-50 p-4">
+                <div className="font-black text-emerald-950">Safe first step</div>
+                <p className="mt-1 text-sm text-emerald-900/75">
+                  Imports stay staged until your team reviews, approves, and applies them.
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-4">
+                <div className="font-black text-slate-950">No workflow cutover</div>
+                <p className="mt-1 text-sm text-slate-600">
+                  Existing fabrication records remain unchanged while you validate the register.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {!isAdmin ? (
+            <div className="rounded-xl bg-slate-100 px-5 py-4 text-sm font-semibold text-slate-700">
+              A project owner or admin must enable this workspace.
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={modeMutation.isPending}
+              onClick={() => modeMutation.mutate(expectedConfirmation)}
+              className="h-12 shrink-0 rounded-xl bg-amber-400 px-6 font-black text-slate-950 shadow-sm transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {modeMutation.isPending ? "Enabling Piece Register..." : "Enable Piece Register"}
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -229,7 +282,7 @@ export function PieceControlPilotReadiness({
               disabled={
                 confirmation !== expectedConfirmation || modeMutation.isPending
               }
-              onClick={() => modeMutation.mutate()}
+              onClick={() => modeMutation.mutate(confirmation)}
               className="h-11 rounded-lg bg-slate-950 px-5 font-black text-white disabled:opacity-40"
             >
               Confirm mode change
