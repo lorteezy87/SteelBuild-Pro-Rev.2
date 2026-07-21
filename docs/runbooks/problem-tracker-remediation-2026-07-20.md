@@ -83,6 +83,29 @@ passed full CI, dependency audit, staging deployment and health check, and the
 authenticated read-only Drawings/Submittals/RFIs smoke. Mutation-capable E2E
 remains disabled pending a separately approved disposable-fixture policy.
 
+After the drawing-viewer fix and final evidence merge, `staging` was
+fast-forwarded to the final production head `4029f1e3a461f22509c67bdaab20fe515c4e2aa1`.
+[GitHub Actions run 29806793694](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/29806793694)
+again passed full CI, dependency audit, staging deployment and health check,
+and the authenticated read-only Drawings/Submittals/RFIs smoke.
+
+## Tracker handoff
+
+`SB PRO PROBLEM TRACKING.xlsx` was updated in place on the Desktop after an
+artifact-tool export round trip and visual render review of both worksheets.
+The following rows were closed on 2026-07-20 with evidence notes:
+
+- #34 — Storage path isolation.
+- #40 — account deletion remains disabled.
+- #87 — trigger-only function execution ACL.
+- #89 — permissive policy consolidation.
+- The unnumbered legacy flat-path Storage remediation row.
+
+Item #5 (organization-to-project visibility) and the GitHub branch-protection
+row remain open as requested. The 775 legacy source objects also remain retained
+for rollback; closing the remediation row records the completed verified
+cutover, not authorization to delete those originals.
+
 ## Deliberately retained and still open
 
 - The 775 legacy source objects remain rollback material. Their deletion needs
