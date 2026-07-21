@@ -47,10 +47,12 @@ describe("one-time maintenance Edge Function contracts", () => {
 
   it("hashes both objects when equal-size copies do not have matching ETags", () => {
     expect(copy).toContain("sourceEtag === destinationEtag");
-    expect(copy).toContain("storage.download(source)");
-    expect(copy).toContain("storage.download(destination)");
+    expect(copy).toContain("async function downloadSha256(");
+    expect(copy).toContain("const sourceHash = await downloadSha256(storage, source)");
+    expect(copy).toContain("const destinationHash = await downloadSha256(storage, destination)");
     expect(copy).toContain('crypto.subtle.digest("SHA-256"');
     expect(copy).toContain("sourceHash === destinationHash");
+    expect(copy).not.toContain("Promise.all");
   });
 
   it("hard-locks bootstrap to staging and deletes only unconfirmed synthetic users", () => {

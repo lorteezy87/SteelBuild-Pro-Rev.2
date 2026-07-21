@@ -22,6 +22,10 @@ interface CopyRequest {
   limit?: number;
 }
 
+interface StorageDownloader {
+  download(path: string): Promise<{ data: Blob | null; error: unknown }>;
+}
+
 function safeInteger(value: unknown, fallback: number, maximum: number): number {
   if (value == null) return fallback;
   if (!Number.isSafeInteger(value) || Number(value) < 0 || Number(value) > maximum) {
@@ -41,8 +45,14 @@ function objectEtag(info: { metadata?: Record<string, unknown> } | null): string
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-async function sha256Hex(blob: Blob): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+async function downloadSha256(
+  storage: StorageDownloader,
+  path: string,
+): Promise<string | null> {
+  const { data, error } = await storage.download(path);
+  if (error || !data) return null;
+
+  const digest = await crypto.subtle.digest("SHA-256", await data.arrayBuffer());
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -127,24 +137,20 @@ Deno.serve(async (request) => {
         continue;
       }
 
-      const [sourceDownload, destinationDownload] = await Promise.all([
-        storage.download(source),
-        storage.download(destination),
-      ]);
-      if (
-        sourceDownload.error ||
-        destinationDownload.error ||
-        !sourceDownload.data ||
-        !destinationDownload.data
-      ) {
+      const sourceHash = await downloadSha256(storage, source);
+      if (!sourceHash) {
         failed += 1;
         continue;
       }
 
-      const [sourceHash, destinationHash] = await Promise.all([
-        sha256Hex(sourceDownload.data),
-        sha256Hex(destinationDownload.data),
-      ]);
+      // Hash strictly sequentially so the source Blob and its ArrayBuffer leave
+      // helper scope before allocating memory for a large destination object.
+      const destinationHash = await downloadSha256(storage, destination);
+      if (!destinationHash) {
+        failed += 1;
+        continue;
+      }
+
       if (sourceHash === destinationHash) {
         hashVerified += 1;
         contentVerified += 1;
