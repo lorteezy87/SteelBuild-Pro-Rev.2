@@ -31,6 +31,7 @@ import {
   MAX_ATTACHMENT_BYTES,
   sanitizeAttachmentName,
 } from "../_shared/attachments.ts";
+import { normalizeRecipients } from "./recipients.ts";
 
 // Max combined raw (decoded) size of outbound attachments. base64 inflates
 // the payload ~33%, so the actual request body stays well under typical
@@ -508,6 +509,34 @@ async function handle(req: Request): Promise<Response> {
   if (!body.to || body.to.length === 0) return errorResponse(400, "to is required (array of email addresses)", req);
   if (!body.subject) return errorResponse(400, "subject is required", req);
   if (!body.body_text) return errorResponse(400, "body_text is required", req);
+
+  // Normalize + format-validate recipients at the boundary so malformed
+  // addresses fail fast instead of surfacing as opaque provider errors.
+  const toRecipients = normalizeRecipients(body.to);
+  const ccRecipients = normalizeRecipients(body.cc ?? []);
+  const bccRecipients = normalizeRecipients(body.bcc ?? []);
+  const invalidAddresses = [
+    ...toRecipients.invalid,
+    ...ccRecipients.invalid,
+    ...bccRecipients.invalid,
+  ];
+  if (invalidAddresses.length > 0) {
+    return errorResponse(
+      400,
+      `Invalid email address(es): ${invalidAddresses.slice(0, 5).join(", ")}`,
+      req,
+    );
+  }
+  if (toRecipients.valid.length === 0) {
+    return errorResponse(
+      400,
+      "to must contain at least one valid email address",
+      req,
+    );
+  }
+  body.to = toRecipients.valid;
+  body.cc = ccRecipients.valid;
+  body.bcc = bccRecipients.valid;
 
   // Validate + size-guard attachments (base64 inflates ~33%; cap on raw bytes).
   // Mirror the inbound email-ingest guards (_shared/attachments.ts): reject
