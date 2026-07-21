@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { signInAsTestUser, signInAsViewerOrNull } from "./fixtures/supabaseUser";
+import { assertDisposableMutationEnvironment } from "./environment";
 
 /**
  * e2e/fab-release-gate.spec.ts — the mutation-aware fab-release gate contract.
@@ -36,6 +37,11 @@ const FAB_RELEASE_BLOCKED_PREFIX = "FAB_RELEASE_BLOCKED";
 // Skip the whole file (don't fail) when the fixture isn't provisioned, so the
 // gate spec is opt-in like the rest of the E2E harness.
 test.describe("fab-release gate (server-arbitrated)", () => {
+  test.skip(
+    process.env.E2E_MUTATIONS_ENABLED !== "true",
+    "Mutation E2E is explicitly opt-in and staging-only.",
+  );
+  test.beforeAll(() => assertDisposableMutationEnvironment());
   test.skip(
     !PROJECT_ID || !BLOCKED_DRAWING_ID || !CLEAN_DRAWING_ID,
     "Set E2E_FAB_PROJECT_ID / E2E_BLOCKED_DRAWING_ID / E2E_CLEAN_DRAWING_ID to run. See e2e/README.md.",

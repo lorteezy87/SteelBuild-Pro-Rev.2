@@ -22,6 +22,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:staging:readonly": "playwright test e2e/smoke.spec.ts e2e/daily-workflow.spec.ts",
+    "test:e2e:staging:mutations": "playwright test e2e/fab-release-gate.spec.ts e2e/piece-control-pilot.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium"
   },

@@ -50,6 +50,11 @@ Repo → Settings → Secrets and variables → Actions:
 | Secret | `STAGING_VERCEL_TOKEN` | a Vercel token scoped to the staging project |
 | Variable | `STAGING_ENABLED` | `true` |
 | Variable | `STAGING_BASE_URL` | staging URL, e.g. `https://steelbuild-pro-staging.vercel.app` (optional — enables the post-deploy health check) |
+| Variable | `STAGING_E2E_ENABLED` | `true` after all four staging E2E secrets below exist |
+| Secret | `STAGING_E2E_USER` | synthetic staging-only confirmed user |
+| Secret | `STAGING_E2E_PASS` | synthetic staging-only password |
+| Secret | `STAGING_E2E_SUPABASE_URL` | staging Supabase URL |
+| Secret | `STAGING_E2E_SUPABASE_ANON_KEY` | staging browser anon key |
 
 `VERCEL_ORG_ID` and `SENTRY_AUTH_TOKEN` are reused from the existing prod secrets (same Vercel team).
 
@@ -59,6 +64,8 @@ git checkout main && git pull
 git checkout -b staging && git push -u origin staging
 ```
 The push triggers CI → `deploy-staging` → staging site goes live. Confirm `STAGING_BASE_URL` serves 200.
+When enabled, authenticated read-only smoke runs next. See
+`docs/runbooks/staging-e2e-automation.md` for bootstrap and mutation isolation.
 
 ---
 

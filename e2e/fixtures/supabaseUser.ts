@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { resolveE2EEnvironment } from "../environment";
 
 /**
  * e2e/fixtures/supabaseUser.ts
@@ -15,23 +16,14 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  *   E2E_USER / E2E_PASS                    primary test account (pm+ in the fixture project)
  *   E2E_VIEWER_USER / E2E_VIEWER_PASS      OPTIONAL viewer-role account for the RLS-deny test
  */
-const SUPABASE_URL =
-  process.env.E2E_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
-const SUPABASE_ANON =
-  process.env.E2E_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
-
 export interface SignedInClient {
   supabase: SupabaseClient;
   userId: string;
 }
 
 async function signIn(email: string, password: string): Promise<SignedInClient> {
-  if (!SUPABASE_URL || !SUPABASE_ANON) {
-    throw new Error(
-      "E2E_SUPABASE_URL / E2E_SUPABASE_ANON_KEY (or VITE_ equivalents) not set. See e2e/README.md.",
-    );
-  }
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  const environment = resolveE2EEnvironment({ ...process.env, E2E_USER: email, E2E_PASS: password });
+  const supabase = createClient(environment.supabaseUrl, environment.supabaseAnonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
