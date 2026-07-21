@@ -4,7 +4,9 @@ Status: **complete for the authorized batch, excluding item #5**.
 
 This record captures the production and staging evidence for PR
 [#94](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/94), merged as
-`6a0c50fbdede43c631e8873c4aec822b0ffd8331`. Times below use the
+`6a0c50fbdede43c631e8873c4aec822b0ffd8331`, plus the drawing-viewer follow-up
+in PR [#96](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/96), merged
+as `91918d592effec0961560bab03a2cb216b08e8e0`. Times below use the
 America/Phoenix work date; the linked CI records completed on 2026-07-21 UTC.
 
 ## Completed scope
@@ -39,10 +41,34 @@ America/Phoenix work date; the linked CI records completed on 2026-07-21 UTC.
 | Trigger-only function ACL | No execute grant for `anon`, `authenticated`, or `service_role` |
 | Four reviewed policy sets | 4 `SELECT`, 4 `INSERT`, 4 `UPDATE`, 4 `DELETE`, and 0 `FOR ALL` policies in aggregate |
 | Maintenance authorization | Job completed and token digest cleared |
+| Drawing file references | 631 drawing rows across 98 distinct tenant-scoped PDF paths; 631 matching Storage objects and 0 missing objects |
+| Live drawing delivery | Authenticated signed-URL creation and PDF downloads returned HTTP 200 after the tenant-path cutover |
 
 The production release passed lint, all typecheck ratchets, Vitest, the
 production build, dependency audit, Vercel deployment, and post-deploy health
 check in [GitHub Actions run 29801414310](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/29801414310).
+
+## Drawing viewer follow-up
+
+The post-cutover drawing-viewer report was not a missing-file or Storage-RLS
+failure. Production records and Storage logs confirmed that the browser reached
+the viewer, signed the tenant-scoped path, and downloaded the PDF. The failure
+was in the client-side PDF.js render lifecycle: a rapid sheet or file change
+cancelled an in-flight render but could reuse the same canvas before the
+cancellation promise settled. PDF.js can reject that overlap, and the renderer
+previously logged the error without entering the viewer's fallback state.
+
+PR [#96](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/pull/96) serializes
+canvas cancellation, ignores stale render completions, cancels the old document
+while a replacement loads, and surfaces real render failures through the
+existing browser-PDF fallback. Regression coverage holds one render open while
+switching sheets and verifies that the replacement does not reuse the canvas
+early.
+
+[GitHub Actions run 29805371964](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/29805371964)
+passed lint, all typecheck ratchets, Vitest, the production build, dependency
+audit, Vercel production deployment, and the post-deploy health check for merge
+`91918d592effec0961560bab03a2cb216b08e8e0`.
 
 ## Staging evidence
 
