@@ -1,6 +1,7 @@
 import { chromium, type FullConfig } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { mkdirSync } from "node:fs";
+import { resolveE2EEnvironment } from "./environment";
 
 /**
  * Sign in ONCE via the Supabase API and seed the resulting session into the app
@@ -19,34 +20,17 @@ import { mkdirSync } from "node:fs";
  *   E2E_SUPABASE_ANON_KEY | VITE_SUPABASE_ANON_KEY      anon key (public)
  *   E2E_BASE_URL                                        app origin (default prod)
  */
-const BASE_URL = process.env.E2E_BASE_URL || "https://steelbuild-pro.com";
-const SUPABASE_URL =
-  process.env.E2E_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
-const SUPABASE_ANON =
-  process.env.E2E_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
-const EMAIL = process.env.E2E_USER || "";
-const PASSWORD = process.env.E2E_PASS || "";
 const STORAGE_PATH = "e2e/.auth/state.json";
 
 export default async function globalSetup(_config: FullConfig): Promise<void> {
-  const missing = [
-    !EMAIL && "E2E_USER",
-    !PASSWORD && "E2E_PASS",
-    !SUPABASE_URL && "E2E_SUPABASE_URL (or VITE_SUPABASE_URL)",
-    !SUPABASE_ANON && "E2E_SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY)",
-  ].filter(Boolean);
-  if (missing.length) {
-    throw new Error(
-      `E2E auth is not configured. Set: ${missing.join(", ")}. See e2e/README.md.`,
-    );
-  }
+  const environment = resolveE2EEnvironment();
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  const supabase = createClient(environment.supabaseUrl, environment.supabaseAnonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: EMAIL,
-    password: PASSWORD,
+    email: environment.email,
+    password: environment.password,
   });
   if (error || !data.session) {
     throw new Error(
@@ -54,10 +38,9 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     );
   }
 
-  const ref = new URL(SUPABASE_URL).hostname.split(".")[0];
-  const storageKey = `sb-${ref}-auth-token`;
+  const storageKey = `sb-${environment.supabaseRef}-auth-token`;
   const sessionValue = JSON.stringify(data.session);
-  const origin = new URL(BASE_URL).origin;
+  const origin = environment.baseUrl;
 
   const browser = await chromium.launch();
   try {
