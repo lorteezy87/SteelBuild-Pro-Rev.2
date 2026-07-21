@@ -56,9 +56,12 @@ describe("one-time maintenance Edge Function contracts", () => {
     expect(copy).not.toContain("Promise.all");
   });
 
-  it("exposes only one ETag-mismatched pair through five-minute signed URLs", () => {
+  it("exposes only one existing equal-size pair through five-minute signed URLs", () => {
     expect(copy).toContain("signedStreamVerify && limit !== 1");
-    expect(copy).toContain("!sourceEtag || !destinationEtag || sourceEtag === destinationEtag");
+    const signedMode = copy.slice(copy.indexOf("if (signedStreamVerify) {"));
+    expect(signedMode.indexOf("storage.createSignedUrl(source, 300)")).toBeLessThan(
+      signedMode.indexOf("const destinationEtag = objectEtag(destinationInfo.data)"),
+    );
     expect(copy).toContain("storage.createSignedUrl(source, 300)");
     expect(copy).toContain("storage.createSignedUrl(destination, 300)");
     expect(copy).toContain("source_signed_url: sourceSigned.data.signedUrl");

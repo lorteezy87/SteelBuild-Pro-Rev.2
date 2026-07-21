@@ -3,7 +3,8 @@
 // preimage supplied in x-sbp-maintenance-token; only its SHA-256 hash is stored
 // in private.maintenance_jobs. This function never deletes an object and never
 // returns paths, names, or row data. Its explicit one-object verification mode
-// may return two five-minute signed URLs after all metadata checks pass.
+// may return two five-minute signed URLs after object existence and equal-size
+// checks pass.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
@@ -142,21 +143,7 @@ Deno.serve(async (request) => {
         continue;
       }
 
-      const destinationEtag = objectEtag(destinationInfo.data);
-      if (sourceEtag && destinationEtag && sourceEtag === destinationEtag) {
-        if (signedStreamVerify) {
-          throw new MaintenanceError(409, "Signed verification requires an ETag mismatch.");
-        }
-        etagVerified += 1;
-        contentVerified += 1;
-        continue;
-      }
-
       if (signedStreamVerify) {
-        if (!sourceEtag || !destinationEtag || sourceEtag === destinationEtag) {
-          throw new MaintenanceError(409, "Signed verification requires an ETag mismatch.");
-        }
-
         const sourceSigned = await storage.createSignedUrl(source, 300);
         if (sourceSigned.error || !sourceSigned.data?.signedUrl) {
           throw new MaintenanceError(500, "Signed verification URL creation failed.");
@@ -172,6 +159,13 @@ Deno.serve(async (request) => {
           destination_signed_url: destinationSigned.data.signedUrl,
           destination_size: objectSize(destinationInfo.data),
         });
+      }
+
+      const destinationEtag = objectEtag(destinationInfo.data);
+      if (sourceEtag && destinationEtag && sourceEtag === destinationEtag) {
+        etagVerified += 1;
+        contentVerified += 1;
+        continue;
       }
 
       const sourceHash = await downloadSha256(storage, source);
