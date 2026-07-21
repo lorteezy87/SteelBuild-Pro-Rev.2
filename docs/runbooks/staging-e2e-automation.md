@@ -50,8 +50,19 @@ then completes the DB marker and clears its token hash.
 Missing secrets fail the explicitly enabled job; there is no production
 fallback.
 
+The separate `steelbuild-pro-staging` Vercel project must store
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as encrypted, pullable
+variables for Production and Preview. Do not mark them Sensitive: the GitHub
+workflow runs `vercel pull` followed by an external prebuilt Vite build, and
+Sensitive values export as `[SENSITIVE]` rather than usable browser config.
+
 Mutation specs are excluded. Their separate job additionally requires
 `STAGING_E2E_MUTATIONS_ENABLED=true`, a disposable-fixture declaration, and
 separate `STAGING_E2E_FAB_*`, `STAGING_E2E_VIEWER_*`, or
 `STAGING_E2E_PIECE_*` fixtures. Both specs reject non-staging targets. Leave the
 mutation variable unset until disposable fixture reset/retention is approved.
+
+Verified 2026-07-20: GitHub Actions run
+[29801931119, attempt 2](https://github.com/lorteezy87/SteelBuild-Pro-Rev.2/actions/runs/29801931119/attempts/2)
+passed the staging deploy, health check, and authenticated read-only
+Drawings/Submittals/RFIs smoke.
