@@ -2,7 +2,8 @@
 // Deploy temporarily with --no-verify-jwt. Authorization uses a high-entropy
 // preimage supplied in x-sbp-maintenance-token; only its SHA-256 hash is stored
 // in private.maintenance_jobs. This function never deletes an object and never
-// returns paths, names, tokens, or row data.
+// returns paths, names, or row data. Its explicit one-object verification mode
+// may return two five-minute signed URLs after all metadata checks pass.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
@@ -20,6 +21,7 @@ const MAX_BATCH_SIZE = 100;
 interface CopyRequest {
   offset?: number;
   limit?: number;
+  signed_stream_verify?: boolean;
 }
 
 interface StorageDownloader {
@@ -79,6 +81,16 @@ Deno.serve(async (request) => {
     const offset = safeInteger(payload.offset, 0, Number.MAX_SAFE_INTEGER);
     const limit = safeInteger(payload.limit, 50, MAX_BATCH_SIZE);
     if (limit < 1) throw new MaintenanceError(400, "Invalid batch parameters.");
+    if (
+      payload.signed_stream_verify !== undefined &&
+      typeof payload.signed_stream_verify !== "boolean"
+    ) {
+      throw new MaintenanceError(400, "Invalid signed verification mode.");
+    }
+    const signedStreamVerify = payload.signed_stream_verify === true;
+    if (signedStreamVerify && limit !== 1) {
+      throw new MaintenanceError(400, "Signed verification requires a single-object batch.");
+    }
 
     const storage = client.storage.from(BUCKET);
     const { data: listed, error: listError } = await storage.list(SOURCE_FOLDER, {
@@ -132,9 +144,34 @@ Deno.serve(async (request) => {
 
       const destinationEtag = objectEtag(destinationInfo.data);
       if (sourceEtag && destinationEtag && sourceEtag === destinationEtag) {
+        if (signedStreamVerify) {
+          throw new MaintenanceError(409, "Signed verification requires an ETag mismatch.");
+        }
         etagVerified += 1;
         contentVerified += 1;
         continue;
+      }
+
+      if (signedStreamVerify) {
+        if (!sourceEtag || !destinationEtag || sourceEtag === destinationEtag) {
+          throw new MaintenanceError(409, "Signed verification requires an ETag mismatch.");
+        }
+
+        const sourceSigned = await storage.createSignedUrl(source, 300);
+        if (sourceSigned.error || !sourceSigned.data?.signedUrl) {
+          throw new MaintenanceError(500, "Signed verification URL creation failed.");
+        }
+        const destinationSigned = await storage.createSignedUrl(destination, 300);
+        if (destinationSigned.error || !destinationSigned.data?.signedUrl) {
+          throw new MaintenanceError(500, "Signed verification URL creation failed.");
+        }
+
+        return jsonResponse(200, {
+          source_signed_url: sourceSigned.data.signedUrl,
+          source_size: sourceSize,
+          destination_signed_url: destinationSigned.data.signedUrl,
+          destination_size: objectSize(destinationInfo.data),
+        });
       }
 
       const sourceHash = await downloadSha256(storage, source);

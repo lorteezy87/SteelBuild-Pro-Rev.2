@@ -42,7 +42,8 @@ describe("one-time maintenance Edge Function contracts", () => {
     expect(copy).toContain("hash_verified: hashVerified,");
     expect(copy).toContain("content_verified: contentVerified,");
     expect(copy).toContain("verification_failed: failed,");
-    expect(copy).not.toMatch(/jsonResponse\([^)]*source|jsonResponse\([^)]*destination/s);
+    expect(copy).not.toMatch(/source_path|destination_path/);
+    expect(copy).not.toMatch(/\n\s+source,|\n\s+destination,/);
   });
 
   it("hashes both objects when equal-size copies do not have matching ETags", () => {
@@ -53,6 +54,17 @@ describe("one-time maintenance Edge Function contracts", () => {
     expect(copy).toContain('crypto.subtle.digest("SHA-256"');
     expect(copy).toContain("sourceHash === destinationHash");
     expect(copy).not.toContain("Promise.all");
+  });
+
+  it("exposes only one ETag-mismatched pair through five-minute signed URLs", () => {
+    expect(copy).toContain("signedStreamVerify && limit !== 1");
+    expect(copy).toContain("!sourceEtag || !destinationEtag || sourceEtag === destinationEtag");
+    expect(copy).toContain("storage.createSignedUrl(source, 300)");
+    expect(copy).toContain("storage.createSignedUrl(destination, 300)");
+    expect(copy).toContain("source_signed_url: sourceSigned.data.signedUrl");
+    expect(copy).toContain("destination_signed_url: destinationSigned.data.signedUrl");
+    expect(copy).toContain("source_size: sourceSize");
+    expect(copy).toContain("destination_size: objectSize(destinationInfo.data)");
   });
 
   it("hard-locks bootstrap to staging and deletes only unconfirmed synthetic users", () => {
