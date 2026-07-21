@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Archive,
   AlertTriangle,
   Boxes,
   CheckCircle2,
@@ -25,12 +26,14 @@ import { PIECE_IMPORT_SOURCE_OPTIONS, readPieceImportFile } from "@/lib/pieceCon
 import type { ImportPayload, PieceImportSourceType } from "@/lib/pieceControl/reconciliation";
 import {
   applyPieceImportBatch,
+  archivePieceLots,
   approvePieceImportBatch,
   fetchPieceImportBatches,
   fetchPieceImportRows,
   fetchPieceRegister,
   stagePieceImportBatch,
 } from "@/lib/pieceControl/repository";
+import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import { pieceTons } from "@/lib/pieceControl/tonnage";
 import { pieceLifecycleLabel } from "@/lib/pieceControl/lifecycle";
 import { filterPieceRegisterRows, type PieceRegisterFilters } from "./pieceRegister/filter";
@@ -107,6 +110,7 @@ export default function PieceRegister() {
   const mode = String(activeProject?.piece_control_mode ?? "off");
   const enabled = Boolean(projectId && mode !== "off");
   const queryClient = useQueryClient();
+  const { role, isLoading: roleLoading } = useProjectRole(projectId);
   const [activeView, setActiveView] = useState<PieceRegisterView>("overview");
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [sourceType, setSourceType] = useState<PieceImportSourceType>("csv");
@@ -114,6 +118,17 @@ export default function PieceRegister() {
   const [importRows, setImportRows] = useState<ImportPayload[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [applyConfirmed, setApplyConfirmed] = useState(false);
+  const [selectedPieceIds, setSelectedPieceIds] = useState<Set<string>>(new Set());
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveReason, setArchiveReason] = useState("");
+  const [archiveConfirmation, setArchiveConfirmation] = useState("");
+
+  useEffect(() => {
+    setSelectedPieceIds(new Set());
+    setArchiveOpen(false);
+    setArchiveReason("");
+    setArchiveConfirmation("");
+  }, [projectId]);
 
   const piecesQuery = useQuery({
     queryKey: ["piece-register", projectId],
@@ -164,6 +179,12 @@ export default function PieceRegister() {
     () => filterPieceRegisterRows(displayRows, filters),
     [displayRows, filters],
   );
+  const canArchive = enabled && !roleLoading && roleAtLeast(role, "admin");
+  const allFilteredSelected = filteredRows.length > 0
+    && filteredRows.every((piece) => selectedPieceIds.has(piece.id));
+  const archiveConfirmationText = selectedPieceIds.size === 1
+    ? "ARCHIVE 1 PIECE"
+    : `ARCHIVE ${selectedPieceIds.size} PIECES`;
 
   const profiles = useMemo(() => uniqueValues(displayRows.map((row) => row.profile)), [displayRows]);
   const grades = useMemo(() => uniqueValues(displayRows.map((row) => row.material_grade)), [displayRows]);
@@ -224,6 +245,39 @@ export default function PieceRegister() {
     },
     onError: (error: Error) => toast.error(error.message || "Unable to apply batch"),
   });
+  const archiveMutation = useMutation({
+    mutationFn: () => archivePieceLots(
+      projectId!,
+      [...selectedPieceIds],
+      archiveConfirmation,
+      archiveReason.trim(),
+    ),
+    onSuccess: async (summary) => {
+      const archived = Number(summary.archived ?? selectedPieceIds.size);
+      setSelectedPieceIds(new Set());
+      setArchiveOpen(false);
+      setArchiveReason("");
+      setArchiveConfirmation("");
+      await invalidate();
+      toast.success(`${archived} piece${archived === 1 ? "" : "s"} archived`);
+    },
+    onError: (error: Error) => toast.error(error.message || "Unable to archive pieces"),
+  });
+
+  const toggleAllFiltered = () => {
+    setSelectedPieceIds((current) => {
+      const next = new Set(current);
+      if (allFilteredSelected) filteredRows.forEach((piece) => next.delete(piece.id));
+      else filteredRows.forEach((piece) => next.add(piece.id));
+      return next;
+    });
+  };
+
+  const openArchiveDialog = () => {
+    setArchiveReason("");
+    setArchiveConfirmation("");
+    setArchiveOpen(true);
+  };
 
   const handleModeChanged = (nextMode: PieceControlMode) => {
     updateActiveProject?.({ piece_control_mode: nextMode });
@@ -358,6 +412,77 @@ export default function PieceRegister() {
           </div>
         </nav>
 
+        {archiveOpen && (
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/70 p-4"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !archiveMutation.isPending) setArchiveOpen(false);
+            }}
+          >
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="archive-piece-title"
+              className="w-full max-w-lg rounded-2xl border border-rose-200 bg-white p-6 shadow-2xl"
+            >
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-rose-100 p-2 text-rose-700"><Archive className="h-5 w-5" /></div>
+                <div>
+                  <h2 id="archive-piece-title" className="text-xl font-black text-slate-950">
+                    Archive {selectedPieceIds.size} piece{selectedPieceIds.size === 1 ? "" : "s"}?
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    Archived pieces are removed from active Piece Control counts and workflows. Import batches,
+                    relationships, and audit history are retained. Split, held, released, or production-started
+                    pieces cannot be archived.
+                  </p>
+                </div>
+              </div>
+              <label className="mt-5 grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+                Reason
+                <textarea
+                  value={archiveReason}
+                  onChange={(event) => setArchiveReason(event.target.value)}
+                  rows={3}
+                  autoFocus
+                  placeholder="Why should these pieces be removed from the active register?"
+                  className="resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-900"
+                />
+              </label>
+              <label className="mt-4 grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+                Type {archiveConfirmationText} to confirm
+                <input
+                  value={archiveConfirmation}
+                  onChange={(event) => setArchiveConfirmation(event.target.value)}
+                  placeholder={archiveConfirmationText}
+                  className="h-11 rounded-lg border border-slate-300 px-3 font-mono text-sm font-bold normal-case tracking-normal text-slate-900"
+                />
+              </label>
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={archiveMutation.isPending}
+                  onClick={() => setArchiveOpen(false)}
+                  className="h-10 rounded-lg border border-slate-300 px-4 text-sm font-bold text-slate-700 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={archiveMutation.isPending
+                    || archiveReason.trim().length === 0
+                    || archiveConfirmation !== archiveConfirmationText}
+                  onClick={() => archiveMutation.mutate()}
+                  className="h-10 rounded-lg bg-rose-700 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {archiveMutation.isPending ? "Archiving..." : "Archive pieces"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeView === "overview" && (
           <div className="space-y-5">
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -453,12 +578,34 @@ export default function PieceRegister() {
               <h2 className="font-black text-slate-900">Canonical pieces</h2>
               <p className="text-sm text-slate-500">{filteredRows.length} of {displayRows.length} rows shown</p>
             </div>
-            <button onClick={() => setFilters(EMPTY_FILTERS)} className="text-sm font-bold text-amber-700 hover:text-amber-900">Clear filters</button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={openArchiveDialog}
+                disabled={!canArchive || selectedPieceIds.size === 0}
+                title={canArchive ? "Archive selected pieces" : "Project admin access is required"}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-rose-700 px-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Archive className="h-4 w-4" />
+                Archive selected {selectedPieceIds.size > 0 ? `(${selectedPieceIds.size})` : ""}
+              </button>
+              <button onClick={() => setFilters(EMPTY_FILTERS)} className="text-sm font-bold text-amber-700 hover:text-amber-900">Clear filters</button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-[1380px] w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                 <tr>
+                  <th className="w-12 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all visible pieces"
+                      checked={allFilteredSelected}
+                      disabled={!canArchive || filteredRows.length === 0}
+                      onChange={toggleAllFiltered}
+                      className="h-4 w-4 rounded border-slate-300 accent-rose-700"
+                    />
+                  </th>
                   {["Mark / lot", "Qty", "Profile", "Grade", "Wt each", "Wt total", "Tons", "Work package", "Lifecycle", "Hold", "Source", "Last update"].map((label) => (
                     <th key={label} className="px-4 py-3 font-bold">{label}</th>
                   ))}
@@ -466,11 +613,11 @@ export default function PieceRegister() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {piecesQuery.isLoading && (
-                  <tr><td colSpan={12} className="px-6 py-14 text-center text-slate-500">Loading the project piece register...</td></tr>
+                  <tr><td colSpan={13} className="px-6 py-14 text-center text-slate-500">Loading the project piece register...</td></tr>
                 )}
                 {piecesQuery.error && (
                   <tr>
-                    <td colSpan={12} className="px-6 py-12 text-center">
+                    <td colSpan={13} className="px-6 py-12 text-center">
                       <div className="font-black text-red-700">The Piece Register could not be loaded.</div>
                       <div className="mt-1 text-sm text-slate-600">{(piecesQuery.error as Error).message}</div>
                       <button type="button" onClick={() => piecesQuery.refetch()} className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-800">Try again</button>
@@ -479,6 +626,21 @@ export default function PieceRegister() {
                 )}
                 {!piecesQuery.isLoading && !piecesQuery.error && filteredRows.map((piece) => (
                   <tr key={piece.id} className="hover:bg-amber-50/30">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${piece.piece_mark} lot ${piece.lot_code}`}
+                        checked={selectedPieceIds.has(piece.id)}
+                        disabled={!canArchive}
+                        onChange={() => setSelectedPieceIds((current) => {
+                          const next = new Set(current);
+                          if (next.has(piece.id)) next.delete(piece.id);
+                          else next.add(piece.id);
+                          return next;
+                        })}
+                        className="h-4 w-4 rounded border-slate-300 accent-rose-700"
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="font-black text-slate-950">{piece.piece_mark}</div>
                       <div className="text-xs text-slate-500">
@@ -503,7 +665,7 @@ export default function PieceRegister() {
                 ))}
                 {!piecesQuery.isLoading && !piecesQuery.error && filteredRows.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="px-6 py-14 text-center">
+                    <td colSpan={13} className="px-6 py-14 text-center">
                       <PackageOpen className="mx-auto h-8 w-8 text-slate-300" />
                       <div className="mt-3 font-black text-slate-800">
                         {displayRows.length === 0 ? "No pieces have been imported yet." : "No pieces match these filters."}
