@@ -23,9 +23,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // any in-flight render before starting a new one, rotation is honoured at
 // scale 1 AND at the user's zoom, link rects are projected via
 // viewport.convertToViewportPoint() so rotation is implicitly applied.
-export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation }) {
+export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderError }) {
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
+  const renderRunRef = useRef(0);
 
   const [rendering, setRendering] = useState(false);
   const [currentViewport, setCurrentViewport] = useState(null);
@@ -34,17 +35,38 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation }) {
   const [linkHotspots, setLinkHotspots] = useState([]);
 
   const renderPage = useCallback(async () => {
-    if (!pdfDoc || !canvasRef.current) return;
+    // PDF.js keeps a canvas locked until a cancelled render's promise settles.
+    // Starting the replacement render immediately can throw "Cannot use the
+    // same canvas during multiple render() operations" and leave the viewer
+    // blank. Serialize cancellation and use a run id so only the newest render
+    // may publish state.
+    const runId = ++renderRunRef.current;
+    const previousTask = renderTaskRef.current;
+    if (previousTask) {
+      previousTask.cancel();
+      try {
+        await previousTask.promise;
+      } catch {
+        // RenderingCancelledException is the expected cancellation result.
+        // Any real failure is surfaced by the render invocation that owns it.
+      }
+      if (renderRunRef.current !== runId) return;
+    }
 
-    // Cancel any in-flight render
-    if (renderTaskRef.current) {
-      renderTaskRef.current.cancel();
-      renderTaskRef.current = null;
+    // A file change clears pdfDoc while the replacement loads. That transition
+    // must still cancel the old document's render so it cannot repaint the
+    // canvas after the active drawing has changed.
+    if (!pdfDoc || !canvasRef.current) {
+      if (renderRunRef.current === runId) setRendering(false);
+      return;
     }
 
     setRendering(true);
+    let renderTask = null;
     try {
       const page = await pdfDoc.getPage(currentPage);
+      if (renderRunRef.current !== runId || !canvasRef.current) return;
+
       const baseViewport = page.getViewport({ scale: 1, rotation });
       setPageSize({ width: baseViewport.width, height: baseViewport.height });
       const viewport = page.getViewport({ scale: zoom, rotation });
@@ -53,8 +75,10 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation }) {
       canvas.height = viewport.height;
       const ctx = canvas.getContext("2d");
 
-      renderTaskRef.current = page.render({ canvasContext: ctx, viewport });
-      await renderTaskRef.current.promise;
+      renderTask = page.render({ canvasContext: ctx, viewport });
+      renderTaskRef.current = renderTask;
+      await renderTask.promise;
+      if (renderRunRef.current !== runId) return;
 
       // Publish viewport + size so AnnotationLayer can project markup.
       // We do this AFTER the render so the overlay never displays against
@@ -89,17 +113,25 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation }) {
       } catch {
         setLinkHotspots([]);
       }
+      onRenderError?.(null);
     } catch (err) {
-      if (err?.name !== "RenderingCancelledException") {
+      if (err?.name !== "RenderingCancelledException" && renderRunRef.current === runId) {
         console.error("Render error:", err);
+        onRenderError?.(`PDF render failed: ${err?.message || "Unknown rendering error"}`);
       }
     } finally {
-      setRendering(false);
-      renderTaskRef.current = null;
+      if (renderTaskRef.current === renderTask) renderTaskRef.current = null;
+      if (renderRunRef.current === runId) setRendering(false);
     }
-  }, [pdfDoc, currentPage, zoom, rotation]);
+  }, [pdfDoc, currentPage, zoom, rotation, onRenderError]);
 
   useEffect(() => { renderPage(); }, [renderPage]);
+
+  useEffect(() => () => {
+    renderRunRef.current += 1;
+    renderTaskRef.current?.cancel();
+    renderTaskRef.current = null;
+  }, []);
 
   return {
     canvasRef,

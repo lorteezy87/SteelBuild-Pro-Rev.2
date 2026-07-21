@@ -127,6 +127,7 @@ export default function DrawingViewer() {
     pdfError,
     currentPage,
     setCurrentPage,
+    setPdfError,
   } = usePdfLoader({ activeDrawing, renderMode });
 
   // Canvas-side renderer. Owns the <canvas> ref + the in-flight render task
@@ -140,7 +141,7 @@ export default function DrawingViewer() {
     canvasSize,
     pageSize,
     linkHotspots,
-  } = usePdfRenderer({ pdfDoc, currentPage, zoom, rotation });
+  } = usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderError: setPdfError });
 
   const qc = useQueryClient();
 
