@@ -102,6 +102,23 @@ begin
       v_ambiguous_attachments;
   end if;
 
+  if not exists (
+    select 1
+      from pg_catalog.pg_trigger trigger_row
+     where trigger_row.tgrelid = 'public.drawings'::regclass
+       and trigger_row.tgname = 'trg_drawings_set_lock_guard'
+       and not trigger_row.tgisinternal
+       and trigger_row.tgenabled = 'O'
+  ) then
+    raise exception
+      'app-files reference rewrite blocked: drawings lock guard is missing or not enabled';
+  end if;
+
+  -- Only the drawing-set lock guard rejects this path-only maintenance update.
+  -- Every audit/activity/timestamp/set-count trigger remains enabled. If any
+  -- later statement fails, the surrounding transaction rolls this ALTER back.
+  alter table public.drawings disable trigger trg_drawings_set_lock_guard;
+
   for v_ref in
     select *
       from (values
@@ -150,6 +167,20 @@ begin
       v_ref.column_name
     ) using v_org_id::text || '/';
   end loop;
+
+  alter table public.drawings enable trigger trg_drawings_set_lock_guard;
+
+  if not exists (
+    select 1
+      from pg_catalog.pg_trigger trigger_row
+     where trigger_row.tgrelid = 'public.drawings'::regclass
+       and trigger_row.tgname = 'trg_drawings_set_lock_guard'
+       and not trigger_row.tgisinternal
+       and trigger_row.tgenabled = 'O'
+  ) then
+    raise exception
+      'app-files reference rewrite blocked: drawings lock guard was not re-enabled';
+  end if;
 
   update public.change_orders
      set attachments = regexp_replace(

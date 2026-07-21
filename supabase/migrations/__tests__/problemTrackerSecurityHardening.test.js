@@ -112,6 +112,22 @@ describe("problem-tracker database security hardening", () => {
     expect(rewriteSql).not.toMatch(/delete\s+from\s+storage\.objects/);
   });
 
+  it("bypasses only the drawings lock guard for the transactional path rewrite", () => {
+    expect(rewriteSql.match(/alter table public\.drawings disable trigger/g)).toHaveLength(1);
+    expect(rewriteSql.match(/alter table public\.drawings enable trigger/g)).toHaveLength(1);
+    expect(rewriteSql).toContain(
+      "alter table public.drawings disable trigger trg_drawings_set_lock_guard;",
+    );
+    expect(rewriteSql).toContain(
+      "alter table public.drawings enable trigger trg_drawings_set_lock_guard;",
+    );
+    expect(rewriteSql.match(/trigger_row\.tgenabled = 'o'/g)).toHaveLength(2);
+    expect(rewriteSql).toContain("drawings lock guard is missing or not enabled");
+    expect(rewriteSql).toContain("drawings lock guard was not re-enabled");
+    expect(rewriteSql).not.toMatch(/disable trigger[^;]*(audit|activity|updated_at|set_count)/);
+    expect(rewriteSql).not.toMatch(/disable trigger\s+(?:all|user)\b/);
+  });
+
   it.each([
     ["reference rewrite", rewriteSql],
     ["policy closure", cutoverSql],
