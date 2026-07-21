@@ -124,3 +124,19 @@ export async function applyPieceImportBatch(batchId: string): Promise<Record<str
   if (error) throw error;
   return data as Record<string, unknown>;
 }
+
+export async function archivePieceLots(
+  projectId: string,
+  pieceIds: string[],
+  confirmation: string,
+  reason: string,
+): Promise<Record<string, unknown>> {
+  const { data, error } = await db.rpc("archive_piece_lots", {
+    p_project_id: projectId,
+    p_piece_ids: pieceIds,
+    p_confirmation: confirmation,
+    p_reason: reason,
+  });
+  if (error) throw error;
+  return data as Record<string, unknown>;
+}
