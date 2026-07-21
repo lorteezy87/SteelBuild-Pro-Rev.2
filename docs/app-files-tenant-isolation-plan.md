@@ -1,8 +1,16 @@
 # `app-files` legacy-path cutover runbook
 
-Status: **implemented in repository; not executed remotely**. Production had
-775 two-segment objects under `app-files/uploads/` on 2026-07-20. Recheck the
-count at execution time.
+Status: **completed in production on 2026-07-20**. All 775 two-segment objects
+under `app-files/uploads/` were copied and verified in the founding
+organization's prefix. Database references and RLS were cut over; all 775
+source objects remain retained as rollback material.
+
+Completion evidence: 706 objects matched by ETag and 69 by SHA-256, with zero
+missing destinations, size mismatches, or verification failures. The reviewed
+23 scalar reference columns and `change_orders.attachments` contain zero legacy
+references. Founding-org and non-founding authenticated sessions both saw zero
+legacy objects after closure. See
+[`problem-tracker-remediation-2026-07-20.md`](runbooks/problem-tracker-remediation-2026-07-20.md).
 
 ## Safety contract
 
@@ -24,7 +32,8 @@ Artifacts, in execution order:
 4. `20260721031606_close_app_files_legacy_path_final.sql`
 5. `supabase/functions/legacy-app-files-copy/disabled.ts`
 
-Rehearse the exact sequence with synthetic data on staging first.
+The exact sequence was rehearsed with synthetic data on staging before the
+production cutover.
 
 ## Initialize authorization
 
