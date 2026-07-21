@@ -33,11 +33,11 @@ vi.mock("@/api/supabaseClient", () => ({
 }));
 
 vi.mock("@/hooks/useTransmittals", () => ({
-  useTransmittals: () => ({ data: transmittals, isLoading: false, error: null }),
+  useTransmittals: () => ({ data: transmittals, isLoading: false, error: null as Error | null }),
 }));
 
 vi.mock("@/hooks/useDrawingRegister", () => ({
-  useDrawingRegister: () => ({ data: register, isLoading: false, error: null }),
+  useDrawingRegister: () => ({ data: register, isLoading: false, error: null as Error | null }),
 }));
 
 vi.mock("@/services/permissions", () => ({
