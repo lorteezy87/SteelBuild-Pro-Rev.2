@@ -10,23 +10,78 @@ begin;
 
 do $$
 declare
-  v_org_id uuid := public.founding_org_id();
+  v_org_id uuid;
+  v_reference_columns constant jsonb := $references$[
+    {"table_name":"drawings","column_name":"file_url"},
+    {"table_name":"drawings","column_name":"thumbnail_url"},
+    {"table_name":"drawing_sets","column_name":"file_url"},
+    {"table_name":"drawing_revisions","column_name":"file_url"},
+    {"table_name":"drawing_analyses","column_name":"file_url"},
+    {"table_name":"drawing_analyses","column_name":"storage_path"},
+    {"table_name":"drawing_signoffs","column_name":"signature_url"},
+    {"table_name":"submittals","column_name":"file_url"},
+    {"table_name":"submittal_rounds","column_name":"file_url"},
+    {"table_name":"submittal_rounds","column_name":"markup_file_url"},
+    {"table_name":"submittal_sheet_responses","column_name":"markup_file_url"},
+    {"table_name":"documents","column_name":"file_url"},
+    {"table_name":"photos","column_name":"file_url"},
+    {"table_name":"expenses","column_name":"receipt_url"},
+    {"table_name":"model_registry","column_name":"file_url"},
+    {"table_name":"model_registry","column_name":"cloud_url"},
+    {"table_name":"scope_items","column_name":"file_url"},
+    {"table_name":"scope_items","column_name":"storage_path"},
+    {"table_name":"mitigation_actions","column_name":"proof_url"},
+    {"table_name":"deliveries","column_name":"shipping_ticket_path"},
+    {"table_name":"deliveries","column_name":"shipping_ticket_url"},
+    {"table_name":"uploaded_files","column_name":"file_url"},
+    {"table_name":"user_profiles","column_name":"avatar_url"}
+  ]$references$::jsonb;
   v_source_objects bigint;
   v_destination_objects bigint;
   v_missing_or_mismatched bigint;
   v_verification jsonb;
   v_ambiguous_attachments bigint;
+  v_legacy_references bigint := 0;
+  v_count bigint;
   v_ref record;
 begin
-  if v_org_id is null then
-    raise exception 'app-files reference rewrite blocked: founding organization is missing';
-  end if;
-
   select count(*)
     into v_source_objects
     from storage.objects source_object
    where source_object.bucket_id = 'app-files'
      and source_object.name like 'uploads/%';
+
+  for v_ref in
+    select reference_column.table_name, reference_column.column_name
+      from pg_catalog.jsonb_to_recordset(v_reference_columns)
+        as reference_column(table_name text, column_name text)
+  loop
+    execute format(
+      'select count(*) from public.%I where %I like $1',
+      v_ref.table_name,
+      v_ref.column_name
+    ) into v_count using 'uploads/%';
+    v_legacy_references := v_legacy_references + v_count;
+  end loop;
+
+  select v_legacy_references + count(*)
+    into v_legacy_references
+    from public.change_orders
+   where attachments like '%uploads/%';
+
+  if v_source_objects = 0 then
+    if v_legacy_references > 0 then
+      raise exception
+        'app-files reference rewrite blocked: % legacy database reference(s) exist without source objects',
+        v_legacy_references;
+    end if;
+    return;
+  end if;
+
+  v_org_id := public.founding_org_id();
+  if v_org_id is null then
+    raise exception 'app-files reference rewrite blocked: founding organization is missing';
+  end if;
 
   select count(*)
     into v_destination_objects
@@ -120,32 +175,9 @@ begin
   alter table public.drawings disable trigger trg_drawings_set_lock_guard;
 
   for v_ref in
-    select *
-      from (values
-        ('drawings', 'file_url'),
-        ('drawings', 'thumbnail_url'),
-        ('drawing_sets', 'file_url'),
-        ('drawing_revisions', 'file_url'),
-        ('drawing_analyses', 'file_url'),
-        ('drawing_analyses', 'storage_path'),
-        ('drawing_signoffs', 'signature_url'),
-        ('submittals', 'file_url'),
-        ('submittal_rounds', 'file_url'),
-        ('submittal_rounds', 'markup_file_url'),
-        ('submittal_sheet_responses', 'markup_file_url'),
-        ('documents', 'file_url'),
-        ('photos', 'file_url'),
-        ('expenses', 'receipt_url'),
-        ('model_registry', 'file_url'),
-        ('model_registry', 'cloud_url'),
-        ('scope_items', 'file_url'),
-        ('scope_items', 'storage_path'),
-        ('mitigation_actions', 'proof_url'),
-        ('deliveries', 'shipping_ticket_path'),
-        ('deliveries', 'shipping_ticket_url'),
-        ('uploaded_files', 'file_url'),
-        ('user_profiles', 'avatar_url')
-      ) as reference_columns(table_name, column_name)
+    select reference_column.table_name, reference_column.column_name
+      from pg_catalog.jsonb_to_recordset(v_reference_columns)
+        as reference_column(table_name text, column_name text)
   loop
     execute format(
       'update public.%I reference_row

@@ -108,8 +108,34 @@ describe("problem-tracker database security hardening", () => {
   it("rewrites all reviewed scalar references only after size and aggregate verification", () => {
     expect(rewriteSql).toContain("destination object(s) are missing or size-mismatched");
     expect(rewriteSql).toContain("change-order attachment row(s) need manual parsing");
-    expect(rewriteSql.match(/\('(?:[a-z_]+)', '(?:[a-z_]+)'\)/g)).toHaveLength(23);
+    expect(
+      rewriteSql.match(/\{"table_name":"[a-z_]+","column_name":"[a-z_]+"\}/g),
+    ).toHaveLength(23);
     expect(rewriteSql).not.toMatch(/delete\s+from\s+storage\.objects/);
+  });
+
+  it.each([
+    ["reference rewrite", rewriteSql],
+    ["policy closure", cutoverSql],
+  ])("allows %s in a truly empty fresh environment", (_name, sql) => {
+    expect(sql).toContain("v_org_id uuid;");
+    expect(sql).toContain("if v_source_objects = 0 then");
+    expect(sql).toContain("legacy database reference(s) exist without source objects");
+    expect(sql).toContain("from pg_catalog.jsonb_to_recordset(v_reference_columns)");
+    expect(sql).toContain("where attachments like '%uploads/%'");
+
+    const sourceCount = sql.indexOf("into v_source_objects");
+    const emptyBranch = sql.indexOf("if v_source_objects = 0 then");
+    const orgLookup = sql.indexOf("v_org_id := public.founding_org_id()");
+    expect(sourceCount).toBeGreaterThan(-1);
+    expect(sourceCount).toBeLessThan(emptyBranch);
+    expect(emptyBranch).toBeLessThan(orgLookup);
+  });
+
+  it("still closes legacy policies and completes the marker after an empty closure check", () => {
+    const emptyBranch = cutoverSql.indexOf("if v_source_objects = 0 then");
+    expect(cutoverSql.indexOf("alter policy auth_read")).toBeGreaterThan(emptyBranch);
+    expect(cutoverSql.indexOf("update private.maintenance_jobs")).toBeGreaterThan(emptyBranch);
   });
 
   it("bypasses only the drawings lock guard for the transactional path rewrite", () => {
