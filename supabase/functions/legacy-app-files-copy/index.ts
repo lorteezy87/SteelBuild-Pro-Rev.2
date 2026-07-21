@@ -36,6 +36,18 @@ function objectSize(info: { size?: number; metadata?: Record<string, unknown> } 
   return Number.isFinite(size) ? size : null;
 }
 
+function objectEtag(info: { metadata?: Record<string, unknown> } | null): string | null {
+  const value = info?.metadata?.eTag ?? info?.metadata?.etag;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+async function sha256Hex(blob: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return jsonResponse(405, { error: "Method not allowed." });
@@ -69,39 +81,73 @@ Deno.serve(async (request) => {
     let copied = 0;
     let existing = 0;
     let failed = 0;
-    let verified = 0;
+    let etagVerified = 0;
+    let hashVerified = 0;
+    let contentVerified = 0;
     const files = (listed || []).filter((object) => object.id != null);
 
     for (const object of files) {
       const source = `${SOURCE_FOLDER}/${object.name}`;
       const destination = `${context.founding_org_id}/${source}`;
-      const sourceSize = objectSize(object);
-      const destinationBefore = await storage.info(destination);
-
-      if (!destinationBefore.error) {
-        if (sourceSize != null && objectSize(destinationBefore.data) === sourceSize) {
-          existing += 1;
-          verified += 1;
-        } else {
-          failed += 1;
-        }
-        continue;
-      }
-
-      const copy = await storage.copy(source, destination);
-      if (copy.error) {
+      const sourceInfo = await storage.info(source);
+      if (sourceInfo.error) {
         failed += 1;
         continue;
       }
-      copied += 1;
+      const sourceSize = objectSize(sourceInfo.data);
+      const sourceEtag = objectEtag(sourceInfo.data);
 
-      const destinationAfter = await storage.info(destination);
+      let destinationInfo = await storage.info(destination);
+      if (!destinationInfo.error) {
+        existing += 1;
+      } else {
+        const copy = await storage.copy(source, destination);
+        if (copy.error) {
+          failed += 1;
+          continue;
+        }
+        copied += 1;
+
+        destinationInfo = await storage.info(destination);
+      }
+
       if (
-        !destinationAfter.error &&
-        sourceSize != null &&
-        objectSize(destinationAfter.data) === sourceSize
+        destinationInfo.error ||
+        sourceSize == null ||
+        objectSize(destinationInfo.data) !== sourceSize
       ) {
-        verified += 1;
+        failed += 1;
+        continue;
+      }
+
+      const destinationEtag = objectEtag(destinationInfo.data);
+      if (sourceEtag && destinationEtag && sourceEtag === destinationEtag) {
+        etagVerified += 1;
+        contentVerified += 1;
+        continue;
+      }
+
+      const [sourceDownload, destinationDownload] = await Promise.all([
+        storage.download(source),
+        storage.download(destination),
+      ]);
+      if (
+        sourceDownload.error ||
+        destinationDownload.error ||
+        !sourceDownload.data ||
+        !destinationDownload.data
+      ) {
+        failed += 1;
+        continue;
+      }
+
+      const [sourceHash, destinationHash] = await Promise.all([
+        sha256Hex(sourceDownload.data),
+        sha256Hex(destinationDownload.data),
+      ]);
+      if (sourceHash === destinationHash) {
+        hashVerified += 1;
+        contentVerified += 1;
       } else {
         failed += 1;
       }
@@ -113,8 +159,10 @@ Deno.serve(async (request) => {
       scanned,
       copied,
       existing,
-      verified,
-      failed,
+      etag_verified: etagVerified,
+      hash_verified: hashVerified,
+      content_verified: contentVerified,
+      verification_failed: failed,
       next_offset: offset + (listed || []).length,
       complete,
       originals_deleted: 0,

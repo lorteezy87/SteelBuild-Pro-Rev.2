@@ -13,8 +13,11 @@ begin;
 do $$
 declare
   v_org_id uuid := public.founding_org_id();
+  v_source_objects bigint;
+  v_destination_objects bigint;
   v_missing_copies bigint;
   v_unverified_copies bigint;
+  v_verification jsonb;
   v_legacy_references bigint := 0;
   v_broken_references bigint := 0;
   v_count bigint;
@@ -22,6 +25,51 @@ declare
 begin
   if v_org_id is null then
     raise exception 'app-files cutover blocked: founding organization is missing';
+  end if;
+
+  select count(*)
+    into v_source_objects
+    from storage.objects source_object
+   where source_object.bucket_id = 'app-files'
+     and source_object.name like 'uploads/%';
+
+  select count(*)
+    into v_destination_objects
+    from storage.objects source_object
+    join storage.objects destination_object
+      on destination_object.bucket_id = source_object.bucket_id
+     and destination_object.name = v_org_id::text || '/' || source_object.name
+   where source_object.bucket_id = 'app-files'
+     and source_object.name like 'uploads/%';
+
+  select job.completion_details
+    into v_verification
+    from private.maintenance_jobs job
+   where job.job_key = 'legacy_app_files_copy';
+
+  if not found then
+    raise exception 'app-files cutover blocked: maintenance marker missing';
+  end if;
+
+  if coalesce(v_verification ->> 'source_objects', '') !~ '^[0-9]+$'
+     or coalesce(v_verification ->> 'destination_objects', '') !~ '^[0-9]+$'
+     or coalesce(v_verification ->> 'content_verified', '') !~ '^[0-9]+$'
+     or coalesce(v_verification ->> 'verification_failed', '') !~ '^[0-9]+$'
+     or (v_verification ->> 'source_objects')::bigint <> v_source_objects
+     or (v_verification ->> 'destination_objects')::bigint <> v_source_objects
+     or (v_verification ->> 'content_verified')::bigint <> v_source_objects
+     or (v_verification ->> 'verification_failed')::bigint <> 0
+     or nullif(v_verification ->> 'verified_at', '') is null then
+    raise exception
+      'app-files cutover blocked: aggregate content verification is incomplete for % source object(s)',
+      v_source_objects;
+  end if;
+
+  if v_destination_objects <> v_source_objects then
+    raise exception
+      'app-files cutover blocked: expected % destination object(s), found %',
+      v_source_objects,
+      v_destination_objects;
   end if;
 
   select count(*)
@@ -56,17 +104,11 @@ begin
        or coalesce(source_object.metadata ->> 'size', source_object.metadata ->> 'contentLength')
           is distinct from
           coalesce(destination_object.metadata ->> 'size', destination_object.metadata ->> 'contentLength')
-       or (
-         coalesce(source_object.metadata ->> 'eTag', source_object.metadata ->> 'etag') is not null
-         and coalesce(source_object.metadata ->> 'eTag', source_object.metadata ->> 'etag')
-             is distinct from
-             coalesce(destination_object.metadata ->> 'eTag', destination_object.metadata ->> 'etag')
-       )
      );
 
   if v_unverified_copies > 0 then
     raise exception
-      'app-files cutover blocked: % destination copy metadata record(s) do not match their source',
+      'app-files cutover blocked: % destination copy size record(s) do not match their source',
       v_unverified_copies;
   end if;
 
@@ -173,7 +215,7 @@ begin
   update private.maintenance_jobs
      set completed_at = coalesce(completed_at, now()),
          token_sha256 = null,
-         completion_details = jsonb_build_object(
+         completion_details = completion_details || jsonb_build_object(
            'legacy_objects_retained', (
              select count(*)
              from storage.objects

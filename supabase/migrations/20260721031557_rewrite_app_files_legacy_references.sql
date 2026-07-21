@@ -11,12 +11,60 @@ begin;
 do $$
 declare
   v_org_id uuid := public.founding_org_id();
+  v_source_objects bigint;
+  v_destination_objects bigint;
   v_missing_or_mismatched bigint;
+  v_verification jsonb;
   v_ambiguous_attachments bigint;
   v_ref record;
 begin
   if v_org_id is null then
     raise exception 'app-files reference rewrite blocked: founding organization is missing';
+  end if;
+
+  select count(*)
+    into v_source_objects
+    from storage.objects source_object
+   where source_object.bucket_id = 'app-files'
+     and source_object.name like 'uploads/%';
+
+  select count(*)
+    into v_destination_objects
+    from storage.objects source_object
+    join storage.objects destination_object
+      on destination_object.bucket_id = source_object.bucket_id
+     and destination_object.name = v_org_id::text || '/' || source_object.name
+   where source_object.bucket_id = 'app-files'
+     and source_object.name like 'uploads/%';
+
+  select job.completion_details
+    into v_verification
+    from private.maintenance_jobs job
+   where job.job_key = 'legacy_app_files_copy';
+
+  if not found then
+    raise exception 'app-files reference rewrite blocked: maintenance marker missing';
+  end if;
+
+  if coalesce(v_verification ->> 'source_objects', '') !~ '^[0-9]+$'
+     or coalesce(v_verification ->> 'destination_objects', '') !~ '^[0-9]+$'
+     or coalesce(v_verification ->> 'content_verified', '') !~ '^[0-9]+$'
+     or coalesce(v_verification ->> 'verification_failed', '') !~ '^[0-9]+$'
+     or (v_verification ->> 'source_objects')::bigint <> v_source_objects
+     or (v_verification ->> 'destination_objects')::bigint <> v_source_objects
+     or (v_verification ->> 'content_verified')::bigint <> v_source_objects
+     or (v_verification ->> 'verification_failed')::bigint <> 0
+     or nullif(v_verification ->> 'verified_at', '') is null then
+    raise exception
+      'app-files reference rewrite blocked: aggregate content verification is incomplete for % source object(s)',
+      v_source_objects;
+  end if;
+
+  if v_destination_objects <> v_source_objects then
+    raise exception
+      'app-files reference rewrite blocked: expected % destination object(s), found %',
+      v_source_objects,
+      v_destination_objects;
   end if;
 
   select count(*)
@@ -34,17 +82,11 @@ begin
        or coalesce(source_object.metadata ->> 'size', source_object.metadata ->> 'contentLength')
           is distinct from
           coalesce(destination_object.metadata ->> 'size', destination_object.metadata ->> 'contentLength')
-       or (
-         coalesce(source_object.metadata ->> 'eTag', source_object.metadata ->> 'etag') is not null
-         and coalesce(source_object.metadata ->> 'eTag', source_object.metadata ->> 'etag')
-             is distinct from
-             coalesce(destination_object.metadata ->> 'eTag', destination_object.metadata ->> 'etag')
-       )
      );
 
   if v_missing_or_mismatched > 0 then
     raise exception
-      'app-files reference rewrite blocked: % destination object(s) are missing or metadata-mismatched',
+      'app-files reference rewrite blocked: % destination object(s) are missing or size-mismatched',
       v_missing_or_mismatched;
   end if;
 

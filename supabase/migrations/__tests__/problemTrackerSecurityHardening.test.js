@@ -102,14 +102,33 @@ describe("problem-tracker database security hardening", () => {
     expect(cutoverSql).toContain("legacy object(s) do not have org-scoped copies");
     expect(cutoverSql).toContain("database reference(s) still use uploads/ paths");
     expect(cutoverSql).toContain("org-scoped database reference(s) have no object");
-    expect(cutoverSql).toContain("destination copy metadata record(s) do not match their source");
+    expect(cutoverSql).toContain("destination copy size record(s) do not match their source");
   });
 
-  it("rewrites all reviewed scalar references only after copy metadata matches", () => {
-    expect(rewriteSql).toContain("destination object(s) are missing or metadata-mismatched");
+  it("rewrites all reviewed scalar references only after size and aggregate verification", () => {
+    expect(rewriteSql).toContain("destination object(s) are missing or size-mismatched");
     expect(rewriteSql).toContain("change-order attachment row(s) need manual parsing");
     expect(rewriteSql.match(/\('(?:[a-z_]+)', '(?:[a-z_]+)'\)/g)).toHaveLength(23);
     expect(rewriteSql).not.toMatch(/delete\s+from\s+storage\.objects/);
+  });
+
+  it.each([
+    ["reference rewrite", rewriteSql],
+    ["policy closure", cutoverSql],
+  ])("requires complete aggregate content verification before %s", (_name, sql) => {
+    for (const field of [
+      "source_objects",
+      "destination_objects",
+      "content_verified",
+      "verification_failed",
+      "verified_at",
+    ]) {
+      expect(sql).toContain(`v_verification ->> '${field}'`);
+    }
+    expect(sql).toContain("<> v_source_objects");
+    expect(sql).toContain("<> 0");
+    expect(sql).not.toMatch(/metadata\s*->>\s*'etag'/i);
+    expect(sql).not.toMatch(/metadata\s*->>\s*'eTag'/);
   });
 
   it("retains source objects while preserving copied-object ownership", () => {
@@ -130,6 +149,7 @@ describe("problem-tracker database security hardening", () => {
   it("atomically completes and disables the legacy-copy maintenance job", () => {
     expect(cutoverSql).toContain("update private.maintenance_jobs");
     expect(cutoverSql).toContain("token_sha256 = null");
+    expect(cutoverSql).toContain("completion_details = completion_details || jsonb_build_object");
     expect(cutoverSql).toContain("where job_key = 'legacy_app_files_copy'");
   });
 });

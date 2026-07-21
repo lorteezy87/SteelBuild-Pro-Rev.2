@@ -38,8 +38,19 @@ describe("one-time maintenance Edge Function contracts", () => {
     expect(copy).toContain("scanned,");
     expect(copy).toContain("copied,");
     expect(copy).toContain("existing,");
-    expect(copy).toContain("verified,");
+    expect(copy).toContain("etag_verified: etagVerified,");
+    expect(copy).toContain("hash_verified: hashVerified,");
+    expect(copy).toContain("content_verified: contentVerified,");
+    expect(copy).toContain("verification_failed: failed,");
     expect(copy).not.toMatch(/jsonResponse\([^)]*source|jsonResponse\([^)]*destination/s);
+  });
+
+  it("hashes both objects when equal-size copies do not have matching ETags", () => {
+    expect(copy).toContain("sourceEtag === destinationEtag");
+    expect(copy).toContain("storage.download(source)");
+    expect(copy).toContain("storage.download(destination)");
+    expect(copy).toContain('crypto.subtle.digest("SHA-256"');
+    expect(copy).toContain("sourceHash === destinationHash");
   });
 
   it("hard-locks bootstrap to staging and deletes only unconfirmed synthetic users", () => {
