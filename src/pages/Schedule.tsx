@@ -10,6 +10,7 @@ import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { addDaysIso, applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import { computePhaseWbs, generateWBS, sanitizeScheduleTaskUpdatePayload } from "./schedule/wbs";
 import { PHASE_NAME_MAP, derivePhaseFromHierarchy, deriveMppDependencies, inferTaskType, parseMsProjectXml } from "./schedule/mppImport";
@@ -66,8 +67,12 @@ export default function Schedule() {
   // the whole schedule layer consumes (optional fields + `[key: string]: any`); every
   // consumer here is already null-safe. Normalize once at the boundary so downstream
   // call sites stay clean. Removable once the hook is typed.
-  const { scheduleTasks: scheduleTasksRaw } = useScheduleTasks(projectId);
+  const { scheduleTasks: scheduleTasksRaw, isLoading: scheduleTasksLoading } = useScheduleTasks(projectId);
   const scheduleTasks = scheduleTasksRaw as unknown as ScheduleTask[];
+  useAutoOpenEdit(scheduleTasks, (task) => {
+    setSelectedTask(task);
+    setShowDrawer(true);
+  }, { enabled: !scheduleTasksLoading, param: "recordId" });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

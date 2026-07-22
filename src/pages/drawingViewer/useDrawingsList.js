@@ -17,7 +17,7 @@ import { entities } from "@/api/supabaseClient";
 //   - activeDrawing
 //   - activeIndex  — index of the active drawing within `filtered`, or -1.
 export function useDrawingsList({ projectId, activeId, search }) {
-  const { data: rawDrawings = [] } = useQuery({
+  const { data: rawDrawings = [], isLoading } = useQuery({
     queryKey: ["drawings", projectId],
     queryFn: () => projectId ? entities.Drawing.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
@@ -44,7 +44,7 @@ export function useDrawingsList({ projectId, activeId, search }) {
   const activeDrawing = drawings.find((d) => d.id === activeId);
   const activeIndex = filtered.findIndex((d) => d.id === activeId);
 
-  return { drawings, filtered, activeDrawing, activeIndex };
+  return { drawings, filtered, activeDrawing, activeIndex, isLoading };
 }
 
 /**

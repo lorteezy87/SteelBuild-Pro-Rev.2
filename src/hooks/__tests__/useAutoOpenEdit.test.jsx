@@ -88,4 +88,15 @@ describe("useAutoOpenEdit", () => {
     setup("/punchlist?punch=a", ITEMS, openEdit, { param: "punch" });
     expect(openEdit).toHaveBeenCalledWith({ id: "a", name: "Item A" });
   });
+
+  it("consumes canonical recordId while preserving project scope", () => {
+    const openEdit = vi.fn();
+    const { seen } = setup("/RFIs?projectId=project-1&recordId=b", ITEMS, openEdit, {
+      param: "recordId",
+    });
+
+    expect(openEdit).toHaveBeenCalledWith({ id: "b", name: "Item B" });
+    expect(seen.params.get("projectId")).toBe("project-1");
+    expect(seen.params.get("recordId")).toBeNull();
+  });
 });

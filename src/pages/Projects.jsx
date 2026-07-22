@@ -575,6 +575,7 @@ export default function Projects() {
 
   const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
   useAutoOpenEdit(projects, setDetailProject, { enabled: !projectsLoading });
+  useAutoOpenEdit(projects, setDetailProject, { enabled: !projectsLoading, param: "recordId" });
   // Subset used by every page-level KPI rollup: on-hold projects (and their
   // child entities) must NOT contribute. Per-card stats still show the
   // project's own counts so users can see what's parked in a paused project.

@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -80,6 +81,7 @@ export default function RFIs() {
     queryFn: () => entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
     enabled: !!projectId,
   });
+  useAutoOpenEdit(rfis, setSelectedRFI, { enabled: !rfisLoading, param: "recordId" });
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
