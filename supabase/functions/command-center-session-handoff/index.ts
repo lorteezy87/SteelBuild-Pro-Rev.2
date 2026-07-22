@@ -18,8 +18,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   try {
     const body = await readJsonObject(request);
-    if (body.action === "create") return handleCreate(request, body);
-    if (body.action === "redeem") return handleRedeem(request, body);
+    if (body.action === "create") return await handleCreate(request, body);
+    if (body.action === "redeem") return await handleRedeem(request, body);
     return jsonResponse({ error: "Unsupported handoff action" }, 400, request);
   } catch (error) {
     const message = error instanceof RequestError ? error.message : "Invalid handoff request";
