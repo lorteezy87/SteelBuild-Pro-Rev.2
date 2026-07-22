@@ -29,6 +29,7 @@ import { batchProcess } from "@/utils/batchProcess";
 import { usePermissions } from "@/services/permissions";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useSubmittalComponents } from "@/hooks/useSubmittalComponents";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import type { DrawingType } from "@/lib/submittalComponents";
 import { CLOSED_SUBMITTAL_STATUSES, submittalStatusToStage } from "@/lib/submittalStageMapping";
 import { shouldBumpRevisionOnResubmit } from "@/lib/submittalRevision";
@@ -97,6 +98,10 @@ export default function Submittals() {
       : [],
     enabled: !!projectId,
     staleTime: 30_000,
+  });
+  useAutoOpenEdit(rows, (submittal) => setSelectedId(submittal.id), {
+    enabled: !isLoading,
+    param: "recordId",
   });
 
   // Drawing sets for the active project — used by the "Linked drawing

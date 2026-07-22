@@ -181,6 +181,7 @@ const ROUTE_DOMAINS = {
     UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management",       { lifecycle: "internal" }),
     ProjectMembers:   r(lazyWithRetry(() => import("@/pages/ProjectMembers")),   "Project Members",       { lifecycle: "internal" }),
     FeatureFlagsAdmin: r(lazyWithRetry(() => import("@/pages/FeatureFlagsAdmin")), "Feature Flags",       { lifecycle: "internal" }),
+    DesktopConnect:    r(lazyWithRetry(() => import("@/pages/DesktopConnect")),    "Connect Desktop",     { lifecycle: "internal" }),
     Tutorial:         r(lazyWithRetry(() => import("@/pages/Tutorial")),         "Tutorial / Help"),
   },
 

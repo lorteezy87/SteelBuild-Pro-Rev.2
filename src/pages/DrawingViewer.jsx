@@ -43,6 +43,7 @@ import ViewerToolbar from "@/pages/drawingViewer/ViewerToolbar";
 import CalloutOverlay from "@/pages/drawingViewer/CalloutOverlay";
 import PdfLinkHotspotLayer from "@/pages/drawingViewer/PdfLinkHotspotLayer";
 import { useZoneData } from "@/pages/drawingViewer/useZoneData";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { drawingViewerStyles } from "@/pages/drawingViewer/drawingViewerStyles";
 import {
   createZone as createZoneSvc,
@@ -57,12 +58,13 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export default function DrawingViewer() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
 
-  const initialId = searchParams.get("id") || searchParams.get("drawingId") || searchParams.get("docId");
+  const initialId = searchParams.get("recordId") || searchParams.get("id") || searchParams.get("drawingId") || searchParams.get("docId");
+  const requestedRevisionId = searchParams.get("revisionId");
 
   const [userId, setUserId] = useState(null);
   useEffect(() => {
@@ -113,7 +115,35 @@ export default function DrawingViewer() {
   // useDrawingsList encapsulates the project drawings query, the search
   // filter, and the active-drawing lookup. activeIndex (used below by the
   // keyboard shortcuts effect) also lives in there.
-  const { drawings, filtered, activeDrawing, activeIndex } = useDrawingsList({ projectId, activeId, search });
+  const { drawings, filtered, activeDrawing, activeIndex, isLoading: drawingsLoading } = useDrawingsList({ projectId, activeId, search });
+  useAutoOpenEdit(drawings, (drawing) => setActiveId(drawing.id), {
+    enabled: !drawingsLoading,
+    param: "recordId",
+  });
+
+  const { data: requestedRevision, isFetched: requestedRevisionFetched } = useQuery({
+    queryKey: ["drawing-revision-deep-link", requestedRevisionId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("drawing_revisions")
+        .select("id,drawing_id")
+        .eq("id", requestedRevisionId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!requestedRevisionId,
+    staleTime: 5 * 60 * 1000,
+  });
+  useEffect(() => {
+    if (!requestedRevisionId || !requestedRevisionFetched || !activeDrawing) return;
+    if (!requestedRevision || requestedRevision.drawing_id !== activeDrawing.id) {
+      toast.error("The requested drawing revision is unavailable for this project.");
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("revisionId");
+    setSearchParams(next, { replace: true });
+  }, [activeDrawing, requestedRevision, requestedRevisionFetched, requestedRevisionId, searchParams, setSearchParams]);
   const markupScale = activeDrawing?.markup_scale || null;
 
   // PDF lifecycle: file_url → signed URL → pdfjs document. Owns currentPage
