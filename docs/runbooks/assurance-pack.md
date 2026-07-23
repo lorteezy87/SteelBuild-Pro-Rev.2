@@ -1,7 +1,7 @@
 # Security & Compliance Assurance Pack
 
 **SteelBuild Pro**
-Date: 2026-07-01
+Date: 2026-07-22
 Finding: [M22] (no security/assurance collateral for enterprise buyers)
 
 Purpose: a single reference for the artifacts enterprise/procurement teams request during a security review of a SaaS vendor. This is an **outline + working reference**, not a substitute for counsel-reviewed published documents (see owner-checklist H12/H13).
@@ -40,7 +40,7 @@ Refs:
 ## 3. Backup & DR statement
 
 - **Database (Postgres):** Supabase daily automated backups + Point-in-Time Recovery (PITR). Target **RPO 15 min / RTO 4 h**. Restore rehearsed on a recurring cadence (log in `backup-dr.md`).
-- **Storage (`app-files`, `email-attachments`):** nightly **offsite versioned** sync via rclone from the Supabase Storage S3 endpoint to an offsite bucket. Target **RPO 24 h / RTO 4 h**.
+- **Storage (`app-files`, `email-attachments`):** nightly offsite workflow is implemented with timestamped snapshots, a current mirror, exact verification, and a retained manifest. It is **not yet an operating control** until owner-managed secrets are configured and the first backup plus staging restore are recorded. Target **RPO 24 h / RTO 4 h**.
 - Restore procedure and post-restore verification: `backup-dr.md`.
 
 ---
@@ -93,55 +93,9 @@ Gaps to close for SOC 2 readiness: formal written policies (Section 1), MFA enfo
 
 ---
 
-## 7. Illustrative offsite Storage backup — example GitHub Action
+## 7. Offsite Storage backup implementation and evidence status
 
-> **This is an illustrative example, NOT a live workflow file.** It documents the intended offsite Storage backup (owner-checklist H25 / `backup-dr.md`). To adopt it, an owner would create a real `.github/workflows/` file, add the required repo secrets, and verify a first run. Do **not** treat this fenced block as committed automation.
-
-```yaml
-# storage-backup.workflow.example.yml
-# EXAMPLE ONLY — nightly offsite backup of Supabase Storage buckets via rclone.
-# Requires repo secrets:
-#   SUPABASE_S3_ACCESS_KEY_ID, SUPABASE_S3_SECRET_ACCESS_KEY  (Supabase Storage S3 access keys)
-#   OFFSITE_S3_ACCESS_KEY_ID,  OFFSITE_S3_SECRET_ACCESS_KEY   (offsite versioned bucket creds)
-#   OFFSITE_BUCKET                                            (e.g. s3://sbp-storage-backup)
-name: storage-backup-example
-on:
-  schedule:
-    - cron: "0 8 * * *"   # 08:00 UTC nightly (~1am AZ)
-  workflow_dispatch: {}
-jobs:
-  backup:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install rclone
-        run: curl https://rclone.org/install.sh | sudo bash
-      - name: Configure rclone remotes
-        env:
-          SB_KEY: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
-          SB_SECRET: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
-          OFF_KEY: ${{ secrets.OFFSITE_S3_ACCESS_KEY_ID }}
-          OFF_SECRET: ${{ secrets.OFFSITE_S3_SECRET_ACCESS_KEY }}
-        run: |
-          # Source: Supabase Storage S3-compatible endpoint
-          rclone config create supabase s3 \
-            provider Other \
-            access_key_id "$SB_KEY" secret_access_key "$SB_SECRET" \
-            endpoint https://kjrwqagyeswwoxpjkcko.storage.supabase.co/storage/v1/s3 \
-            region us-east-1
-          # Destination: offsite versioned bucket (enable object versioning on the bucket)
-          rclone config create offsite s3 \
-            access_key_id "$OFF_KEY" secret_access_key "$OFF_SECRET"
-      - name: Sync app-files
-        run: |
-          rclone sync supabase:app-files "offsite:${{ secrets.OFFSITE_BUCKET }}/app-files" \
-            --fast-list --transfers 8 --checkers 16 --stats-one-line
-      - name: Sync email-attachments
-        run: |
-          rclone sync supabase:email-attachments "offsite:${{ secrets.OFFSITE_BUCKET }}/email-attachments" \
-            --fast-list --transfers 8 --checkers 16 --stats-one-line
-```
-
-Notes for whoever adopts this:
-- The **offsite bucket must have versioning enabled** so an `rclone sync` (which mirrors deletes) cannot silently destroy the only copy — versioning preserves prior object versions.
-- Consider `rclone copy` (never deletes) instead of `sync`, or add lifecycle rules, if you want strict append-only retention.
-- Test a **restore back** into a staging Supabase project as part of the DR rehearsal (`backup-dr.md`), not just the outbound sync.
+- Workflow: `.github/workflows/storage-backup.yml` (nightly and manual dispatch).
+- Runner: `scripts/storage-backup.mjs` (server-only credentials, both required buckets, immutable snapshot, current mirror, checks, and manifest).
+- Setup and restore acceptance: `storage-backup-setup.md`.
+- Evidence status: **implementation verified by automated tests; operating effectiveness not yet verified**. H25 remains open until the first successful production-source backup manifest and staging restore record exist.

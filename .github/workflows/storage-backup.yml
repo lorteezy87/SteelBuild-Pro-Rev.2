@@ -1,0 +1,63 @@
+name: Storage backup
+
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: storage-backup-production
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Back up Supabase Storage offsite
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: storage-backup-production
+    env:
+      RCLONE_VERSION: "1.74.4"
+      RCLONE_SHA256: fe435e0c36228e7c2f116a8701f01127bb1f694005fc11d1f27186c8bca4115d
+      STORAGE_BACKUP_MANIFEST_PATH: ${{ runner.temp }}/storage-backup-manifest.json
+      OFFSITE_RCLONE_CONFIG_B64: ${{ secrets.OFFSITE_RCLONE_CONFIG_B64 }}
+      OFFSITE_ROOT: ${{ secrets.OFFSITE_ROOT }}
+      SUPABASE_S3_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+      SUPABASE_S3_ENDPOINT: ${{ secrets.SUPABASE_S3_ENDPOINT }}
+      SUPABASE_S3_REGION: ${{ secrets.SUPABASE_S3_REGION }}
+      SUPABASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install verified rclone binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --output rclone.zip \
+            "https://downloads.rclone.org/v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-amd64.zip"
+          echo "${RCLONE_SHA256}  rclone.zip" | sha256sum --check --strict
+          unzip -q rclone.zip
+          sudo install -m 0755 \
+            "rclone-v${RCLONE_VERSION}-linux-amd64/rclone" \
+            /usr/local/bin/rclone
+          rclone version
+
+      - name: Back up and verify required buckets
+        run: node scripts/storage-backup.mjs
+
+      - name: Retain verified backup manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-backup-manifest-${{ github.run_id }}
+          path: ${{ runner.temp }}/storage-backup-manifest.json
+          if-no-files-found: error
+          retention-days: 30

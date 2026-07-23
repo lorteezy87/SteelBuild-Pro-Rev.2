@@ -69,6 +69,13 @@ Refs:
   - Why: daily backups alone give up to ~24h of data loss; PITR narrows RPO to minutes. An untested backup is not a backup.
   - Verify: rehearsal completes; login + project-list + drawing-register + a signed-URL file open all succeed on the restored copy.
 
+- [~] **Enable and rehearse offsite Storage backup** — [H25]
+  - **Code ready (2026-07-22):** `.github/workflows/storage-backup.yml` and `scripts/storage-backup.mjs` cover `app-files` and `email-attachments` with timestamped snapshots, a current mirror, exact path/size checks, aggregate count/byte checks, and a retained manifest.
+  - Owner steps: provision a company-owned offsite destination, enable provider-side versioning/soft-delete and lifecycle retention, configure the `storage-backup-production` GitHub environment secrets, then manually run the workflow.
+  - Rehearse a restore of both buckets into staging and record the manifest timestamp, measured RTO/RPO, and post-restore checks in `backup-dr.md`.
+  - Full setup and acceptance criteria: `storage-backup-setup.md`.
+  - Verify: the workflow has a green run and manifest for both buckets, failure notifications reach an owner, and the staging restore passes a real signed-file open.
+
 - [ ] **Harden Auth settings** — [M42]
   - Supabase dashboard → `Authentication → Providers/Policies/Settings`:
     - Minimum password length **>= 10** with complexity requirement enabled.

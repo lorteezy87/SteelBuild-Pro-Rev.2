@@ -1,7 +1,7 @@
 # Backup & Disaster Recovery Runbook
 
 **SteelBuild Pro**
-Date: 2026-07-01
+Date: 2026-07-22
 Findings: [H24] (backups/PITR untested) · [H25] (Storage not backed up)
 
 Refs:
@@ -17,13 +17,13 @@ Refs:
 | Data | Current coverage | Gap |
 |---|---|---|
 | **Postgres database** (all tables: projects, drawings, submittals, RFIs, financials, activities audit trail, org/billing, etc.) | Supabase **daily automated backups**; **PITR** to be enabled (see owner-checklist H24) | Backups exist but were **never restore-tested** until the rehearsal below. |
-| **Storage bucket `app-files`** (drawings, uploaded documents, exports) | **NOT covered by Supabase database backups.** [H25] | No offsite copy. Loss/corruption of the bucket = permanent data loss. |
-| **Storage bucket `email-attachments`** (inbound email attachments) | **NOT covered.** [H25] | Same as above. |
+| **Storage bucket `app-files`** (drawings, uploaded documents, exports) | Repository automation is implemented in `.github/workflows/storage-backup.yml`; Supabase database backups still do **not** include object bytes. [H25] | Owner must configure the offsite destination/secrets, capture the first successful verified manifest, and rehearse a restore. Until then there is no verified offsite backup. |
+| **Storage bucket `email-attachments`** (inbound email attachments) | Covered by the same implemented workflow and verification contract. [H25] | Same operational enablement and restore-evidence gap. |
 | **Edge function code** | In git (`supabase/functions/`) + deployed via CLI | Recoverable from git; must be **redeployed** after a project rebuild. |
 | **Edge function secrets / env** | Supabase dashboard only | Not exported anywhere — must be **re-entered** from the owner's secret store on rebuild. |
 | **Schema / migrations** | In git (`supabase/migrations/`) | Recoverable from git. |
 
-> The critical gap is **Storage**. Postgres has vendor backups + (soon) PITR; the two Storage buckets have **no backup at all**. The remediation is an **offsite nightly rclone sync** of both buckets from the Supabase Storage S3 endpoint to a versioned offsite bucket (see the illustrative workflow in `assurance-pack.md`).
+> The critical gap is still **Storage recovery evidence**. The repository now contains the nightly offsite backup implementation, but code alone is not a backup. H25 stays open until the owner completes `storage-backup-setup.md`, retains a successful manifest for both buckets, and records a staging restore rehearsal below.
 
 ---
 
@@ -70,7 +70,7 @@ Use when the Supabase project itself is unrecoverable (deleted, region outage wi
    - **Without** `--no-verify-jwt` for: `email-send`, `project-export`.
    - Re-set secrets: LLM keys, provider keys, `LLM_DAILY_COST_LIMIT_USD` / `LLM_DAILY_REQUEST_LIMIT`, `EMAIL_SEND_DAILY_LIMIT` / `EMAIL_CLASSIFY_DAILY_LIMIT`, `ALLOWED_ORIGINS`, Stripe keys + webhook secret.
    - Re-point the **Stripe webhook** endpoint (the `/webhook` route inside `stripe-billing`) at the new project URL in the Stripe dashboard.
-5. **Restore Storage** (both buckets) from the offsite rclone mirror into the new project's Storage (rclone copy back from the offsite bucket to the new S3 endpoint). Preserve the same object keys/paths so signed URLs and DB `file_url` references resolve.
+5. **Restore Storage** (both buckets) from a verified offsite snapshot into the new project's Storage. Follow `storage-backup-setup.md#restore-rehearsal`, restore both buckets, and preserve the same object keys/paths so signed URLs and DB `file_url` references resolve.
 6. Run the **post-restore verification** (Section 3.C).
 
 ### 3.C Post-restore verification (run after EVERY restore — 3.A or 3.B)
@@ -95,8 +95,22 @@ Run at least one rehearsal now (H24), then on a recurring cadence (recommend **q
 
 | Date | Type (PITR in-place / restore-to-new) | Rehearsed by | Target ts / snapshot | Measured RTO | Measured RPO | Storage restored? | Verification (3.C) result | Notes / gaps found |
 |---|---|---|---|---|---|---|---|---|
-| _2026-07-01 (planned)_ | restore-to-new (staging) | | | | | | | Initial rehearsal — establish baseline RTO/RPO. |
+| _2026-07-22 (planned)_ | restore-to-new (staging) | | | | | | | Run after the first verified offsite manifest; establish baseline RTO/RPO. |
 | | | | | | | | | |
 | | | | | | | | | |
 
 **After each rehearsal:** update Section 2 if measured numbers differ materially from targets, and file any discovered gaps (e.g. a secret that wasn't documented, a bucket path mismatch) as backlog items.
+
+---
+
+## 5. Storage backup operating evidence
+
+The scheduled job is `.github/workflows/storage-backup.yml`; the server-only runner is `scripts/storage-backup.mjs`. Every successful run must:
+
+1. cover both `app-files` and `email-attachments`;
+2. write a timestamped, non-overwriting snapshot and update the `current` mirror;
+3. run an exact path/size check against both destinations;
+4. compare object counts and total bytes, including valid empty buckets; and
+5. retain the verified JSON manifest in both the offsite destination and the GitHub Actions artifact.
+
+Setup, secret rotation, retention, first-run acceptance, and the restore rehearsal are in `storage-backup-setup.md`.
