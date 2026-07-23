@@ -27,7 +27,11 @@ test.describe("staging authentication boundary", () => {
     await page.goto("/Submittals");
     await expect(page).toHaveURL(/\/Submittals\/?$/);
 
-    await page.getByRole("button", { name: /sign out/i }).click();
+    const signOutButton = page
+      .locator('button[title*="sign out" i]')
+      .or(page.getByRole("button", { name: /sign out/i }))
+      .first();
+    await signOutButton.click();
 
     await expect(page.getByRole("button", { name: "Sign in" }).first()).toBeVisible();
     await expect
