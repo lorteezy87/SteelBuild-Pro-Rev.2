@@ -45,8 +45,10 @@ case may run against production.
 
 - Automated and blocking: Vitest auth, project scope, permission, Submittal,
   RFI, and fabrication-release safety tests in CI.
-- Automated but nonblocking: existing Playwright smoke and fab-release specs;
-  they are fixture-gated and require dedicated staging credentials.
+- Automated but nonblocking: authenticated Drawings/Submittals/RFIs rendering,
+  unauthenticated protected-route rejection, and synthetic-user sign-out. The
+  fab-release specs remain fixture-gated and require dedicated staging
+  credentials.
 - Staging manual: ST-01 through ST-25 until staging credentials and fixtures
   are provisioned and evidence is attached.
 - Production post-deploy read-only: health, login, primary route, and asset
