@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   DESKTOP_SESSION_ALGORITHM,
+  DesktopSessionCryptoError,
   buildDesktopCallbackUrl,
   encodePublicKeyQuery,
   encryptDesktopSession,
@@ -74,6 +75,27 @@ describe("desktop browser session handoff", () => {
     expect(serialized).not.toContain("access-secret-value-123");
     expect(serialized).not.toContain("refresh-secret-value-123");
     expect(envelope.ciphertext.length).toBeLessThan(16_384);
+  });
+
+  it("reports a safe stage when the recipient public key cannot be imported", async () => {
+    const key = await publicKeyJwk();
+    const importKey = vi.spyOn(crypto.subtle, "importKey").mockRejectedValueOnce(
+      new DOMException("sensitive browser detail", "DataError"),
+    );
+
+    await expect(encryptDesktopSession({
+      algorithm: DESKTOP_SESSION_ALGORITHM,
+      state: "A".repeat(43),
+      publicKey: key,
+      session: {
+        accessToken: "access-secret-value-123",
+        refreshToken: "refresh-secret-value-123",
+        expiresAt: 1_800_000_000,
+        user: { id: "user-1", email: "pm@example.com" },
+      },
+    })).rejects.toEqual(new DesktopSessionCryptoError("import"));
+
+    importKey.mockRestore();
   });
 
   it("builds a callback containing only opaque code and state", () => {

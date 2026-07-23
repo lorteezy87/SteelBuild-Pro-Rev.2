@@ -1,6 +1,25 @@
 export const DESKTOP_SESSION_ALGORITHM = "P-256+A256GCM" as const;
 export const DESKTOP_SESSION_HKDF_INFO = "desktop-command-center/steelbuild-session/v1";
 
+export type DesktopSessionCryptoStage =
+  | "import"
+  | "generate"
+  | "derive"
+  | "kdf"
+  | "random"
+  | "encrypt"
+  | "export";
+
+export class DesktopSessionCryptoError extends Error {
+  readonly stage: DesktopSessionCryptoStage;
+
+  constructor(stage: DesktopSessionCryptoStage) {
+    super(`Desktop session cryptography failed during ${stage}`);
+    this.name = "DesktopSessionCryptoError";
+    this.stage = stage;
+  }
+}
+
 export interface DesktopConnectQuery {
   state: string;
   challenge: string;
@@ -64,26 +83,32 @@ export async function encryptDesktopSession(input: {
   const state = validateBase64Url(input.state, "state", 43, 128);
   const recipientJwk = normalizeP256PublicKey(input.publicKey);
   const session = validateMinimalSession(input.session);
-  const recipientKey = await crypto.subtle.importKey(
+  const recipientKey = await runCryptoStage("import", () => crypto.subtle.importKey(
     "jwk",
     recipientJwk,
     { name: "ECDH", namedCurve: "P-256" },
     false,
     [],
-  );
-  const ephemeral = await crypto.subtle.generateKey(
+  ));
+  const ephemeral = await runCryptoStage("generate", () => crypto.subtle.generateKey(
     { name: "ECDH", namedCurve: "P-256" },
     true,
     ["deriveBits"],
-  );
-  const sharedSecret = await crypto.subtle.deriveBits(
+  ));
+  const sharedSecret = await runCryptoStage("derive", () => crypto.subtle.deriveBits(
     { name: "ECDH", public: recipientKey },
     ephemeral.privateKey,
     256,
-  );
-  const hkdfMaterial = await crypto.subtle.importKey("raw", sharedSecret, "HKDF", false, ["deriveKey"]);
+  ));
+  const hkdfMaterial = await runCryptoStage("kdf", () => crypto.subtle.importKey(
+    "raw",
+    sharedSecret,
+    "HKDF",
+    false,
+    ["deriveKey"],
+  ));
   const context = new TextEncoder().encode(DESKTOP_SESSION_HKDF_INFO);
-  const encryptionKey = await crypto.subtle.deriveKey(
+  const encryptionKey = await runCryptoStage("kdf", () => crypto.subtle.deriveKey(
     {
       name: "HKDF",
       hash: "SHA-256",
@@ -94,15 +119,20 @@ export async function encryptDesktopSession(input: {
     { name: "AES-GCM", length: 256 },
     false,
     ["encrypt"],
-  );
+  ));
 
   const randomBytes = input.randomBytes ?? secureRandomBytes;
-  const iv = randomBytes(12);
+  let iv: Uint8Array;
+  try {
+    iv = randomBytes(12);
+  } catch {
+    throw new DesktopSessionCryptoError("random");
+  }
   if (!(iv instanceof Uint8Array) || iv.byteLength !== 12) {
-    throw new Error("AES-GCM requires a 12-byte IV");
+    throw new DesktopSessionCryptoError("random");
   }
   const plaintext = new TextEncoder().encode(JSON.stringify(session));
-  const ciphertext = await crypto.subtle.encrypt(
+  const ciphertext = await runCryptoStage("encrypt", () => crypto.subtle.encrypt(
     {
       name: "AES-GCM",
       iv: toArrayBuffer(iv),
@@ -111,9 +141,9 @@ export async function encryptDesktopSession(input: {
     },
     encryptionKey,
     plaintext,
-  );
+  ));
   const ephemeralJwk = normalizeP256PublicKey(
-    await crypto.subtle.exportKey("jwk", ephemeral.publicKey),
+    await runCryptoStage("export", () => crypto.subtle.exportKey("jwk", ephemeral.publicKey)),
   );
 
   return {
@@ -226,6 +256,17 @@ function decodeBase64UrlUtf8(value: string): string {
 
 function secureRandomBytes(length: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(length));
+}
+
+async function runCryptoStage<T>(
+  stage: DesktopSessionCryptoStage,
+  operation: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch {
+    throw new DesktopSessionCryptoError(stage);
+  }
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
