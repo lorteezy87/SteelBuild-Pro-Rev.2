@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 let projState;
@@ -22,6 +22,8 @@ import ProjectScopedRoute from "@/components/shared/ProjectScopedRoute";
 
 const ctx = (over = {}) => ({
   projects: [],
+  activeProject: null,
+  setActiveProject: vi.fn(),
   loading: false,
   projectLoadError: null,
   ...over,
@@ -50,13 +52,37 @@ describe("ProjectScopedRoute", () => {
   });
 
   it("renders when the URL project is in the accessible set", () => {
-    projState = ctx({ projects: [{ id: "p1" }, { id: "p2" }] });
+    projState = ctx({
+      projects: [{ id: "p1" }, { id: "p2" }],
+      activeProject: { id: "p1" },
+    });
     renderAt("/RFIs?projectId=p1");
     expect(screen.getByText("PAGE")).toBeInTheDocument();
   });
 
+  it("activates an accessible deep-linked project before rendering its page", async () => {
+    const targetProject = { id: "p2", name: "Target project" };
+    const setActiveProject = vi.fn();
+    projState = ctx({
+      projects: [{ id: "p1", name: "Current project" }, targetProject],
+      activeProject: { id: "p1", name: "Current project" },
+      setActiveProject,
+    });
+
+    renderAt("/Submittals?projectId=p2&recordId=submittal-2");
+
+    await waitFor(() =>
+      expect(setActiveProject).toHaveBeenCalledWith(targetProject),
+    );
+    expect(screen.getByText("LOADER")).toBeInTheDocument();
+    expect(screen.queryByText("PAGE")).not.toBeInTheDocument();
+  });
+
   it("honors the legacy ?project= alias", () => {
-    projState = ctx({ projects: [{ id: "p1" }] });
+    projState = ctx({
+      projects: [{ id: "p1" }],
+      activeProject: { id: "p1" },
+    });
     renderAt("/RFIs?project=p1");
     expect(screen.getByText("PAGE")).toBeInTheDocument();
   });
@@ -76,7 +102,11 @@ describe("ProjectScopedRoute", () => {
   });
 
   it("renders an accessible cached project even while a refresh is loading", () => {
-    projState = ctx({ projects: [{ id: "p1" }], loading: true });
+    projState = ctx({
+      projects: [{ id: "p1" }],
+      activeProject: { id: "p1" },
+      loading: true,
+    });
     renderAt("/RFIs?projectId=p1");
     expect(screen.getByText("PAGE")).toBeInTheDocument();
   });
