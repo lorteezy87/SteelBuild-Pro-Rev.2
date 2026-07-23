@@ -20,6 +20,23 @@ export class DesktopSessionCryptoError extends Error {
   }
 }
 
+export type DesktopSessionValidationField =
+  | "access-token"
+  | "refresh-token"
+  | "expiry"
+  | "user-id"
+  | "email";
+
+export class DesktopSessionValidationError extends Error {
+  readonly field: DesktopSessionValidationField;
+
+  constructor(field: DesktopSessionValidationField) {
+    super(`Desktop session validation failed for ${field}`);
+    this.name = "DesktopSessionValidationError";
+    this.field = field;
+  }
+}
+
 export interface DesktopConnectQuery {
   state: string;
   challenge: string;
@@ -81,15 +98,17 @@ export async function encryptDesktopSession(input: {
   }
 
   const state = validateBase64Url(input.state, "state", 43, 128);
-  const recipientJwk = normalizeP256PublicKey(input.publicKey);
   const session = validateMinimalSession(input.session);
-  const recipientKey = await runCryptoStage("import", () => crypto.subtle.importKey(
-    "jwk",
-    recipientJwk,
-    { name: "ECDH", namedCurve: "P-256" },
-    false,
-    [],
-  ));
+  const recipientKey = await runCryptoStage("import", async () => {
+    const recipientJwk = normalizeP256PublicKey(input.publicKey);
+    return crypto.subtle.importKey(
+      "jwk",
+      recipientJwk,
+      { name: "ECDH", namedCurve: "P-256" },
+      false,
+      [],
+    );
+  });
   const ephemeral = await runCryptoStage("generate", () => crypto.subtle.generateKey(
     { name: "ECDH", namedCurve: "P-256" },
     true,
@@ -142,9 +161,9 @@ export async function encryptDesktopSession(input: {
     encryptionKey,
     plaintext,
   ));
-  const ephemeralJwk = normalizeP256PublicKey(
-    await runCryptoStage("export", () => crypto.subtle.exportKey("jwk", ephemeral.publicKey)),
-  );
+  const ephemeralJwk = await runCryptoStage("export", async () => normalizeP256PublicKey(
+    await crypto.subtle.exportKey("jwk", ephemeral.publicKey),
+  ));
 
   return {
     algorithm: DESKTOP_SESSION_ALGORITHM,
@@ -190,34 +209,34 @@ function normalizeP256PublicKey(value: unknown): JsonWebKey {
 }
 
 function validateMinimalSession(session: MinimalDesktopSession): MinimalDesktopSession {
-  if (!session || typeof session !== "object") throw new Error("SteelBuild session is unavailable");
-  const accessToken = requireSecret(session.accessToken, "access token");
-  const refreshToken = requireSecret(session.refreshToken, "refresh token");
+  if (!session || typeof session !== "object") throw new DesktopSessionValidationError("access-token");
+  const accessToken = requireSecret(session.accessToken, "access-token");
+  const refreshToken = requireSecret(session.refreshToken, "refresh-token");
   if (!Number.isSafeInteger(session.expiresAt) || session.expiresAt <= 0) {
-    throw new Error("SteelBuild session expiry is invalid");
+    throw new DesktopSessionValidationError("expiry");
   }
-  const id = requireIdentifier(session.user?.id, "user ID");
+  const id = requireIdentifier(session.user?.id);
   const email = requireEmail(session.user?.email);
   return { accessToken, refreshToken, expiresAt: session.expiresAt, user: { id, email } };
 }
 
-function requireSecret(value: unknown, field: string): string {
+function requireSecret(value: unknown, field: "access-token" | "refresh-token"): string {
   if (typeof value !== "string" || value.length < 16 || value.length > 16_384) {
-    throw new Error(`SteelBuild ${field} is invalid`);
+    throw new DesktopSessionValidationError(field);
   }
   return value;
 }
 
-function requireIdentifier(value: unknown, field: string): string {
+function requireIdentifier(value: unknown): string {
   if (typeof value !== "string" || value.trim().length === 0 || value.length > 200) {
-    throw new Error(`SteelBuild ${field} is invalid`);
+    throw new DesktopSessionValidationError("user-id");
   }
   return value.trim();
 }
 
 function requireEmail(value: unknown): string {
   if (typeof value !== "string" || value.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-    throw new Error("SteelBuild account email is invalid");
+    throw new DesktopSessionValidationError("email");
   }
   return value;
 }
