@@ -2,6 +2,7 @@ const REQUIRED_BUCKETS = ["app-files", "email-attachments"];
 const REQUIRED_ENV_KEYS = [
   "OFFSITE_RCLONE_CONFIG_B64",
   "OFFSITE_ROOT",
+  "SUPABASE_EXPECTED_PROJECT_REF",
   "SUPABASE_S3_ACCESS_KEY_ID",
   "SUPABASE_S3_ENDPOINT",
   "SUPABASE_S3_REGION",
@@ -92,9 +93,22 @@ export function validateStorageBackupEnvironment(environment) {
     throw new Error(`Missing required Storage backup configuration: ${missing.join(", ")}`);
   }
 
-  const endpoint = new URL(environment.SUPABASE_S3_ENDPOINT);
+  let endpoint;
+  try {
+    endpoint = new URL(environment.SUPABASE_S3_ENDPOINT);
+  } catch {
+    throw new Error("SUPABASE_S3_ENDPOINT must be a valid HTTPS URL");
+  }
   if (endpoint.protocol !== "https:") {
     throw new Error("SUPABASE_S3_ENDPOINT must use HTTPS");
+  }
+  const expectedProjectRef = environment.SUPABASE_EXPECTED_PROJECT_REF.trim().toLowerCase();
+  if (!/^[a-z0-9]{20}$/.test(expectedProjectRef)) {
+    throw new Error("SUPABASE_EXPECTED_PROJECT_REF must be a valid Supabase project ref");
+  }
+  const expectedHostname = `${expectedProjectRef}.storage.supabase.co`;
+  if (endpoint.hostname.toLowerCase() !== expectedHostname) {
+    throw new Error("SUPABASE_S3_ENDPOINT hostname does not match SUPABASE_EXPECTED_PROJECT_REF");
   }
   decodeOffsiteRcloneConfig(environment.OFFSITE_RCLONE_CONFIG_B64);
   createStorageBackupPlan({
@@ -104,8 +118,10 @@ export function validateStorageBackupEnvironment(environment) {
 
   return {
     destinationRoot: normalizeRemoteRoot(environment.OFFSITE_ROOT),
-    sourceEndpoint: endpoint.toString().replace(/\/$/, ""),
-    sourceRegion: environment.SUPABASE_S3_REGION.trim(),
+    source: {
+      provider: "supabase-storage",
+      projectRef: expectedProjectRef,
+    },
   };
 }
 
@@ -185,6 +201,19 @@ function assertRequiredPlanCoverage(plan) {
   }
 }
 
+function createVerifiedSourceIdentity(source) {
+  if (
+    source?.provider !== "supabase-storage"
+    || !/^[a-z0-9]{20}$/.test(source.projectRef ?? "")
+  ) {
+    throw new Error("Verified Storage backup manifest requires a validated Supabase source identity");
+  }
+  return {
+    provider: "supabase-storage",
+    projectRef: source.projectRef,
+  };
+}
+
 async function readRemoteStats(remote, execute) {
   const output = await execute(
     ["size", remote, "--json"],
@@ -197,8 +226,10 @@ export async function executeStorageBackupPlan({
   plan,
   timestamp,
   completedAt,
+  source,
   execute,
 }) {
+  const verifiedSource = createVerifiedSourceIdentity(source);
   assertRequiredPlanCoverage(plan);
   const buckets = [];
 
@@ -226,6 +257,7 @@ export async function executeStorageBackupPlan({
     status: "verified",
     backupTimestamp: timestamp,
     completedAt: completedAt ?? new Date().toISOString(),
+    source: verifiedSource,
     buckets,
   };
 }

@@ -111,6 +111,8 @@ The scheduled job is `.github/workflows/storage-backup.yml`; the server-only run
 2. write a timestamped, non-overwriting snapshot and update the `current` mirror;
 3. run an exact path/size check against both destinations;
 4. compare object counts and total bytes, including valid empty buckets; and
-5. retain the verified JSON manifest in both the offsite destination and the GitHub Actions artifact.
+5. retain the verified JSON manifest in both the offsite destination and the GitHub Actions artifact, including `source.projectRef` matching the intended production Supabase project.
+
+Before adding the environment secrets, configure `storage-backup-production` deployment branches/tags to **selected branches** with `main` only. The job has a defense-in-depth main-ref guard, so a feature-branch `workflow_dispatch` is rejected/skipped and must not receive production credentials.
 
 Setup, secret rotation, retention, first-run acceptance, and the restore rehearsal are in `storage-backup-setup.md`.

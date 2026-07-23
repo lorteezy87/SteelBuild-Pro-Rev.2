@@ -72,6 +72,7 @@ async function main() {
     const manifest = await executeStorageBackupPlan({
       plan,
       timestamp,
+      source: config.source,
       execute,
     });
 

@@ -71,10 +71,10 @@ Refs:
 
 - [~] **Enable and rehearse offsite Storage backup** — [H25]
   - **Code ready (2026-07-22):** `.github/workflows/storage-backup.yml` and `scripts/storage-backup.mjs` cover `app-files` and `email-attachments` with timestamped snapshots, a current mirror, exact path/size checks, aggregate count/byte checks, and a retained manifest.
-  - Owner steps: provision a company-owned offsite destination, enable provider-side versioning/soft-delete and lifecycle retention, configure the `storage-backup-production` GitHub environment secrets, then manually run the workflow.
+  - Owner steps: provision a company-owned offsite destination, enable provider-side versioning/soft-delete and lifecycle retention, configure the `storage-backup-production` deployment branches/tags policy to **selected branches** with `main` only before adding environment secrets, then manually run the workflow. A feature-branch `workflow_dispatch` must be rejected/skipped and must not receive production credentials.
   - Rehearse a restore of both buckets into staging and record the manifest timestamp, measured RTO/RPO, and post-restore checks in `backup-dr.md`.
   - Full setup and acceptance criteria: `storage-backup-setup.md`.
-  - Verify: the workflow has a green run and manifest for both buckets, failure notifications reach an owner, and the staging restore passes a real signed-file open.
+  - Verify: the workflow has a green run and manifest for both buckets with `source.projectRef` matching production, failure notifications reach an owner, and the staging restore passes a real signed-file open.
 
 - [ ] **Harden Auth settings** — [M42]
   - Supabase dashboard → `Authentication → Providers/Policies/Settings`:

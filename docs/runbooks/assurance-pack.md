@@ -40,7 +40,7 @@ Refs:
 ## 3. Backup & DR statement
 
 - **Database (Postgres):** Supabase daily automated backups + Point-in-Time Recovery (PITR). Target **RPO 15 min / RTO 4 h**. Restore rehearsed on a recurring cadence (log in `backup-dr.md`).
-- **Storage (`app-files`, `email-attachments`):** nightly offsite workflow is implemented with timestamped snapshots, a current mirror, exact verification, and a retained manifest. It is **not yet an operating control** until owner-managed secrets are configured and the first backup plus staging restore are recorded. Target **RPO 24 h / RTO 4 h**.
+- **Storage (`app-files`, `email-attachments`):** nightly offsite workflow is implemented with timestamped snapshots, a current mirror, exact path-and-size verification, and a retained manifest. It is **not yet an operating control** until owner-managed secrets are configured and the first backup plus staging restore are recorded. Target **RPO 24 h / RTO 4 h**.
 - Restore procedure and post-restore verification: `backup-dr.md`.
 
 ---

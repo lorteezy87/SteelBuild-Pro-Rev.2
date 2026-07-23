@@ -30,9 +30,9 @@ A run fails unless both buckets pass `rclone check --size-only` against the snap
    ```
 
    Copy the result directly into GitHub Secrets, then securely remove the temporary file. Never commit the decoded configuration or paste it into an issue, log, or chat.
-6. **Create the GitHub environment** `storage-backup-production` and add these environment secrets:
+6. **Create the GitHub environment** `storage-backup-production`. Before adding secrets, set deployment branches/tags to **selected branches** with `main` only. The workflow additionally guards the job to `main`, so a feature-branch `workflow_dispatch` must be rejected/skipped and must not receive production credentials. Add these environment settings:
 
-   | Secret | Value |
+   | Setting | Value |
    |---|---|
    | `OFFSITE_RCLONE_CONFIG_B64` | Base64 configuration containing the `[offsite]` remote |
    | `OFFSITE_ROOT` | `offsite:<container-or-bucket>/steelbuild-pro-storage` |
@@ -40,6 +40,7 @@ A run fails unless both buckets pass `rclone check --size-only` against the snap
    | `SUPABASE_S3_SECRET_ACCESS_KEY` | Dedicated Supabase Storage S3 secret key |
    | `SUPABASE_S3_ENDPOINT` | `https://kjrwqagyeswwoxpjkcko.storage.supabase.co/storage/v1/s3` |
    | `SUPABASE_S3_REGION` | `us-east-1` |
+   | Environment variable `SUPABASE_EXPECTED_PROJECT_REF` | `kjrwqagyeswwoxpjkcko` (non-secret production project identity) |
 
 7. **Configure failure ownership.** Ensure at least two owners receive failed GitHub Actions workflow notifications and know how to rotate both credential sets.
 
@@ -48,7 +49,7 @@ A run fails unless both buckets pass `rclone check --size-only` against the snap
 1. Open GitHub Actions → **Storage backup** → **Run workflow** from the default branch.
 2. Confirm the job installed rclone only after the pinned SHA-256 checksum passed.
 3. Confirm the log reports `Verified app-files` and `Verified email-attachments` without displaying credentials.
-4. Download the `storage-backup-manifest-<run id>` artifact and confirm `status` is `verified`, both buckets are present, and the counts are plausible.
+4. Download the `storage-backup-manifest-<run id>` artifact and confirm `status` is `verified`, `source.projectRef` matches the intended production project, both buckets are present, and the counts are plausible.
 5. Confirm the same manifest exists under `manifests/<timestamp>.json` at the offsite destination.
 6. Confirm snapshot objects exist beneath both timestamped bucket paths and the `current` paths.
 7. Record the workflow URL, manifest timestamp, counts, bytes, and reviewer in the H25 evidence record. Do not close H25 yet; complete the restore rehearsal.

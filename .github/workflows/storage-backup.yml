@@ -15,6 +15,7 @@ concurrency:
 jobs:
   backup:
     name: Back up Supabase Storage offsite
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     environment: storage-backup-production
@@ -22,12 +23,6 @@ jobs:
       RCLONE_VERSION: "1.74.4"
       RCLONE_SHA256: fe435e0c36228e7c2f116a8701f01127bb1f694005fc11d1f27186c8bca4115d
       STORAGE_BACKUP_MANIFEST_PATH: ${{ runner.temp }}/storage-backup-manifest.json
-      OFFSITE_RCLONE_CONFIG_B64: ${{ secrets.OFFSITE_RCLONE_CONFIG_B64 }}
-      OFFSITE_ROOT: ${{ secrets.OFFSITE_ROOT }}
-      SUPABASE_S3_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
-      SUPABASE_S3_ENDPOINT: ${{ secrets.SUPABASE_S3_ENDPOINT }}
-      SUPABASE_S3_REGION: ${{ secrets.SUPABASE_S3_REGION }}
-      SUPABASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -52,6 +47,14 @@ jobs:
           rclone version
 
       - name: Back up and verify required buckets
+        env:
+          OFFSITE_RCLONE_CONFIG_B64: ${{ secrets.OFFSITE_RCLONE_CONFIG_B64 }}
+          OFFSITE_ROOT: ${{ secrets.OFFSITE_ROOT }}
+          SUPABASE_EXPECTED_PROJECT_REF: ${{ vars.SUPABASE_EXPECTED_PROJECT_REF }}
+          SUPABASE_S3_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+          SUPABASE_S3_ENDPOINT: ${{ secrets.SUPABASE_S3_ENDPOINT }}
+          SUPABASE_S3_REGION: ${{ secrets.SUPABASE_S3_REGION }}
+          SUPABASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
         run: node scripts/storage-backup.mjs
 
       - name: Retain verified backup manifest

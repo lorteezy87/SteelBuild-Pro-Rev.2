@@ -57,7 +57,7 @@ describe("Storage backup planner", () => {
 describe("Storage backup configuration", () => {
   it("fails closed and names every missing secret", () => {
     expect(() => validateStorageBackupEnvironment({})).toThrow(
-      "Missing required Storage backup configuration: OFFSITE_RCLONE_CONFIG_B64, OFFSITE_ROOT, SUPABASE_S3_ACCESS_KEY_ID, SUPABASE_S3_ENDPOINT, SUPABASE_S3_REGION, SUPABASE_S3_SECRET_ACCESS_KEY",
+      "Missing required Storage backup configuration: OFFSITE_RCLONE_CONFIG_B64, OFFSITE_ROOT, SUPABASE_EXPECTED_PROJECT_REF, SUPABASE_S3_ACCESS_KEY_ID, SUPABASE_S3_ENDPOINT, SUPABASE_S3_REGION, SUPABASE_S3_SECRET_ACCESS_KEY",
     );
   });
 
@@ -66,19 +66,80 @@ describe("Storage backup configuration", () => {
     const config = validateStorageBackupEnvironment({
       OFFSITE_RCLONE_CONFIG_B64: offsiteConfig,
       OFFSITE_ROOT: "offsite:steelbuild-pro-storage",
+      SUPABASE_EXPECTED_PROJECT_REF: "exampleprojectref123",
       SUPABASE_S3_ACCESS_KEY_ID: "source-key",
-      SUPABASE_S3_ENDPOINT: "https://example.storage.supabase.co/storage/v1/s3",
+      SUPABASE_S3_ENDPOINT: "https://exampleprojectref123.storage.supabase.co/storage/v1/s3",
       SUPABASE_S3_REGION: "us-east-1",
       SUPABASE_S3_SECRET_ACCESS_KEY: "source-secret",
     });
 
     expect(config).toEqual({
       destinationRoot: "offsite:steelbuild-pro-storage",
-      sourceEndpoint: "https://example.storage.supabase.co/storage/v1/s3",
-      sourceRegion: "us-east-1",
+      source: {
+        provider: "supabase-storage",
+        projectRef: "exampleprojectref123",
+      },
     });
     expect(JSON.stringify(config)).not.toContain("source-secret");
     expect(JSON.stringify(config)).not.toContain("sas_url");
+  });
+
+  it("rejects a missing expected Supabase project ref", () => {
+    const offsiteConfig = Buffer.from("[offsite]\ntype = azureblob\n").toString("base64");
+
+    expect(() => validateStorageBackupEnvironment({
+      OFFSITE_RCLONE_CONFIG_B64: offsiteConfig,
+      OFFSITE_ROOT: "offsite:steelbuild-pro-storage",
+      SUPABASE_S3_ACCESS_KEY_ID: "source-key",
+      SUPABASE_S3_ENDPOINT: "https://exampleprojectref123.storage.supabase.co/storage/v1/s3",
+      SUPABASE_S3_REGION: "us-east-1",
+      SUPABASE_S3_SECRET_ACCESS_KEY: "source-secret",
+    })).toThrow("SUPABASE_EXPECTED_PROJECT_REF");
+  });
+
+  it("rejects a malformed expected Supabase project ref", () => {
+    const offsiteConfig = Buffer.from("[offsite]\ntype = azureblob\n").toString("base64");
+
+    expect(() => validateStorageBackupEnvironment({
+      OFFSITE_RCLONE_CONFIG_B64: offsiteConfig,
+      OFFSITE_ROOT: "offsite:steelbuild-pro-storage",
+      SUPABASE_EXPECTED_PROJECT_REF: "not a project ref",
+      SUPABASE_S3_ACCESS_KEY_ID: "source-key",
+      SUPABASE_S3_ENDPOINT: "https://exampleprojectref123.storage.supabase.co/storage/v1/s3",
+      SUPABASE_S3_REGION: "us-east-1",
+      SUPABASE_S3_SECRET_ACCESS_KEY: "source-secret",
+    })).toThrow("valid Supabase project ref");
+  });
+
+  it("rejects an HTTPS endpoint that is not the expected Supabase project", () => {
+    const offsiteConfig = Buffer.from("[offsite]\ntype = azureblob\n").toString("base64");
+
+    expect(() => validateStorageBackupEnvironment({
+      OFFSITE_RCLONE_CONFIG_B64: offsiteConfig,
+      OFFSITE_ROOT: "offsite:steelbuild-pro-storage",
+      SUPABASE_EXPECTED_PROJECT_REF: "expectedprojectref12",
+      SUPABASE_S3_ACCESS_KEY_ID: "source-key",
+      SUPABASE_S3_ENDPOINT: "https://stagingprojectref123.storage.supabase.co/storage/v1/s3",
+      SUPABASE_S3_REGION: "us-east-1",
+      SUPABASE_S3_SECRET_ACCESS_KEY: "source-secret",
+    })).toThrow("does not match SUPABASE_EXPECTED_PROJECT_REF");
+  });
+
+  it("accepts the intended Supabase endpoint with case-insensitive hostname matching", () => {
+    const offsiteConfig = Buffer.from("[offsite]\ntype = azureblob\n").toString("base64");
+
+    expect(validateStorageBackupEnvironment({
+      OFFSITE_RCLONE_CONFIG_B64: offsiteConfig,
+      OFFSITE_ROOT: "offsite:steelbuild-pro-storage",
+      SUPABASE_EXPECTED_PROJECT_REF: "exampleprojectref123",
+      SUPABASE_S3_ACCESS_KEY_ID: "source-key",
+      SUPABASE_S3_ENDPOINT: "https://EXAMPLEPROJECTREF123.STORAGE.SUPABASE.CO/storage/v1/s3",
+      SUPABASE_S3_REGION: "us-east-1",
+      SUPABASE_S3_SECRET_ACCESS_KEY: "source-secret",
+    }).source).toEqual({
+      provider: "supabase-storage",
+      projectRef: "exampleprojectref123",
+    });
   });
 
   it("requires the decoded destination configuration to define the offsite remote", () => {
@@ -141,6 +202,7 @@ describe("Storage backup execution", () => {
       PATH: "C:\\tools",
       OFFSITE_RCLONE_CONFIG_B64: "destination-secret",
       OFFSITE_ROOT: "offsite:steelbuild-pro-storage",
+      SUPABASE_EXPECTED_PROJECT_REF: "exampleprojectref123",
       SUPABASE_S3_ACCESS_KEY_ID: "source-key",
       SUPABASE_S3_ENDPOINT: "https://example.storage.supabase.co/storage/v1/s3",
       SUPABASE_S3_REGION: "us-east-1",
@@ -150,6 +212,7 @@ describe("Storage backup execution", () => {
     expect(childEnvironment.PATH).toBe("C:\\tools");
     expect(childEnvironment.OFFSITE_RCLONE_CONFIG_B64).toBeUndefined();
     expect(childEnvironment.OFFSITE_ROOT).toBeUndefined();
+    expect(childEnvironment.SUPABASE_EXPECTED_PROJECT_REF).toBeUndefined();
     expect(childEnvironment.SUPABASE_S3_ACCESS_KEY_ID).toBeUndefined();
     expect(childEnvironment.SUPABASE_S3_ENDPOINT).toBeUndefined();
     expect(childEnvironment.SUPABASE_S3_REGION).toBeUndefined();
@@ -169,11 +232,13 @@ describe("Storage backup execution", () => {
       supabase_s3_endpoint: "https://alternate.storage.supabase.co/storage/v1/s3",
       Supabase_S3_Region: "alternate-region",
       supabase_s3_secret_access_key: "alternate-source-secret",
+      supabase_expected_project_ref: "alternateprojectref12",
     };
     const childEnvironment = createRcloneChildEnvironment({
       PATH: "C:\\tools",
       OFFSITE_RCLONE_CONFIG_B64: "destination-secret",
       OFFSITE_ROOT: "offsite:steelbuild-pro-storage",
+      SUPABASE_EXPECTED_PROJECT_REF: "exampleprojectref123",
       SUPABASE_S3_ACCESS_KEY_ID: "source-key",
       SUPABASE_S3_ENDPOINT: "https://example.storage.supabase.co/storage/v1/s3",
       SUPABASE_S3_REGION: "us-east-1",
@@ -250,6 +315,21 @@ describe("Storage backup execution", () => {
     ]);
   });
 
+  it("refuses to create a verified manifest without a validated source identity", async () => {
+    const plan = createStorageBackupPlan({
+      destinationRoot: "offsite:steelbuild-pro-storage",
+      timestamp: "20260723T003000Z",
+    });
+
+    await expect(executeStorageBackupPlan({
+      plan,
+      timestamp: "20260723T003000Z",
+      execute: async () => {
+        throw new Error("rclone must not run without source identity");
+      },
+    })).rejects.toThrow("validated Supabase source identity");
+  });
+
   it("returns a verified manifest only after both required buckets pass", async () => {
     const timestamp = "20260723T003000Z";
     const plan = createStorageBackupPlan({
@@ -274,6 +354,10 @@ describe("Storage backup execution", () => {
       plan,
       timestamp,
       completedAt: "2026-07-23T00:31:00.000Z",
+      source: {
+        provider: "supabase-storage",
+        projectRef: "exampleprojectref123",
+      },
       execute,
     });
 
@@ -284,6 +368,10 @@ describe("Storage backup execution", () => {
       status: "verified",
       backupTimestamp: timestamp,
       completedAt: "2026-07-23T00:31:00.000Z",
+      source: {
+        provider: "supabase-storage",
+        projectRef: "exampleprojectref123",
+      },
       buckets: [
         {
           bucket: "app-files",
@@ -313,6 +401,10 @@ describe("Storage backup execution", () => {
       plan,
       timestamp: "20260723T003000Z",
       completedAt: "2026-07-23T00:31:00.000Z",
+      source: {
+        provider: "supabase-storage",
+        projectRef: "exampleprojectref123",
+      },
       execute: async (args) => args[0] === "size" ? "not-json" : "",
     })).rejects.toThrow("rclone size returned invalid JSON");
   });
