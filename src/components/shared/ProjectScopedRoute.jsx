@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import EmptyState from "@/components/design-system/EmptyState";
@@ -22,8 +22,9 @@ import PageLoader from "@/boot/PageLoader";
  *   - No URL project param → render. Portfolio mode (null) and a
  *     context-selected project (always from the user's own list) keep working
  *     exactly as before — no regression to pages with portfolio views.
- *   - URL project is in the accessible set → render (works from the cached
- *     list too, so authorized deep links don't flash a loader).
+ *   - URL project is in the accessible set → make it the active project, then
+ *     render. Waiting for that synchronization prevents record-level deep
+ *     links from querying the previously selected project's register.
  *   - URL project unknown while the list is still loading → wait (PageLoader),
  *     so we never deny before the list resolves.
  *   - Project list failed to load → render (can't determine access; don't
@@ -32,21 +33,38 @@ import PageLoader from "@/boot/PageLoader";
  */
 export default function ProjectScopedRoute({ children }) {
   const [searchParams] = useSearchParams();
-  const { projects, loading, projectLoadError } = useProjectContext();
+  const {
+    projects,
+    activeProject,
+    setActiveProject,
+    loading,
+    projectLoadError,
+  } = useProjectContext();
 
   // Only an explicit URL param can name a project the user might not own; a
   // context-selected project always comes from their own accessible list.
   const urlProjectId =
     searchParams.get("projectId") || searchParams.get("project") || null;
 
-  // Full accessible set (includes on-hold projects — access ≠ "active").
-  const accessibleIds = useMemo(
-    () => new Set((projects || []).map((p) => p && p.id).filter(Boolean)),
-    [projects],
+  // Full accessible set (includes on-hold projects — access ≠ "active"). Keep
+  // the matching object so ProjectContext can synchronize the selected project
+  // before the page mounts and consumes its recordId query parameter.
+  const accessibleProject = useMemo(
+    () => (projects || []).find((project) => project?.id === urlProjectId),
+    [projects, urlProjectId],
   );
 
+  useEffect(() => {
+    if (accessibleProject && activeProject?.id !== accessibleProject.id) {
+      setActiveProject(accessibleProject);
+    }
+  }, [accessibleProject, activeProject?.id, setActiveProject]);
+
   if (!urlProjectId) return children;
-  if (accessibleIds.has(urlProjectId)) return children;
+  if (accessibleProject) {
+    if (activeProject?.id !== accessibleProject.id) return <PageLoader />;
+    return children;
+  }
   // Not (yet) in the set: wait for a definitive answer before denying.
   if (loading) return <PageLoader />;
   // List couldn't load — fall back to rendering; RLS is the real guard.

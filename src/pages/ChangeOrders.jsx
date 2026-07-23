@@ -17,6 +17,7 @@ import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -82,6 +83,11 @@ export default function ChangeOrders() {
         : [],
     enabled: !!projectId,
   });
+  useAutoOpenEdit(cos, (changeOrder) => {
+    setPrefill(null);
+    setEditing(changeOrder);
+    setModalOpen(true);
+  }, { enabled: !isLoading, param: "recordId" });
 
   useRealtimeInvalidation("change_orders", projectId, [["change-orders", projectId]]);
 
