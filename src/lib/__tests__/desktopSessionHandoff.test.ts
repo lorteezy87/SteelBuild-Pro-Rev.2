@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DESKTOP_SESSION_ALGORITHM,
   DesktopSessionCryptoError,
+  DesktopSessionValidationError,
   buildDesktopCallbackUrl,
   encodePublicKeyQuery,
   encryptDesktopSession,
@@ -96,6 +97,22 @@ describe("desktop browser session handoff", () => {
     })).rejects.toEqual(new DesktopSessionCryptoError("import"));
 
     importKey.mockRestore();
+  });
+
+  it("classifies an invalid refresh token without exposing its value", async () => {
+    const key = await publicKeyJwk();
+
+    await expect(encryptDesktopSession({
+      algorithm: DESKTOP_SESSION_ALGORITHM,
+      state: "A".repeat(43),
+      publicKey: key,
+      session: {
+        accessToken: "access-secret-value-123",
+        refreshToken: "short",
+        expiresAt: 1_800_000_000,
+        user: { id: "user-1", email: "pm@example.com" },
+      },
+    })).rejects.toEqual(new DesktopSessionValidationError("refresh-token"));
   });
 
   it("builds a callback containing only opaque code and state", () => {
