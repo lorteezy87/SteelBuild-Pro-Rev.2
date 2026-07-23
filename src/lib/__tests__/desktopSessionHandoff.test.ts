@@ -99,7 +99,25 @@ describe("desktop browser session handoff", () => {
     importKey.mockRestore();
   });
 
-  it("classifies an invalid refresh token without exposing its value", async () => {
+  it("accepts a bounded non-empty opaque refresh token shorter than 16 characters", async () => {
+    const key = await publicKeyJwk();
+
+    const envelope = await encryptDesktopSession({
+      algorithm: DESKTOP_SESSION_ALGORITHM,
+      state: "A".repeat(43),
+      publicKey: key,
+      session: {
+        accessToken: "access-secret-value-123",
+        refreshToken: "short",
+        expiresAt: 1_800_000_000,
+        user: { id: "user-1", email: "pm@example.com" },
+      },
+    });
+
+    expect(envelope.algorithm).toBe(DESKTOP_SESSION_ALGORITHM);
+  });
+
+  it("classifies an empty refresh token without exposing its value", async () => {
     const key = await publicKeyJwk();
 
     await expect(encryptDesktopSession({
@@ -108,7 +126,7 @@ describe("desktop browser session handoff", () => {
       publicKey: key,
       session: {
         accessToken: "access-secret-value-123",
-        refreshToken: "short",
+        refreshToken: "",
         expiresAt: 1_800_000_000,
         user: { id: "user-1", email: "pm@example.com" },
       },
