@@ -10,7 +10,6 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 // Canonical control-center loading uses the same query set for all project views.
 const DashboardControlCenter = lazyWithRetry(() => import("./dashboardCC/DashboardControlCenter"));
 const PortfolioControlCenter = lazyWithRetry(() => import("./portfolio/PortfolioControlCenter"));
-const CanonicalPieceDashboard = lazyWithRetry(() => import("@/components/dashboard/CanonicalPieceDashboard"));
 
 function FirstProjectWelcome({ onStart }) {
   return (
@@ -279,6 +278,7 @@ export default function Dashboard() {
         procurement: "/Procurement", field: "/Field", "daily-logs": "/DailyLogs",
         photos: "/Photos", punchlist: "/Punchlist", inspections: "/Inspections",
         safety: "/Safety", "quality-control": "/QualityControl",
+        "piece-register": "/PieceRegister",
       };
       const path = paths[target];
       if (!path) return;
@@ -291,7 +291,6 @@ export default function Dashboard() {
     return (
       <ErrorBoundary label="Dashboard Control Center">
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <CanonicalPieceDashboard project={activeProject} />
           <DashboardControlCenter
             project={activeProject}
             rfis={rfis}
