@@ -8,6 +8,9 @@ import {
   setPieceControlMode,
   type PieceControlMode,
 } from "@/lib/pieceControl/pilotReadinessRepository";
+import { modePresentation } from "@/lib/pieceControl/presentation";
+import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { PieceControlModeBadge } from "./PieceControlModeBadge";
 
 interface PieceControlPilotReadinessProps {
   projectId: string;
@@ -21,6 +24,33 @@ const nextModes: Record<PieceControlMode, PieceControlMode[]> = {
   pilot: ["off", "shadow", "live"],
   live: ["off", "shadow"],
 };
+
+function presentReadinessText(value: string) {
+  if (/^No active actionable canonical piece scope$/i.test(value)) {
+    return "No active pieces are in the Piece Register";
+  }
+  if (
+    /^Canonical station configuration must contain six stations totaling 100 percent$/i.test(
+      value,
+    )
+  ) {
+    return "Fabrication station setup must contain six stations totaling 100 percent";
+  }
+  return value
+    .replaceAll("_", " ")
+    .replace(
+      /\bcanonical versus legacy\b/gi,
+      "Piece Register versus existing production records",
+    )
+    .replace(/\bcanonical release gate\b/gi, "fabrication release checks")
+    .replace(/\bcanonical piece scope\b/gi, "Piece Register scope")
+    .replace(/\bcanonical\b/gi, "Piece Register")
+    .replace(/\blegacy\b/gi, "existing production records")
+    .replace(/\bbefore pilot\b/gi, "for Pilot workflow")
+    .replace(/\bbefore live mode\b/gi, "for Live workflow")
+    .replace(/\bpilot transition\b/gi, "Pilot workflow")
+    .replace(/\blive transition\b/gi, "Live workflow");
+}
 
 export function PieceControlPilotReadiness({
   projectId,
@@ -42,8 +72,10 @@ export function PieceControlPilotReadiness({
     queryKey: ["piece-control-pilot-readiness", projectId],
     queryFn: () => fetchPilotReadiness(projectId),
   });
-  const expectedConfirmation = `CHANGE ${currentMode.toUpperCase()} TO ${targetMode.toUpperCase()}`;
+  const expectedConfirmation =
+    `CHANGE ${currentMode.toUpperCase()} TO ${targetMode.toUpperCase()}`;
   const isAdmin = ["admin", "owner"].includes(query.data?.role ?? "");
+  const currentModeInfo = modePresentation(currentMode);
 
   const modeMutation = useMutation({
     mutationFn: (confirmationOverride?: string) =>
@@ -51,10 +83,12 @@ export function PieceControlPilotReadiness({
         projectId,
         targetMode,
         confirmationOverride ?? confirmation,
-      ),
+    ),
     onSuccess: async () => {
       onModeChanged?.(targetMode);
-      toast.success(`Piece Control moved to ${targetMode} mode.`);
+      toast.success(
+        `Piece Control moved to ${modePresentation(targetMode).label}.`,
+      );
       setConfirmation("");
       await Promise.all([
         queryClient.invalidateQueries({
@@ -66,7 +100,13 @@ export function PieceControlPilotReadiness({
         }),
       ]);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(
+          error,
+          "The Piece Register workflow could not be changed.",
+        ),
+      ),
   });
 
   const exportRows = useMemo(() => {
@@ -75,27 +115,27 @@ export function PieceControlPilotReadiness({
     return [
       ...Object.entries(report.metrics).map(([metric, value]) => [
         "Metric",
-        metric,
+        presentReadinessText(metric),
         value,
       ]),
       ...report.data_quality_warnings.map((warning) => [
         "Data quality warning",
-        warning,
+        presentReadinessText(warning),
         "",
       ]),
       ...report.hard_release_blockers.map((blocker) => [
         "Hard release blocker",
-        blocker,
+        presentReadinessText(blocker),
         "",
       ]),
       ...report.pilot_transition_blockers.map((blocker) => [
-        "Pilot transition blocker",
-        blocker,
+        presentReadinessText("Pilot transition blocker"),
+        presentReadinessText(blocker),
         "",
       ]),
       ...report.live_transition_blockers.map((blocker) => [
-        "Live transition blocker",
-        blocker,
+        presentReadinessText("Live transition blocker"),
+        presentReadinessText(blocker),
         "",
       ]),
     ];
@@ -103,15 +143,34 @@ export function PieceControlPilotReadiness({
 
   if (query.isLoading) {
     return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
-        Building pilot readiness report...
+      <section
+        className="piece-rollout-state is-loading"
+        aria-label="Loading Piece Control readiness"
+      >
+        <span className="piece-rollout-state__skeleton" aria-hidden="true" />
+        <span>Building the Piece Control readiness report...</span>
       </section>
     );
   }
   if (query.error || !query.data) {
     return (
-      <section className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        Pilot readiness unavailable: {(query.error as Error)?.message}
+      <section className="piece-rollout-state is-error">
+        <div>
+          <strong>Piece Control readiness is unavailable.</strong>
+          <span>
+            {presentPieceControlError(
+              query.error,
+              "Piece Register readiness could not be loaded.",
+            )}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="cmd-btn"
+          onClick={() => void query.refetch()}
+        >
+          Try again
+        </button>
       </section>
     );
   }
@@ -120,27 +179,28 @@ export function PieceControlPilotReadiness({
 
   if (currentMode === "off") {
     return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-2 text-xl font-black text-slate-950">
-              <ShieldCheck className="h-6 w-6 text-amber-700" />
-              Enable Piece Register
+      <section className="piece-rollout-setup">
+        <div className="piece-rollout-setup__body">
+          <div className="piece-rollout-setup__copy">
+            <div className="piece-rollout-title">
+              <ShieldCheck size={20} />
+              <h2>Enable Piece Register</h2>
             </div>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Start in Shadow mode to import and review piece data without replacing
+            <PieceControlModeBadge presentation={currentModeInfo} />
+            <p>
+              Start in Shadow review to import and review piece data without replacing
               current release, production, or reporting workflows.
             </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl bg-emerald-50 p-4">
-                <div className="font-black text-emerald-950">Safe first step</div>
-                <p className="mt-1 text-sm text-emerald-900/75">
+            <div className="piece-rollout-setup__assurances">
+              <div className="is-safe">
+                <strong>Safe first step</strong>
+                <p>
                   Imports stay staged until your team reviews, approves, and applies them.
                 </p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4">
-                <div className="font-black text-slate-950">No workflow cutover</div>
-                <p className="mt-1 text-sm text-slate-600">
+              <div>
+                <strong>No workflow cutover</strong>
+                <p>
                   Existing fabrication records remain unchanged while you validate the register.
                 </p>
               </div>
@@ -148,7 +208,7 @@ export function PieceControlPilotReadiness({
           </div>
 
           {!isAdmin ? (
-            <div className="rounded-xl bg-slate-100 px-5 py-4 text-sm font-semibold text-slate-700">
+            <div className="piece-rollout-admin-note">
               A project owner or admin must enable this workspace.
             </div>
           ) : (
@@ -156,7 +216,7 @@ export function PieceControlPilotReadiness({
               type="button"
               disabled={modeMutation.isPending}
               onClick={() => modeMutation.mutate(expectedConfirmation)}
-              className="h-12 shrink-0 rounded-xl bg-amber-400 px-6 font-black text-slate-950 shadow-sm transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="cmd-btn cmd-btn--primary piece-rollout-setup__action"
             >
               {modeMutation.isPending ? "Enabling Piece Register..." : "Enable Piece Register"}
             </button>
@@ -167,15 +227,16 @@ export function PieceControlPilotReadiness({
   }
 
   return (
-    <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-lg font-black text-slate-900">
-            <ShieldCheck className="h-5 w-5 text-teal-700" />
-            Pilot readiness and rollout control
+    <section className="piece-rollout">
+      <header className="piece-rollout__header">
+        <div className="piece-rollout__intro">
+          <div className="piece-rollout-title">
+            <ShieldCheck size={19} />
+            <h2>Readiness and rollout control</h2>
           </div>
-          <p className="mt-1 text-sm text-slate-500">
-            Project-scoped validation. Mode rollback preserves canonical and legacy records.
+          <p>
+            Project-scoped checks. Moving to an earlier mode does not remove register
+            or production history.
           </p>
         </div>
         <button
@@ -187,103 +248,107 @@ export function PieceControlPilotReadiness({
               rows: exportRows,
             })
           }
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold"
+          className="cmd-btn"
         >
-          <Download className="h-4 w-4" />
+          <Download size={15} />
           Export CSV
         </button>
-      </div>
+      </header>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="piece-rollout__metrics">
         {[
           ["Import coverage", `${report.metrics.canonical_import_coverage_percent ?? 0}%`],
           ["Model coverage", `${report.metrics.model_element_coverage_percent ?? 0}%`],
           ["Release blockers", report.hard_release_blockers.length],
           ["Failed command audits", query.data.recentFailureCount],
         ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-xl bg-slate-50 p-4">
-            <div className="text-2xl font-black text-slate-900">{value}</div>
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              {label}
-            </div>
+          <div key={String(label)} className="piece-rollout-metric">
+            <strong>{value}</strong>
+            <span>{label}</span>
           </div>
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="piece-rollout__report-grid">
         <ReportList
           title="Data quality warnings"
-          items={report.data_quality_warnings}
+          items={report.data_quality_warnings.map(presentReadinessText)}
           empty="No data quality warnings."
           severity="warning"
         />
         <ReportList
           title="Hard release blockers"
-          items={report.hard_release_blockers}
+          items={report.hard_release_blockers.map(presentReadinessText)}
           empty="No current hard release blockers."
           severity="blocker"
         />
       </div>
 
-      <div className="rounded-xl border border-slate-200 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-black uppercase tracking-wider text-slate-500">
-              Current mode
-            </div>
-            <div className="text-2xl font-black capitalize text-slate-900">
-              {currentMode}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle2
-              className={`h-4 w-4 ${
-                report.pilot_ready ? "text-emerald-600" : "text-amber-600"
-              }`}
-            />
-            Pilot {report.pilot_ready ? "ready" : "blocked"}
-            <CheckCircle2
-              className={`ml-3 h-4 w-4 ${
-                report.live_ready ? "text-emerald-600" : "text-amber-600"
-              }`}
-            />
-            Live {report.live_ready ? "ready" : "blocked"}
+      <div className="piece-rollout__readiness-grid">
+        <ModeReadiness
+          label="Pilot workflow"
+          ready={report.pilot_ready}
+          blockers={report.pilot_transition_blockers.map(presentReadinessText)}
+        />
+        <ModeReadiness
+          label="Live workflow"
+          ready={report.live_ready}
+          blockers={report.live_transition_blockers.map(presentReadinessText)}
+        />
+      </div>
+
+      <div className="piece-rollout-mode">
+        <div className="piece-rollout-mode__head">
+          <div className="piece-rollout-mode__identity">
+            <span>Current mode</span>
+            <PieceControlModeBadge presentation={currentModeInfo} />
           </div>
         </div>
 
         {!isAdmin ? (
-          <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+          <p className="piece-rollout-admin-note">
             Only a project admin or owner can change Piece Control mode.
           </p>
         ) : (
-          <div className="mt-4 grid gap-3 lg:grid-cols-[180px_1fr_auto]">
-            <select
-              value={targetMode}
-              onChange={(event) => {
-                setTargetMode(event.target.value as PieceControlMode);
-                setConfirmation("");
-              }}
-              className="h-11 rounded-lg border border-slate-300 px-3"
-            >
-              {nextModes[currentMode].map((mode) => (
-                <option key={mode} value={mode}>
-                  {mode}
-                </option>
-              ))}
-            </select>
-            <input
-              value={confirmation}
-              onChange={(event) => setConfirmation(event.target.value)}
-              placeholder={`Type: ${expectedConfirmation}`}
-              className="h-11 rounded-lg border border-slate-300 px-3"
-            />
+          <div className="piece-rollout-confirmation">
+            <label className="piece-rollout-field" htmlFor="piece-rollout-target-mode">
+              Target mode
+              <select
+                id="piece-rollout-target-mode"
+                value={targetMode}
+                onChange={(event) => {
+                  setTargetMode(event.target.value as PieceControlMode);
+                  setConfirmation("");
+                }}
+                className="piece-command-control"
+              >
+                {nextModes[currentMode].map((mode) => {
+                  const option = modePresentation(mode);
+                  return (
+                    <option key={mode} value={mode}>
+                      {option.label}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label className="piece-rollout-field" htmlFor="piece-rollout-confirmation">
+              Exact confirmation
+              <input
+                id="piece-rollout-confirmation"
+                value={confirmation}
+                onChange={(event) => setConfirmation(event.target.value)}
+                placeholder={`Type: ${expectedConfirmation}`}
+                className="piece-command-control piece-rollout-confirmation__input"
+              />
+            </label>
             <button
               type="button"
               disabled={
                 confirmation !== expectedConfirmation || modeMutation.isPending
               }
               onClick={() => modeMutation.mutate(confirmation)}
-              className="h-11 rounded-lg bg-slate-950 px-5 font-black text-white disabled:opacity-40"
+              className="cmd-btn cmd-btn--primary piece-rollout-confirmation__action"
             >
               Confirm mode change
             </button>
@@ -292,22 +357,21 @@ export function PieceControlPilotReadiness({
       </div>
 
       {query.data.modeEvents.length > 0 && (
-        <div>
-          <h3 className="text-sm font-black uppercase tracking-wider text-slate-500">
-            Mode audit history
-          </h3>
-          <div className="mt-2 space-y-2">
+        <div className="piece-rollout-audit">
+          <h3>Mode audit history</h3>
+          <div className="piece-rollout-audit__list">
             {query.data.modeEvents.map((event) => (
               <div
                 key={event.id}
-                className="flex justify-between rounded-lg bg-slate-50 p-3 text-sm"
+                className="piece-rollout-audit__row"
               >
                 <span>
-                  {event.previous_mode} to {event.next_mode}
+                  {modePresentation(event.previous_mode).label} to{" "}
+                  {modePresentation(event.next_mode).label}
                 </span>
-                <span className="text-slate-500">
+                <time dateTime={event.changed_at}>
                   {new Date(event.changed_at).toLocaleString()}
-                </span>
+                </time>
               </div>
             ))}
           </div>
@@ -330,29 +394,47 @@ function ReportList({
 }) {
   const blocked = severity === "blocker";
   return (
-    <div
-      className={`rounded-xl border p-4 ${
-        blocked ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"
-      }`}
-    >
-      <div className="flex items-center gap-2 font-black text-slate-900">
-        <AlertTriangle
-          className={`h-4 w-4 ${blocked ? "text-red-700" : "text-amber-700"}`}
-        />
+    <div className={`piece-rollout-report ${blocked ? "is-blocker" : "is-warning"}`}>
+      <div className="piece-rollout-report__title">
+        <AlertTriangle size={15} />
         {title}
       </div>
       {items.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-600">{empty}</p>
+        <p>{empty}</p>
       ) : (
-        <ul className="mt-3 space-y-2 text-sm text-slate-700">
+        <ul>
           {items.map((item) => (
-            <li key={item} className="rounded-lg bg-white/70 p-2">
-              {item}
-            </li>
+            <li key={item}>{item}</li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+function ModeReadiness({
+  label,
+  ready,
+  blockers,
+}: {
+  label: string;
+  ready: boolean;
+  blockers: string[];
+}) {
+  return (
+    <section className={`piece-rollout-readiness ${ready ? "is-ready" : "is-blocked"}`}>
+      <div className="piece-rollout-readiness__title">
+        {ready ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+        <strong>{label} {ready ? "ready" : "blocked"}</strong>
+      </div>
+      {blockers.length > 0 ? (
+        <ul>
+          {blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+        </ul>
+      ) : (
+        <p>{ready ? "All current transition checks pass." : "Transition checks are incomplete."}</p>
+      )}
+    </section>
   );
 }
 

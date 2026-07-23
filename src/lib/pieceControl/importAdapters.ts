@@ -51,7 +51,7 @@ export async function readPieceImportFile(file: File): Promise<ImportPayload[]> 
 }
 
 export const PIECE_IMPORT_SOURCE_OPTIONS: Array<{ value: PieceImportSourceType; label: string }> = [
-  { value: "csv", label: "Canonical CSV" },
+  { value: "csv", label: "Piece Register CSV" },
   { value: "ifc", label: "IFC roster" },
   { value: "kiss", label: "KISS" },
   { value: "powerfab_xml", label: "PowerFab XML" },

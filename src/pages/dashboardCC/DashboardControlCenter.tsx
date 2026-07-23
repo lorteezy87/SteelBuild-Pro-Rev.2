@@ -19,6 +19,7 @@
 import { useMemo, useState } from "react";
 import { LayoutDashboard, FileText, HelpCircle, CalendarDays, DollarSign } from "lucide-react";
 import "@/styles/command.css";
+import "@/styles/piece-control-command.css";
 import {
   PageHero,
   KpiStrip,
@@ -33,11 +34,15 @@ import { photoFor } from "@/config/launcherConfig";
 import { buildDashboardSummary } from "./dashboardControlCenter.derive";
 import type { DashActivityRow, ModuleTile } from "./dashboardControlCenter.derive";
 import { getPageIcon } from "@/config/pageIcons";
+import { PieceControlDashboardPanel } from "@/components/pieceControl/PieceControlDashboardPanel";
 
 // ── Prop type matches what Dashboard.jsx already passes to ProjectDashboard ───
 
 interface DashboardControlCenterProps {
-  project?: Record<string, unknown> | null;
+  project?: (Record<string, unknown> & {
+    id: string;
+    piece_control_mode?: string | null;
+  }) | null;
   rfis?: Record<string, unknown>[];
   cos?: Record<string, unknown>[];
   codes?: Record<string, unknown>[];
@@ -305,6 +310,13 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
       />
 
       <KpiStrip cells={kpiCells} />
+
+      {project ? (
+        <PieceControlDashboardPanel
+          project={project}
+          onOpen={() => onNavigate?.("piece-register")}
+        />
+      ) : null}
 
       {/* SteelBuild Modules — photographic launcher, restored + front-and-center */}
       <DecisionPanel title="SteelBuild Modules" onViewAll={() => onNavigate?.("rfis")}>

@@ -10,19 +10,43 @@ import {
   FileUp,
   GitBranch,
   PackageOpen,
+  Scale,
   Search,
   Settings2,
   ShieldCheck,
   Truck,
 } from "lucide-react";
 import { toast } from "sonner";
+import "@/styles/command.css";
+import "@/styles/piece-control-command.css";
 import { entities } from "@/api/supabaseClient";
+import {
+  DecisionPanel,
+  KpiStrip,
+  PageHero,
+  Pill,
+  useCommandSkin,
+  type KpiCellDef,
+  type PillTone,
+} from "@/components/command";
+import { PieceAttentionPanel } from "@/components/pieceControl/PieceAttentionPanel";
+import { PieceControlModeBadge } from "@/components/pieceControl/PieceControlModeBadge";
+import { PieceLifecycleStrip } from "@/components/pieceControl/PieceLifecycleStrip";
 import PieceRelationshipManager from "@/components/pieceControl/PieceRelationshipManager";
 import { PieceProductionControl } from "@/components/pieceControl/PieceProductionControl";
 import { PieceLogisticsControl } from "@/components/pieceControl/PieceLogisticsControl";
 import { PieceControlPilotReadiness } from "@/components/pieceControl/PieceControlPilotReadiness";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { photoFor } from "@/config/launcherConfig";
+import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
+import { rollupCanonicalWorkPackages } from "@/lib/pieceControl/canonicalRollups";
 import { PIECE_IMPORT_SOURCE_OPTIONS, readPieceImportFile } from "@/lib/pieceControl/importAdapters";
+import {
+  buildPieceControlSummary,
+  modePresentation,
+  type PieceAttentionItem,
+  type PieceControlMode,
+} from "@/lib/pieceControl/presentation";
 import type { ImportPayload, PieceImportSourceType } from "@/lib/pieceControl/reconciliation";
 import {
   applyPieceImportBatch,
@@ -36,6 +60,7 @@ import {
 import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import { pieceTons } from "@/lib/pieceControl/tonnage";
 import { pieceLifecycleLabel } from "@/lib/pieceControl/lifecycle";
+import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import { filterPieceRegisterRows, type PieceRegisterFilters } from "./pieceRegister/filter";
 
 const EMPTY_FILTERS: PieceRegisterFilters = {
@@ -48,11 +73,9 @@ const EMPTY_FILTERS: PieceRegisterFilters = {
   hold: "all",
 };
 
-type PieceControlMode = "off" | "shadow" | "pilot" | "live";
-
 const REGISTER_VIEWS = [
   { id: "overview", label: "Overview", icon: Boxes },
-  { id: "register", label: "Piece register", icon: PackageOpen },
+  { id: "register", label: "Register", icon: PackageOpen },
   { id: "import", label: "Imports", icon: FileUp },
   { id: "relationships", label: "Lots & links", icon: GitBranch },
   { id: "production", label: "Production", icon: Factory },
@@ -62,16 +85,44 @@ const REGISTER_VIEWS = [
 
 type PieceRegisterView = (typeof REGISTER_VIEWS)[number]["id"];
 
-const decisionTone: Record<string, string> = {
-  new: "bg-emerald-50 text-emerald-800 border-emerald-200",
-  unchanged: "bg-slate-50 text-slate-700 border-slate-200",
-  update_candidate: "bg-amber-50 text-amber-900 border-amber-200",
-  conflict: "bg-rose-50 text-rose-800 border-rose-200",
-  invalid: "bg-red-50 text-red-800 border-red-200",
+const decisionTone: Record<string, PillTone> = {
+  new: "good",
+  unchanged: "neutral",
+  update_candidate: "warn",
+  conflict: "danger",
+  invalid: "danger",
 };
 
+const naturalSortCollator = new Intl.Collator("en-US", {
+  numeric: true,
+  sensitivity: "base",
+});
+
 function uniqueValues(values: Array<string | null | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort();
+  return [...new Set(values.filter((value): value is string => Boolean(value)))]
+    .sort(naturalSortCollator.compare);
+}
+
+function formatPlannedShipDate(value: string): string {
+  return new Date(`${value.slice(0, 10)}T00:00:00.000Z`).toLocaleDateString(
+    "en-US",
+    {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    },
+  );
+}
+
+function workPackageStatusLabel(status: string): string {
+  return status === "No Canonical Scope" ? "No active pieces" : status;
+}
+
+function presentImportReconciliationText(value: string): string {
+  return value === "mark has split lots but no active ALL root"
+    ? "This piece mark has split lots but no active parent record."
+    : value;
 }
 
 function SelectFilter({
@@ -85,13 +136,15 @@ function SelectFilter({
   label: string;
   options: Array<string | { value: string; label: string }>;
 }) {
+  const controlId = `piece-register-filter-${label.toLowerCase().replace(/\s+/g, "-")}`;
   return (
-    <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+    <label className="piece-register-filter" htmlFor={controlId}>
       {label}
       <select
+        id={controlId}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-slate-800"
+        className="piece-register-filter__control"
       >
         <option value="">All</option>
         {options.map((option) => {
@@ -105,9 +158,10 @@ function SelectFilter({
 }
 
 export default function PieceRegister() {
+  useCommandSkin();
   const { activeProject, updateActiveProject } = useProjectContext() as any;
   const projectId = activeProject?.id as string | undefined;
-  const mode = String(activeProject?.piece_control_mode ?? "off");
+  const mode = String(activeProject?.piece_control_mode ?? "off") as PieceControlMode;
   const enabled = Boolean(projectId && mode !== "off");
   const queryClient = useQueryClient();
   const { role, isLoading: roleLoading } = useProjectRole(projectId);
@@ -122,12 +176,14 @@ export default function PieceRegister() {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveReason, setArchiveReason] = useState("");
   const [archiveConfirmation, setArchiveConfirmation] = useState("");
+  const [attentionFocus, setAttentionFocus] = useState<PieceAttentionItem["key"] | null>(null);
 
   useEffect(() => {
     setSelectedPieceIds(new Set());
     setArchiveOpen(false);
     setArchiveReason("");
     setArchiveConfirmation("");
+    setAttentionFocus(null);
   }, [projectId]);
 
   const piecesQuery = useQuery({
@@ -175,10 +231,57 @@ export default function PieceRegister() {
     })),
     [piecesQuery.data, workPackageMap],
   );
-  const filteredRows = useMemo(
-    () => filterPieceRegisterRows(displayRows, filters),
-    [displayRows, filters],
+  const overviewSnapshotQuery = useQuery({
+    queryKey: ["canonical-reporting", projectId],
+    queryFn: () => fetchCanonicalDashboardSnapshot(projectId!),
+    enabled:
+      enabled &&
+      activeView === "overview" &&
+      piecesQuery.isSuccess &&
+      displayRows.length > 0,
+    staleTime: 30_000,
+  });
+  const overviewWorkPackages = useMemo(() => {
+    const snapshot = overviewSnapshotQuery.data;
+    if (!snapshot) return [];
+    const sourceById = new Map(
+      snapshot.workPackages.map((workPackage) => [workPackage.id, workPackage]),
+    );
+    return rollupCanonicalWorkPackages(
+      snapshot.workPackages,
+      snapshot.pieces,
+      snapshot.stations,
+      snapshot.completions,
+    ).map((rollup) => ({
+      ...rollup,
+      source: sourceById.get(rollup.workPackageId),
+    }));
+  }, [overviewSnapshotQuery.data]);
+  const upcomingShipments = useMemo(
+    () =>
+      overviewWorkPackages
+        .filter((workPackage) => Boolean(workPackage.plannedShipDate))
+        .sort((left, right) =>
+          String(left.plannedShipDate).localeCompare(
+            String(right.plannedShipDate),
+          ),
+        )
+        .slice(0, 8),
+    [overviewWorkPackages],
   );
+  const filteredRows = useMemo(() => {
+    const rows = filterPieceRegisterRows(displayRows, filters);
+    if (attentionFocus === "unassigned") {
+      return rows.filter((piece) => !piece.work_package_id);
+    }
+    if (attentionFocus === "missing-weight") {
+      return rows.filter((piece) => pieceTons(piece) == null);
+    }
+    if (attentionFocus === "held") {
+      return rows.filter((piece) => piece.on_hold);
+    }
+    return rows;
+  }, [attentionFocus, displayRows, filters]);
   const canArchive = enabled && !roleLoading && roleAtLeast(role, "admin");
   const allFilteredSelected = filteredRows.length > 0
     && filteredRows.every((piece) => selectedPieceIds.has(piece.id));
@@ -190,19 +293,43 @@ export default function PieceRegister() {
   const grades = useMemo(() => uniqueValues(displayRows.map((row) => row.material_grade)), [displayRows]);
   const lifecycles = useMemo(() => uniqueValues(displayRows.map((row) => row.lifecycle_status)), [displayRows]);
   const sources = useMemo(() => uniqueValues(displayRows.map((row) => row.source_system)), [displayRows]);
-  const pieceSummary = useMemo(
-    () => displayRows.reduce(
-      (summary, piece) => {
-        summary.quantity += Number(piece.quantity ?? 0);
-        summary.tons += pieceTons(piece) ?? 0;
-        if (piece.on_hold) summary.held += 1;
-        if (!piece.work_package_id) summary.unassigned += 1;
-        return summary;
-      },
-      { quantity: 0, tons: 0, held: 0, unassigned: 0 },
-    ),
+  const presentation = useMemo(
+    () => buildPieceControlSummary(displayRows),
     [displayRows],
   );
+  const modeInfo = modePresentation(mode);
+  const kpiCells: KpiCellDef[] = [
+    {
+      label: "Total Pieces",
+      value: presentation.totalPieces.toLocaleString(),
+      Icon: Boxes,
+    },
+    {
+      label: "Known Tons",
+      value: presentation.knownTons.toFixed(1),
+      Icon: Scale,
+    },
+    {
+      label: "In Fabrication",
+      value: presentation.inFabricationPieces.toLocaleString(),
+      tone: "info",
+      Icon: Factory,
+    },
+    {
+      label: "Ready to Ship",
+      value: presentation.readyToShipPieces.toLocaleString(),
+      tone: "good",
+      Icon: Truck,
+    },
+    {
+      label: "Exceptions",
+      value: presentation.attention
+        .reduce((total, item) => total + item.count, 0)
+        .toLocaleString(),
+      tone: presentation.attention.length > 0 ? "warn" : "good",
+      Icon: AlertTriangle,
+    },
+  ];
 
   const invalidate = async () => {
     await Promise.all([
@@ -226,7 +353,10 @@ export default function PieceRegister() {
       await invalidate();
       toast.success("Import staged for review");
     },
-    onError: (error: Error) => toast.error(error.message || "Unable to stage import"),
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "The import could not be staged."),
+      ),
   });
   const approveMutation = useMutation({
     mutationFn: () => approvePieceImportBatch(selectedBatch!.id),
@@ -234,7 +364,10 @@ export default function PieceRegister() {
       await invalidate();
       toast.success("Batch approved. Confirm once more to apply.");
     },
-    onError: (error: Error) => toast.error(error.message || "Unable to approve batch"),
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "The import batch could not be approved."),
+      ),
   });
   const applyMutation = useMutation({
     mutationFn: () => applyPieceImportBatch(selectedBatch!.id),
@@ -243,7 +376,10 @@ export default function PieceRegister() {
       await invalidate();
       toast.success(`Import applied: ${summary.created ?? 0} created, ${summary.updated ?? 0} updated`);
     },
-    onError: (error: Error) => toast.error(error.message || "Unable to apply batch"),
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "The import batch could not be applied."),
+      ),
   });
   const archiveMutation = useMutation({
     mutationFn: () => archivePieceLots(
@@ -261,7 +397,10 @@ export default function PieceRegister() {
       await invalidate();
       toast.success(`${archived} piece${archived === 1 ? "" : "s"} archived`);
     },
-    onError: (error: Error) => toast.error(error.message || "Unable to archive pieces"),
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "The selected pieces could not be archived."),
+      ),
   });
 
   const toggleAllFiltered = () => {
@@ -277,6 +416,28 @@ export default function PieceRegister() {
     setArchiveReason("");
     setArchiveConfirmation("");
     setArchiveOpen(true);
+  };
+
+  const clearRegisterFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    setAttentionFocus(null);
+  };
+
+  const updateRegisterFilters = (patch: Partial<PieceRegisterFilters>) => {
+    setAttentionFocus(null);
+    setFilters((current) => ({ ...current, ...patch }));
+  };
+
+  const handleLifecycleSelect = (lifecycle: string) => {
+    setAttentionFocus(null);
+    setFilters({ ...EMPTY_FILTERS, lifecycle });
+    setActiveView("register");
+  };
+
+  const handleAttentionSelect = (key: PieceAttentionItem["key"]) => {
+    setFilters(EMPTY_FILTERS);
+    setAttentionFocus(key);
+    setActiveView("register");
   };
 
   const handleModeChanged = (nextMode: PieceControlMode) => {
@@ -300,117 +461,158 @@ export default function PieceRegister() {
 
   if (!projectId) {
     return (
-      <div className="m-6 rounded-2xl border border-slate-200 bg-white p-12 text-center">
-        <Database className="mx-auto mb-4 h-10 w-10 text-slate-400" />
-        <h1 className="text-2xl font-black text-slate-900">Select a project</h1>
-        <p className="mt-2 text-slate-600">The Piece Register is always scoped to one project.</p>
+      <div className="piece-control-command" data-skin="command">
+        <PageHero
+          Icon={Database}
+          title="Select a project"
+          subtitle="The Piece Register is always scoped to one project."
+          photoSrc={photoFor("PieceRegister") ?? undefined}
+        />
       </div>
     );
   }
 
   if (mode === "off") {
     return (
-      <div className="min-h-screen bg-slate-100 p-4 md:p-6">
-        <div className="mx-auto max-w-6xl space-y-5">
-          <header className="overflow-hidden rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-300/40 md:px-8">
-            <div className="max-w-3xl">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-400">Fabrication control</p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">Set up the Piece Register</h1>
-              <p className="mt-3 text-sm leading-6 text-slate-300">
-                Turn imported piece data into a controlled project register for lot tracking,
-                shop progress, shipping, delivery, and erection.
-              </p>
-            </div>
-          </header>
+      <div className="piece-control-command" data-skin="command">
+        <PageHero
+          Icon={ShieldCheck}
+          title="Set up the Piece Register"
+          subtitle="Start in Shadow review to import and compare piece data without replacing current production records."
+          projectName={activeProject?.name}
+          photoSrc={photoFor("PieceRegister") ?? undefined}
+        >
+          <PieceControlModeBadge presentation={modeInfo} />
+        </PageHero>
 
-          <section className="grid gap-4 md:grid-cols-3">
+        <section className="piece-register-setup-steps" aria-label="Piece Register setup steps">
             {[
-              ["1", "Enable controlled mode", "Start in shadow mode. Existing production and release workflows remain unchanged."],
+              ["1", "Start Shadow review", "Existing production and release workflows remain unchanged."],
               ["2", "Stage a piece file", "Upload CSV or JSON, review matches and exceptions, then approve the batch."],
               ["3", "Run the workflow", "Organize lots, advance shop stations, and record logistics from one project register."],
             ].map(([step, title, description]) => (
-              <div key={step} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-sm font-black text-amber-900">
+              <div key={step} className="piece-register-setup-step">
+                <div className="piece-register-setup-step__number">
                   {step}
                 </div>
-                <h2 className="mt-4 font-black text-slate-950">{title}</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+                <h2>{title}</h2>
+                <p>{description}</p>
               </div>
             ))}
-          </section>
+        </section>
 
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950">
-            <div className="flex gap-3">
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+        <DecisionPanel title="Piece Register setup">
+          <div className="piece-register-setup-notice">
+              <ShieldCheck size={18} />
               <div>
-                <div className="font-black">Admin setup required</div>
-                <p className="mt-1 text-amber-900/80">
-                  A project owner or admin must move this project from Off to Shadow below.
-                  Shadow mode creates the register without replacing current downstream workflows.
+                <strong>Admin setup required</strong>
+                <p>
+                  A project owner or admin must move this project from Not set up to
+                  Shadow review below. Shadow review creates the register without replacing
+                  current downstream workflows.
                 </p>
               </div>
-            </div>
           </div>
+        </DecisionPanel>
 
+        <div className="piece-register-embedded-workspace">
           <PieceControlPilotReadiness
-            projectId={projectId}
-            currentMode="off"
-            onModeChanged={handleModeChanged}
-          />
+              projectId={projectId}
+              currentMode="off"
+              onModeChanged={handleModeChanged}
+            />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_0%,_#fef3c7,_transparent_25%),linear-gradient(180deg,#f8fafc,#eef2f7)] p-4 md:p-6">
-      <div className="mx-auto max-w-[1680px] space-y-5">
-        <header className="overflow-hidden rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-300/40 md:px-8">
-          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-400">Fabrication control</p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">Piece Register</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-                The project source for piece quantities, lots, work-package assignments,
-                shop progress, shipping, delivery, and erection.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => setActiveView("import")}
-                className="inline-flex h-11 items-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-black text-slate-950 hover:bg-amber-300"
-              >
-                <FileUp className="h-4 w-4" />
-                Import pieces
-              </button>
-              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
-                <div className="text-lg font-black text-white">{mode.toUpperCase()}</div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-400">Control mode</div>
-              </div>
-            </div>
-          </div>
-        </header>
+    <div className="piece-control-command" data-skin="command">
+      <PageHero
+        Icon={Boxes}
+        title="Piece Register"
+        subtitle="Controlled piece, lot, production, and logistics record."
+        projectName={activeProject?.name}
+        photoSrc={photoFor("PieceRegister") ?? undefined}
+      >
+        <div className="piece-register-hero-actions">
+          <PieceControlModeBadge presentation={modeInfo} />
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--primary"
+            onClick={() => setActiveView("import")}
+          >
+            <FileUp size={16} />
+            Import pieces
+          </button>
+        </div>
+      </PageHero>
 
-        <nav aria-label="Piece Register sections" className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-          <div className="flex min-w-max gap-1">
-            {REGISTER_VIEWS.map(({ id, label, icon: Icon }) => {
-              const selected = activeView === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-current={selected ? "page" : undefined}
-                  onClick={() => setActiveView(id)}
-                  className={`inline-flex h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-bold transition ${selected ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </button>
-              );
-            })}
+      {piecesQuery.isLoading ? (
+        <DecisionPanel title="Piece Register status">
+          <div className="piece-operation-state is-loading">
+            Loading the Piece Register…
           </div>
-        </nav>
+        </DecisionPanel>
+      ) : piecesQuery.error ? (
+        <DecisionPanel title="Piece Register status">
+          <div className="piece-operation-state is-error">
+            <strong>The Piece Register could not be loaded.</strong>
+            <span>
+              {presentPieceControlError(
+                piecesQuery.error,
+                "Piece Register data could not be loaded.",
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => void piecesQuery.refetch()}
+              className="cmd-btn cmd-btn--secondary"
+            >
+              Try again
+            </button>
+          </div>
+        </DecisionPanel>
+      ) : (
+        <>
+          <KpiStrip cells={kpiCells} />
+
+          <div className="piece-register-summary">
+            <DecisionPanel title="Piece lifecycle">
+              <PieceLifecycleStrip
+                items={presentation.lifecycle}
+                totalPieces={presentation.totalPieces}
+                onSelect={handleLifecycleSelect}
+              />
+            </DecisionPanel>
+            <DecisionPanel title="Needs attention">
+              <PieceAttentionPanel
+                items={presentation.attention}
+                emptyMessage="No piece exceptions."
+                onSelect={handleAttentionSelect}
+              />
+            </DecisionPanel>
+          </div>
+        </>
+      )}
+
+      <nav aria-label="Piece Register sections" className="piece-register-nav">
+        {REGISTER_VIEWS.map(({ id, label, icon: Icon }) => {
+          const selected = activeView === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              aria-current={selected ? "page" : undefined}
+              onClick={() => setActiveView(id)}
+              className={`piece-register-nav__item${selected ? " is-active" : ""}`}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          );
+        })}
+      </nav>
 
         {archiveOpen && (
           <div
@@ -439,20 +641,21 @@ export default function PieceRegister() {
                   </p>
                 </div>
               </div>
-              <label className="mt-5 grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+              <label htmlFor="piece-archive-reason" className="mt-5 grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
                 Reason
                 <textarea
+                  id="piece-archive-reason"
                   value={archiveReason}
                   onChange={(event) => setArchiveReason(event.target.value)}
                   rows={3}
-                  autoFocus
                   placeholder="Why should these pieces be removed from the active register?"
                   className="resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-900"
                 />
               </label>
-              <label className="mt-4 grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+              <label htmlFor="piece-archive-confirmation" className="mt-4 grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
                 Type {archiveConfirmationText} to confirm
                 <input
+                  id="piece-archive-confirmation"
                   value={archiveConfirmation}
                   onChange={(event) => setArchiveConfirmation(event.target.value)}
                   placeholder={archiveConfirmationText}
@@ -483,150 +686,260 @@ export default function PieceRegister() {
           </div>
         )}
 
-        {activeView === "overview" && (
-          <div className="space-y-5">
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              {[
-                ["Piece rows", displayRows.length.toLocaleString()],
-                ["Total quantity", pieceSummary.quantity.toLocaleString()],
-                ["Total tons", pieceSummary.tons.toFixed(1)],
-                ["On hold", pieceSummary.held.toLocaleString()],
-                ["Unassigned", pieceSummary.unassigned.toLocaleString()],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="text-2xl font-black text-slate-950">{value}</div>
-                  <div className="mt-1 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</div>
-                </div>
-              ))}
-            </section>
-
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-                <div>
-                  <h2 className="text-lg font-black text-slate-950">Piece workflow</h2>
-                  <p className="mt-1 text-sm text-slate-600">A controlled path from source file to erection history.</p>
-                </div>
-                <button type="button" onClick={() => setActiveView(displayRows.length === 0 ? "import" : "register")} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-black text-white">
-                  {displayRows.length === 0 ? "Import the first pieces" : "Open the register"}
-                </button>
+        {activeView === "overview" && !piecesQuery.isLoading && !piecesQuery.error && (
+          <section className="piece-register-overview">
+            <div className="piece-register-overview__head">
+              <div>
+                <h2>{displayRows.length === 0 ? "Build the project piece record" : "Piece Register workspace"}</h2>
+                <p>
+                  {displayRows.length === 0
+                    ? "A controlled path from source file to erection history."
+                    : `${displayRows.length.toLocaleString()} active piece rows are available for assignment, production, and logistics control.`}
+                </p>
               </div>
-              <div className="mt-5 grid gap-3 md:grid-cols-4">
+              <button
+                type="button"
+                onClick={() => setActiveView(displayRows.length === 0 ? "import" : "register")}
+                className="cmd-btn cmd-btn--primary"
+              >
+                {displayRows.length === 0 ? "Import the first pieces" : "Open the register"}
+              </button>
+            </div>
+
+            {displayRows.length === 0 ? (
+              <div className="piece-register-workflow">
                 {[
                   ["01", "Import & reconcile", "Stage source data and resolve conflicts before anything is written."],
                   ["02", "Organize lots", "Assign work packages and split quantities while preserving traceability."],
                   ["03", "Track production", "Advance released lots through controlled shop stations."],
                   ["04", "Move to the field", "Record shipping, delivery, and erection with an immutable history."],
                 ].map(([step, title, description]) => (
-                  <div key={step} className="rounded-xl bg-slate-50 p-4">
-                    <div className="text-xs font-black uppercase tracking-wider text-amber-700">{step}</div>
-                    <div className="mt-2 font-black text-slate-900">{title}</div>
-                    <p className="mt-1 text-sm leading-5 text-slate-600">{description}</p>
+                  <div key={step} className="piece-register-workflow__step">
+                    <div className="piece-register-workflow__number">{step}</div>
+                    <div>
+                      <strong>{title}</strong>
+                      <p>{description}</p>
+                    </div>
                   </div>
                 ))}
               </div>
-            </section>
-          </div>
+            ) : (
+              <>
+                <div className="piece-register-overview__status">
+                  <CheckCircle2 size={18} />
+                  <div>
+                    <strong>Register loaded</strong>
+                    <p>Use the lifecycle and exception controls above to move directly into focused piece work.</p>
+                  </div>
+                </div>
+                <div className="piece-register-summary">
+                  <DecisionPanel title="Work-package readiness">
+                    {overviewSnapshotQuery.isLoading ? (
+                      <p className="cmd-row__meta">Loading work-package readiness…</p>
+                    ) : overviewSnapshotQuery.error ? (
+                      <div className="piece-operation-state is-error">
+                        <span>Work-package readiness could not be loaded.</span>
+                        <button
+                          type="button"
+                          className="cmd-btn cmd-btn--secondary"
+                          onClick={() => void overviewSnapshotQuery.refetch()}
+                        >
+                          Try again
+                        </button>
+                      </div>
+                    ) : overviewWorkPackages.length === 0 ? (
+                      <p className="piece-command-empty">No work packages are in this project.</p>
+                    ) : (
+                      overviewWorkPackages.map((workPackage) => (
+                        <div key={workPackage.workPackageId} className="cmd-row">
+                          <div>
+                            <strong>
+                              {workPackage.source?.wp_number ||
+                                workPackage.source?.name ||
+                                workPackage.workPackageId}
+                            </strong>
+                            <div className="cmd-row__meta">
+                              {workPackageStatusLabel(workPackage.derivedStatus)}
+                              {" · "}
+                              {workPackage.pieceCount.toLocaleString()} pieces
+                              {" · "}
+                              {workPackage.knownTons.toFixed(2)} known tons
+                            </div>
+                          </div>
+                          <span className="cmd-row__num">
+                            {workPackage.earnedFabricationPercent == null
+                              ? "Weights needed"
+                              : `${workPackage.earnedFabricationPercent.toFixed(1)}% shop earned`}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </DecisionPanel>
+
+                  <DecisionPanel title="Upcoming shipments">
+                    {overviewSnapshotQuery.isLoading ? (
+                      <p className="cmd-row__meta">Loading planned shipments…</p>
+                    ) : overviewSnapshotQuery.error ? (
+                      <p className="piece-command-empty">Planned shipments are unavailable.</p>
+                    ) : upcomingShipments.length === 0 ? (
+                      <div className="piece-command-empty piece-register-overview__empty-action">
+                        <p>No planned ship dates recorded.</p>
+                        <button
+                          type="button"
+                          className="cmd-btn cmd-btn--secondary"
+                          onClick={() => setActiveView("logistics")}
+                        >
+                          Open Logistics
+                        </button>
+                      </div>
+                    ) : (
+                      upcomingShipments.map((workPackage) => (
+                        <div key={workPackage.workPackageId} className="cmd-row">
+                          <strong>
+                            {workPackage.source?.wp_number ||
+                              workPackage.source?.name ||
+                              workPackage.workPackageId}
+                          </strong>
+                          <span className="cmd-row__num">
+                            {formatPlannedShipDate(workPackage.plannedShipDate!)}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </DecisionPanel>
+                </div>
+              </>
+            )}
+          </section>
         )}
 
         {activeView === "register" && (
-          <>
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 xl:grid-cols-[minmax(220px,2fr)_repeat(6,minmax(120px,1fr))]">
-            <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+          <section className="piece-register-workspace">
+        <div className="cmd-filterbar piece-register-filters">
+            <label htmlFor="piece-register-search" className="piece-register-filter piece-register-filter--search">
               Search
-              <span className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+              <span className="cmd-search">
+                <Search size={15} />
                 <input
+                  id="piece-register-search"
                   value={filters.search}
-                  onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+                  onChange={(event) => updateRegisterFilters({ search: event.target.value })}
                   placeholder="Mark, package, profile..."
-                  className="h-10 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm font-medium normal-case tracking-normal text-slate-800"
+                  className="cmd-search__input"
                 />
               </span>
             </label>
             <SelectFilter
               label="Work package"
               value={filters.workPackageId}
-              onChange={(value) => setFilters((current) => ({ ...current, workPackageId: value }))}
+              onChange={(value) => updateRegisterFilters({ workPackageId: value })}
               options={(workPackagesQuery.data ?? []).map((wp: any) => ({
                 value: wp.id,
                 label: wp.wp_number || wp.name || wp.title || "Unnamed package",
               }))}
             />
-            <SelectFilter label="Profile" value={filters.profile} onChange={(value) => setFilters((current) => ({ ...current, profile: value }))} options={profiles} />
-            <SelectFilter label="Grade" value={filters.grade} onChange={(value) => setFilters((current) => ({ ...current, grade: value }))} options={grades} />
-            <SelectFilter label="Lifecycle" value={filters.lifecycle} onChange={(value) => setFilters((current) => ({ ...current, lifecycle: value }))} options={lifecycles} />
-            <SelectFilter label="Source" value={filters.source} onChange={(value) => setFilters((current) => ({ ...current, source: value }))} options={sources} />
-            <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+            <SelectFilter label="Profile" value={filters.profile} onChange={(value) => updateRegisterFilters({ profile: value })} options={profiles} />
+            <SelectFilter label="Grade" value={filters.grade} onChange={(value) => updateRegisterFilters({ grade: value })} options={grades} />
+            <SelectFilter label="Lifecycle" value={filters.lifecycle} onChange={(value) => updateRegisterFilters({ lifecycle: value })} options={lifecycles} />
+            <SelectFilter label="Source" value={filters.source} onChange={(value) => updateRegisterFilters({ source: value })} options={sources} />
+            <label htmlFor="piece-register-filter-hold" className="piece-register-filter">
               Hold
               <select
+                id="piece-register-filter-hold"
                 value={filters.hold}
-                onChange={(event) => setFilters((current) => ({ ...current, hold: event.target.value as PieceRegisterFilters["hold"] }))}
-                className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-slate-800"
+                onChange={(event) => updateRegisterFilters({ hold: event.target.value as PieceRegisterFilters["hold"] })}
+                className="piece-register-filter__control"
               >
                 <option value="all">All</option>
                 <option value="held">Held</option>
                 <option value="clear">Clear</option>
               </select>
             </label>
-          </div>
-        </section>
+            {attentionFocus ? (
+              <button
+                type="button"
+                className="cmd-chip-btn is-active piece-register-attention-filter"
+                onClick={clearRegisterFilters}
+              >
+                {attentionFocus === "unassigned"
+                  ? "Unassigned pieces"
+                  : attentionFocus === "missing-weight"
+                    ? "Missing weights"
+                    : "Held pieces"}
+                <span aria-hidden="true">×</span>
+              </button>
+            ) : null}
+        </div>
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="piece-register-table">
+          <div className="piece-register-table__head">
             <div>
-              <h2 className="font-black text-slate-900">Canonical pieces</h2>
-              <p className="text-sm text-slate-500">{filteredRows.length} of {displayRows.length} rows shown</p>
+              <h2>Piece register</h2>
+              <p>{filteredRows.length} of {displayRows.length} rows shown</p>
             </div>
-            <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={clearRegisterFilters}
+              className="cmd-btn cmd-btn--ghost"
+            >
+              Clear filters
+            </button>
+          </div>
+          {selectedPieceIds.size > 0 ? (
+            <div className="piece-selection-bar">
+              <strong>{selectedPieceIds.size} selected</strong>
               <button
                 type="button"
                 onClick={openArchiveDialog}
-                disabled={!canArchive || selectedPieceIds.size === 0}
+                disabled={!canArchive}
                 title={canArchive ? "Archive selected pieces" : "Project admin access is required"}
-                className="inline-flex h-9 items-center gap-2 rounded-lg bg-rose-700 px-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="cmd-btn piece-selection-bar__archive"
               >
-                <Archive className="h-4 w-4" />
-                Archive selected {selectedPieceIds.size > 0 ? `(${selectedPieceIds.size})` : ""}
+                <Archive size={15} />
+                Archive selected
               </button>
-              <button onClick={() => setFilters(EMPTY_FILTERS)} className="text-sm font-bold text-amber-700 hover:text-amber-900">Clear filters</button>
             </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-[1380px] w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+          ) : null}
+          <div className="cmd-table-wrap piece-register-table__wrap">
+            <table className="cmd-table piece-register-table__table">
+              <thead>
                 <tr>
-                  <th className="w-12 px-4 py-3">
+                  <th>
                     <input
                       type="checkbox"
                       aria-label="Select all visible pieces"
                       checked={allFilteredSelected}
                       disabled={!canArchive || filteredRows.length === 0}
                       onChange={toggleAllFiltered}
-                      className="h-4 w-4 rounded border-slate-300 accent-rose-700"
+                      className="cmd-check"
                     />
                   </th>
                   {["Mark / lot", "Qty", "Profile", "Grade", "Wt each", "Wt total", "Tons", "Work package", "Lifecycle", "Hold", "Source", "Last update"].map((label) => (
-                    <th key={label} className="px-4 py-3 font-bold">{label}</th>
+                    <th key={label}>{label}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {piecesQuery.isLoading && (
-                  <tr><td colSpan={13} className="px-6 py-14 text-center text-slate-500">Loading the project piece register...</td></tr>
+                  <tr><td colSpan={13} className="cmd-table__empty">Loading the project piece register...</td></tr>
                 )}
                 {piecesQuery.error && (
                   <tr>
-                    <td colSpan={13} className="px-6 py-12 text-center">
-                      <div className="font-black text-red-700">The Piece Register could not be loaded.</div>
-                      <div className="mt-1 text-sm text-slate-600">{(piecesQuery.error as Error).message}</div>
-                      <button type="button" onClick={() => piecesQuery.refetch()} className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-800">Try again</button>
+                    <td colSpan={13} className="cmd-table__empty">
+                      <strong className="piece-register-error">The Piece Register could not be loaded.</strong>
+                      <div>
+                        {presentPieceControlError(
+                          piecesQuery.error,
+                          "Piece Register data could not be loaded.",
+                        )}
+                      </div>
+                      <button type="button" onClick={() => piecesQuery.refetch()} className="cmd-btn">Try again</button>
                     </td>
                   </tr>
                 )}
                 {!piecesQuery.isLoading && !piecesQuery.error && filteredRows.map((piece) => (
-                  <tr key={piece.id} className="hover:bg-amber-50/30">
-                    <td className="px-4 py-3">
+                  <tr key={piece.id}>
+                    <td>
                       <input
                         type="checkbox"
                         aria-label={`Select ${piece.piece_mark} lot ${piece.lot_code}`}
@@ -638,42 +951,42 @@ export default function PieceRegister() {
                           else next.add(piece.id);
                           return next;
                         })}
-                        className="h-4 w-4 rounded border-slate-300 accent-rose-700"
+                        className="cmd-check"
                       />
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="font-black text-slate-950">{piece.piece_mark}</div>
-                      <div className="text-xs text-slate-500">
+                    <td>
+                      <div className="piece-register-mark">{piece.piece_mark}</div>
+                      <div className="piece-register-cell-meta">
                         {piece.parent_piece_id ? `Child lot ${piece.lot_code}` : piece.lot_code === "ALL" ? "Root lot ALL" : `Container ${piece.lot_code}`}
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-semibold">{piece.quantity}</td>
-                    <td className="px-4 py-3">{piece.profile || "—"}</td>
-                    <td className="px-4 py-3">{piece.material_grade || "—"}</td>
-                    <td className="px-4 py-3">{piece.weight_each_lbs == null ? "—" : Number(piece.weight_each_lbs).toFixed(1)}</td>
-                    <td className="px-4 py-3">{piece.weight_total_lbs == null ? "—" : Number(piece.weight_total_lbs).toFixed(1)}</td>
-                    <td className="px-4 py-3 font-black">{pieceTons(piece) == null ? "—" : pieceTons(piece)!.toFixed(3)}</td>
-                    <td className="px-4 py-3">{piece.workPackageLabel}</td>
-                    <td className="px-4 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold">{pieceLifecycleLabel(piece.lifecycle_status)}</span></td>
-                    <td className="px-4 py-3">{piece.on_hold ? <span className="font-black text-rose-700">HELD</span> : <span className="text-slate-500">Clear</span>}</td>
-                    <td className="px-4 py-3">
+                    <td className="piece-register-number">{piece.quantity}</td>
+                    <td>{piece.profile || "—"}</td>
+                    <td>{piece.material_grade || "—"}</td>
+                    <td className="piece-register-number">{piece.weight_each_lbs == null ? "—" : Number(piece.weight_each_lbs).toFixed(1)}</td>
+                    <td className="piece-register-number">{piece.weight_total_lbs == null ? "—" : Number(piece.weight_total_lbs).toFixed(1)}</td>
+                    <td className="piece-register-number piece-register-number--strong">{pieceTons(piece) == null ? "—" : pieceTons(piece)!.toFixed(3)}</td>
+                    <td>{piece.workPackageLabel}</td>
+                    <td><span className="cmd-pill cmd-pill--neutral">{pieceLifecycleLabel(piece.lifecycle_status)}</span></td>
+                    <td>{piece.on_hold ? <span className="piece-register-hold">Held</span> : <span className="piece-register-cell-meta">Clear</span>}</td>
+                    <td>
                       <div>{piece.source_system || "—"}</div>
-                      <div className="max-w-40 truncate text-xs text-slate-400">{piece.external_ref || ""}</div>
+                      <div className="piece-register-cell-meta piece-register-cell-meta--truncate">{piece.external_ref || ""}</div>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{new Date(piece.updated_at).toLocaleString()}</td>
+                    <td className="piece-register-updated">{new Date(piece.updated_at).toLocaleString()}</td>
                   </tr>
                 ))}
                 {!piecesQuery.isLoading && !piecesQuery.error && filteredRows.length === 0 && (
                   <tr>
-                    <td colSpan={13} className="px-6 py-14 text-center">
-                      <PackageOpen className="mx-auto h-8 w-8 text-slate-300" />
-                      <div className="mt-3 font-black text-slate-800">
+                    <td colSpan={13} className="cmd-table__empty">
+                      <PackageOpen size={28} />
+                      <strong>
                         {displayRows.length === 0 ? "No pieces have been imported yet." : "No pieces match these filters."}
-                      </div>
+                      </strong>
                       <button
                         type="button"
-                        onClick={() => displayRows.length === 0 ? setActiveView("import") : setFilters(EMPTY_FILTERS)}
-                        className="mt-4 rounded-lg bg-slate-950 px-4 py-2 text-sm font-black text-white"
+                        onClick={() => displayRows.length === 0 ? setActiveView("import") : clearRegisterFilters()}
+                        className="cmd-btn cmd-btn--primary"
                       >
                         {displayRows.length === 0 ? "Import pieces" : "Clear filters"}
                       </button>
@@ -683,20 +996,22 @@ export default function PieceRegister() {
               </tbody>
             </table>
           </div>
-        </section>
-          </>
+        </div>
+          </section>
         )}
 
         {activeView === "settings" && (
-          <PieceControlPilotReadiness
-            projectId={projectId}
-            currentMode={mode as PieceControlMode}
-            onModeChanged={handleModeChanged}
-          />
+          <div className="piece-register-embedded-workspace">
+            <PieceControlPilotReadiness
+              projectId={projectId}
+              currentMode={mode}
+              onModeChanged={handleModeChanged}
+            />
+          </div>
         )}
 
         {activeView === "relationships" && (
-          <section>
+          <section className="piece-register-embedded-workspace">
             <PieceRelationshipManager
               projectId={projectId}
               pieceControlMode={mode}
@@ -705,134 +1020,200 @@ export default function PieceRegister() {
         )}
 
         {activeView === "production" && (
-          <PieceProductionControl
-            projectId={projectId}
-            pieceControlMode={mode}
-          />
+          <div className="piece-register-embedded-workspace">
+            <PieceProductionControl
+              projectId={projectId}
+              pieceControlMode={mode}
+            />
+          </div>
         )}
 
         {activeView === "logistics" && (
-          <PieceLogisticsControl
-            projectId={projectId}
-            pieceControlMode={mode}
-          />
+          <div className="piece-register-embedded-workspace">
+            <PieceLogisticsControl
+              projectId={projectId}
+              pieceControlMode={mode}
+            />
+          </div>
         )}
 
         {activeView === "import" && (
-        <section className="grid gap-5 xl:grid-cols-[420px_1fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-amber-100 p-2 text-amber-800"><FileUp className="h-5 w-5" /></div>
-              <div>
-                <h2 className="font-black text-slate-900">Stage reconciled import</h2>
-                <p className="text-sm text-slate-500">CSV or JSON parser output, no direct piece writes.</p>
+          <section className="piece-register-embedded-workspace piece-import-workspace">
+            <DecisionPanel title="Stage import">
+              <div className="piece-command-intro">
+                <span className="piece-command-intro__icon" aria-hidden="true">
+                  <FileUp size={18} />
+                </span>
+                <p>
+                  Stage CSV or JSON rows for reconciliation. Staging makes no direct changes
+                  to the active register.
+                </p>
               </div>
-            </div>
-            <div className="mt-5 grid gap-4">
-              <label className="grid gap-1 text-xs font-bold uppercase tracking-wider text-slate-500">
-                Source
-                <select value={sourceType} onChange={(event) => setSourceType(event.target.value as PieceImportSourceType)} className="h-11 rounded-lg border border-slate-200 px-3 text-sm normal-case tracking-normal">
-                  {PIECE_IMPORT_SOURCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-              <label className="grid gap-1 text-xs font-bold uppercase tracking-wider text-slate-500">
-                File
-                <input type="file" accept=".csv,.json,text/csv,application/json" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} className="block w-full rounded-lg border border-dashed border-slate-300 p-3 text-sm" />
-              </label>
-              {importFile && <p className="rounded-lg bg-slate-50 p-3 text-sm"><strong>{importFile.name}</strong><br />{importRows.length} rows ready to stage</p>}
-              <button
-                disabled={importRows.length === 0 || stageMutation.isPending}
-                onClick={() => stageMutation.mutate()}
-                className="h-11 rounded-lg bg-slate-950 px-4 font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {stageMutation.isPending ? "Reconciling..." : "Stage for review"}
-              </button>
-            </div>
-          </div>
+              <div className="piece-command-form">
+                <label htmlFor="piece-import-source" className="piece-command-field">
+                  Source
+                  <select
+                    id="piece-import-source"
+                    value={sourceType}
+                    onChange={(event) => setSourceType(event.target.value as PieceImportSourceType)}
+                    className="piece-command-control"
+                  >
+                    {PIECE_IMPORT_SOURCE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label htmlFor="piece-import-file" className="piece-command-field">
+                  File
+                  <input
+                    id="piece-import-file"
+                    type="file"
+                    accept=".csv,.json,text/csv,application/json"
+                    onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
+                    className="piece-command-control piece-command-control--file"
+                  />
+                </label>
+                {importFile && (
+                  <p className="piece-import-file-summary">
+                    <strong>{importFile.name}</strong>
+                    <span>{importRows.length} rows ready to stage</span>
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={importRows.length === 0 || stageMutation.isPending}
+                  onClick={() => stageMutation.mutate()}
+                  className="cmd-btn cmd-btn--primary piece-import-stage-action"
+                >
+                  {stageMutation.isPending ? "Reconciling..." : "Stage for review"}
+                </button>
+              </div>
+            </DecisionPanel>
 
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="grid border-b border-slate-200 lg:grid-cols-[260px_1fr]">
-              <div className="border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
-                <h2 className="mb-3 font-black text-slate-900">Import batches</h2>
-                <div className="max-h-72 space-y-2 overflow-y-auto">
+            <DecisionPanel title="Import batches">
+              <div className="piece-import-batch-layout">
+                <div className="piece-import-batch-list" aria-label="Staged import batches">
                   {batches.map((batch) => (
                     <button
+                      type="button"
                       key={batch.id}
+                      aria-pressed={selectedBatch?.id === batch.id}
                       onClick={() => { setSelectedBatchId(batch.id); setApplyConfirmed(false); }}
-                      className={`w-full rounded-xl border p-3 text-left ${selectedBatch?.id === batch.id ? "border-amber-400 bg-amber-50" : "border-slate-200 hover:bg-slate-50"}`}
+                      className={`piece-import-batch${selectedBatch?.id === batch.id ? " is-selected" : ""}`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate font-bold">{batch.source_name || batch.source_type}</span>
-                        <span className="text-[10px] font-black uppercase text-slate-500">{batch.status}</span>
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500">{batch.row_count} rows · {new Date(batch.created_at).toLocaleDateString()}</div>
+                      <span className="piece-import-batch__head">
+                        <strong>{batch.source_name || batch.source_type}</strong>
+                        <Pill tone={batch.status === "applied" ? "good" : batch.status === "approved" ? "info" : "warn"}>
+                          {batch.status.replace("_", " ")}
+                        </Pill>
+                      </span>
+                      <span className="piece-import-batch__meta">
+                        {batch.row_count} rows · {new Date(batch.created_at).toLocaleDateString()}
+                      </span>
                     </button>
                   ))}
-                  {batches.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No staged imports yet.</p>}
+                  {batches.length === 0 && (
+                    <p className="piece-command-empty">No staged imports yet.</p>
+                  )}
+                </div>
+
+                <div className="piece-import-batch-detail">
+                  {selectedBatch ? (
+                    <>
+                      <div className="piece-import-batch-summary">
+                        <div>
+                          <h3>{selectedBatch.source_name || selectedBatch.source_type}</h3>
+                          <div className="piece-import-decisions">
+                            {Object.entries(selectedBatch.decision_counts ?? {}).map(([decision, count]) => (
+                              <Pill key={decision} tone={decisionTone[decision] ?? "neutral"}>
+                                {decision.replace("_", " ")}: {count}
+                              </Pill>
+                            ))}
+                          </div>
+                        </div>
+                        {selectedBatch.status === "pending_review" ? (
+                          <button
+                            type="button"
+                            disabled={approveMutation.isPending}
+                            onClick={() => approveMutation.mutate()}
+                            className="cmd-btn cmd-btn--primary"
+                          >
+                            Review complete · Approve
+                          </button>
+                        ) : selectedBatch.status === "approved" ? (
+                          <div className="piece-import-apply">
+                            <label htmlFor="piece-import-apply-confirmation">
+                              <input
+                                id="piece-import-apply-confirmation"
+                                type="checkbox"
+                                checked={applyConfirmed}
+                                onChange={(event) => setApplyConfirmed(event.target.checked)}
+                              />
+                              Confirm eligible creates and updates
+                            </label>
+                            <button
+                              type="button"
+                              disabled={!applyConfirmed || applyMutation.isPending}
+                              onClick={() => applyMutation.mutate()}
+                              className="cmd-btn piece-import-apply__button"
+                            >
+                              Apply approved batch
+                            </button>
+                          </div>
+                        ) : (
+                          <Pill tone="good">
+                            <CheckCircle2 size={13} />
+                            Applied
+                          </Pill>
+                        )}
+                      </div>
+                      <div className="cmd-table-wrap piece-import-results">
+                        <table className="cmd-table">
+                          <thead>
+                            <tr>
+                              <th>Row</th>
+                              <th>Mark</th>
+                              <th>Decision</th>
+                              <th>Profile</th>
+                              <th>Grade</th>
+                              <th>Warnings / resolution</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(batchRowsQuery.data ?? []).map((row) => (
+                              <tr key={row.id}>
+                                <td>{row.source_row_number}</td>
+                                <td><strong>{String(row.normalized_payload.piece_mark ?? "—")}</strong></td>
+                                <td>
+                                  <Pill tone={decisionTone[row.decision] ?? "neutral"}>
+                                    {row.decision.replace("_", " ")}
+                                  </Pill>
+                                </td>
+                                <td>{String(row.normalized_payload.profile ?? "—")}</td>
+                                <td>{String(row.normalized_payload.material_grade ?? "—")}</td>
+                                <td>
+                                  {row.warnings.map(presentImportReconciliationText).join("; ")
+                                    || (row.resolution
+                                      ? presentImportReconciliationText(row.resolution)
+                                      : "No exceptions")}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="piece-command-empty piece-command-empty--detail">
+                      <AlertTriangle size={24} />
+                      <p>Stage an import to review reconciliation results.</p>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              <div className="min-w-0 p-4">
-                {selectedBatch ? (
-                  <>
-                    <div className="flex flex-col justify-between gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center">
-                      <div>
-                        <h3 className="font-black text-slate-950">{selectedBatch.source_name || selectedBatch.source_type}</h3>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {Object.entries(selectedBatch.decision_counts ?? {}).map(([decision, count]) => (
-                            <span key={decision} className={`rounded-full border px-2 py-1 text-xs font-bold ${decisionTone[decision] ?? decisionTone.unchanged}`}>{decision.replace("_", " ")}: {count}</span>
-                          ))}
-                        </div>
-                      </div>
-                      {selectedBatch.status === "pending_review" ? (
-                        <button disabled={approveMutation.isPending} onClick={() => approveMutation.mutate()} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-black text-slate-950 disabled:opacity-50">
-                          Review complete · Approve
-                        </button>
-                      ) : selectedBatch.status === "approved" ? (
-                        <div className="grid gap-2">
-                          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                            <input type="checkbox" checked={applyConfirmed} onChange={(event) => setApplyConfirmed(event.target.checked)} />
-                            Confirm eligible creates and updates
-                          </label>
-                          <button disabled={!applyConfirmed || applyMutation.isPending} onClick={() => applyMutation.mutate()} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-40">
-                            Apply approved batch
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800"><CheckCircle2 className="h-4 w-4" /> Applied</span>
-                      )}
-                    </div>
-                    <div className="mt-4 max-h-72 overflow-auto">
-                      <table className="w-full min-w-[760px] text-left text-sm">
-                        <thead className="sticky top-0 bg-white text-xs uppercase tracking-wider text-slate-500">
-                          <tr><th className="p-2">Row</th><th className="p-2">Mark</th><th className="p-2">Decision</th><th className="p-2">Profile</th><th className="p-2">Grade</th><th className="p-2">Warnings / resolution</th></tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {(batchRowsQuery.data ?? []).map((row) => (
-                            <tr key={row.id}>
-                              <td className="p-2 text-slate-500">{row.source_row_number}</td>
-                              <td className="p-2 font-black">{String(row.normalized_payload.piece_mark ?? "—")}</td>
-                              <td className="p-2"><span className={`rounded-full border px-2 py-1 text-xs font-bold ${decisionTone[row.decision] ?? decisionTone.unchanged}`}>{row.decision.replace("_", " ")}</span></td>
-                              <td className="p-2">{String(row.normalized_payload.profile ?? "—")}</td>
-                              <td className="p-2">{String(row.normalized_payload.material_grade ?? "—")}</td>
-                              <td className="p-2 text-xs text-slate-600">{row.warnings.join("; ") || row.resolution || "No exceptions"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                ) : (
-                  <div className="grid min-h-64 place-items-center text-center text-slate-500">
-                    <div><AlertTriangle className="mx-auto mb-3 h-7 w-7" /><p>Stage an import to review reconciliation results.</p></div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
+            </DecisionPanel>
+          </section>
         )}
       </div>
-    </div>
   );
 }
