@@ -221,7 +221,8 @@ function validateMinimalSession(session: MinimalDesktopSession): MinimalDesktopS
 }
 
 function requireSecret(value: unknown, field: "access-token" | "refresh-token"): string {
-  if (typeof value !== "string" || value.length < 16 || value.length > 16_384) {
+  const minimumLength = field === "refresh-token" ? 1 : 16;
+  if (typeof value !== "string" || value.length < minimumLength || value.length > 16_384) {
     throw new DesktopSessionValidationError(field);
   }
   return value;
