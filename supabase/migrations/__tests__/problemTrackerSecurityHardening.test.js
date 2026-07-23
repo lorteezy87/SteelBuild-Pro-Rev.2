@@ -2,26 +2,26 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const hardeningSql = readFileSync(
-  fileURLToPath(
-    new URL("../20260721030200_harden_trigger_and_split_write_policies.sql", import.meta.url),
-  ),
-  "utf8",
-).toLowerCase();
+function readSql(relativePath) {
+  return readFileSync(
+    fileURLToPath(new URL(relativePath, import.meta.url)),
+    "utf8",
+  )
+    .replace(/\r\n/g, "\n")
+    .toLowerCase();
+}
 
-const cutoverSql = readFileSync(
-  fileURLToPath(
-    new URL("../20260721031606_close_app_files_legacy_path_final.sql", import.meta.url),
-  ),
-  "utf8",
-).toLowerCase();
+const hardeningSql = readSql(
+  "../20260721030200_harden_trigger_and_split_write_policies.sql",
+);
 
-const rewriteSql = readFileSync(
-  fileURLToPath(
-    new URL("../20260721031557_rewrite_app_files_legacy_references.sql", import.meta.url),
-  ),
-  "utf8",
-).toLowerCase();
+const cutoverSql = readSql(
+  "../20260721031606_close_app_files_legacy_path_final.sql",
+);
+
+const rewriteSql = readSql(
+  "../20260721031557_rewrite_app_files_legacy_references.sql",
+);
 
 const policyTables = [
   "delivery_items",
