@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertBackupVerified,
   createRcloneBackupOperations,
+  createRcloneChildEnvironment,
   createRcloneSourceEnvironment,
   createStorageBackupPlan,
   decodeOffsiteRcloneConfig,
@@ -133,6 +134,57 @@ describe("Storage backup execution", () => {
       RCLONE_CONFIG_SUPABASE_REGION: "us-east-1",
       RCLONE_CONFIG_SUPABASE_NO_CHECK_BUCKET: "true",
     });
+  });
+
+  it("removes raw backup settings from the rclone child environment", () => {
+    const childEnvironment = createRcloneChildEnvironment({
+      PATH: "C:\\tools",
+      OFFSITE_RCLONE_CONFIG_B64: "destination-secret",
+      OFFSITE_ROOT: "offsite:steelbuild-pro-storage",
+      SUPABASE_S3_ACCESS_KEY_ID: "source-key",
+      SUPABASE_S3_ENDPOINT: "https://example.storage.supabase.co/storage/v1/s3",
+      SUPABASE_S3_REGION: "us-east-1",
+      SUPABASE_S3_SECRET_ACCESS_KEY: "source-secret",
+    });
+
+    expect(childEnvironment.PATH).toBe("C:\\tools");
+    expect(childEnvironment.OFFSITE_RCLONE_CONFIG_B64).toBeUndefined();
+    expect(childEnvironment.OFFSITE_ROOT).toBeUndefined();
+    expect(childEnvironment.SUPABASE_S3_ACCESS_KEY_ID).toBeUndefined();
+    expect(childEnvironment.SUPABASE_S3_ENDPOINT).toBeUndefined();
+    expect(childEnvironment.SUPABASE_S3_REGION).toBeUndefined();
+    expect(childEnvironment.SUPABASE_S3_SECRET_ACCESS_KEY).toBeUndefined();
+    expect(childEnvironment.RCLONE_CONFIG_SUPABASE_ACCESS_KEY_ID).toBe("source-key");
+    expect(childEnvironment.RCLONE_CONFIG_SUPABASE_SECRET_ACCESS_KEY).toBe("source-secret");
+    expect(childEnvironment.RCLONE_CONFIG_SUPABASE_ENDPOINT)
+      .toBe("https://example.storage.supabase.co/storage/v1/s3");
+    expect(childEnvironment.RCLONE_CONFIG_SUPABASE_REGION).toBe("us-east-1");
+  });
+
+  it("removes case-insensitive raw backup settings from the rclone child environment", () => {
+    const rawKeyVariants = {
+      Offsite_Rclone_Config_B64: "destination-secret",
+      offsite_root: "offsite:steelbuild-pro-storage",
+      Supabase_S3_Access_Key_Id: "alternate-source-key",
+      supabase_s3_endpoint: "https://alternate.storage.supabase.co/storage/v1/s3",
+      Supabase_S3_Region: "alternate-region",
+      supabase_s3_secret_access_key: "alternate-source-secret",
+    };
+    const childEnvironment = createRcloneChildEnvironment({
+      PATH: "C:\\tools",
+      OFFSITE_RCLONE_CONFIG_B64: "destination-secret",
+      OFFSITE_ROOT: "offsite:steelbuild-pro-storage",
+      SUPABASE_S3_ACCESS_KEY_ID: "source-key",
+      SUPABASE_S3_ENDPOINT: "https://example.storage.supabase.co/storage/v1/s3",
+      SUPABASE_S3_REGION: "us-east-1",
+      SUPABASE_S3_SECRET_ACCESS_KEY: "source-secret",
+      ...rawKeyVariants,
+    });
+
+    expect(childEnvironment.PATH).toBe("C:\\tools");
+    for (const rawKey of Object.keys(rawKeyVariants)) {
+      expect(childEnvironment[rawKey]).toBeUndefined();
+    }
   });
 
   it("copies immutable snapshots, syncs current mirrors, and checks both destinations", () => {

@@ -27,6 +27,16 @@ export function createRcloneSourceEnvironment(environment) {
   };
 }
 
+export function createRcloneChildEnvironment(environment) {
+  const childEnvironment = { ...environment };
+  for (const key of Object.keys(childEnvironment)) {
+    if (REQUIRED_ENV_KEYS.includes(key.toUpperCase())) {
+      delete childEnvironment[key];
+    }
+  }
+  return Object.assign(childEnvironment, createRcloneSourceEnvironment(environment));
+}
+
 function normalizeRemoteRoot(value) {
   return value.trim().replace(/\/+$/, "");
 }

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
-  createRcloneSourceEnvironment,
+  createRcloneChildEnvironment,
   createStorageBackupPlan,
   decodeOffsiteRcloneConfig,
   executeStorageBackupPlan,
@@ -57,11 +57,7 @@ async function main() {
       ?? join(".tmp", "storage-backup", `${timestamp}.json`),
   );
 
-  const childEnvironment = { ...process.env };
-  delete childEnvironment.OFFSITE_RCLONE_CONFIG_B64;
-  delete childEnvironment.SUPABASE_S3_ACCESS_KEY_ID;
-  delete childEnvironment.SUPABASE_S3_SECRET_ACCESS_KEY;
-  Object.assign(childEnvironment, createRcloneSourceEnvironment(process.env));
+  const childEnvironment = createRcloneChildEnvironment(process.env);
 
   try {
     await writeFile(
