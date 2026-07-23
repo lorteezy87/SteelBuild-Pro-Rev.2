@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   DESKTOP_SESSION_ALGORITHM,
+  DesktopSessionCryptoError,
   buildDesktopCallbackUrl,
   encryptDesktopSession,
   parseDesktopConnectQuery,
   type DesktopConnectQuery,
   type DesktopEncryptedSession,
+  type DesktopSessionCryptoStage,
   type MinimalDesktopSession,
 } from "@/lib/desktopSessionHandoff";
 
@@ -40,12 +42,24 @@ interface DesktopConnectProps {
   parseQuery?: (search: string) => DesktopConnectQuery;
 }
 
-type DesktopConnectFailure = "query" | "session" | "crypto" | "handoff";
+type DesktopConnectFailure =
+  | "query"
+  | "session"
+  | "crypto"
+  | `crypto-${DesktopSessionCryptoStage}`
+  | "handoff";
 
 const failureMessages: Record<DesktopConnectFailure, string> = {
   query: "The desktop connection request is invalid or expired. Start again from Desktop Command Center. (DC-QUERY)",
   session: "Sign in to SteelBuild in this browser, then start again from Desktop Command Center. (DC-SESSION)",
   crypto: "This browser could not secure the desktop session. Start again from Desktop Command Center. (DC-CRYPTO)",
+  "crypto-import": "This browser could not import the desktop public key. Start again from Desktop Command Center. (DC-CRYPTO-IMPORT)",
+  "crypto-generate": "This browser could not generate a temporary session key. Start again from Desktop Command Center. (DC-CRYPTO-GENERATE)",
+  "crypto-derive": "This browser could not derive the shared session secret. Start again from Desktop Command Center. (DC-CRYPTO-DERIVE)",
+  "crypto-kdf": "This browser could not derive the session encryption key. Start again from Desktop Command Center. (DC-CRYPTO-KDF)",
+  "crypto-random": "This browser could not generate a secure session nonce. Start again from Desktop Command Center. (DC-CRYPTO-RANDOM)",
+  "crypto-encrypt": "This browser could not encrypt the desktop session. Start again from Desktop Command Center. (DC-CRYPTO-ENCRYPT)",
+  "crypto-export": "This browser could not export the temporary public key. Start again from Desktop Command Center. (DC-CRYPTO-EXPORT)",
   handoff: "SteelBuild could not create the one-time desktop handoff. Try again. (DC-HANDOFF)",
 };
 
@@ -120,9 +134,13 @@ export function DesktopConnect({
         if (!active) return;
         setStatus("returning");
         dependencies.redirect(callback);
-      } catch {
+      } catch (error) {
         if (active) {
-          setFailure(failureStage);
+          setFailure(
+            failureStage === "crypto" && error instanceof DesktopSessionCryptoError
+              ? `crypto-${error.stage}`
+              : failureStage,
+          );
           setStatus("error");
         }
       }
