@@ -40,6 +40,15 @@ interface DesktopConnectProps {
   parseQuery?: (search: string) => DesktopConnectQuery;
 }
 
+type DesktopConnectFailure = "query" | "session" | "crypto" | "handoff";
+
+const failureMessages: Record<DesktopConnectFailure, string> = {
+  query: "The desktop connection request is invalid or expired. Start again from Desktop Command Center. (DC-QUERY)",
+  session: "Sign in to SteelBuild in this browser, then start again from Desktop Command Center. (DC-SESSION)",
+  crypto: "This browser could not secure the desktop session. Start again from Desktop Command Center. (DC-CRYPTO)",
+  handoff: "SteelBuild could not create the one-time desktop handoff. Try again. (DC-HANDOFF)",
+};
+
 const defaultDependencies: DesktopConnectDependencies = {
   async getSession() {
     const { data, error } = await supabase.auth.getSession();
@@ -73,18 +82,23 @@ export function DesktopConnect({
 }: DesktopConnectProps) {
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<"connecting" | "returning" | "error">("connecting");
+  const [failure, setFailure] = useState<DesktopConnectFailure | null>(null);
 
   useEffect(() => {
     let active = true;
+    let failureStage: DesktopConnectFailure = "query";
     setStatus("connecting");
+    setFailure(null);
 
     void (async () => {
       try {
         const query = parseQuery(search);
+        failureStage = "session";
         const browserSession = await dependencies.getSession();
         if (!browserSession?.expires_at || !browserSession.user.email) {
           throw new Error("Authenticated SteelBuild session is unavailable");
         }
+        failureStage = "crypto";
         const encryptedSession = await dependencies.encryptSession({
           algorithm: DESKTOP_SESSION_ALGORITHM,
           state: query.state,
@@ -96,6 +110,7 @@ export function DesktopConnect({
             user: { id: browserSession.user.id, email: browserSession.user.email },
           },
         });
+        failureStage = "handoff";
         const handoff = await dependencies.createHandoff({
           state: query.state,
           codeChallenge: query.challenge,
@@ -106,7 +121,10 @@ export function DesktopConnect({
         setStatus("returning");
         dependencies.redirect(callback);
       } catch {
-        if (active) setStatus("error");
+        if (active) {
+          setFailure(failureStage);
+          setStatus("error");
+        }
       }
     })();
 
@@ -125,7 +143,7 @@ export function DesktopConnect({
       {status === "returning" && <p>Connected. Returning to Desktop Command Center…</p>}
       {status === "error" && (
         <>
-          <p>The secure desktop connection could not be completed. The request may have expired.</p>
+          <p>{failure ? failureMessages[failure] : "The secure desktop connection could not be completed."}</p>
           <button type="button" onClick={() => setAttempt((value) => value + 1)}>Retry connection</button>
         </>
       )}
