@@ -6,6 +6,7 @@ const root = process.cwd();
 
 const RETIRED_PATHS = [
   "src/components/ai-assistant",
+  "src/components/shared/useAIRateLimit.jsx",
   "supabase/functions/schedule-assistant",
   "src/pages/DecisionLog.jsx",
 ] as const;
@@ -24,12 +25,7 @@ const ACTIVE_FILES = [
   "supabase/scripts/probe_anon_access.sql",
   "AGENTS.md",
   "README.md",
-  "ARCHITECTURE.md",
-  "TECH_DEBT.md",
-  "docs/TODO.md",
   "docs/runbooks/backup-dr.md",
-  "docs/PHASE_0_FINAL.md",
-  "ENTERPRISE_READINESS_AUDIT.md",
 ] as const;
 
 const RETIRED_IDENTIFIER = new RegExp(
@@ -52,12 +48,12 @@ const RETIRED_IDENTIFIER = new RegExp(
 );
 
 describe("Project Management Assistant retirement", () => {
-  it("removes the retired frontend, route, and Edge Function paths", () => {
+  it("removes the retired frontend, route, rate limiter, and Edge Function paths", () => {
     const remaining = RETIRED_PATHS.filter((path) => existsSync(resolve(root, path)));
-    expect(remaining, `Retired PMA paths still exist:\n${remaining.join("\n")}`).toEqual([]);
+    expect(remaining, `Retired assistant paths still exist:\n${remaining.join("\n")}`).toEqual([]);
   });
 
-  it("contains no active runtime, configuration, export, or current-doc references", () => {
+  it("contains no active runtime, configuration, export, or runbook references", () => {
     const matches: string[] = [];
 
     for (const path of ACTIVE_FILES) {
@@ -67,6 +63,6 @@ describe("Project Management Assistant retirement", () => {
       if (RETIRED_IDENTIFIER.test(source)) matches.push(path);
     }
 
-    expect(matches, `Retired PMA identifiers remain in:\n${matches.join("\n")}`).toEqual([]);
+    expect(matches, `Retired assistant identifiers remain in:\n${matches.join("\n")}`).toEqual([]);
   });
 });
