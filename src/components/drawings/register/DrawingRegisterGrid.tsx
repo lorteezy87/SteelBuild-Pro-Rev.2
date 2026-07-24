@@ -1,7 +1,13 @@
 /**
- * DrawingRegisterGrid — register-first document-control view. One row per active
- * sheet: current revision + release status + open-impact / pending-review / RFI /
- * work-package counts, sourced from `drawing_register_view`.
+ * DrawingRegisterGrid — legacy register-first document-control view.
+ *
+ * LEGACY (kept for unit tests in `__tests__/DrawingRegisterGrid.test.tsx`).
+ * Canonical Doc Control UI for production: `DrawingRegisterGridPanel`
+ * (wired by `DocControlPanel`). Do not add new call sites to this file —
+ * extend the Panel instead.
+ *
+ * One row per active sheet: current revision + release status + open-impact /
+ * pending-review / RFI / work-package counts, sourced from `drawing_register_view`.
  *
  * Slice 2 adds release control: a status filter (select "Released for field" for
  * field-release mode — the "one current source of truth" crews work from) and a

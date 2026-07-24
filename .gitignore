@@ -65,3 +65,12 @@ exports/
 # transient scratch/snapshot copies dropped by tooling (never source; must not
 # be tracked or linted — a stale repo copy here otherwise fails `eslint .`)
 .tmp/
+
+# test / coverage / packaging artifacts
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+*.zip
+*.tgz
+*.tar.gz

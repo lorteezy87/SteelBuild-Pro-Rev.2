@@ -19,11 +19,11 @@ export function useAppSecurity() {
   // Use useContext directly to avoid throwing if AuthProvider is not mounted.
   const authCtx = useContext(AuthContext);
 
-  const user = authCtx?.user || {
-    email: typeof window !== "undefined" ? localStorage.getItem("current_user_email") : null,
-    id: typeof window !== "undefined" ? localStorage.getItem("current_user_id") : null,
-  };
-  const isAuthenticated = authCtx ? authCtx.isAuthenticated : !!user.email;
+  // Identity comes ONLY from AuthContext / Supabase session — never from
+  // localStorage identity leftovers (current_user_email / current_user_id),
+  // which are stale Base44-era keys and are not an authorization source.
+  const user = authCtx?.user ?? null;
+  const isAuthenticated = Boolean(authCtx?.isAuthenticated && user);
 
   const stamp = useCallback((data) => {
     return {

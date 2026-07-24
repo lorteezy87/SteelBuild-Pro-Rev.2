@@ -5,14 +5,31 @@ import { useProjectContext } from "../components/shared/ProjectContext";
 import { toast } from "sonner";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
 import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
-import { formatLocalDate } from "@/utils/dates";
 import {
-  addDays, subDays, snapToMonday, fmt, isThisWeek,
+  addDays, snapToMonday, fmt,
   PHASE_COLORS, PX_PER_DAY,
   GHOST_RESOURCES_SCHED,
   extractSkillsRS, getRowCapacityBg,
   injectKeyframes,
 } from "./resourceScheduling/utils";
+import {
+  filterTopLevelResources,
+  buildMembersByParentId,
+  buildEffectiveCapacityById,
+  buildDisplayResources,
+  computeCapacitySummary,
+  computeTimelineWindow,
+  getBarStyle as computeBarStyle,
+  buildTimelineHeaders,
+  buildMonthBanners,
+  filterWorkPackagesByPhase,
+  partitionScheduledWorkPackages,
+  filterFocusedDisplayResources,
+  computeScheduleStats,
+  computeTodayOffset,
+  isShopWorkPackage,
+  toIsoDate,
+} from "./resourceScheduling/resourceSchedulingHelpers";
 import CapacityView from "./resourceScheduling/CapacityView";
 import NewResourceDialog from "./resourceScheduling/NewResourceDialog";
 import WPContextMenu from "./resourceScheduling/WPContextMenu";
@@ -113,36 +130,23 @@ export default function ResourceScheduling() {
   // members' capacities. Members can be toggled visible under the crew
   // row via the expand chevron.
   const topLevelResources = useMemo(
-    () => resources.filter(r => !r.parent_resource_id),
+    () => filterTopLevelResources(resources),
     [resources],
   );
-  const membersByParentId = useMemo(() => {
-    const map = {};
-    for (const r of resources) {
-      if (r.parent_resource_id) {
-        (map[r.parent_resource_id] = map[r.parent_resource_id] || []).push(r);
-      }
-    }
-    return map;
-  }, [resources]);
+  const membersByParentId = useMemo(
+    () => buildMembersByParentId(resources),
+    [resources],
+  );
 
   // Effective capacity = own + sum of direct children.
-  const effectiveCapacityById = useMemo(() => {
-    const map = {};
-    for (const r of resources) {
-      map[r.id] = Number(r.capacity) || 0;
-    }
-    for (const r of resources) {
-      if (r.parent_resource_id && map[r.parent_resource_id] !== undefined) {
-        map[r.parent_resource_id] += Number(r.capacity) || 0;
-      }
-    }
-    return map;
-  }, [resources]);
+  const effectiveCapacityById = useMemo(
+    () => buildEffectiveCapacityById(resources),
+    [resources],
+  );
 
   // Expand/collapse state for crew rows. Crew IDs in this set show their
   // members below the crew row.
-  const [expandedCrews, setExpandedCrews] = useState(() => new Set());
+  const [expandedCrews, setExpandedCrews] = useState(() => new Set<string>());
   const toggleCrew = useCallback((crewId) => {
     setExpandedCrews(prev => {
       const next = new Set(prev);
@@ -156,201 +160,55 @@ export default function ResourceScheduling() {
   // members indented underneath. Individual resources without a parent
   // appear as their own row, same as before. Members whose parent is
   // collapsed are hidden.
-  const displayResources = useMemo(() => {
-    const out = [];
-    for (const r of topLevelResources) {
-      const children = membersByParentId[r.id] || [];
-      out.push({ resource: r, isMember: false, hasMembers: children.length > 0, memberCount: children.length });
-      if (expandedCrews.has(r.id)) {
-        for (const c of children) out.push({ resource: c, isMember: true, hasMembers: false, memberCount: 0 });
-      }
-    }
-    return out;
-  }, [topLevelResources, membersByParentId, expandedCrews]);
+  const displayResources = useMemo(
+    () => buildDisplayResources(topLevelResources, membersByParentId, expandedCrews),
+    [topLevelResources, membersByParentId, expandedCrews],
+  );
 
   // Capacity view data (uses same workPackages query)
-  const capacity = useMemo(() => {
-    const wps = workPackages;
-    const shopBudget = wps.reduce((s, w) => s + (Number(w.shop_hours_budget) || 0), 0);
-    const shopActual = wps.reduce((s, w) => s + (Number(w.shop_hours_actual) || 0), 0);
-    const shopRemaining = shopBudget - shopActual;
-    const fieldBudget = wps.reduce((s, w) => s + (Number(w.field_hours_budget) || 0), 0);
-    const fieldActual = wps.reduce((s, w) => s + (Number(w.field_hours_actual) || 0), 0);
-    const fieldRemaining = fieldBudget - fieldActual;
-    const totalTons = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-    const inFabTons = wps.filter(w => w.phase === 'Fabrication' && w.status === 'In Progress').reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-    const byPhase = {
-      Detailing: wps.filter(w => w.phase === 'Detailing' && !['Complete', 'On Hold'].includes(w.status)).length,
-      Fabrication: wps.filter(w => w.phase === 'Fabrication' && !['Complete', 'On Hold'].includes(w.status)).length,
-      Delivery: wps.filter(w => w.phase === 'Delivery' && !['Complete', 'On Hold'].includes(w.status)).length,
-      Erection: wps.filter(w => w.phase === 'Erection' && !['Complete', 'On Hold'].includes(w.status)).length,
-    };
-    return { shopBudget, shopActual, shopRemaining, fieldBudget, fieldActual, fieldRemaining, totalTons, inFabTons, byPhase };
-  }, [workPackages]);
+  const capacity = useMemo(
+    () => computeCapacitySummary(workPackages),
+    [workPackages],
+  );
 
   // Calculate timeline window from actual WP scheduling dates.
   // scheduled_start_date / scheduled_end_date were added in migration 042.
   // released_date is kept as a fallback start (the date the package was
   // released to the shop) so legacy WPs without a scheduling window still
   // anchor the timeline.
-  const { timelineStart, timelineEnd, totalDays } = useMemo(() => {
-    const starts = workPackages
-      .filter((wp) => wp.scheduled_start_date || wp.released_date)
-      .map((wp) => new Date(wp.scheduled_start_date || wp.released_date).getTime())
-      .filter((t) => !isNaN(t));
-    const ends = workPackages
-      .filter((wp) => wp.scheduled_end_date)
-      .map((wp) => new Date(wp.scheduled_end_date).getTime())
-      .filter((t) => !isNaN(t));
-
-    const tStart = starts.length > 0
-      ? subDays(new Date(Math.min.apply(null, starts)), 14)
-      : subDays(new Date(), 14);
-    const tEnd = ends.length > 0
-      ? addDays(new Date(Math.max.apply(null, ends)), 14)
-      : addDays(new Date(), 60);
-
-    const days = Math.ceil((+tEnd - +tStart) / 86400000);
-
-    return {
-      timelineStart: tStart,
-      timelineEnd: tEnd,
-      totalDays: days,
-    };
-  }, [workPackages]);
+  const { timelineStart, timelineEnd, totalDays } = useMemo(
+    () => computeTimelineWindow(workPackages),
+    [workPackages],
+  );
 
   const pxPerDay = PX_PER_DAY[zoomMode];
 
   // Calculate bar position
-  const getBarStyle = (wp: any) => {
-    const rawStart = wp.scheduled_start_date || wp.released_date;
-    if (!rawStart || !wp.scheduled_end_date) return null;
+  const getBarStyle = useCallback(
+    (wp: any) => computeBarStyle(wp, timelineStart, pxPerDay),
+    [timelineStart, pxPerDay],
+  );
 
-    const start = new Date(rawStart);
-    // wp.scheduled_end_date guaranteed non-null by the guard above.
-    const end = new Date(wp.scheduled_end_date);
-    const left = Math.round(
-      ((+start - +timelineStart) / 86400000) * pxPerDay
-    );
-    const width = Math.max(
-      Math.round(((+end - +start) / 86400000) * pxPerDay),
-      pxPerDay * 2
-    );
-    const duration = Math.round((+end - +start) / 86400000);
-
-    return { left, width, duration };
-  };
-
-  // Build timeline headers
-  const buildHeaders = useCallback(() => {
-    const headers = [];
-    let cursor = new Date(timelineStart);
-    cursor.setHours(0, 0, 0, 0);
-
-    if (zoomMode === "week") {
-      while (cursor < timelineEnd) {
-        headers.push({
-          label: cursor.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          }),
-          subLabel: cursor.toLocaleDateString("en-US", {
-            weekday: "short",
-          }),
-          width: pxPerDay * 7,
-          isToday: isThisWeek(cursor),
-          date: new Date(cursor),
-        });
-        cursor = addDays(cursor, 7);
-      }
-    } else if (zoomMode === "month") {
-      while (cursor < timelineEnd) {
-        headers.push({
-          label: cursor.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          }),
-          subLabel: cursor.toLocaleDateString("en-US", {
-            year: "numeric",
-          }),
-          width: pxPerDay * 7,
-          isToday: isThisWeek(cursor),
-          month: cursor.getMonth(),
-          date: new Date(cursor),
-        });
-        cursor = addDays(cursor, 7);
-      }
-    } else if (zoomMode === "quarter") {
-      while (cursor < timelineEnd) {
-        headers.push({
-          label: cursor.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          }),
-          width: pxPerDay * 14,
-          isToday: false,
-          date: new Date(cursor),
-        });
-        cursor = addDays(cursor, 14);
-      }
-    }
-
-    return headers;
-  }, [zoomMode, timelineStart, timelineEnd, pxPerDay]);
-
-  const headers = buildHeaders();
+  const headers = useMemo(
+    () => buildTimelineHeaders({ zoomMode, timelineStart, timelineEnd, pxPerDay }),
+    [zoomMode, timelineStart, timelineEnd, pxPerDay],
+  );
 
   // Build month banners for month view
-  const monthBanners = useMemo(() => {
-    if (zoomMode !== "month") return [];
-
-    const banners = [];
-    let currentMonth = -1;
-    let currentWidth = 0;
-    let currentLabel = "";
-
-    headers.forEach((h) => {
-      if (h.month !== currentMonth) {
-        if (currentMonth !== -1) {
-          banners.push({ label: currentLabel, width: currentWidth });
-        }
-        currentMonth = h.month;
-        currentLabel = formatLocalDate(h.date, "en-US", {
-          month: "long",
-          year: "numeric",
-        });
-        currentWidth = h.width;
-      } else {
-        currentWidth += h.width;
-      }
-    });
-
-    if (currentLabel) {
-      banners.push({ label: currentLabel, width: currentWidth });
-    }
-
-    return banners;
-  }, [zoomMode, headers]);
+  const monthBanners = useMemo(
+    () => buildMonthBanners(zoomMode, headers),
+    [zoomMode, headers],
+  );
 
   // Filter WPs
-  const filteredWorkPackages = useMemo(() => {
-    return workPackages.filter((wp) => {
-      const phaseMatch = filterPhase === "all" || wp.phase === filterPhase;
-      return phaseMatch;
-    });
-  }, [workPackages, filterPhase]);
+  const filteredWorkPackages = useMemo(
+    () => filterWorkPackagesByPhase(workPackages, filterPhase),
+    [workPackages, filterPhase],
+  );
 
   // Separate scheduled vs unscheduled
-  const scheduledWps = useMemo(
-    () => filteredWorkPackages.filter(
-      (wp) => (wp.scheduled_start_date || wp.released_date) && wp.scheduled_end_date
-    ),
-    [filteredWorkPackages],
-  );
-  const unscheduledWps = useMemo(
-    () => filteredWorkPackages.filter(
-      (wp) => !(wp.scheduled_start_date || wp.released_date) || !wp.scheduled_end_date
-    ),
+  const { scheduled: scheduledWps, unscheduled: unscheduledWps } = useMemo(
+    () => partitionScheduledWorkPackages(filteredWorkPackages),
     [filteredWorkPackages],
   );
 
@@ -364,47 +222,24 @@ export default function ResourceScheduling() {
     [effectiveCapacityById, filteredWorkPackages, resources, scheduledWps],
   );
 
-  const focusedDisplayResources = useMemo(() => {
-    if (resourceFocus === "all") return displayResources;
-    return displayResources.filter((entry) => {
-      const row = resourceGuruPlan.rowById.get(entry.resource.id);
-      if (!row) return resourceFocus === "all";
-      if (resourceFocus === "personnel") return row.isPersonnel;
-      if (resourceFocus === "equipment") return row.isEquipment;
-      if (resourceFocus === "available") return !row.unavailable && row.remainingHours > 0;
-      if (resourceFocus === "issues") return row.overAllocated || row.unavailable || row.nearCapacity;
-      return true;
-    });
-  }, [displayResources, resourceFocus, resourceGuruPlan.rowById]);
+  const focusedDisplayResources = useMemo(
+    () => filterFocusedDisplayResources(
+      displayResources,
+      resourceFocus,
+      resourceGuruPlan.rowById,
+    ),
+    [displayResources, resourceFocus, resourceGuruPlan.rowById],
+  );
 
-  const scheduleStats = useMemo(() => {
-    const totalBudgetHrs = filteredWorkPackages.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-    const totalActualHrs = filteredWorkPackages.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
-    const totalShopBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0), 0);
-    const totalShopActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0), 0);
-    const totalFieldBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_budget) || 0), 0);
-    const totalFieldActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_actual) || 0), 0);
-    const assignedWPCount = scheduledWps.filter(wp => wp.crew).length;
-    const unassignedCount = filteredWorkPackages.filter(wp => !wp.crew).length;
-    const overAllocatedResources = topLevelResources.filter(res => {
-      const resWPs = scheduledWps.filter(wp => wp.crew === res.name);
-      const resBudget = resWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-      const effCap = effectiveCapacityById[res.id] || 0;
-      return effCap > 0 && resBudget > effCap;
-    }).length;
-
-    return {
-      totalBudgetHrs,
-      totalActualHrs,
-      totalShopBudget,
-      totalShopActual,
-      totalFieldBudget,
-      totalFieldActual,
-      assignedWPCount,
-      unassignedCount,
-      overAllocatedResources,
-    };
-  }, [filteredWorkPackages, scheduledWps, topLevelResources, effectiveCapacityById]);
+  const scheduleStats = useMemo(
+    () => computeScheduleStats({
+      filteredWorkPackages,
+      scheduledWps,
+      topLevelResources,
+      effectiveCapacityById,
+    }),
+    [filteredWorkPackages, scheduledWps, topLevelResources, effectiveCapacityById],
+  );
 
   // Cleanup drag function
   const cleanupDrag = useCallback(() => {
@@ -590,7 +425,7 @@ export default function ResourceScheduling() {
       const wp = workPackages.find((w) => w.id === d.wpId);
       const totalHrs = Number(wp?.shop_hours_budget) || Number(wp?.field_hours_budget) || 0;
       const dailyLoad = totalHrs > 0 ? (totalHrs / durationDays).toFixed(1) : null;
-      const isShop = (wp as any)?.location === "Shop" || wp?.phase === "Fabrication" || wp?.phase === "Detailing";
+      const isShop = isShopWorkPackage(wp);
 
       setDragTooltip({
         x: e.clientX,
@@ -640,7 +475,7 @@ export default function ResourceScheduling() {
     // field_hours_budget, field_hours_actual. Scheduling dates are on
     // scheduled_start_date / scheduled_end_date (migration 042).
     const droppedWp = workPackages.find((w) => w.id === d.wpId);
-    const isShop = (droppedWp as any)?.location === "Shop" || droppedWp?.phase === "Fabrication" || droppedWp?.phase === "Detailing";
+    const isShop = isShopWorkPackage(droppedWp);
     const totalEstHrs = Number(droppedWp?.shop_hours_budget) || Number(droppedWp?.field_hours_budget) || 0;
     const autoHours: Record<string, any> = {};
     if (totalEstHrs > 0) {
@@ -654,9 +489,8 @@ export default function ResourceScheduling() {
     // Compute the new scheduling window. newStart comes from the drop
     // position above; newEnd was already computed on line ~551 from
     // newStart + d.durationMs. Reuse both here.
-    const iso = (dt) => dt.toISOString().split("T")[0];
-    const newStartISO = iso(newStart);
-    const newEndISO   = iso(newEnd);
+    const newStartISO = toIsoDate(newStart);
+    const newEndISO   = toIsoDate(newEnd);
 
     // Handle new assignment from unscheduled pool
     if (d.isNewAssignment) {
@@ -791,15 +625,7 @@ export default function ResourceScheduling() {
   };
 
   // Today line offset - normalize both dates to midnight to avoid DST errors
-  const todayOffset = Math.round(
-    (() => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tStart = new Date(timelineStart);
-      tStart.setHours(0, 0, 0, 0);
-      return ((+today - +tStart) / 86400000) * pxPerDay;
-    })()
-  );
+  const todayOffset = computeTodayOffset(timelineStart, pxPerDay);
 
   // Auto-scroll to today when the board mounts or timeline changes
   useEffect(() => {
