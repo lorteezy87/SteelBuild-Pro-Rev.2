@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 import { validatePdfPage } from "@/lib/pdfSheetExtractor";
 import { ensureCurrentRevision, recordSheetSlipSheet } from "@/lib/drawingHub";
-import { isPdfFile, normalizeRevisionNumber, getRevisionSuggestions, matchSheets, validateRevisionLabel } from "@/lib/drawingUploadUtils";
+import { isPdfFile, normalizeRevisionNumber, getRevisionSuggestions, matchSheets, validateRevisionLabel, hasAmbiguousSheetMatches, findExactLiveDrawing } from "@/lib/drawingUploadUtils";
 import { formatBytes, CHANGE_STYLE, extractRevisionSheets, deriveVirtualSets, buildRevisionSnapshot } from "./revisionUploadHelpers";
 
 const MAX_PDF_SIZE_MB = 32;
@@ -323,10 +323,12 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
     revised: matchedSheets.filter(m => m.change === "revised").length,
     added: matchedSheets.filter(m => m.change === "added").length,
     removed: matchedSheets.filter(m => m.change === "removed").length,
+    ambiguous: matchedSheets.filter(m => m.change === "ambiguous").length,
   };
   const totalOld = matchedSheets.filter(m => m.oldSheet).length;
   const totalNew = matchedSheets.filter(m => m.newSheet).length;
   const removedSheets = matchedSheets.filter(m => m.change === "removed");
+  const ambiguousSheets = matchedSheets.filter(m => m.change === "ambiguous");
 
   const updateTitle = (idx, val) => {
     setMatchedSheets(prev => prev.map((m, i) => i === idx ? { ...m, newSheet: { ...m.newSheet, sheetTitle: val } } : m));
@@ -343,7 +345,25 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-success-bright)", letterSpacing: "0.06em" }}>{counts.added} added</span>
         <span style={{ color: "var(--text-muted)" }}>·</span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: supersedeUnlisted ? "var(--status-error-bright)" : "var(--text-muted)", letterSpacing: "0.06em" }}>{counts.removed} {supersedeUnlisted ? "removed" : "kept"}</span>
+        {counts.ambiguous > 0 && (
+          <>
+            <span style={{ color: "var(--text-muted)" }}>·</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error-bright)", letterSpacing: "0.06em" }}>{counts.ambiguous} need review</span>
+          </>
+        )}
       </div>
+
+      {ambiguousSheets.length > 0 && (
+        <div style={{ padding: "10px 12px", borderRadius: 8, marginBottom: 12, background: "rgba(255,61,61,0.07)", border: "1px solid rgba(255,61,61,0.20)" }}>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
+            Ambiguous sheet matches — exact numbers only, no automatic guessing
+          </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
+            Resolve duplicate or blank sheet numbers before applying.{" "}
+            {ambiguousSheets.map((m) => m.ambiguousReason || `Sheet "${m.sheetNumber || "(blank)"}"`).join(" · ")}
+          </div>
+        </div>
+      )}
 
       {/* Sheets in the set but NOT in this upload. Retiring them is OPT-IN: the
           default treats the upload as a PARTIAL revision and leaves those sheets
@@ -577,6 +597,18 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   const handleApply = async () => {
     try {
       setFlowError("");
+      const ambiguous = (matchedSheets || []).filter((m) => m.change === "ambiguous");
+      if (hasAmbiguousSheetMatches(matchedSheets) || ambiguous.length) {
+        const detail = ambiguous
+          .map((m) => m.ambiguousReason || `Ambiguous sheet "${m.sheetNumber || "(blank)"}"`)
+          .slice(0, 3)
+          .join(" ");
+        setFlowError(
+          `Ambiguous sheet matches must be reviewed before applying. Exact sheet-number matching only — no automatic guessing. ${detail}`,
+        );
+        setStep("comparison");
+        return;
+      }
       const currentStage = selectedSet?.stage || selectedSet?.stage_summary || (selectedSet?.set_approval_status === "approved" ? "IFC" : "");
       const revisionCheck = validateRevisionLabel(revMeta.revisionLabel, currentStage);
       if (!revisionCheck.ok) {
@@ -627,7 +659,13 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     let updated = 0, added = 0, removed = 0, failed = 0;
     for (const match of matchedSheets) {
       try {
-        const existing = existingDrawings.find(d => d.sheet_number === match.sheetNumber && !d.is_superseded);
+        const existing = findExactLiveDrawing(existingDrawings, match.sheetNumber);
+        if (match.change !== "added" && match.change !== "removed" && match.sheetNumber && !existing && existingDrawings.some((d) => !d.is_superseded && String(d.sheet_number || "").trim() === String(match.sheetNumber || "").trim())) {
+          // Multiple live rows share this exact number — refuse to guess.
+          failed++;
+          console.error(`[RevisionUploadModal] Ambiguous live sheet "${match.sheetNumber}" — skipped`);
+          continue;
+        }
         if (match.change === "removed") {
           // A sheet that isn't in this upload is only retired when the user
           // explicitly opted into a full re-issue. The default (partial

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   isPdfFile, normalizeRevisionNumber, withTimeout, newUploadBatchId,
-  getRevisionSuggestions, matchSheets,
+  getRevisionSuggestions, matchSheets, hasAmbiguousSheetMatches, findExactLiveDrawing,
+  exactSheetNumber,
 } from "@/lib/drawingUploadUtils";
 
 describe("isPdfFile", () => {
@@ -81,5 +82,43 @@ describe("matchSheets", () => {
     expect(matchSheets([{ sheetNumber: "A" }], [])).toEqual([
       { sheetNumber: "A", oldSheet: { sheetNumber: "A" }, newSheet: null, change: "removed" },
     ]);
+  });
+  it("uses exact sheet numbers only (does not normalize S-101 vs S101)", () => {
+    const out = matchSheets(
+      [{ sheetNumber: "S-101" }],
+      [{ sheetNumber: "S101" }],
+    );
+    expect(out).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sheetNumber: "S-101", change: "removed" }),
+      expect.objectContaining({ sheetNumber: "S101", change: "added" }),
+    ]));
+  });
+  it("marks duplicate exact numbers as ambiguous (never auto-guesses)", () => {
+    const out = matchSheets(
+      [{ sheetNumber: "S1" }, { sheetNumber: "S1" }],
+      [{ sheetNumber: "S1" }],
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].change).toBe("ambiguous");
+    expect(hasAmbiguousSheetMatches(out)).toBe(true);
+  });
+  it("marks blank sheet numbers as ambiguous", () => {
+    const out = matchSheets([{ sheetNumber: "  " }], [{ sheetNumber: "" }]);
+    expect(out.every((r) => r.change === "ambiguous")).toBe(true);
+  });
+});
+
+describe("findExactLiveDrawing", () => {
+  it("returns the sole live exact match and null on ambiguity", () => {
+    const drawings = [
+      { id: "1", sheet_number: "S-1", is_superseded: false },
+      { id: "2", sheet_number: "S-2", is_superseded: true },
+      { id: "3", sheet_number: "S-3", is_superseded: false },
+      { id: "4", sheet_number: "S-3", is_superseded: false },
+    ];
+    expect(findExactLiveDrawing(drawings, "S-1")?.id).toBe("1");
+    expect(findExactLiveDrawing(drawings, "S-2")).toBeNull();
+    expect(findExactLiveDrawing(drawings, "S-3")).toBeNull();
+    expect(exactSheetNumber("  S-1 ")).toBe("S-1");
   });
 });

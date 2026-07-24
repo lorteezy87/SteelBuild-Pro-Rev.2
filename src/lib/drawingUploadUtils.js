@@ -101,22 +101,119 @@ export function getRevisionSuggestions(currentRev) {
 }
 
 /**
- * Match old vs new sheets by sheet number into a diff: each entry is
- * { sheetNumber, oldSheet, newSheet, change } where change is "revised"
- * (in both), "added" (new only), or "removed" (old only). Sorted by number.
+ * Exact sheet-number key. Empty / whitespace-only numbers are treated as missing
+ * (ambiguous) so the matcher never invents a pairing from incomplete labels.
+ */
+export function exactSheetNumber(value) {
+  if (value == null) return "";
+  return String(value).trim();
+}
+
+/**
+ * Group sheets by exact sheet number. Duplicate keys are retained as arrays so
+ * the matcher can refuse to auto-pair ambiguous collisions.
+ */
+function groupByExactSheetNumber(sheets) {
+  const map = new Map();
+  for (const sheet of sheets || []) {
+    const key = exactSheetNumber(sheet?.sheetNumber ?? sheet?.sheet_number);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(sheet);
+  }
+  return map;
+}
+
+/**
+ * Match old vs new sheets by EXACT sheet number into a diff.
+ *
+ * Each entry is `{ sheetNumber, oldSheet, newSheet, change, ambiguousReason? }`
+ * where change is:
+ *   - "revised"  — exactly one old + one new with the same exact number
+ *   - "added"    — exactly one new with no old counterpart
+ *   - "removed"  — exactly one old with no new counterpart
+ *   - "ambiguous"— duplicate / empty / conflicting numbers that must be reviewed
+ *                 explicitly (never auto-guessed)
+ *
+ * Sorted by sheet number. Empty sheet numbers never auto-match.
  */
 export function matchSheets(oldSheets, newSheets) {
-  const oldMap = new Map((oldSheets || []).map(s => [s.sheetNumber, s]));
-  const newMap = new Map((newSheets || []).map(s => [s.sheetNumber, s]));
+  const oldGroups = groupByExactSheetNumber(oldSheets);
+  const newGroups = groupByExactSheetNumber(newSheets);
+  const keys = new Set([...oldGroups.keys(), ...newGroups.keys()]);
   const results = [];
-  for (const [num, newSheet] of newMap) {
-    const old = oldMap.get(num);
-    results.push({ sheetNumber: num, oldSheet: old || null, newSheet, change: old ? "revised" : "added" });
-  }
-  for (const [num, oldSheet] of oldMap) {
-    if (!newMap.has(num)) {
+
+  for (const num of keys) {
+    const oldList = oldGroups.get(num) || [];
+    const newList = newGroups.get(num) || [];
+
+    if (!num) {
+      for (const oldSheet of oldList) {
+        results.push({
+          sheetNumber: "",
+          oldSheet,
+          newSheet: null,
+          change: "ambiguous",
+          ambiguousReason: "Sheet number is missing or blank — review before applying.",
+        });
+      }
+      for (const newSheet of newList) {
+        results.push({
+          sheetNumber: "",
+          oldSheet: null,
+          newSheet,
+          change: "ambiguous",
+          ambiguousReason: "Sheet number is missing or blank — review before applying.",
+        });
+      }
+      continue;
+    }
+
+    if (oldList.length > 1 || newList.length > 1) {
+      results.push({
+        sheetNumber: num,
+        oldSheet: oldList[0] || null,
+        newSheet: newList[0] || null,
+        oldSheets: oldList,
+        newSheets: newList,
+        change: "ambiguous",
+        ambiguousReason:
+          oldList.length > 1 && newList.length > 1
+            ? `Multiple existing and incoming sheets share exact number "${num}".`
+            : oldList.length > 1
+              ? `Multiple existing sheets share exact number "${num}".`
+              : `Multiple incoming sheets share exact number "${num}".`,
+      });
+      continue;
+    }
+
+    const oldSheet = oldList[0] || null;
+    const newSheet = newList[0] || null;
+    if (oldSheet && newSheet) {
+      results.push({ sheetNumber: num, oldSheet, newSheet, change: "revised" });
+    } else if (newSheet) {
+      results.push({ sheetNumber: num, oldSheet: null, newSheet, change: "added" });
+    } else {
       results.push({ sheetNumber: num, oldSheet, newSheet: null, change: "removed" });
     }
   }
-  return results.sort((a, b) => a.sheetNumber.localeCompare(b.sheetNumber));
+
+  return results.sort((a, b) => String(a.sheetNumber).localeCompare(String(b.sheetNumber)));
+}
+
+/** True when the match list contains any ambiguous entries that must be reviewed. */
+export function hasAmbiguousSheetMatches(matches) {
+  return (matches || []).some((m) => m?.change === "ambiguous");
+}
+
+/**
+ * Find a single live drawing by exact sheet number. Returns null when zero or
+ * multiple live (non-superseded) rows share the number — never guesses.
+ */
+export function findExactLiveDrawing(drawings, sheetNumber) {
+  const key = exactSheetNumber(sheetNumber);
+  if (!key) return null;
+  const hits = (drawings || []).filter(
+    (d) => !d?.is_superseded && exactSheetNumber(d?.sheet_number) === key,
+  );
+  return hits.length === 1 ? hits[0] : null;
 }

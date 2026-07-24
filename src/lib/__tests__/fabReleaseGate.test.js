@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findBlockingRfis, computeFabReleaseGate, linkedRfiNumbers } from "../fabReleaseGate";
+import { findBlockingRfis, computeFabReleaseGate, linkedRfiNumbers, isUnresolvedCurrentRevision } from "../fabReleaseGate";
 
 // drawings.linked_rfi_ids is a COMMA-SEPARATED STRING of RFI numbers.
 const sheet = (id, linkedCsv) => ({ id, sheet_number: id, linked_rfi_ids: linkedCsv });
@@ -128,5 +128,15 @@ describe("computeFabReleaseGate — readiness checks beyond RFIs", () => {
     });
     expect(g.blocked).toBe(true);
     expect(g.reasons.map((r) => r.kind).sort()).toEqual(["open_rfis", "rejected_sheets", "revision_conflict"]);
+  });
+
+  it("blocks sheets with an unresolved current revision and explains the action", () => {
+    expect(isUnresolvedCurrentRevision({ id: "A", current_release_status: "on_hold" })).toBe(true);
+    const g = computeFabReleaseGate({
+      drawings: [{ id: "A", stage: "Released", current_release_status: "pending_review" }],
+    });
+    expect(g.blocked).toBe(true);
+    const reason = g.reasons.find((r) => r.kind === "unresolved_revision");
+    expect(reason?.action).toMatch(/Publish or clear the current revision/i);
   });
 });

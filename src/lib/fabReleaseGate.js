@@ -79,6 +79,19 @@ export function isSupersededSheet(d) {
   return !!d && d.is_deleted !== true && d.is_superseded === true;
 }
 
+/**
+ * Current revision is missing or not fabrication-usable (on hold / void /
+ * pending review). Callers may populate `current_revision_missing` or
+ * `current_release_status` from drawing_register_view / revision joins.
+ */
+export function isUnresolvedCurrentRevision(d) {
+  if (!d || d.is_deleted === true || d.is_superseded === true) return false;
+  if (d.current_revision_missing === true) return true;
+  if (d.current_revision_id == null && d.has_revision_ledger === true) return true;
+  const status = String(d.current_release_status || d.current_revision_status || "").toLowerCase();
+  return status === "on_hold" || status === "void" || status === "pending_review";
+}
+
 /** A non-voided fab/construction-approval sign-off that satisfies the sign-off gate. */
 function isFabSignoff(s) {
   if (!s || s.is_voided) return false;
@@ -111,6 +124,9 @@ export function computeFabReleaseGate({ drawings = [], rfis = [], signoffs = [],
   // rejected is reported once, under "rejected").
   const rejected = live.filter(isRejectedSheet);
   const superseded = live.filter((d) => isSupersededSheet(d) && !isRejectedSheet(d));
+  const unresolved = live.filter(
+    (d) => isUnresolvedCurrentRevision(d) && !isRejectedSheet(d) && !isSupersededSheet(d),
+  );
 
   const reasons = [];
   if (rejected.length) {
@@ -118,6 +134,14 @@ export function computeFabReleaseGate({ drawings = [], rfis = [], signoffs = [],
   }
   if (superseded.length) {
     reasons.push({ kind: "revision_conflict", title: `${superseded.length} sheet${plural(superseded.length)} with a superseded revision`, sheets: superseded });
+  }
+  if (unresolved.length) {
+    reasons.push({
+      kind: "unresolved_revision",
+      title: `${unresolved.length} sheet${plural(unresolved.length)} with an unresolved current revision`,
+      sheets: unresolved,
+      action: "Publish or clear the current revision before releasing for fabrication.",
+    });
   }
   if (blockingRfis.length) {
     reasons.push({ kind: "open_rfis", title: `${blockingRfis.length} open RFI${plural(blockingRfis.length)} reference this package`, rfis: blockingRfis, sheets: affectedSheets });
