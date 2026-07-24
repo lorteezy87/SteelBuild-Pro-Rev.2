@@ -1,0 +1,99 @@
+name: Retired assistant documentation cleanup
+
+on:
+  push:
+    branches:
+      - claude/restore-piece-dashboard-remove-pma
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/restore-piece-dashboard-remove-pma
+          fetch-depth: 0
+
+      - name: Remove stale current-document references
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path("ARCHITECTURE.md"): [
+                  (
+                      "- `schedule-assistant` — schedule chat/tooling; routes model turns through `llm-proxy`.\n",
+                      "",
+                  ),
+                  (
+                      "  `stripe-worker` (these are NOT the real webhook — that lives inside\n"
+                      "  `stripe-billing`). As of 2026-07-01 there are **11 functions live** (6 real + 5\n"
+                      "  orphan/deprecated); the `pg_cron` job that pinged `stripe-worker` every 60s was\n",
+                      "  `stripe-worker` (these are NOT the real webhook — that lives inside\n"
+                      "  `stripe-billing`). The `pg_cron` job that pinged `stripe-worker` every 60s was\n",
+                  ),
+                  (
+                      "| `schedule-assist`         | anthropic | claude-sonnet-4-5  | (NOT WIRED IN PHASE 1 — see TECH_DEBT.md)         |\n",
+                      "",
+                  ),
+              ],
+              Path("TECH_DEBT.md"): [
+                  (
+                      "   functions tracked in `supabase/functions`: the 2 deprecated integration proxies\n"
+                      "   + 3 orphan Stripe Sync Engine functions are **gone** — only 8 edge functions\n"
+                      "   are deployed now (`llm-proxy`, `schedule-assistant`, `email-ingest`,\n"
+                      "   `email-send`, `project-export`, `stripe-billing`, `account-delete`, `health`);\n",
+                      "   functions tracked in `supabase/functions`: the 2 deprecated integration proxies\n"
+                      "   + 3 orphan Stripe Sync Engine functions are **gone** — supported source is limited\n"
+                      "   to `llm-proxy`, `email-ingest`, `email-send`, `project-export`,\n"
+                      "   `stripe-billing`, `account-delete`, and `health`;\n",
+                  ),
+              ],
+              Path("docs/TODO.md"): [
+                  (
+                      "  headlessly): project-export pagination/full-table/manifest (H2/H26/M20/M47), schedule-assistant\n"
+                      "  `SERVICE_ROLE_OVERRIDE` removal (M5), stripe-billing (L6/L10), email-send (L7). Deploy commands +\n",
+                      "  headlessly): project-export pagination/full-table/manifest (H2/H26/M20/M47),\n"
+                      "  stripe-billing (L6/L10), email-send (L7). Deploy commands +\n",
+                  ),
+              ],
+              Path("docs/PHASE_0_FINAL.md"): [
+                  (
+                      "- Staging deployment candidates were limited to `health`, `project-export`,\n"
+                      "  and `schedule-assistant`.\n",
+                      "- Staging deployment candidates were limited to `health` and `project-export`;\n"
+                      "  an additional internal candidate documented at the time has since been retired.\n",
+                  ),
+              ],
+          }
+
+          for path, pairs in replacements.items():
+              text = path.read_text(encoding="utf-8")
+              for old, new in pairs:
+                  if old not in text:
+                      raise SystemExit(f"Expected text not found in {path}: {old!r}")
+                  text = text.replace(old, new, 1)
+              path.write_text(text, encoding="utf-8")
+
+          forbidden = ("schedule-assistant", "schedule-assist")
+          for path in replacements:
+              text = path.read_text(encoding="utf-8")
+              hits = [token for token in forbidden if token in text]
+              if hits:
+                  raise SystemExit(f"Stale identifiers remain in {path}: {hits}")
+          PY
+
+      - name: Commit documentation cleanup and remove this temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/retired-assistant-doc-cleanup.yml
+          git add ARCHITECTURE.md TECH_DEBT.md docs/TODO.md docs/PHASE_0_FINAL.md
+          git commit -m "docs: scrub retired assistant references"
+          git push origin HEAD:claude/restore-piece-dashboard-remove-pma
