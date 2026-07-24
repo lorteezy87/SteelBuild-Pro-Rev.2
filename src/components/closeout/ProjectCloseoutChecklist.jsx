@@ -1,7 +1,7 @@
 import React from "react";
 import { formatLocalDate } from "@/utils/dates";
 
-export default function ProjectCloseoutChecklist({ closeout, onUpdate }) {
+export default function ProjectCloseoutChecklist({ closeout, onUpdate, isUpdating = false }) {
   if (!closeout) return null;
 
   const items = [
@@ -41,10 +41,15 @@ export default function ProjectCloseoutChecklist({ closeout, onUpdate }) {
         {items.map((item) => {
           const isDone = !!closeout[item.key];
           return (
-            <div
+            <button
+              type="button"
               key={item.key}
-              onClick={() => onUpdate && onUpdate({ ...closeout, [item.key]: !isDone })}
+              aria-label={`${item.label}: ${isDone ? "done" : "not done"}`}
+              disabled={!onUpdate || isUpdating}
+              onClick={() => onUpdate?.({ [item.key]: !isDone })}
               style={{
+                width: "100%",
+                textAlign: "left",
                 background: "var(--bg-surface)",
                 border: isDone ? "1px solid var(--status-success)" : "1px solid var(--border-default)",
                 borderRadius: "10px",
@@ -53,21 +58,22 @@ export default function ProjectCloseoutChecklist({ closeout, onUpdate }) {
                 alignItems: "center",
                 gap: "12px",
                 transition: "all 0.15s",
-                cursor: onUpdate ? "pointer" : "default",
-                opacity: 1,
+                cursor: onUpdate && !isUpdating ? "pointer" : "not-allowed",
+                opacity: isUpdating ? 0.65 : 1,
+                color: "inherit",
               }}
             >
               <div style={{ fontSize: "20px" }}>{item.icon}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-primary)" }}>{item.label}</div>
                 <div style={{ fontSize: "9px", color: isDone ? "var(--status-success)" : "var(--text-muted)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
-                  {isDone ? "✓ DONE" : "CLICK TO MARK DONE"}
+                  {isDone ? "✓ DONE" : isUpdating ? "SAVING…" : "CLICK TO MARK DONE"}
                 </div>
               </div>
               <div style={{ fontSize: "18px", color: isDone ? "var(--status-success)" : "var(--border-default)", transition: "color 0.15s" }}>
                 {isDone ? "✓" : "○"}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
