@@ -45,6 +45,7 @@ import {
   costStatusTone,
 } from "./costControlCenter.derive";
 import CostChartRow from "./CostChartRow";
+import { persistCostCode } from "./costCodeSave";
 
 // CostCodeFormModal is untyped JS; its default-`[]` props infer as never[]. Cast so it accepts our data.
 const CostCodeForm = CostCodeFormModal as unknown as React.ComponentType<Record<string, unknown>>;
@@ -429,12 +430,14 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
         costCode={editingCode ? (costCodes.find((c) => c.id === editingCode.id) ?? editingCode) : null}
         projects={project ? [project] : []}
         existingCodes={costCodes}
-        onSave={(data: Record<string, unknown>) => {
-          if (editingCode) {
-            costCodeCrud.update.mutate({ id: editingCode.id as string, ...data });
-          } else {
-            costCodeCrud.create.mutate({ ...data, project_id: projectId });
-          }
+        onSave={async (data: Record<string, unknown>) => {
+          await persistCostCode({
+            editingId: editingCode?.id as string | null,
+            data,
+            projectId,
+            createMutation: costCodeCrud.create,
+            updateMutation: costCodeCrud.update,
+          });
           setModalOpen(false);
           setEditingCode(null);
         }}
