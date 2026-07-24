@@ -62,8 +62,8 @@ Use when the Supabase project itself is unrecoverable (deleted, region outage wi
    - **Redeploy** the frontend (push to `main` → CI deploy, or Vercel redeploy) so the new env is baked into the build.
 4. **Redeploy every edge function** to the new project and **re-enter all edge secrets** (they do not travel with a DB restore):
    ```powershell
-   # Deploy each function (repeat for: llm-proxy, schedule-assistant, email-ingest,
-   # email-send, project-export, stripe-billing). Match each function's verify_jwt.
+   # Deploy each function (repeat for: llm-proxy, email-ingest, email-send,
+   # project-export, stripe-billing). Match each function's verify_jwt.
    npx supabase functions deploy <name> --project-ref <NEW_PROJECT_REF> [--no-verify-jwt]
    ```
    - `--no-verify-jwt` for: `llm-proxy`, `email-ingest`, `stripe-billing` (they do their own auth / are webhooks).
