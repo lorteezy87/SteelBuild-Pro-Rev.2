@@ -27,6 +27,7 @@ import { validate } from "@/services/validation";
 import { computeRevisedContractValue, preferManualActual } from "@/services/costRollup";
 import { COST_CODES } from "@/components/shared/costCodes";
 import { calcEVM } from "@/utils/projectKpis";
+import { logActivity } from "@/services/auditLogger";
 
 export type CostCode = RowWithAliases<'cost_codes'>;
 export type Expense = RowWithAliases<'expenses'>;
@@ -573,8 +574,12 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       if (existing) throw new Error(`Cost code ${data.cost_code_number} already exists in this project.`);
       return await entities.CostCode.create(data as Insert<'cost_codes'>);
     },
-    onSuccess: async () => {
+    onSuccess: async (created) => {
       await invalidateEntities(qc, ["cost_code"], projectId);
+      logActivity("create", "cost_code", created, {
+        projectId: created?.project_id || projectId,
+        projectName: created?.project_name,
+      });
       toast.success("Cost code created");
     },
     onError: (err) => toast.error(`Failed to create cost code: ${err.message}`),
@@ -586,8 +591,12 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       if (!id) throw new Error("Update requires an id.");
       return await entities.CostCode.update(id, data as Update<'cost_codes'>);
     },
-    onSuccess: async () => {
+    onSuccess: async (updated) => {
       await invalidateEntities(qc, ["cost_code"], projectId);
+      logActivity("update", "cost_code", updated, {
+        projectId: updated?.project_id || projectId,
+        projectName: updated?.project_name,
+      });
       toast.success("Cost code updated");
     },
     onError: (err) => toast.error(`Failed to update cost code: ${err.message}`),
@@ -599,11 +608,15 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       await entities.CostCode.delete(id);
       return id;
     },
-    onSuccess: async () => {
+    onSuccess: async (id) => {
       await invalidateEntities(qc, ["cost_code"], projectId);
-      toast.success("Cost code deleted");
+      logActivity("delete", "cost_code", { id, cost_code_number: id }, {
+        projectId,
+        description: "Archived cost code",
+      });
+      toast.success("Cost code archived");
     },
-    onError: (err) => toast.error(`Failed to delete cost code: ${err.message}`),
+    onError: (err) => toast.error(`Failed to archive cost code: ${err.message}`),
   });
 
   return {

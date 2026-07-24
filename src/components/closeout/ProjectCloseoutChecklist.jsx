@@ -1,24 +1,26 @@
 import React from "react";
 import { formatLocalDate } from "@/utils/dates";
+import { presentCloseoutForUi } from "@/lib/closeout/closeoutPayload";
+
+const CHECKLIST_ITEMS = [
+  { key: "final_inspection_completed", label: "Final Inspection", icon: "✓" },
+  { key: "punch_list_cleared", label: "Punchlist Cleared", icon: "☑" },
+  { key: "all_invoices_processed", label: "Invoices Processed", icon: "💰" },
+  { key: "warranties_registered", label: "Warranties Registered", icon: "📋" },
+  { key: "as_built_docs_completed", label: "As-Built Docs", icon: "📐" },
+  { key: "permits_closed", label: "Permits Closed", icon: "🔐" },
+];
 
 export default function ProjectCloseoutChecklist({ closeout, onUpdate, isUpdating = false }) {
   if (!closeout) return null;
+  const view = presentCloseoutForUi(closeout);
 
-  const items = [
-    { key: "final_inspection_completed", label: "Final Inspection", icon: "✓" },
-    { key: "punch_list_cleared", label: "Punchlist Cleared", icon: "☑" },
-    { key: "all_invoices_processed", label: "Invoices Processed", icon: "💰" },
-    { key: "warranties_registered", label: "Warranties Registered", icon: "📋" },
-    { key: "as_built_docs_completed", label: "As-Built Docs", icon: "📐" },
-    { key: "permits_closed", label: "Permits Closed", icon: "🔐" },
-  ];
-
-  const completedCount = items.filter((i) => closeout[i.key]).length;
-  const completionPercent = Math.round((completedCount / items.length) * 100);
+  const completedCount = CHECKLIST_ITEMS.filter((item) => view[item.key]).length;
+  const completionPercent = Math.round((completedCount / CHECKLIST_ITEMS.length) * 100);
+  const status = view.closeout_status || "In Progress";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Progress */}
       <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 600, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Closeout Progress</span>
@@ -29,17 +31,15 @@ export default function ProjectCloseoutChecklist({ closeout, onUpdate, isUpdatin
         </div>
       </div>
 
-      {/* Status Badge */}
-      <div style={{ display: "inline-flex", alignItems: "center", padding: "4px 12px", background: `var(--${closeout.closeout_status === "Closed" ? "status-success" : closeout.closeout_status === "Approved" ? "status-info" : "status-warning"})20`, border: `1px solid var(--${closeout.closeout_status === "Closed" ? "status-success" : closeout.closeout_status === "Approved" ? "status-info" : "status-warning"})40`, borderRadius: "8px", width: "fit-content" }}>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", fontWeight: 700, color: `var(--${closeout.closeout_status === "Closed" ? "status-success" : closeout.closeout_status === "Approved" ? "status-info" : "status-warning"})`, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          Status: {closeout.closeout_status}
+      <div style={{ display: "inline-flex", alignItems: "center", padding: "4px 12px", background: `var(--${status === "Closed" ? "status-success" : status === "Approved" ? "status-info" : "status-warning"})20`, border: `1px solid var(--${status === "Closed" ? "status-success" : status === "Approved" ? "status-info" : "status-warning"})40`, borderRadius: "8px", width: "fit-content" }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", fontWeight: 700, color: `var(--${status === "Closed" ? "status-success" : status === "Approved" ? "status-info" : "status-warning"})`, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Status: {status}
         </span>
       </div>
 
-      {/* Checklist Items */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-        {items.map((item) => {
-          const isDone = !!closeout[item.key];
+        {CHECKLIST_ITEMS.map((item) => {
+          const isDone = !!view[item.key];
           return (
             <button
               type="button"
@@ -78,32 +78,25 @@ export default function ProjectCloseoutChecklist({ closeout, onUpdate, isUpdatin
         })}
       </div>
 
-      {/* Key Dates */}
       <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "16px" }}>
         <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 12px 0" }}>Key Dates</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px" }}>
-          {closeout.completion_date && (
+          {view.completion_date && (
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Completion</div>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{formatLocalDate(closeout.completion_date)}</div>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{formatLocalDate(view.completion_date)}</div>
             </div>
           )}
-          {closeout.handover_date && (
+          {view.handover_date && (
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Handover</div>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{formatLocalDate(closeout.handover_date)}</div>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{formatLocalDate(view.handover_date)}</div>
             </div>
           )}
-          {closeout.client_sign_off_date && (
+          {closeout.final_inspection_date && (
             <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Client Sign-Off</div>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--status-success)" }}>{formatLocalDate(closeout.client_sign_off_date)}</div>
-            </div>
-          )}
-          {closeout.archive_date && (
-            <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Archived</div>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{formatLocalDate(closeout.archive_date)}</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>Final Inspection</div>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--status-success)" }}>{formatLocalDate(closeout.final_inspection_date)}</div>
             </div>
           )}
         </div>

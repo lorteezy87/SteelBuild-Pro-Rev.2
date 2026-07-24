@@ -319,7 +319,7 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
       ) : null}
 
       {/* SteelBuild Modules — photographic launcher, restored + front-and-center */}
-      <DecisionPanel title="SteelBuild Modules" onViewAll={() => onNavigate?.("rfis")}>
+      <DecisionPanel title="SteelBuild Modules">
         <ModuleTileGrid modules={s.modules} onNavigate={(target) => onNavigate?.(target)} />
       </DecisionPanel>
 

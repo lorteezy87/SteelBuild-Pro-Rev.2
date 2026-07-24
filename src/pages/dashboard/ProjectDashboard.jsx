@@ -553,13 +553,13 @@ function buildDashboardModel(input) {
     ],
     modules: [
       moduleModel("RFIs", "RFIs", "Questions & Responses", `${openRfis} Open`, "rfis"),
-      moduleModel("DrawingSubmittalHub", "Detailing", "Drawings & Models", `${drawingCount} Drawings`, "submittals"),
+      moduleModel("DrawingSubmittalHub", "Detailing", "Drawings & Models", `${drawingCount} Drawings`, "detailing"),
       moduleModel("ScheduleHub", "Schedule", "Project Timeline", `${schedulePct}% Complete`, "schedule", schedulePct >= 80 ? "good" : undefined),
       moduleModel("FieldHub", "Field Hub", "Daily Field Management", `${fieldIssues} Issues`, "field"),
-      moduleModel("CostHub", "Budget Control", "Costs & Commitments", budget > 0 ? `${formatSignedPercent(costPct)} ${costPct >= 0 ? "Under Budget" : "Over Budget"}` : "Budget TBD", "budget-hours", costPct >= 0 ? "good" : undefined),
+      moduleModel("CostHub", "Budget Control", "Costs & Commitments", budget > 0 ? `${formatSignedPercent(costPct)} ${costPct >= 0 ? "Under Budget" : "Over Budget"}` : "Budget TBD", "cost-hub", costPct >= 0 ? "good" : undefined),
       moduleModel("ChangeOrders", "Change Orders", "Scope & Contract Changes", `${activeCos} Active`, "change-orders"),
-      moduleModel("Documents", "Documents", "Project Documents", `${drawingCount + submittals.length} Files`, "submittals"),
-      moduleModel("ReportsHub", "Reports", "Analytics & Insights", `${recentActivity.length} Updates`, "schedule"),
+      moduleModel("Documents", "Documents", "Project Documents", `${drawingCount + submittals.length} Files`, "documents"),
+      moduleModel("ReportsHub", "Reports", "Analytics & Insights", `${recentActivity.length} Updates`, "reports"),
     ],
     alerts: buildAlerts({
       overdueRfis,

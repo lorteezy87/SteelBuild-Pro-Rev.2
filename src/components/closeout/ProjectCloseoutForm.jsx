@@ -1,10 +1,8 @@
 import React, { useState } from "react";
-import { entities } from "@/api/supabaseClient";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { buildCloseoutDbPayload } from "@/lib/closeout/closeoutPayload";
 
-export default function ProjectCloseoutForm({ projectId }) {
-  const qc = useQueryClient();
+export default function ProjectCloseoutForm({ projectId, onSave }) {
   const [formData, setFormData] = useState({
     project_id: projectId,
     closeout_status: "In Progress",
@@ -17,26 +15,33 @@ export default function ProjectCloseoutForm({ projectId }) {
     as_built_docs_completed: false,
     permits_closed: false,
   });
+  const [saving, setSaving] = useState(false);
 
-  const mutation = useMutation({
-    mutationFn: (data) => entities.ProjectCloseout.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["closeouts"] });
-      toast.success("Closeout initiated");
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    mutation.mutate(formData);
+  const handleSubmit = async () => {
+    if (!projectId) {
+      toast.error("Select a project before starting closeout");
+      return;
+    }
+    if (saving) return;
+    setSaving(true);
+    try {
+      const payload = {
+        project_id: projectId,
+        ...buildCloseoutDbPayload(formData),
+      };
+      await onSave?.(payload);
+    } catch (err) {
+      toast.error(err?.message || "Closeout could not be created");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px", maxWidth: "600px" }}>
       <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px 0", textTransform: "uppercase", letterSpacing: "0.10em" }}>Initiate Project Closeout</h2>
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         <div>
           <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Completion Date</label>
           <input type="date" value={formData.completion_date} onChange={(e) => setFormData({ ...formData, completion_date: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} required />
@@ -67,11 +72,11 @@ export default function ProjectCloseoutForm({ projectId }) {
         </div>
 
         <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-          <button type="submit" disabled={mutation.isPending} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "8px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: mutation.isPending ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending ? 0.5 : 1 }}>
-            {mutation.isPending ? "Creating..." : "Start Closeout"}
+          <button type="button" onClick={handleSubmit} disabled={saving || !onSave} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "8px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: saving ? 0.5 : 1 }}>
+            {saving ? "Creating..." : "Start Closeout"}
           </button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }

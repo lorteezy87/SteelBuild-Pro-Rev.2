@@ -7,6 +7,7 @@ import ProjectCloseoutForm from "@/components/closeout/ProjectCloseoutForm";
 import ProjectCloseoutChecklist from "@/components/closeout/ProjectCloseoutChecklist";
 import ProjectCloseoutSummary from "@/components/closeout/ProjectCloseoutSummary";
 import { CommandBar } from "@/components/design-system";
+import { buildCloseoutDbPayload } from "@/lib/closeout/closeoutPayload";
 
 export default function ProjectCloseout() {
   const projectId = useProjectId();
@@ -66,12 +67,18 @@ export default function ProjectCloseout() {
     onSettled: () => qc.invalidateQueries({ queryKey: closeoutQueryKey }),
   });
 
-  const handleSave = (data) => {
+  const handleSave = async (data) => {
     if (projectCloseout) {
-      updateMut.mutate({ id: projectCloseout.id, patch: data });
+      await updateMut.mutateAsync({ id: projectCloseout.id, patch: data });
     } else {
-      createMut.mutate(data);
+      await createMut.mutateAsync(data);
     }
+  };
+
+  const handleChecklistUpdate = async (uiPatch) => {
+    if (!projectCloseout) return;
+    const patch = buildCloseoutDbPayload(uiPatch, projectCloseout);
+    await updateMut.mutateAsync({ id: projectCloseout.id, patch });
   };
 
   const tabs = [
@@ -123,16 +130,15 @@ export default function ProjectCloseout() {
             <ProjectCloseoutChecklist
               closeout={projectCloseout}
               isUpdating={updateMut.isPending}
-              onUpdate={(patch) => updateMut.mutate({ id: projectCloseout.id, patch })}
+              onUpdate={handleChecklistUpdate}
             />
           )}
           {activeTab === "summary" && (
             <ProjectCloseoutSummary
               closeout={projectCloseout}
-              onUpdate={(patch) => updateMut.mutate({ id: projectCloseout.id, patch })}
+              onUpdate={handleChecklistUpdate}
             />
-          )}
-          {activeTab === "lessons" && <ProjectCloseoutLessons closeout={projectCloseout} />}
+          )}          {activeTab === "lessons" && <ProjectCloseoutLessons closeout={projectCloseout} />}
         </>
       )}
     </div>

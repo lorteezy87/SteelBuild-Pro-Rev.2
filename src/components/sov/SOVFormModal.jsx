@@ -18,6 +18,7 @@ const empty = {
 export default function SOVFormModal({ open, onClose, onSave, sov, projects = [], nextId, activeProject }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (sov) {
@@ -31,6 +32,7 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
       });
     }
     setErrors({});
+    setSaving(false);
   }, [sov, open, nextId, activeProject?.id]);
 
   const validate = () => {
@@ -56,22 +58,35 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
     return Object.keys(e).length === 0;
   };
 
-  const handleSave = () => {
-    if (!validate()) return;
+  const handleSave = async () => {
+    if (!validate() || saving) return;
+    // Whitelist only editable SOV columns — never spread full record
+    // (is_deleted / deleted_at / metadata / derived fields).
     const data = {
-      ...form,
+      project_id: form.project_id,
+      project_name: form.project_name || "",
       application_number: Number(form.application_number) || 1,
+      period_from: form.period_from || null,
+      period_to: form.period_to || null,
       line_item_number: Number(form.line_item_number) || 1,
+      description: form.description || "",
       scheduled_value: Number(form.scheduled_value) || 0,
       previous_percent_complete: Number(form.previous_percent_complete) || 0,
       current_percent_complete: Number(form.current_percent_complete) || 0,
       retainage_percent: Number(form.retainage_percent) || 0,
+      status: form.status || "Draft",
       submitted_date: form.submitted_date || null,
       payment_received_date: form.payment_received_date || null,
     };
+    if (form.sov_id) data.sov_id = form.sov_id;
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
-    onSave(data);
+    setSaving(true);
+    try {
+      await onSave(data);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const today = () => new Date().toISOString().split("T")[0];
@@ -219,7 +234,9 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} style={{ background: "var(--accent)", color: "#fff" }}>{sov ? "Update" : "Create"}</Button>
+          <Button onClick={handleSave} disabled={saving} style={{ background: "var(--accent)", color: "#fff" }}>
+            {saving ? "Saving…" : sov ? "Update" : "Create"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

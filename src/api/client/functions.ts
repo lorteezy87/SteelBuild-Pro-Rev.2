@@ -61,14 +61,13 @@ export const functions = {
         }
       }
 
-      // Alert generation
+      // Alert generation — fail closed. There is no generate-alerts Edge Function
+      // in this repo; returning an empty "success" made Alerts Center look like a
+      // scan completed. Module workflows (RFIs, Deliveries) create alerts directly.
       case 'generateAlerts':
-        try {
-          const { data } = await supabase.functions.invoke('generate-alerts', { body: params });
-          return { data: data || { alerts: [] } };
-        } catch {
-          return { data: { alerts: [] } };
-        }
+        throw new Error(
+          'Cross-module alert scan is unavailable: the generate-alerts Edge Function is not deployed. Alerts are created from module workflows (RFIs, Deliveries).',
+        );
 
       // Agent memory
       case 'agentMemory':

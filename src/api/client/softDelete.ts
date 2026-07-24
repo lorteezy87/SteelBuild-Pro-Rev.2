@@ -33,6 +33,8 @@ export const SOFT_DELETE_TABLES = new Set<string>([
   'email_messages',
   // Document Storage integration: linked folders and import queue.
   'linked_folders', 'document_import_queue',
+  // Launch-readiness: archive cost codes instead of hard-deleting financial history.
+  'cost_codes',
 ]);
 
 /**

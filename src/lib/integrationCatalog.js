@@ -83,7 +83,7 @@ export const INTEGRATION_AREAS = [
     status: "Partially Live",
     risk: "Medium",
     customerStatus: "available",
-    customerSummary: "SteelBuild storage is live; SharePoint and OneDrive need a one-time setup; Google Drive and Dropbox are coming soon.",
+    customerSummary: "SteelBuild storage is live. SharePoint and OneDrive folder links can be saved for setup, but file sync is not connected until the connector is deployed. Google Drive and Dropbox are coming soon.",
     providers: [
       { name: "SteelBuild storage", status: "available" },
       { name: "SharePoint", status: "setup_required" },
