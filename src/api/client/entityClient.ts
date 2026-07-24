@@ -54,6 +54,12 @@ const DEFAULT_LIST_LIMIT = LIST_ROW_CAP;
 // ListTruncationNotice (M18) — this is the telemetry half.
 const warnIfTruncated = (tableName: string, op: string, count: number, cap: number) => {
   if (count < cap) return;
+  // Explicit caller limits (latest-1, recent-50 activity feed, quiet exists
+  // probes) are intentional truncations — only the default LIST_ROW_CAP is the
+  // silent-truncation failure mode H10 cares about. Without this gate, every
+  // SubmittalRound.filter(..., 1) and DrawingActivity.filter(..., 50) that
+  // fills its window floods Sentry (JAVASCRIPT-REACT-E / -D).
+  if (cap < DEFAULT_LIST_LIMIT) return;
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.warn(

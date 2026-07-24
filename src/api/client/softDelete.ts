@@ -63,9 +63,16 @@ export const PROJECT_SCOPED_TABLES = new Set<string>([
   'linked_folders', 'document_import_queue',
 ]);
 
+/**
+ * PostgREST embed for live-project scoping.
+ *
+ * Always name the FK (`projects!<table>_project_id_fkey`) — ambiguous joins
+ * explode when a reverse FK also links the tables (e.g. contacts.project_id
+ * AND projects.detailer_contact_id → contacts). Sentry JAVASCRIPT-REACT-10/V.
+ */
 export const projectScopedSelect = (tableName: string): string =>
   PROJECT_SCOPED_TABLES.has(tableName)
-    ? '*, projects!inner(id)'
+    ? `*, projects!${tableName}_project_id_fkey!inner(id)`
     : '*';
 
 export const applyLiveProjectScope = (query: QueryBuilder, tableName: string): QueryBuilder =>
