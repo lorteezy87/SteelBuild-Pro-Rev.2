@@ -43,7 +43,6 @@ const GlobalSearchModal = lazyWithRetry(() => import("./components/search/Global
 const MobileDrawer = lazyWithRetry(() => import("./components/nav/MobileDrawer"));
 const Toaster = lazyWithRetry(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
 const SidebarNav = lazyWithRetry(() => import("./components/nav/SidebarNav"));
-const AiAssistantLauncher = lazyWithRetry(() => import("./components/ai-assistant/AiAssistantLauncher"));
 // QuickAddFAB intentionally not imported — the floating "+" shortcut at
 // bottom-right was hidden per user request. Component file is preserved
 // in src/components/shared/QuickAddFAB.jsx; uncomment this import + its
@@ -403,9 +402,6 @@ export default function Layout({ children, currentPageName }) {
         )}
         {/* QuickAddFAB removed per user request — the bottom-right "+"
             shortcut remains hidden site-wide. */}
-        <Suspense fallback={null}>
-          <AiAssistantLauncher />
-        </Suspense>
         <Suspense fallback={null}>
           <Toaster
             theme={isDarkTheme ? "dark" : "light"}

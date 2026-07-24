@@ -7,7 +7,7 @@ SteelBuild Pro is a Vite + React 18 + Supabase project-management app for struct
 - `src/components/` — feature-scoped UI grouped by domain (`drawings/`, `submittals/`, `financials/`, `gantt/`, `schedule/`, …), plus `ui/` (radix/shadcn primitives), `design-system/`, and `shared/`.
 - `src/services/` — deterministic domain engines: `marginRiskEngine`, `autoLinkEngine`, `constraintEngine`, `scheduleCascade`, `workflowEngine`, `permissions`, `validation`, `auditLogger`, `cacheRegistry`.
 - `src/hooks/` — TanStack Query CRUD hooks; `src/api/` — Supabase client + storage; `src/lib/` — shared utilities and domain mapping (`submittalStageMapping.js`, `drawingSetOrdering.js`).
-- `supabase/migrations/` — ordered SQL, **re-baselined 2026-06-20** to a handful of active files (3 baseline `20260101000000/10/20` + timestamped follow-ups; ~190 originals archived in `supabase/migrations_archive/`). Inspect the dir, don't assume a number. `supabase/functions/` — edge functions (`llm-proxy`, `schedule-assistant`, `email-ingest`, `email-send`, `project-export`, `stripe-billing`); `sharepoint-proxy`/`bluebeam-proxy` + the orphan `stripe-setup`/`stripe-webhook`/`stripe-worker` are **deprecated and pending `supabase functions delete`** (owner/CLI).
+- `supabase/migrations/` — ordered SQL, **re-baselined 2026-06-20** to a handful of active files (3 baseline `20260101000000/10/20` + timestamped follow-ups; ~190 originals archived in `supabase/migrations_archive/`). Inspect the dir, don't assume a number. `supabase/functions/` — edge functions (`llm-proxy`, `email-ingest`, `email-send`, `project-export`, `stripe-billing`); `sharepoint-proxy`/`bluebeam-proxy` + the orphan `stripe-setup`/`stripe-webhook`/`stripe-worker` are **deprecated and pending `supabase functions delete`** (owner/CLI).
 - Import via the `@/*` alias (→ `src/`). **Multi-tenant:** each company is an `organizations` workspace and projects belong to an org. RBAC **and** the org boundary are enforced at the DB layer via RLS, not UI gates (`user_has_project_access` is org-aware; `useOrg()` exposes the active workspace).
 
 ## Build, Test, and Development Commands
@@ -32,3 +32,11 @@ Use Conventional Commit prefixes seen in history: `feat:`, `fix:`, `docs:`, `ref
 
 ## Concurrent agents
 Multiple agent sessions write `main` simultaneously. Before editing, `git pull` and claim your area in `AGENT_CLAIMS.md` (repo root) — one row (date · session · area · files · intent), committed on its own — then release it when done. Skip or tightly scope work that overlaps an open claim. A conflict on that file is the intended signal that another agent is active (keep both rows). It is a convention, not a lock; the git-safety rules in `CLAUDE.md` §7 still apply.
+
+## Cursor Cloud specific instructions
+
+- **Single product:** Vite SPA + hosted/local Supabase. No monorepo apps. Standard commands live in this file and `package.json` (`npm run dev|lint|test|build` + typecheck gates).
+- **Local Supabase:** `.env.local` points at `http://127.0.0.1:54321` with the standard demo anon key. `supabase status` may report some optional containers stopped (imgproxy/analytics/edge runtime); API/DB/Auth are enough for app login and CRUD. Start with `supabase start` if status is empty.
+- **Piece Register:** Canonical UI is the command-deck page (`src/pages/PieceRegister.tsx` + `src/styles/piece-control-command.css`) and dashboard embed `PieceControlDashboardPanel` inside `DashboardControlCenter`. Do not reintroduce `CanonicalPieceDashboard`.
+- **Retired chat assistant:** Removed from runtime (UI, Decision Log route, schedule chat Edge Function, entity clients). Historical `pma_*` / `ai_audit_log` tables remain in migrations + generated `src/types/supabase.ts` only — do not recreate app access. Remote schedule chat function may still need owner `supabase functions delete`.
+- **Auth for demos:** Seeded local users depend on migration/seed state; if login fails against local Supabase, create a user via Studio (`http://127.0.0.1:54323`) or Auth admin API. Vitest does not need live Supabase.

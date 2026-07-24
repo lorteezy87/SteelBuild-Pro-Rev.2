@@ -201,12 +201,12 @@ describe("getRegisteredEntities", () => {
     expect(entities).toContain("constraint");
     expect(entities).toContain("procurement");
     expect(entities).toContain("user");
-    expect(entities).toContain("decision");
-    expect(entities).toContain("assumption");
+    expect(entities).not.toContain("decision");
+    expect(entities).not.toContain("assumption");
     expect(entities).toContain("activity");
     expect(entities).toContain("document");
     expect(entities).toContain("change_request");
     expect(entities).toContain("user_settings");
-    expect(entities.length).toBeGreaterThanOrEqual(34);
+    expect(entities.length).toBeGreaterThanOrEqual(32);
   });
 });

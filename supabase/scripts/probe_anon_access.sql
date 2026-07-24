@@ -51,9 +51,6 @@ union all select 'alerts',                   count(*) from alerts
 union all select 'daily_logs',               count(*) from daily_logs
 union all select 'delivery_items',           count(*) from delivery_items
 union all select 'photos',                   count(*) from photos
-union all select 'pma_assumptions',          count(*) from pma_assumptions
-union all select 'pma_audit_logs',           count(*) from pma_audit_logs
-union all select 'pma_decisions',            count(*) from pma_decisions
 union all select 'project_closeout',         count(*) from project_closeout
 union all select 'project_handoff_items',    count(*) from project_handoff_items
 union all select 'quality_control_records',  count(*) from quality_control_records
