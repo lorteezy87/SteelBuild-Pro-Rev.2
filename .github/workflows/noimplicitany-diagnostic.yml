@@ -1,0 +1,38 @@
+name: noImplicitAny diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Capture noImplicitAny output
+        shell: bash
+        run: |
+          set +e
+          npm run typecheck:noimplicitany > noimplicitany.log 2>&1
+          code=$?
+          cat noimplicitany.log
+          echo "$code" > noimplicitany.exit
+          exit "$code"
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noimplicitany-diagnostics
+          path: |
+            noimplicitany.log
+            noimplicitany.exit
+          if-no-files-found: error
