@@ -1,44 +1,28 @@
 /**
- * Floating "Ask AI" launcher that opens the schedule-assistant drawer.
+ * Floating launcher for the project-scoped assistant drawer.
  *
- * Stacked above QuickAddFAB so both remain clickable. Lives inside Layout
- * so it's available on every authenticated page.
+ * Global search owns Cmd/Ctrl+K, so this component intentionally has no global
+ * keyboard listener. The explicit button remains available on every
+ * authenticated page without competing with search or form input shortcuts.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Sparkles } from "lucide-react";
 import AiAssistantDrawer from "./AiAssistantDrawer";
 
-const mono = { fontFamily: "var(--font-mono)" };
-
 export default function AiAssistantLauncher() {
   const [open, setOpen] = useState(false);
-
-  // Keyboard shortcut: Cmd/Ctrl + K toggles the drawer from anywhere.
-  // Matches the convention used by Global Search (Cmd+/) — different key
-  // so they don't collide.
-  useEffect(() => {
-    const onKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        if (document.activeElement?.tagName === "INPUT") return;
-        e.preventDefault();
-        setOpen((o) => !o);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Open AI Schedule Assistant"
-        title="Ask AI (Ctrl+K)"
+        aria-label="Open Project Assistant"
+        title="Open Project Assistant"
         style={{
           position: "fixed",
-          bottom: 88, // stack above QuickAddFAB (bottom: 24, height ~56)
+          bottom: 24,
           right: 24,
           zIndex: 500,
           height: 48,
@@ -72,22 +56,7 @@ export default function AiAssistantLauncher() {
         }}
       >
         <Sparkles size={15} />
-        Ask AI
-        <span
-          style={{
-            ...mono,
-            fontSize: 9,
-            fontWeight: 700,
-            padding: "2px 6px",
-            marginLeft: 4,
-            background: "rgba(0,0,0,0.15)",
-            color: "rgba(0,0,0,0.65)",
-            borderRadius: 3,
-            letterSpacing: "0.04em",
-          }}
-        >
-          ⌘K
-        </span>
+        Project Assistant
       </button>
 
       <AiAssistantDrawer open={open} onClose={() => setOpen(false)} />
