@@ -158,7 +158,6 @@ const ROUTE_DOMAINS = {
   // ── Risk & Compliance ──
   risk: {
     ChangeRequests:  r(lazyWithRetry(() => import("@/pages/ChangeRequests")),  "Change Requests",     { projectScoped: true }),
-    DecisionLog:     r(lazyWithRetry(() => import("@/pages/DecisionLog")),     "Decision Log"),
     AlertsCenter:    r(lazyWithRetry(() => import("@/pages/AlertsCenter")),    "Alerts Center"),
   },
 
@@ -341,7 +340,4 @@ export const pagesConfig = {
   Pages: PAGES,
   // Layout is imported directly by App.jsx (no longer bundled here)
 };
-
-
-
 
