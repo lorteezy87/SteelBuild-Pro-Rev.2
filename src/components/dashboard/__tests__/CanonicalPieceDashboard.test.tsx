@@ -161,7 +161,7 @@ describe("CanonicalPieceDashboard", () => {
 
     expect(await screen.findByRole("heading", { name: "Piece Register" })).toBeInTheDocument();
     expect(screen.getByText("6")).toBeInTheDocument();
-    expect(screen.getByText("WP-001")).toBeInTheDocument();
+    expect(screen.getAllByText("WP-001")).toHaveLength(2);
     expect(container.querySelector(".cmd-panel")).not.toBeNull();
     expect(container.querySelector(".cmd-kpi-strip")).not.toBeNull();
     expect(container.querySelector(".cmd-table")).not.toBeNull();
