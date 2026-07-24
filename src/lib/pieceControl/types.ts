@@ -1,5 +1,6 @@
 export const PIECE_LIFECYCLE_STATUSES = [
   "not_started",
+  "released",
   "in_fabrication",
   "fabricated",
   "shipped",

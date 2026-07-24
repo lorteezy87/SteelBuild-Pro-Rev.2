@@ -28,12 +28,25 @@ describe("piece import reconciliation", () => {
     const rows = normalizeImportRows([
       { piece_mark: " b-101 ", quantity: 2, weight_total_lbs: 200, profile: "W12X26", material_grade: "A992", external_ref: "source-1" },
       { piece_mark: "B-102", quantity: 1, profile: "HSS6X6" },
-      { piece_mark: "B-103", quantity: 4 },
+      { piece_mark: "B-103", quantity: 1, sequence_number: "20" },
     ], "csv");
 
     const results = reconcileImportRows(rows, [
       root({ length_inches: null, sequence_number: null, erection_area: null }),
-      root({ id: "piece-3", piece_mark: "B-103", normalized_piece_mark: "B-103", quantity: 1, weight_each_lbs: null, weight_total_lbs: null, profile: null, material_grade: null, length_inches: null, sequence_number: null, erection_area: null, external_ref: null }),
+      root({
+        id: "piece-3",
+        piece_mark: "B-103",
+        normalized_piece_mark: "B-103",
+        quantity: 1,
+        weight_each_lbs: null,
+        weight_total_lbs: null,
+        profile: null,
+        material_grade: null,
+        length_inches: null,
+        sequence_number: "10",
+        erection_area: null,
+        external_ref: null,
+      }),
     ]);
 
     expect(results.map((row) => row.decision)).toEqual(["unchanged", "new", "update_candidate"]);
@@ -55,9 +68,16 @@ describe("piece import reconciliation", () => {
     expect(results[3].warnings).toContain("conflicting profile");
   });
 
-  it("allows an eligible root update but refuses the same change after lot splitting", () => {
-    const row = normalizeImportRows([{ piece_mark: "B-101", quantity: 3 }], "csv");
-    expect(reconcileImportRows(row, [root()])[0].decision).toBe("update_candidate");
+  it("flags quantity changes as conflicts and refuses split-lot updates", () => {
+    const qtyRow = normalizeImportRows([{ piece_mark: "B-101", quantity: 3 }], "csv");
+    const qtyResult = reconcileImportRows(qtyRow, [root()])[0];
+    expect(qtyResult.decision).toBe("conflict");
+    expect(qtyResult.warnings).toContain("conflicting quantity");
+
+    const seqRow = normalizeImportRows([
+      { piece_mark: "B-101", quantity: 2, sequence_number: "99" },
+    ], "csv");
+    expect(reconcileImportRows(seqRow, [root()])[0].decision).toBe("update_candidate");
 
     const child = root({
       id: "child-1",
@@ -65,9 +85,16 @@ describe("piece import reconciliation", () => {
       parent_piece_id: "piece-1",
       quantity: 1,
     });
-    const result = reconcileImportRows(row, [root(), child])[0];
+    const result = reconcileImportRows(seqRow, [root(), child])[0];
     expect(result.decision).toBe("conflict");
     expect(result.warnings).toContain("automatic changes to a split lot are not allowed");
   });
-});
 
+  it("rejects rows whose each×qty disagrees with total weight", () => {
+    const rows = normalizeImportRows([
+      { piece_mark: "B-200", quantity: 2, weight_each_lbs: 100, weight_total_lbs: 500 },
+    ], "csv");
+    expect(rows[0].warnings).toContain("inconsistent weight each vs total");
+    expect(reconcileImportRows(rows, [])[0].decision).toBe("invalid");
+  });
+});
