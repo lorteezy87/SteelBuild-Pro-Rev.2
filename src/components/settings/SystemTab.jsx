@@ -77,10 +77,20 @@ export default function SystemTab({ user }) {
   const handleClearCache = () => {
     try {
       if ('caches' in window) caches.keys().then(names => names.forEach(n => caches.delete(n)));
-      // Preserve auth/preference keys while clearing cache data
-      const preserve = ['current_user_email', 'current_user_id', 'activeProjectId', 'sbp-theme', 'supabase.auth.token'];
+      // Preserve preferences + real Supabase session keys only. Never preserve
+      // stale Base44-era identity keys (current_user_*), and don't rely on the
+      // obsolete `supabase.auth.token` name — supabase-js stores
+      // `sb-<project-ref>-auth-token`.
+      const preserve = ['activeProjectId', 'sbp-theme'];
       const saved = {};
       preserve.forEach(k => { const v = localStorage.getItem(k); if (v !== null) saved[k] = v; });
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && /^sb-.*-auth-token$/.test(key)) {
+          const v = localStorage.getItem(key);
+          if (v !== null) saved[key] = v;
+        }
+      }
       localStorage.clear();
       Object.entries(saved).forEach(([k, v]) => localStorage.setItem(k, v));
       sessionStorage.clear();

@@ -74,7 +74,7 @@ describe("supabase entity client", () => {
     expect(mocks.calls).toContainEqual({
       table: "work_packages",
       op: "select",
-      value: "*, projects!inner(id)",
+      value: "*, projects!work_packages_project_id_fkey!inner(id)",
     });
     expect(mocks.calls).toContainEqual({
       table: "work_packages",
@@ -87,6 +87,19 @@ describe("supabase entity client", () => {
       op: "eq",
       column: "is_deleted",
       value: false,
+    });
+  });
+
+  it("disambiguates contacts→projects via the project_id FK (not detailer_contact_id)", async () => {
+    // projects.detailer_contact_id → contacts creates a second PostgREST path;
+    // bare projects!inner fails with "more than one relationship" (Sentry
+    // JAVASCRIPT-REACT-10). The embed must name contacts_project_id_fkey.
+    await entities.Contact.list();
+
+    expect(mocks.calls).toContainEqual({
+      table: "contacts",
+      op: "select",
+      value: "*, projects!contacts_project_id_fkey!inner(id)",
     });
   });
 

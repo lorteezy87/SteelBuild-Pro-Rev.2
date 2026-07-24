@@ -37,4 +37,20 @@ describe("persistCostCode", () => {
     expect(update.mutateAsync).toHaveBeenCalledWith({ id: "cc-1", notes: "revised" });
     expect(create.mutateAsync).not.toHaveBeenCalled();
   });
+
+  it("rejects when projectId is missing before any mutation", async () => {
+    const create = { mutateAsync: vi.fn() };
+    const update = { mutateAsync: vi.fn() };
+
+    await expect(persistCostCode({
+      editingId: null,
+      data: { budget_amount: 1 },
+      projectId: null,
+      createMutation: create,
+      updateMutation: update,
+    })).rejects.toThrow(/Select a project first/);
+
+    expect(create.mutateAsync).not.toHaveBeenCalled();
+    expect(update.mutateAsync).not.toHaveBeenCalled();
+  });
 });
