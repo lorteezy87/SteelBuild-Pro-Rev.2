@@ -1,5 +1,5 @@
 /**
- * importShippingList.js — parse a Tekla EPM / FabSuite "Master Shipping List
+ * importShippingList.ts — parse a Tekla EPM / FabSuite "Master Shipping List
  * w/ Pieces" report into staged loads + their pieces (Phase 4).
  *
  * The report is grouped, multi-page, and two-banded: Destination sections →
@@ -18,11 +18,94 @@
  * in, so this is testable without a spreadsheet engine.
  */
 
-const norm = (v) => String(v == null ? "" : v).trim();
-const normLabel = (v) => norm(v).toLowerCase().replace(/[.#]/g, "").replace(/\s+/g, " ").trim();
+export type GridCell = string | number | null | undefined;
+export type Grid = GridCell[][];
+
+export interface ParsedPiece {
+  mark: string;
+  quantity: number | null;
+  sequence: string | null;
+  dimensions: string | null;
+  length: string | null;
+  grade: string | null;
+  finish: string | null;
+}
+
+export interface ParsedLoad {
+  job_number: string;
+  load_number: string | null;
+  destination: string | null;
+  trailer: string | null;
+  carrier: string | null;
+  total_qty: number | null;
+  total_weight_lbs: number | null;
+  ship_date: string;
+  ready_date: string | null;
+  tbr: string | null;
+  pieces: ParsedPiece[];
+}
+
+export interface ParseShippingListStats {
+  loads: number;
+  pieces: number;
+}
+
+export interface ParseShippingListResult {
+  ok: boolean;
+  error?: string;
+  loads: ParsedLoad[];
+  stats: ParseShippingListStats;
+}
+
+export interface ExistingDelivery {
+  id?: string;
+  load_number?: string | null;
+  actual_date?: string | null;
+  scheduled_date?: string | null;
+  expected_ship_date?: string | null;
+  is_deleted?: boolean | null;
+}
+
+export type ClassifyAction = "create" | "exists";
+
+export interface ClassifiedLoad extends ParsedLoad {
+  action: ClassifyAction;
+  existing_id: string | null | undefined;
+}
+
+export interface ClassifyLoadsResult {
+  rows: ClassifiedLoad[];
+  stats: { create: number; exists: number };
+}
+
+interface LoadCols {
+  job: number;
+  load: number;
+  trailer: number;
+  carrier: number;
+  qty: number;
+  weight: number;
+  ship: number;
+  tbr: number;
+  ready: number;
+}
+
+interface PieceCols {
+  qty: number;
+  mark: number;
+  sequence: number;
+  dimensions: number;
+  length: number;
+  grade: number;
+  finish: number;
+}
+
+const norm = (v: unknown): string => String(v == null ? "" : v).trim();
+const normLabel = (v: unknown): string =>
+  norm(v).toLowerCase().replace(/[.#]/g, "").replace(/\s+/g, " ").trim();
 
 /** "10/6/2025" / ISO → YYYY-MM-DD, else null. */
-export function parseShipDate(value) {
+export function parseShipDate(value: unknown): string | null {
   const s = norm(value);
   if (!s) return null;
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -37,14 +120,14 @@ export function parseShipDate(value) {
 }
 
 /** "3,454#" → 3454 ; "" → null. */
-export function parseWeight(value) {
+export function parseWeight(value: unknown): number | null {
   const s = norm(value).replace(/[#,\s]/g, "");
   if (!s) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
 
-const numOrNull = (v) => {
+const numOrNull = (v: unknown): number | null => {
   const s = norm(v).replace(/[,\s]/g, "");
   if (!s) return null;
   const n = Number(s);
@@ -52,21 +135,24 @@ const numOrNull = (v) => {
 };
 
 // Find a column index by matching any of the given normalized labels in a row.
-function findCol(row, labels) {
+function findCol(row: GridCell[], labels: string[]): number {
   for (let i = 0; i < row.length; i += 1) {
     if (labels.includes(normLabel(row[i]))) return i;
   }
   return -1;
 }
 
-function detectColumns(grid) {
-  const loadCols = { job: 0, load: 4, trailer: 7, carrier: 9, qty: 14, weight: 16, ship: 17, tbr: 19, ready: 21 };
-  const pieceCols = { qty: 2, mark: 4, sequence: 8, dimensions: 10, length: 15, grade: 18, finish: 21 };
+function detectColumns(grid: Grid): { loadCols: LoadCols; pieceCols: PieceCols } {
+  const loadCols: LoadCols = { job: 0, load: 4, trailer: 7, carrier: 9, qty: 14, weight: 16, ship: 17, tbr: 19, ready: 21 };
+  const pieceCols: PieceCols = { qty: 2, mark: 4, sequence: 8, dimensions: 10, length: 15, grade: 18, finish: 21 };
   for (let i = 0; i < Math.min(grid.length, 60); i += 1) {
     const row = grid[i];
     const labels = row.map(normLabel);
     if (labels.includes("load") || labels.includes("load no")) {
-      const c = (names, fb) => { const x = findCol(row, names); return x >= 0 ? x : fb; };
+      const c = (names: string[], fb: number): number => {
+        const x = findCol(row, names);
+        return x >= 0 ? x : fb;
+      };
       loadCols.job = c(["job", "job no"], loadCols.job);
       loadCols.load = c(["load", "load no"], loadCols.load);
       loadCols.trailer = c(["trailer", "trailer no"], loadCols.trailer);
@@ -78,7 +164,10 @@ function detectColumns(grid) {
       loadCols.ready = c(["ready date"], loadCols.ready);
     }
     if (labels.includes("dimensions")) {
-      const c = (names, fb) => { const x = findCol(row, names); return x >= 0 ? x : fb; };
+      const c = (names: string[], fb: number): number => {
+        const x = findCol(row, names);
+        return x >= 0 ? x : fb;
+      };
       // NOTE: the "Quantity" label is merged (spans cols 1-3) while the piece
       // qty DATA lands one column right — so qty is NOT detected from the label;
       // it keeps its data-position default and a scan fallback below.
@@ -95,20 +184,24 @@ function detectColumns(grid) {
 }
 
 /**
- * @param {Array<Array<any>>} rows  array-of-arrays (SheetJS header:1 output)
- * @returns {{ ok, error?, loads, stats }}
+ * @param rows  array-of-arrays (SheetJS header:1 output)
  */
-export function parseShippingList(rows) {
-  const grid = (Array.isArray(rows) ? rows : []).map((r) => (Array.isArray(r) ? r : []));
+export function parseShippingList(rows: unknown): ParseShippingListResult {
+  const grid: Grid = (Array.isArray(rows) ? rows : []).map((r): GridCell[] =>
+    Array.isArray(r) ? (r as GridCell[]) : [],
+  );
   const hasMark = grid.some((r) => r.some((c) => normLabel(c) === "mark"));
-  if (!hasMark) return { ok: false, error: 'Not a shipping list — no "Mark" column found.', loads: [], stats: zeroStats() };
+  if (!hasMark) {
+    return { ok: false, error: 'Not a shipping list — no "Mark" column found.', loads: [], stats: zeroStats() };
+  }
 
   const { loadCols, pieceCols } = detectColumns(grid);
-  const cell = (row, i) => (i < 0 || i >= row.length ? "" : norm(row[i]));
+  const cell = (row: GridCell[], i: number): string =>
+    (i < 0 || i >= row.length ? "" : norm(row[i]));
 
-  const loads = [];
-  let destination = null;
-  let current = null;
+  const loads: ParsedLoad[] = [];
+  let destination: string | null = null;
+  let current: ParsedLoad | null = null;
   const stats = zeroStats();
 
   for (const row of grid) {
@@ -170,7 +263,7 @@ export function parseShippingList(rows) {
   return { ok: true, loads, stats };
 }
 
-function zeroStats() {
+function zeroStats(): ParseShippingListStats {
   return { loads: 0, pieces: 0 };
 }
 
@@ -179,8 +272,11 @@ function zeroStats() {
  * (load_number, ship date) against existing deliveries — so re-importing the
  * master list doesn't duplicate loads. Pure; returns staged rows + stats.
  */
-export function classifyLoads(loads, existingDeliveries = []) {
-  const seen = new Map();
+export function classifyLoads(
+  loads: ParsedLoad[] | null | undefined,
+  existingDeliveries: ExistingDelivery[] = [],
+): ClassifyLoadsResult {
+  const seen = new Map<string, ExistingDelivery>();
   for (const d of existingDeliveries) {
     if (!d || d.is_deleted) continue;
     const date = String(d.actual_date || d.scheduled_date || d.expected_ship_date || "").slice(0, 10);
@@ -189,10 +285,10 @@ export function classifyLoads(loads, existingDeliveries = []) {
   }
   let create = 0;
   let exists = 0;
-  const rows = (loads || []).map((l) => {
+  const rows = (loads || []).map((l): ClassifiedLoad => {
     const key = `${String(l.load_number || "").trim().toUpperCase()}|${l.ship_date || ""}`;
     const existing = seen.get(key) || null;
-    const action = existing ? "exists" : "create";
+    const action: ClassifyAction = existing ? "exists" : "create";
     if (existing) exists += 1; else create += 1;
     return { ...l, action, existing_id: existing ? existing.id : null };
   });

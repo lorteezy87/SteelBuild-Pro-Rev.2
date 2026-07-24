@@ -1,5 +1,5 @@
 /**
- * fabStatus.js — the manual fabrication-status vocabulary for the 3D viewer.
+ * fabStatus.ts — the manual fabrication-status vocabulary for the 3D viewer.
  *
  * A hand-set, coarse fab stage per piece (model_elements.fab_status), distinct
  * from the detailing-readiness engine (services/modelElementStatus). Used by the
@@ -13,10 +13,13 @@ export const FAB_STATUS_META = {
   shipped:        { label: "Shipped",        color: "#f59e0b" },
   delivered:      { label: "Delivered",      color: "#0891b2" },
   erected:        { label: "Erected",        color: "#16a34a" },
-};
+} as const;
+
+/** Keys of FAB_STATUS_META — the closed fab-status vocabulary. */
+export type FabStatus = keyof typeof FAB_STATUS_META;
 
 /** Stages in shop order — drives the assign buttons + legend. */
-export const FAB_STATUS_ORDER = [
+export const FAB_STATUS_ORDER: readonly FabStatus[] = [
   "not_started",
   "released",
   "in_fabrication",
@@ -25,6 +28,48 @@ export const FAB_STATUS_ORDER = [
   "delivered",
   "erected",
 ];
+
+/** Live marks read from the clicked piece in the IFC viewer. */
+export type PickedMarks = {
+  assemblyMark?: string | null;
+  partMark?: string | null;
+} & Record<string, unknown>;
+
+export type ResolveFabMarksArgs = {
+  picked?: PickedMarks | null;
+  selectedGuids?: string[];
+  guidToMark?: Map<string, string>;
+};
+
+export type FabAssignmentScope = "piece" | "assembly";
+
+export type ResolveFabAssignmentArgs = ResolveFabMarksArgs & {
+  scope?: FabAssignmentScope;
+};
+
+/**
+ * Discriminated target for a "Set fab status" write:
+ *  - guid  — per-piece update keyed on model_elements.element_guid
+ *  - mark  — whole-assembly (or GUID-less fallback) update keyed on piece_mark
+ *  - none  — nothing targetable
+ */
+export type FabAssignmentTarget =
+  | { mode: "guid"; guids: string[]; marks: [] }
+  | { mode: "mark"; guids: []; marks: string[]; fellBackToMark?: boolean }
+  | { mode: "none"; guids: []; marks: [] };
+
+/** Minimal element shape for project-level fab-status rollups. */
+export type FabStatusElement = {
+  fab_status?: string | null;
+  is_deleted?: boolean | null;
+};
+
+export type FabStatusSummary = {
+  counts: Record<FabStatus, number>;
+  withFabStatus: number;
+  total: number;
+  pct: number;
+};
 
 /**
  * Resolve the piece mark(s) to assign a fab status to for the current viewer
@@ -39,15 +84,13 @@ export const FAB_STATUS_ORDER = [
  * re-exported model (Tekla regenerates GUIDs but marks are stable) or a part the
  * roster import skipped. Without it, a GUID-only lookup comes back empty and the
  * UI wrongly says "select a piece first" even though a piece is selected.
- *
- * @param {object} args
- * @param {{ assemblyMark?: string, partMark?: string }|null} [args.picked]  clicked piece's live marks
- * @param {string[]} [args.selectedGuids]  GlobalIds of the selected meshes
- * @param {Map<string, string>} [args.guidToMark]  roster GlobalId → piece_mark
- * @returns {string[]} distinct piece marks (Assembly preferred over Part)
  */
-export function resolveFabMarks({ picked, selectedGuids = [], guidToMark } = {}) {
-  const marks = new Set();
+export function resolveFabMarks({
+  picked,
+  selectedGuids = [],
+  guidToMark,
+}: ResolveFabMarksArgs = {}): string[] {
+  const marks = new Set<string>();
   const live = picked && (picked.assemblyMark || picked.partMark);
   if (live) marks.add(String(live));
   for (const guid of selectedGuids) {
@@ -75,23 +118,13 @@ export function resolveFabMarks({ picked, selectedGuids = [], guidToMark } = {})
  *
  * Scope "assembly" (whole-assembly): always mark-scoped (resolveFabMarks) — flips
  * every part sharing the clicked mark, the original behavior.
- *
- * @param {object} args
- * @param {"piece"|"assembly"} [args.scope]  default "piece"
- * @param {{ assemblyMark?: string, partMark?: string }|null} [args.picked]
- * @param {string[]} [args.selectedGuids]  GlobalIds of selected meshes
- * @param {Map<string, string>} [args.guidToMark]  roster GlobalId → piece_mark
- * @returns {{ mode: "guid", guids: string[], marks: [] }
- *          | { mode: "mark", guids: [], marks: string[], fellBackToMark?: boolean }
- *          | { mode: "none", guids: [], marks: [] }}
- *   mode "none" = nothing targetable (no selection / no mark + not in roster).
  */
 export function resolveFabAssignment({
   scope = "piece",
   picked,
   selectedGuids = [],
   guidToMark,
-} = {}) {
+}: ResolveFabAssignmentArgs = {}): FabAssignmentTarget {
   if (scope === "assembly") {
     const marks = resolveFabMarks({ picked, selectedGuids, guidToMark });
     return marks.length
@@ -100,8 +133,8 @@ export function resolveFabAssignment({
   }
   // Per-piece: keep only GUIDs the roster actually knows (a real model_elements
   // row exists to update). De-dupe while preserving order.
-  const guids = [];
-  const seen = new Set();
+  const guids: string[] = [];
+  const seen = new Set<string>();
   for (const guid of selectedGuids) {
     if (guid && guidToMark?.has?.(guid) && !seen.has(guid)) {
       seen.add(guid);
@@ -123,8 +156,12 @@ export function resolveFabAssignment({
  * `counts` is keyed by FAB_STATUS_ORDER; unknown/blank statuses count toward
  * `total` only. `pct` = % of non-deleted elements with a known fab status.
  */
-export function summarizeFabStatus(elements) {
-  const counts = Object.fromEntries(FAB_STATUS_ORDER.map((s) => [s, 0]));
+export function summarizeFabStatus(
+  elements: FabStatusElement[] | null | undefined,
+): FabStatusSummary {
+  const counts = Object.fromEntries(
+    FAB_STATUS_ORDER.map((s) => [s, 0]),
+  ) as Record<FabStatus, number>;
   let total = 0;
   let withFabStatus = 0;
   for (const el of Array.isArray(elements) ? elements : []) {
@@ -132,7 +169,7 @@ export function summarizeFabStatus(elements) {
     total += 1;
     const s = el.fab_status;
     if (s && Object.prototype.hasOwnProperty.call(counts, s)) {
-      counts[s] += 1;
+      counts[s as FabStatus] += 1;
       withFabStatus += 1;
     }
   }

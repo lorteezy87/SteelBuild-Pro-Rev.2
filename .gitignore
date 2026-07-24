@@ -59,9 +59,19 @@ scripts/.imgtools/
 
 # Operational/customer exports and generated workbook deliverables are never source
 # code. Store them in approved project storage, not in this repository.
-exports/
+# Anchored to repo root so src/lib/exports/ (app helpers) stays trackable.
+/exports/
 *.xlsm
 
 # transient scratch/snapshot copies dropped by tooling (never source; must not
 # be tracked or linted — a stale repo copy here otherwise fails `eslint .`)
 .tmp/
+
+# test / coverage / packaging artifacts
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+*.zip
+*.tgz
+*.tar.gz
