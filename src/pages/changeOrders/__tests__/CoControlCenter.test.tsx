@@ -17,12 +17,12 @@ type TestTableProps = {
 };
 
 vi.mock("@/components/command", () => ({
-  PageHero: () => null,
-  KpiStrip: () => null,
-  DecisionPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-  FilterBar: () => null,
-  DataTable: ({ columns, rows, onRowClick }: TestTableProps) => (
+  PageHero: (): null => null,
+  KpiStrip: (): null => null,
+  DecisionPanel: ({ children }: { children: React.ReactNode }): React.ReactElement => <div>{children}</div>,
+  Pill: ({ children }: { children: React.ReactNode }): React.ReactElement => <span>{children}</span>,
+  FilterBar: (): null => null,
+  DataTable: ({ columns, rows, onRowClick }: TestTableProps): React.ReactElement => (
     <div>
       {rows.map((row) => (
         <div key={row.id} data-testid={`row-${row.id}`} onClick={() => onRowClick(row)}>
@@ -31,10 +31,10 @@ vi.mock("@/components/command", () => ({
       ))}
     </div>
   ),
-  useCommandSkin: () => {},
+  useCommandSkin: (): void => {},
 }));
 
-vi.mock("@/config/launcherConfig", () => ({ photoFor: () => null }));
+vi.mock("@/config/launcherConfig", () => ({ photoFor: (): null => null }));
 
 import CoControlCenter from "../CoControlCenter";
 
