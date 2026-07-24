@@ -59,7 +59,8 @@ scripts/.imgtools/
 
 # Operational/customer exports and generated workbook deliverables are never source
 # code. Store them in approved project storage, not in this repository.
-exports/
+# Anchored to repo root so src/lib/exports/ (app helpers) stays trackable.
+/exports/
 *.xlsm
 
 # transient scratch/snapshot copies dropped by tooling (never source; must not

@@ -88,6 +88,12 @@ jobs:
         # the existing warnings down.
         run: npm run lint
 
+      - name: No new JavaScript under src/
+        # Phase 1 of docs/architecture/typescript-standard.md — blocks new
+        # .js/.jsx additions vs origin/main (existing JS may remain until
+        # intentionally converted with real types).
+        run: npm run check:no-new-js
+
       - name: Typecheck (TypeScript)
         # Blocking: guards Supabase table names, hook contracts,
         # and TS/TSX integration points before Vercel receives a deploy.
