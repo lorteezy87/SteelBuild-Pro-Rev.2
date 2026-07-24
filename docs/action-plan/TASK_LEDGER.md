@@ -1,15 +1,24 @@
 # SteelBuild Pro Action Plan — Task Ledger
 
-Branch: `cursor/action-plan-completion-d3a1`  
-Baseline (pre-change on `main`): lint ✅ · typecheck ✅ · typecheck:js ✅ · typecheck:strict ✅ · typecheck:noimplicitany ✅ · vitest 312 files / 3253 tests ✅ · `npm run build` ✅  
-No production merge/deploy performed under this assignment.
+**Authoritative status as of 2026-07-24** (post merges **#119**, **#120**, and production deploy).
 
-Status key:
-- **Completed** — implemented and verified (code inspection + automated tests/gates; UAT where noted)
-- **Verified prior** — already on `main` from PRs #112–#117 (and related); re-verified this session
+Companion workbook: [`steelbuild_action_plan_tracker_2026-07-24.xlsx`](./steelbuild_action_plan_tracker_2026-07-24.xlsx)  
+Snapshot narrative: [`COMPLETION_2026-07-24.md`](./COMPLETION_2026-07-24.md)
+
+| Metric | Count |
+|---|---|
+| Tracker tasks (IDs 1–105) | 105 |
+| **Done** | **62** |
+| **In Progress** | **42** |
+| **Blocked** | **1** (ID 102 — full interactive UAT) |
+| Not Started | 0 |
+
+Status key (spreadsheet + this ledger):
+- **Done** — implemented and verified (code + automated gates; UAT where noted)
+- **In Progress** — meaningful progress; remaining work or field-verify gap called out
 - **Blocked** — cannot finish without owner/external action
-- **Partial** — code present; remaining risk or field-verify gap called out
-- **N/A** — not applicable given current product state
+
+Production: https://www.steelbuild-pro.com — deployed 2026-07-24 from `main` (`1d192eb1`, includes #119).
 
 ---
 
@@ -17,170 +26,173 @@ Status key:
 
 | ID | Status | Finding / work | Evidence |
 |---|---|---|---|
-| 1 | Completed | Duplicate inventory documented | `docs/action-plan/DUPLICATE_INVENTORY.md` |
-| 2 | Completed | Canonical ownership rules chosen | Same inventory + `docs/architecture/folder-ownership.md` |
-| 3 | Completed | Risky deletes replaced with re-exports / comments | `ImpactBoard.tsx` → Panel re-export; `DrawingRegisterGrid` kept for tests with canonical note |
-| 4 | Completed | Dead duplicates deleted | `src/components/viewer/**`, orphan `pages/rfis/BulkActionBar.jsx`, unused WeeklySummary copies, `app-params.js` |
-| 5 | Completed | Folder ownership architecture note | `docs/architecture/folder-ownership.md` |
-| 28 | Verified prior / Completed | No stale root duplicate folders found | Inventory |
-| 29 | Completed | No tracked zip/tgz; gitignore now blocks archives | `.gitignore` |
-| 30 | Completed | Logs ignored; none tracked | `.gitignore` + `git ls-files` |
-| 31 | Verified prior | `dist/` untracked | `.gitignore` |
-| 32 | Verified prior | Only `.env.example` tracked | `git ls-files` |
-| 33 | Completed | gitignore extended (coverage, archives, playwright) | `.gitignore` |
-| 34 | Completed | Single lockfile (`package-lock.json`); clean workflow docs | package root |
-| 35 | Completed | Folder rules published | `docs/architecture/folder-ownership.md` |
-| 36 | Partial | Shared UI lives in `design-system/` + `components/ui`; page-local FilterBar/EmptyState retained intentionally for domain chrome | Inventory |
-| 37 | Partial | Business logic extraction ongoing (see Phase 3–4); mutation helpers added | `src/lib/mutations/standardMutation.ts` |
-| 38 | Completed | Architecture note with examples | `docs/architecture/folder-ownership.md` |
-| 42 | Completed | Dead imports/modules removed this session | viewer/, app-params, AuthCallbackError, WeeklySummary orphans |
-| 43 | Partial | Critical workflow typing already gated in CI; no new broad ignores | baseline gates |
+| 1 | Done | Duplicate inventory documented | `DUPLICATE_INVENTORY.md` |
+| 2 | Done | Canonical ownership rules chosen | inventory + `folder-ownership.md` |
+| 3 | Done | Risky deletes replaced with re-exports / comments | `ImpactBoard.tsx` → Panel re-export |
+| 4 | Done | Dead duplicates deleted | `viewer/**`, WeeklySummary orphans, `app-params.js`, AuthCallbackError, BulkActionBar |
+| 5 | Done | Folder ownership architecture note | `docs/architecture/folder-ownership.md` |
+| 28 | Done | No stale root duplicate folders | inventory |
+| 29 | Done | No tracked zip/tgz; gitignore blocks archives | `.gitignore` |
+| 30 | Done | Logs ignored; none tracked | `.gitignore` |
+| 31 | Done | `dist/` untracked | `.gitignore` |
+| 32 | Done | Only `.env.example` tracked | `git ls-files` |
+| 33 | Done | gitignore extended (coverage, archives, playwright, `/exports/`) | `.gitignore` |
+| 34 | Done | Single lockfile (`package-lock.json`) | package root |
+| 35 | Done | Folder rules published | `folder-ownership.md` |
+| 36 | In Progress | Shared UI in `design-system/` + `ui/`; some page-local chrome retained | inventory |
+| 37 | In Progress | Business logic extraction ongoing | `standardMutation.ts`, ResourceScheduling helpers |
+| 38 | Done | Architecture notes published | `folder-ownership.md`, `typescript-standard.md` (#120) |
+| 42 | Done | Dead imports/modules removed | #119 |
+| 43 | In Progress | Critical typing gated; priority modules → TS | #120 `check:no-new-js` |
 
 ## Phase 2 — Workflows & stability
 
 | ID | Status | Finding / work | Evidence |
 |---|---|---|---|
-| 6 | Completed | Task persistence sanitize + regression tests | `scheduleHelpers` / `taskPersistence.test.ts`; Schedule mutations use sanitize |
-| 7 | Verified prior | Cost-code save + soft-delete + unique | `costCodeSave.js` + migration `20260724140000` + tests |
-| 8 | Verified prior | Contract management + project update sync | `ContractManagement.jsx`, `projectUpdateEvents` |
-| 9 | Verified prior | CO edit payload whitelist | `changeOrderPayload.ts` + tests |
-| 10 | Verified prior | CO archive/soft-delete | CoControlCenter + soft-delete |
-| 11 | Verified prior | Checklist closeout mapping | `closeoutPayload.ts` + tests |
-| 12 | Verified prior | PMA fully removed from runtime | `pmaRemoval.test.ts` |
-| 14 | Verified prior | Canonical Piece Register restored | `pieceRegisterWiring.test.ts` |
-| 15 | Partial | Automated coverage green; full UAT blocked without staging session | see Task 110 |
-| 16 | Completed | Sampled large pages — no early-return-before-hooks | audit |
-| 17 | Partial | Top Sentry CSP/timeout/embed issues fixed (cherry-pick) | migration `20260724150000`, CSP, entityClient |
-| 18 | Partial | Critical modules have loading/empty patterns; not universal | existing control centers |
-| 19 | Partial | Null project guards on major pages; assertProjectId helper | `useAppSecurity`, `standardMutation.assertProjectId` |
-| 20 | Partial | Modal project-switch safety varies by module | remaining risk |
+| 6 | Done | Task persistence sanitize + tests | `taskPersistence.test.ts` |
+| 7 | Done | Cost-code save + soft-delete + unique | `costCodeSave.ts` + `20260724140000` |
+| 8 | Done | Contract management + project update sync | ContractManagement |
+| 9 | Done | CO edit payload whitelist | `changeOrderPayload.ts` |
+| 10 | Done | CO archive/soft-delete | CoControlCenter |
+| 11 | Done | Checklist closeout mapping | `closeoutPayload.ts` |
+| 12 | Done | PMA removed from runtime | `pmaRemoval.test.ts`; on prod |
+| 13 | Done | Drawing workflow failures documented + PDF race fixed | PR #96 note in workbook |
+| 14 | Done | App sync paths hardened (piece/shipping); SharePoint still unavailable | #116 + honest Sync Now |
+| 15 | In Progress | Automated suite green; interactive staging UAT open | see ID 102 |
+| 16 | Done | No early-return-before-hooks in sampled large pages | #119 audit |
+| 17 | Done | Top Sentry CSP/timeout/embed issues fixed + deployed | #119; prod CSP includes open-meteo/wasm |
+| 18 | In Progress | Loading/empty on critical modules; not universal | control centers |
+| 19 | In Progress | Null project guards + `assertProjectId`; broaden adoption | `useAppSecurity.ts` |
+| 20 | In Progress | Modal project-switch safety varies | needs UAT |
 
 ## Phase 3 — Major page refactors
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 21 | Partial | Submittals already TS + helpers; still ~1k LOC shell | `Submittals.tsx` |
-| 22 | Partial | Constraints already split under `pages/constraints/` | ~403 LOC shell |
-| 23 | Partial | RFIs already split under `pages/rfis/` | ~596 LOC |
-| 24 | Completed | Pure helpers extracted to `pages/resourceScheduling/`; page remains orchestrator | `resourceSchedulingHelpers.ts` + 27 tests |
-| 25 | Partial | Layout reduced to shell (~429) | `Layout.jsx` |
-| 26 | Partial | Deliveries already split | `pages/deliveries/` |
-| 27 | Partial | Drawings still large (~1085); hub is canonical for drawing/submittal | Drawings + DrawingSubmittalHub |
+| 21 | In Progress | Submittals TS + helpers; shell still large | `Submittals.tsx` |
+| 22 | In Progress | Constraints split under `pages/constraints/` | ~403 LOC shell |
+| 23 | In Progress | RFIs split under `pages/rfis/` | ~596 LOC |
+| 24 | Done | ResourceScheduling helpers extracted + 27 tests | `resourceSchedulingHelpers.ts` |
+| 25 | In Progress | Layout shell ~429 | `Layout.jsx` |
+| 26 | In Progress | Deliveries already split | `pages/deliveries/` |
+| 27 | In Progress | Drawings still large; hub is canonical | Drawings + DrawingSubmittalHub |
 
 ## Phase 4 — Mutations & shared logic
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 47 | Completed | Standard mutation helpers introduced | `src/lib/mutations/standardMutation.ts` |
-| 48 | Partial | Toast patterns exist (sonner); helper `toUserErrorMessage` | same |
-| 49 | Completed | `invalidateAfterMutation` helper | same + cacheRegistry |
-| 50 | Partial | Ad hoc mutations remain on many pages | TECH_DEBT / TODO Thread D |
-| 51 | Partial | Critical optimistic paths reviewed in prior PRs; not universal | — |
-| 52 | Partial | Project-scoped selects + invalidation; concurrent edit not fully E2E | — |
-| 53 | Partial | Many KPI derives extracted; portfolio/financial KPIs tested in places | derive modules |
-| 54 | Partial | Payload helpers for CO/cost/closeout/schedule | domain helpers |
-| 55 | Completed | `assertProjectId` shared | useAppSecurity + standardMutation |
-| 56 | Partial | Status enums in domain libs; some duplicate pills remain | inventory |
-| 57 | Partial | Control-center pattern widely used | — |
+| 47 | Done | Standard mutation helpers | `standardMutation.ts` |
+| 48 | In Progress | Toast + `toUserErrorMessage`; not universal | same |
+| 49 | Done | `invalidateAfterMutation` | same + cacheRegistry |
+| 50 | In Progress | Ad hoc mutations remain | TECH_DEBT |
+| 51 | In Progress | Optimistic paths reviewed in places | prior PRs |
+| 52 | In Progress | Scoped selects + invalidation; concurrent-edit E2E open | — |
+| 53 | In Progress | Many KPI derives extracted | derive modules |
+| 54 | In Progress | Payload helpers for CO/cost/closeout/schedule | domain helpers |
+| 55 | Done | `assertProjectId` shared | useAppSecurity + standardMutation |
+| 56 | In Progress | Status enums in domain libs | inventory |
+| 57 | In Progress | Control-center pattern widely used | — |
 
 ## Phase 5 — Security & backend
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 58 | Completed | base44Client gone; AuthCallbackError deleted; leftovers are comments/docs | this branch |
-| 59 | Completed | app-params deleted; `env.ts` is validated source | this branch |
-| 60 | Verified prior | No manual URL token parsers; supabase detectSessionInUrl | `supabase.ts` |
-| 61 | Completed | Removed LS identity auth fallback; cache clear preserves real sb-*-auth-token | useAppSecurity, SystemTab, SecureDeleteDialog |
-| 62 | Verified prior | No `requiresAuth: false` | grep |
-| 63 | Verified prior | AuthenticatedApp gates app | App.jsx PUBLIC_PAGES |
-| 64 | Partial | RLS + PROJECT_SCOPED_TABLES; assertProjectId underused | TECH_DEBT org model |
-| 66 | Verified prior | stripe/email/llm JWT gates | edge functions |
-| 67 | Verified prior | service_role server-only | edge functions |
-| 68 | Partial | Org/project checks present; broaden assertProjectId usage | — |
-| 69 | Verified prior | Stripe webhook signature + idempotency | stripe-billing |
-| 70 | Partial | Staging env mis-set historically (URL/anon swap) — owner fix | Sentry Y |
+| 58 | Done | base44Client gone; AuthCallbackError deleted | #119 |
+| 59 | Done | app-params deleted; `env.ts` validated | #119 |
+| 60 | Done | No manual URL token parsers | `supabase.ts` |
+| 61 | Done | Removed LS identity auth fallback | useAppSecurity.ts (#120) |
+| 62 | Done | No `requiresAuth: false` | grep |
+| 63 | Done | AuthenticatedApp gates app | App.jsx |
+| 64 | In Progress | RLS + PROJECT_SCOPED; broaden assertProjectId | — |
+| 65 | Done | Approved auth/config pattern documented | runbooks (prior) |
+| 66 | Done | stripe/email/llm JWT gates | edge functions |
+| 67 | Done | service_role server-only | edge functions |
+| 68 | In Progress | Org/project checks; broaden assertProjectId | — |
+| 69 | Done | Stripe webhook signature + idempotency | stripe-billing |
+| 70 | In Progress | Staging env historically mis-set — owner verify | Sentry Y |
 
 ## Phase 6 — UX trust & continuity
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 71 | Completed | Inventory of coming_soon | `integrationCatalog.js` + audit |
-| 72 | Verified prior | Coming-soon gated in Integrations UI | Integrations.jsx |
-| 73 | Verified prior | Honest messaging for incomplete connectors | catalog + DMS |
-| 74 | Completed | Sync Now labeled unavailable (muted) | DocumentStorageSettings |
-| 75 | Partial | Flagship paths honest; catalog still lists future items | — |
-| 76 | Verified prior | Drawing/submittal/fab controls | PR #115 + tests + migration |
-| 77 | Partial | RFI path hardened; full field UAT open | docs/TODO Thread E |
-| 78 | Verified prior | Piece/production hardening | PR #116 |
-| 79 | Verified prior | Shipping bridge + quantity rules | PR #116 |
-| 80 | Partial | Schedule/look-ahead present; field-verify open | — |
-| 81 | Partial | Cost/SOV/budget paths exist; KPI reconciliation tests partial | — |
-| 82 | Verified prior | PMA removal complete at runtime | pmaRemoval.test.ts |
-| 83 | Partial | Nav dead-ends fixed in #117; more handoffs remain | — |
+| 71 | Done | Coming-soon inventory | `COMING_SOON_INVENTORY.md` |
+| 72 | Done | Coming-soon gated in Integrations UI | Integrations.jsx |
+| 73 | Done | Honest messaging for incomplete connectors | catalog + DMS |
+| 74 | Done | Sync Now labeled unavailable | DocumentStorageSettings |
+| 75 | In Progress | Flagship paths honest; catalog lists future items | — |
+| 76 | Done | Drawing/submittal/fab controls | #115 + prod |
+| 77 | In Progress | RFI hardened; field UAT open | — |
+| 78 | Done | Piece/production hardening | #116 + prod |
+| 79 | Done | Shipping bridge + quantity rules | #116 + prod |
+| 80 | In Progress | Schedule/look-ahead; field-verify open | — |
+| 81 | In Progress | Cost/SOV/budget; KPI tests partial | — |
+| 82 | Done | PMA removal complete (audit usefulness N/A) | pmaRemoval.test.ts |
+| 83 | In Progress | Nav dead-ends fixed (#117); more handoffs remain | — |
 
 ## Phase 7 — Project boundaries
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 84 | Partial | PROJECT_SCOPED_PAGES + RLS | routes tests |
-| 85 | Partial | Explicit FK project scope (Sentry fix) | softDelete.ts |
-| 86 | Verified prior | Portfolio vs project modes on Dashboard | Dashboard.jsx |
-| 87 | Partial | ListTruncationNotice on some registers | H10 residual |
-| 88 | Partial | Needs interactive UAT | Task 110 |
+| 84 | In Progress | PROJECT_SCOPED_PAGES + RLS | routes tests |
+| 85 | Done | Explicit FK project scope (Sentry) | softDelete / entityClient |
+| 86 | Done | Portfolio vs project modes | Dashboard.jsx |
+| 87 | In Progress | Truncation notices; confirm all KPIs scoped | — |
+| 88 | In Progress | Interactive project-switch UAT open | ID 102 |
 
-## Phase 8 — Customer-facing completion
+## Phase 8 — Customer-facing (ledger IDs 106–109; not in 1–105 workbook)
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 106 | Partial | Alerts honest refresh; deep-links for RFI; full escalation not built | useAlerts, AGENTS.md |
-| 107 | Partial | Integration catalog honesty; Sync Now unavailable | catalog + DMS |
-| 108 | Partial | RLS/matrix docs exist; continuous verification open | docs/runbooks |
-| 109 | Verified prior | Landing pricing/module claims corrected | Landing.jsx + plansHonesty.test.ts |
+| 106 | In Progress | Alerts honest refresh; escalation not fully built | useAlerts |
+| 107 | In Progress | Integration catalog honesty; Sync Now unavailable | catalog + DMS |
+| 108 | In Progress | RLS/matrix docs; continuous verification | runbooks |
+| 109 | Done | Landing pricing/module claims corrected | Landing + plansHonesty.test.ts |
 
 ## Phase 9 — Automated testing
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 89 | Partial | Domain tests exist for CO/cost/closeout/piece | suite |
-| 90 | Completed | Task persistence regression tests | `taskPersistence.test.ts` |
-| 92 | Partial | Stage/transition tests for submittal/drawing | existing |
-| 93 | Partial | Assignment flows covered unevenly | — |
-| 94 | Partial | KPI/calc tests exist in domains | — |
-| 95 | Partial | Import/piece sync tests exist | productionHardening tests |
-| 97 | Partial | Form save tests for key domains | costCodeSave etc. |
+| 89 | In Progress | Domain CRUD tests for key records | suite |
+| 90 | Done | Task persistence tests | `taskPersistence.test.ts` |
+| 91 | Done | Project-context tests | #107 (prior workbook note) |
+| 92 | In Progress | Stage/transition tests | submittal/drawing |
+| 93 | In Progress | Assignment coverage uneven | — |
+| 94 | In Progress | KPI/calc tests in domains | — |
+| 95 | In Progress | Import/piece sync tests | production hardening |
+| 96 | Done | Drawing revision tests | #96/#101 |
+| 97 | In Progress | Major form save tests partial | costCodeSave etc. |
+| 98 | Done | Permission-sensitive regression coverage | prior |
 
 ## Phase 10 — Production-readiness review
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 99 | Partial | Re-audit via this ledger + Sentry triage | — |
-| 102 | Blocked | Full UAT needs staging + credentials | CI billing blocked |
-| 103 | Partial | Security re-check done in audit; continuous | — |
-| 104 | Partial | Project boundaries re-checked in code | — |
-| 105 | Partial | UX trust re-checked; coming_soon catalog remains | — |
+| 99 | In Progress | Re-audit via this ledger + Sentry triage | 2026-07-24 |
+| 100 | Done | Lint clean locally / in gates | CI + local |
+| 101 | Done | Expanded typecheck gates pass | strict + noImplicitAny |
+| 102 | **Blocked** | Full interactive UAT | staging credentials + GH Actions billing |
+| 103 | In Progress | Security continuous | #119 LS-auth removal |
+| 104 | In Progress | Boundaries continuous | FK embeds |
+| 105 | In Progress | UX trust continuous | honest Sync Now |
 
 ## Phase 11 — Release gate
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 110 | Blocked | Staging smoke + manual UAT + Go require owner staging env, CI billing, and human UAT | GitHub Actions spending limit; staging EnvValidation historically |
+| 110 | Blocked / Partial | Code+prod deploy done; Go/No-Go for *full* launch still needs staging UAT | Prod deploy 2026-07-24; UAT still open |
 
 ---
 
-## Dependency-aware plan (executed)
+## Shipped on production (2026-07-24)
 
-1. Baseline gates → green  
-2. Cherry-pick production Sentry fixes (CSP, contacts FK, model_elements index)  
-3. Phase 1 hygiene + architecture docs + dead code removal  
-4. Security LS-auth removal + mutation helpers + task persistence tests  
-5. Ledger + remaining Partial/Blocked honesty  
-6. Final validation on branch (lint/typecheck/test/build)  
-7. No production deploy/merge without explicit authorization  
+- Merges: **#114–#117**, **#119**, **#120** (and #118 closed as superseded by #119)
+- Hosted migrations including `20260724120000` / `130000` / `140000` / `150000`
+- Vercel prod: `steelbuildpro-og` → https://www.steelbuild-pro.com
 
 ## Remaining blockers
 
 1. GitHub Actions billing/spending limit blocks CI runners  
-2. Staging Vercel env must have valid `VITE_SUPABASE_*`  
-3. Manual 20-step UAT requires authenticated staging session  
+2. Staging Vercel `VITE_SUPABASE_*` must be valid for authenticated UAT  
+3. Manual multi-step UAT requires authenticated staging session  
 4. Owner: delete deprecated edge functions (`sharepoint-proxy`, `bluebeam-proxy`, orphan stripe sync)  
-5. Large-page decomposition (ResourceScheduling, Drawings, Submittals) continues as Partial — behavior-preserving extraction already started historically; full finish exceeds single-pass risk appetite without per-page UAT  
+5. Continue large-page thinning + `assertProjectId` adoption without mass risk  
