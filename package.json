@@ -17,6 +17,8 @@
     "typecheck:strict": "node scripts/strict-typecheck.mjs",
     "typecheck:noimplicitany": "node scripts/noimplicitany-typecheck.mjs",
     "check:no-new-js": "node scripts/check-no-new-js.mjs",
+    "check:hooks": "node scripts/check-hooks.mjs",
+    "test:corrected-flows": "node scripts/retest-corrected-flows.mjs",
     "types:db": "supabase gen types typescript --project-id kjrwqagyeswwoxpjkcko > src/types/supabase.ts",
     "perf:bundle": "node scripts/perf-bundle-report.cjs",
     "perf:trace": "node scripts/perf-browser-trace.mjs",

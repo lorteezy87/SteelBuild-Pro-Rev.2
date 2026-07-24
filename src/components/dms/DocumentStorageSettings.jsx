@@ -15,6 +15,11 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import {
   FolderOpen, Plus, Trash2, Power, PowerOff, Clock, RefreshCw,
 } from "lucide-react";
+import {
+  SYNC_UNAVAILABLE_MESSAGE,
+  buildLinkedFolderSyncDefaults,
+  buildUnavailableSyncStatusPatch,
+} from "@/lib/dms/sharepointSyncHonesty";
 
 // ── Provider config ───────────────────────────────────────────────────
 const PROVIDERS = [
@@ -137,24 +142,18 @@ export default function DocumentStorageSettings({ projectId }) {
       folder_name: folderName.trim(),
       folder_path: folderPath.trim(),
       tenant_id: needsTenant ? tenantId.trim() : null,
-      sync_enabled: true,
-      sync_frequency: syncFrequency,
+      ...buildLinkedFolderSyncDefaults({ syncFrequency }),
       is_active: true,
       is_deleted: false,
     });
   };
 
   const handleSyncNow = (folder) => {
-    toast.message(
-      "SharePoint / OneDrive sync is not connected yet. Folder links are saved for setup, but Sync Now does not transfer files until the connector is deployed.",
-    );
+    toast.message(SYNC_UNAVAILABLE_MESSAGE);
     updateMut.mutate(
       {
         id: folder.id,
-        data: {
-          last_sync_status: "unavailable",
-          last_sync_at: new Date().toISOString(),
-        },
+        data: buildUnavailableSyncStatusPatch(),
       },
     );
   };

@@ -24,6 +24,7 @@ import { listPieceProduction, commitProductionRows } from "@/lib/production/repo
 import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
 import { resolveCanonicalShipTargets } from "@/lib/pieceControl/shippingCanonicalBridge";
 import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
+import { summarizeShippingListCommit } from "@/lib/deliveries/summarizeShippingListCommit";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -173,10 +174,13 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
       let shipped = 0;
       let canonicalShipped = 0;
       let canonicalSkipped = 0;
+      let productionShipFailed = false;
+      let canonicalShipFailed = false;
       if (markShipped) {
         try {
           shipped = await markPiecesShipped(kept, existingProduction, projectId);
         } catch (e) {
+          productionShipFailed = true;
           console.error("[ShippingListImportModal] mark-shipped failed:", e);
         }
         try {
@@ -184,19 +188,26 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
           canonicalShipped = bridge.shipped;
           canonicalSkipped = bridge.skipped;
         } catch (e) {
+          canonicalShipFailed = true;
           console.error("[ShippingListImportModal] canonical ship bridge failed:", e);
         }
       }
 
-      setLastResult({ created, items, failed, shipped, canonicalShipped, canonicalSkipped });
-      toast.success(
-        `${created} load${created === 1 ? "" : "s"} imported (${items} pieces)`
-        + (shipped ? `, ${shipped} marked shipped` : "")
-        + (canonicalShipped ? `, ${canonicalShipped} canonical lots shipped` : "")
-        + (canonicalSkipped ? `, ${canonicalSkipped} canonical lots skipped` : "")
-        + (failed ? `, ${failed} failed` : ""),
-      );
-      onImported?.({ created, items, failed, shipped, canonicalShipped, canonicalSkipped });
+      const result = {
+        created,
+        items,
+        failed,
+        shipped,
+        canonicalShipped,
+        canonicalSkipped,
+        productionShipFailed,
+        canonicalShipFailed,
+      };
+      setLastResult(result);
+      const { level, message } = summarizeShippingListCommit(result);
+      if (level === "warning") toast.warning(message);
+      else toast.success(message);
+      onImported?.(result);
       setStep("done");
       setTimeout(() => { reset(); onClose(); }, 1800);
     } catch (e) {
@@ -345,8 +356,15 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
             <div style={{ textAlign: "center", padding: "40px 0" }}>
               <CheckCircle2 size={32} style={{ color: "var(--status-success)" }} />
               <div style={{ marginTop: 10, color: "var(--text-primary)", fontWeight: 700 }}>
-                {lastResult.created} load{lastResult.created === 1 ? "" : "s"} imported · {lastResult.items} pieces{lastResult.shipped ? ` · ${lastResult.shipped} marked shipped` : ""}{lastResult.failed ? ` · ${lastResult.failed} failed` : ""}
+                {lastResult.created} load{lastResult.created === 1 ? "" : "s"} imported · {lastResult.items} pieces{lastResult.shipped ? ` · ${lastResult.shipped} marked shipped` : ""}{lastResult.canonicalShipped ? ` · ${lastResult.canonicalShipped} canonical shipped` : ""}{lastResult.canonicalSkipped ? ` · ${lastResult.canonicalSkipped} canonical skipped` : ""}{lastResult.failed ? ` · ${lastResult.failed} failed` : ""}
               </div>
+              {(lastResult.productionShipFailed || lastResult.canonicalShipFailed) && (
+                <div style={{ marginTop: 8, color: "var(--status-warning)", fontSize: 12 }}>
+                  Piece sync incomplete
+                  {lastResult.productionShipFailed ? " — production status update failed" : ""}
+                  {lastResult.canonicalShipFailed ? " — canonical lot bridge failed" : ""}.
+                </div>
+              )}
             </div>
           )}
         </div>

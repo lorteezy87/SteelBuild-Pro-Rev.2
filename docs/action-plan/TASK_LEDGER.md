@@ -47,10 +47,10 @@ Status key:
 | 10 | Verified prior | CO archive/soft-delete | CoControlCenter + soft-delete |
 | 11 | Verified prior | Checklist closeout mapping | `closeoutPayload.ts` + tests |
 | 12 | Verified prior | PMA fully removed from runtime | `pmaRemoval.test.ts` |
-| 14 | Verified prior | Canonical Piece Register restored | `pieceRegisterWiring.test.ts` |
-| 15 | Partial | Automated coverage green; full UAT blocked without staging session | see Task 110 |
-| 16 | Completed | Sampled large pages — no early-return-before-hooks | audit |
-| 17 | Partial | Top Sentry CSP/timeout/embed issues fixed (cherry-pick) | migration `20260724150000`, CSP, entityClient |
+| 14 | Done | Sync reliability hardened (SharePoint honesty, shipping-list piece-sync warnings, Data Exchange skipped reporting) | `WORK_14_17.md` |
+| 15 | Done (automated) | Corrected-flow retest harness — 18 files / 155 tests PASS; interactive UAT = ID 102 | `npm run test:corrected-flows`, `RETEST_CORRECTED_FLOWS.md` |
+| 16 | Done | `react-hooks/rules-of-hooks` clean across `src/` | `npm run check:hooks` |
+| 17 | Done | Console/Sentry review; residual CSP-RO/staging-ops/noise documented | `WORK_14_17.md` |
 | 18 | Partial | Critical modules have loading/empty patterns; not universal | existing control centers |
 | 19 | Partial | Null project guards on major pages; assertProjectId helper | `useAppSecurity`, `standardMutation.assertProjectId` |
 | 20 | Partial | Modal project-switch safety varies by module | remaining risk |
