@@ -222,6 +222,20 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
           {step === "upload" && (
             <div>
+              <div style={{
+                marginBottom: 12,
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: "1px solid var(--border-default)",
+                background: "var(--bg-surface-low)",
+                color: "var(--text-muted)",
+                fontSize: 12,
+                lineHeight: 1.45,
+              }}>
+                Creates <strong style={{ color: "var(--text-primary)" }}>deliveries</strong> only.
+                Does not update Production Status or advance canonical Piece Register lots —
+                use Master Shipping List import for that sync path.
+              </div>
               <div
                 onClick={() => fileInput.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = `color-mix(in srgb, ${AI} 8%, transparent)`; }}
