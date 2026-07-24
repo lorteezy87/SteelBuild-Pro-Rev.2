@@ -36,6 +36,6 @@ describe("AiAssistantDrawer", () => {
     await user.click(screen.getByRole("button", { name: "Top delay risks in the next 3 weeks?" }));
 
     expect(mocks.send).toHaveBeenCalledWith("Top delay risks in the next 3 weeks?");
-    expect(screen.getByLabelText(/project assistant/i)).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: /project assistant/i })).toHaveValue("");
   });
 });
