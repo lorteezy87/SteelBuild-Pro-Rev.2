@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect, useContext, useMemo } from "react";
 import { entities } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
+import { subscribeProjectUpdated } from "@/services/projectUpdateEvents";
 
 export const ProjectContext = createContext({
   activeProject: null,
@@ -72,6 +73,25 @@ export function ProjectProvider({ children }) {
   });
   const [loading, setLoading] = useState(true);
   const [projectLoadError, setProjectLoadError] = useState(null);
+
+  // Every successful Project.update publishes the returned database row through
+  // the entity client. Merge it into both ProjectContext stores and the durable
+  // cache so contract values, project chrome, dashboards, and portfolio totals
+  // update together instead of waiting for a reload.
+  useEffect(() => subscribeProjectUpdated((updated) => {
+    const id = updated?.id;
+    if (!id) return;
+    setProjects((list) => {
+      const next = list.map((project) => (
+        project.id === id ? { ...project, ...updated } : project
+      ));
+      writeProjectsCache(next);
+      return next;
+    });
+    setActiveProject((current) => (
+      current?.id === id ? { ...current, ...updated } : current
+    ));
+  }), []);
 
   // Load projects on mount — retries up to 3x in case SDK isn't ready yet
   useEffect(() => {
