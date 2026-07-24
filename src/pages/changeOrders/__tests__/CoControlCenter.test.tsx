@@ -3,6 +3,18 @@ import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { CoRecord } from "../coControlCenter.derive";
+
+type TestColumn = {
+  key: string;
+  render?: (row: CoRecord) => React.ReactNode;
+};
+
+type TestTableProps = {
+  columns: TestColumn[];
+  rows: CoRecord[];
+  onRowClick: (row: CoRecord) => void;
+};
 
 vi.mock("@/components/command", () => ({
   PageHero: () => null,
@@ -10,11 +22,11 @@ vi.mock("@/components/command", () => ({
   DecisionPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   FilterBar: () => null,
-  DataTable: ({ columns, rows, onRowClick }: any) => (
+  DataTable: ({ columns, rows, onRowClick }: TestTableProps) => (
     <div>
-      {rows.map((row: any) => (
+      {rows.map((row) => (
         <div key={row.id} data-testid={`row-${row.id}`} onClick={() => onRowClick(row)}>
-          {columns.map((column: any) => <span key={column.key}>{column.render?.(row)}</span>)}
+          {columns.map((column) => <span key={column.key}>{column.render?.(row)}</span>)}
         </div>
       ))}
     </div>
@@ -26,7 +38,7 @@ vi.mock("@/config/launcherConfig", () => ({ photoFor: () => null }));
 
 import CoControlCenter from "../CoControlCenter";
 
-const co = {
+const co: CoRecord = {
   id: "co-1",
   co_number: "CO #004",
   title: "Added support steel",
