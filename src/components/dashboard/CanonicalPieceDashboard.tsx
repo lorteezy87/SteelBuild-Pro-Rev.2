@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Boxes, CalendarClock, Factory, Weight } from "lucide-react";
+import { DecisionPanel, Pill } from "@/components/command";
+import type { PillTone } from "@/components/command";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import {
   CANONICAL_LIFECYCLES,
@@ -16,12 +18,25 @@ interface CanonicalPieceDashboardProps {
     id: string;
     piece_control_mode?: string | null;
   };
+  onOpenRegister?: () => void;
 }
 
 const fmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 
+function workPackageTone(status: string): PillTone {
+  if (["Complete", "Delivered", "Fabrication Complete"].includes(status)) return "good";
+  if (["Erection", "Shipping", "In Fabrication"].includes(status)) return "info";
+  if (status === "Ready for Release") return "warn";
+  return "neutral";
+}
+
+function stationLabel(station: string): string {
+  return station.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export default function CanonicalPieceDashboard({
   project,
+  onOpenRegister,
 }: CanonicalPieceDashboardProps) {
   const mode = String(project.piece_control_mode ?? "off");
   const enabled = mode !== "off";
@@ -83,15 +98,19 @@ export default function CanonicalPieceDashboard({
   if (!enabled) return null;
   if (query.isLoading) {
     return (
-      <section className="mb-5 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
-        Loading canonical piece reporting...
+      <section className="cmd-panel" role="status" aria-live="polite">
+        <div className="cmd-panel__body" style={{ padding: 16 }}>
+          <span className="cmd-row__meta">Loading Piece Register reporting…</span>
+        </div>
       </section>
     );
   }
   if (query.error || !derived) {
     return (
-      <section className="mb-5 rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        Canonical reporting unavailable: {(query.error as Error)?.message}
+      <section className="cmd-panel" role="alert">
+        <div className="cmd-panel__body" style={{ padding: 16, color: "var(--cmd-danger-text, #b42318)" }}>
+          Piece Register reporting unavailable: {(query.error as Error | null)?.message || "No reporting data returned."}
+        </div>
       </section>
     );
   }
@@ -108,178 +127,277 @@ export default function CanonicalPieceDashboard({
       String(left.plannedShipDate).localeCompare(String(right.plannedShipDate)),
     )
     .slice(0, 8);
-  const shadowPieceDelta =
-    projectRollup.pieceCount - derived.legacyPieceCount;
+  const shadowPieceDelta = projectRollup.pieceCount - derived.legacyPieceCount;
   const shadowTonsDelta = projectRollup.knownTons - derived.legacyTons;
+  const modeTone: PillTone = mode === "shadow" ? "warn" : "good";
+  const kpis = [
+    {
+      label: "Total pieces",
+      value: fmt.format(projectRollup.pieceCount),
+      sublabel: `${fmt.format(projectRollup.lotCount)} actionable lots`,
+      Icon: Boxes,
+      tone: "info",
+    },
+    {
+      label: "Known tonnage",
+      value: fmt.format(projectRollup.knownTons),
+      sublabel: "tons with complete weight",
+      Icon: Weight,
+      tone: "neutral",
+    },
+    {
+      label: "Erected tons",
+      value: fmt.format(erectedTons),
+      sublabel: "canonical erected scope",
+      Icon: Factory,
+      tone: "good",
+    },
+    {
+      label: "Erected by tons",
+      value: percentErected === null ? "Unknown" : `${percentErected.toFixed(1)}%`,
+      sublabel: "known-weight scope only",
+      Icon: Factory,
+      tone: percentErected != null && percentErected >= 75 ? "good" : "warn",
+    },
+  ] as const;
 
   return (
-    <section className="mb-5 space-y-4 rounded-2xl border border-slate-200 bg-[linear-gradient(135deg,#f8fafc_0%,#eef6f5_55%,#fff7ed_100%)] p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-lg font-black text-slate-900">
-            <Boxes className="h-5 w-5 text-teal-700" />
-            Canonical Piece Control
-          </div>
-          <p className="mt-1 text-sm text-slate-600">
-            Active actionable leaf lots only. Unknown weights are reported separately.
-          </p>
-        </div>
-        <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
-          {mode} mode
-        </span>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: "Total pieces", value: fmt.format(projectRollup.pieceCount), Icon: Boxes },
-          { label: "Known tonnage", value: fmt.format(projectRollup.knownTons), Icon: Weight },
-          { label: "Erected tons", value: fmt.format(erectedTons), Icon: Factory },
-          {
-            label: "Erected by tons",
-            value: percentErected === null ? "Unknown" : `${percentErected.toFixed(1)}%`,
-            Icon: Factory,
-          },
-        ].map(({ label, value, Icon }) => (
-          <div key={label} className="rounded-xl border border-white/80 bg-white/85 p-4">
-            <Icon className="h-4 w-4 text-teal-700" />
-            <div className="mt-3 text-2xl font-black text-slate-900">{value}</div>
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              {label}
+    <DecisionPanel title="Piece Register" onViewAll={onOpenRegister}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 8 }}>
+        <div
+          className="cmd-row"
+          style={{
+            borderTop: 0,
+            padding: "0 0 4px",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div className="cmd-row__num">Canonical production control</div>
+            <div className="cmd-row__meta" style={{ marginTop: 3 }}>
+              Active actionable leaf lots only. Unknown weights are reported separately.
             </div>
           </div>
-        ))}
-      </div>
-
-      {projectRollup.unknownWeightLotCount > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <AlertTriangle className="h-4 w-4" />
-          {projectRollup.unknownWeightLotCount} lot(s), representing{" "}
-          {fmt.format(projectRollup.unknownWeightPieceCount)} pieces, have incomplete weight
-          and are excluded from tonnage percentages.
+          <Pill tone={modeTone}>{mode.toUpperCase()} MODE</Pill>
         </div>
-      )}
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-xl bg-white p-4">
-          <h3 className="font-black text-slate-900">Tonnage by lifecycle</h3>
-          <div className="mt-4 space-y-2">
+        <div
+          className="cmd-kpi-strip"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}
+        >
+          {kpis.map(({ label, value, sublabel, Icon, tone }) => (
+            <div
+              key={label}
+              className={`cmd-kpi${tone === "neutral" ? "" : ` cmd-kpi--${tone}`}`}
+            >
+              <div className="cmd-kpi__icon">
+                <Icon size={15} strokeWidth={1.9} aria-hidden="true" />
+              </div>
+              <div className="cmd-kpi__value">{value}</div>
+              <div className="cmd-kpi__label">{label}</div>
+              <div className="cmd-kpi__sub">{sublabel}</div>
+            </div>
+          ))}
+        </div>
+
+        {projectRollup.unknownWeightLotCount > 0 && (
+          <div
+            role="status"
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 9,
+              padding: "10px 12px",
+              border: "1px solid #f5dca6",
+              borderRadius: 10,
+              background: "#fffbeb",
+              color: "var(--cmd-warn-text, #93540b)",
+              fontSize: 12,
+              lineHeight: 1.45,
+            }}
+          >
+            <AlertTriangle size={16} strokeWidth={2} aria-hidden="true" style={{ flex: "0 0 auto", marginTop: 1 }} />
+            <span>
+              {projectRollup.unknownWeightLotCount} lot(s), representing{" "}
+              {fmt.format(projectRollup.unknownWeightPieceCount)} pieces, have incomplete weight and
+              are excluded from tonnage percentages.
+            </span>
+          </div>
+        )}
+
+        <div
+          className="cmd-panels"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}
+        >
+          <DecisionPanel title="Tonnage by lifecycle">
             {CANONICAL_LIFECYCLES.map((status) => {
               const tons = projectRollup.tonsByLifecycle[status] ?? 0;
-              const width =
-                projectRollup.knownTons > 0
-                  ? (tons / projectRollup.knownTons) * 100
-                  : 0;
+              const width = projectRollup.knownTons > 0
+                ? Math.min(100, Math.max(0, (tons / projectRollup.knownTons) * 100))
+                : 0;
               return (
-                <div key={status} className="grid grid-cols-[120px_1fr_70px] items-center gap-2 text-xs">
-                  <span className="font-semibold text-slate-700">
+                <div
+                  key={status}
+                  className="cmd-row"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(104px, 1fr) minmax(90px, 2fr) 64px",
+                  }}
+                >
+                  <span className="cmd-row__meta" style={{ color: "var(--cmd-text, #1b2430)" }}>
                     {pieceLifecycleLabel(status)}
                   </span>
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-teal-600" style={{ width: `${width}%` }} />
-                  </div>
-                  <span className="text-right text-slate-500">{fmt.format(tons)} t</span>
+                  <span
+                    aria-label={`${pieceLifecycleLabel(status)} ${width.toFixed(1)} percent of known tons`}
+                    style={{
+                      display: "block",
+                      height: 8,
+                      overflow: "hidden",
+                      borderRadius: 999,
+                      background: "#eef1f5",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        width: `${width}%`,
+                        height: "100%",
+                        borderRadius: 999,
+                        background: status === "erected" ? "var(--cmd-good)" : "var(--cmd-info)",
+                      }}
+                    />
+                  </span>
+                  <strong style={{ textAlign: "right", fontSize: 12, color: "var(--cmd-text)" }}>
+                    {fmt.format(tons)} t
+                  </strong>
                 </div>
               );
             })}
-          </div>
-        </div>
+          </DecisionPanel>
 
-        <div className="rounded-xl bg-white p-4">
-          <h3 className="font-black text-slate-900">Production backlog by station</h3>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <DecisionPanel title="Production backlog by station">
             {[...derived.stationBacklog.entries()].map(([station, count]) => (
-              <div key={station} className="rounded-lg bg-slate-50 p-3">
-                <div className="text-lg font-black text-slate-900">{fmt.format(count)}</div>
-                <div className="text-xs uppercase tracking-wide text-slate-500">
-                  {station.replaceAll("_", " ")}
-                </div>
+              <div className="cmd-row" key={station}>
+                <span className="cmd-row__meta" style={{ color: "var(--cmd-text, #1b2430)" }}>
+                  {stationLabel(station)}
+                </span>
+                <strong className="cmd-row__num">{fmt.format(count)}</strong>
               </div>
             ))}
             {derived.stationBacklog.size === 0 && (
-              <p className="col-span-full text-sm text-slate-500">No fabrication backlog.</p>
+              <div className="cmd-row__meta" style={{ padding: "10px 0" }}>
+                No fabrication backlog.
+              </div>
             )}
-          </div>
+          </DecisionPanel>
         </div>
-      </div>
 
-      <div className="overflow-x-auto rounded-xl bg-white p-4">
-        <h3 className="font-black text-slate-900">Canonical work packages</h3>
-        <table className="mt-3 min-w-[760px] w-full text-left text-sm">
-          <thead className="text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="pb-2">Work package</th>
-              <th className="pb-2">Derived status</th>
-              <th className="pb-2 text-right">Pieces</th>
-              <th className="pb-2 text-right">Known tons</th>
-              <th className="pb-2 text-right">Fab earned</th>
-              <th className="pb-2">Planned ship</th>
-            </tr>
-          </thead>
-          <tbody>
-            {derived.workPackages.map((row) => (
-              <tr key={row.workPackageId} className="border-t border-slate-100">
-                <td className="py-2 font-semibold">
-                  {row.source?.wp_number || row.source?.name || row.workPackageId}
-                </td>
-                <td className="py-2">{row.derivedStatus}</td>
-                <td className="py-2 text-right">{fmt.format(row.pieceCount)}</td>
-                <td className="py-2 text-right">{fmt.format(row.knownTons)}</td>
-                <td className="py-2 text-right">
-                  {row.earnedFabricationPercent == null
-                    ? "Unknown"
-                    : `${row.earnedFabricationPercent.toFixed(1)}%`}
-                </td>
-                <td className="py-2">{row.plannedShipDate || "—"}</td>
+        <div className="cmd-table-wrap">
+          <table className="cmd-table">
+            <thead>
+              <tr>
+                <th>Work package</th>
+                <th>Derived status</th>
+                <th style={{ textAlign: "right" }}>Pieces</th>
+                <th style={{ textAlign: "right" }}>Known tons</th>
+                <th style={{ textAlign: "right" }}>Fab earned</th>
+                <th>Planned ship</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {derived.workPackages.map((row) => (
+                <tr key={row.workPackageId}>
+                  <td>
+                    <strong>{row.source?.wp_number || row.source?.name || row.workPackageId}</strong>
+                  </td>
+                  <td><Pill tone={workPackageTone(row.derivedStatus)}>{row.derivedStatus}</Pill></td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                    {fmt.format(row.pieceCount)}
+                  </td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                    {fmt.format(row.knownTons)}
+                  </td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                    {row.earnedFabricationPercent == null
+                      ? "Unknown"
+                      : `${row.earnedFabricationPercent.toFixed(1)}%`}
+                  </td>
+                  <td>{row.plannedShipDate || "—"}</td>
+                </tr>
+              ))}
+              {derived.workPackages.length === 0 && (
+                <tr>
+                  <td className="cmd-table__empty" colSpan={6}>No canonical work packages.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-xl bg-white p-4">
-          <div className="flex items-center gap-2 font-black text-slate-900">
-            <CalendarClock className="h-4 w-4" />
-            Upcoming ships
-          </div>
-          <div className="mt-3 space-y-2 text-sm">
+        <div
+          className="cmd-panels"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}
+        >
+          <DecisionPanel title="Upcoming ships">
             {upcomingShips.map((row) => (
-              <div key={row.workPackageId} className="flex justify-between rounded-lg bg-slate-50 p-2">
-                <span>{row.source?.wp_number || row.source?.name || row.workPackageId}</span>
-                <span className="font-semibold">{row.plannedShipDate}</span>
+              <div className="cmd-row" key={row.workPackageId}>
+                <span>
+                  <span className="cmd-row__num">
+                    {row.source?.wp_number || row.source?.name || row.workPackageId}
+                  </span>
+                  {row.source?.wp_number && row.source?.name && (
+                    <span className="cmd-row__meta" style={{ display: "block", marginTop: 2 }}>
+                      {row.source.name}
+                    </span>
+                  )}
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <CalendarClock size={14} aria-hidden="true" style={{ color: "var(--cmd-info)" }} />
+                  <strong style={{ fontSize: 12, color: "var(--cmd-text)" }}>{row.plannedShipDate}</strong>
+                </span>
               </div>
             ))}
             {upcomingShips.length === 0 && (
-              <p className="text-slate-500">No planned ship dates recorded.</p>
+              <div className="cmd-row__meta" style={{ padding: "10px 0" }}>
+                No planned ship dates recorded.
+              </div>
             )}
-          </div>
-        </div>
+          </DecisionPanel>
 
-        {mode === "shadow" && (
-          <div className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4">
-            <h3 className="font-black text-amber-950">Shadow comparison</h3>
-            <p className="mt-1 text-xs text-amber-800">
-              Legacy values remain authoritative during pilot comparison.
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <div className="text-xs uppercase text-amber-700">Piece delta</div>
-                <div className="text-xl font-black">{fmt.format(shadowPieceDelta)}</div>
+          {mode === "shadow" && (
+            <DecisionPanel title="Shadow comparison">
+              <div className="cmd-row__meta" style={{ padding: "4px 0 8px" }}>
+                Legacy values remain authoritative during pilot comparison.
               </div>
-              <div>
-                <div className="text-xs uppercase text-amber-700">Tonnage delta</div>
-                <div className="text-xl font-black">{fmt.format(shadowTonsDelta)} t</div>
+              <div className="cmd-row">
+                <span className="cmd-row__meta">Piece delta</span>
+                <strong className="cmd-row__num">{fmt.format(shadowPieceDelta)}</strong>
               </div>
-            </div>
-            {(Math.abs(shadowPieceDelta) >= 1 || Math.abs(shadowTonsDelta) >= 0.1) && (
-              <div className="mt-3 flex items-center gap-2 text-sm font-semibold text-amber-900">
-                <AlertTriangle className="h-4 w-4" />
-                Meaningful canonical/legacy discrepancy requires review.
+              <div className="cmd-row">
+                <span className="cmd-row__meta">Tonnage delta</span>
+                <strong className="cmd-row__num">{fmt.format(shadowTonsDelta)} t</strong>
               </div>
-            )}
-          </div>
-        )}
+              {(Math.abs(shadowPieceDelta) >= 1 || Math.abs(shadowTonsDelta) >= 0.1) && (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "flex-start",
+                    marginTop: 8,
+                    color: "var(--cmd-warn-text, #93540b)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  <AlertTriangle size={15} aria-hidden="true" style={{ flex: "0 0 auto" }} />
+                  Meaningful canonical/legacy discrepancy requires review.
+                </div>
+              )}
+            </DecisionPanel>
+          )}
+        </div>
       </div>
-    </section>
+    </DecisionPanel>
   );
 }
