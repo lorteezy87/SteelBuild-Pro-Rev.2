@@ -72,6 +72,7 @@ const GATE_REASON_ICON = {
   open_rfis: "❓",
   rejected_sheets: "⊘",
   revision_conflict: "⟳",
+  unresolved_revision: "◎",
   missing_signoffs: "✍",
 };
 
@@ -209,12 +210,23 @@ export default function ExportFabReleaseModal({
             packageKind: kind,
             packageName: stem,
             drawingIds: filteredDrawings.map((d) => d.id).filter(Boolean),
+            packageDrawingIds: packageDrawings.map((d) => d.id).filter(Boolean),
             overrideReason: override ? overrideReason : null,
           });
         } catch (err) {
           if (err instanceof FabReleaseBlockedError) {
-            const nums = err.blockingRfiNumbers.length ? ` (${err.blockingRfiNumbers.join(", ")})` : "";
-            toast.error(`Release blocked: open RFI${err.blockingRfiNumbers.length === 1 ? "" : "s"}${nums} reference this package. Resolve them or check the PM override and give a reason.`);
+            const detail = err.blockers?.length
+              ? err.blockers.map((b) => {
+                  const sheets = (b.sheet_numbers || []).filter(Boolean);
+                  const rfis = (b.rfi_numbers || []).filter(Boolean);
+                  if (rfis.length) return `${b.title} (${rfis.join(", ")})`;
+                  if (sheets.length) return `${b.title}: ${sheets.join(", ")}`;
+                  return b.title;
+                }).join(" · ")
+              : (err.blockingRfiNumbers.length
+                ? `open RFI${err.blockingRfiNumbers.length === 1 ? "" : "s"} (${err.blockingRfiNumbers.join(", ")})`
+                : err.message);
+            toast.error(`Release blocked: ${detail}. Resolve each blocker or check the PM override and give a reason.`);
           } else {
             toast.error(`Could not record the release: ${err?.message || "Unknown error"}`);
           }
@@ -377,6 +389,11 @@ export default function ExportFabReleaseModal({
                     <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-primary)", marginBottom: 3 }}>
                       {GATE_REASON_ICON[reason.kind] || "•"} {reason.title}
                     </div>
+                    {reason.action && (
+                      <div style={{ ...mono, fontSize: 10.5, color: "var(--status-warning)", paddingLeft: 16, marginBottom: 3 }}>
+                        Next: {reason.action}
+                      </div>
+                    )}
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 16 }}>
                       {items.slice(0, 4).map((item, i) => (
                         <div key={item.id || i} style={{ ...mono, fontSize: 10.5, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

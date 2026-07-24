@@ -228,7 +228,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
 
   it("opens cycle 1 on a first send and does NOT lock (non-terminal)", async () => {
     await addSubmittalRound({
-      submittal: { id: "s2", project_id: "p1", drawing_set_ids: ["set-a"] },
+      submittal: { id: "s2", project_id: "p1", drawing_set_ids: ["set-a"], status: "Draft" },
       status: "Submitted",
       ball_in_court: "EOR",
       submitted_date: "2026-06-01",
@@ -241,7 +241,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
   it("advances the OPEN round in place on a sent→sent move (updates, no new row)", async () => {
     filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Submitted", submitted_date: "2026-06-01", returned_date: null }]);
     await addSubmittalRound({
-      submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"] },
+      submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], status: "Submitted" },
       status: "Under Review",
       ball_in_court: "EOR",
     });
@@ -253,7 +253,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
   it("closes the OPEN round on a verdict (updates it; locks on approval — no new row)", async () => {
     filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Under Review", submitted_date: "2026-06-01", returned_date: null }]);
     await addSubmittalRound({
-      submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"] },
+      submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], status: "Under Review" },
       status: "Approved",
       ball_in_court: "GC",
       returned_date: "2026-06-10",
@@ -267,7 +267,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
   it("opens the NEXT cycle on a resubmit (send on a CLOSED round)", async () => {
     filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Revise and Resubmit", submitted_date: "2026-06-01", returned_date: "2026-06-05" }]);
     await addSubmittalRound({
-      submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"] },
+      submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], status: "Revise and Resubmit" },
       status: "Submitted",
       submitted_date: "2026-06-07",
     });
@@ -277,7 +277,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
 
   it("opens-and-closes cycle 1 on a verdict with no prior round, and locks on approval", async () => {
     await addSubmittalRound({
-      submittal: { id: "sub-1", project_id: "p1", drawing_set_ids: ["set-a"] },
+      submittal: { id: "sub-1", project_id: "p1", drawing_set_ids: ["set-a"], status: "Under Review" },
       status: "Approved",
       ball_in_court: "GC",
       returned_date: "2026-06-01",
@@ -289,7 +289,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
 
   it("bumps the submittal revision round_number only when bumpRevision is set", async () => {
     await addSubmittalRound({
-      submittal: { id: "s3", project_id: "p1", round_number: 2 },
+      submittal: { id: "s3", project_id: "p1", round_number: 2, status: "Under Review" },
       status: "Revise and Resubmit",
       bumpRevision: true,
     });
@@ -300,7 +300,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
   it("bumps the text revision from currentRevision when bumpTextRevision is set", async () => {
     filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Revise and Resubmit", submitted_date: "2026-06-01", returned_date: "2026-06-05" }]);
     await addSubmittalRound({
-      submittal: { id: "s4", project_id: "p1", revision: "0" },
+      submittal: { id: "s4", project_id: "p1", revision: "0", status: "Revise and Resubmit" },
       status: "Submitted",
       submitted_date: "2026-06-07",
       bumpTextRevision: true,
@@ -311,7 +311,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
 
   it("falls back to submittal.revision when currentRevision is omitted", async () => {
     await addSubmittalRound({
-      submittal: { id: "s5", project_id: "p1", revision: "A" },
+      submittal: { id: "s5", project_id: "p1", revision: "A", status: "Draft" },
       status: "Submitted",
       submitted_date: "2026-06-07",
       bumpTextRevision: true,
@@ -321,7 +321,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
 
   it("leaves the text revision untouched when bumpTextRevision is absent (flag-off parity)", async () => {
     await addSubmittalRound({
-      submittal: { id: "s6", project_id: "p1", revision: "0" },
+      submittal: { id: "s6", project_id: "p1", revision: "0", status: "Draft" },
       status: "Submitted",
       submitted_date: "2026-06-07",
     });
@@ -346,7 +346,7 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
     rpcMock.mockResolvedValueOnce({ data: [{ rfi_number: "RFI-001" }, { rfi_number: "RFI-002" }], error: null });
     await expect(
       addSubmittalRound({
-        submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1 },
+        submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1, status: "Approved" },
         status: "Released for Fabrication",
       }),
     ).rejects.toBeInstanceOf(FabReleaseBlockedError);
@@ -357,7 +357,7 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
 
   it("releases when an override reason is given — skips the pre-check, stamps fab_release_override_reason (trimmed)", async () => {
     await addSubmittalRound({
-      submittal: { id: "s2", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0 },
+      submittal: { id: "s2", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0, status: "Approved" },
       status: "Released for Fabrication",
       fabReleaseOverrideReason: "  accept rework risk  ",
     });
@@ -371,7 +371,7 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
 
   it("releases cleanly when no RFIs block — round logged, override reason null", async () => {
     await addSubmittalRound({
-      submittal: { id: "s3", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 2 },
+      submittal: { id: "s3", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 2, status: "Approved as Noted" },
       status: "Released for Fabrication",
     });
     expect(rpcMock).toHaveBeenCalled();
@@ -387,7 +387,7 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
     updateSubmittal.mockRejectedValueOnce({ message: "FAB_RELEASE_BLOCKED: 1 open RFI(s) ... (RFI-009)." });
     await expect(
       addSubmittalRound({
-        submittal: { id: "s4", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0 },
+        submittal: { id: "s4", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0, status: "Approved" },
         status: "Released for Fabrication",
       }),
     ).rejects.toBeInstanceOf(FabReleaseBlockedError);
@@ -397,12 +397,23 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
 
   it("does NOT pre-check non-release moves (e.g. Approved)", async () => {
     await addSubmittalRound({
-      submittal: { id: "s5", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0 },
+      submittal: { id: "s5", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0, status: "Under Review" },
       status: "Approved",
       ball_in_court: "EOR",
     });
     expect(rpcMock).not.toHaveBeenCalled();
     expect(createRound).toHaveBeenCalled();
+  });
+
+  it("rejects illegal Draft → Released for Fabrication jumps before the fab gate", async () => {
+    await expect(
+      addSubmittalRound({
+        submittal: { id: "s6", project_id: "p1", status: "Draft" },
+        status: "Released for Fabrication",
+      }),
+    ).rejects.toThrow(/Cannot move a submittal from "Draft"/);
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(createRound).not.toHaveBeenCalled();
   });
 });
 
@@ -424,7 +435,7 @@ describe("addSubmittalRound — ball-in-court clear on completion (§20)", () =>
 
   it("nulls the submittal patch's ball_in_court on 'Released for Fabrication'", async () => {
     await addSubmittalRound({
-      submittal: { id: "c1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1 },
+      submittal: { id: "c1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1, status: "Approved" },
       status: "Released for Fabrication",
       ball_in_court: "GC",
     });
@@ -437,7 +448,7 @@ describe("addSubmittalRound — ball-in-court clear on completion (§20)", () =>
 
   it("nulls the submittal patch's ball_in_court on 'Void'", async () => {
     await addSubmittalRound({
-      submittal: { id: "c2", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1 },
+      submittal: { id: "c2", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1, status: "Draft" },
       status: "Void",
       ball_in_court: "EOR",
     });
@@ -449,6 +460,7 @@ describe("addSubmittalRound — ball-in-court clear on completion (§20)", () =>
 
   it("PRESERVES input.ball_in_court on mid-flow / open statuses", async () => {
     // Approved / Approved as Noted are mid-flow (route onward) and must keep BIC.
+    // Use same-status no-ops so the transition graph is not under test here.
     for (const status of [
       "Approved",
       "Approved as Noted",
@@ -459,7 +471,7 @@ describe("addSubmittalRound — ball-in-court clear on completion (§20)", () =>
     ]) {
       updateSubmittal.mockClear();
       await addSubmittalRound({
-        submittal: { id: "c3", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0 },
+        submittal: { id: "c3", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0, status },
         status,
         ball_in_court: "EOR",
       });

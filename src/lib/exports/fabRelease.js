@@ -30,6 +30,11 @@
 export function isApprovedForFab(d) {
   if (!d || d.is_deleted) return false;
   if (d.is_superseded) return false;
+  // Never treat a non-current / unresolved revision as fabrication-ready.
+  const releaseStatus = String(d.current_release_status || d.current_revision_status || "").toLowerCase();
+  if (releaseStatus === "superseded" || releaseStatus === "void" || releaseStatus === "on_hold") {
+    return false;
+  }
   if (d.stage === "Released") return true;
   const setStatus = (d.set_approval_status || "").toLowerCase();
   if (setStatus === "approved" || setStatus === "approved_as_noted") return true;

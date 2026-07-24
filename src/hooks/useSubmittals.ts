@@ -25,6 +25,7 @@ import { validate } from "@/services/validation";
 import { logTransition } from "@/services/auditLogger";
 import { lockSet } from "@/lib/drawingHub";
 import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
+import { validateSubmittalTransition } from "@/lib/submittalTransitions";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { bumpRevision as nextRevision } from "@/lib/submittalRevision";
 import { supabase } from "@/lib/supabase";
@@ -215,11 +216,16 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   const fabOverride = (input.fabReleaseOverrideReason || "").trim() || null;
   const isFabRelease = input.status === "Released for Fabrication";
 
+  const transition = validateSubmittalTransition(s.status, input.status);
+  if (transition.ok === false) {
+    throw new Error(transition.reason);
+  }
+
   // Server-arbitrated fab-release gate (Option C): a submittal cannot reach
-  // 'Released for Fabrication' while open RFIs reference its sheets. Pre-check
-  // BEFORE touching the round so a blocked release never orphans/mutates a round
-  // row; the DB trigger is the authoritative backstop (mapped below if it fires
-  // on a race between this check and the write).
+  // 'Released for Fabrication' while open RFIs / rejected / superseded sheets
+  // remain on its package. Pre-check BEFORE touching the round so a blocked
+  // release never orphans/mutates a round row; the DB trigger is the
+  // authoritative backstop (mapped below if it fires on a race).
   if (isFabRelease && !fabOverride) {
     // `submittal_blocking_rfis` is a SECURITY DEFINER RPC not yet in the
     // generated DB types — cast the call (the result is handled defensively).

@@ -32,8 +32,9 @@ describe("formatBytes (revision modal variant)", () => {
 
 describe("CHANGE_STYLE", () => {
   it("carries a style entry for each diff change kind", () => {
-    expect(Object.keys(CHANGE_STYLE).sort()).toEqual(["added", "removed", "revised", "same"]);
+    expect(Object.keys(CHANGE_STYLE).sort()).toEqual(["added", "ambiguous", "removed", "revised", "same"]);
     expect(CHANGE_STYLE.revised.label).toBe("✎ REVISED");
+    expect(CHANGE_STYLE.ambiguous.label).toBe("! REVIEW");
   });
 });
 
