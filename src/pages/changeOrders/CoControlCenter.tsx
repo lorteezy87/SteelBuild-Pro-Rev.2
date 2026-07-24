@@ -18,6 +18,7 @@ import {
   CalendarClock,
   Link2,
   FileEdit,
+  Trash2,
 } from "lucide-react";
 import "@/styles/command.css";
 import {
@@ -60,6 +61,7 @@ export interface CoControlCenterProps {
   statusFilter: string;
   onFilterChange: (v: string) => void;
   onOpenCo: (co: CoRecord) => void;
+  onDeleteCo?: ((co: CoRecord) => void) | null;
   onExport: () => void;
   onImport?: (() => void) | null;
   onCreate?: (() => void) | null;
@@ -84,6 +86,7 @@ export default function CoControlCenter(props: CoControlCenterProps) {
     statusFilter,
     onFilterChange,
     onOpenCo,
+    onDeleteCo,
     onExport,
     onImport,
     onCreate,
@@ -219,6 +222,38 @@ export default function CoControlCenter(props: CoControlCenterProps) {
       header: "Approved By",
       render: (c) => <span className="cmd-row__meta">{c.approved_by || "—"}</span>,
     },
+    ...(onDeleteCo
+      ? ([{
+          key: "actions",
+          header: "",
+          align: "right",
+          render: (c: CoRecord) => (
+            <button
+              type="button"
+              aria-label={`Delete ${c.co_number || "change order"}`}
+              title="Delete change order"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDeleteCo(c);
+              }}
+              style={{
+                width: 28,
+                height: 28,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "1px solid var(--border-default)",
+                borderRadius: 4,
+                background: "transparent",
+                color: "var(--status-error)",
+                cursor: "pointer",
+              }}
+            >
+              <Trash2 size={13} aria-hidden="true" />
+            </button>
+          ),
+        }] as Column<CoRecord>[])
+      : []),
   ];
 
   return (

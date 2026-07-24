@@ -43,17 +43,12 @@ const GlobalSearchModal = lazyWithRetry(() => import("./components/search/Global
 const MobileDrawer = lazyWithRetry(() => import("./components/nav/MobileDrawer"));
 const Toaster = lazyWithRetry(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
 const SidebarNav = lazyWithRetry(() => import("./components/nav/SidebarNav"));
+const AiAssistantLauncher = lazyWithRetry(() => import("./components/ai-assistant/AiAssistantLauncher"));
 // QuickAddFAB intentionally not imported — the floating "+" shortcut at
 // bottom-right was hidden per user request. Component file is preserved
 // in src/components/shared/QuickAddFAB.jsx; uncomment this import + its
 // render below to re-enable.
 // import QuickAddFAB from "./components/shared/QuickAddFAB";
-// AiAssistantLauncher intentionally not imported — the floating "Ask AI"
-// launcher and its Cmd/Ctrl+K shortcut were hidden site-wide because the
-// schedule-assistant edge function isn't reliably returning answers yet.
-// The component, drawer, hook, and edge-function call site are all still
-// in the repo — uncomment this import + its render below to re-enable.
-// import AiAssistantLauncher from "./components/ai-assistant/AiAssistantLauncher";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 
 // Context
@@ -312,7 +307,7 @@ export default function Layout({ children, currentPageName }) {
 
           {/* RIGHT: Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            {/* Search trigger \u2014 see TopBarSearchButton for context. */}
+            {/* Search trigger — see TopBarSearchButton for context. */}
             <TopBarSearchButton onClick={() => setSearchOpen(true)} compact={isMobile} />
 
             {/* Density toggle + Modules grid — desktop only */}
@@ -407,12 +402,10 @@ export default function Layout({ children, currentPageName }) {
           </Suspense>
         )}
         {/* QuickAddFAB removed per user request — the bottom-right "+"
-            shortcut was hidden site-wide. Re-enable by restoring the
-            import at the top of this file and the <QuickAddFAB /> render
-            here. The component file itself is preserved unchanged. */}
-        {/* <AiAssistantLauncher /> — hidden until the schedule-assistant
-            edge function returns reliable answers. Underlying code kept
-            in src/components/ai-assistant/* for re-enable. */}
+            shortcut remains hidden site-wide. */}
+        <Suspense fallback={null}>
+          <AiAssistantLauncher />
+        </Suspense>
         <Suspense fallback={null}>
           <Toaster
             theme={isDarkTheme ? "dark" : "light"}

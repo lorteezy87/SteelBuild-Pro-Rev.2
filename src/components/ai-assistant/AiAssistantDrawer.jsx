@@ -1,5 +1,5 @@
 /**
- * Slide-out right-side drawer that hosts the AI chat.
+ * Slide-out right-side drawer that hosts the project assistant chat.
  *
  * Owns the conversation state via useScheduleAssistant. Mounts inside a
  * fixed overlay so it can slide over any page. The active project (from
@@ -59,6 +59,12 @@ export default function AiAssistantDrawer({ open, onClose }) {
     setDraft("");
   };
 
+  const handleStarterPrompt = (prompt) => {
+    if (sending || !projectId) return;
+    setDraft("");
+    send(prompt);
+  };
+
   const handleKeyDown = (e) => {
     // Cmd/Ctrl+Enter submits; plain Enter inserts a newline.
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -70,7 +76,7 @@ export default function AiAssistantDrawer({ open, onClose }) {
   return (
     <div
       role="dialog"
-      aria-label="SteelBuild Pro AI"
+      aria-label="SteelBuild Pro Project Assistant"
       className="sbd-sidebar"
       style={{
         position: "fixed",
@@ -114,7 +120,7 @@ export default function AiAssistantDrawer({ open, onClose }) {
                 letterSpacing: "-0.01em",
               }}
             >
-              Schedule Assistant
+              Project Assistant
             </div>
             <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>
               {activeProject ? activeProject.name : "No project selected"}
@@ -165,8 +171,9 @@ export default function AiAssistantDrawer({ open, onClose }) {
                 <button
                   key={p}
                   type="button"
-                  onClick={() => { setDraft(p); inputRef.current?.focus(); }}
-                  style={starterBtn}
+                  onClick={() => handleStarterPrompt(p)}
+                  disabled={sending}
+                  style={{ ...starterBtn, opacity: sending ? 0.5 : 1, cursor: sending ? "not-allowed" : "pointer" }}
                 >
                   {p}
                 </button>
@@ -225,13 +232,13 @@ export default function AiAssistantDrawer({ open, onClose }) {
           ref={inputRef}
           id="sbp-ai-composer"
           name="sbp-ai-composer"
-          aria-label="Ask the SteelBuild Pro AI"
+          aria-label="Ask the SteelBuild Pro Project Assistant"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
             projectId
-              ? "Ask about schedule, RFIs, deliveries…  (Ctrl+Enter to send)"
+              ? "Ask about schedules, RFIs, deliveries, production, or project risk…"
               : "Select a project to enable"
           }
           disabled={!projectId || sending}

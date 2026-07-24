@@ -18,6 +18,7 @@ import {
   projectScopedSelect,
 } from './softDelete';
 import type { EntityClient, RowWithAliases, TableName } from './supabaseTypes';
+import { emitProjectUpdated } from '@/services/projectUpdateEvents';
 
 // ─── Entity factory ───────────────────────────────────────────────────────────
 
@@ -211,7 +212,11 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
       .select()
       .single();
     if (error) throw new SupabaseOperationError(tableName as string, 'update', error);
-    return addAliases<RowWithAliases<T>>(data, tableName as string);
+    const updated = addAliases<RowWithAliases<T>>(data, tableName as string);
+    if ((tableName as string) === 'projects') {
+      emitProjectUpdated(updated as unknown as Record<string, unknown> & { id?: string });
+    }
+    return updated;
   },
 
   /**

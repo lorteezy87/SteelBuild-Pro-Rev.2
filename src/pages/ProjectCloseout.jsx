@@ -18,8 +18,9 @@ export default function ProjectCloseout() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const closeoutQueryKey = ["closeouts", projectId];
   const { data: closeouts = [] } = useQuery({
-    queryKey: ["closeouts", projectId],
+    queryKey: closeoutQueryKey,
     queryFn: () =>
       projectId
         ? entities.ProjectCloseout.filter({ project_id: projectId })
@@ -36,24 +37,38 @@ export default function ProjectCloseout() {
   const createMut = useMutation({
     mutationFn: (data) => entities.ProjectCloseout.create({ ...data, project_id: data.project_id || projectId }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["closeouts", projectId] });
+      qc.invalidateQueries({ queryKey: closeoutQueryKey });
       toast.success("Closeout record created");
     },
     onError: (err) => toast.error(err.message),
   });
 
   const updateMut = useMutation({
-    mutationFn: (data) => entities.ProjectCloseout.update(data.id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["closeouts", projectId] });
+    mutationFn: ({ id, patch }) => entities.ProjectCloseout.update(id, patch),
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: closeoutQueryKey });
+      const previous = qc.getQueryData(closeoutQueryKey);
+      qc.setQueryData(closeoutQueryKey, (current = []) =>
+        current.map((row) => row.id === id ? { ...row, ...patch } : row),
+      );
+      return { previous };
+    },
+    onError: (err, _variables, context) => {
+      if (context?.previous) qc.setQueryData(closeoutQueryKey, context.previous);
+      toast.error(err.message);
+    },
+    onSuccess: (updated) => {
+      qc.setQueryData(closeoutQueryKey, (current = []) =>
+        current.map((row) => row.id === updated.id ? updated : row),
+      );
       toast.success("Closeout updated");
     },
-    onError: (err) => toast.error(err.message),
+    onSettled: () => qc.invalidateQueries({ queryKey: closeoutQueryKey }),
   });
 
   const handleSave = (data) => {
     if (projectCloseout) {
-      updateMut.mutate({ ...data, id: projectCloseout.id });
+      updateMut.mutate({ id: projectCloseout.id, patch: data });
     } else {
       createMut.mutate(data);
     }
@@ -104,8 +119,19 @@ export default function ProjectCloseout() {
           </div>
 
           {/* Content */}
-          {activeTab === "checklist" && <ProjectCloseoutChecklist closeout={projectCloseout} onUpdate={(data) => updateMut.mutate({ ...data, id: projectCloseout.id })} />}
-          {activeTab === "summary" && <ProjectCloseoutSummary closeout={projectCloseout} onUpdate={(data) => updateMut.mutate({ ...data, id: projectCloseout.id })} />}
+          {activeTab === "checklist" && (
+            <ProjectCloseoutChecklist
+              closeout={projectCloseout}
+              isUpdating={updateMut.isPending}
+              onUpdate={(patch) => updateMut.mutate({ id: projectCloseout.id, patch })}
+            />
+          )}
+          {activeTab === "summary" && (
+            <ProjectCloseoutSummary
+              closeout={projectCloseout}
+              onUpdate={(patch) => updateMut.mutate({ id: projectCloseout.id, patch })}
+            />
+          )}
           {activeTab === "lessons" && <ProjectCloseoutLessons closeout={projectCloseout} />}
         </>
       )}

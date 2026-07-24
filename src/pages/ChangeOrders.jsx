@@ -187,10 +187,9 @@ export default function ChangeOrders() {
         project_id: targetProjectId,
       });
     },
-    onSuccess: (created) => {
+    onSuccess: async (created) => {
       appendRecordToCaches(qc, coQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
-      qc.invalidateQueries({ queryKey: ["change-orders"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      await invalidateEntity(qc, "change_order", created.project_id || projectId);
       setModalOpen(false);
       setEditing(null);
       toast.success("Change order created");
@@ -200,10 +199,9 @@ export default function ChangeOrders() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.ChangeOrder.update(id, data),
-    onSuccess: (updated) => {
+    onSuccess: async (updated) => {
       replaceRecordInCaches(qc, coQueryKeys, updated);
-      qc.invalidateQueries({ queryKey: ["change-orders"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      await invalidateEntity(qc, "change_order", updated.project_id || projectId);
       setModalOpen(false);
       setEditing(null);
       toast.success("Change order updated");
@@ -213,9 +211,14 @@ export default function ChangeOrders() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => entities.ChangeOrder.delete(id),
-    onSuccess: (_result, deletedId) => {
+    onSuccess: async (_result, deletedId) => {
       removeRecordFromCaches(qc, coQueryKeys, deletedId);
-      qc.invalidateQueries({ queryKey: ["change-orders"] });
+      await invalidateEntity(qc, "change_order", projectId);
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(deletedId);
+        return next;
+      });
       setDeleteTarget(null);
       toast.success("Change order deleted");
     },
@@ -429,9 +432,10 @@ export default function ChangeOrders() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => deleteTarget?.id && deleteMut.mutate(deleteTarget.id)}
+        isDeleting={deleteMut.isPending}
         title="Delete Change Order"
-        description={`Delete ${deleteTarget?.co_number}?`}
+        description={`Delete ${deleteTarget?.co_number || "this change order"}?`}
       />
     </>
   );
@@ -447,7 +451,8 @@ export default function ChangeOrders() {
         onSearch={setSearch}
         statusFilter={filter}
         onFilterChange={setFilter}
-        onOpenCo={(co) => { setEditing(co); setModalOpen(true); }}
+        onOpenCo={(co) => { setPrefill(null); setEditing(co); setModalOpen(true); }}
+        onDeleteCo={can("delete", "change_order") ? (co) => setDeleteTarget(co) : null}
         onExport={exportCsv}
         onCreate={can("create", "change_order") ? () => {
           setEditing(null);

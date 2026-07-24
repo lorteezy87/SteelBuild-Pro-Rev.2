@@ -17,6 +17,7 @@ vi.mock("@/api/supabaseClient", () => ({
 }));
 
 import { ProjectContext, ProjectProvider } from "@/components/shared/ProjectContext";
+import { emitProjectUpdated } from "@/services/projectUpdateEvents";
 
 function Probe() {
   const { activeProject, projects, loading } = React.useContext(ProjectContext);
@@ -24,6 +25,7 @@ function Probe() {
     <div>
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="active">{activeProject?.name || "none"}</span>
+      <span data-testid="contract">{activeProject?.original_contract_value ?? "none"}</span>
       <span data-testid="count">{projects.length}</span>
     </div>
   );
@@ -64,5 +66,32 @@ describe("ProjectProvider", () => {
     expect(screen.getByTestId("count")).toHaveTextContent("0");
     expect(localStorage.getItem("activeProjectId")).toBeNull();
     expect(localStorage.getItem("sbp_projects_cache")).toBeNull();
+  });
+
+  it("merges successful project saves into active state and the project cache", async () => {
+    const project = { id: "p-1", name: "Project One", original_contract_value: 100000 };
+    localStorage.setItem("activeProjectId", project.id);
+    localStorage.setItem("sbp_projects_cache", JSON.stringify([project]));
+    mocks.projectListMock.mockResolvedValue([project]);
+
+    render(
+      <ProjectProvider>
+        <Probe />
+      </ProjectProvider>
+    );
+
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("contract")).toHaveTextContent("100000");
+
+    await act(async () => {
+      emitProjectUpdated({ ...project, original_contract_value: 125000, contract_type: "GMP" });
+    });
+
+    expect(screen.getByTestId("contract")).toHaveTextContent("125000");
+    expect(JSON.parse(localStorage.getItem("sbp_projects_cache"))[0]).toMatchObject({
+      id: "p-1",
+      original_contract_value: 125000,
+      contract_type: "GMP",
+    });
   });
 });
