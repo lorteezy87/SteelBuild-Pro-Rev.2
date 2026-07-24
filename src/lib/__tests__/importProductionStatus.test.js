@@ -29,6 +29,9 @@ describe("normalizeStage", () => {
     expect(normalizeStage("Shotblast")).toBe("Clean");
     expect(normalizeStage("CNC")).toBe("Cut");
     expect(normalizeStage("Released")).toBe("Not Started");
+    expect(normalizeStage("Complete")).toBe("Paint");
+    expect(normalizeStage("Done")).toBe("Paint");
+    expect(normalizeStage("Fabricated")).toBe("Paint");
   });
 
   it("falls back to a contains-match (e.g. 'Weld Complete')", () => {

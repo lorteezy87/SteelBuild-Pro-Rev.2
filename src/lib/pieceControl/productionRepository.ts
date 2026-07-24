@@ -113,3 +113,19 @@ export async function advancePieceStation(
   if (error) throw error;
   unwrapPieceControlRpc(data);
 }
+
+export async function setPieceHold(
+  projectId: string,
+  pieceIds: string[],
+  onHold: boolean,
+  reason?: string,
+): Promise<void> {
+  const { data, error } = await (supabase as any).rpc('set_piece_hold', {
+    p_project_id: projectId,
+    p_piece_ids: pieceIds,
+    p_on_hold: onHold,
+    p_reason: reason ?? null,
+  });
+  if (error) throw error;
+  unwrapPieceControlRpc(data);
+}

@@ -1,5 +1,6 @@
 export const PIECE_LIFECYCLE_LABELS: Record<string, string> = {
   not_started: "Not Started",
+  released: "Released",
   in_fabrication: "In Fabrication",
   fabricated: "Fabricated",
   shipped: "Shipped",

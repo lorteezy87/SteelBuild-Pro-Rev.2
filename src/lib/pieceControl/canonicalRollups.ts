@@ -6,6 +6,7 @@ import type {
 
 export const CANONICAL_LIFECYCLES = [
   "not_started",
+  "released",
   "in_fabrication",
   "fabricated",
   "shipped",
@@ -17,6 +18,7 @@ export type CanonicalLifecycle = (typeof CANONICAL_LIFECYCLES)[number];
 export type DerivedWorkPackageStatus =
   | "No Canonical Scope"
   | "Ready for Release"
+  | "Released"
   | "In Fabrication"
   | "Fabrication Complete"
   | "Shipping"
@@ -39,6 +41,14 @@ export interface CanonicalRollupPiece {
   is_deleted: boolean;
   deleted_at: string | null;
 }
+
+export type LeafSelectablePiece = {
+  id: string;
+  parent_piece_id: string | null;
+  is_container?: boolean;
+  is_deleted?: boolean;
+  deleted_at: string | null;
+};
 
 export interface CanonicalWorkPackage {
   id: string;
@@ -70,7 +80,7 @@ export interface CanonicalWorkPackageRollup extends CanonicalPieceRollup {
   plannedShipDate: string | null;
 }
 
-export function selectActionableLeafPieces<T extends CanonicalRollupPiece>(
+export function selectActionableLeafPieces<T extends LeafSelectablePiece>(
   pieces: T[] | null | undefined,
 ): T[] {
   const active = (pieces ?? []).filter(
@@ -150,6 +160,14 @@ export function deriveWorkPackageStatus(
     )
   ) {
     return "In Fabrication";
+  }
+  if (
+    statuses.some((status) => status === "released") &&
+    statuses.every(
+      (status) => status === "not_started" || status === "released",
+    )
+  ) {
+    return "Released";
   }
   return "Ready for Release";
 }

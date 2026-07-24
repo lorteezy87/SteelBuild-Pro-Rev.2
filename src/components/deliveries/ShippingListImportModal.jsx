@@ -21,6 +21,9 @@ import { entities } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import { parseShippingList, classifyLoads } from "@/lib/importShippingList";
 import { listPieceProduction, commitProductionRows } from "@/lib/production/repository";
+import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
+import { resolveCanonicalShipTargets } from "@/lib/pieceControl/shippingCanonicalBridge";
+import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -166,22 +169,34 @@ export default function ShippingListImportModal({ open, projectId, projectName, 
         });
       }
       // Mark every shipped piece "Shipped" on Production Status (terminal stage).
+      // When Piece Control is pilot/live, also advance matching canonical lots.
       let shipped = 0;
+      let canonicalShipped = 0;
+      let canonicalSkipped = 0;
       if (markShipped) {
         try {
           shipped = await markPiecesShipped(kept, existingProduction, projectId);
         } catch (e) {
           console.error("[ShippingListImportModal] mark-shipped failed:", e);
         }
+        try {
+          const bridge = await markCanonicalPiecesShipped(kept, projectId);
+          canonicalShipped = bridge.shipped;
+          canonicalSkipped = bridge.skipped;
+        } catch (e) {
+          console.error("[ShippingListImportModal] canonical ship bridge failed:", e);
+        }
       }
 
-      setLastResult({ created, items, failed, shipped });
+      setLastResult({ created, items, failed, shipped, canonicalShipped, canonicalSkipped });
       toast.success(
         `${created} load${created === 1 ? "" : "s"} imported (${items} pieces)`
         + (shipped ? `, ${shipped} marked shipped` : "")
+        + (canonicalShipped ? `, ${canonicalShipped} canonical lots shipped` : "")
+        + (canonicalSkipped ? `, ${canonicalSkipped} canonical lots skipped` : "")
         + (failed ? `, ${failed} failed` : ""),
       );
-      onImported?.({ created, items, failed, shipped });
+      onImported?.({ created, items, failed, shipped, canonicalShipped, canonicalSkipped });
       setStep("done");
       setTimeout(() => { reset(); onClose(); }, 1800);
     } catch (e) {
@@ -385,6 +400,51 @@ async function markPiecesShipped(keptLoads, existingProduction, projectId) {
   });
   const { created, updated } = await commitProductionRows(projectId, rows);
   return created + updated;
+}
+
+/**
+ * When Piece Control is pilot/live, advance fabricated canonical leaf lots that
+ * exactly match shipping-list marks. Shadow/off leave legacy piece_production
+ * authoritative. Ambiguous or non-fabricated marks are skipped with reasons.
+ */
+async function markCanonicalPiecesShipped(keptLoads, projectId) {
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .select("piece_control_mode")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (projectError) throw projectError;
+  const mode = project?.piece_control_mode || "off";
+  if (mode !== "pilot" && mode !== "live") {
+    return { shipped: 0, skipped: 0 };
+  }
+
+  const { data: pieces, error: piecesError } = await supabase
+    .from("pieces")
+    .select("id, piece_mark, lifecycle_status, on_hold, is_container, is_deleted, deleted_at, parent_piece_id")
+    .eq("project_id", projectId)
+    .eq("is_deleted", false)
+    .is("deleted_at", null);
+  if (piecesError) throw piecesError;
+
+  const actionable = selectActionableLeafPieces(pieces || []);
+  const { shipIds, skipped } = resolveCanonicalShipTargets(keptLoads, actionable);
+  if (shipIds.length === 0) {
+    return { shipped: 0, skipped: skipped.length };
+  }
+
+  const shipDate = keptLoads
+    .map((load) => load.ship_date)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || null;
+
+  await transitionPieceLots("ship", projectId, shipIds, {
+    shipment_number: "shipping-list-import",
+    ship_date: shipDate || "",
+    notes: "Advanced from shipping-list import after delivery loads were confirmed",
+  });
+  return { shipped: shipIds.length, skipped: skipped.length };
 }
 
 const th = { textAlign: "left", padding: "8px 10px", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", borderBottom: "1px solid var(--divider)" };

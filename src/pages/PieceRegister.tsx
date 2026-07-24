@@ -39,7 +39,10 @@ import { PieceControlPilotReadiness } from "@/components/pieceControl/PieceContr
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { photoFor } from "@/config/launcherConfig";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
-import { rollupCanonicalWorkPackages } from "@/lib/pieceControl/canonicalRollups";
+import {
+  rollupCanonicalWorkPackages,
+  selectActionableLeafPieces,
+} from "@/lib/pieceControl/canonicalRollups";
 import { PIECE_IMPORT_SOURCE_OPTIONS, readPieceImportFile } from "@/lib/pieceControl/importAdapters";
 import {
   buildPieceControlSummary,
@@ -294,7 +297,7 @@ export default function PieceRegister() {
   const lifecycles = useMemo(() => uniqueValues(displayRows.map((row) => row.lifecycle_status)), [displayRows]);
   const sources = useMemo(() => uniqueValues(displayRows.map((row) => row.source_system)), [displayRows]);
   const presentation = useMemo(
-    () => buildPieceControlSummary(displayRows),
+    () => buildPieceControlSummary(selectActionableLeafPieces(displayRows)),
     [displayRows],
   );
   const modeInfo = modePresentation(mode);
@@ -450,7 +453,7 @@ export default function PieceRegister() {
     setImportRows([]);
     if (!file) return;
     try {
-      const rows = await readPieceImportFile(file);
+      const rows = await readPieceImportFile(file, sourceType);
       if (rows.length === 0) throw new Error("No import rows were found");
       setImportRows(rows);
     } catch (error) {

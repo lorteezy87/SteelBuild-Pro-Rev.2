@@ -34,12 +34,15 @@ export const STAGE_PERCENT = {
 };
 
 // Exact status text → canonical stage (compared lowercased, punctuation
-// collapsed). The generic completion words live here so a cell that is exactly
-// "Complete"/"Done" reads as Shipped — but they are deliberately NOT tokens
-// below, so "Weld Complete" resolves to Weld (the station), not Shipped.
+// collapsed). Generic completion words map to Paint (fab complete) — NOT
+// Shipped — so "Complete"/"Done" cannot jump past fabrication. Shipping requires
+// an explicit ship/delivered signal. They are deliberately NOT tokens below, so
+// "Weld Complete" resolves to Weld (the station), not Paint/Shipped.
 const STATUS_ALIASES = {
-  Shipped: ["shipped", "ship", "complete", "completed", "done", "delivered", "finished"],
-  Paint: ["paint", "painted", "painting", "galv", "galvanized", "galvanised", "coat", "coated", "prime", "primed"],
+  // Exact "Complete"/"Done" mean fabrication complete (Paint), NOT shipped.
+  // Shipping must be an explicit ship/delivered signal.
+  Shipped: ["shipped", "ship", "delivered"],
+  Paint: ["paint", "painted", "painting", "galv", "galvanized", "galvanised", "coat", "coated", "prime", "primed", "complete", "completed", "done", "finished", "fabricated"],
   Clean: ["clean", "cleaned", "cleaning", "blast", "blasted", "shotblast", "sand", "sandblast"],
   Weld: ["weld", "welded", "welding", "fit weld", "fitweld", "assembled", "assembly"],
   Fit: ["fit", "fitted", "fitup", "fit up", "fitting", "layout"],
@@ -117,7 +120,7 @@ export function detectHeaderMap(headerRow) {
 export function normalizeStage(statusText) {
   const norm = normalizeHeader(statusText);
   if (!norm) return null;
-  // pass 1: exact alias match (handles "Complete"/"Done" → Shipped)
+  // pass 1: exact alias match (handles "Complete"/"Done" → Paint / fab complete)
   for (const [stage, aliases] of Object.entries(STATUS_ALIASES)) {
     if (aliases.includes(norm)) return stage;
   }
