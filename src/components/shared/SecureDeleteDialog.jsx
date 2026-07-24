@@ -9,9 +9,10 @@
  * - Logs all confirmed deletes to the audit trail
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { usePermissions } from "@/services/permissions";
+import { AuthContext } from "@/lib/AuthContext";
 import { useDestructiveAudit } from './useDestructiveAudit';
 
 export default function SecureDeleteDialog({
@@ -29,7 +30,8 @@ export default function SecureDeleteDialog({
   const trapRef = useFocusTrap(open);
   const { can } = usePermissions();
   const { logAction } = useDestructiveAudit();
-  const userEmail = typeof window !== 'undefined' ? localStorage.getItem('current_user_email') : null;
+  const authCtx = useContext(AuthContext);
+  const userEmail = authCtx?.user?.email ?? null;
   const [typed, setTyped] = useState('');
 
   useEffect(() => {

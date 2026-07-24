@@ -449,11 +449,12 @@ export default function DocumentStorageSettings({ projectId }) {
               <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                 <button
                   onClick={() => handleSyncNow(folder)}
-                  title="Sync now"
+                  title="Not connected — sync is unavailable until the SharePoint connector is deployed"
                   disabled={updateMut.isPending}
+                  aria-label="Sync unavailable"
                   style={iconBtnStyle}
                 >
-                  <RefreshCw size={14} strokeWidth={2} style={{ color: "var(--accent)" }} />
+                  <RefreshCw size={14} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
                 </button>
                 <button
                   onClick={() => handleToggleActive(folder)}
