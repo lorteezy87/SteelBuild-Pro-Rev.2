@@ -16,7 +16,7 @@
  * keeps the CC self-contained while showing identical tile data.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { LayoutDashboard, FileText, HelpCircle, CalendarDays, DollarSign } from "lucide-react";
 import "@/styles/command.css";
 import {
@@ -54,6 +54,7 @@ interface DashboardControlCenterProps {
   inspections?: Record<string, unknown>[];
   safetyIncidents?: Record<string, unknown>[];
   qualityRecords?: Record<string, unknown>[];
+  pieceRegister?: ReactNode;
   /** Navigation handler — same signature as in ProjectDashboard */
   onNavigate?: (target: string, opts?: Record<string, unknown>) => void;
 }
@@ -206,6 +207,7 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
     inspections = [],
     safetyIncidents = [],
     qualityRecords = [],
+    pieceRegister,
     onNavigate,
   } = props;
 
@@ -305,6 +307,8 @@ export default function DashboardControlCenter(props: DashboardControlCenterProp
       />
 
       <KpiStrip cells={kpiCells} />
+
+      {pieceRegister}
 
       {/* SteelBuild Modules — photographic launcher, restored + front-and-center */}
       <DecisionPanel title="SteelBuild Modules" onViewAll={() => onNavigate?.("rfis")}>
