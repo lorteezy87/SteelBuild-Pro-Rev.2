@@ -46,7 +46,7 @@ const NAV_LINKS = [
 ];
 
 const EXEC_METRICS = [
-  { value: "31", label: "Connected modules" },
+  { value: "8", label: "Featured modules" },
   { value: "1", label: "Source of truth" },
   { value: "24/7", label: "Project visibility" },
   { value: "0", label: "Spreadsheet handoffs" },
@@ -631,7 +631,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
                     <div style={monoLabel({ color: C.amberDark })}>{p.name}</div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, margin: "16px 0 6px" }}>
                       <span style={{ color: C.ink, fontWeight: 950, fontSize: 48, letterSpacing: "-.06em", lineHeight: 1 }}>{p.priceMonthly === 0 ? "Free" : `$${p.priceMonthly}`}</span>
-                      {p.priceMonthly > 0 && <span style={{ color: C.muted, fontSize: 14 }}>/user · mo</span>}
+                      {p.priceMonthly > 0 && <span style={{ color: C.muted, fontSize: 14 }}>/workspace · mo</span>}
                     </div>
                     <p style={{ color: C.body, fontSize: 14, lineHeight: 1.55, minHeight: 44, margin: "0 0 20px" }}>{p.blurb}</p>
                     <div style={{ display: "grid", gap: 10, marginBottom: 24, flex: 1 }}>

@@ -8,7 +8,24 @@ import StatusBadge from "../components/shared/StatusBadge";
 import { useAlerts } from "@/hooks/useAlerts";
 import { CommandBar } from "@/components/design-system";
 
-const PAGE_MAP = { RFI: "RFIs", Drawing: "Drawings", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
+const PAGE_MAP = {
+  RFI: "RFIs",
+  RFI_Overdue: "RFIs",
+  Drawing: "Drawings",
+  ChangeOrder: "ChangeOrders",
+  Delivery: "Deliveries",
+  WorkPackage: "WorkPackages",
+  ActionItem: "ActionItems",
+};
+
+function resolveAlertPath(alert) {
+  const recordType = alert.record_type || alert.alert_type;
+  const page = PAGE_MAP[recordType];
+  if (!page) return null;
+  const base = createPageUrl(page);
+  if (alert.related_record_id) return `${base}?id=${encodeURIComponent(String(alert.related_record_id))}`;
+  return base;
+}
 
 const SEVERITY_BG = {
   Critical: { bg: "var(--danger-muted)", border: "var(--status-error)" },
@@ -84,8 +101,8 @@ export default function AlertsCenter() {
           onMouseLeave={(e) => !generating && (e.currentTarget.style.background = "var(--accent)")}
         >
           {generating
-            ? <><Loader2 className="w-3 h-3 animate-spin" /> Scanning...</>
-            : <><RefreshCw className="w-3 h-3" /> Scan</>}
+            ? <><Loader2 className="w-3 h-3 animate-spin" /> Refreshing...</>
+            : <><RefreshCw className="w-3 h-3" /> Refresh</>}
         </button>
       </CommandBar>
 
@@ -110,7 +127,9 @@ export default function AlertsCenter() {
         <div className="sbd-card" style={{ padding: "60px 24px", textAlign: "center" }}>
           <Bell style={{ width: 36, height: 36, color: "var(--text-muted)", margin: "0 auto 12px" }} />
           <p style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-secondary)", fontWeight: 500, marginBottom: 4 }}>No active alerts</p>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Click "Scan for Alerts" to check your project data</p>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>
+            Alerts appear when module workflows detect overdue RFIs, deliveries, and similar conditions. Cross-module scan is not deployed.
+          </p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -127,16 +146,24 @@ export default function AlertsCenter() {
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-surface-high)", color: "var(--text-muted)", borderRadius: 4, padding: "1px 6px", letterSpacing: "0.08em" }}>{alert.alert_type}</span>
                       {!alert.is_read && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />}
                     </div>
-                    <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>{alert.message}</p>
+                    <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>{alert.description || alert.message}</p>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{formatDate(alert.created_date)}</span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{formatDate(alert.created_at || alert.created_date)}</span>
                       {alert.project_name && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)" }}>· {alert.project_name}</span>}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    {alert.record_type && PAGE_MAP[alert.record_type] && (
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => navigate(createPageUrl(PAGE_MAP[alert.record_type]))}>
-                        <ExternalLink className="w-3 h-3 mr-1" />View
+                    {resolveAlertPath(alert) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          markRead(alert);
+                          navigate(resolveAlertPath(alert));
+                        }}
+                      >
+                        <ExternalLink className="w-3 h-3 mr-1" />Open
                       </Button>
                     )}
                     {!alert.is_read && (

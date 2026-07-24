@@ -57,6 +57,7 @@ function syncStatusLabel(status) {
     case "success": return "Synced";
     case "error":   return "Error";
     case "pending": return "Pending";
+    case "unavailable": return "Unavailable";
     default:        return "Never";
   }
 }
@@ -144,15 +145,17 @@ export default function DocumentStorageSettings({ projectId }) {
   };
 
   const handleSyncNow = (folder) => {
+    toast.message(
+      "SharePoint / OneDrive sync is not connected yet. Folder links are saved for setup, but Sync Now does not transfer files until the connector is deployed.",
+    );
     updateMut.mutate(
       {
         id: folder.id,
         data: {
-          last_sync_status: "pending",
+          last_sync_status: "unavailable",
           last_sync_at: new Date().toISOString(),
         },
       },
-      { onSuccess: () => toast.success("Sync queued") }
     );
   };
 

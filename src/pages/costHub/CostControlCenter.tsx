@@ -228,6 +228,27 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
       header: "Status",
       render: (r) => <Pill tone={costStatusTone(r)}>{r.is_over ? "Over Budget" : r.used_pct > 85 ? "Watch" : "On Track"}</Pill>,
     },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (r) => can("delete", "cost_code") ? (
+        <button
+          type="button"
+          className="cmd-btn cmd-btn--secondary"
+          style={{ fontSize: 10, padding: "4px 8px" }}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (!window.confirm(`Archive cost code ${r.cost_code_number}? Historical expenses remain; the code is hidden from active budgets.`)) {
+              return;
+            }
+            costCodeCrud.delete.mutate(r.id);
+          }}
+        >
+          Archive
+        </button>
+      ) : null,
+    },
   ];
 
   // ── CSV export ──

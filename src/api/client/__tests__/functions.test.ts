@@ -7,4 +7,8 @@ describe("functions.invoke", () => {
       "Unsupported backend function: not-a-supported-function",
     );
   });
+
+  it("fails closed for generateAlerts instead of returning empty success", async () => {
+    await expect(functions.invoke("generateAlerts")).rejects.toThrow(/generate-alerts/i);
+  });
 });

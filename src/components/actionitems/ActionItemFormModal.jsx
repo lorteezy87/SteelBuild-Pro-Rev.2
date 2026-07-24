@@ -74,9 +74,17 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
     onError: (err) => toast.error(err.message),
   });
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!runValidation(formData)) return;
-    if (actionItem && onSave) { onSave(formData); onClose(); return; }
+    if (actionItem && onSave) {
+      try {
+        await onSave(formData);
+        onClose();
+      } catch (err) {
+        toast.error(err?.message || "Action item could not be saved");
+      }
+      return;
+    }
     mutation.mutate(formData);
   };
 

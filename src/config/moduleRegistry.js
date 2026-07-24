@@ -276,6 +276,7 @@ export const SIDEBAR_GROUPS = [
       { label: "Schedule of Values",   icon: "📊", page: "SOV" },
       { label: "Pay Applications",     icon: "🧾", page: "PayApplications" },
       { label: "Backcharge Defense",   icon: "⚖", page: "Backcharges" },
+      { label: "Contract Management",  icon: "📑", page: "ContractManagement" },
       { label: "Expenses",             icon: "💰", page: "Expenses" },
     ],
   },

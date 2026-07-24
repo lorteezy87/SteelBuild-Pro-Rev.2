@@ -8,13 +8,15 @@ import ProjectCloseoutChecklist from "../ProjectCloseoutChecklist";
 const closeout = {
   id: "closeout-1",
   project_id: "p-1",
-  closeout_status: "In Progress",
-  final_inspection_completed: false,
-  punch_list_cleared: true,
-  all_invoices_processed: false,
-  warranties_registered: false,
-  as_built_docs_completed: false,
-  permits_closed: false,
+  status: "In Progress",
+  punchlist_complete: true,
+  warranties_complete: false,
+  as_built_complete: false,
+  final_inspection_date: null,
+  metadata: {
+    all_invoices_processed: false,
+    permits_closed: false,
+  },
 };
 
 describe("ProjectCloseoutChecklist", () => {

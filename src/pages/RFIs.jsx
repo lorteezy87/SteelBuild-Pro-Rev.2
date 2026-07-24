@@ -245,6 +245,8 @@ export default function RFIs() {
             description: `${r.rfi_number}: "${(r.title || "").slice(0, 60)}" · BIC: ${r.ball_in_court || "Contractor"} · Priority: ${r.priority}`,
             project_id: r.project_id,
             project_name: liveProjectName,
+            related_record_id: r.id,
+            record_type: "RFI",
           });
           alertsCreatedRef.current.add(r.id);
         }

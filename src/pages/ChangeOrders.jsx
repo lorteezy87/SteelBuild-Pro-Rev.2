@@ -434,8 +434,8 @@ export default function ChangeOrders() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => deleteTarget?.id && deleteMut.mutate(deleteTarget.id)}
         isDeleting={deleteMut.isPending}
-        title="Delete Change Order"
-        description={`Delete ${deleteTarget?.co_number || "this change order"}?`}
+        title="Archive Change Order"
+        description={`Archive ${deleteTarget?.co_number || "this change order"}? It is soft-deleted and can be restored by an administrator. Historical financial links are preserved.`}
       />
     </>
   );

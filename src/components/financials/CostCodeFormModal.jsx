@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { COST_CODES, COST_CODES_GROUPED } from "../shared/costCodes";
@@ -15,6 +14,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
   const [form, setForm] = useState(empty);
   const [selectedCode, setSelectedCode] = useState("");
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (costCode) {
@@ -37,6 +37,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
 
   const handleSave = async () => {
     if (!validate()) return;
+    if (saving) return;
 
     // Check for duplicates only on create
     if (!costCode && selectedCode) {
@@ -49,13 +50,6 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
 
     const selectedCostCodeMeta = COST_CODES.find((c) => c.code === selectedCode);
     // Emit ONLY real, user-editable cost_codes columns — never spread ...form.
-    // Callers seed this modal with whatever record they have; CostControlCenter
-    // passes an enriched useFinancials CostCodeRow that carries derived display
-    // fields (expense_count, revised_budget, signed_extras, used_pct, is_over, …)
-    // which are NOT columns. Spreading those into the payload makes PostgREST
-    // reject the write ("Could not find the 'expense_count' column of
-    // 'cost_codes' in the schema cache"). Whitelisting here protects every caller
-    // and also keeps DB-managed columns (id/created_at) out of the PATCH body.
     const data = {
       project_id: form.project_id,
       project_name: form.project_name || "",
@@ -71,13 +65,16 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
     const proj = projects.find((p) => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
 
+    setSaving(true);
     try {
       await onSave(data);
       setForm(empty);
       setSelectedCode("");
     } catch (err) {
-      console.error('Save failed:', err);
-      toast.error(`Failed to save: ${err.message}`);
+      // Mutation onError already toasts; keep modal open for retry.
+      console.error("Save failed:", err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -475,6 +472,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
           </button>
           <button
             onClick={handleSave}
+            disabled={saving}
             style={{
               background: 'var(--accent)',
               border: 'none',
@@ -485,11 +483,12 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               fontSize: 10,
               fontWeight: 700,
               letterSpacing: '0.10em',
-              cursor: 'pointer',
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.6 : 1,
               boxShadow: '0 4px 14px var(--accent-muted)'
             }}>
 
-            {costCode ? "UPDATE" : "CREATE"}
+            {saving ? "SAVING…" : costCode ? "UPDATE" : "CREATE"}
           </button>
           </DialogFooter>
       </DialogContent>
