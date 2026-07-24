@@ -115,8 +115,8 @@ src/
   services/      deterministic domain engines (costRollup, marginRiskEngine, …)
 supabase/
   migrations/    ordered SQL migrations (timestamped `YYYYMMDDhhmmss_name.sql`)
-  functions/     Edge Functions (llm-proxy, schedule-assistant, email-ingest,
-                 email-send, project-export, stripe-billing, …)
+  functions/     Edge Functions (llm-proxy, email-ingest, email-send,
+                 project-export, stripe-billing, …)
 public/          static assets, web-ifc wasm, pdf workers
 ```
 
