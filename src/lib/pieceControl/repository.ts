@@ -17,6 +17,7 @@ export interface PieceRegisterRow {
   lifecycle_status: string;
   current_station?: string | null;
   on_hold: boolean;
+  on_hold_reason?: string | null;
   is_container?: boolean;
   is_deleted?: boolean;
   source_system: string | null;

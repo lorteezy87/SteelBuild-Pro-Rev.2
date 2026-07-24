@@ -12,6 +12,7 @@ import {
 import {
   advancePieceStation,
   fetchProductionSnapshot,
+  setPieceHold,
   splitPieceLot,
   type LotAllocation,
 } from '../../lib/pieceControl/productionRepository';
@@ -53,6 +54,7 @@ export function PieceProductionControl({
   ]);
   const [overrideStationKey, setOverrideStationKey] = useState<string | null>(null);
   const [overrideReason, setOverrideReason] = useState('');
+  const [holdReason, setHoldReason] = useState('');
 
   const snapshotQuery = useQuery({
     queryKey: ['piece-production', projectId, workPackageId ?? 'all'],
@@ -132,6 +134,20 @@ export function PieceProductionControl({
           error,
           'The production station could not be recorded.',
         ),
+      ),
+  });
+
+  const holdMutation = useMutation({
+    mutationFn: ({ onHold, reason }: { onHold: boolean; reason?: string }) =>
+      setPieceHold(projectId, [selectedPiece!.id], onHold, reason),
+    onSuccess: async (_data, variables) => {
+      toast.success(variables.onHold ? 'Hold applied.' : 'Hold released.');
+      setHoldReason('');
+      await invalidateProduction();
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, 'The hold state could not be updated.'),
       ),
   });
 
@@ -303,6 +319,51 @@ export function PieceProductionControl({
                 </div>
               ) : null}
             </header>
+
+            <div className="piece-operation-hold" style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+              <span className="piece-operation-card__eyebrow">Hold control</span>
+              {selectedPiece.on_hold ? (
+                <>
+                  <p>
+                    Held{selectedPiece.on_hold_reason ? `: ${selectedPiece.on_hold_reason}` : ''}
+                  </p>
+                  <Button
+                    size="sm"
+                    className="cmd-btn cmd-btn--secondary"
+                    disabled={holdMutation.isPending || selectedPiece.is_container}
+                    onClick={() => holdMutation.mutate({ onHold: false })}
+                  >
+                    Release hold
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Input
+                    className="piece-command-control"
+                    aria-label="Hold reason"
+                    placeholder="Hold reason (required)"
+                    value={holdReason}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setHoldReason(event.target.value)
+                    }
+                  />
+                  <Button
+                    size="sm"
+                    className="cmd-btn"
+                    disabled={
+                      holdMutation.isPending ||
+                      selectedPiece.is_container ||
+                      !holdReason.trim()
+                    }
+                    onClick={() =>
+                      holdMutation.mutate({ onHold: true, reason: holdReason.trim() })
+                    }
+                  >
+                    Apply hold
+                  </Button>
+                </>
+              )}
+            </div>
 
             <div className="piece-production-stations">
               {stations.map((station) => {

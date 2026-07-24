@@ -53,4 +53,11 @@ describe("buildPieceControlSummary", () => {
       ["held", 1],
     ]);
   });
+
+  it("includes released in the lifecycle strip", () => {
+    const summary = buildPieceControlSummary([
+      row({ lifecycle_status: "released", quantity: 4 }),
+    ]);
+    expect(summary.lifecycle.find((item) => item.key === "released")?.pieces).toBe(4);
+  });
 });

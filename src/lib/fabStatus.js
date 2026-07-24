@@ -7,14 +7,24 @@
  */
 export const FAB_STATUS_META = {
   not_started:    { label: "Not Started",    color: "#64748b" },
+  released:       { label: "Released",       color: "#7c3aed" },
   in_fabrication: { label: "In Fabrication", color: "#3b82f6" },
   fabricated:     { label: "Fabricated",     color: "#22c55e" },
   shipped:        { label: "Shipped",        color: "#f59e0b" },
+  delivered:      { label: "Delivered",      color: "#0891b2" },
   erected:        { label: "Erected",        color: "#16a34a" },
 };
 
 /** Stages in shop order — drives the assign buttons + legend. */
-export const FAB_STATUS_ORDER = ["not_started", "in_fabrication", "fabricated", "shipped", "erected"];
+export const FAB_STATUS_ORDER = [
+  "not_started",
+  "released",
+  "in_fabrication",
+  "fabricated",
+  "shipped",
+  "delivered",
+  "erected",
+];
 
 /**
  * Resolve the piece mark(s) to assign a fab status to for the current viewer
