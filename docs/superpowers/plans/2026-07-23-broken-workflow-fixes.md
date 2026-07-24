@@ -14,23 +14,27 @@
 
 **Files:**
 - Modify: `src/pages/costHub/CostControlCenter.tsx`
-- Test: `src/pages/costHub/__tests__/CostControlCenter.test.tsx` or focused helper/component coverage
+- Add: `src/pages/costHub/costCodeSave.js`
+- Test: `src/pages/costHub/__tests__/costCodeSave.test.ts`
 
-1. Add a regression test proving the modal remains open when create/update rejects.
+1. Add regression coverage proving create/update rejections propagate to the form.
 2. Change the modal callback to await `costCodeCrud.create/update.mutateAsync`.
 3. Close and clear edit state only after successful resolution.
-4. Verify create and edit paths both preserve entered values on failure.
+4. Preserve entered values when Supabase rejects the write.
 
 ## Task 2: Contract save synchronization
 
 **Files:**
-- Modify: `src/pages/ContractManagement.jsx`
-- Test: `src/pages/__tests__/ContractManagement.test.jsx`
+- Modify: `src/api/client/entityClient.ts`
+- Modify: `src/components/shared/ProjectContext.jsx`
+- Add: `src/services/projectUpdateEvents.ts`
+- Test: `src/services/__tests__/projectUpdateEvents.test.ts`
+- Test: `src/__tests__/components/ProjectContext.test.jsx`
 
-1. Add coverage for invalid contract amounts and successful context synchronization.
-2. Validate the amount instead of coercing invalid/blank input to zero.
-3. Use the updated Project row returned by Supabase.
-4. Patch ProjectContext and canonical project caches before exiting edit mode.
+1. Publish the updated project row only after `Project.update` succeeds.
+2. Subscribe ProjectContext to successful project updates.
+3. Merge the returned row into active-project state, the project collection, and local storage.
+4. Verify contract values refresh across app-level project consumers without a reload.
 
 ## Task 3: Change-order edit and delete
 
@@ -38,14 +42,15 @@
 - Modify: `src/pages/ChangeOrders.jsx`
 - Modify: `src/pages/changeOrders/CoControlCenter.tsx`
 - Modify: `src/components/changeorders/COFormModal.jsx`
+- Add: `src/components/changeorders/changeOrderPayload.ts`
 - Test: `src/pages/changeOrders/__tests__/CoControlCenter.test.tsx`
-- Test: `src/components/changeorders/__tests__/COFormModal.test.jsx`
+- Test: `src/components/changeorders/__tests__/changeOrderPayload.test.ts`
 
 1. Add an explicit permission-gated delete action that does not trigger row edit.
 2. Route single deletion through the existing confirmation dialog.
 3. Invalidate the full `change_order` cache family after edit/delete so revised-contract totals refresh.
 4. Lock the project selector during edit to prevent unsupported cross-project moves.
-5. Whitelist editable CO fields so aliases/derived/read-only values cannot poison update payloads.
+5. Whitelist editable CO fields so aliases, timestamps, and derived values cannot poison update payloads.
 
 ## Task 4: Checklist item behavior
 
