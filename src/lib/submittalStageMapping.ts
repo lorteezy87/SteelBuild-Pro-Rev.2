@@ -1,11 +1,11 @@
 /**
- * submittalStageMapping.js — Pure helpers for translating between
+ * submittalStageMapping.ts — Pure helpers for translating between
  * submittal workflow status (the post-Sprint-2 source of truth) and the
  * drawing "stage" enum that the Drawings page UI still uses to colour
  * chevrons, KPI tiles, and group-header badges.
  *
- * No React, no Supabase, no side effects. All inputs are plain JS
- * objects, all outputs are strings or numbers.
+ * No React, no Supabase, no side effects. All inputs are plain objects,
+ * all outputs are strings or numbers.
  *
  * ── Canonical 7-stage detailing/submittal flow (corrected May 2026) ──
  *
@@ -49,15 +49,50 @@
 
 import { STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 
+/** drawingsConfig is still .js — treat STAGE_ORDER as a string list. */
+const STAGE_KEYS = STAGE_ORDER as readonly string[];
+
+/** Submittal-like row used by stage derivation helpers. */
+export interface SubmittalLike {
+  id?: string | null;
+  status?: string | null;
+  ball_in_court?: string | null;
+  approved_date?: string | null;
+  submitted_date?: string | null;
+  updated_at?: string | null;
+  round_number?: number | null;
+  is_deleted?: boolean | null;
+  assigned_to?: string | null;
+  reviewer?: string | null;
+  submittal_number?: string | null;
+  drawing_set_ids?: string[] | null;
+  /** Due-date fields used by hub triage / health scoring read paths. */
+  due_date?: string | null;
+  required_date?: string | null;
+  date_required?: string | null;
+  title?: string | null;
+  name?: string | null;
+}
+
+/** Sheet/drawing-like row used as legacy stage fallback. */
+export interface SheetLike {
+  stage?: string | null;
+}
+
+export interface StageSubmittalPair {
+  status: string;
+  ball_in_court: string | null;
+}
+
 /** BIC discriminator classes — used to split status buckets by ownership. */
-const DETAILER_CLASS_BIC = new Set([
+const DETAILER_CLASS_BIC: ReadonlySet<string> = new Set([
   "Detailer", "S&H", "Contractor", "Subcontractor",
 ]);
-const APPROVER_CLASS_BIC = new Set(["EOR", "Architect", "AOR"]);
-const DOWNSTREAM_CLASS_BIC = new Set(["GC", "Owner"]);
+const APPROVER_CLASS_BIC: ReadonlySet<string> = new Set(["EOR", "Architect", "AOR"]);
+const DOWNSTREAM_CLASS_BIC: ReadonlySet<string> = new Set(["GC", "Owner"]);
 
 /** Match the .ts hook's terminal set so we never disagree on "open". */
-const TERMINAL_STATUSES = new Set([
+const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
   "Approved",
   "Approved as Noted",
   "Released for Fabrication",
@@ -65,7 +100,7 @@ const TERMINAL_STATUSES = new Set([
 ]);
 
 /** Statuses that represent an R&R (loop-back) outcome. */
-const RR_STATUSES = new Set(["Revise and Resubmit", "Rejected"]);
+const RR_STATUSES: ReadonlySet<string> = new Set(["Revise and Resubmit", "Rejected"]);
 
 /**
  * COMPLETED ("closed") submittal statuses — the NARROW set where the workflow
@@ -79,10 +114,14 @@ const RR_STATUSES = new Set(["Revise and Resubmit", "Rejected"]);
  * Canonical source for the page; drawingSubmittalHub/format.ts keeps its own
  * register-display copy intentionally.
  */
-export const CLOSED_SUBMITTAL_STATUSES = new Set([
+export const CLOSED_SUBMITTAL_STATUSES: ReadonlySet<string> = new Set([
   "Released for Fabrication",
   "Void",
 ]);
+
+function bicIn(set: ReadonlySet<string>, ball_in_court: string | null | undefined): boolean {
+  return typeof ball_in_court === "string" && set.has(ball_in_court);
+}
 
 /**
  * Map a single submittal's (status, ball_in_court, approved_date) to a
@@ -95,14 +134,16 @@ export const CLOSED_SUBMITTAL_STATUSES = new Set([
  * surfacing R&R as its own UI badge should use `isRRStatus(status)`
  * alongside this function.
  *
- * @param {string|null|undefined} status
- * @param {string|null|undefined} ball_in_court
- * @param {string|null|undefined} approved_date — ISO date or null (unused
- *   today; reserved for future OFS/IFC distinction by date-stamped events)
- * @returns {string|null}
+ * @param approved_date — ISO date or null (unused today; reserved for
+ *   future OFS/IFC distinction by date-stamped events)
  */
- 
-export function submittalStatusToStage(status, ball_in_court, approved_date) {
+export function submittalStatusToStage(
+  status: string | null | undefined,
+  ball_in_court: string | null | undefined,
+  // Reserved for future OFS/IFC date-stamped distinction — keep the arity.
+  approved_date?: string | null,
+): string | null {
+  void approved_date;
   if (!status) return null;
   if (status === "Void") return null;
   if (status === "Released for Fabrication") return "Released";
@@ -112,16 +153,16 @@ export function submittalStatusToStage(status, ball_in_court, approved_date) {
   if (RR_STATUSES.has(status)) return "IFA";
 
   if (status === "Approved" || status === "Approved as Noted") {
-    if (APPROVER_CLASS_BIC.has(ball_in_court)) return "BFA";
-    if (DETAILER_CLASS_BIC.has(ball_in_court)) return "OFS";
-    if (DOWNSTREAM_CLASS_BIC.has(ball_in_court)) return "IFC";
+    if (bicIn(APPROVER_CLASS_BIC, ball_in_court)) return "BFA";
+    if (bicIn(DETAILER_CLASS_BIC, ball_in_court)) return "OFS";
+    if (bicIn(DOWNSTREAM_CLASS_BIC, ball_in_court)) return "IFC";
     // BIC missing/unknown — default to BFA (just-returned, not yet
     // routed onward). Better than guessing OFS or IFC and being wrong.
     return "BFA";
   }
 
   if (status === "Submitted" || status === "Under Review") {
-    if (DETAILER_CLASS_BIC.has(ball_in_court)) return "IFA";
+    if (bicIn(DETAILER_CLASS_BIC, ball_in_court)) return "IFA";
     // EOR / Architect / AOR / GC / Owner / unknown → OFA (default
     // outbound; matches the flow where Detailer→S&H→GC→EOR all happen
     // while the submittal is "Submitted").
@@ -140,11 +181,8 @@ export function submittalStatusToStage(status, ball_in_court, approved_date) {
  *
  * Returns null for "Not Started" (no submittal needed) and for unknown
  * stages.
- *
- * @param {string} stage
- * @returns {{ status: string, ball_in_court: string|null }|null}
  */
-export function stageToSubmittalStatus(stage) {
+export function stageToSubmittalStatus(stage: string): StageSubmittalPair | null {
   switch (stage) {
     case "Not Started":
       return null; // no submittal yet
@@ -166,8 +204,8 @@ export function stageToSubmittalStatus(stage) {
 }
 
 /** True if a status represents an R&R (revise & resubmit) outcome. */
-export function isRRStatus(status) {
-  return RR_STATUSES.has(status);
+export function isRRStatus(status: string | null | undefined): boolean {
+  return status != null && RR_STATUSES.has(status);
 }
 
 /**
@@ -178,7 +216,9 @@ export function isRRStatus(status) {
  *
  * Returns null on empty / null input.
  */
-export function pickMostRecentSubmittal(submittals) {
+export function pickMostRecentSubmittal<T extends SubmittalLike>(
+  submittals: T[] | null | undefined,
+): T | null {
   if (!Array.isArray(submittals) || submittals.length === 0) return null;
   const active = submittals.filter((s) => s && !s.is_deleted);
   if (active.length === 0) return null;
@@ -209,13 +249,11 @@ export function pickMostRecentSubmittal(submittals) {
  *      legacy data that hasn't moved into submittals yet.
  *   3. If neither submittals nor sheets give us a signal, return
  *      "Not Started".
- *
- * @param {Array} submittalsForSet — submittals whose drawing_set_ids
- *                                   includes the set id
- * @param {Array} [sheetsForSet]   — drawings belonging to the set
- * @returns {string} one of STAGE_ORDER
  */
-export function derivedSetStage(submittalsForSet, sheetsForSet = []) {
+export function derivedSetStage(
+  submittalsForSet: SubmittalLike[] | null | undefined,
+  sheetsForSet: SheetLike[] = [],
+): string {
   const usable = (Array.isArray(submittalsForSet) ? submittalsForSet : []).filter((s) => {
     if (!s || s.is_deleted) return false;
     return submittalStatusToStage(s.status, s.ball_in_court, s.approved_date) !== null;
@@ -239,20 +277,20 @@ export function derivedSetStage(submittalsForSet, sheetsForSet = []) {
  * Pick the dominant (most-common, ties → earliest in canonical order)
  * stage from a list of stage strings. Unknown / falsy entries are
  * dropped. Returns "Not Started" when the list is empty.
- *
- * @param {Array<string|null|undefined>} stages
  */
-export function dominantStage(stages) {
+export function dominantStage(
+  stages: Array<string | null | undefined> | null | undefined,
+): string {
   if (!Array.isArray(stages) || stages.length === 0) return "Not Started";
-  const counts = new Map();
+  const counts = new Map<string, number>();
   for (const s of stages) {
-    if (!s || !STAGE_ORDER.includes(s)) continue;
+    if (!s || !STAGE_KEYS.includes(s)) continue;
     counts.set(s, (counts.get(s) || 0) + 1);
   }
   if (counts.size === 0) return "Not Started";
-  let bestKey = null;
+  let bestKey: string | null = null;
   let bestCount = -1;
-  for (const key of STAGE_ORDER) {
+  for (const key of STAGE_KEYS) {
     const c = counts.get(key) || 0;
     if (c > bestCount) {
       bestKey = key;
@@ -267,7 +305,7 @@ export function dominantStage(stages) {
  * range (anything that has left Not Started but isn't terminal).
  * Single source of truth shared with IN_REVIEW_STAGES in drawingsConfig.
  */
-export function isStageInReview(stage) {
+export function isStageInReview(stage: string | null | undefined): boolean {
   return stage === "IFA" || stage === "OFA" || stage === "BFA" ||
          stage === "OFS" || stage === "IFC";
 }

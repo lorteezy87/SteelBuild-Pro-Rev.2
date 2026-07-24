@@ -1,5 +1,5 @@
 /**
- * fabRelease.js — Pure helpers for the "Export Fab Release" package.
+ * fabRelease.ts — Pure helpers for the "Export Fab Release" package.
  *
  * Pulls every drawing with a stamp/stage indicating it's released for
  * fabrication, groups by drawing-set, and produces the tabular manifest
@@ -16,6 +16,108 @@
  * is documented in the modal UI and the README header.
  */
 
+/** Minimal drawing shape used by fab-release / turnover / claims helpers. */
+export interface DrawingLike {
+  id?: string | null;
+  sheet_number?: string | null;
+  title?: string | null;
+  drawing_set_name?: string | null;
+  discipline?: string | null;
+  revision_number?: string | number | null;
+  stage?: string | null;
+  set_approval_status?: string | null;
+  ifc_status?: string | null;
+  is_deleted?: boolean | null;
+  is_superseded?: boolean | null;
+  current_release_status?: string | null;
+  current_revision_status?: string | null;
+  created_at?: string | Date | null;
+  updated_at?: string | Date | null;
+  reviewer?: string | null;
+  notes?: string | null;
+}
+
+/** Sign-off row merged into the fab manifest. */
+export interface SignoffLike {
+  drawing_id?: string | null;
+  signed_by?: string | null;
+  signed_at?: string | null;
+  status?: string | null;
+}
+
+export interface DrawingSetGroup {
+  setName: string;
+  sheets: DrawingLike[];
+}
+
+export interface DateGroup<T> {
+  date: string;
+  items: T[];
+}
+
+export interface ProjectLike {
+  id?: string | null;
+  name?: string | null;
+}
+
+export interface ReadmeOptions {
+  kind?: string;
+  project?: ProjectLike;
+  groups?: DrawingSetGroup[];
+  totalCount?: number | null;
+  zipped?: boolean;
+  now?: Date;
+}
+
+export interface PackageNameOptions {
+  kind?: string;
+  project?: ProjectLike;
+  now?: Date;
+}
+
+export interface RfiLike {
+  id?: string | null;
+  rfi_number?: string | null;
+  title?: string | null;
+  status?: string | null;
+  author?: string | null;
+  created_by?: string | null;
+  question?: string | null;
+  submitted_date?: string | Date | null;
+  created_at?: string | Date | null;
+}
+
+export interface ChangeOrderLike {
+  id?: string | null;
+  co_number?: string | null;
+  title?: string | null;
+  description?: string | null;
+  status?: string | null;
+  issued_by?: string | null;
+  created_by?: string | null;
+  issued_date?: string | Date | null;
+  created_at?: string | Date | null;
+}
+
+export interface PhotoLike {
+  id?: string | null;
+  caption?: string | null;
+  file_name?: string | null;
+  uploaded_by?: string | null;
+  linked_drawing_id?: string | null;
+  taken_at?: string | Date | null;
+  created_at?: string | Date | null;
+}
+
+export interface ClaimsManifestOptions {
+  drawings?: DrawingLike[];
+  rfis?: RfiLike[];
+  changeOrders?: ChangeOrderLike[];
+  photos?: PhotoLike[];
+}
+
+export type CsvCell = string | number | null | undefined;
+
 // ── Pure filtering helpers ───────────────────────────────────────────────
 
 /**
@@ -27,7 +129,7 @@
  * (set_approval_status check values come from migration 074 — see the
  * supabase_drawings_constraints memory.)
  */
-export function isApprovedForFab(d) {
+export function isApprovedForFab(d: DrawingLike | null | undefined): boolean {
   if (!d || d.is_deleted) return false;
   if (d.is_superseded) return false;
   // Never treat a non-current / unresolved revision as fabrication-ready.
@@ -51,7 +153,7 @@ export function isApprovedForFab(d) {
  *   - stage === "Released" (IFC)  → approved for construction
  *   - set_approval_status approved / approved_as_noted → approved for fab
  */
-export function isApprovedForTurnover(d) {
+export function isApprovedForTurnover(d: DrawingLike | null | undefined): boolean {
   return isApprovedForFab(d);
 }
 
@@ -59,7 +161,7 @@ export function isApprovedForTurnover(d) {
  * Claims scope: include EVERYTHING that isn't soft-deleted. Even
  * superseded revisions get pulled in for legal/insurance.
  */
-export function isClaimable(d) {
+export function isClaimable(d: DrawingLike | null | undefined): boolean {
   return !!d && d.is_deleted !== true;
 }
 
@@ -71,14 +173,14 @@ export function isClaimable(d) {
  * Returns `[{ setName, sheets }]` sorted alphabetically by setName,
  * with the ungrouped bucket pinned to the end.
  */
-export function groupBySet(drawings) {
-  const map = new Map();
+export function groupBySet(drawings: readonly DrawingLike[] | null | undefined): DrawingSetGroup[] {
+  const map = new Map<string, DrawingLike[]>();
   for (const d of drawings || []) {
     const name = (d.drawing_set_name && d.drawing_set_name.trim()) || "(Ungrouped)";
     if (!map.has(name)) map.set(name, []);
-    map.get(name).push(d);
+    map.get(name)!.push(d);
   }
-  const out = [];
+  const out: DrawingSetGroup[] = [];
   for (const [setName, sheets] of map.entries()) {
     sheets.sort((a, b) => String(a.sheet_number || "").localeCompare(String(b.sheet_number || "")));
     out.push({ setName, sheets });
@@ -95,19 +197,22 @@ export function groupBySet(drawings) {
  * Group items by ISO date (YYYY-MM-DD) of `dateField`. Used by claims
  * exports which group everything chronologically.
  */
-export function groupByDate(items, dateField = "created_at") {
-  const map = new Map();
+export function groupByDate<T extends object>(
+  items: readonly T[] | null | undefined,
+  dateField: keyof T | string = "created_at",
+): DateGroup<T>[] {
+  const map = new Map<string, T[]>();
   for (const it of items || []) {
-    const raw = it && it[dateField];
+    const raw = it ? (it as Record<string, unknown>)[dateField as string] : undefined;
     let key = "Undated";
     if (raw) {
-      const d = raw instanceof Date ? raw : new Date(raw);
+      const d = raw instanceof Date ? raw : new Date(raw as string | number);
       if (!Number.isNaN(d.getTime())) key = d.toISOString().slice(0, 10);
     }
     if (!map.has(key)) map.set(key, []);
-    map.get(key).push(it);
+    map.get(key)!.push(it);
   }
-  const out = [];
+  const out: DateGroup<T>[] = [];
   for (const [date, list] of map.entries()) out.push({ date, items: list });
   // Newest first; "Undated" pinned to end
   out.sort((a, b) => {
@@ -120,17 +225,16 @@ export function groupByDate(items, dateField = "created_at") {
 
 // ── CSV manifest ─────────────────────────────────────────────────────────
 
-const CSV_QUOTE = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+const CSV_QUOTE = (v: CsvCell): string => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
 
 /**
  * Build the fab-release manifest CSV. One row per drawing.
- *
- * @param {Array} drawings   already-filtered approved drawings
- * @param {Array} signoffs   optional [{ drawing_id, signed_by, signed_at, status }]
- * @returns {string}         CSV content
  */
-export function buildFabManifestCsv(drawings, signoffs = []) {
-  const signMap = new Map();
+export function buildFabManifestCsv(
+  drawings: readonly DrawingLike[] | null | undefined,
+  signoffs: readonly SignoffLike[] = [],
+): string {
+  const signMap = new Map<string, SignoffLike>();
   for (const s of signoffs || []) {
     if (!s?.drawing_id) continue;
     const prev = signMap.get(s.drawing_id);
@@ -152,7 +256,7 @@ export function buildFabManifestCsv(drawings, signoffs = []) {
     "status",
   ];
   const rows = (drawings || []).map((d) => {
-    const sign = signMap.get(d.id) || {};
+    const sign = signMap.get(d.id || "") || {};
     return [
       d.drawing_set_name || "",
       d.sheet_number || "",
@@ -174,7 +278,7 @@ export function buildFabManifestCsv(drawings, signoffs = []) {
  * Generic helpers for the claims / turnover packages so each can have
  * its own row shape without duplicating CSV plumbing.
  */
-export function buildCsv(headers, rows) {
+export function buildCsv(headers: readonly CsvCell[], rows: readonly (readonly CsvCell[])[]): string {
   const lines = [headers.map(CSV_QUOTE).join(","), ...rows.map((r) => r.map(CSV_QUOTE).join(","))];
   return lines.join("\n");
 }
@@ -184,7 +288,7 @@ export function buildCsv(headers, rows) {
 /**
  * Format a Date (or anything Date can parse) as ISO yyyy-mm-dd.
  */
-export function formatIsoDate(value) {
+export function formatIsoDate(value?: Date | string | number | null): string {
   const d = value instanceof Date ? value : new Date(value || Date.now());
   if (Number.isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
   return d.toISOString().slice(0, 10);
@@ -192,14 +296,6 @@ export function formatIsoDate(value) {
 
 /**
  * Build the README markdown shipped at the root of the export package.
- *
- * @param {object} opts
- * @param {string} opts.kind          "Fab Release" | "Turnover" | "Claims"
- * @param {object} opts.project       { id, name }
- * @param {Array}  opts.groups        groupBySet output
- * @param {number} [opts.totalCount]  total item count (overrides default count)
- * @param {boolean} [opts.zipped]     was a zip generated, or are we in fallback?
- * @param {Date}   [opts.now]
  */
 export function buildReadme({
   kind = "Fab Release",
@@ -208,9 +304,9 @@ export function buildReadme({
   totalCount = null,
   zipped = false,
   now = new Date(),
-} = {}) {
+}: ReadmeOptions = {}): string {
   const total = totalCount != null ? totalCount : groups.reduce((acc, g) => acc + (g.sheets?.length || 0), 0);
-  const lines = [];
+  const lines: string[] = [];
   lines.push(`# ${kind} Package`);
   lines.push("");
   lines.push(`- **Project:** ${project.name || "(unnamed)"}`);
@@ -247,8 +343,15 @@ export function buildReadme({
 /**
  * Suggest a folder / filename stem for the package.
  */
-export function suggestPackageName({ kind = "fab_release", project = {}, now = new Date() } = {}) {
-  const safeProj = String(project.name || "project").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "project";
+export function suggestPackageName({
+  kind = "fab_release",
+  project = {},
+  now = new Date(),
+}: PackageNameOptions = {}): string {
+  const safeProj =
+    String(project.name || "project")
+      .replace(/[^A-Za-z0-9._-]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "project";
   const stamp = formatIsoDate(now);
   const safeKind = String(kind).replace(/[^A-Za-z0-9._-]+/g, "_").toLowerCase();
   return `${safeProj}_${safeKind}_${stamp}`;
@@ -259,16 +362,15 @@ export function suggestPackageName({ kind = "fab_release", project = {}, now = n
 /**
  * Build the claims manifest CSV — multi-entity rows so legal/insurance
  * gets every artifact in one chronological table.
- *
- * @param {object} opts
- * @param {Array} opts.drawings
- * @param {Array} [opts.rfis]
- * @param {Array} [opts.changeOrders]
- * @param {Array} [opts.photos]   photos linked to drawings
  */
-export function buildClaimsManifestCsv({ drawings = [], rfis = [], changeOrders = [], photos = [] } = {}) {
+export function buildClaimsManifestCsv({
+  drawings = [],
+  rfis = [],
+  changeOrders = [],
+  photos = [],
+}: ClaimsManifestOptions = {}): string {
   const headers = ["date", "kind", "id", "label", "status", "author", "notes"];
-  const rows = [];
+  const rows: CsvCell[][] = [];
   for (const d of drawings) {
     rows.push([
       formatIsoDate(d.created_at || d.updated_at || Date.now()),
@@ -321,7 +423,7 @@ export function buildClaimsManifestCsv({ drawings = [], rfis = [], changeOrders 
  * Trigger a browser download of a Blob. Pure-ish helper — uses DOM but
  * isolated so the export module can stub it out in tests.
  */
-export function downloadBlob(blob, filename) {
+export function downloadBlob(blob: Blob, filename: string): void {
   if (typeof document === "undefined" || typeof URL === "undefined") return;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -334,7 +436,11 @@ export function downloadBlob(blob, filename) {
 /**
  * Trigger download of a UTF-8 text Blob (CSV / md / txt).
  */
-export function downloadTextFile(content, filename, mime = "text/plain;charset=utf-8") {
+export function downloadTextFile(
+  content: string,
+  filename: string,
+  mime = "text/plain;charset=utf-8",
+): void {
   const blob = new Blob([content], { type: mime });
   downloadBlob(blob, filename);
 }
