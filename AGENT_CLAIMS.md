@@ -45,6 +45,7 @@ Notes:
 | 2026-07-09T20:00:00Z | measurement-ship1 | Drawing-viewer measurement correctness | src/components/drawings/viewer/{AnnotationLayer.jsx,detectScale.js,measureLabel.js,useMarkup.js} · src/pages/drawingViewer/{useAutoScaleOnLoad.js,ViewerToolbar.jsx,usePdfLoader.js} · src/pages/DrawingViewer.jsx · src/utils/feetInches.js · supabase/migrations/** | Fix `drawing_markups` CHECK (7 of 8 markup kinds rejected → table holds 0 rows), per-page scale detection + explicit ambiguous state, canonical ft-in 1/16" formatter, save-failure toast, badge+detection outside canvas mode. Plan: docs/superpowers/plans/2026-07-09-drawing-viewer-measurement-ship1.md |
 
 ## Recently released
+- 2026-07-24 · cursor-piece-pma-d3a1 · Piece Register command-deck restore + Project Assistant removal (PR open).
 - 2026-06-22 · opus-gtm-batch · GTM readiness batch SHIPPED + field-verified — security headers (HSTS + Permissions-Policy + CSP Report-Only in `vercel.json`), public legal pages (`Privacy/Terms/Security.jsx` + `App.jsx` short-circuit), demo form → `public.demo_requests` (migration `20260623032908`, anon insert / admin select; Landing wired), `package.json` engines. Storage backfill = WRITTEN ONLY (`scripts/storage-backfill-legacy-uploads.mjs`, dry-run) — see runbook `docs/HANDOFF-2026-06-22-gtm-batch.md`. Owner follow-ups: demo email-notify, flip CSP→enforcing, legal counsel review, E2E enable, Sentry alerts, a11y pass.
 
 <!-- Move finished claims here briefly, or just delete the row. -->

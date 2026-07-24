@@ -27,7 +27,7 @@ export const PRIMARY_TABS = [
   { label: "SCHEDULE",    pages: ["ScheduleHub", "Schedule", "ProjectCalendar", "LookAheadSchedule"] },
   { label: "FIELD",       pages: ["FieldToday", "FieldHub", "Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs", "FieldPlan", "Inspections", "Safety", "Punchlist", "QualityControl"] },
   { label: "COST",        pages: ["CostHub", "ChangeOrders", "Backcharges", "SOV", "PayApplications", "ContractManagement"] },
-  { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "JobStatusReport", "DecisionLog", "Reports", "AlertsCenter", "Activity"] },
+  { label: "REPORTS",     pages: ["PortfolioHub", "ReportsHub", "JobStatusReport", "Reports", "AlertsCenter", "Activity"] },
   { label: "CLOSEOUT",    pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] },
 ];
 
@@ -383,6 +383,3 @@ if (import.meta.env.DEV) {
     });
   });
 }
-
-
-

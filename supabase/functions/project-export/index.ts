@@ -107,8 +107,6 @@ const PROJECT_EXPORT_TABLES: readonly string[] = [
   "pay_applications",
   "photos",
   "piece_production",
-  "pma_assumptions",
-  "pma_decisions",
   "production_notes",
   "project_closeout",
   "project_handoff_items",
@@ -243,8 +241,8 @@ interface AuthedUser {
 }
 
 /**
- * Verify the caller's JWT by hitting Supabase Auth's /user endpoint directly
- * (immune to library-side ES256 verification lag — see schedule-assistant).
+ * Verify the caller's JWT by hitting Supabase Auth's /user endpoint directly,
+ * avoiding library-side ES256 verification lag.
  */
 async function verifyJwt(
   token: string,

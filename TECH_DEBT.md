@@ -82,9 +82,9 @@ follow-ups._
   a test-mode checkout) are in [`docs/stripe-go-live.md`](docs/stripe-go-live.md).
   ✅ **Update (verified 2026-06-17):** the orphan **Supabase Stripe Sync Engine**
   functions (`stripe-setup`/`stripe-worker`/`stripe-webhook`/`stripe-diagnostics`)
-  are **gone** — only 8 edge functions are deployed now (`llm-proxy`,
-  `schedule-assistant`, `email-ingest`, `email-send`, `stripe-billing`,
-  `project-export`, `sharepoint-proxy`, `bluebeam-proxy`). The 29-table `stripe`
+  are **gone** — only the active edge functions remain (`llm-proxy`,
+  `email-ingest`, `email-send`, `stripe-billing`,
+  `project-export`, plus deprecated `sharepoint-proxy`/`bluebeam-proxy`). The 29-table `stripe`
   schema decision remains. ✅ **`org.plan` anchor path confirmed (code-verified
   2026-06-17):** there is no separate `stripe-webhook` function — the webhook is a
   `/webhook` route INSIDE the deployed `stripe-billing` function (CLAUDE.md §16 is
@@ -462,12 +462,9 @@ Remaining:
   drawings/submittals rollup was removed after confirming no live
   callers remained.
 
-- `schedule-assistant` LLM gateway bypass resolved: the edge function
-  now keeps JWT verification, RLS-scoped schedule tool execution, and
-  `ai_audit_log` writes locally, but routes every model turn through
-  `llm-proxy` with `useCase: "schedule-assist"`. Token usage, latency,
-  cost, and failures are now visible through `llm_telemetry`, and
-  provider/model changes live in `supabase/functions/llm-proxy/router.ts`.
+- Retired schedule chat assistant removed from the application and
+  repository runtime. Historical `pma_*` / `ai_audit_log`
+  schema objects remain in migrations and generated types only.
 
 - Supabase generated types / typecheck drift resolved: `npm run typecheck`
   and `npm run typecheck:js` are passing, and CI treats both checks as

@@ -347,7 +347,6 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
 
 - `llm-proxy` — the LLM gateway. Holds the only provider API key; all model
   calls route here. Does its own JWT verification (deploy `--no-verify-jwt`).
-- `schedule-assistant` — schedule chat/tooling; routes model turns through `llm-proxy`.
 - `email-ingest` — inbound email → staged project records (Power Automate path).
 - `email-send` — outbound email compose/reply pipeline.
 - `project-export` — RLS-scoped, audited per-project data export (powers the
@@ -359,8 +358,12 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
   (owner/CLI):** `sharepoint-proxy`, `bluebeam-proxy` (removed integrations) and
   the Stripe Sync Engine orphans `stripe-setup` / `stripe-webhook` /
   `stripe-worker` (these are NOT the real webhook — that lives inside
-  `stripe-billing`). As of 2026-07-01 there are **11 functions live** (6 real + 5
-  orphan/deprecated); the `pg_cron` job that pinged `stripe-worker` every 60s was
+  `stripe-billing`). As of 2026-07-24 the application inventory is **5 real**
+  (`llm-proxy`, `email-ingest`, `email-send`, `project-export`, `stripe-billing`)
+  **+ 5 orphan/deprecated** (`sharepoint-proxy`, `bluebeam-proxy`, `stripe-setup`,
+  `stripe-webhook`, `stripe-worker`). A previously shipped schedule chat Edge
+  Function may still exist remotely pending `supabase functions delete`
+  (owner/CLI). The `pg_cron` job that pinged `stripe-worker` every 60s was
   unscheduled 2026-07-01. See `docs/runbooks/owner-checklist.md`.
 
 ### Storage
@@ -419,7 +422,6 @@ work unchanged.
 | `shipping-ticket-import`  | openai    | gpt-4o-mini        | `src/lib/importShippingTicket.js`                 |
 | `rfi-log-import`          | openai    | gpt-4o-mini        | `src/lib/importRfiLog.js`                         |
 | `photo-ocr`               | openai    | gpt-4o-mini        | `src/components/ocr/FileUploadWithOCR.jsx`        |
-| `schedule-assist`         | anthropic | claude-sonnet-4-5  | (NOT WIRED IN PHASE 1 — see TECH_DEBT.md)         |
 
 The Phase 1 routing intentionally **mirrors current production
 defaults**. We did not silently switch any caller to a new provider;

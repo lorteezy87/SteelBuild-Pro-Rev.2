@@ -37,11 +37,6 @@ export const ROUTING_TABLE: Record<string, RoutingTarget> = {
   "revision-compare":      { provider: "openai",    model: "gpt-4o-mini" },
   "sheet-extraction":      { provider: "openai",    model: "gpt-4o-mini" },
 
-  // Schedule-assistant routes each model turn through llm-proxy while
-  // keeping schedule tool execution inside its own JWT-scoped function.
-  // Switched from Anthropic → OpenAI (May 2026) — credit balance exhausted.
-  "schedule-assist":       { provider: "openai",    model: "gpt-4o" },
-
   // Bonus callers that the audit found. All currently default to
   // OpenAI in their respective modules.
   "drawing-link-suggest":  { provider: "openai",    model: "gpt-4o-mini" },

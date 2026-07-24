@@ -7,6 +7,7 @@ import {
   releaseCanonicalWorkPackage,
   type CanonicalReleaseGate,
 } from "@/lib/pieceControl/releaseRepository";
+import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 
 interface CanonicalFabReleasePanelProps {
   projectId: string;
@@ -15,11 +16,20 @@ interface CanonicalFabReleasePanelProps {
 }
 
 const CHECK_LABELS: Array<{ key: keyof CanonicalReleaseGate["checks"]; label: string }> = [
-  { key: "scope", label: "Canonical piece scope" },
+  { key: "scope", label: "Piece scope" },
   { key: "drawings", label: "Shop drawings" },
   { key: "material", label: "Material received / on hand" },
   { key: "holds", label: "Piece holds" },
 ];
+
+const BLOCKER_PRESENTATION_COPY: Record<string, string> = {
+  "No active, actionable canonical leaf pieces are assigned to this work package.":
+    "No active pieces are assigned to this work package.",
+};
+
+function presentBlocker(blocker: string) {
+  return BLOCKER_PRESENTATION_COPY[blocker] ?? blocker;
+}
 
 export default function CanonicalFabReleasePanel({
   projectId,
@@ -30,6 +40,7 @@ export default function CanonicalFabReleasePanel({
   const enabled = Boolean(projectId && workPackageId && pieceControlMode !== "off");
   const [exceptionOpen, setExceptionOpen] = useState(false);
   const [exceptionReason, setExceptionReason] = useState("");
+  const exceptionReasonId = `piece-release-exception-reason-${workPackageId}`;
 
   const gateQuery = useQuery({
     queryKey: ["canonical-release-gate", workPackageId],
@@ -55,13 +66,16 @@ export default function CanonicalFabReleasePanel({
         toast.success(`Released as ${result.release_number}`);
       }
     },
-    onError: (error: Error) => toast.error(error.message || "Canonical release failed"),
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "Fabrication release failed."),
+      ),
   });
 
   if (!enabled) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        Canonical release is unavailable while piece control is off.
+        Fabrication release is unavailable until the Piece Register is set up.
       </div>
     );
   }
@@ -74,12 +88,14 @@ export default function CanonicalFabReleasePanel({
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="font-black text-slate-950">Canonical fab release</h3>
-            <p className="text-xs text-slate-500">Live, server-enforced four-check gate.</p>
+            <h3 className="font-black text-slate-950">Fabrication release</h3>
+            <p className="text-xs text-slate-500">
+              Four required checks must pass before fabrication release.
+            </p>
           </div>
         </div>
         <button
-          aria-label="Refresh release gate"
+          aria-label="Refresh fabrication release checks"
           onClick={() => gateQuery.refetch()}
           disabled={gateQuery.isFetching}
           className="rounded-lg border border-slate-200 p-2 text-slate-600 disabled:opacity-40"
@@ -88,8 +104,15 @@ export default function CanonicalFabReleasePanel({
         </button>
       </div>
 
-      {gateQuery.isLoading && <p className="mt-4 text-sm text-slate-500">Evaluating release gate…</p>}
-      {gateQuery.error && <p className="mt-4 text-sm font-semibold text-rose-700">Unable to evaluate the release gate.</p>}
+      {gateQuery.isLoading && <p className="mt-4 text-sm text-slate-500">Checking fabrication release…</p>}
+      {gateQuery.error && (
+        <p className="mt-4 text-sm font-semibold text-rose-700">
+          {presentPieceControlError(
+            gateQuery.error,
+            "Fabrication release could not be evaluated.",
+          )}
+        </p>
+      )}
 
       {gate && (
         <>
@@ -106,7 +129,7 @@ export default function CanonicalFabReleasePanel({
                   </div>
                   {check.blockers.length > 0 && (
                     <div className="mt-2 space-y-1 pl-6 text-xs text-rose-800">
-                      {check.blockers.map((blocker) => <p key={blocker}>{blocker}</p>)}
+                      {check.blockers.map((blocker) => <p key={blocker}>{presentBlocker(blocker)}</p>)}
                     </div>
                   )}
                 </div>
@@ -137,7 +160,7 @@ export default function CanonicalFabReleasePanel({
           ) : (
             <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
               <AlertOctagon className="mt-0.5 h-4 w-4 shrink-0" />
-              Missing canonical piece scope is a hard block and cannot be overridden.
+              Missing active piece scope is a hard block and cannot be overridden.
             </div>
           )}
         </>
@@ -150,14 +173,18 @@ export default function CanonicalFabReleasePanel({
             Exception release creates a High schedule risk
           </div>
           <p className="mt-2 text-xs text-amber-900">
-            The risk will retain the live gate snapshot, blockers, reason, work package, and release reference.
+            The risk will retain the current release checks, blockers, reason, work package, and release reference.
           </p>
           <div className="mt-3 space-y-1 text-xs text-amber-900">
-            {gate.blockers.map((blocker) => <p key={blocker}>• {blocker}</p>)}
+            {gate.blockers.map((blocker) => <p key={blocker}>• {presentBlocker(blocker)}</p>)}
           </div>
-          <label className="mt-4 grid gap-1 text-xs font-bold uppercase tracking-wider text-amber-900">
+          <label
+            htmlFor={exceptionReasonId}
+            className="mt-4 grid gap-1 text-xs font-bold uppercase tracking-wider text-amber-900"
+          >
             Required exception reason
             <textarea
+              id={exceptionReasonId}
               value={exceptionReason}
               onChange={(event) => setExceptionReason(event.target.value)}
               rows={4}

@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Link2, PackageCheck, Unlink2 } from "lucide-react";
 import { toast } from "sonner";
+import "@/styles/piece-control-command.css";
+import { DecisionPanel, Pill } from "@/components/command";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { evaluateWorkPackageReadiness } from "@/lib/pieceControl/readiness";
 import {
@@ -11,6 +13,7 @@ import {
   unassignPiecesFromWorkPackage,
   unlinkPieceDrawing,
 } from "@/lib/pieceControl/relationshipsRepository";
+import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 
 interface PieceRelationshipManagerProps {
   projectId: string;
@@ -18,6 +21,15 @@ interface PieceRelationshipManagerProps {
   focusedWorkPackageId?: string;
   compact?: boolean;
 }
+
+const READINESS_BLOCKER_COPY: Record<string, string> = {
+  "No canonical pieces assigned to this work package.":
+    "No active pieces assigned to this work package.",
+};
+
+const READINESS_MATERIAL_COPY: Record<string, string> = {
+  "not yet evaluated in this release.": "Material status is not available.",
+};
 
 export default function PieceRelationshipManager({
   projectId,
@@ -107,7 +119,13 @@ export default function PieceRelationshipManager({
       setSelectedPieceIds(new Set());
       await invalidate();
     },
-    onError: (error: Error) => toast.error(error.message || "Piece relationship update failed"),
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(
+          error,
+          "The piece relationship could not be updated.",
+        ),
+      ),
   };
   const assignMutation = useMutation({
     mutationFn: () => assignPiecesToWorkPackage(
@@ -150,49 +168,76 @@ export default function PieceRelationshipManager({
 
   if (!enabled) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <div className="flex items-center gap-2 font-black">
-          <AlertTriangle className="h-4 w-4" />
+      <div className="piece-relationship-state is-warning" data-skin="command">
+        <div className="piece-relationship-state__title">
+          <AlertTriangle size={16} />
           Piece relationship controls are disabled
         </div>
-        <p className="mt-1">Enable piece control for this project to manage authoritative scope.</p>
+        <p>Set up the Piece Register for this project to manage active piece scope.</p>
       </div>
     );
   }
 
   if (snapshotQuery.isLoading) {
-    return <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading piece relationships…</div>;
+    return <div className="piece-relationship-state" data-skin="command">Loading piece relationships…</div>;
   }
 
   if (snapshotQuery.error || !snapshot) {
-    return <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">Unable to load piece relationships.</div>;
+    return (
+      <div className="piece-relationship-state is-error" data-skin="command">
+        <span>
+          {presentPieceControlError(
+            snapshotQuery.error,
+            "Piece relationships could not be loaded.",
+          )}
+        </span>
+        <button
+          type="button"
+          className="cmd-btn cmd-btn--secondary"
+          onClick={() => void snapshotQuery.refetch()}
+        >
+          Try again
+        </button>
+      </div>
+    );
   }
 
   return (
-    <div className={`grid gap-4 ${compact ? "" : "xl:grid-cols-[1.1fr_0.9fr]"}`}>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-2">
-          <PackageCheck className="h-5 w-5 text-amber-700" />
-          <div>
-            <h3 className="font-black text-slate-950">Authoritative piece scope</h3>
-            <p className="text-xs text-slate-500">Assignments update only pieces.work_package_id.</p>
-          </div>
+    <div className={`piece-relationships${compact ? " is-compact" : ""}`} data-skin="command">
+      <DecisionPanel title="Piece assignments">
+        <div className="piece-command-intro">
+          <span className="piece-command-intro__icon" aria-hidden="true">
+            <PackageCheck size={18} />
+          </span>
+          <p>Assign active pieces to a work package.</p>
         </div>
 
         {!focusedWorkPackageId && (
-          <label className="mt-4 grid gap-1 text-xs font-bold uppercase tracking-wider text-slate-500">
+          <label className="piece-command-field" htmlFor="piece-assignment-work-package">
             Target work package
-            <select value={targetWorkPackageId} onChange={(event) => setTargetWorkPackageId(event.target.value)} className="h-10 rounded-lg border border-slate-200 px-3 text-sm normal-case tracking-normal">
+            <select
+              id="piece-assignment-work-package"
+              value={targetWorkPackageId}
+              onChange={(event) => setTargetWorkPackageId(event.target.value)}
+              className="piece-command-control"
+            >
               <option value="">Select package</option>
-              {snapshot.workPackages.map((wp) => <option key={wp.id} value={wp.id}>{workPackageMap.get(wp.id)}</option>)}
+              {snapshot.workPackages.map((wp) => (
+                <option key={wp.id} value={wp.id}>{workPackageMap.get(wp.id)}</option>
+              ))}
             </select>
           </label>
         )}
 
-        <div className="mt-4 max-h-52 overflow-auto rounded-xl border border-slate-200">
+        <div className="piece-assignment-list">
           {selectablePieces.map((piece) => (
-            <label key={piece.id} className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2 text-sm last:border-0 hover:bg-slate-50">
+            <label
+              key={piece.id}
+              className="piece-assignment-row"
+              htmlFor={`piece-assignment-${piece.id}`}
+            >
               <input
+                id={`piece-assignment-${piece.id}`}
                 type="checkbox"
                 checked={selectedPieceIds.has(piece.id)}
                 onChange={(event) => setSelectedPieceIds((current) => {
@@ -202,112 +247,167 @@ export default function PieceRelationshipManager({
                   return next;
                 })}
               />
-              <span className="font-black text-slate-900">{piece.piece_mark}</span>
-              <span className="text-xs text-slate-500">Lot {piece.lot_code}</span>
-              <span className="ml-auto text-xs text-slate-500">
+              <strong>{piece.piece_mark}</strong>
+              <span className="piece-assignment-row__lot">Lot {piece.lot_code}</span>
+              <span className="piece-assignment-row__package">
                 {piece.work_package_id ? workPackageMap.get(piece.work_package_id) ?? "Assigned" : "Unassigned"}
               </span>
             </label>
           ))}
-          {selectablePieces.length === 0 && <p className="p-5 text-center text-sm text-slate-500">No active leaf pieces available.</p>}
+          {selectablePieces.length === 0 && (
+            <p className="piece-command-empty">No active pieces available.</p>
+          )}
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="piece-command-actions">
           <button
+            type="button"
             disabled={selectedPieceIds.size === 0 || !(focusedWorkPackageId || targetWorkPackageId) || assignMutation.isPending}
             onClick={() => assignMutation.mutate()}
-            className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-black text-white disabled:opacity-40"
+            className="cmd-btn cmd-btn--primary"
           >
             Assign selected
           </button>
           <button
+            type="button"
             disabled={selectedPieceIds.size === 0 || unassignMutation.isPending}
             onClick={() => unassignMutation.mutate()}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-black text-slate-700 disabled:opacity-40"
+            className="cmd-btn cmd-btn--ghost"
           >
             Unassign selected
           </button>
         </div>
-      </div>
+      </DecisionPanel>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Link2 className="h-5 w-5 text-amber-700" />
-          <div>
-            <h3 className="font-black text-slate-950">Piece-to-drawing links</h3>
-            <p className="text-xs text-slate-500">Explicit links; legacy model-element links remain unchanged.</p>
+      <DecisionPanel title="Piece and drawing links">
+        <div className="piece-command-intro">
+          <span className="piece-command-intro__icon" aria-hidden="true">
+            <Link2 size={18} />
+          </span>
+          <p>Create explicit links between piece lots and drawings.</p>
+        </div>
+        {drawingPieces.length === 0 || snapshot.drawings.length === 0 ? (
+          <div className="piece-command-empty piece-command-empty--detail">
+            {drawingPieces.length === 0 && (
+              <p>
+                {focusedWorkPackageId
+                  ? "Assign active pieces to this work package before linking drawings."
+                  : "Import or add active pieces to the Piece Register before linking drawings."}
+              </p>
+            )}
+            {snapshot.drawings.length === 0 && (
+              <p>Add active project drawings before creating piece links.</p>
+            )}
           </div>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-xs font-bold uppercase tracking-wider text-slate-500">
-            Piece
-            <select value={selectedDrawingPieceId} onChange={(event) => setDrawingPieceId(event.target.value)} className="h-10 rounded-lg border border-slate-200 px-3 text-sm normal-case tracking-normal">
-              {drawingPieces.map((piece) => <option key={piece.id} value={piece.id}>{piece.piece_mark} · {piece.lot_code}</option>)}
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs font-bold uppercase tracking-wider text-slate-500">
-            Drawing
-            <select value={drawingId} onChange={(event) => setDrawingId(event.target.value)} className="h-10 rounded-lg border border-slate-200 px-3 text-sm normal-case tracking-normal">
-              <option value="">Select drawing</option>
-              {snapshot.drawings.map((drawing) => <option key={drawing.id} value={drawing.id}>{drawing.sheet_number || drawing.id} · {drawing.title || "Untitled"}</option>)}
-            </select>
-          </label>
-        </div>
-        <button
-          disabled={!selectedDrawingPieceId || !drawingId || linkMutation.isPending}
-          onClick={() => linkMutation.mutate()}
-          className="mt-3 rounded-lg bg-amber-500 px-4 py-2 text-sm font-black text-slate-950 disabled:opacity-40"
-        >
-          Link drawing
-        </button>
-        <div className="mt-4 space-y-2">
+        ) : (
+          <>
+            <div className="piece-link-controls">
+              <label className="piece-command-field" htmlFor="piece-drawing-link-piece">
+                Piece
+                <select
+                  id="piece-drawing-link-piece"
+                  value={selectedDrawingPieceId}
+                  onChange={(event) => setDrawingPieceId(event.target.value)}
+                  className="piece-command-control"
+                >
+                  {drawingPieces.map((piece) => (
+                    <option key={piece.id} value={piece.id}>
+                      {piece.piece_mark} · {piece.lot_code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="piece-command-field" htmlFor="piece-drawing-link-drawing">
+                Drawing
+                <select
+                  id="piece-drawing-link-drawing"
+                  value={drawingId}
+                  onChange={(event) => setDrawingId(event.target.value)}
+                  className="piece-command-control"
+                >
+                  <option value="">Select drawing</option>
+                  {snapshot.drawings.map((drawing) => (
+                    <option key={drawing.id} value={drawing.id}>
+                      {drawing.sheet_number || drawing.id} · {drawing.title || "Untitled"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={!selectedDrawingPieceId || !drawingId || linkMutation.isPending}
+              onClick={() => linkMutation.mutate()}
+              className="cmd-btn cmd-btn--primary piece-link-action"
+            >
+              Link drawing
+            </button>
+          </>
+        )}
+        <div className="piece-link-list">
           {linksForPiece.map((link) => {
             const drawing = drawingMap.get(link.drawing_id);
             return (
-              <div key={link.drawing_id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                <span className="font-black">{drawing?.sheet_number || link.drawing_id}</span>
-                <span className="truncate text-slate-500">{drawing?.title || "Inactive drawing"}</span>
+              <div key={link.drawing_id} className="piece-link-row">
+                <strong>{drawing?.sheet_number || link.drawing_id}</strong>
+                <span>{drawing?.title || "Inactive drawing"}</span>
                 <button
+                  type="button"
                   aria-label="Unlink drawing"
                   onClick={() => unlinkMutation.mutate({ pieceId: link.piece_id, targetDrawingId: link.drawing_id })}
-                  className="ml-auto rounded p-1 text-rose-700 hover:bg-rose-50"
+                  className="piece-link-row__unlink"
                 >
-                  <Unlink2 className="h-4 w-4" />
+                  <Unlink2 size={16} />
                 </button>
               </div>
             );
           })}
-          {selectedDrawingPieceId && linksForPiece.length === 0 && <p className="py-3 text-center text-sm text-slate-500">No drawings linked to this piece.</p>}
+          {selectedDrawingPieceId && linksForPiece.length === 0 && (
+            <p className="piece-command-empty">No drawings linked to this piece.</p>
+          )}
         </div>
-      </div>
+      </DecisionPanel>
 
-      <div className={`rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white shadow-sm ${compact ? "" : "xl:col-span-2"}`}>
-        <h3 className="font-black">Derived readiness</h3>
-        <p className="mt-1 text-xs text-slate-400">Read-only evaluation. Work package status is not changed.</p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <DecisionPanel title="Work package readiness">
+        <p className="piece-readiness-notice">
+          Read-only readiness check. Work package status is not changed.
+        </p>
+        <div className="piece-readiness-grid">
           {visibleReadiness.map((row) => (
-            <div key={row.workPackageId} className="rounded-xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-start justify-between gap-3">
+            <article
+              key={row.workPackageId}
+              className={`piece-readiness-card${row.isReady ? " is-ready" : " is-blocked"}`}
+            >
+              <div className="piece-readiness-card__head">
                 <div>
-                  <div className="font-black">{workPackageMap.get(row.workPackageId)}</div>
-                  <div className="mt-1 text-xs text-slate-400">{row.pieceCount} pieces · {row.approvedDrawingCount}/{row.linkedDrawingCount} drawings approved</div>
+                  <strong>{workPackageMap.get(row.workPackageId)}</strong>
+                  <span>
+                    {row.pieceCount} pieces · {row.approvedDrawingCount}/{row.linkedDrawingCount} drawings approved
+                  </span>
                 </div>
                 {row.isReady
-                  ? <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                  : <AlertTriangle className="h-5 w-5 text-amber-400" />}
+                  ? <Pill tone="good"><CheckCircle2 size={13} /> Ready</Pill>
+                  : <Pill tone="warn"><AlertTriangle size={13} /> Blocked</Pill>}
               </div>
-              <div className="mt-3 space-y-1 text-sm">
-                {row.blockers.length === 0
-                  ? <p className="text-emerald-300">No piece or drawing blockers found.</p>
-                  : row.blockers.map((blocker) => <p key={blocker} className="text-amber-200">• {blocker}</p>)}
+              {row.blockers.length === 0 ? (
+                <p className="piece-readiness-card__success">No piece or drawing blockers found.</p>
+              ) : (
+                <ul className="piece-readiness-card__blockers">
+                  {row.blockers.map((blocker) => (
+                    <li key={blocker}>{READINESS_BLOCKER_COPY[blocker] ?? blocker}</li>
+                  ))}
+                </ul>
+              )}
+              <div className="piece-readiness-card__material">
+                {READINESS_MATERIAL_COPY[row.materialState] ??
+                  `Material: ${row.materialState}`}
               </div>
-              <div className="mt-3 border-t border-white/10 pt-3 text-xs text-slate-400">
-                Material: {row.materialState}
-              </div>
-            </div>
+            </article>
           ))}
-          {visibleReadiness.length === 0 && <p className="text-sm text-slate-400">No active work packages in this view.</p>}
+          {visibleReadiness.length === 0 && (
+            <p className="piece-command-empty">No active work packages in this view.</p>
+          )}
         </div>
-      </div>
+      </DecisionPanel>
     </div>
   );
 }
