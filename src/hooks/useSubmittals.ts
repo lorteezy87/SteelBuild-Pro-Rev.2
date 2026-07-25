@@ -24,10 +24,25 @@ import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { logTransition } from "@/services/auditLogger";
 import { lockSet } from "@/lib/drawingHub";
-import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
+import {
+  CLOSED_SUBMITTAL_STATUSES,
+  submittalStatusToStage,
+} from "@/lib/submittalStageMapping";
 import { validateSubmittalTransition } from "@/lib/submittalTransitions";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { bumpRevision as nextRevision } from "@/lib/submittalRevision";
+import { evaluateRrResubmitGate } from "@/lib/rrResubmitGate";
+import {
+  evaluateOfsIfcGate,
+  evaluateOfsToOfaGate,
+  evaluateSkipOfsReleaseGate,
+  type OfsChecklistState,
+} from "@/lib/ofsCompletionGate";
+import {
+  evaluateCommentDispositionGate,
+  type CommentDispositionLike,
+} from "@/lib/commentDispositionGate";
+import { roundRevision } from "@/lib/submittalCycles";
 import { supabase } from "@/lib/supabase";
 import {
   FabReleaseBlockedError,
@@ -120,14 +135,39 @@ export interface AddRoundInput {
     submitted_date?: string | null;
     /** Status BEFORE this move — lets the smart triggers detect the transition. */
     status?: string | null;
+    /** Ball-in-court BEFORE this move — required for derived-stage OFS gates. */
+    ball_in_court?: string | null;
     /** Current text revision ('0','A','Rev 2'…) — read when auto-bumping it. */
     revision?: string | null;
+    /** Existing metadata — merged when stamping ofs_checklist. */
+    metadata?: Record<string, unknown> | null;
   };
   status: string;
   ball_in_court?: string | null;
   submitted_date?: string | null;
   returned_date?: string | null;
   notes?: string | null;
+  /**
+   * Target workflow stage for this move (from nextSubmittalAction). Used by
+   * the OFS→IFC checklist gate when status alone cannot distinguish OFS/IFC
+   * (both are Approved/AAN with different BICs).
+   */
+  nextStage?: string | null;
+  /** OFS→IFC scrub completion checklist (Slice 4). */
+  ofsChecklist?: OfsChecklistState | null;
+  /**
+   * Audited override reason for OFS gates (skip checklist / OFS→OFA /
+   * skip-OFS release). Distinct from fabReleaseOverrideReason but either
+   * satisfies the skip-OFS release gate when releasing for fab.
+   */
+  ofsOverrideReason?: string | null;
+  /**
+   * Optional preloaded comment dispositions for Slice 5 gates. When omitted
+   * on a gated move (OFS→IFC / R&R→OFA), addSubmittalRound loads them.
+   */
+  commentDispositions?: CommentDispositionLike[] | null;
+  /** Audited override for unresolved required comment dispositions. */
+  commentOverrideReason?: string | null;
   /** Bump the submittal's revision round_number (true on Revise & Resubmit). */
   bumpRevision?: boolean;
   /**
@@ -170,6 +210,8 @@ export interface CurrentRoundLite {
   ball_in_court?: string | null;
   submitted_date?: string | null;
   returned_date?: string | null;
+  /** Cycle stamp — carries `revision` (the text revision submitted). */
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface RoundWritePlan {
@@ -261,6 +303,113 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   const currentRound = (Array.isArray(existing) ? existing[0] : null) || null;
   const plan = planRoundWrite(currentRound, input.status);
 
+  // The text revision in effect FOR THIS MOVE — computed once so the round's
+  // cycle stamp and the submittal patch can never diverge. Bumped when the
+  // caller requested it (genuine resubmit + flag), else the current value.
+  // Stamped into `submittal_rounds.metadata.revision` at cycle-open so each
+  // approval cycle permanently records WHICH revision was submitted
+  // (Slice 2 — see src/lib/submittalCycles.ts).
+  const cycleRevision: string | null = input.bumpTextRevision
+    ? nextRevision(input.currentRevision ?? s.revision ?? null)
+    : (typeof s.revision === "string" && s.revision.trim() ? s.revision.trim() : null);
+
+  // R&R → OFA transmission-evidence gate (Slice 3): a package returned
+  // Revise-and-Resubmit / Rejected stays in R&R until the revised set is
+  // ACTUALLY retransmitted — a resubmission send requires the actual
+  // submission date, the recipient, and (when the returned cycle's revision
+  // is known) the next revision. The DB trigger backstops date + recipient.
+  const rrGate = evaluateRrResubmitGate({
+    priorStatus: s.status,
+    nextStatus: input.status,
+    submittedDate: input.submitted_date ?? null,
+    recipient: input.ball_in_court ?? null,
+    revision: cycleRevision,
+    priorCycleRevision: roundRevision(currentRound),
+  });
+  if (rrGate.ok === false) {
+    throw new Error(rrGate.reason);
+  }
+
+  // OFS workflow gates (Slice 4): Out for Scrub is post-approval cleanup —
+  // not a resubmittal — and IFC issue requires the scrub checklist (or an
+  // audited override). Fab-release override also satisfies skip-OFS release.
+  const ofsOverride =
+    (input.ofsOverrideReason || input.fabReleaseOverrideReason || "").trim() || null;
+  const derivedNextStage =
+    input.nextStage ??
+    submittalStatusToStage(input.status, input.ball_in_court ?? null, null);
+  const ofsToOfa = evaluateOfsToOfaGate({
+    priorStatus: s.status,
+    priorBallInCourt: s.ball_in_court,
+    nextStatus: input.status,
+    overrideReason: ofsOverride,
+  });
+  if (ofsToOfa.ok === false) {
+    throw new Error(ofsToOfa.reason);
+  }
+  const ofsIfc = evaluateOfsIfcGate({
+    priorStatus: s.status,
+    priorBallInCourt: s.ball_in_court,
+    nextStage: derivedNextStage,
+    checklist: input.ofsChecklist,
+    overrideReason: ofsOverride,
+  });
+  if (ofsIfc.ok === false) {
+    throw new Error(ofsIfc.reason);
+  }
+  const skipOfs = evaluateSkipOfsReleaseGate({
+    priorStatus: s.status,
+    priorBallInCourt: s.ball_in_court,
+    nextStatus: input.status,
+    overrideReason: ofsOverride,
+  });
+  if (skipOfs.ok === false) {
+    throw new Error(skipOfs.reason);
+  }
+
+  // Comment-disposition gates (Slice 5): OFS→IFC and R&R→OFA require all
+  // required returned comments to be resolved (or an audited override).
+  // Callers may pass dispositions; otherwise we load live rows for the package.
+  const priorStageForComments = submittalStatusToStage(
+    s.status,
+    s.ball_in_court,
+    null,
+  );
+  let dispositions = input.commentDispositions ?? null;
+  const needsCommentGate =
+    (derivedNextStage === "IFC" && priorStageForComments === "OFS") ||
+    (["Revise and Resubmit", "Rejected"].includes(String(s.status ?? "")) &&
+      ["Submitted", "Under Review"].includes(input.status));
+  if (needsCommentGate && dispositions == null) {
+    try {
+      dispositions = (await entities.SubmittalCommentDisposition.filter({
+        submittal_id: s.id,
+      })) as CommentDispositionLike[];
+    } catch {
+      dispositions = [];
+    }
+  }
+  if (needsCommentGate) {
+    const commentOverride =
+      (input.commentOverrideReason || ofsOverride || "").trim() || null;
+    const ofsCommentGate = evaluateCommentDispositionGate({
+      kind: "ofs_to_ifc",
+      dispositions,
+      nextStage: derivedNextStage,
+      priorStage: priorStageForComments,
+      overrideReason: commentOverride,
+    });
+    if (ofsCommentGate.ok === false) throw new Error(ofsCommentGate.reason);
+    const rrCommentGate = evaluateCommentDispositionGate({
+      kind: "rr_to_ofa",
+      dispositions,
+      nextStatus: input.status,
+      priorStatus: s.status,
+      overrideReason: commentOverride,
+    });
+    if (rrCommentGate.ok === false) throw new Error(rrCommentGate.reason);
+  }
+
   let round: { id?: string } | null;
   if (plan.action === "update" && plan.roundId) {
     const upd: Record<string, unknown> = {
@@ -282,7 +431,7 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
       returned_date: plan.setReturned ? (input.returned_date ?? null) : null,
       response_notes: input.notes ?? null,
       drawing_set_ids: Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [],
-      metadata: {},
+      metadata: cycleRevision ? { revision: cycleRevision } : {},
     } as Insert<"submittal_rounds">);
   }
 
@@ -304,12 +453,26 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   if (input.returned_date && plan.setReturned) patch.returned_date = input.returned_date;
   if (input.bumpRevision) patch.round_number = (Number(s.round_number) || 1) + 1;
   // Phase 2 (flag-gated at the caller): auto-advance the TEXT `revision` column
-  // when a resubmit opens a new round. Kept in this same patch so the round row
-  // and the bumped revision are written atomically for the caller.
+  // when a resubmit opens a new round. Uses the same `cycleRevision` stamped on
+  // the round row so the cycle history and the live revision agree.
   if (input.bumpTextRevision) {
-    patch.revision = nextRevision(input.currentRevision ?? s.revision ?? null);
+    patch.revision = cycleRevision;
   }
   if (isFabRelease) patch.fab_release_override_reason = fabOverride;
+  // Stamp scrub checklist / override into metadata when leaving OFS for IFC
+  // so the completion evidence survives on the submittal row.
+  if (derivedNextStage === "IFC" && (input.ofsChecklist || ofsOverride)) {
+    const priorMeta =
+      s.metadata && typeof s.metadata === "object" && !Array.isArray(s.metadata)
+        ? { ...s.metadata }
+        : {};
+    patch.metadata = {
+      ...priorMeta,
+      ofs_checklist: input.ofsChecklist ?? priorMeta.ofs_checklist ?? null,
+      workflow_substatus: "ifc_issued",
+      ...(ofsOverride ? { ofs_override_reason: ofsOverride } : {}),
+    };
+  }
 
   let updated: unknown;
   try {

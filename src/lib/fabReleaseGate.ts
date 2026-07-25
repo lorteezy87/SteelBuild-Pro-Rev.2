@@ -66,7 +66,8 @@ export interface FabGateReason {
     | "revision_conflict"
     | "unresolved_revision"
     | "open_rfis"
-    | "missing_signoffs";
+    | "missing_signoffs"
+    | "not_ifc_ready";
   title: string;
   sheets: DrawingLike[];
   rfis?: RfiLike[];
@@ -89,6 +90,24 @@ export interface FabReleaseGateArgs {
   rfis?: Array<RfiLike | null | undefined> | null;
   signoffs?: Array<SignoffLike | null | undefined> | null;
   requireSignoffs?: boolean;
+  /** Submittal evidence for IFC/Released readiness (Slice 8). */
+  submittals?: Array<{
+    id: string;
+    status: string;
+    ball_in_court?: string | null;
+    drawing_set_ids?: string[] | null;
+    submitted_date?: string | null;
+    updated_at?: string | null;
+    round_number?: number | null;
+    is_deleted?: boolean | null;
+    deleted_at?: string | null;
+  }> | null;
+  drawingRevisions?: Array<{
+    id: string;
+    drawing_id: string;
+    is_current: boolean;
+    archived_at?: string | null;
+  }> | null;
 }
 
 /** Normalize an RFI number for matching: "RFI #001" → "RFI001". */
@@ -181,8 +200,22 @@ export function computeFabReleaseGate({
   rfis = [],
   signoffs = [],
   requireSignoffs = false,
+  submittals = [],
+  drawingRevisions = [],
 }: FabReleaseGateArgs = {}): FabGateResult {
   const live = (drawings || []).filter((d): d is DrawingLike => !!d && d.is_deleted !== true);
+  const evidence = {
+    submittals: submittals ?? [],
+    drawingSignoffs: (signoffs || [])
+      .filter((s): s is SignoffLike => !!s && !!s.drawing_id)
+      .map((s) => ({
+        drawing_id: String(s.drawing_id),
+        stamp_type: String(s.stamp_type || s.status || ""),
+        is_voided: s.is_voided ?? false,
+        drawing_revision_id: null,
+      })),
+    drawingRevisions: drawingRevisions ?? [],
+  };
 
   // 1. Open RFIs.
   const blockingRfis = findBlockingRfis({ drawings: live, rfis });
@@ -197,6 +230,14 @@ export function computeFabReleaseGate({
   const superseded = live.filter((d) => isSupersededSheet(d) && !isRejectedSheet(d));
   const unresolved = live.filter(
     (d) => isUnresolvedCurrentRevision(d) && !isRejectedSheet(d) && !isSupersededSheet(d),
+  );
+  // Slice 8: package sheets that are not IFC/Released fail closed (unless already
+  // counted as rejected / superseded).
+  const notIfcReady = live.filter(
+    (d) =>
+      !isRejectedSheet(d) &&
+      !isSupersededSheet(d) &&
+      !isApprovedForFab(d as any, evidence),
   );
 
   const reasons: FabGateReason[] = [];
@@ -214,10 +255,18 @@ export function computeFabReleaseGate({
       action: "Publish or clear the current revision before releasing for fabrication.",
     });
   }
+  if (notIfcReady.length) {
+    reasons.push({
+      kind: "not_ifc_ready",
+      title: `${notIfcReady.length} sheet${plural(notIfcReady.length)} not IFC / Released for fabrication`,
+      sheets: notIfcReady,
+      action: "Advance governing submittals to IFC or Released before releasing the package.",
+    });
+  }
   if (blockingRfis.length) {
     reasons.push({ kind: "open_rfis", title: `${blockingRfis.length} open RFI${plural(blockingRfis.length)} reference this package`, rfis: blockingRfis, sheets: affectedSheets });
   }
-  // 4. Required sign-offs (opt-in via project setting). Only approved sheets need
+  // Required sign-offs (opt-in via project setting). Only IFC/Released sheets need
   // one — an in-progress sheet isn't expected to be signed off yet.
   if (requireSignoffs) {
     const signed = new Set(
@@ -226,9 +275,11 @@ export function computeFabReleaseGate({
         .map((s) => s.drawing_id)
         .filter((id): id is string => typeof id === "string" && id.length > 0),
     );
-    const missing = live.filter((d) => isApprovedForFab(d) && d.id != null && !signed.has(d.id));
+    const missing = live.filter(
+      (d) => isApprovedForFab(d as any, evidence) && d.id != null && !signed.has(d.id),
+    );
     if (missing.length) {
-      reasons.push({ kind: "missing_signoffs", title: `${missing.length} approved sheet${plural(missing.length)} missing a fab sign-off`, sheets: missing });
+      reasons.push({ kind: "missing_signoffs", title: `${missing.length} IFC/Released sheet${plural(missing.length)} missing a fab sign-off`, sheets: missing });
     }
   }
 

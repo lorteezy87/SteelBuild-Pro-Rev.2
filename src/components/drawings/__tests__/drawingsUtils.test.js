@@ -258,10 +258,20 @@ describe("computeSelectedSetName", () => {
 });
 
 describe("computeStagePipeline", () => {
-  it("builds the 7 canonical stages and picks activeIdx from an explicit real-stage filter", () => {
+  it("builds the 8 workflow stages (R&R first-class, 2026-07-25) and picks activeIdx from an explicit real-stage filter", () => {
     const r = computeStagePipeline({ submittals: [], drawingSetRecords: [], drawings: [], stageFilter: "OFA" });
-    expect(r.pipeStages.map(s => s.id)).toEqual(["Not Started", "IFA", "OFA", "BFA", "OFS", "IFC", "Released"]);
+    expect(r.pipeStages.map(s => s.id)).toEqual(["Not Started", "IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released"]);
     expect(r.activeIdx).toBe(2); // OFA
+  });
+  it("buckets R&R submittals into the R&R chevron, not IFA", () => {
+    const r = computeStagePipeline({
+      submittals: [{ id: "s1", status: "Revise and Resubmit", ball_in_court: "Detailer", drawing_set_ids: ["set-1"] }],
+      drawingSetRecords: [{ id: "set-1" }],
+      drawings: [],
+      stageFilter: "ALL",
+    });
+    expect(r.pipeStages.find(s => s.id === "R&R").count).toBe(1);
+    expect(r.pipeStages.find(s => s.id === "IFA").count).toBe(0);
   });
   it("counts a package with no submittal (and no released sheet) in the Not Started bucket", () => {
     const r = computeStagePipeline({

@@ -90,6 +90,8 @@ describe("buildBoardItems", () => {
     expect(sub!.needsAction).toBe(true);
     expect(sub!.isRR).toBe(true);
     expect(sub!.due.overdue).toBe(true); // required_date (Jul 3) is before pinned today (Jul 6)
+    expect(sub!.stage).toBe("R&R");
+    expect(sub!.risk?.tier).toBe("critical");
   });
 
   it("does not double-count a submittal that is linked to a package", () => {
@@ -183,11 +185,14 @@ describe("bucketByStage", () => {
 
 describe("summarizeBoard", () => {
   it("counts totals / overdue / needsAction / unlinked over the unfiltered list", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(PINNED_TODAY);
     const items = buildBoardItems([setPackage], [...setPackage.submittals, unlinkedSubmittal]);
     const summary = summarizeBoard(items);
     expect(summary.total).toBe(2);
     expect(summary.unlinked).toBe(1);
     expect(summary.needsAction).toBe(1);
     expect(summary.overdue).toBeGreaterThanOrEqual(1);
+    expect(summary.criticalRisk).toBeGreaterThanOrEqual(1);
   });
 });

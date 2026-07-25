@@ -2109,6 +2109,8 @@ export type Database = {
           revision_code: string
           revision_name: string | null
           revision_notes: string | null
+          revision_reason: string | null
+          revision_source: string | null
           sheet_number: string
           sheet_title: string
           supersedes_revision_id: string | null
@@ -2135,6 +2137,8 @@ export type Database = {
           revision_code: string
           revision_name?: string | null
           revision_notes?: string | null
+          revision_reason?: string | null
+          revision_source?: string | null
           sheet_number: string
           sheet_title: string
           supersedes_revision_id?: string | null
@@ -2161,6 +2165,8 @@ export type Database = {
           revision_code?: string
           revision_name?: string | null
           revision_notes?: string | null
+          revision_reason?: string | null
+          revision_source?: string | null
           sheet_number?: string
           sheet_title?: string
           supersedes_revision_id?: string | null
@@ -6392,6 +6398,126 @@ export type Database = {
             columns: ["submittal_id"]
             isOneToOne: false
             referencedRelation: "submittals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submittal_comment_dispositions: {
+        Row: {
+          comment_number: string | null
+          comment_text: string | null
+          completed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          drawing_id: string | null
+          id: string
+          incorporated_revision: string | null
+          is_deleted: boolean
+          is_required: boolean
+          location: string | null
+          metadata: Json
+          project_id: string
+          related_piece_ids: string[]
+          related_rfi_id: string | null
+          required_action: string | null
+          resolution: string | null
+          responsible_user_id: string | null
+          source: string | null
+          status: string
+          submittal_id: string
+          submittal_round_id: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          comment_number?: string | null
+          comment_text?: string | null
+          completed_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          drawing_id?: string | null
+          id?: string
+          incorporated_revision?: string | null
+          is_deleted?: boolean
+          is_required?: boolean
+          location?: string | null
+          metadata?: Json
+          project_id: string
+          related_piece_ids?: string[]
+          related_rfi_id?: string | null
+          required_action?: string | null
+          resolution?: string | null
+          responsible_user_id?: string | null
+          source?: string | null
+          status?: string
+          submittal_id: string
+          submittal_round_id: string
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          comment_number?: string | null
+          comment_text?: string | null
+          completed_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          drawing_id?: string | null
+          id?: string
+          incorporated_revision?: string | null
+          is_deleted?: boolean
+          is_required?: boolean
+          location?: string | null
+          metadata?: Json
+          project_id?: string
+          related_piece_ids?: string[]
+          related_rfi_id?: string | null
+          required_action?: string | null
+          resolution?: string | null
+          responsible_user_id?: string | null
+          source?: string | null
+          status?: string
+          submittal_id?: string
+          submittal_round_id?: string
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submittal_comment_dispositions_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_comment_dispositions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_comment_dispositions_related_rfi_id_fkey"
+            columns: ["related_rfi_id"]
+            isOneToOne: false
+            referencedRelation: "rfis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_comment_dispositions_submittal_id_fkey"
+            columns: ["submittal_id"]
+            isOneToOne: false
+            referencedRelation: "submittals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_comment_dispositions_submittal_round_id_fkey"
+            columns: ["submittal_round_id"]
+            isOneToOne: false
+            referencedRelation: "submittal_rounds"
             referencedColumns: ["id"]
           },
         ]

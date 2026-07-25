@@ -21,7 +21,7 @@
  * isPackageSuperseded() — it is not part of the linear effective-state pipeline.
  */
 
-import { STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+import { WORKFLOW_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import { derivedSetStage, submittalStatusToStage, isRRStatus, pickMostRecentSubmittal } from "@/lib/submittalStageMapping";
 
 /** Manual upstream (pre-submittal) drafting states. */
@@ -32,16 +32,17 @@ export const RELEASE_STATES = ["Partially Released", "Released for Erection"];
 
 /**
  * Full operational pipeline order (left = earliest). Splices the manual
- * drafting states before the canonical submittal STAGE_ORDER and the release
- * states after it. 'Superseded' is intentionally excluded (orthogonal).
+ * drafting states before the canonical WORKFLOW_STAGE_ORDER (the derived
+ * submittal stages, R&R included) and the release states after it.
+ * 'Superseded' is intentionally excluded (orthogonal).
  *   ["Not Started","In Detailing","Internal Review","Ready to Submit",
- *    "IFA","OFA","BFA","OFS","IFC","Released",
+ *    "IFA","OFA","BFA","R&R","OFS","IFC","Released",
  *    "Partially Released","Released for Erection"]
  */
 export const DETAILING_STATE_ORDER = [
   "Not Started",
   ...DRAFTING_STATES,
-  ...STAGE_ORDER.filter((s) => s !== "Not Started"),
+  ...WORKFLOW_STAGE_ORDER.filter((s) => s !== "Not Started"),
   ...RELEASE_STATES,
 ];
 
@@ -119,12 +120,12 @@ export function isPackageSuperseded(sheetsForSet) {
  * most-recent active one — the same submittal `derivedSetStage` maps) carries a
  * Revise-and-Resubmit / Rejected outcome.
  *
- * R&R deliberately rolls up to the IFA stage for counting (see
- * submittalStatusToStage), so without this flag an R&R loop-back is
- * indistinguishable from a fresh IFA on the board. Surfaced as a separate badge
- * alongside the effective state (like isPackageSuperseded), never folded into
- * it. Returns false once the governing submittal advances past R&R (e.g. it's
- * resubmitted, approved, or released).
+ * Since 2026-07-25 R&R derives to the first-class "R&R" stage (see
+ * submittalStatusToStage), so the effective state itself reads R&R. This flag
+ * remains for surfaces that badge R&R alongside a non-stage display (e.g. a
+ * literal status row) — callers should skip the badge when the state chip
+ * already reads "R&R". Returns false once the governing submittal advances
+ * past R&R (e.g. it's resubmitted, approved, or released).
  *
  * @param {Array} submittalsForSet
  * @returns {boolean}

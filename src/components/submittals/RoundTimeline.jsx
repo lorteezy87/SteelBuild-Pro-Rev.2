@@ -1,15 +1,23 @@
 import React, { useState } from "react";
 import { formatDate } from "../shared/formatters";
+import { buildApprovalCycles } from "@/lib/submittalCycles";
+import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 
 /**
- * RoundTimeline — vertical timeline showing all rounds for a submittal.
+ * RoundTimeline — vertical APPROVAL-CYCLE timeline for a submittal.
  *
- * Used inside the SubmittalDetail panel. Each node shows the round
- * badge, status, date span, reviewer, ball-in-court, and response
- * notes (expandable). The latest round is highlighted.
+ * Used inside the SubmittalDetail panel. Each round row IS one
+ * submit→return approval cycle (see planRoundWrite); every node shows
+ * the cycle badge, the revision submitted in that cycle, status, the
+ * resulting workflow stage for verdicts (→ R&R / OFS / IFC / Released),
+ * date span, reviewer, ball-in-court, and response notes (expandable).
+ * The latest cycle is highlighted. Prior cycles are immutable history —
+ * a new return never overwrites them.
  *
  * Props:
  *   rounds        — submittal_round records, pre-sorted ascending by round_number
+ *   submittal     — optional parent submittal; supplies the live revision as
+ *                   the fallback for the CURRENT cycle when unstamped
  *   submittalId   — parent submittal UUID (informational)
  *   onReturnRound — callback(roundId) when user marks a round returned
  */
@@ -37,7 +45,7 @@ function daysBetween(isoA, isoB) {
   return Math.round(Math.abs(b - a) / 86_400_000);
 }
 
-export default function RoundTimeline({ rounds = [], submittalId, onReturnRound }) {
+export default function RoundTimeline({ rounds = [], submittal = null, submittalId, onReturnRound }) {
   if (rounds.length === 0) {
     return (
       <div style={{
@@ -47,11 +55,15 @@ export default function RoundTimeline({ rounds = [], submittalId, onReturnRound 
         fontStyle: "italic",
         padding: "8px 0",
       }}>
-        No rounds recorded yet.
+        No approval cycles recorded yet.
       </div>
     );
   }
 
+  // Cycle framing (revision / disposition / resulting stage) keyed by round id.
+  const cyclesById = new Map(
+    buildApprovalCycles(rounds, submittal).map((c) => [c.id, c]),
+  );
   const lastIdx = rounds.length - 1;
 
   return (
@@ -73,6 +85,7 @@ export default function RoundTimeline({ rounds = [], submittalId, onReturnRound 
         <RoundNode
           key={round.id}
           round={round}
+          cycle={cyclesById.get(round.id) || null}
           isLatest={idx === lastIdx}
           isFirst={idx === 0}
           onReturn={onReturnRound}
@@ -82,12 +95,13 @@ export default function RoundTimeline({ rounds = [], submittalId, onReturnRound 
   );
 }
 
-function RoundNode({ round, isLatest, isFirst, onReturn }) {
+function RoundNode({ round, cycle, isLatest, isFirst, onReturn }) {
   const [notesExpanded, setNotesExpanded] = useState(false);
   const cfg = ROUND_STATUS_COLORS[round.status] || DEFAULT_COLOR;
   const duration = daysBetween(round.submitted_date, round.returned_date);
   const hasLongNotes = (round.response_notes || "").length > 120;
   const notesText = round.response_notes || "";
+  const stageCfg = cycle?.resultingStage ? STAGE_MAP[cycle.resultingStage] : null;
 
   return (
     <div style={{
@@ -117,8 +131,8 @@ function RoundNode({ round, isLatest, isFirst, onReturn }) {
         borderRadius: 6,
         padding: "10px 14px",
       }}>
-        {/* Header: round badge + status chip */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        {/* Header: cycle badge + revision + status chip + resulting stage */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
           <span style={{
             fontFamily: "var(--font-mono)",
             fontSize: 11,
@@ -126,8 +140,25 @@ function RoundNode({ round, isLatest, isFirst, onReturn }) {
             color: isLatest ? "var(--accent)" : "var(--text-primary)",
             letterSpacing: "0.06em",
           }}>
-            R{round.round_number || "?"}
+            CYCLE {round.round_number || "?"}
           </span>
+          {cycle?.revision && (
+            <span
+              title={`Revision submitted in this approval cycle: ${cycle.revision}`}
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 700,
+                padding: "2px 6px",
+                borderRadius: 3,
+                color: "var(--text-primary)",
+                border: "1px solid var(--border-default)",
+                letterSpacing: "0.06em",
+              }}
+            >
+              REV {cycle.revision}
+            </span>
+          )}
           <span style={{
             fontFamily: "var(--font-mono)",
             fontSize: 9,
@@ -139,6 +170,25 @@ function RoundNode({ round, isLatest, isFirst, onReturn }) {
           }}>
             {round.status || "Draft"}
           </span>
+          {/* Resulting workflow stage for a closed cycle (verdict), e.g.
+              "→ R&R" / "→ OFS" — the disposition's landing stage. */}
+          {cycle?.disposition && stageCfg && (
+            <span
+              title={`Disposition "${cycle.disposition}" moved the package to ${stageCfg.label}`}
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 700,
+                padding: "2px 6px",
+                borderRadius: 3,
+                color: stageCfg.color,
+                background: stageCfg.bg,
+                letterSpacing: "0.06em",
+              }}
+            >
+              {"→ "}{stageCfg.label}
+            </span>
+          )}
           {isLatest && (
             <span style={{
               fontFamily: "var(--font-mono)",

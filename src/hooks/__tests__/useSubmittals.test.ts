@@ -20,6 +20,7 @@ const updateRound = vi.fn(async (id: string, patch: any) => ({ id, ...patch }));
 // The latest round for the submittal (round model = submit→return cycle).
 // Default [] = no prior round; tests inject an open/closed round per case.
 const filterRound = vi.fn(async (..._a: any[]) => [] as any[]);
+const filterCommentDispositions = vi.fn(async (..._a: any[]) => [] as any[]);
 const updateSubmittal = vi.fn(async (id: string, patch: any) => ({ id, drawing_set_ids: ["set-a"], ...patch }));
 const deleteRound = vi.fn(async (_id: string) => ({}));
 vi.mock("@/api/supabaseClient", () => ({
@@ -29,6 +30,9 @@ vi.mock("@/api/supabaseClient", () => ({
       update: (...a: any[]) => updateRound(a[0], a[1]),
       filter: (...a: any[]) => filterRound(...a),
       delete: (...a: any[]) => deleteRound(a[0]),
+    },
+    SubmittalCommentDisposition: {
+      filter: (...a: any[]) => filterCommentDispositions(...a),
     },
     Submittal: { update: (...a: any[]) => updateSubmittal(a[0], a[1]) },
   },
@@ -269,6 +273,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     await addSubmittalRound({
       submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], status: "Revise and Resubmit" },
       status: "Submitted",
+      ball_in_court: "EOR",
       submitted_date: "2026-06-07",
     });
     expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 2, status: "Submitted" }));
@@ -302,6 +307,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     await addSubmittalRound({
       submittal: { id: "s4", project_id: "p1", revision: "0", status: "Revise and Resubmit" },
       status: "Submitted",
+      ball_in_court: "EOR",
       submitted_date: "2026-06-07",
       bumpTextRevision: true,
       currentRevision: "0",
@@ -328,6 +334,301 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     const patch = updateSubmittal.mock.calls.find((c) => c[0] === "s6")?.[1] ?? {};
     expect(patch).not.toHaveProperty("revision");
   });
+
+  // Slice 2 (approval-cycle history): each new cycle permanently records the
+  // text revision submitted in it, in submittal_rounds.metadata.revision.
+  it("stamps the current revision into the new round's metadata at cycle-open", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s7", project_id: "p1", revision: "A", status: "Draft" },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+    });
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { revision: "A" } }),
+    );
+  });
+
+  it("stamps the BUMPED revision on a resubmit cycle so the round and patch agree", async () => {
+    filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Revise and Resubmit", submitted_date: "2026-06-01", returned_date: "2026-06-05" }]);
+    await addSubmittalRound({
+      submittal: { id: "s8", project_id: "p1", revision: "A", status: "Revise and Resubmit" },
+      status: "Submitted",
+      ball_in_court: "EOR",
+      submitted_date: "2026-06-07",
+      bumpTextRevision: true,
+    });
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ round_number: 2, metadata: { revision: "B" } }),
+    );
+    expect(updateSubmittal).toHaveBeenCalledWith("s8", expect.objectContaining({ revision: "B" }));
+  });
+
+  it("stamps empty metadata when the submittal has no revision (nothing invented)", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s9", project_id: "p1", status: "Draft" },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+    });
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: {} }),
+    );
+  });
+});
+
+describe("addSubmittalRound — R&R resubmission-evidence gate (Slice 3)", () => {
+  beforeEach(() => {
+    createRound.mockClear();
+    updateRound.mockClear();
+    filterRound.mockClear();
+    updateSubmittal.mockClear();
+  });
+
+  it("blocks an R&R → Submitted move without an actual submission date", async () => {
+    filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Revise and Resubmit", submitted_date: "2026-06-01", returned_date: "2026-06-05" }]);
+    await expect(
+      addSubmittalRound({
+        submittal: { id: "g1", project_id: "p1", status: "Revise and Resubmit" },
+        status: "Submitted",
+        ball_in_court: "EOR",
+      }),
+    ).rejects.toThrow(/RR_RESUBMIT_BLOCKED.*submission date/);
+    expect(createRound).not.toHaveBeenCalled();
+    expect(updateSubmittal).not.toHaveBeenCalled();
+  });
+
+  it("blocks an R&R → Submitted move without a recipient", async () => {
+    filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Revise and Resubmit", submitted_date: "2026-06-01", returned_date: "2026-06-05" }]);
+    await expect(
+      addSubmittalRound({
+        submittal: { id: "g2", project_id: "p1", status: "Revise and Resubmit" },
+        status: "Submitted",
+        submitted_date: "2026-06-07",
+      }),
+    ).rejects.toThrow(/RR_RESUBMIT_BLOCKED.*recipient/);
+  });
+
+  it("blocks resubmitting the SAME revision the returned cycle went out as", async () => {
+    filterRound.mockResolvedValueOnce([{
+      id: "r1", round_number: 1, status: "Revise and Resubmit",
+      submitted_date: "2026-06-01", returned_date: "2026-06-05",
+      metadata: { revision: "A" },
+    }]);
+    await expect(
+      addSubmittalRound({
+        submittal: { id: "g3", project_id: "p1", revision: "A", status: "Revise and Resubmit" },
+        status: "Submitted",
+        ball_in_court: "EOR",
+        submitted_date: "2026-06-07",
+      }),
+    ).rejects.toThrow(/RR_RESUBMIT_BLOCKED.*next revision/);
+  });
+
+  it("passes a fully-evidenced resubmission (date + recipient + bumped revision)", async () => {
+    filterRound.mockResolvedValueOnce([{
+      id: "r1", round_number: 1, status: "Revise and Resubmit",
+      submitted_date: "2026-06-01", returned_date: "2026-06-05",
+      metadata: { revision: "A" },
+    }]);
+    await addSubmittalRound({
+      submittal: { id: "g4", project_id: "p1", revision: "A", status: "Revise and Resubmit" },
+      status: "Submitted",
+      ball_in_court: "EOR",
+      submitted_date: "2026-06-07",
+      bumpTextRevision: true,
+    });
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ round_number: 2, metadata: { revision: "B" } }),
+    );
+  });
+
+  it("does not gate a first submission (Draft → Submitted)", async () => {
+    await addSubmittalRound({
+      submittal: { id: "g5", project_id: "p1", status: "Draft" },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+    });
+    expect(createRound).toHaveBeenCalled();
+  });
+});
+
+describe("addSubmittalRound — OFS workflow gates (Slice 4)", () => {
+  beforeEach(() => {
+    createRound.mockClear();
+    updateRound.mockClear();
+    filterRound.mockClear();
+    updateSubmittal.mockClear();
+    rpcMock.mockReset();
+    rpcMock.mockResolvedValue({ data: [], error: null });
+  });
+
+  it("blocks OFS → IFC without the scrub checklist", async () => {
+    await expect(
+      addSubmittalRound({
+        submittal: {
+          id: "ofs1", project_id: "p1", status: "Approved as Noted", ball_in_court: "Detailer",
+        },
+        // Same disposition + BIC move to GC (IFC) — status graph allows same-status.
+        status: "Approved as Noted",
+        ball_in_court: "GC",
+        nextStage: "IFC",
+      }),
+    ).rejects.toThrow(/OFS_IFC_BLOCKED/);
+    expect(createRound).not.toHaveBeenCalled();
+  });
+
+  it("allows OFS → IFC when the checklist is complete and stamps metadata", async () => {
+    const checklist = {
+      comments_addressed: true,
+      markups_incorporated: true,
+      sheets_ready: true,
+      authorized_to_issue: true,
+    };
+    await addSubmittalRound({
+      submittal: {
+        id: "ofs2", project_id: "p1", status: "Approved as Noted", ball_in_court: "Detailer",
+        metadata: { existing: 1 },
+      },
+      status: "Approved as Noted",
+      ball_in_court: "GC",
+      nextStage: "IFC",
+      ofsChecklist: checklist,
+    });
+    expect(updateSubmittal).toHaveBeenCalledWith(
+      "ofs2",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          existing: 1,
+          ofs_checklist: checklist,
+          workflow_substatus: "ifc_issued",
+        }),
+      }),
+    );
+  });
+
+  it("blocks Released for Fab from OFS (must be at IFC)", async () => {
+    await expect(
+      addSubmittalRound({
+        submittal: {
+          id: "ofs3", project_id: "p1", status: "Approved as Noted", ball_in_court: "Detailer",
+        },
+        status: "Released for Fabrication",
+      }),
+    ).rejects.toThrow(/OFS_SKIP_BLOCKED/);
+  });
+
+  it("blocks OFS → Submitted without override (scrub ≠ resubmittal)", async () => {
+    // Status graph also blocks this; gate message is the product-facing one
+    // when the graph is bypassed via same-status+BIC tricks — here the
+    // transition graph rejects first. Assert either product gate or graph.
+    await expect(
+      addSubmittalRound({
+        submittal: {
+          id: "ofs4", project_id: "p1", status: "Approved as Noted", ball_in_court: "Detailer",
+        },
+        status: "Submitted",
+        ball_in_court: "EOR",
+      }),
+    ).rejects.toThrow(/Cannot move a submittal|OFS_TO_OFA_BLOCKED/);
+  });
+});
+
+describe("addSubmittalRound — comment disposition gates (Slice 5)", () => {
+  beforeEach(() => {
+    createRound.mockClear();
+    updateRound.mockClear();
+    filterRound.mockClear();
+    filterCommentDispositions.mockClear();
+    updateSubmittal.mockClear();
+    rpcMock.mockReset();
+    rpcMock.mockResolvedValue({ data: [], error: null });
+  });
+
+  const checklist = {
+    comments_addressed: true,
+    markups_incorporated: true,
+    sheets_ready: true,
+    authorized_to_issue: true,
+  };
+
+  it("blocks OFS → IFC when a required comment is unresolved", async () => {
+    await expect(
+      addSubmittalRound({
+        submittal: {
+          id: "cd1", project_id: "p1", status: "Approved as Noted", ball_in_court: "Detailer",
+        },
+        status: "Approved as Noted",
+        ball_in_court: "GC",
+        nextStage: "IFC",
+        ofsChecklist: checklist,
+        commentDispositions: [
+          { id: "c1", status: "Unreviewed", is_required: true, comment_text: "Fix weld" },
+        ],
+      }),
+    ).rejects.toThrow(/COMMENT_DISPOSITION_BLOCKED/);
+    expect(createRound).not.toHaveBeenCalled();
+  });
+
+  it("allows OFS → IFC when required comments are resolved", async () => {
+    await addSubmittalRound({
+      submittal: {
+        id: "cd2", project_id: "p1", status: "Approved as Noted", ball_in_court: "Detailer",
+      },
+      status: "Approved as Noted",
+      ball_in_court: "GC",
+      nextStage: "IFC",
+      ofsChecklist: checklist,
+      commentDispositions: [
+        { id: "c1", status: "Complete", is_required: true },
+      ],
+    });
+    expect(updateSubmittal).toHaveBeenCalled();
+  });
+
+  it("blocks R&R → Submitted when required comments are unresolved", async () => {
+    filterRound.mockResolvedValueOnce([{
+      id: "r1", round_number: 1, status: "Revise and Resubmit",
+      submitted_date: "2026-06-01", returned_date: "2026-06-05",
+      metadata: { revision: "A" },
+    }]);
+    await expect(
+      addSubmittalRound({
+        submittal: {
+          id: "cd3", project_id: "p1", revision: "A", status: "Revise and Resubmit",
+          ball_in_court: "Detailer",
+        },
+        status: "Submitted",
+        ball_in_court: "EOR",
+        submitted_date: "2026-06-07",
+        bumpTextRevision: true,
+        commentDispositions: [
+          { id: "c1", status: "Clarification Required", is_required: true },
+        ],
+      }),
+    ).rejects.toThrow(/COMMENT_DISPOSITION_BLOCKED/);
+  });
+
+  it("allows R&R → Submitted with comment override when comments remain open", async () => {
+    filterRound.mockResolvedValueOnce([{
+      id: "r1", round_number: 1, status: "Revise and Resubmit",
+      submitted_date: "2026-06-01", returned_date: "2026-06-05",
+      metadata: { revision: "A" },
+    }]);
+    await addSubmittalRound({
+      submittal: {
+        id: "cd4", project_id: "p1", revision: "A", status: "Revise and Resubmit",
+        ball_in_court: "Detailer",
+      },
+      status: "Submitted",
+      ball_in_court: "EOR",
+      submitted_date: "2026-06-07",
+      bumpTextRevision: true,
+      commentDispositions: [
+        { id: "c1", status: "Unreviewed", is_required: true },
+      ],
+      commentOverrideReason: "Tracked in RFI-012 — exception authorized",
+    });
+    expect(createRound).toHaveBeenCalled();
+  });
 });
 
 describe("addSubmittalRound — fab-release gate (Option C)", () => {
@@ -346,7 +647,10 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
     rpcMock.mockResolvedValueOnce({ data: [{ rfi_number: "RFI-001" }, { rfi_number: "RFI-002" }], error: null });
     await expect(
       addSubmittalRound({
-        submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1, status: "Approved" },
+        submittal: {
+          id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1,
+          status: "Approved", ball_in_court: "GC", // IFC — past OFS skip gate
+        },
         status: "Released for Fabrication",
       }),
     ).rejects.toBeInstanceOf(FabReleaseBlockedError);
@@ -371,7 +675,10 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
 
   it("releases cleanly when no RFIs block — round logged, override reason null", async () => {
     await addSubmittalRound({
-      submittal: { id: "s3", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 2, status: "Approved as Noted" },
+      submittal: {
+        id: "s3", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 2,
+        status: "Approved as Noted", ball_in_court: "GC", // IFC
+      },
       status: "Released for Fabrication",
     });
     expect(rpcMock).toHaveBeenCalled();
@@ -387,7 +694,10 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
     updateSubmittal.mockRejectedValueOnce({ message: "FAB_RELEASE_BLOCKED: 1 open RFI(s) ... (RFI-009)." });
     await expect(
       addSubmittalRound({
-        submittal: { id: "s4", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0, status: "Approved" },
+        submittal: {
+          id: "s4", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0,
+          status: "Approved", ball_in_court: "GC",
+        },
         status: "Released for Fabrication",
       }),
     ).rejects.toBeInstanceOf(FabReleaseBlockedError);
@@ -435,7 +745,10 @@ describe("addSubmittalRound — ball-in-court clear on completion (§20)", () =>
 
   it("nulls the submittal patch's ball_in_court on 'Released for Fabrication'", async () => {
     await addSubmittalRound({
-      submittal: { id: "c1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1, status: "Approved" },
+      submittal: {
+        id: "c1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1,
+        status: "Approved", ball_in_court: "GC",
+      },
       status: "Released for Fabrication",
       ball_in_court: "GC",
     });

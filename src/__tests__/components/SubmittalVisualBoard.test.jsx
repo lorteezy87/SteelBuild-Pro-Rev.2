@@ -72,7 +72,9 @@ describe("SubmittalVisualBoard", () => {
 
     expect(screen.getByText("05-2000 - Embed plates")).toBeInTheDocument();
     expect(screen.getAllByText("Unlinked").length).toBeGreaterThan(0);
-    expect(screen.getByText("R&R")).toBeInTheDocument();
+    // R&R is a first-class board column (2026-07-25): the column header AND
+    // the card badge both read "R&R", so assert at least one of each family.
+    expect(screen.getAllByText("R&R").length).toBeGreaterThanOrEqual(2);
   });
 
   it("opens the matching register tab when a card is selected", () => {

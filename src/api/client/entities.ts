@@ -237,6 +237,7 @@ export const entities = {
   // released tracking, gated by the `submittal_drawing_types` flag at the UI.
   SubmittalComponent:    createEntityClient('submittal_components'),
   SubmittalSheetResponse: createEntityClient('submittal_sheet_responses'),
+  SubmittalCommentDisposition: createEntityClient('submittal_comment_dispositions'),
   SubmittalActivity:     createEntityClient('submittal_activity'),
   Comment:               createEntityClient('comments'),
   Expense:               createEntityClient('expenses'),

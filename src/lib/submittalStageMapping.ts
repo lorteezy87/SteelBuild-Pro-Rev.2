@@ -7,22 +7,24 @@
  * No React, no Supabase, no side effects. All inputs are plain objects,
  * all outputs are strings or numbers.
  *
- * ── Canonical 7-stage detailing/submittal flow (corrected May 2026) ──
+ * ── Canonical detailing/submittal workflow (R&R promoted 2026-07-25) ──
  *
  *   Not Started → IFA → OFA → BFA → OFS → IFC → Released for Fab
- *                                    ↑
- *                                    └─ R&R (Revise & Resubmit) loops
- *                                       back to IFA. R&R is an OUTCOME
- *                                       status on a submittal, not a
- *                                       stage — it's surfaced via the
- *                                       UI as a "Restart cycle" badge
- *                                       and rolled up as IFA in counts.
+ *                          ↑     │
+ *                          │     └─ R&R (Revise & Resubmit) — a returned
+ *                          └──────  R&R/Rejected disposition parks the
+ *                                   package in the first-class R&R stage
+ *                                   until the revised set is actually
+ *                                   retransmitted (→ OFA).
  *
  * Stage glossary:
  *   IFA = In For Approval         (internal prep — detailer → S&H → GC,
  *                                  before going to EOR)
  *   OFA = Out For Approval        (submitted to EOR / AOR)
  *   BFA = Back From Approval      (returned with AAN / Approved / R&R)
+ *   R&R = Revise and Resubmit     (returned R&R/Rejected; detailer owns
+ *                                  the rework — DERIVED display stage,
+ *                                  never written to drawings.stage)
  *   OFS = Out For Scrub           (post-approval cleanup; detailer
  *                                  addressing EOR's comments)
  *   IFC = Issued For Construction (S&H sends record copy to GC)
@@ -41,10 +43,15 @@
  *   Approved / Approved as Noted    | EOR / Architect / AOR  → BFA
  *                                   | Detailer / S&H / Contractor → OFS
  *                                   | GC / Owner             → IFC
- *   Revise and Resubmit / Rejected  | (any)                  → IFA
- *                                                              (R&R loop)
+ *   Revise and Resubmit / Rejected  | (any)                  → R&R
+ *                                                              (first-class
+ *                                                               stage)
  *   Released for Fabrication        | (any)                  → Released
  *   Void                            | (any)                  → null (skip)
+ *
+ * ⚠ "R&R" exists only in WORKFLOW_STAGE_ORDER (display) — the 7-value
+ *   drawings.stage sheet enum / DB CHECK is untouched. dominantStage()
+ *   still operates over sheet stages and never yields "R&R".
  */
 
 import { STAGE_ORDER } from "@/components/drawings/drawingsConfig";
@@ -129,10 +136,10 @@ function bicIn(set: ReadonlySet<string>, ball_in_court: string | null | undefine
  * submittal carries no usable signal (e.g. status === "Void" or an
  * unrecognised status string).
  *
- * R&R outcomes (Revise and Resubmit / Rejected) are mapped to IFA — the
- * cycle restarts back at internal prep. Callers that care about
- * surfacing R&R as its own UI badge should use `isRRStatus(status)`
- * alongside this function.
+ * R&R outcomes (Revise and Resubmit / Rejected) map to the first-class
+ * "R&R" stage (2026-07-25) — a failed approval cycle must never read as
+ * a fresh IFA. `isRRStatus(status)` remains available for callers that
+ * key off the status string rather than the derived stage.
  *
  * @param approved_date — ISO date or null (unused today; reserved for
  *   future OFS/IFC distinction by date-stamped events)
@@ -148,9 +155,9 @@ export function submittalStatusToStage(
   if (status === "Void") return null;
   if (status === "Released for Fabrication") return "Released";
 
-  // R&R loops back to IFA. Surface separately via isRRStatus() if you
-  // want a dedicated badge.
-  if (RR_STATUSES.has(status)) return "IFA";
+  // R&R / Rejected park the package in the first-class R&R stage until
+  // the revised set is actually retransmitted.
+  if (RR_STATUSES.has(status)) return "R&R";
 
   if (status === "Approved" || status === "Approved as Noted") {
     if (bicIn(APPROVER_CLASS_BIC, ball_in_court)) return "BFA";
@@ -192,6 +199,9 @@ export function stageToSubmittalStatus(stage: string): StageSubmittalPair | null
       return { status: "Submitted",                 ball_in_court: "EOR" };
     case "BFA":
       return { status: "Approved as Noted",         ball_in_court: "EOR" };
+    case "R&R":
+      // The detailer owns the rework after an R&R return.
+      return { status: "Revise and Resubmit",       ball_in_court: "Detailer" };
     case "OFS":
       return { status: "Approved as Noted",         ball_in_court: "Detailer" };
     case "IFC":
@@ -307,7 +317,7 @@ export function dominantStage(
  */
 export function isStageInReview(stage: string | null | undefined): boolean {
   return stage === "IFA" || stage === "OFA" || stage === "BFA" ||
-         stage === "OFS" || stage === "IFC";
+         stage === "R&R" || stage === "OFS" || stage === "IFC";
 }
 
 /** Re-export for tests / consumers that want the open/closed split. */

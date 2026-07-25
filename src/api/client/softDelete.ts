@@ -18,7 +18,8 @@ export const SOFT_DELETE_TABLES = new Set<string>([
   'documents', 'drawings', 'drawing_sets', 'expenses', 'inspections',
   'punchlist_items', 'safety_incidents', 'scope_items',
   'sov_items', 'contacts', 'meetings', 'model_elements',
-  'submittals', 'submittal_rounds', 'submittal_sheet_responses', 'comments',
+  'submittals', 'submittal_rounds', 'submittal_sheet_responses',
+  'submittal_comment_dispositions', 'comments',
   'document_folders',
   // Field overhaul (migration field_overhaul_soft_delete_and_fks)
   // added is_deleted/deleted_at to these three. Once registered here
@@ -55,7 +56,8 @@ export const PROJECT_SCOPED_TABLES = new Set<string>([
   'project_handoff_items', 'mitigation_logs', 'mitigation_actions',
   'drawing_activity', 'drawing_revisions', 'drawing_zones', 'drawing_links',
   'drawing_signoffs', 'task_dependencies', 'submittals', 'submittal_rounds',
-  'submittal_sheet_responses', 'submittal_activity', 'submittal_components', 'comments',
+  'submittal_sheet_responses', 'submittal_comment_dispositions',
+  'submittal_activity', 'submittal_components', 'comments',
   'budget_hour_items', 'risks',
   // Email integration: all three tables are project-scoped.
   'email_accounts', 'email_messages', 'email_attachments',

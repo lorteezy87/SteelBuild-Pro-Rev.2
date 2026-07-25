@@ -33,6 +33,59 @@ import {
   downloadTextFile,
 } from "@/lib/exports/fabRelease";
 
+/** Slice 8 — submittal + signoff evidence for IFC/Released readiness. */
+function useFabApprovalEvidence(open, projectId, drawings) {
+  const [evidence, setEvidence] = useState({
+    submittals: [],
+    drawingSignoffs: [],
+    drawingRevisions: [],
+  });
+
+  useEffect(() => {
+    if (!open || !projectId) {
+      setEvidence({ submittals: [], drawingSignoffs: [], drawingRevisions: [] });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const drawingIds = (drawings || []).map((d) => d?.id).filter(Boolean);
+        const [subs, signoffs, revisions] = await Promise.all([
+          supabase
+            .from("submittals")
+            .select("id, status, ball_in_court, drawing_set_ids, submitted_date, updated_at, round_number, is_deleted, deleted_at")
+            .eq("project_id", projectId)
+            .eq("is_deleted", false),
+          drawingIds.length
+            ? supabase
+                .from("drawing_signoffs")
+                .select("drawing_id, drawing_revision_id, stamp_type, is_voided")
+                .in("drawing_id", drawingIds)
+                .eq("is_voided", false)
+            : Promise.resolve({ data: [], error: null }),
+          drawingIds.length
+            ? supabase
+                .from("drawing_revisions")
+                .select("id, drawing_id, is_current, archived_at")
+                .in("drawing_id", drawingIds)
+            : Promise.resolve({ data: [], error: null }),
+        ]);
+        if (cancelled) return;
+        setEvidence({
+          submittals: subs.data || [],
+          drawingSignoffs: signoffs.data || [],
+          drawingRevisions: revisions.data || [],
+        });
+      } catch (err) {
+        console.warn("[ExportFabReleaseModal] approval evidence fetch failed:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, projectId, drawings]);
+
+  return evidence;
+}
+
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 
 const labelStyle = {
@@ -50,14 +103,14 @@ const KIND_CONFIG = {
   fab_release: {
     title: "Export Fab Release Package",
     eyebrow: "FABRICATION RELEASE",
-    description: "Approved drawings (Released / approved sets) bundled with a manifest CSV and a README listing the contents, ready to hand to the fabricator.",
-    filterLabel: "Approved for fabrication",
+    description: "IFC / Released drawings (submittal-derived) bundled with a manifest CSV and a README listing the contents, ready to hand to the fabricator.",
+    filterLabel: "IFC / Released for fabrication",
   },
   turnover: {
     title: "Export Turnover Package",
     eyebrow: "TURNOVER",
-    description: "Approved-for-construction or approved-for-fabrication drawings with manifest and README, ready for owner turnover.",
-    filterLabel: "Approved (construction / fab)",
+    description: "IFC / Released drawings with manifest and README, ready for owner turnover.",
+    filterLabel: "IFC / Released",
   },
   claims: {
     title: "Export Claims Package",
@@ -73,6 +126,7 @@ const GATE_REASON_ICON = {
   rejected_sheets: "⊘",
   revision_conflict: "⟳",
   unresolved_revision: "◎",
+  not_ifc_ready: "⊘",
   missing_signoffs: "✍",
 };
 
@@ -85,15 +139,15 @@ export default function ExportFabReleaseModal({
 }) {
   const cfg = KIND_CONFIG[kind] || KIND_CONFIG.fab_release;
   const [busy, setBusy] = useState(false);
+  const approvalEvidence = useFabApprovalEvidence(open, project?.id, drawings);
 
-  // For fab_release / turnover the filter is identical (both predicates
-  // resolve to the same conditions today). For claims we include
-  // everything not soft-deleted.
+  // For fab_release / turnover the filter is identical (IFC/Released).
+  // For claims we include everything not soft-deleted.
   const filteredDrawings = useMemo(() => {
     const list = drawings || [];
     if (kind === "claims") return list.filter(isClaimable);
-    return list.filter(isApprovedForFab);
-  }, [drawings, kind]);
+    return list.filter((d) => isApprovedForFab(d, approvalEvidence));
+  }, [drawings, kind, approvalEvidence]);
 
   const groups = useMemo(() => groupBySet(filteredDrawings), [filteredDrawings]);
 
@@ -167,9 +221,16 @@ export default function ExportFabReleaseModal({
 
   const gate = useMemo(
     () => (gated
-      ? computeFabReleaseGate({ drawings: packageDrawings, rfis: linkedRfis, signoffs: gateSignoffs, requireSignoffs })
+      ? computeFabReleaseGate({
+          drawings: packageDrawings,
+          rfis: linkedRfis,
+          signoffs: gateSignoffs,
+          requireSignoffs,
+          submittals: approvalEvidence.submittals,
+          drawingRevisions: approvalEvidence.drawingRevisions,
+        })
       : { blocked: false, reasons: [], blockingRfis: [], affectedSheets: [], blockingCount: 0 }),
-    [gated, packageDrawings, linkedRfis, gateSignoffs, requireSignoffs],
+    [gated, packageDrawings, linkedRfis, gateSignoffs, requireSignoffs, approvalEvidence],
   );
   // Override now requires a written reason (the server records it and refuses an
   // empty-reason override). The button stays locked until the reason is filled.

@@ -7,11 +7,16 @@ import { daysUntil } from "@/lib/dateMath";
 import { formatDate } from "@/components/shared/formatters";
 import { submittalStatusToStage, isRRStatus, CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import { nextSubmittalAction } from "@/lib/submittalActionEngine";
+import { computeSubmittalRiskAging } from "@/lib/submittalRiskAging";
+import type { OfsChecklistState } from "@/lib/ofsCompletionGate";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 import CommentThreadRaw from "@/components/collaboration/CommentThread";
 import RoundTimelineRaw from "@/components/submittals/RoundTimeline";
 import ResponseMatrixRaw from "@/components/submittals/ResponseMatrix";
+import IfcIssueDialog from "@/components/submittals/IfcIssueDialog";
+import CommentDispositionChecklist from "@/components/submittals/CommentDispositionChecklist";
+import type { CommentDispositionStatus } from "@/lib/commentDispositionGate";
 import SubmittalForecastCard from "@/components/submittals/SubmittalForecastCard";
 import { buildResponseMatrix } from "@/lib/submittalResubmittal";
 import { forecastSubmittal } from "@/lib/submittalForecast";
@@ -289,12 +294,14 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
-            {/* Derived workflow-stage chip — shows IFA/OFA/BFA/OFS/IFC/
+            {/* Derived workflow-stage chip — shows IFA/OFA/BFA/R&R/OFS/IFC/
                 Released so the user can see workflow position at a
-                glance, not just the raw submittal status. */}
+                glance, not just the raw submittal status. R&R statuses
+                derive the first-class R&R stage (2026-07-25), so the chip
+                itself reads R&R — no extra loop suffix needed. */}
             {stageCfg && (
               <span
-                title={`Workflow stage: ${stageCfg.label}${showRR ? " (R&R loop)" : ""}`}
+                title={`Workflow stage: ${stageCfg.label}${showRR ? " — Revise and Resubmit" : ""}`}
                 style={{
                   fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
                   padding: "2px 6px", borderRadius: 3, letterSpacing: "0.06em",
@@ -358,13 +365,33 @@ interface SubmittalDetailProps {
   /** Today as 'YYYY-MM-DD' (injected — never new Date() in render). */
   today?: string;
   /** Advance the submittal one step in the canonical flow (status + BIC together). */
-  onAdvance?: (action: { nextStatus: string | null; nextBallInCourt: string | null; label: string; nextStage: string | null; chainStepIndex?: number }) => void;
+  onAdvance?: (action: {
+    nextStatus: string | null;
+    nextBallInCourt: string | null;
+    label: string;
+    nextStage: string | null;
+    chainStepIndex?: number;
+    ofsChecklist?: OfsChecklistState | null;
+    ofsOverrideReason?: string | null;
+    commentOverrideReason?: string | null;
+  }) => void;
   /**
    * When true (from the `submittal_approved_to_scrub` flag), a BFA "Approved"
    * routes to the detailer scrub (OFS) like "Approved as Noted" instead of
-   * skipping to IFC. Defaults to false — legacy behavior.
+   * skipping to IFC. Defaults to true — mandatory scrub (Slice 4).
    */
   approvedRoutesToScrub?: boolean;
+  /** Returned-comment dispositions for this submittal (Slice 5). */
+  commentDispositions?: any[];
+  onCommentDispositionAdd?: (draft: {
+    comment_number: string;
+    source: string;
+    location: string;
+    comment_text: string;
+    is_required: boolean;
+  }) => void | Promise<void>;
+  onCommentDispositionStatus?: (id: string, status: CommentDispositionStatus) => void | Promise<void>;
+  onCommentDispositionResolution?: (id: string, resolution: string) => void | Promise<void>;
   /**
    * Phase 3 splitting (flag `submittal_splitting`): when true, show the "Spin
    * off child" action + the lineage card. Defaults to false — nothing renders.
@@ -392,7 +419,15 @@ interface SubmittalDetailProps {
   onComponentRemoveType?: (component: SubmittalComponent) => void;
 }
 
-export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = false, splittingEnabled = false, onSpinOff, onSelectSubmittal, drawingTypesEnabled = false, components = [], onComponentSetReceived, onComponentSetReleased, onComponentAddType, onComponentRemoveType }: SubmittalDetailProps) {
+export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = true, commentDispositions = [], onCommentDispositionAdd, onCommentDispositionStatus, onCommentDispositionResolution, splittingEnabled = false, onSpinOff, onSelectSubmittal, drawingTypesEnabled = false, components = [], onComponentSetReceived, onComponentSetReleased, onComponentAddType, onComponentRemoveType }: SubmittalDetailProps) {
+  // Pending OFS→IFC action while the scrub checklist dialog is open.
+  const [pendingIfcAction, setPendingIfcAction] = useState<{
+    nextStatus: string | null;
+    nextBallInCourt: string | null;
+    label: string;
+    nextStage: string | null;
+    chainStepIndex?: number;
+  } | null>(null);
   // Round-over-round per-sheet disposition matrix (computed before any early
   // return to keep hook order stable). Empty-safe — renders nothing when the
   // submittal has no recorded reviewer responses.
@@ -459,6 +494,30 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
     submittal.required_date &&
     !["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(submittal.status ?? "") &&
     daysUntil(submittal.required_date) < 0;
+  const workflowStage = submittalStatusToStage(
+    submittal.status,
+    submittal.ball_in_court,
+    submittal.approved_date,
+  );
+  const risk = computeSubmittalRiskAging({
+    stage: workflowStage,
+    dueDate: submittal.required_date || null,
+    statusChangedAt:
+      submittal.returned_date ||
+      submittal.approved_date ||
+      submittal.updated_at ||
+      submittal.submitted_date ||
+      null,
+    useWorkdays: true,
+  });
+  const riskChipColor =
+    risk?.tier === "critical"
+      ? "var(--status-error)"
+      : risk?.tier === "urgent"
+        ? "var(--status-warning)"
+        : risk?.tier === "attention"
+          ? "var(--accent)"
+          : "var(--text-muted)";
 
   return (
     <div style={{ width: 480, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--bg-page, #0D1117)", minHeight: 0 }}>
@@ -488,6 +547,22 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
                   BIC · {CLOSED_SUBMITTAL_STATUSES.has(submittal.status ?? "") ? "Closed" : submittal.ball_in_court}
                 </span>
               )}
+              {risk && risk.tier !== "normal" && (
+                <span
+                  title={risk.reason}
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: "3px 8px",
+                    borderRadius: 3,
+                    color: riskChipColor,
+                    background: "var(--bg-surface-high)",
+                  }}
+                >
+                  Risk · {risk.tier}
+                </span>
+              )}
               {overdue && (
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--status-error)" }}>
                   ⚠ {Math.abs(daysUntil(submittal.required_date))}d overdue
@@ -510,7 +585,15 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
               type="button"
               className="sbd-btn-primary"
               disabled={action.disabled}
-              onClick={() => !action.disabled && onAdvance(action)}
+              onClick={() => {
+                if (action.disabled) return;
+                // OFS → IFC goes through the scrub checklist dialog (Slice 4).
+                if (action.currentStage === "OFS" && action.nextStage === "IFC") {
+                  setPendingIfcAction(action);
+                  return;
+                }
+                onAdvance(action);
+              }}
               title={action.disabled ? "No further workflow step" : `Set to ${action.nextStage} (${action.nextStatus}${action.nextBallInCourt ? ` · BIC ${action.nextBallInCourt}` : ""})`}
               style={{
                 marginTop: 12, width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -521,6 +604,24 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
             </button>
           );
         })()}
+
+        <IfcIssueDialog
+          open={!!pendingIfcAction}
+          submittalNumber={submittal.submittal_number}
+          dispositions={commentDispositions}
+          onClose={() => setPendingIfcAction(null)}
+          onConfirm={({ checklist, overrideReason }) => {
+            if (!pendingIfcAction || !onAdvance) return;
+            const action = pendingIfcAction;
+            setPendingIfcAction(null);
+            onAdvance({
+              ...action,
+              ofsChecklist: checklist,
+              ofsOverrideReason: overrideReason,
+              commentOverrideReason: overrideReason,
+            });
+          }}
+        />
 
         {/* Phase 3 splitting: "Spin off child" — surfaced once the submittal is
             approved/terminal (the split scope is only known after approval, e.g.
@@ -684,12 +785,14 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
           />
         </DetailSection>
 
-        {/* Round History — vertical timeline of all submittal rounds
-            with status badges, durations, and BIC. "New Round" creates
-            a fresh resubmission round. */}
-        <DetailSection title={`Round History (${rounds.length})`}>
+        {/* Approval-cycle history — vertical timeline of all submittal
+            rounds (one row per submit→return cycle) with cycle number,
+            revision, status, resulting stage, durations, and BIC.
+            "New Round" opens the next resubmission cycle. */}
+        <DetailSection title={`Approval Cycles (${rounds.length})`}>
           <RoundTimeline
             rounds={rounds}
+            submittal={submittal}
             submittalId={submittal.id}
             onReturnRound={onReturnRound}
           />
@@ -738,6 +841,23 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
         {responseMatrix.rows.length > 0 && (
           <DetailSection title={`Response matrix (${responseMatrix.rows.length} sheet${responseMatrix.rows.length === 1 ? "" : "s"})`}>
             <ResponseMatrix columns={responseMatrix.columns} rows={responseMatrix.rows} />
+          </DetailSection>
+        )}
+
+        {/* Returned-comment dispositions (Slice 5) — required unresolved rows
+            block OFS→IFC and R&R→OFA. Shown for AAN / Approved / R&R packages. */}
+        {onCommentDispositionAdd &&
+          onCommentDispositionStatus &&
+          ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"].includes(
+            submittal.status ?? "",
+          ) && (
+          <DetailSection title={`Returned comments (${commentDispositions.length})`}>
+            <CommentDispositionChecklist
+              dispositions={commentDispositions}
+              onAdd={onCommentDispositionAdd}
+              onUpdateStatus={onCommentDispositionStatus}
+              onUpdateResolution={onCommentDispositionResolution}
+            />
           </DetailSection>
         )}
 

@@ -167,7 +167,9 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                   {focusItem.group} - {focusItem.status}
                 </span>
                 {focusItem.detailingState && <OperationalStateChip state={focusItem.detailingState} />}
-                {focusItem.isRR && <RRChip />}
+                {/* R&R is a first-class stage (2026-07-25): skip the extra badge
+                    when the state chip itself already reads R&R. */}
+                {focusItem.isRR && focusItem.detailingState !== "R&R" && <RRChip />}
               </div>
               {/* ── Inline Quick-Action Controls ──────────────────────── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
@@ -1069,7 +1071,9 @@ function TriageItemRow({ item, onOpen, onEscalate }: { item: any; onOpen: () => 
           {item.detailingState
             ? <OperationalStateChip state={item.detailingState} />
             : <span style={{ color: textMuted, fontSize: 12, whiteSpace: "nowrap" }}>- {item.status}</span>}
-          {item.isRR && <RRChip />}
+          {/* R&R is a first-class stage (2026-07-25): skip the extra badge
+              when the state chip itself already reads R&R. */}
+          {item.isRR && item.detailingState !== "R&R" && <RRChip />}
         </div>
       </div>
       <div>

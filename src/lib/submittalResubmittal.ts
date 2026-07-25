@@ -118,6 +118,20 @@ export function formatCarryForwardNotes(
   return [header, ...lines].join("\n");
 }
 
+/**
+ * Merge sheet-response carry-forward notes with structured comment-disposition
+ * notes (Slice 5). Empty parts are omitted; both present → blank-line join.
+ */
+export function mergeCarryForwardNotes(
+  sheetNotes: string | null | undefined,
+  dispositionNotes: string | null | undefined,
+): string {
+  const parts = [String(sheetNotes ?? "").trim(), String(dispositionNotes ?? "").trim()].filter(
+    Boolean,
+  );
+  return parts.join("\n\n");
+}
+
 // ── Response matrix (round-over-round per-sheet disposition) ──────────
 
 export interface DrawingLike {

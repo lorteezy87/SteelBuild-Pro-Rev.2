@@ -5,23 +5,24 @@
  * fabrication, groups by drawing-set, and produces the tabular manifest
  * + README that ship inside the export.
  *
- * No third-party deps — everything here is string / array manipulation
- * so the helpers can be tested without a DOM. The React modal in
- * components/drawings/ExportFabReleaseModal.jsx wires user options to
- * these helpers and triggers the actual download.
+ * Slice 8: `isApprovedForFab` reuses piece-control IFC/Released readiness
+ * (`isGoverningDrawingReleaseReady`) so package export and piece release agree.
  *
  * Note on packaging: jszip is NOT in package.json (verified 2026-05-03),
  * so the modal falls back to delivering a manifest CSV + a README text
  * file + a list of signed file URLs the user downloads manually. This
  * is documented in the modal UI and the README header.
  */
+import { isGoverningDrawingReleaseReady } from "@/lib/pieceControl/drawingReleaseReady";
 
 /** Minimal drawing shape used by fab-release / turnover / claims helpers. */
 export interface DrawingLike {
   id?: string | null;
   sheet_number?: string | null;
   title?: string | null;
+  drawing_set_id?: string | null;
   drawing_set_name?: string | null;
+  project_id?: string | null;
   discipline?: string | null;
   revision_number?: string | number | null;
   stage?: string | null;
@@ -35,6 +36,33 @@ export interface DrawingLike {
   updated_at?: string | Date | null;
   reviewer?: string | null;
   notes?: string | null;
+}
+
+/** Optional evidence so package export can use submittal-derived IFC/Released. */
+export interface FabApprovalEvidence {
+  submittals?: Array<{
+    id: string;
+    status: string;
+    ball_in_court?: string | null;
+    drawing_set_ids?: string[] | null;
+    submitted_date?: string | null;
+    updated_at?: string | null;
+    round_number?: number | null;
+    is_deleted?: boolean | null;
+    deleted_at?: string | null;
+  }> | null;
+  drawingSignoffs?: Array<{
+    drawing_id: string;
+    drawing_revision_id?: string | null;
+    stamp_type: string;
+    is_voided?: boolean | null;
+  }> | null;
+  drawingRevisions?: Array<{
+    id: string;
+    drawing_id: string;
+    is_current: boolean;
+    archived_at?: string | null;
+  }> | null;
 }
 
 /** Sign-off row merged into the fab manifest. */
@@ -129,7 +157,16 @@ export type CsvCell = string | number | null | undefined;
  * (set_approval_status check values come from migration 074 — see the
  * supabase_drawings_constraints memory.)
  */
-export function isApprovedForFab(d: DrawingLike | null | undefined): boolean {
+/**
+ * Package export membership predicate (Slice 8).
+ * Aligns with piece-control Slice 6: IFC / Released via submittal+BIC,
+ * drawings.stage IFC/Released, or fab signoff — never bare Approved/AAN /
+ * deprecated ifc_status alone.
+ */
+export function isApprovedForFab(
+  d: DrawingLike | null | undefined,
+  evidence: FabApprovalEvidence = {},
+): boolean {
   if (!d || d.is_deleted) return false;
   if (d.is_superseded) return false;
   // Never treat a non-current / unresolved revision as fabrication-ready.
@@ -137,24 +174,35 @@ export function isApprovedForFab(d: DrawingLike | null | undefined): boolean {
   if (releaseStatus === "superseded" || releaseStatus === "void" || releaseStatus === "on_hold") {
     return false;
   }
-  if (d.stage === "Released") return true;
-  const setStatus = (d.set_approval_status || "").toLowerCase();
-  if (setStatus === "approved" || setStatus === "approved_as_noted") return true;
-  const ifcStatus = (d.ifc_status || "").toLowerCase();
-  if (ifcStatus === "approved" || ifcStatus === "approved as noted") return true;
-  return false;
+
+  return isGoverningDrawingReleaseReady(
+    {
+      id: String(d.id || ""),
+      project_id: String(d.project_id || ""),
+      drawing_set_id: d.drawing_set_id ?? null,
+      sheet_number: d.sheet_number ?? null,
+      stage: d.stage ?? null,
+      set_approval_status: d.set_approval_status ?? null,
+      is_deleted: d.is_deleted ?? false,
+      deleted_at: null,
+      is_superseded: d.is_superseded ?? false,
+    },
+    {
+      submittals: evidence.submittals ?? undefined,
+      drawingSignoffs: evidence.drawingSignoffs ?? undefined,
+      drawingRevisions: evidence.drawingRevisions ?? undefined,
+    },
+  ).ready;
 }
 
 /**
- * Turnover scope: drawings with construction-ready stamps only.
- * Per requirements: "approved_for_construction" or
- * "approved_for_fabrication". We map those onto the stage / status
- * fields we actually persist:
- *   - stage === "Released" (IFC)  → approved for construction
- *   - set_approval_status approved / approved_as_noted → approved for fab
+ * Turnover scope: same IFC/Released readiness as fab release (Slice 8).
  */
-export function isApprovedForTurnover(d: DrawingLike | null | undefined): boolean {
-  return isApprovedForFab(d);
+export function isApprovedForTurnover(
+  d: DrawingLike | null | undefined,
+  evidence: FabApprovalEvidence = {},
+): boolean {
+  return isApprovedForFab(d, evidence);
 }
 
 /**

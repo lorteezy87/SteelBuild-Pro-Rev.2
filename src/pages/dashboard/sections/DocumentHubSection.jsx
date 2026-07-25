@@ -43,18 +43,20 @@ const STAGE_COLOR = {
   IFA:      "#60A5FA", // sky
   OFA:      "#2563EB", // blue
   BFA:      "#F97316", // orange
+  "R&R":    "#F59E0B", // amber — first-class derived stage (2026-07-25)
   OFS:      "#0D9488", // teal
   IFC:      "#34D399", // mint
   Released: "#10B981", // emerald
 };
 
-// Canonical steel-detailing pipeline. "Scrub" is the in-house QA review
-// where corrections are applied after EOR comments; IFC is the record
-// copy issued to the GC; Released = released for fabrication.
+// Canonical steel-detailing pipeline (R&R first-class since 2026-07-25).
+// Scrub is in-house QA after EOR comments; IFC is the record copy to GC;
+// Released = released for fabrication.
 const STAGE_CAPTION = {
   IFA:      "In for Approval",
   OFA:      "Out for Approval",
   BFA:      "Back from Approval",
+  "R&R":    "Revise and Resubmit",
   OFS:      "Out for Scrub",
   IFC:      "Issued for Construction",
   Released: "Released for Fabrication",
