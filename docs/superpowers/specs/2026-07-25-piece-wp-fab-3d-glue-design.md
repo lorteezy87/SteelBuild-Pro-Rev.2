@@ -123,7 +123,7 @@ client-side patches).
 
 | Column | Rule |
 |---|---|
-| `percent_complete` | Tonnage-weighted earned % (0–100). If all weights unknown → lot-count-weighted earned %. If no leaves → `0`. If no station config yet → `0` (or keep prior only when explicitly documented — default `0` for empty progress). |
+| `percent_complete` | Tonnage-weighted earned % (0–100). If all weights unknown → lot-count-weighted earned %. If no leaves → `0`. If no active station config yet → `0`. |
 | `status` | Mapped coarse enum below |
 | Hold | If **all** assigned leaves `on_hold` → `On Hold` |
 
