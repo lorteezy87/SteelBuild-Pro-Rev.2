@@ -46,7 +46,7 @@ Notes:
 
 ## Recently released
 - 2026-07-25 · cursor-remove-autolock-3d17 · Removed drawing-set auto-lock on terminal submittal approval (PR #126); deployed to production.
-- 2026-07-25 · cursor-unlock-drawing-sets-3d17 · Unlock all locked drawing sets (migration `20260725203000`; PR #124). Local applied; prod still needs migration push.
+- 2026-07-25 · cursor-unlock-drawing-sets-3d17 · Unlock all locked drawing sets (migration `20260725203000`; PR #124). Local + prod applied (owner ran unlock SQL on `kjrwqagyeswwoxpjkcko`).
 - 2026-07-25 · cursor-rr-stage-3d17 · Drawing approval lifecycle Slices 0–10 complete on PR #122 (R&R through legacy cleanup).
 - 2026-07-25 · cursor-rr-stage-3d17 · Drawing approval lifecycle Slice 7 (R&R/OFS/BFA risk aging + Critical ActionItems) on PR #122.
 - 2026-07-25 · cursor-rr-stage-3d17 · Drawing approval lifecycle Slices 0–5 shipped on PR #122 (R&R stage, cycles, evidence gate, OFS scrub/IFC checklist, comment dispositions). Branch cursor/drawing-approval-lifecycle-rr-stage-3d17.
