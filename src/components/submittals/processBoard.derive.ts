@@ -23,6 +23,10 @@ import {
   submittalStatusToStage,
 } from "@/lib/submittalStageMapping";
 import { formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
+import {
+  computeSubmittalRiskAging,
+  type SubmittalRiskAssessment,
+} from "@/lib/submittalRiskAging";
 import { dueInfoFor } from "@/pages/drawingSubmittalHub/format";
 import type { DueInfo } from "@/pages/drawingSubmittalHub/types";
 
@@ -48,6 +52,8 @@ export interface BoardItem {
   submittalCount: number;
   discipline: string;
   routeTab: string;
+  /** Slice 7 — R&R/OFS/BFA aging risk (null when stage is not scored). */
+  risk: SubmittalRiskAssessment | null;
 }
 
 export interface BoardSummary {
@@ -57,9 +63,29 @@ export interface BoardSummary {
   needsAction: number;
   unlinked: number;
   released: number;
+  criticalRisk: number;
 }
 
-export type BoardFilter = "all" | "overdue" | "needs-action" | "unlinked";
+export type BoardFilter = "all" | "overdue" | "needs-action" | "unlinked" | "critical";
+
+function riskForBoardStage(
+  stage: string | null | undefined,
+  dueDate: string | null,
+  submittal: any,
+  useWorkdays: boolean,
+): SubmittalRiskAssessment | null {
+  return computeSubmittalRiskAging({
+    stage,
+    dueDate,
+    statusChangedAt:
+      submittal?.returned_date ||
+      submittal?.approved_date ||
+      submittal?.updated_at ||
+      submittal?.submitted_date ||
+      null,
+    useWorkdays,
+  });
+}
 
 // ── Local date helpers (byte-identical to SubmittalVisualBoard.jsx) ──────────
 
@@ -176,6 +202,7 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
       submittalCount: (pkg.submittals || []).length,
       discipline: pkg.parent?.discipline || latestSubmittal?.discipline || "",
       routeTab: latestSubmittal ? "submittals" : "drawings",
+      risk: riskForBoardStage(stage, dueDate, latestSubmittal, useWorkdays && !!submittalDue),
     };
   });
 
@@ -212,10 +239,14 @@ export function buildBoardItems(setPackages: any[], submittals: any[], useWorkda
         submittalCount: 1,
         discipline: submittal.discipline || submittal.submittal_type || "",
         routeTab: "submittals",
+        risk: riskForBoardStage(stage, dueDate, submittal, useWorkdays),
       };
     });
 
   return [...packageItems, ...unlinkedItems].sort((a, b) => {
+    const aCrit = a.risk?.tier === "critical" ? 1 : 0;
+    const bCrit = b.risk?.tier === "critical" ? 1 : 0;
+    if (aCrit !== bCrit) return bCrit - aCrit;
     if (a.due.overdue !== b.due.overdue) return a.due.overdue ? -1 : 1;
     if (a.needsAction !== b.needsAction) return a.needsAction ? -1 : 1;
     return a.due.sort - b.due.sort || a.title.localeCompare(b.title);
@@ -230,6 +261,7 @@ export function filterItems(items: BoardItem[], filter: BoardFilter, search: str
     if (filter === "overdue" && !item.due.overdue) return false;
     if (filter === "needs-action" && !item.needsAction) return false;
     if (filter === "unlinked" && item.linked) return false;
+    if (filter === "critical" && item.risk?.tier !== "critical") return false;
     if (!q) return true;
     return (
       item.title.toLowerCase().includes(q) ||
@@ -265,5 +297,6 @@ export function summarizeBoard(allItems: BoardItem[]): BoardSummary {
     needsAction: allItems.filter((item) => item.needsAction).length,
     unlinked: allItems.filter((item) => !item.linked).length,
     released: allItems.filter((item) => item.stage === "Released").length,
+    criticalRisk: allItems.filter((item) => item.risk?.tier === "critical").length,
   };
 }

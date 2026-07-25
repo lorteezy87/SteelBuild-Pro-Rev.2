@@ -105,7 +105,7 @@ describe("isGoverningDrawingReleaseReady", () => {
 });
 
 describe("buildPieceImpact", () => {
-  it("flags R&R / unresolved comments and blocks release", () => {
+  it("flags R&R / unresolved comments / critical aging and blocks release", () => {
     const impact = buildPieceImpact({
       piece: {
         id: "p1",
@@ -122,6 +122,7 @@ describe("buildPieceImpact", () => {
             status: "Revise and Resubmit",
             ball_in_court: "Detailer",
             drawing_set_ids: ["set-1"],
+            required_date: "2026-07-01",
           },
         ],
       },
@@ -139,7 +140,11 @@ describe("buildPieceImpact", () => {
     expect(impact.releaseReady).toBe(false);
     expect(impact.workflowStage).toBe("R&R");
     expect(impact.flags.map((f) => f.key)).toEqual(
-      expect.arrayContaining(["tied_to_rr", "unresolved_required_comment"]),
+      expect.arrayContaining([
+        "tied_to_rr",
+        "unresolved_required_comment",
+        "aging_critical",
+      ]),
     );
   });
 

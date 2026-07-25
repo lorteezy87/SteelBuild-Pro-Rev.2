@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
@@ -6,6 +6,7 @@ import { lockLinkedSetsIfApproved, addSubmittalRound } from "@/hooks/useSubmitta
 import { logActivity, logTransition } from "@/services/auditLogger";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
+import { ensureCriticalAgingActionItems } from "@/lib/submittalAgingTriggers";
 import { localToday } from "@/utils/dates";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import {
@@ -108,6 +109,19 @@ export default function Submittals() {
     enabled: !isLoading,
     param: "recordId",
   });
+
+  // Slice 7: draft ActionItems for Critical R&R/OFS/BFA aging (deduped).
+  // Honest path — never invents Alerts Center rows / generate-alerts.
+  useEffect(() => {
+    if (!projectId || isLoading || rows.length === 0) return;
+    void ensureCriticalAgingActionItems(
+      rows.map((row: any) => ({
+        ...row,
+        project_id: row.project_id || projectId,
+        project_name: activeProject?.name || activeProject?.project_name || null,
+      })),
+    );
+  }, [projectId, isLoading, rows, activeProject?.name, activeProject?.project_name]);
 
   // Drawing sets for the active project — used by the "Linked drawing
   // sets" picker on the detail panel. Read-only here (the Drawings page

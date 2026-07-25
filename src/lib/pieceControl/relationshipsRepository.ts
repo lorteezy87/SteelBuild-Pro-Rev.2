@@ -92,7 +92,7 @@ export async function fetchPieceRelationshipSnapshot(
     fetchProjectRows<SubmittalEvidence>(
       "submittals",
       projectId,
-      "id, status, ball_in_court, drawing_set_ids, current_round_id, submitted_date, updated_at, round_number, is_deleted, deleted_at",
+      "id, status, ball_in_court, drawing_set_ids, current_round_id, submitted_date, required_date, returned_date, updated_at, round_number, is_deleted, deleted_at",
     ),
     fetchProjectRows<SheetResponseEvidence>(
       "submittal_sheet_responses",

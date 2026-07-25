@@ -13,6 +13,7 @@ import {
   collectUnresolvedRequiredComments,
   type CommentDispositionLike,
 } from "@/lib/commentDispositionGate";
+import { computeSubmittalRiskAging } from "@/lib/submittalRiskAging";
 import type {
   DrawingRevisionEvidence,
   DrawingSignoffEvidence,
@@ -38,6 +39,8 @@ export type PieceExposureFlagKey =
   | "non_ifc_governing"
   | "tied_to_rr"
   | "tied_to_ofs"
+  | "aging_urgent"
+  | "aging_critical"
   | "unresolved_required_comment"
   | "fabricated_from_superseded"
   | "shipped_on_new_rev";
@@ -261,6 +264,32 @@ export function buildPieceImpact(input: BuildPieceImpactInput): PieceImpactModel
     flags.push({
       key: "tied_to_ofs",
       label: "Tied to OFS (Out for Scrub)",
+      tone: "warn",
+    });
+  }
+  const governingSub = (input.evidence.submittals ?? []).find(
+    (s) => s.id === ready.governingSubmittalId,
+  ) as (SubmittalEvidence & { required_date?: string | null; returned_date?: string | null }) | undefined;
+  const agingScored = computeSubmittalRiskAging({
+    stage: ready.stage,
+    dueDate: governingSub?.required_date ?? null,
+    statusChangedAt:
+      governingSub?.returned_date ||
+      governingSub?.updated_at ||
+      governingSub?.submitted_date ||
+      null,
+    useWorkdays: true,
+  });
+  if (agingScored?.tier === "critical") {
+    flags.push({
+      key: "aging_critical",
+      label: `Critical aging — ${agingScored.reason}`,
+      tone: "danger",
+    });
+  } else if (agingScored?.tier === "urgent") {
+    flags.push({
+      key: "aging_urgent",
+      label: `Urgent aging — ${agingScored.reason}`,
       tone: "warn",
     });
   }

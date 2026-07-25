@@ -55,6 +55,8 @@ export interface SubmittalEvidence {
   drawing_set_ids?: string[] | null;
   current_round_id?: string | null;
   submitted_date?: string | null;
+  required_date?: string | null;
+  returned_date?: string | null;
   updated_at?: string | null;
   round_number?: number | null;
   is_deleted?: boolean | null;

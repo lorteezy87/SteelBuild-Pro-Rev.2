@@ -7,6 +7,7 @@ import { daysUntil } from "@/lib/dateMath";
 import { formatDate } from "@/components/shared/formatters";
 import { submittalStatusToStage, isRRStatus, CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import { nextSubmittalAction } from "@/lib/submittalActionEngine";
+import { computeSubmittalRiskAging } from "@/lib/submittalRiskAging";
 import type { OfsChecklistState } from "@/lib/ofsCompletionGate";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
@@ -493,6 +494,30 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
     submittal.required_date &&
     !["Approved", "Approved as Noted", "Released for Fabrication", "Void"].includes(submittal.status ?? "") &&
     daysUntil(submittal.required_date) < 0;
+  const workflowStage = submittalStatusToStage(
+    submittal.status,
+    submittal.ball_in_court,
+    submittal.approved_date,
+  );
+  const risk = computeSubmittalRiskAging({
+    stage: workflowStage,
+    dueDate: submittal.required_date || null,
+    statusChangedAt:
+      submittal.returned_date ||
+      submittal.approved_date ||
+      submittal.updated_at ||
+      submittal.submitted_date ||
+      null,
+    useWorkdays: true,
+  });
+  const riskChipColor =
+    risk?.tier === "critical"
+      ? "var(--status-error)"
+      : risk?.tier === "urgent"
+        ? "var(--status-warning)"
+        : risk?.tier === "attention"
+          ? "var(--accent)"
+          : "var(--text-muted)";
 
   return (
     <div style={{ width: 480, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--bg-page, #0D1117)", minHeight: 0 }}>
@@ -520,6 +545,22 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
               {(CLOSED_SUBMITTAL_STATUSES.has(submittal.status ?? "") || submittal.ball_in_court) && (
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 3, color: "var(--text-secondary)", background: "var(--bg-surface-high)" }}>
                   BIC · {CLOSED_SUBMITTAL_STATUSES.has(submittal.status ?? "") ? "Closed" : submittal.ball_in_court}
+                </span>
+              )}
+              {risk && risk.tier !== "normal" && (
+                <span
+                  title={risk.reason}
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: "3px 8px",
+                    borderRadius: 3,
+                    color: riskChipColor,
+                    background: "var(--bg-surface-high)",
+                  }}
+                >
+                  Risk · {risk.tier}
                 </span>
               )}
               {overdue && (

@@ -21,10 +21,10 @@ ActionItem drafts for Critical/overdue cases — without inventing a
 
 ## Tasks
 
-- [ ] Claim + plan
-- [ ] `submittalRiskAging.ts` + unit tests
-- [ ] Process Board risk pill + summary critical count
-- [ ] Submittal detail risk chip
-- [ ] Piece Impact aging exposure flag
-- [ ] Critical aging ActionItem ensure + tests
-- [ ] Verify + commit + PR
+- [x] Claim + plan
+- [x] `submittalRiskAging.ts` + unit tests
+- [x] Process Board risk pill + summary critical count
+- [x] Submittal detail risk chip
+- [x] Piece Impact aging exposure flag
+- [x] Critical aging ActionItem ensure + tests
+- [x] Verify + commit + PR

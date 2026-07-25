@@ -720,6 +720,16 @@ audited override is recorded (`commentDispositionGate`). Sheet-level
 `submittal_sheet_responses` remain the per-sheet disposition SoT.
 `drawing_revisions` gains nullable `revision_source` / `revision_reason`.
 
+### 2026-07-25 — R&R/OFS/BFA risk aging + Critical ActionItems (Slice 7)
+
+Time-sensitive stages (**R&R**, **OFS**, **BFA**) get Normal / Attention /
+Urgent / Critical tiers from working-day countdown (or days-stuck when no
+due). Surfaced on Process Board (critical filter + pills), Submittal detail,
+and Piece Impact flags. Critical packages draft deduped ActionItems via
+`ensureCriticalAgingActionItems` — Alerts Center Refresh stays reload-only
+(no `generate-alerts` Edge Function). Package fab-release gate unify remains
+Slice 8; dashboard SoT remains Slice 9.
+
 ### 2026-07-25 — Piece release requires IFC/Released governing drawings (Slice 6)
 
 Canonical piece / work-package fabrication readiness no longer treats bare

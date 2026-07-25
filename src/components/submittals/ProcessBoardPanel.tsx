@@ -52,6 +52,7 @@ const STAGE_CAPTIONS: Record<string, string> = {
   IFA: "In for approval",
   OFA: "Out for approval",
   BFA: "Back from approval",
+  "R&R": "Revise and resubmit",
   OFS: "OFS — Out for Scrub",
   IFC: "Issued for construction",
   Released: "Released for fab",
@@ -64,11 +65,18 @@ function getStageColor(stage: string): string {
   return STAGE_MAP[stage]?.color || "var(--text-muted)";
 }
 
-/** Card-level tone: overdue → danger, needs-action → review, due-soon → warn. */
+/** Card-level tone: critical risk / overdue → danger, needs-action → review, due-soon → warn. */
 function cardTone(item: BoardItem): PillTone {
-  if (item.due.overdue) return "danger";
-  if (item.needsAction) return "review";
-  if (item.due.dueSoon) return "warn";
+  if (item.risk?.tier === "critical" || item.due.overdue) return "danger";
+  if (item.risk?.tier === "urgent" || item.needsAction) return "review";
+  if (item.risk?.tier === "attention" || item.due.dueSoon) return "warn";
+  return "neutral";
+}
+
+function riskPillTone(tier: string | undefined): PillTone {
+  if (tier === "critical") return "danger";
+  if (tier === "urgent") return "review";
+  if (tier === "attention") return "warn";
   return "neutral";
 }
 
@@ -116,6 +124,7 @@ export default function ProcessBoardPanel({
         filters={
           <>
             <SummaryPill icon={FileStack} label="Packages" value={summary.total} tone="neutral" />
+            <SummaryPill icon={AlertTriangle} label="Critical" value={summary.criticalRisk} tone="danger" />
             <SummaryPill icon={AlertTriangle} label="Overdue" value={summary.overdue} tone="danger" />
             <SummaryPill icon={Clock3} label="Due Soon" value={summary.dueSoon} tone="warn" />
             <SummaryPill icon={ShieldCheck} label="Released" value={summary.released} tone="good" />
@@ -127,6 +136,7 @@ export default function ProcessBoardPanel({
       {/* ── Quick-filter chips ──────────────────────────────────────────── */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label="All" value={summary.total} />
+        <FilterChip active={filter === "critical"} onClick={() => setFilter("critical")} label="Critical" value={summary.criticalRisk} />
         <FilterChip active={filter === "overdue"} onClick={() => setFilter("overdue")} label="Overdue" value={summary.overdue} />
         <FilterChip active={filter === "needs-action"} onClick={() => setFilter("needs-action")} label="Needs Action" value={summary.needsAction} />
         <FilterChip active={filter === "unlinked"} onClick={() => setFilter("unlinked")} label="Unlinked" value={summary.unlinked} />
@@ -254,11 +264,11 @@ function ProcessColumn({ stage, items, onOpenTab }: { stage: string; items: Boar
 // ── Card ──────────────────────────────────────────────────────────────────
 
 function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: string) => void }) {
-  const accent = item.due.overdue
+  const accent = item.risk?.tier === "critical" || item.due.overdue
     ? "var(--cmd-danger)"
-    : item.needsAction
+    : item.risk?.tier === "urgent" || item.needsAction
       ? "var(--cmd-review)"
-      : item.due.dueSoon
+      : item.risk?.tier === "attention" || item.due.dueSoon
         ? "var(--cmd-warn)"
         : getStageColor(item.stage);
   const titleMeta = [
@@ -330,6 +340,17 @@ function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: str
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 9 }}>
         <Pill tone={statusPillTone(item.stage)}>{item.status}</Pill>
         <DueCardChip item={item} />
+        {item.risk && item.risk.tier !== "normal" && (
+          <span title={item.risk.reason}>
+            <Pill tone={riskPillTone(item.risk.tier)}>
+              {item.risk.tier === "critical"
+                ? "Critical"
+                : item.risk.tier === "urgent"
+                  ? "Urgent"
+                  : "Attention"}
+            </Pill>
+          </span>
+        )}
         {item.needsAction && <Pill tone="review">{item.isRR ? "R&R" : "Action"}</Pill>}
         {!item.linked && <Pill tone="warn">Unlinked</Pill>}
       </div>
