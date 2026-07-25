@@ -34,7 +34,13 @@ export const SUBMITTAL_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
     "Under Review",
     "Void",
   ],
-  "Revise and Resubmit": ["Draft", "Submitted", "Under Review", "Void"],
+  // R&R holds the package until an actual resubmission (a SENT status with
+  // transmission evidence — see rrResubmitGate). "Draft" is deliberately NOT
+  // allowed: sliding back to Draft would hide a failed approval cycle as
+  // fresh internal prep (the R&R stage must stay visible until resubmit).
+  "Revise and Resubmit": ["Submitted", "Under Review", "Void"],
+  // Rejected keeps the Draft edge as the authorized reopen path for a new
+  // approval cycle (product decision pending a formal reopen workflow).
   Rejected: ["Draft", "Submitted", "Under Review", "Void"],
   "Released for Fabrication": ["Void"],
   Void: [],

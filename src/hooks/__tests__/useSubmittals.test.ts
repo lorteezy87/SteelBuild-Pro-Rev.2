@@ -269,6 +269,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     await addSubmittalRound({
       submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], status: "Revise and Resubmit" },
       status: "Submitted",
+      ball_in_court: "EOR",
       submitted_date: "2026-06-07",
     });
     expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 2, status: "Submitted" }));
@@ -302,6 +303,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     await addSubmittalRound({
       submittal: { id: "s4", project_id: "p1", revision: "0", status: "Revise and Resubmit" },
       status: "Submitted",
+      ball_in_court: "EOR",
       submitted_date: "2026-06-07",
       bumpTextRevision: true,
       currentRevision: "0",
@@ -347,6 +349,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     await addSubmittalRound({
       submittal: { id: "s8", project_id: "p1", revision: "A", status: "Revise and Resubmit" },
       status: "Submitted",
+      ball_in_court: "EOR",
       submitted_date: "2026-06-07",
       bumpTextRevision: true,
     });
@@ -365,6 +368,82 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     expect(createRound).toHaveBeenCalledWith(
       expect.objectContaining({ metadata: {} }),
     );
+  });
+});
+
+describe("addSubmittalRound — R&R resubmission-evidence gate (Slice 3)", () => {
+  beforeEach(() => {
+    createRound.mockClear();
+    updateRound.mockClear();
+    filterRound.mockClear();
+    updateSubmittal.mockClear();
+  });
+
+  it("blocks an R&R → Submitted move without an actual submission date", async () => {
+    filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Revise and Resubmit", submitted_date: "2026-06-01", returned_date: "2026-06-05" }]);
+    await expect(
+      addSubmittalRound({
+        submittal: { id: "g1", project_id: "p1", status: "Revise and Resubmit" },
+        status: "Submitted",
+        ball_in_court: "EOR",
+      }),
+    ).rejects.toThrow(/RR_RESUBMIT_BLOCKED.*submission date/);
+    expect(createRound).not.toHaveBeenCalled();
+    expect(updateSubmittal).not.toHaveBeenCalled();
+  });
+
+  it("blocks an R&R → Submitted move without a recipient", async () => {
+    filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Revise and Resubmit", submitted_date: "2026-06-01", returned_date: "2026-06-05" }]);
+    await expect(
+      addSubmittalRound({
+        submittal: { id: "g2", project_id: "p1", status: "Revise and Resubmit" },
+        status: "Submitted",
+        submitted_date: "2026-06-07",
+      }),
+    ).rejects.toThrow(/RR_RESUBMIT_BLOCKED.*recipient/);
+  });
+
+  it("blocks resubmitting the SAME revision the returned cycle went out as", async () => {
+    filterRound.mockResolvedValueOnce([{
+      id: "r1", round_number: 1, status: "Revise and Resubmit",
+      submitted_date: "2026-06-01", returned_date: "2026-06-05",
+      metadata: { revision: "A" },
+    }]);
+    await expect(
+      addSubmittalRound({
+        submittal: { id: "g3", project_id: "p1", revision: "A", status: "Revise and Resubmit" },
+        status: "Submitted",
+        ball_in_court: "EOR",
+        submitted_date: "2026-06-07",
+      }),
+    ).rejects.toThrow(/RR_RESUBMIT_BLOCKED.*next revision/);
+  });
+
+  it("passes a fully-evidenced resubmission (date + recipient + bumped revision)", async () => {
+    filterRound.mockResolvedValueOnce([{
+      id: "r1", round_number: 1, status: "Revise and Resubmit",
+      submitted_date: "2026-06-01", returned_date: "2026-06-05",
+      metadata: { revision: "A" },
+    }]);
+    await addSubmittalRound({
+      submittal: { id: "g4", project_id: "p1", revision: "A", status: "Revise and Resubmit" },
+      status: "Submitted",
+      ball_in_court: "EOR",
+      submitted_date: "2026-06-07",
+      bumpTextRevision: true,
+    });
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ round_number: 2, metadata: { revision: "B" } }),
+    );
+  });
+
+  it("does not gate a first submission (Draft → Submitted)", async () => {
+    await addSubmittalRound({
+      submittal: { id: "g5", project_id: "p1", status: "Draft" },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+    });
+    expect(createRound).toHaveBeenCalled();
   });
 });
 

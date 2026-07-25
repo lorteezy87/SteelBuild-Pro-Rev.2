@@ -19,6 +19,12 @@ describe("validateSubmittalTransition", () => {
     expect(validateSubmittalTransition("Rejected", "Under Review").ok).toBe(true);
   });
 
+  it("blocks R&R → Draft (a failed cycle must stay visible until resubmitted)", () => {
+    expect(validateSubmittalTransition("Revise and Resubmit", "Draft")).toMatchObject({ ok: false });
+    // Rejected keeps the Draft reopen path (pending a formal reopen workflow).
+    expect(validateSubmittalTransition("Rejected", "Draft").ok).toBe(true);
+  });
+
   it("blocks skipped / illegal jumps", () => {
     expect(validateSubmittalTransition("Draft", "Released for Fabrication")).toMatchObject({
       ok: false,

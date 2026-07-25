@@ -28,6 +28,8 @@ import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import { validateSubmittalTransition } from "@/lib/submittalTransitions";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { bumpRevision as nextRevision } from "@/lib/submittalRevision";
+import { evaluateRrResubmitGate } from "@/lib/rrResubmitGate";
+import { roundRevision } from "@/lib/submittalCycles";
 import { supabase } from "@/lib/supabase";
 import {
   FabReleaseBlockedError,
@@ -170,6 +172,8 @@ export interface CurrentRoundLite {
   ball_in_court?: string | null;
   submitted_date?: string | null;
   returned_date?: string | null;
+  /** Cycle stamp — carries `revision` (the text revision submitted). */
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface RoundWritePlan {
@@ -270,6 +274,23 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   const cycleRevision: string | null = input.bumpTextRevision
     ? nextRevision(input.currentRevision ?? s.revision ?? null)
     : (typeof s.revision === "string" && s.revision.trim() ? s.revision.trim() : null);
+
+  // R&R → OFA transmission-evidence gate (Slice 3): a package returned
+  // Revise-and-Resubmit / Rejected stays in R&R until the revised set is
+  // ACTUALLY retransmitted — a resubmission send requires the actual
+  // submission date, the recipient, and (when the returned cycle's revision
+  // is known) the next revision. The DB trigger backstops date + recipient.
+  const rrGate = evaluateRrResubmitGate({
+    priorStatus: s.status,
+    nextStatus: input.status,
+    submittedDate: input.submitted_date ?? null,
+    recipient: input.ball_in_court ?? null,
+    revision: cycleRevision,
+    priorCycleRevision: roundRevision(currentRound),
+  });
+  if (rrGate.ok === false) {
+    throw new Error(rrGate.reason);
+  }
 
   let round: { id?: string } | null;
   if (plan.action === "update" && plan.roundId) {
