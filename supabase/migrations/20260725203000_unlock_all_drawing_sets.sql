@@ -1,9 +1,12 @@
 -- One-shot: clear edit locks on all drawing_sets.
 --
--- Terminal submittal approvals auto-lock linked sets (is_locked). Owner asked
--- to remove those locks. The unlock trigger requires an admin JWT context, so
--- this migration briefly disables that trigger, clears lock columns, then
--- re-enables it. Future approvals can still re-lock via lockSet().
+-- Clears is_locked / lock metadata so sets can accept revisions and edits.
+-- The unlock trigger requires an admin JWT context, so this migration briefly
+-- disables that trigger, clears lock columns, then re-enables it.
+-- Auto-lock on terminal submittal approval was removed (PR #126); lockSet()
+-- remains available for manual use only.
+--
+-- Applied live to prod (kjrwqagyeswwoxpjkcko) via SQL editor on 2026-07-25.
 
 ALTER TABLE public.drawing_sets DISABLE TRIGGER drawing_sets_unlock_role_check;
 
