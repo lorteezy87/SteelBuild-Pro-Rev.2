@@ -65,7 +65,7 @@ Status key:
 | 24 | Completed | Pure helpers extracted to `pages/resourceScheduling/`; page remains orchestrator | `resourceSchedulingHelpers.ts` + 27 tests |
 | 25 | Partial | Layout reduced to shell (~429) | `Layout.jsx` |
 | 26 | Partial | Deliveries already split | `pages/deliveries/` |
-| 27 | Partial | Drawings still large (~1085); hub is canonical for drawing/submittal | Drawings + DrawingSubmittalHub |
+| 27 | Partial | `drawingMutationHelpers` extracted + tested; create/delete-set toasts scoped; shell still ~1k LOC | `WORK_NEXT_SLICE.md` |
 
 ## Phase 4 — Mutations & shared logic
 
@@ -74,7 +74,7 @@ Status key:
 | 47 | Completed | Standard mutation helpers introduced | `src/lib/mutations/standardMutation.ts` |
 | 48 | Partial | `toUserErrorMessage` adopted across field/commercial/RFIs/ops/email escalate paths; not universal | `WORK_NEXT_SLICE.md` |
 | 49 | Completed | `invalidateAfterMutation` helper | same + cacheRegistry |
-| 50 | Partial | `withProjectId` on RFIs/ActionItems/DailyLogs/Constraints/LookAhead/WPs/email/escalate + prior cluster; ad hoc remain | `WORK_NEXT_SLICE.md` |
+| 50 | Partial | `withProjectId` across field/commercial/RFIs/ops/Drawings/FabRelease/Contract/Schedule import/Deliveries alerts; ad hoc remain (Contacts/Vendors/Projects/FeatureFlags) | `WORK_NEXT_SLICE.md` |
 | 51 | Partial | Critical optimistic paths reviewed in prior PRs; not universal | — |
 | 52 | Partial | Write shaping + scoped invalidation advanced across flagship + ops pages; concurrent-edit E2E open | `withProjectId` |
 | 53 | Partial | Many KPI derives extracted; portfolio/financial KPIs tested in places | derive modules |

@@ -463,8 +463,7 @@ export default function Schedule() {
         const parentUid = uidToParentUid[t.uid];
         const parentDbId = parentUid ? uidToDbId[parentUid] : null;
 
-        const record = await entities.ScheduleTask.create({
-          project_id: pid,
+        const record = await entities.ScheduleTask.create(withProjectId({
           task_name: t.name,
           task_type: inferTaskType(t.name, t.isSummary, t.milestone),
           phase: PHASES.includes(phase) ? phase : "Fabrication",
@@ -483,7 +482,7 @@ export default function Schedule() {
           notes: t.notes || null,
           is_summary: t.isSummary || false,
           // Dependencies will be set in a second pass after all tasks exist
-        });
+        }, pid) as any);
         uidToDbId[t.uid] = record.id;
       }
 

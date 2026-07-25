@@ -20,7 +20,7 @@ import NewRoundModalRaw from "@/components/submittals/NewRoundModal";
 import ReleaseGateOverrideModalRaw from "@/components/submittals/ReleaseGateOverrideModal";
 import SheetResponseGridRaw from "@/components/submittals/SheetResponseGrid";
 import { FabReleaseBlockedError } from "@/lib/fabRelease/releaseStatus";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import {
   appendSubmittalNotes,
   buildBulkSubmittalCreatePayload,
@@ -656,21 +656,22 @@ export default function Submittals() {
           return;
         }
         try {
-          await entities.SubmittalCommentDisposition.create({
-            project_id: selected.project_id,
-            submittal_id: selected.id,
-            submittal_round_id: roundId,
-            comment_number: draft.comment_number,
-            source: draft.source,
-            location: draft.location || null,
-            comment_text: draft.comment_text,
-            is_required: draft.is_required,
-            status: "Unreviewed",
-          });
+          await entities.SubmittalCommentDisposition.create(
+            withProjectId({
+              submittal_id: selected.id,
+              submittal_round_id: roundId,
+              comment_number: draft.comment_number,
+              source: draft.source,
+              location: draft.location || null,
+              comment_text: draft.comment_text,
+              is_required: draft.is_required,
+              status: "Unreviewed",
+            }, selected.project_id || projectId),
+          );
           await invalidateCommentDispositions();
           toast.success("Returned comment added");
         } catch (err: any) {
-          toast.error(`Could not add comment: ${err?.message || err}`);
+          toast.error(`Could not add comment: ${toUserErrorMessage(err)}`);
         }
       }}
       onCommentDispositionStatus={async (id, status) => {

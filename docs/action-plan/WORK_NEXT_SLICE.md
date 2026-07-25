@@ -30,6 +30,8 @@ Added `withProjectId()` in `src/lib/mutations/standardMutation.ts`:
 | RFIs (ID 23) | Extracted `rfiMutationHelpers.ts` + tests; create/alert/doc attach + bulk toast helpers |
 | Ops / field | `ActionItems`, `DailyLogs`, `Constraints`, `LookAheadSchedule`, `WorkPackages` (+ bulk prep), `FieldToday` photos |
 | Cross-page create | `EscalateModal`, `emailInbox/modals` entity + document creates |
+| Drawings (ID 27) | Extracted `drawingMutationHelpers.ts` + tests; create/update/delete/set toast helpers |
+| Remaining creates | `FabRelease` WP create, `ContractManagement` SOV, Schedule MPP import, Submittal comment dispositions, Deliveries overdue alerts |
 
 ## Tracker IDs moved to Done (2026-07-25 checkpoint)
 
@@ -37,8 +39,8 @@ Added `withProjectId()` in `src/lib/mutations/standardMutation.ts`:
 
 ## Still In Progress (intentionally)
 
-- Large page thinning: **21** / **23** (helpers started; shells still large), **27** Drawings
-- Universal mutation/toast adoption: 18, **48**, **50**, 51, **52**, 53, 54, 56 — advanced on flagship + ops pages, not universal
+- Large page thinning: **21** / **23** / **27** (mutation helpers started; shells still large)
+- Universal mutation/toast adoption: 18, **48**, **50**, 51, **52**, 53, 54, 56 — advanced widely; org-level Contacts/Vendors/Projects intentionally skipped
 - UX / UAT: 20, 75, 77, 80, 81, 83, 87, 88
 - **Blocked:** 102 (interactive UAT — staging credentials + GH Actions billing)
 
@@ -48,7 +50,7 @@ Added `withProjectId()` in `src/lib/mutations/standardMutation.ts`:
 npx vitest run src/lib/mutations/__tests__/standardMutation.test.ts \
   src/pages/submittals/__tests__/submittalMutationHelpers.test.ts \
   src/pages/rfis/__tests__/rfiMutationHelpers.test.ts \
+  src/pages/drawings/__tests__/drawingMutationHelpers.test.ts \
   src/pages/workPackages/__tests__/creation.test.ts
 npx eslint <touched files> --quiet
-npm run typecheck
 ```
