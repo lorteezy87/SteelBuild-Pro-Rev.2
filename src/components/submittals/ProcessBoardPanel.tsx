@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import type { ComponentType } from "react";
-import { STAGE_MAP, STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+import { STAGE_MAP, WORKFLOW_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import { formatShortDate } from "@/utils/dates";
 import { FilterBar, Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
@@ -99,7 +99,7 @@ export default function ProcessBoardPanel({
     [allItems, filter, search],
   );
   const stageBuckets = useMemo(
-    () => bucketByStage(boardItems, STAGE_ORDER),
+    () => bucketByStage(boardItems, WORKFLOW_STAGE_ORDER),
     [boardItems],
   );
   const summary = useMemo<BoardSummary>(() => summarizeBoard(allItems), [allItems]);
@@ -143,7 +143,7 @@ export default function ProcessBoardPanel({
         padding: "2px 2px 12px",
         minHeight: 520,
       }}>
-        {STAGE_ORDER.map((stage) => (
+        {WORKFLOW_STAGE_ORDER.map((stage) => (
           <ProcessColumn
             key={stage}
             stage={stage}

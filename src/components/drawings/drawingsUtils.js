@@ -5,7 +5,7 @@
  * overdue detection, CSV export, and filter/stat computation.
  */
 
-import { IN_REVIEW_STAGES, STAGE_ORDER, STAGES } from "./drawingsConfig";
+import { IN_REVIEW_STAGES, STAGE_ORDER, WORKFLOW_STAGES } from "./drawingsConfig";
 import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
 import { compareDrawingSetPackages, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
@@ -709,14 +709,18 @@ export function computeStagePipeline({ submittals, drawingSetRecords, drawings, 
     (ds) => ds?.id && !packagesWithSubmittal.has(ds.id) &&
       derivedSetStage([], (drawings || []).filter((d) => d.drawing_set_id === ds.id)) === "Not Started"
   ).length;
-  const counts = STAGES.reduce((acc, s) => {
+  // WORKFLOW_STAGES (not STAGES): the pipeline shows submittal-DERIVED
+  // stages, so the first-class R&R bucket (2026-07-25) gets its own
+  // chevron instead of silently dropping R&R rows. Display only — the
+  // sheet stage filter still operates over the 7-value sheet enum.
+  const counts = WORKFLOW_STAGES.reduce((acc, s) => {
     acc[s.key] = s.key === "Not Started"
       ? notStartedCount
       : (rollup.counts[s.key] || 0);
     return acc;
   }, {});
   // Pipeline stages (use only the forward-flow stages; Released is the terminal)
-  const pipeStages = STAGES.map((s) => ({
+  const pipeStages = WORKFLOW_STAGES.map((s) => ({
     id: s.key,
     label: s.label,
     color: s.color,
@@ -726,13 +730,13 @@ export function computeStagePipeline({ submittals, drawingSetRecords, drawings, 
   // non-empty non-terminal stage (the bottleneck).
   let activeIdx = 0;
   const filteredActive = stageFilter !== "ALL" && !stageFilter.startsWith("_")
-    ? STAGES.findIndex((s) => s.key === stageFilter)
+    ? WORKFLOW_STAGES.findIndex((s) => s.key === stageFilter)
     : -1;
   if (filteredActive >= 0) {
     activeIdx = filteredActive;
   } else {
-    for (let i = STAGES.length - 2; i >= 1; i--) {
-      if (counts[STAGES[i].key] > 0) { activeIdx = i; break; }
+    for (let i = WORKFLOW_STAGES.length - 2; i >= 1; i--) {
+      if (counts[WORKFLOW_STAGES[i].key] > 0) { activeIdx = i; break; }
     }
   }
   return { pipeStages, activeIdx };

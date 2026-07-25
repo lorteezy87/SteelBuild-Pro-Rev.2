@@ -61,9 +61,9 @@ describe("nextSubmittalAction", () => {
     expect(a.nextStatus).toBe("Released for Fabrication");
   });
 
-  it("Revise and Resubmit (→ IFA) frames the move as a resubmit", () => {
+  it("Revise and Resubmit (→ R&R first-class stage) frames the move as a resubmit", () => {
     const a = nextSubmittalAction({ status: "Revise and Resubmit", ball_in_court: "Detailer" });
-    expect(a.currentStage).toBe("IFA");
+    expect(a.currentStage).toBe("R&R");
     expect(a.label).toBe("Resubmit for Approval (OFA)");
     expect(a.nextStage).toBe("OFA");
   });

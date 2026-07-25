@@ -3,9 +3,9 @@
 // agreement.
 //
 // Path A — `submittalPipelineRollupFromSubmittals` in projectMetrics.js
-//   Maps each non-deleted submittal to one of 6 active display stages
-//   (IFA / OFA / BFA / OFS / IFC / Released) and counts ROWS. This drives
-//   the StagePipeline chevrons on the Drawings page.
+//   Maps each non-deleted submittal to one of 7 active display stages
+//   (IFA / OFA / BFA / R&R / OFS / IFC / Released) and counts ROWS. This
+//   drives the StagePipeline chevrons on the Drawings page.
 //
 // Path B — `derivedSetStage` in submittalStageMapping.js
 //   For each drawing set, picks the most-recent linked submittal and
@@ -50,7 +50,7 @@ const submittals = [
     submitted_date: "2025-09-01",
     is_deleted: false,
   },
-  // Set B: Revise and Resubmit → IFA (loop back)
+  // Set B: Revise and Resubmit → R&R (first-class stage, 2026-07-25)
   {
     id: "s3",
     status: "Revise and Resubmit",
@@ -102,7 +102,7 @@ const drawings = [
 
 // Helper: bucket each set by derivedSetStage(submittals-for-set, sheets-for-set).
 function bucketSetsByDerivedStage(setIds, allSubmittals, allDrawings) {
-  const stages = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
+  const stages = ["IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released"];
   const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
   for (const setId of setIds) {
     const subs = allSubmittals.filter((s) =>
@@ -121,14 +121,16 @@ describe("Drawings ↔ Submittals cohesion smoke test", () => {
     // 4 active submittals (s5 soft-deleted):
     //   s1 Released for Fabrication      → Released
     //   s2 Approved as Noted + Detailer  → OFS
-    //   s3 Revise and Resubmit           → IFA (loop back)
+    //   s3 Revise and Resubmit           → R&R (first-class stage)
     //   s4 Approved as Noted + EOR       → BFA
     expect(total).toBe(4);
     expect(counts.Released).toBe(1);
     expect(counts.OFS).toBe(1);
-    expect(counts.IFA).toBe(1);
+    expect(counts["R&R"]).toBe(1);
     expect(counts.BFA).toBe(1);
-    // Unused buckets must be empty for this fixture.
+    // Unused buckets must be empty for this fixture — an R&R row must not
+    // leak into IFA (the pre-2026-07-25 rollup).
+    expect(counts.IFA).toBe(0);
     expect(counts.OFA).toBe(0);
     expect(counts.IFC).toBe(0);
   });
@@ -140,11 +142,11 @@ describe("Drawings ↔ Submittals cohesion smoke test", () => {
       drawings.filter((d) => d.drawing_set_id === SET_A),
     )).toBe("Released");
 
-    // Set B: only active submittal is s3 (Revise and Resubmit) → IFA
+    // Set B: only active submittal is s3 (Revise and Resubmit) → R&R
     expect(derivedSetStage(
       submittals.filter((s) => s.drawing_set_ids.includes(SET_B)),
       drawings.filter((d) => d.drawing_set_id === SET_B),
-    )).toBe("IFA");
+    )).toBe("R&R");
 
     // Set C: only active submittal is s4 (Approved as Noted + EOR) → BFA
     // (s5 is soft-deleted and excluded)
@@ -158,10 +160,10 @@ describe("Drawings ↔ Submittals cohesion smoke test", () => {
     const setIds = [SET_A, SET_B, SET_C];
     const fromSets = bucketSetsByDerivedStage(setIds, submittals, drawings);
     // Set A → Released (most recent: s1)
-    // Set B → IFA      (only active: s3, R&R loop)
+    // Set B → R&R      (only active: s3, first-class R&R stage)
     // Set C → BFA      (only active: s4)
     expect(fromSets).toEqual({
-      IFA: 1, OFA: 0, BFA: 1, OFS: 0, IFC: 0, Released: 1,
+      IFA: 0, OFA: 0, BFA: 1, "R&R": 1, OFS: 0, IFC: 0, Released: 1,
     });
 
     // Compare to the row-rollup. Path A counts each submittal row, so
@@ -172,7 +174,7 @@ describe("Drawings ↔ Submittals cohesion smoke test", () => {
     const rollup = submittalPipelineRollupFromSubmittals(submittals).counts;
     expect(rollup.Released).toBe(fromSets.Released);    // 1 ↔ 1 ✓
     expect(rollup.BFA).toBe(fromSets.BFA);              // 1 ↔ 1 ✓
-    expect(rollup.IFA).toBe(fromSets.IFA);              // 1 ↔ 1 ✓
+    expect(rollup["R&R"]).toBe(fromSets["R&R"]);        // 1 ↔ 1 ✓
     // OFS rollup has s2 (older Set A submittal mapped to OFS) = 1,
     // while per-set is 0 (Set A's dominant stage is Released, not OFS).
     expect(rollup.OFS).toBe(1);

@@ -231,7 +231,7 @@ export function validateDueDateWrite(
   return null;
 }
 
-const WORKFLOW_STAGE_STATES = new Set(["IFA", "OFA", "BFA", "OFS", "IFC", "Released", "Partially Released", "Released for Erection"]);
+const WORKFLOW_STAGE_STATES = new Set(["IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released", "Partially Released", "Released for Erection"]);
 
 /** Manual detailing state is a pre-submittal recovery action only. */
 export function validateDetailingStateWrite(
@@ -497,9 +497,11 @@ export function buildSequenceReadiness(readinessByKey: Map<string, any>) {
 export function buildDrawingKpis(drawings: any[], setPackages: SetPackage[]) {
   const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted);
   const released = setPackages.filter(isClosedPackage).length;
-  // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
+  // "In review" = active workflow stages: IFA / OFA / BFA / R&R / OFS / IFC.
+  // R&R counts as in-review — the package is mid-cycle (detailer rework), the
+  // same bucket it occupied when R&R still derived to IFA.
   const inReview = setPackages.filter((pkg) =>
-    ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets))
+    ["IFA", "OFA", "BFA", "R&R", "OFS", "IFC"].includes(effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets))
   ).length;
   const overdueDrawings = setPackages.filter((pkg) =>
     pkg.sheets.some((d) => dueInfo(getDrawingDueDate(d), isClosedDrawing(d)).overdue)
@@ -540,8 +542,8 @@ export function buildTriage(
       // alongside `status` (additive) so the existing pipeline/row display is
       // unchanged; surfaced as its own chip + drives the drafting control.
       const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
-      // R&R loops back to the IFA stage for counts; surface it as its own flag so
-      // the board doesn't read an R&R rejection as a fresh IFA (matches register).
+      // R&R is a first-class derived stage (2026-07-25); the flag is kept for
+      // surfaces that badge R&R alongside a non-stage display (e.g. status rows).
       const isRR = isPackageRR(pkg.submittals);
       // CLOSED is satisfied by ANY terminal signal — not only a closed
       // submittal status. Previous logic prioritised `latestSubmittal` and

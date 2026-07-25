@@ -289,12 +289,14 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsBy
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
-            {/* Derived workflow-stage chip — shows IFA/OFA/BFA/OFS/IFC/
+            {/* Derived workflow-stage chip — shows IFA/OFA/BFA/R&R/OFS/IFC/
                 Released so the user can see workflow position at a
-                glance, not just the raw submittal status. */}
+                glance, not just the raw submittal status. R&R statuses
+                derive the first-class R&R stage (2026-07-25), so the chip
+                itself reads R&R — no extra loop suffix needed. */}
             {stageCfg && (
               <span
-                title={`Workflow stage: ${stageCfg.label}${showRR ? " (R&R loop)" : ""}`}
+                title={`Workflow stage: ${stageCfg.label}${showRR ? " — Revise and Resubmit" : ""}`}
                 style={{
                   fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
                   padding: "2px 6px", borderRadius: 3, letterSpacing: "0.06em",

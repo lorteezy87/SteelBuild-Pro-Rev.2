@@ -71,10 +71,15 @@ describe("submittalStatusToStage", () => {
   });
 
   describe("R&R outcomes", () => {
-    it("maps Revise and Resubmit / Rejected → IFA (loop back)", () => {
-      expect(submittalStatusToStage("Revise and Resubmit", null,       null)).toBe("IFA");
-      expect(submittalStatusToStage("Revise and Resubmit", "Detailer", null)).toBe("IFA");
-      expect(submittalStatusToStage("Rejected",             "EOR",     null)).toBe("IFA");
+    it("maps Revise and Resubmit / Rejected → R&R (first-class stage, 2026-07-25)", () => {
+      expect(submittalStatusToStage("Revise and Resubmit", null,       null)).toBe("R&R");
+      expect(submittalStatusToStage("Revise and Resubmit", "Detailer", null)).toBe("R&R");
+      expect(submittalStatusToStage("Rejected",             "EOR",     null)).toBe("R&R");
+    });
+
+    it("never derives R&R outcomes to IFA (a failed cycle must not read as fresh prep)", () => {
+      expect(submittalStatusToStage("Revise and Resubmit", "EOR", null)).not.toBe("IFA");
+      expect(submittalStatusToStage("Rejected", null, null)).not.toBe("IFA");
     });
   });
 
@@ -101,6 +106,7 @@ describe("stageToSubmittalStatus", () => {
     expect(stageToSubmittalStatus("IFA")).toMatchObject({ status: "Draft",                    ball_in_court: "Detailer" });
     expect(stageToSubmittalStatus("OFA")).toMatchObject({ status: "Submitted",                ball_in_court: "EOR" });
     expect(stageToSubmittalStatus("BFA")).toMatchObject({ status: "Approved as Noted",        ball_in_court: "EOR" });
+    expect(stageToSubmittalStatus("R&R")).toMatchObject({ status: "Revise and Resubmit",      ball_in_court: "Detailer" });
     expect(stageToSubmittalStatus("OFS")).toMatchObject({ status: "Approved as Noted",        ball_in_court: "Detailer" });
     expect(stageToSubmittalStatus("IFC")).toMatchObject({ status: "Approved",                 ball_in_court: "GC" });
     expect(stageToSubmittalStatus("Released")).toMatchObject({ status: "Released for Fabrication", ball_in_court: null });
@@ -192,6 +198,14 @@ describe("derivedSetStage", () => {
     expect(derivedSetStage(subs, [])).toBe("OFS");
   });
 
+  it("derives R&R for a set whose governing submittal came back Revise and Resubmit", () => {
+    const subs = [
+      { id: "s1", submitted_date: "2026-04-01", status: "Revise and Resubmit", ball_in_court: "Detailer" },
+      { id: "s2", submitted_date: "2026-03-01", status: "Approved", ball_in_court: "Detailer" },
+    ];
+    expect(derivedSetStage(subs, [])).toBe("R&R");
+  });
+
   it("skips Voided submittals when picking most-recent", () => {
     const subs = [
       { id: "s1", submitted_date: "2026-05-01", status: "Void" },
@@ -212,8 +226,8 @@ describe("derivedSetStage", () => {
 });
 
 describe("isStageInReview", () => {
-  it("is true for IFA/OFA/BFA/OFS/IFC", () => {
-    for (const s of ["IFA", "OFA", "BFA", "OFS", "IFC"]) {
+  it("is true for IFA/OFA/BFA/R&R/OFS/IFC", () => {
+    for (const s of ["IFA", "OFA", "BFA", "R&R", "OFS", "IFC"]) {
       expect(isStageInReview(s)).toBe(true);
     }
   });

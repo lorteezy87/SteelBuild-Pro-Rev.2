@@ -151,9 +151,14 @@ export function nextSubmittalAction(
   switch (currentStage) {
     case "Not Started":
     case "IFA":
-      // R&R/Rejected derive to IFA too — frame the move as a resubmit.
       nextStage = "OFA";
-      label = isRRStatus(status) ? "Resubmit for Approval (OFA)" : "Send for Approval (OFA)";
+      label = "Send for Approval (OFA)";
+      break;
+    case "R&R":
+      // First-class R&R stage (2026-07-25): the forward move is the
+      // resubmittal — identical outcome to the pre-promotion IFA branch.
+      nextStage = "OFA";
+      label = "Resubmit for Approval (OFA)";
       break;
     case "OFA":
       nextStage = "BFA";

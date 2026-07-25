@@ -52,15 +52,14 @@ export function OperationalStateChip({ state }: { state: string }) {
   );
 }
 
-// R&R loop-back badge, shown next to the stage chip when the governing submittal
-// is Revise-and-Resubmit / Rejected. The stage rolls up to IFA for counts, so
-// this keeps an R&R rejection from reading as a fresh IFA on the board (and
-// matches the register's literal "Revise and Resubmit").
+// R&R badge — shown next to displays that do NOT already read "R&R" (since
+// 2026-07-25 R&R is a first-class derived stage, so most chips render it
+// directly; callers skip this badge when the state chip is itself "R&R").
 export function RRChip() {
   const color = "#f59e0b"; // matches "Revise and Resubmit" in format.ts
   return (
     <span
-      title="Revise & Resubmit — the review sent this package back; the cycle restarts at IFA"
+      title="Revise & Resubmit — the review sent this package back; the detailer owns the rework until resubmission (→ OFA)"
       style={{
         display: "inline-block",
         padding: "2px 8px",

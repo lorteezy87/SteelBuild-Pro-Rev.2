@@ -12,7 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { STAGE_MAP, STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+import { STAGE_MAP, WORKFLOW_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 import {
   derivedSetStage,
   isRRStatus,
@@ -257,9 +257,9 @@ export default function SubmittalVisualBoard({
   );
 
   const stageBuckets = useMemo(() => {
-    const buckets = Object.fromEntries(STAGE_ORDER.map((stage) => [stage, []]));
+    const buckets = Object.fromEntries(WORKFLOW_STAGE_ORDER.map((stage) => [stage, []]));
     for (const item of boardItems) {
-      const key = STAGE_ORDER.includes(item.stage) ? item.stage : "Not Started";
+      const key = WORKFLOW_STAGE_ORDER.includes(item.stage) ? item.stage : "Not Started";
       buckets[key].push(item);
     }
     return buckets;
@@ -341,7 +341,7 @@ export default function SubmittalVisualBoard({
         padding: "2px 2px 12px",
         minHeight: 520,
       }}>
-        {STAGE_ORDER.map((stage) => (
+        {WORKFLOW_STAGE_ORDER.map((stage) => (
           <ProcessColumn
             key={stage}
             stage={stage}

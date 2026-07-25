@@ -7,21 +7,25 @@
 
 // ─── Stage Definitions ──────────────────────────────────────────────────────
 //
-// Canonical 7-stage detailing/submittal flow (corrected May 2026):
+// Canonical detailing/submittal flow (R&R promoted to a first-class
+// derived stage 2026-07-25 — see ARCHITECTURE.md decision log):
 //
 //   Not Started → IFA → OFA → BFA → OFS → IFC → Released for Fab
-//                                    ↑
-//                                    └─ R&R (Revise & Resubmit) loops
-//                                       back to IFA. R&R is an OUTCOME
-//                                       status on a submittal, not a
-//                                       stage — rendered as a separate
-//                                       UI badge / transition.
+//                          ↑     │
+//                          │     └─ R&R (Revise & Resubmit) — a returned
+//                          └──────  disposition parks the package in the
+//                                   R&R stage until the revised set is
+//                                   actually retransmitted (→ OFA).
 //
 // Stage glossary:
 //   IFA = In For Approval         — internal prep (detailer → S&H → GC,
 //                                   before going to EOR)
 //   OFA = Out For Approval        — submitted to EOR / AOR
 //   BFA = Back From Approval      — returned with AAN / Approved / R&R
+//   R&R = Revise and Resubmit     — returned R&R/Rejected; detailer owns
+//                                   the rework until resubmission (DERIVED
+//                                   display stage only — never written to
+//                                   drawings.stage)
 //   OFS = Out For Scrub           — post-approval cleanup (detailer
 //                                   addressing EOR's comments)
 //   IFC = Issued For Construction — S&H sends record copy to GC
@@ -29,6 +33,15 @@
 //
 // Color sequence: cool→warm→cool→warm with green at the end so the
 // chevron strip reads as progress.
+//
+// ⚠ TWO ORDERS, ON PURPOSE:
+//   • STAGES / STAGE_ORDER (7 values) — the SHEET stage enum. Mirrors the
+//     `chk_drawings_stage` DB CHECK and drives every sheet-stage WRITE path
+//     (BulkActionBar, AdvanceStageDialog legacy fallback, DrawingKanban,
+//     stage sort). "R&R" must NEVER appear here.
+//   • WORKFLOW_STAGES / WORKFLOW_STAGE_ORDER (8 values) — the DISPLAY order
+//     for submittal-derived workflow stages (process boards, chips,
+//     rollups). Includes R&R after BFA.
 export const STAGES = [
   { key: "Not Started", label: "NOT STARTED", color: "#64748B", bg: "rgba(100,116,139,0.16)" }, // slate
   { key: "IFA",         label: "IFA",         color: "#60A5FA", bg: "rgba(96,165,250,0.16)"  }, // info-muted (sky)
@@ -39,10 +52,33 @@ export const STAGES = [
   { key: "Released",    label: "RELEASED",    color: "#10B981", bg: "rgba(16,185,129,0.18)"  }, // success (emerald)
 ];
 
-/** Map stage key → { key, label, color, bg } */
-export const STAGE_MAP = Object.fromEntries(STAGES.map(s => [s.key, s]));
+/**
+ * R&R — a first-class DERIVED workflow stage (never a sheet-enum value).
+ * Amber, matching the pre-existing R&R badge / "Revise and Resubmit"
+ * status color (#f59e0b) so the promotion doesn't change the R&R hue.
+ */
+export const RR_STAGE = { key: "R&R", label: "R&R", color: "#F59E0B", bg: "rgba(245,158,11,0.16)" };
 
-/** Ordered stage keys for advancement logic */
+/**
+ * Display order for submittal-DERIVED workflow stages: the sheet stages
+ * with R&R spliced after BFA (an R&R disposition is received at BFA and
+ * parks the package until resubmission). Used by the process boards and
+ * any surface bucketing/ordering derived stages.
+ */
+export const WORKFLOW_STAGES = STAGES.flatMap(s => (s.key === "BFA" ? [s, RR_STAGE] : [s]));
+
+/** Ordered workflow-stage keys (8 values, includes "R&R"). Display only. */
+export const WORKFLOW_STAGE_ORDER = WORKFLOW_STAGES.map(s => s.key);
+
+/**
+ * Map stage key → { key, label, color, bg }. Built over WORKFLOW_STAGES so
+ * lookups cover the derived "R&R" stage too (StageChip, board columns);
+ * pure superset of the sheet-enum stages, so sheet surfaces are unchanged.
+ */
+export const STAGE_MAP = Object.fromEntries(WORKFLOW_STAGES.map(s => [s.key, s]));
+
+/** Ordered SHEET stage keys (7 values — mirrors the drawings.stage CHECK).
+ *  Drives sheet-stage write paths and sheet sorting. No "R&R" here. */
 export const STAGE_ORDER = STAGES.map(s => s.key);
 
 /**
@@ -51,9 +87,10 @@ export const STAGE_ORDER = STAGES.map(s => s.key);
  * still in active workflow (record copy in transit to GC) so it counts
  * as in-review until S&H releases it for fab. Single source of truth
  * for both the stat tile and the "_inReview" filter button so their
- * counts never disagree.
+ * counts never disagree. R&R is in-review: the package is mid-cycle,
+ * with the detailer owning the rework.
  */
-export const IN_REVIEW_STAGES = ["IFA", "OFA", "BFA", "OFS", "IFC"];
+export const IN_REVIEW_STAGES = ["IFA", "OFA", "BFA", "R&R", "OFS", "IFC"];
 
 /**
  * Build the `entities.Drawing.update` patch for a direct (legacy) sheet-stage

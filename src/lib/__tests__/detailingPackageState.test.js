@@ -23,7 +23,7 @@ describe("DETAILING_STATE_ORDER", () => {
     expect(DETAILING_STATE_ORDER).toEqual([
       "Not Started",
       "In Detailing", "Internal Review", "Ready to Submit",
-      "IFA", "OFA", "BFA", "OFS", "IFC", "Released",
+      "IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released",
       "Partially Released", "Released for Erection",
     ]);
   });
