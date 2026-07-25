@@ -1,7 +1,7 @@
 # Piece ↔ Work Package ↔ Fab ↔ 3D Glue Design
 
 **Date:** 2026-07-25  
-**Status:** Draft for owner review (brainstorming §§1–4 approved in chat)  
+**Status:** Approved — implementation in progress  
 **Branch:** `cursor/piece-wp-3d-glue-design-3d17`
 
 ## Problem
