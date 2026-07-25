@@ -765,6 +765,9 @@ export default function Submittals() {
           returned_date: action.nextStage === "BFA" ? today : undefined,
           bumpTextRevision,
           currentRevision: selected.revision ?? null,
+          nextStage: action.nextStage,
+          ofsChecklist: action.ofsChecklist ?? undefined,
+          ofsOverrideReason: action.ofsOverrideReason ?? undefined,
           extraPatch: Object.keys(extraPatch).length ? extraPatch : undefined,
         });
       }}

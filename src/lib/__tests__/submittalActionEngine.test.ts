@@ -39,11 +39,11 @@ describe("nextSubmittalAction", () => {
     expect(a.nextBallInCourt).toBe("Detailer");
   });
 
-  it("Approved at EOR (→ BFA) skips scrub → Issue for Construction (IFC)", () => {
+  it("Approved at EOR (→ BFA) routes to scrub (OFS) by default (Slice 4)", () => {
     const a = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
     expect(a.currentStage).toBe("BFA");
-    expect(a.label).toBe("Issue for Construction (IFC)");
-    expect(a.nextStage).toBe("IFC");
+    expect(a.label).toBe("Send for Scrub (OFS)");
+    expect(a.nextStage).toBe("OFS");
   });
 
   it("Approved as Noted at Detailer (→ OFS) suggests Issue for Construction (IFC)", () => {
@@ -51,6 +51,24 @@ describe("nextSubmittalAction", () => {
     expect(a.currentStage).toBe("OFS");
     expect(a.label).toBe("Issue for Construction (IFC)");
     expect(a.nextStage).toBe("IFC");
+    // Preserve AAN disposition — only BIC moves to GC.
+    expect(a.nextStatus).toBe("Approved as Noted");
+    expect(a.nextBallInCourt).toBe("GC");
+  });
+
+  it("Approved at Detailer (→ OFS) preserves Approved when issuing IFC", () => {
+    const a = nextSubmittalAction({ status: "Approved", ball_in_court: "Detailer" });
+    expect(a.currentStage).toBe("OFS");
+    expect(a.nextStage).toBe("IFC");
+    expect(a.nextStatus).toBe("Approved");
+    expect(a.nextBallInCourt).toBe("GC");
+  });
+
+  it("Approved at EOR routes to OFS without flipping disposition to AAN", () => {
+    const a = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
+    expect(a.nextStage).toBe("OFS");
+    expect(a.nextStatus).toBe("Approved");
+    expect(a.nextBallInCourt).toBe("Detailer");
   });
 
   it("Approved at GC (→ IFC) suggests Release for Fabrication", () => {
@@ -94,51 +112,46 @@ describe("nextSubmittalAction", () => {
     expect(a.nextStage).toBe("OFA");
   });
 
-  it("a full happy-path chain advances Draft → … → Released", () => {
+  it("a full happy-path chain advances Draft → … → Released via OFS", () => {
     let s: { status: string | null; ball_in_court: string | null } = { status: "Draft", ball_in_court: "Detailer" };
     const seen: string[] = [];
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 10; i++) {
       const a = nextSubmittalAction(s);
       seen.push(a.currentStage);
       if (a.disabled || !a.nextStatus) break;
       s = { status: a.nextStatus, ball_in_court: a.nextBallInCourt };
     }
-    // Should touch the key stages and terminate at Released.
+    // Should touch the key stages (including OFS) and terminate at Released.
     expect(seen).toContain("OFA");
     expect(seen).toContain("BFA");
+    expect(seen).toContain("OFS");
     expect(seen).toContain("IFC");
     expect(seen[seen.length - 1]).toBe("Released");
   });
 });
 
 // ── Flag-gated routing: submittal_approved_to_scrub ────────────────────────
-// When `approvedRoutesToScrub` is on, a BFA "Approved" flows through the
-// detailer scrub (OFS) exactly like "Approved as Noted", instead of skipping
-// straight to IFC. Flag-off (default / absent) behavior is asserted unchanged
-// in the primary describe block above.
+// Default (absent / true) routes BFA "Approved" through OFS. Explicit false
+// restores the legacy Approved → IFC skip.
 
 describe("nextSubmittalAction with approvedRoutesToScrub", () => {
-  it("Approved at EOR (→ BFA) routes to scrub (OFS) like AAN when flag on", () => {
-    const a = nextSubmittalAction(
-      { status: "Approved", ball_in_court: "EOR" },
-      { approvedRoutesToScrub: true },
-    );
+  it("Approved at EOR (→ BFA) routes to scrub (OFS) like AAN by default", () => {
+    const a = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
     expect(a.currentStage).toBe("BFA");
     expect(a.label).toBe("Send for Scrub (OFS)");
     expect(a.nextStage).toBe("OFS");
     expect(a.nextBallInCourt).toBe("Detailer");
   });
 
-  it("flag-on Approved matches the flag-off AAN branch exactly (label + routing)", () => {
-    const approvedOn = nextSubmittalAction(
-      { status: "Approved", ball_in_court: "EOR" },
-      { approvedRoutesToScrub: true },
-    );
+  it("default Approved matches AAN branch on stage/BIC (preserves disposition)", () => {
+    const approvedOn = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
     const aanOff = nextSubmittalAction({ status: "Approved as Noted", ball_in_court: "EOR" });
     expect(approvedOn.label).toBe(aanOff.label);
     expect(approvedOn.nextStage).toBe(aanOff.nextStage);
-    expect(approvedOn.nextStatus).toBe(aanOff.nextStatus);
     expect(approvedOn.nextBallInCourt).toBe(aanOff.nextBallInCourt);
+    // Disposition string is preserved (Approved stays Approved, AAN stays AAN).
+    expect(approvedOn.nextStatus).toBe("Approved");
+    expect(aanOff.nextStatus).toBe("Approved as Noted");
   });
 
   it("flag-off (explicit false) keeps the legacy Approved → IFC skip", () => {
@@ -150,22 +163,22 @@ describe("nextSubmittalAction with approvedRoutesToScrub", () => {
     expect(a.nextStage).toBe("IFC");
   });
 
-  it("empty opts object is identical to the no-opts default (Approved → IFC)", () => {
+  it("empty opts object is identical to the no-opts default (Approved → OFS)", () => {
     const withOpts = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" }, {});
     const noOpts = nextSubmittalAction({ status: "Approved", ball_in_court: "EOR" });
-    expect(withOpts.nextStage).toBe("IFC");
+    expect(withOpts.nextStage).toBe("OFS");
     expect(withOpts.label).toBe(noOpts.label);
     expect(withOpts.nextStage).toBe(noOpts.nextStage);
   });
 
-  it("flag-on happy path chains Approved → OFS → IFC → Released", () => {
+  it("default happy path chains Approved → OFS → IFC → Released", () => {
     let s: { status: string | null; ball_in_court: string | null } = {
       status: "Approved",
       ball_in_court: "EOR",
     };
     const seen: string[] = [];
     for (let i = 0; i < 8; i++) {
-      const a = nextSubmittalAction(s, { approvedRoutesToScrub: true });
+      const a = nextSubmittalAction(s);
       seen.push(a.currentStage);
       if (a.disabled || !a.nextStatus) break;
       s = { status: a.nextStatus, ball_in_court: a.nextBallInCourt };

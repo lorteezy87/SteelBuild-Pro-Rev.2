@@ -24,11 +24,20 @@ import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { logTransition } from "@/services/auditLogger";
 import { lockSet } from "@/lib/drawingHub";
-import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
+import {
+  CLOSED_SUBMITTAL_STATUSES,
+  submittalStatusToStage,
+} from "@/lib/submittalStageMapping";
 import { validateSubmittalTransition } from "@/lib/submittalTransitions";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { bumpRevision as nextRevision } from "@/lib/submittalRevision";
 import { evaluateRrResubmitGate } from "@/lib/rrResubmitGate";
+import {
+  evaluateOfsIfcGate,
+  evaluateOfsToOfaGate,
+  evaluateSkipOfsReleaseGate,
+  type OfsChecklistState,
+} from "@/lib/ofsCompletionGate";
 import { roundRevision } from "@/lib/submittalCycles";
 import { supabase } from "@/lib/supabase";
 import {
@@ -122,14 +131,32 @@ export interface AddRoundInput {
     submitted_date?: string | null;
     /** Status BEFORE this move — lets the smart triggers detect the transition. */
     status?: string | null;
+    /** Ball-in-court BEFORE this move — required for derived-stage OFS gates. */
+    ball_in_court?: string | null;
     /** Current text revision ('0','A','Rev 2'…) — read when auto-bumping it. */
     revision?: string | null;
+    /** Existing metadata — merged when stamping ofs_checklist. */
+    metadata?: Record<string, unknown> | null;
   };
   status: string;
   ball_in_court?: string | null;
   submitted_date?: string | null;
   returned_date?: string | null;
   notes?: string | null;
+  /**
+   * Target workflow stage for this move (from nextSubmittalAction). Used by
+   * the OFS→IFC checklist gate when status alone cannot distinguish OFS/IFC
+   * (both are Approved/AAN with different BICs).
+   */
+  nextStage?: string | null;
+  /** OFS→IFC scrub completion checklist (Slice 4). */
+  ofsChecklist?: OfsChecklistState | null;
+  /**
+   * Audited override reason for OFS gates (skip checklist / OFS→OFA /
+   * skip-OFS release). Distinct from fabReleaseOverrideReason but either
+   * satisfies the skip-OFS release gate when releasing for fab.
+   */
+  ofsOverrideReason?: string | null;
   /** Bump the submittal's revision round_number (true on Revise & Resubmit). */
   bumpRevision?: boolean;
   /**
@@ -292,6 +319,43 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
     throw new Error(rrGate.reason);
   }
 
+  // OFS workflow gates (Slice 4): Out for Scrub is post-approval cleanup —
+  // not a resubmittal — and IFC issue requires the scrub checklist (or an
+  // audited override). Fab-release override also satisfies skip-OFS release.
+  const ofsOverride =
+    (input.ofsOverrideReason || input.fabReleaseOverrideReason || "").trim() || null;
+  const derivedNextStage =
+    input.nextStage ??
+    submittalStatusToStage(input.status, input.ball_in_court ?? null, null);
+  const ofsToOfa = evaluateOfsToOfaGate({
+    priorStatus: s.status,
+    priorBallInCourt: s.ball_in_court,
+    nextStatus: input.status,
+    overrideReason: ofsOverride,
+  });
+  if (ofsToOfa.ok === false) {
+    throw new Error(ofsToOfa.reason);
+  }
+  const ofsIfc = evaluateOfsIfcGate({
+    priorStatus: s.status,
+    priorBallInCourt: s.ball_in_court,
+    nextStage: derivedNextStage,
+    checklist: input.ofsChecklist,
+    overrideReason: ofsOverride,
+  });
+  if (ofsIfc.ok === false) {
+    throw new Error(ofsIfc.reason);
+  }
+  const skipOfs = evaluateSkipOfsReleaseGate({
+    priorStatus: s.status,
+    priorBallInCourt: s.ball_in_court,
+    nextStatus: input.status,
+    overrideReason: ofsOverride,
+  });
+  if (skipOfs.ok === false) {
+    throw new Error(skipOfs.reason);
+  }
+
   let round: { id?: string } | null;
   if (plan.action === "update" && plan.roundId) {
     const upd: Record<string, unknown> = {
@@ -341,6 +405,20 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
     patch.revision = cycleRevision;
   }
   if (isFabRelease) patch.fab_release_override_reason = fabOverride;
+  // Stamp scrub checklist / override into metadata when leaving OFS for IFC
+  // so the completion evidence survives on the submittal row.
+  if (derivedNextStage === "IFC" && (input.ofsChecklist || ofsOverride)) {
+    const priorMeta =
+      s.metadata && typeof s.metadata === "object" && !Array.isArray(s.metadata)
+        ? { ...s.metadata }
+        : {};
+    patch.metadata = {
+      ...priorMeta,
+      ofs_checklist: input.ofsChecklist ?? priorMeta.ofs_checklist ?? null,
+      workflow_substatus: "ifc_issued",
+      ...(ofsOverride ? { ofs_override_reason: ofsOverride } : {}),
+    };
+  }
 
   let updated: unknown;
   try {

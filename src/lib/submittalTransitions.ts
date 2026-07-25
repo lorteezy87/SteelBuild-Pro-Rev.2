@@ -27,11 +27,14 @@ export const SUBMITTAL_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
     "Rejected",
     "Void",
   ],
-  Approved: ["Released for Fabrication", "Revise and Resubmit", "Under Review", "Void"],
+  // Mid-flow approvals keep Released / R&R / Void. "Under Review" (→ OFA) is
+  // deliberately NOT allowed: OFS is post-approval scrub, not a resubmittal
+  // loop (Slice 4 — OFS→OFA requires an audited override path outside this
+  // graph, or a fresh Rejected/R&R disposition).
+  Approved: ["Released for Fabrication", "Revise and Resubmit", "Void"],
   "Approved as Noted": [
     "Released for Fabrication",
     "Revise and Resubmit",
-    "Under Review",
     "Void",
   ],
   // R&R holds the package until an actual resubmission (a SENT status with

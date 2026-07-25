@@ -47,7 +47,7 @@ export const STAGES = [
   { key: "IFA",         label: "IFA",         color: "#60A5FA", bg: "rgba(96,165,250,0.16)"  }, // info-muted (sky)
   { key: "OFA",         label: "OFA",         color: "#2563EB", bg: "rgba(37,99,235,0.18)"   }, // info (blue)
   { key: "BFA",         label: "BFA",         color: "#FBBF24", bg: "rgba(251,191,36,0.16)"  }, // warning-muted (amber)
-  { key: "OFS",         label: "OFS",         color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // warning (orange)
+  { key: "OFS",         label: "OFS — Out for Scrub", color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // warning (orange)
   { key: "IFC",         label: "IFC",         color: "#34D399", bg: "rgba(52,211,153,0.16)"  }, // success-muted (mint)
   { key: "Released",    label: "RELEASED",    color: "#10B981", bg: "rgba(16,185,129,0.18)"  }, // success (emerald)
 ];

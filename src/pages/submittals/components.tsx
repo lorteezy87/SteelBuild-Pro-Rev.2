@@ -7,11 +7,13 @@ import { daysUntil } from "@/lib/dateMath";
 import { formatDate } from "@/components/shared/formatters";
 import { submittalStatusToStage, isRRStatus, CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
 import { nextSubmittalAction } from "@/lib/submittalActionEngine";
+import type { OfsChecklistState } from "@/lib/ofsCompletionGate";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 import CommentThreadRaw from "@/components/collaboration/CommentThread";
 import RoundTimelineRaw from "@/components/submittals/RoundTimeline";
 import ResponseMatrixRaw from "@/components/submittals/ResponseMatrix";
+import IfcIssueDialog from "@/components/submittals/IfcIssueDialog";
 import SubmittalForecastCard from "@/components/submittals/SubmittalForecastCard";
 import { buildResponseMatrix } from "@/lib/submittalResubmittal";
 import { forecastSubmittal } from "@/lib/submittalForecast";
@@ -360,11 +362,19 @@ interface SubmittalDetailProps {
   /** Today as 'YYYY-MM-DD' (injected — never new Date() in render). */
   today?: string;
   /** Advance the submittal one step in the canonical flow (status + BIC together). */
-  onAdvance?: (action: { nextStatus: string | null; nextBallInCourt: string | null; label: string; nextStage: string | null; chainStepIndex?: number }) => void;
+  onAdvance?: (action: {
+    nextStatus: string | null;
+    nextBallInCourt: string | null;
+    label: string;
+    nextStage: string | null;
+    chainStepIndex?: number;
+    ofsChecklist?: OfsChecklistState | null;
+    ofsOverrideReason?: string | null;
+  }) => void;
   /**
    * When true (from the `submittal_approved_to_scrub` flag), a BFA "Approved"
    * routes to the detailer scrub (OFS) like "Approved as Noted" instead of
-   * skipping to IFC. Defaults to false — legacy behavior.
+   * skipping to IFC. Defaults to true — mandatory scrub (Slice 4).
    */
   approvedRoutesToScrub?: boolean;
   /**
@@ -394,7 +404,15 @@ interface SubmittalDetailProps {
   onComponentRemoveType?: (component: SubmittalComponent) => void;
 }
 
-export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = false, splittingEnabled = false, onSpinOff, onSelectSubmittal, drawingTypesEnabled = false, components = [], onComponentSetReceived, onComponentSetReleased, onComponentAddType, onComponentRemoveType }: SubmittalDetailProps) {
+export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = true, splittingEnabled = false, onSpinOff, onSelectSubmittal, drawingTypesEnabled = false, components = [], onComponentSetReceived, onComponentSetReleased, onComponentAddType, onComponentRemoveType }: SubmittalDetailProps) {
+  // Pending OFS→IFC action while the scrub checklist dialog is open.
+  const [pendingIfcAction, setPendingIfcAction] = useState<{
+    nextStatus: string | null;
+    nextBallInCourt: string | null;
+    label: string;
+    nextStage: string | null;
+    chainStepIndex?: number;
+  } | null>(null);
   // Round-over-round per-sheet disposition matrix (computed before any early
   // return to keep hook order stable). Empty-safe — renders nothing when the
   // submittal has no recorded reviewer responses.
@@ -512,7 +530,15 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
               type="button"
               className="sbd-btn-primary"
               disabled={action.disabled}
-              onClick={() => !action.disabled && onAdvance(action)}
+              onClick={() => {
+                if (action.disabled) return;
+                // OFS → IFC goes through the scrub checklist dialog (Slice 4).
+                if (action.currentStage === "OFS" && action.nextStage === "IFC") {
+                  setPendingIfcAction(action);
+                  return;
+                }
+                onAdvance(action);
+              }}
               title={action.disabled ? "No further workflow step" : `Set to ${action.nextStage} (${action.nextStatus}${action.nextBallInCourt ? ` · BIC ${action.nextBallInCourt}` : ""})`}
               style={{
                 marginTop: 12, width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -523,6 +549,22 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
             </button>
           );
         })()}
+
+        <IfcIssueDialog
+          open={!!pendingIfcAction}
+          submittalNumber={submittal.submittal_number}
+          onClose={() => setPendingIfcAction(null)}
+          onConfirm={({ checklist, overrideReason }) => {
+            if (!pendingIfcAction || !onAdvance) return;
+            const action = pendingIfcAction;
+            setPendingIfcAction(null);
+            onAdvance({
+              ...action,
+              ofsChecklist: checklist,
+              ofsOverrideReason: overrideReason,
+            });
+          }}
+        />
 
         {/* Phase 3 splitting: "Spin off child" — surfaced once the submittal is
             approved/terminal (the split scope is only known after approval, e.g.

@@ -447,6 +447,87 @@ describe("addSubmittalRound — R&R resubmission-evidence gate (Slice 3)", () =>
   });
 });
 
+describe("addSubmittalRound — OFS workflow gates (Slice 4)", () => {
+  beforeEach(() => {
+    createRound.mockClear();
+    updateRound.mockClear();
+    filterRound.mockClear();
+    updateSubmittal.mockClear();
+    rpcMock.mockReset();
+    rpcMock.mockResolvedValue({ data: [], error: null });
+  });
+
+  it("blocks OFS → IFC without the scrub checklist", async () => {
+    await expect(
+      addSubmittalRound({
+        submittal: {
+          id: "ofs1", project_id: "p1", status: "Approved as Noted", ball_in_court: "Detailer",
+        },
+        // Same disposition + BIC move to GC (IFC) — status graph allows same-status.
+        status: "Approved as Noted",
+        ball_in_court: "GC",
+        nextStage: "IFC",
+      }),
+    ).rejects.toThrow(/OFS_IFC_BLOCKED/);
+    expect(createRound).not.toHaveBeenCalled();
+  });
+
+  it("allows OFS → IFC when the checklist is complete and stamps metadata", async () => {
+    const checklist = {
+      comments_addressed: true,
+      markups_incorporated: true,
+      sheets_ready: true,
+      authorized_to_issue: true,
+    };
+    await addSubmittalRound({
+      submittal: {
+        id: "ofs2", project_id: "p1", status: "Approved as Noted", ball_in_court: "Detailer",
+        metadata: { existing: 1 },
+      },
+      status: "Approved as Noted",
+      ball_in_court: "GC",
+      nextStage: "IFC",
+      ofsChecklist: checklist,
+    });
+    expect(updateSubmittal).toHaveBeenCalledWith(
+      "ofs2",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          existing: 1,
+          ofs_checklist: checklist,
+          workflow_substatus: "ifc_issued",
+        }),
+      }),
+    );
+  });
+
+  it("blocks Released for Fab from OFS (must be at IFC)", async () => {
+    await expect(
+      addSubmittalRound({
+        submittal: {
+          id: "ofs3", project_id: "p1", status: "Approved as Noted", ball_in_court: "Detailer",
+        },
+        status: "Released for Fabrication",
+      }),
+    ).rejects.toThrow(/OFS_SKIP_BLOCKED/);
+  });
+
+  it("blocks OFS → Submitted without override (scrub ≠ resubmittal)", async () => {
+    // Status graph also blocks this; gate message is the product-facing one
+    // when the graph is bypassed via same-status+BIC tricks — here the
+    // transition graph rejects first. Assert either product gate or graph.
+    await expect(
+      addSubmittalRound({
+        submittal: {
+          id: "ofs4", project_id: "p1", status: "Approved as Noted", ball_in_court: "Detailer",
+        },
+        status: "Submitted",
+        ball_in_court: "EOR",
+      }),
+    ).rejects.toThrow(/Cannot move a submittal|OFS_TO_OFA_BLOCKED/);
+  });
+});
+
 describe("addSubmittalRound — fab-release gate (Option C)", () => {
   beforeEach(() => {
     mockLockSet.mockClear();
@@ -463,7 +544,10 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
     rpcMock.mockResolvedValueOnce({ data: [{ rfi_number: "RFI-001" }, { rfi_number: "RFI-002" }], error: null });
     await expect(
       addSubmittalRound({
-        submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1, status: "Approved" },
+        submittal: {
+          id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1,
+          status: "Approved", ball_in_court: "GC", // IFC — past OFS skip gate
+        },
         status: "Released for Fabrication",
       }),
     ).rejects.toBeInstanceOf(FabReleaseBlockedError);
@@ -488,7 +572,10 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
 
   it("releases cleanly when no RFIs block — round logged, override reason null", async () => {
     await addSubmittalRound({
-      submittal: { id: "s3", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 2, status: "Approved as Noted" },
+      submittal: {
+        id: "s3", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 2,
+        status: "Approved as Noted", ball_in_court: "GC", // IFC
+      },
       status: "Released for Fabrication",
     });
     expect(rpcMock).toHaveBeenCalled();
@@ -504,7 +591,10 @@ describe("addSubmittalRound — fab-release gate (Option C)", () => {
     updateSubmittal.mockRejectedValueOnce({ message: "FAB_RELEASE_BLOCKED: 1 open RFI(s) ... (RFI-009)." });
     await expect(
       addSubmittalRound({
-        submittal: { id: "s4", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0, status: "Approved" },
+        submittal: {
+          id: "s4", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 0,
+          status: "Approved", ball_in_court: "GC",
+        },
         status: "Released for Fabrication",
       }),
     ).rejects.toBeInstanceOf(FabReleaseBlockedError);
@@ -552,7 +642,10 @@ describe("addSubmittalRound — ball-in-court clear on completion (§20)", () =>
 
   it("nulls the submittal patch's ball_in_court on 'Released for Fabrication'", async () => {
     await addSubmittalRound({
-      submittal: { id: "c1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1, status: "Approved" },
+      submittal: {
+        id: "c1", project_id: "p1", drawing_set_ids: ["set-a"], total_rounds: 1,
+        status: "Approved", ball_in_court: "GC",
+      },
       status: "Released for Fabrication",
       ball_in_court: "GC",
     });

@@ -14,6 +14,13 @@ describe("validateSubmittalTransition", () => {
     expect(validateSubmittalTransition("Approved as Noted", "Released for Fabrication").ok).toBe(true);
   });
 
+  it("blocks Approved/AAN → Under Review (OFS is scrub, not a resubmittal)", () => {
+    expect(validateSubmittalTransition("Approved", "Under Review")).toMatchObject({ ok: false });
+    expect(validateSubmittalTransition("Approved as Noted", "Under Review")).toMatchObject({
+      ok: false,
+    });
+  });
+
   it("allows R&R / Rejected to restart into Submitted / Under Review", () => {
     expect(validateSubmittalTransition("Revise and Resubmit", "Submitted").ok).toBe(true);
     expect(validateSubmittalTransition("Rejected", "Under Review").ok).toBe(true);

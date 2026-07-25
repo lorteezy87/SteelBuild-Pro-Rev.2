@@ -38,12 +38,12 @@ default + transition graph parity.
 
 ## Tasks
 
-- [ ] Claim area in `AGENT_CLAIMS.md`
-- [ ] Default `submittal_approved_to_scrub` ON (migration + engine/UI defaults)
-- [ ] `src/lib/ofsCompletionGate.ts` + tests (checklist + OFS→OFA + skip-OFS)
-- [ ] Wire gates into `addSubmittalRound`; tighten `submittalTransitions`
-- [ ] IFC issue dialog with checklist; wire SubmittalDetail CTA
-- [ ] Process-board / stage captions: “Out for Scrub”
+- [x] Claim area in `AGENT_CLAIMS.md`
+- [x] Default `submittal_approved_to_scrub` ON (migration + engine/UI defaults)
+- [x] `src/lib/ofsCompletionGate.ts` + tests (checklist + OFS→OFA + skip-OFS)
+- [x] Wire gates into `addSubmittalRound`; tighten `submittalTransitions`
+- [x] IFC issue dialog with checklist; wire SubmittalDetail CTA
+- [x] Process-board / stage captions: “Out for Scrub”
 - [ ] Verify lint/test/build; commit; push; update PR #122
 
 ## Acceptance criteria

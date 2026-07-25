@@ -47,7 +47,7 @@ const STAGE_CAPTIONS = {
   IFA: "In for approval",
   OFA: "Out for approval",
   BFA: "Back from approval",
-  OFS: "Out for scrub",
+  OFS: "OFS — Out for Scrub",
   IFC: "Issued for construction",
   Released: "Released for fab",
 };

@@ -709,7 +709,20 @@ never written to a sheet row — the 7-stage `STAGE_ORDER` still governs every
 sheet-stage write path. Later slices (approval-cycle history, the
 R&R→OFA transmission-evidence gate, OFS completion checklist, comment
 dispositions, release-gate unification) are specced in
-`docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-rr-stage.md`.
+`docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-rr-stage.md`
+and `docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-ofs-slice4.md`.
+
+### 2026-07-25 — OFS is mandatory scrub before IFC (drawing approval lifecycle, Slice 4)
+
+Approved packages must pass through **OFS — Out for Scrub** before IFC /
+Released for Fabrication. `submittal_approved_to_scrub` defaults ON and
+`nextSubmittalAction` defaults `approvedRoutesToScrub: true` so BFA
+`Approved` follows the same OFS → IFC → Released path as `Approved as Noted`.
+OFS remains a derived stage (Approved/AAN + Detailer-class BIC); scrub is
+**not** a resubmittal — Approved/AAN → Under Review is removed from the
+status graph, OFS→OFA and skip-OFS releases are blocked without an audited
+override, and OFS→IFC requires the scrub checklist (`ofsCompletionGate` +
+`IfcIssueDialog`) stamped into `submittals.metadata.ofs_checklist`.
 
 ### 2026-06-20 — DB migration baseline squash (P0 #2)
 
