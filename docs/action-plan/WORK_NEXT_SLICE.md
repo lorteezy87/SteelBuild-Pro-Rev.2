@@ -1,7 +1,7 @@
 # Action-plan next slice — `withProjectId` + tracker checkpoint
 
-**Branch:** `cursor/action-plan-next-slice-d3a1`  
-**Dates:** 2026-07-25 (initial) · 2026-07-26 (adoption continuation)
+**Branch / PR:** `cursor/action-plan-next-slice-d3a1` → **#123** (merged + prod 2026-07-26)  
+**Dates:** 2026-07-25 (initial) · 2026-07-26 (adoption continuation + merge/deploy)
 
 ## Code
 
