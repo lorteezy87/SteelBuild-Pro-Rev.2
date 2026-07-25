@@ -207,15 +207,12 @@ Approver-class  (EOR / Architect / AOR)                        → OFA / BFA
 Downstream-class (GC / Owner)                                  → IFC
 ```
 
-### Auto-lock on approval
+### Drawing-set edit locks
 
-When a submittal transitions to a terminal-approved status (`Approved`,
-`Approved as Noted`, `Released for Fabrication`), every linked drawing
-set is auto-locked from edits. This is implemented in
-`useSubmittals.ts` `lockLinkedSetsIfApproved` — the lock primitive
-(`drawingHub/setLock.lockSet`) is unchanged; only the trigger path
-moved from `set_approval_status='approved'` (legacy, document-side) to
-submittal terminal status (workflow-side).
+Drawing sets retain `is_locked` / admin unlock (`drawingHub/setLock`) for
+manual override and DB write barriers, but **submittal approval no longer
+auto-locks** linked sets. Terminal status (`Approved` / `Approved as Noted` /
+`Released for Fabrication`) updates workflow state only.
 
 ---
 
