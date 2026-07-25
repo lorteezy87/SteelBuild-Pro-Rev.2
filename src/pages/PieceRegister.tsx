@@ -31,6 +31,7 @@ import {
 } from "@/components/command";
 import { PieceAttentionPanel } from "@/components/pieceControl/PieceAttentionPanel";
 import { PieceControlModeBadge } from "@/components/pieceControl/PieceControlModeBadge";
+import { PieceImpactPanel } from "@/components/pieceControl/PieceImpactPanel";
 import { PieceLifecycleStrip } from "@/components/pieceControl/PieceLifecycleStrip";
 import PieceRelationshipManager from "@/components/pieceControl/PieceRelationshipManager";
 import { PieceProductionControl } from "@/components/pieceControl/PieceProductionControl";
@@ -43,6 +44,10 @@ import {
   rollupCanonicalWorkPackages,
   selectActionableLeafPieces,
 } from "@/lib/pieceControl/canonicalRollups";
+import {
+  buildPieceImpact,
+  currentRevisionCodeForDrawing,
+} from "@/lib/pieceControl/drawingReleaseReady";
 import { PIECE_IMPORT_SOURCE_OPTIONS, readPieceImportFile } from "@/lib/pieceControl/importAdapters";
 import {
   buildPieceControlSummary,
@@ -51,6 +56,7 @@ import {
   type PieceControlMode,
 } from "@/lib/pieceControl/presentation";
 import type { ImportPayload, PieceImportSourceType } from "@/lib/pieceControl/reconciliation";
+import { fetchPieceRelationshipSnapshot } from "@/lib/pieceControl/relationshipsRepository";
 import {
   applyPieceImportBatch,
   archivePieceLots,
@@ -207,6 +213,49 @@ export default function PieceRegister() {
     enabled,
     staleTime: 30_000,
   });
+  const selectedPieceId =
+    selectedPieceIds.size === 1 ? [...selectedPieceIds][0] : null;
+  const impactSnapshotQuery = useQuery({
+    queryKey: ["piece-relationships", projectId],
+    queryFn: () => fetchPieceRelationshipSnapshot(projectId!),
+    enabled: enabled && Boolean(selectedPieceId),
+    staleTime: 15_000,
+  });
+  const selectedPieceImpact = useMemo(() => {
+    if (!selectedPieceId || !impactSnapshotQuery.data) return null;
+    const snapshot = impactSnapshotQuery.data;
+    const piece = snapshot.pieces.find((row) => row.id === selectedPieceId);
+    if (!piece) return null;
+    const linkedDrawingIds = snapshot.pieceDrawings
+      .filter((link) => link.piece_id === selectedPieceId)
+      .map((link) => link.drawing_id);
+    const governingId = linkedDrawingIds[0] ?? null;
+    const commentDispositions = snapshot.commentDispositions.filter((row) =>
+      (row.related_piece_ids ?? []).includes(selectedPieceId),
+    );
+    return buildPieceImpact({
+      piece: {
+        id: piece.id,
+        piece_mark: piece.piece_mark,
+        lifecycle_status: piece.lifecycle_status,
+        on_hold: piece.on_hold,
+      },
+      linkedDrawingIds,
+      drawings: snapshot.drawings,
+      evidence: {
+        drawingSets: snapshot.drawingSets,
+        submittals: snapshot.submittals,
+        sheetResponses: snapshot.sheetResponses,
+        drawingRevisions: snapshot.drawingRevisions,
+        drawingReviews: snapshot.drawingReviews,
+        drawingSignoffs: snapshot.drawingSignoffs,
+      },
+      commentDispositions,
+      currentRevisionCode: governingId
+        ? currentRevisionCodeForDrawing(governingId, snapshot.drawingRevisions)
+        : null,
+    });
+  }, [impactSnapshotQuery.data, selectedPieceId]);
 
   const batches = batchesQuery.data ?? [];
   const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) ?? batches[0] ?? null;
@@ -902,6 +951,14 @@ export default function PieceRegister() {
                 Archive selected
               </button>
             </div>
+          ) : null}
+          {selectedPieceId ? (
+            <DecisionPanel title="Piece impact">
+              <PieceImpactPanel
+                impact={selectedPieceImpact}
+                loading={impactSnapshotQuery.isLoading}
+              />
+            </DecisionPanel>
           ) : null}
           <div className="cmd-table-wrap piece-register-table__wrap">
             <table className="cmd-table piece-register-table__table">

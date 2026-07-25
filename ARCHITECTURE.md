@@ -720,6 +720,19 @@ audited override is recorded (`commentDispositionGate`). Sheet-level
 `submittal_sheet_responses` remain the per-sheet disposition SoT.
 `drawing_revisions` gains nullable `revision_source` / `revision_reason`.
 
+### 2026-07-25 — Piece release requires IFC/Released governing drawings (Slice 6)
+
+Canonical piece / work-package fabrication readiness no longer treats bare
+Approved / AAN (or sheet-response / review-only evidence) as release-ready.
+`piece_control_drawing_is_approved` and client `isDrawingApproved` /
+`isGoverningDrawingReleaseReady` agree: ready = most-recent linked submittal
+derives **IFC** (Approved/AAN + GC/Owner) or **Released for Fabrication**, or
+`drawings.stage` is IFC/Released, or current-revision
+`approved_for_fabrication` signoff. OFS, R&R, BFA, OFA, and IFA fail closed.
+Piece Register surfaces a Piece Impact panel (governing sheet/rev/stage +
+exposure flags) when a single piece is selected. Package-level
+`fabReleaseGate` / `isApprovedForFab` unification remains Slice 8.
+
 ### 2026-07-25 — OFS is mandatory scrub before IFC (drawing approval lifecycle, Slice 4)
 
 Approved packages must pass through **OFS — Out for Scrub** before IFC /

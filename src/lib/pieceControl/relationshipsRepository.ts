@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import type { CommentDispositionLike } from "@/lib/commentDispositionGate";
 import { fetchPieceRegister, type PieceRegisterRow } from "./repository";
 import type {
   DrawingReviewEvidence,
@@ -12,6 +13,14 @@ import type {
   SubmittalEvidence,
 } from "./readiness";
 
+export interface PieceCommentDispositionEvidence extends CommentDispositionLike {
+  id: string;
+  project_id?: string | null;
+  related_piece_ids?: string[] | null;
+  drawing_id?: string | null;
+  submittal_id?: string | null;
+}
+
 export interface PieceRelationshipSnapshot {
   pieces: PieceRegisterRow[];
   pieceDrawings: ReadinessPieceDrawing[];
@@ -23,6 +32,7 @@ export interface PieceRelationshipSnapshot {
   drawingRevisions: DrawingRevisionEvidence[];
   drawingReviews: DrawingReviewEvidence[];
   drawingSignoffs: DrawingSignoffEvidence[];
+  commentDispositions: PieceCommentDispositionEvidence[];
 }
 
 const db = supabase as any;
@@ -60,13 +70,14 @@ export async function fetchPieceRelationshipSnapshot(
     drawingRevisions,
     drawingReviews,
     drawingSignoffs,
+    commentDispositions,
   ] = await Promise.all([
     fetchPieceRegister(projectId),
     fetchProjectRows<ReadinessPieceDrawing>("piece_drawings", projectId),
     fetchProjectRows<ReadinessDrawing>(
       "drawings",
       projectId,
-      "id, project_id, drawing_set_id, sheet_number, title, set_approval_status, is_deleted, deleted_at, is_superseded",
+      "id, project_id, drawing_set_id, sheet_number, title, stage, set_approval_status, is_deleted, deleted_at, is_superseded",
     ),
     fetchProjectRows<ReadinessWorkPackage>(
       "work_packages",
@@ -81,7 +92,7 @@ export async function fetchPieceRelationshipSnapshot(
     fetchProjectRows<SubmittalEvidence>(
       "submittals",
       projectId,
-      "id, status, drawing_set_ids, current_round_id, is_deleted, deleted_at",
+      "id, status, ball_in_court, drawing_set_ids, current_round_id, submitted_date, updated_at, round_number, is_deleted, deleted_at",
     ),
     fetchProjectRows<SheetResponseEvidence>(
       "submittal_sheet_responses",
@@ -91,7 +102,7 @@ export async function fetchPieceRelationshipSnapshot(
     fetchProjectRows<DrawingRevisionEvidence>(
       "drawing_revisions",
       projectId,
-      "id, drawing_id, is_current, archived_at",
+      "id, drawing_id, is_current, archived_at, revision_code",
     ),
     fetchProjectRows<DrawingReviewEvidence>(
       "drawing_reviews",
@@ -102,6 +113,11 @@ export async function fetchPieceRelationshipSnapshot(
       "drawing_signoffs",
       projectId,
       "drawing_id, drawing_revision_id, stamp_type, is_voided",
+    ),
+    fetchProjectRows<PieceCommentDispositionEvidence>(
+      "submittal_comment_dispositions",
+      projectId,
+      "id, project_id, status, is_required, is_deleted, comment_text, comment_number, location, related_piece_ids, drawing_id, submittal_id",
     ),
   ]);
 
@@ -116,6 +132,7 @@ export async function fetchPieceRelationshipSnapshot(
     drawingRevisions,
     drawingReviews,
     drawingSignoffs,
+    commentDispositions,
   };
 }
 
@@ -159,4 +176,3 @@ export function unlinkPieceDrawing(projectId: string, pieceId: string, drawingId
     p_drawing_id: drawingId,
   });
 }
-

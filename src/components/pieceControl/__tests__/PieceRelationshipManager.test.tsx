@@ -45,6 +45,7 @@ describe("PieceRelationshipManager", () => {
       drawingRevisions: [],
       drawingReviews: [],
       drawingSignoffs: [],
+      commentDispositions: [],
     });
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -128,6 +129,7 @@ describe("PieceRelationshipManager", () => {
       drawingRevisions: [],
       drawingReviews: [],
       drawingSignoffs: [],
+      commentDispositions: [],
     });
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -172,6 +174,7 @@ describe("PieceRelationshipManager", () => {
         drawingRevisions: [],
         drawingReviews: [],
         drawingSignoffs: [],
+        commentDispositions: [],
       });
     const queryClient = new QueryClient({
       defaultOptions: {

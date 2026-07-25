@@ -381,7 +381,7 @@ export default function PieceRelationshipManager({
                 <div>
                   <strong>{workPackageMap.get(row.workPackageId)}</strong>
                   <span>
-                    {row.pieceCount} pieces · {row.approvedDrawingCount}/{row.linkedDrawingCount} drawings approved
+                    {row.pieceCount} pieces · {row.approvedDrawingCount}/{row.linkedDrawingCount} drawings IFC/Released
                   </span>
                 </div>
                 {row.isReady
