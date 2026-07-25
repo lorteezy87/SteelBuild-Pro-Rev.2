@@ -694,6 +694,23 @@ public/             Static assets including web-ifc wasm (public/wasm/) + pdf wo
 
 ## Decision log (recent material decisions)
 
+### 2026-07-25 — R&R is a first-class derived workflow stage (drawing approval lifecycle, Slice 1)
+
+R&R (Revise & Resubmit) / Rejected submittal outcomes previously derived to the
+**IFA** stage plus a separate badge (`isRRStatus` / `isPackageRR`), which let a
+failed approval cycle read as a fresh internal-prep package in boards, KPIs and
+rollups. `submittalStatusToStage` now derives those outcomes to a dedicated
+**"R&R"** stage, placed after BFA in the display order
+(`Not Started → IFA → OFA → BFA → R&R → OFS → IFC → Released`,
+`WORKFLOW_STAGE_ORDER` in `drawingsConfig.js`). This is a **display-derivation
+change only**: `submittals.status` + `ball_in_court` remain the workflow source
+of truth (§20), the 7-value `drawings.stage` CHECK is untouched, and "R&R" is
+never written to a sheet row — the 7-stage `STAGE_ORDER` still governs every
+sheet-stage write path. Later slices (approval-cycle history, the
+R&R→OFA transmission-evidence gate, OFS completion checklist, comment
+dispositions, release-gate unification) are specced in
+`docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-rr-stage.md`.
+
 ### 2026-06-20 — DB migration baseline squash (P0 #2)
 
 `supabase/migrations/` could no longer bootstrap a DB from zero: MCP
