@@ -47,6 +47,10 @@ export default function PieceRelationshipManager({
   const [targetWorkPackageId, setTargetWorkPackageId] = useState(focusedWorkPackageId ?? "");
   const [drawingPieceId, setDrawingPieceId] = useState("");
   const [drawingId, setDrawingId] = useState("");
+  const [markFilter, setMarkFilter] = useState("");
+  const [scopeFilter, setScopeFilter] = useState<"unassigned" | "package" | "all">(
+    focusedWorkPackageId ? "unassigned" : "all",
+  );
 
   const snapshotQuery = useQuery({
     queryKey: ["piece-relationships", projectId],
@@ -70,11 +74,52 @@ export default function PieceRelationshipManager({
     ),
     [containerIds, snapshot?.pieces],
   );
-  const selectablePieces = focusedWorkPackageId
+  const packageScopedLeaves = focusedWorkPackageId
     ? leafPieces.filter((piece) =>
       !piece.work_package_id || piece.work_package_id === focusedWorkPackageId
     )
     : leafPieces;
+
+  const selectablePieces = useMemo(() => {
+    const mark = markFilter.trim().toLowerCase();
+    return packageScopedLeaves.filter((piece) => {
+      if (scopeFilter === "unassigned" && piece.work_package_id) return false;
+      if (
+        scopeFilter === "package" &&
+        focusedWorkPackageId &&
+        piece.work_package_id !== focusedWorkPackageId
+      ) {
+        return false;
+      }
+      if (mark && !String(piece.piece_mark || "").toLowerCase().includes(mark)) {
+        return false;
+      }
+      return true;
+    });
+  }, [focusedWorkPackageId, markFilter, packageScopedLeaves, scopeFilter]);
+
+  const selectedTons = useMemo(() => {
+    let lbs = 0;
+    let known = 0;
+    for (const piece of selectablePieces) {
+      if (!selectedPieceIds.has(piece.id)) continue;
+      const each = Number(piece.weight_each_lbs);
+      const qty = Number(piece.quantity) || 0;
+      const total = Number(piece.weight_total_lbs);
+      const weight =
+        Number.isFinite(each) && each >= 0 && qty > 0
+          ? each * qty
+          : Number.isFinite(total) && total >= 0
+            ? total
+            : null;
+      if (weight !== null) {
+        lbs += weight;
+        known += 1;
+      }
+    }
+    return { tons: lbs / 2000, known, selected: selectedPieceIds.size };
+  }, [selectablePieces, selectedPieceIds]);
+
   const drawingPieces = focusedWorkPackageId
     ? leafPieces.filter((piece) => piece.work_package_id === focusedWorkPackageId)
     : leafPieces;
@@ -112,6 +157,11 @@ export default function PieceRelationshipManager({
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["piece-relationships", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["piece-register", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["work-packages", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["workPackages", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["model-elements", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["modelElements", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["ifc", projectId] }),
     ]);
   };
   const mutationOptions = {
@@ -136,7 +186,12 @@ export default function PieceRelationshipManager({
     ...mutationOptions,
     onSuccess: async (summary) => {
       await mutationOptions.onSuccess();
-      toast.success(`${summary.assigned ?? 0} piece relationship(s) assigned`);
+      const synced = Number(summary.model_elements_synced ?? 0);
+      toast.success(
+        synced > 0
+          ? `${summary.assigned ?? 0} piece(s) assigned · ${synced} 3D element(s) synced`
+          : `${summary.assigned ?? 0} piece(s) assigned to work package`,
+      );
     },
   });
   const unassignMutation = useMutation({
@@ -144,7 +199,7 @@ export default function PieceRelationshipManager({
     ...mutationOptions,
     onSuccess: async (summary) => {
       await mutationOptions.onSuccess();
-      toast.success(`${summary.unassigned ?? 0} piece relationship(s) removed`);
+      toast.success(`${summary.unassigned ?? 0} piece(s) removed from work package`);
     },
   });
   const linkMutation = useMutation({
@@ -204,12 +259,16 @@ export default function PieceRelationshipManager({
 
   return (
     <div className={`piece-relationships${compact ? " is-compact" : ""}`} data-skin="command">
-      <DecisionPanel title="Piece assignments">
+      <DecisionPanel title={focusedWorkPackageId ? "Pieces" : "Piece assignments"}>
         <div className="piece-command-intro">
           <span className="piece-command-intro__icon" aria-hidden="true">
             <PackageCheck size={18} />
           </span>
-          <p>Assign active pieces to a work package.</p>
+          <p>
+            {focusedWorkPackageId
+              ? "Add unassigned piece marks to this work package, or remove assigned lots."
+              : "Multi-select piece marks and assign them to a work package."}
+          </p>
         </div>
 
         {!focusedWorkPackageId && (
@@ -227,6 +286,46 @@ export default function PieceRelationshipManager({
               ))}
             </select>
           </label>
+        )}
+
+        <div className="piece-command-actions" style={{ marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+          {(
+            [
+              ["unassigned", "Unassigned"],
+              ...(focusedWorkPackageId ? [["package", "This package"] as const] : []),
+              ["all", "All"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={`cmd-btn ${scopeFilter === value ? "cmd-btn--primary" : "cmd-btn--ghost"}`}
+              onClick={() => setScopeFilter(value)}
+            >
+              {label}
+            </button>
+          ))}
+          <label className="piece-command-field" htmlFor="piece-mark-filter" style={{ flex: 1, minWidth: 140 }}>
+            Mark search
+            <input
+              id="piece-mark-filter"
+              className="piece-command-control"
+              value={markFilter}
+              onChange={(event) => setMarkFilter(event.target.value)}
+              placeholder="Filter by mark…"
+            />
+          </label>
+        </div>
+
+        {selectedPieceIds.size > 0 && (
+          <p className="piece-command-intro" style={{ marginBottom: 8 }}>
+            <Pill tone="info">
+              {selectedTons.selected} selected
+              {selectedTons.known > 0
+                ? ` · ${selectedTons.tons.toFixed(2)} t (${selectedTons.known} weighed)`
+                : ""}
+            </Pill>
+          </p>
         )}
 
         <div className="piece-assignment-list">
@@ -255,17 +354,38 @@ export default function PieceRelationshipManager({
             </label>
           ))}
           {selectablePieces.length === 0 && (
-            <p className="piece-command-empty">No active pieces available.</p>
+            <p className="piece-command-empty">
+              {focusedWorkPackageId && scopeFilter === "unassigned"
+                ? "No unassigned pieces — switch to “This package” or clear the mark filter."
+                : focusedWorkPackageId
+                  ? "No pieces assigned — add from unassigned marks."
+                  : "No active pieces match this filter."}
+            </p>
           )}
         </div>
         <div className="piece-command-actions">
           <button
             type="button"
             disabled={selectedPieceIds.size === 0 || !(focusedWorkPackageId || targetWorkPackageId) || assignMutation.isPending}
-            onClick={() => assignMutation.mutate()}
+            onClick={() => {
+              const target = focusedWorkPackageId || targetWorkPackageId;
+              const reassigning = [...selectedPieceIds].some((id) => {
+                const piece = leafPieces.find((row) => row.id === id);
+                return piece?.work_package_id && piece.work_package_id !== target;
+              });
+              if (
+                reassigning &&
+                !window.confirm(
+                  "Some selected pieces are already on another work package. Reassign them?",
+                )
+              ) {
+                return;
+              }
+              assignMutation.mutate();
+            }}
             className="cmd-btn cmd-btn--primary"
           >
-            Assign selected
+            {focusedWorkPackageId ? "Add to this WP" : "Assign selected"}
           </button>
           <button
             type="button"
@@ -273,7 +393,7 @@ export default function PieceRelationshipManager({
             onClick={() => unassignMutation.mutate()}
             className="cmd-btn cmd-btn--ghost"
           >
-            Unassign selected
+            {focusedWorkPackageId ? "Remove from WP" : "Unassign selected"}
           </button>
         </div>
       </DecisionPanel>

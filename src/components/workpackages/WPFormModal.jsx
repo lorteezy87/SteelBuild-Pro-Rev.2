@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { formatBudgetPercent } from "../shared/formatters";
 import { getDraftDrawingsWarning } from "../shared/workflowValidation";
 import { sortDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
+import { isPieceDrivenWorkPackageProgress } from "@/lib/pieceControl/wpProgressMapping";
 
 const empty = {
   name: "", project_id: "", project_name: "", phase: "Detailing",
@@ -49,6 +51,41 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     enabled: Boolean(activeProjectId),
     staleTime: 60_000,
   });
+
+  const { data: pieceProgressGate } = useQuery({
+    queryKey: ["wp-piece-progress-gate", activeProjectId, wp?.id],
+    enabled: Boolean(open && activeProjectId && wp?.id),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const db = supabase;
+      const [{ data: project }, { data: pieces, error }] = await Promise.all([
+        db.from("projects").select("piece_control_mode").eq("id", activeProjectId).maybeSingle(),
+        db
+          .from("pieces")
+          .select("id, parent_piece_id, is_container, is_deleted, deleted_at")
+          .eq("project_id", activeProjectId)
+          .eq("work_package_id", wp.id)
+          .eq("is_deleted", false)
+          .is("deleted_at", null),
+      ]);
+      if (error) throw error;
+      const rows = pieces || [];
+      const parentIds = new Set(
+        rows.map((row) => row.parent_piece_id).filter(Boolean),
+      );
+      const leafCount = rows.filter(
+        (row) => !row.is_container && !parentIds.has(row.id),
+      ).length;
+      return {
+        mode: project?.piece_control_mode ?? "off",
+        leafCount,
+      };
+    },
+  });
+  const pieceDrivenProgress = isPieceDrivenWorkPackageProgress(
+    pieceProgressGate?.mode,
+    pieceProgressGate?.leafCount ?? 0,
+  );
 
   useEffect(() => {
     if (wp) {
@@ -94,6 +131,11 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
       field_hours_actual: Number(form.field_hours_actual) || 0,
       percent_complete: Math.min(100, Math.max(0, Number(form.percent_complete) || 0)),
     };
+    if (pieceDrivenProgress) {
+      // Progress is written by refresh_work_package_progress from leaf pieces.
+      delete data.percent_complete;
+      delete data.status;
+    }
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
     onSave(data);
@@ -265,10 +307,21 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           </select>
         </FormField>
         <FormField label="Status">
-          <select style={selectStyle} value={form.status} onChange={e => set("status", e.target.value)}>
+          <select
+            style={pieceDrivenProgress ? inputDisabledStyle : selectStyle}
+            value={form.status}
+            disabled={pieceDrivenProgress}
+            title={pieceDrivenProgress ? "Progress is driven by piece fabrication" : undefined}
+            onChange={e => set("status", e.target.value)}
+          >
             {["Not Started", "In Progress", "Complete", "On Hold"].map(o => <option key={o} value={o}>{o}</option>)}
           </select>
         </FormField>
+        {pieceDrivenProgress && (
+          <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--info-muted)", border: "1px solid var(--info-border)", borderLeft: "3px solid var(--status-info)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-info)", letterSpacing: "0.08em" }}>
+            STATUS &amp; % COMPLETE ARE DRIVEN BY PIECE FABRICATION — assign pieces and advance stations in Piece Control.
+          </div>
+        )}
 
         {form.phase === "Fabrication" && linkedDrawingIds.length === 0 && (
           <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderLeft: "3px solid var(--status-error)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-error)", letterSpacing: "0.08em" }}>
@@ -293,7 +346,16 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input type="number" style={inputStyle} value={form.tonnage} onChange={e => set("tonnage", e.target.value)} placeholder="0" />
         </FormField>
         <FormField label="% Complete (0–100)">
-          <input type="number" min="0" max="100" style={inputStyle} value={form.percent_complete} onChange={e => set("percent_complete", e.target.value)} />
+          <input
+            type="number"
+            min="0"
+            max="100"
+            style={pieceDrivenProgress ? inputDisabledStyle : inputStyle}
+            value={form.percent_complete}
+            disabled={pieceDrivenProgress}
+            title={pieceDrivenProgress ? "Progress is driven by piece fabrication" : undefined}
+            onChange={e => set("percent_complete", e.target.value)}
+          />
         </FormField>
         <FormField label="Crew / Responsible" span2>
           <input style={inputStyle} value={form.crew} onChange={e => set("crew", e.target.value)} placeholder="Crew name or person..." />

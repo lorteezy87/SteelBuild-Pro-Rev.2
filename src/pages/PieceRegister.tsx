@@ -57,6 +57,7 @@ import {
 } from "@/lib/pieceControl/presentation";
 import type { ImportPayload, PieceImportSourceType } from "@/lib/pieceControl/reconciliation";
 import { fetchPieceRelationshipSnapshot } from "@/lib/pieceControl/relationshipsRepository";
+import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
 import {
   applyPieceImportBatch,
   archivePieceLots,
@@ -1072,6 +1073,37 @@ export default function PieceRegister() {
 
         {activeView === "relationships" && (
           <section className="piece-register-embedded-workspace">
+            <div className="piece-command-actions" style={{ marginBottom: 12 }}>
+              <button
+                type="button"
+                className="cmd-btn cmd-btn--secondary"
+                disabled={mode === "off"}
+                onClick={() => {
+                  void linkModelElementsToPieces(projectId)
+                    .then((summary) => {
+                      toast.success(
+                        `Linked ${summary.linked ?? 0} · unmatched ${summary.unmatched ?? 0} · ambiguous ${summary.ambiguous ?? 0}`,
+                      );
+                      void queryClient.invalidateQueries({
+                        queryKey: ["model-elements", projectId],
+                      });
+                      void queryClient.invalidateQueries({
+                        queryKey: ["canonical-pieces-3d", projectId],
+                      });
+                    })
+                    .catch((error: Error) =>
+                      toast.error(
+                        presentPieceControlError(
+                          error,
+                          "Could not link marks to pieces.",
+                        ),
+                      ),
+                    );
+                }}
+              >
+                Link 3D marks to pieces
+              </button>
+            </div>
             <PieceRelationshipManager
               projectId={projectId}
               pieceControlMode={mode}

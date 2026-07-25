@@ -21,6 +21,7 @@ import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
+import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
 import { useCanonicalReportingRealtime } from "@/hooks/useCanonicalReportingRealtime";
 
 const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer"));
@@ -268,14 +269,22 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
       const gz = await gzipBuffer(buf).catch(() => null);
       if (gz) uploadFile = new File([gz], `${file.name}.gz`);
       const up = await integrations.Core.UploadFile({ file: uploadFile });
-      const { created } = await importIfcRoster({
+      const { created, linkSummary } = await importIfcRoster({
         projectId, fileName: file.name, schema: result.schema, fileUrl: up.path, rows: result.rows,
       });
       qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
       qc.invalidateQueries({ queryKey: ["project-model", projectId] });
+      qc.invalidateQueries({ queryKey: ["canonical-pieces-3d", projectId] });
       setSource("stored");
       setRoster({ step: "done", created });
-      toast.success(`Model saved to this project${created ? ` · ${created.toLocaleString()} pieces` : ""}.`);
+      const linkNote = linkSummary
+        ? ` · linked ${linkSummary.linked ?? 0}` +
+          (linkSummary.ambiguous ? ` · ambiguous ${linkSummary.ambiguous}` : "") +
+          (linkSummary.unmatched ? ` · unmatched ${linkSummary.unmatched}` : "")
+        : "";
+      toast.success(
+        `Model saved to this project${created ? ` · ${created.toLocaleString()} pieces` : ""}${linkNote}.`,
+      );
     } catch (err) {
       setRoster({ step: "error", message: err?.message || String(err) });
       toast.error("Couldn't save the model: " + (err?.message || String(err)));
@@ -323,6 +332,20 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
       toast.success(`Canonical ${variables.action} action recorded.`);
     },
     onError: (error) => toast.error(error?.message || "Canonical logistics action failed."),
+  });
+
+  const linkMarksMutation = useMutation({
+    mutationFn: () => linkModelElementsToPieces(projectId),
+    onSuccess: (summary) => {
+      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
+      qc.invalidateQueries({ queryKey: ["canonical-pieces-3d", projectId] });
+      toast.success(
+        `Linked ${summary.linked ?? 0} · unchanged ${summary.unchanged ?? 0}` +
+          ` · unmatched ${summary.unmatched ?? 0} · ambiguous ${summary.ambiguous ?? 0}`,
+      );
+    },
+    onError: (error) =>
+      toast.error(error?.message || "Could not link marks to pieces."),
   });
 
   // Canonical-linked selections may initiate only the immutable logistics
@@ -514,6 +537,24 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
               );
             })}
           </div>
+          {projectId && hasRoster && (
+            <button
+              type="button"
+              disabled={linkMarksMutation.isPending}
+              onClick={() => linkMarksMutation.mutate()}
+              style={{
+                marginTop: 10, width: "100%", padding: "7px 10px", borderRadius: 7, cursor: "pointer",
+                border: "1px solid var(--border-default)",
+                background: "var(--bg-surface-low)",
+                color: "var(--text-primary)",
+                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.05em", textTransform: "uppercase",
+              }}
+              title="Match IFC marks to canonical piece lots (lot-aware exact match)"
+            >
+              {linkMarksMutation.isPending ? "Linking marks…" : "Link marks to pieces"}
+            </button>
+          )}
         </div>
 
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--divider)" }}>

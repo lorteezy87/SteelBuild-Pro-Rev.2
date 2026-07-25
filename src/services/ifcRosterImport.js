@@ -87,7 +87,18 @@ export async function importIfcRoster({ projectId, fileName, schema, fileUrl, ro
     created += chunk.length;
   }
 
-  return { modelId, created };
+  // Lot-aware mark → canonical piece link (no-op / error if piece control off).
+  let linkSummary = null;
+  try {
+    const { data, error } = await supabase.rpc("link_model_elements_to_pieces", {
+      p_project_id: projectId,
+    });
+    if (!error) linkSummary = data;
+  } catch {
+    /* link is best-effort after import */
+  }
+
+  return { modelId, created, linkSummary };
 }
 
 /**
