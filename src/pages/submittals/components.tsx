@@ -686,12 +686,14 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
           />
         </DetailSection>
 
-        {/* Round History — vertical timeline of all submittal rounds
-            with status badges, durations, and BIC. "New Round" creates
-            a fresh resubmission round. */}
-        <DetailSection title={`Round History (${rounds.length})`}>
+        {/* Approval-cycle history — vertical timeline of all submittal
+            rounds (one row per submit→return cycle) with cycle number,
+            revision, status, resulting stage, durations, and BIC.
+            "New Round" opens the next resubmission cycle. */}
+        <DetailSection title={`Approval Cycles (${rounds.length})`}>
           <RoundTimeline
             rounds={rounds}
+            submittal={submittal}
             submittalId={submittal.id}
             onReturnRound={onReturnRound}
           />

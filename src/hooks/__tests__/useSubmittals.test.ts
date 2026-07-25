@@ -328,6 +328,44 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     const patch = updateSubmittal.mock.calls.find((c) => c[0] === "s6")?.[1] ?? {};
     expect(patch).not.toHaveProperty("revision");
   });
+
+  // Slice 2 (approval-cycle history): each new cycle permanently records the
+  // text revision submitted in it, in submittal_rounds.metadata.revision.
+  it("stamps the current revision into the new round's metadata at cycle-open", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s7", project_id: "p1", revision: "A", status: "Draft" },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+    });
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { revision: "A" } }),
+    );
+  });
+
+  it("stamps the BUMPED revision on a resubmit cycle so the round and patch agree", async () => {
+    filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Revise and Resubmit", submitted_date: "2026-06-01", returned_date: "2026-06-05" }]);
+    await addSubmittalRound({
+      submittal: { id: "s8", project_id: "p1", revision: "A", status: "Revise and Resubmit" },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+      bumpTextRevision: true,
+    });
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ round_number: 2, metadata: { revision: "B" } }),
+    );
+    expect(updateSubmittal).toHaveBeenCalledWith("s8", expect.objectContaining({ revision: "B" }));
+  });
+
+  it("stamps empty metadata when the submittal has no revision (nothing invented)", async () => {
+    await addSubmittalRound({
+      submittal: { id: "s9", project_id: "p1", status: "Draft" },
+      status: "Submitted",
+      submitted_date: "2026-06-07",
+    });
+    expect(createRound).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: {} }),
+    );
+  });
 });
 
 describe("addSubmittalRound — fab-release gate (Option C)", () => {

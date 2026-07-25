@@ -261,6 +261,16 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   const currentRound = (Array.isArray(existing) ? existing[0] : null) || null;
   const plan = planRoundWrite(currentRound, input.status);
 
+  // The text revision in effect FOR THIS MOVE — computed once so the round's
+  // cycle stamp and the submittal patch can never diverge. Bumped when the
+  // caller requested it (genuine resubmit + flag), else the current value.
+  // Stamped into `submittal_rounds.metadata.revision` at cycle-open so each
+  // approval cycle permanently records WHICH revision was submitted
+  // (Slice 2 — see src/lib/submittalCycles.ts).
+  const cycleRevision: string | null = input.bumpTextRevision
+    ? nextRevision(input.currentRevision ?? s.revision ?? null)
+    : (typeof s.revision === "string" && s.revision.trim() ? s.revision.trim() : null);
+
   let round: { id?: string } | null;
   if (plan.action === "update" && plan.roundId) {
     const upd: Record<string, unknown> = {
@@ -282,7 +292,7 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
       returned_date: plan.setReturned ? (input.returned_date ?? null) : null,
       response_notes: input.notes ?? null,
       drawing_set_ids: Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [],
-      metadata: {},
+      metadata: cycleRevision ? { revision: cycleRevision } : {},
     } as Insert<"submittal_rounds">);
   }
 
@@ -304,10 +314,10 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   if (input.returned_date && plan.setReturned) patch.returned_date = input.returned_date;
   if (input.bumpRevision) patch.round_number = (Number(s.round_number) || 1) + 1;
   // Phase 2 (flag-gated at the caller): auto-advance the TEXT `revision` column
-  // when a resubmit opens a new round. Kept in this same patch so the round row
-  // and the bumped revision are written atomically for the caller.
+  // when a resubmit opens a new round. Uses the same `cycleRevision` stamped on
+  // the round row so the cycle history and the live revision agree.
   if (input.bumpTextRevision) {
-    patch.revision = nextRevision(input.currentRevision ?? s.revision ?? null);
+    patch.revision = cycleRevision;
   }
   if (isFabRelease) patch.fab_release_override_reason = fabOverride;
 
