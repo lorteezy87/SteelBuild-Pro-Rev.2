@@ -25,6 +25,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import {
   parseScope,
@@ -194,8 +195,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
         if (detailRefs.length)  meta.detail_refs  = detailRefs;
         if (sourceText)         meta.scope_source = sourceText;
         if (t._scopeTypeKey)    meta.scope_type   = t._scopeTypeKey;
-        return {
-          project_id:       projectId,
+        return withProjectId({
           task_name:        t.task_name,
           phase:            t.phase,
           wbs_code:         t.wbs_code,
@@ -205,7 +205,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
           status:           "Not Started",
           percent_complete: 0,
           ...(Object.keys(meta).length ? { metadata: meta } : {}),
-        };
+        }, projectId);
       });
       // Insert sequentially via the entity client — bulk is nicer but
       // the entity-client abstracts it per-row and we already use the

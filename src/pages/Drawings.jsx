@@ -18,6 +18,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { batchProcess } from "@/utils/batchProcess";
@@ -232,7 +233,10 @@ export default function Drawings({ embedded = false } = {}) {
   };
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.Drawing.create({ ...data, project_id: projectId, project_name: activeProject?.name }),
+    mutationFn: (data) => entities.Drawing.create({
+      ...withProjectId(data, projectId),
+      project_name: activeProject?.name,
+    }),
     onSuccess: async (created) => {
       await invalidate();
       toast.success("Sheet added");

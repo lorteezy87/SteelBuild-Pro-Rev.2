@@ -10,6 +10,7 @@ import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 
 export default function Safety() {
   const projectId = useProjectId();
@@ -57,7 +58,7 @@ export default function Safety() {
   );
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.SafetyIncident.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.SafetyIncident.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["safety-incidents", projectId] });
       setShowForm(false);

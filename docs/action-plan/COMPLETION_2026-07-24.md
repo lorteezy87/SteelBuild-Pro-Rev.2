@@ -16,10 +16,12 @@ Workbook sheets: **Changelog** (this refresh), **Tracker** (IDs 1–105), **Summ
 
 ## Headline counts (IDs 1–105)
 
+Updated **2026-07-25** (`cursor/action-plan-next-slice-d3a1` — see `WORK_NEXT_SLICE.md`):
+
 | Status | Count |
 |---|---|
-| Done | **62** |
-| In Progress | **42** |
+| Done | **78** |
+| In Progress | **26** |
 | Blocked | **1** (ID 102 — full interactive core-workflow UAT) |
 | Not Started | **0** |
 

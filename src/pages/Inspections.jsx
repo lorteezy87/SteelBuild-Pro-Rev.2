@@ -9,6 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 
 const TYPES = [
   "Steel Fabrication",
@@ -79,7 +80,7 @@ export default function Inspections() {
   );
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.Inspection.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.Inspection.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inspections", projectId] });
       setShowForm(false);

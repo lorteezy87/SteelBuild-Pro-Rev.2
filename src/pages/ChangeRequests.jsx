@@ -10,6 +10,7 @@ import { CommandBar, KpiTile } from "@/components/design-system";
 import { formatCurrency } from "@/components/shared/formatters";
 import { Plus } from "lucide-react";
 import { CHANGE_REQUEST_STATUS, PRIORITY } from "@/lib/enums";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 
 export default function ChangeRequests() {
   const projectId = useProjectId();
@@ -53,7 +54,7 @@ export default function ChangeRequests() {
   };
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.ChangeRequest.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.ChangeRequest.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["change-requests", projectId] });
       setShowForm(false);

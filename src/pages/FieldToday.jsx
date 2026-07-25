@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { entities, integrations } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import { compressImage } from "@/utils/compressImage";
@@ -167,8 +168,7 @@ export default function FieldToday() {
   // The client_op_id is minted in onSave and rides BOTH the online create and
   // the offline retry, so a replay can't mint a duplicate (server dedups it).
   const punchMut = useMutation({
-    mutationFn: (data) =>
-      entities.PunchlistItem.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.PunchlistItem.create(withProjectId(data, projectId)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["field-hub-punchlist", projectId] });
       queryClient.invalidateQueries({ queryKey: ["punchlist", projectId] });

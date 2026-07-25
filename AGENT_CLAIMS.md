@@ -53,6 +53,7 @@ Notes:
 - 2026-07-25 · cursor-rr-stage-3d17 · Drawing approval lifecycle Slices 0–5 shipped on PR #122 (R&R stage, cycles, evidence gate, OFS scrub/IFC checklist, comment dispositions). Branch cursor/drawing-approval-lifecycle-rr-stage-3d17.
 - 2026-07-25 · cursor-rr-stage-3d17 · Drawing approval lifecycle Slices 0–4 shipped on PR #122 (R&R stage, approval cycles, R&R evidence gate, mandatory OFS scrub + IFC checklist). Branch cursor/drawing-approval-lifecycle-rr-stage-3d17.
 - 2026-07-25 · cursor-rr-stage-3d17 · R&R promoted to a first-class derived workflow stage (Slices 0–1 of the drawing-approval-lifecycle plan; PR #122, branch cursor/drawing-approval-lifecycle-rr-stage-3d17). Display-derivation only — drawings.stage CHECK untouched.
+- 2026-07-25 · cursor-ap-next-slice-d3a1 · withProjectId write shaping + action-plan tracker checkpoint (IDs 19/43/64/68/70/84/89/92/94/95/97/99/103–105).
 - 2026-07-24 · cursor-ap-14-17-d3a1 · Action plan IDs 14–17 sync honesty, corrected-flow retest, hooks check, Sentry triage.
 - 2026-07-24 · cursor-action-plan-d3a1 · Action-plan completion pass (ledger, hygiene, security identity, ResourceScheduling helpers).
 - 2026-07-24 · cursor-debug-prod-sentry-d3a1 · Prod Sentry fixes cherry-picked into action-plan branch.
