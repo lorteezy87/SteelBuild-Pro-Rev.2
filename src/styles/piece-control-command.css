@@ -2609,3 +2609,197 @@
     text-align: left;
   }
 }
+
+/* ── Package Board ─────────────────────────────────────────────── */
+
+[data-skin="command"] .package-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 420px;
+}
+
+[data-skin="command"] .package-board__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+[data-skin="command"] .package-board__modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 2px;
+  background: var(--cmd-surface);
+}
+
+[data-skin="command"] .package-board__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--cmd-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-skin="command"] .package-board__mode.is-active {
+  background: color-mix(in srgb, var(--cmd-gold) 18%, var(--cmd-surface));
+  color: var(--cmd-text);
+}
+
+[data-skin="command"] .package-board__mode:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+[data-skin="command"] .package-board__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+[data-skin="command"] .package-board__field {
+  display: grid;
+  gap: 4px;
+  color: var(--cmd-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[data-skin="command"] .package-board__field input,
+[data-skin="command"] .package-board__field select {
+  min-width: 180px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 2px;
+  background: var(--cmd-surface);
+  color: var(--cmd-text);
+  font-size: 13px;
+}
+
+[data-skin="command"] .package-board__hint {
+  margin: 0;
+  color: var(--cmd-text-muted);
+  font-size: 12px;
+}
+
+[data-skin="command"] .package-board__columns {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+
+[data-skin="command"] .package-board-column {
+  display: flex;
+  flex: 0 0 260px;
+  flex-direction: column;
+  min-height: 360px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--cmd-surface) 92%, var(--cmd-bg));
+}
+
+[data-skin="command"] .package-board-column__header {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--cmd-border);
+}
+
+[data-skin="command"] .package-board-column__title {
+  margin: 0;
+  color: var(--cmd-text);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-skin="command"] .package-board-column__stats {
+  display: flex;
+  justify-content: space-between;
+  color: var(--cmd-text-muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+
+[data-skin="command"] .package-board-column__list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 280px;
+  padding: 10px;
+  transition: background 120ms ease;
+}
+
+[data-skin="command"] .package-board-column__list.is-over {
+  background: color-mix(in srgb, var(--cmd-gold) 10%, transparent);
+}
+
+[data-skin="command"] .package-board-column__empty {
+  margin: auto 0;
+  color: var(--cmd-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+[data-skin="command"] .package-board-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 2px;
+  background: var(--cmd-surface);
+  color: var(--cmd-text);
+  cursor: grab;
+}
+
+[data-skin="command"] .package-board-card.is-dragging {
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--cmd-text) 18%, transparent);
+  cursor: grabbing;
+}
+
+[data-skin="command"] .package-board-card.is-disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+[data-skin="command"] .package-board-card__mark {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+[data-skin="command"] .package-board-card__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--cmd-text-muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  [data-skin="command"] .package-board-column {
+    flex-basis: 220px;
+  }
+
+  [data-skin="command"] .package-board__field input,
+  [data-skin="command"] .package-board__field select {
+    min-width: 140px;
+  }
+}

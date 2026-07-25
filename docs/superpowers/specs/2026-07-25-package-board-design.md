@@ -1,7 +1,7 @@
 # Package Board Design
 
 **Date:** 2026-07-25  
-**Status:** Draft for owner review (brainstorming §§1–3 approved in chat)  
+**Status:** Approved — implementing on `cursor/package-board-design-3d17`  
 **Depends on:** Piece↔WP↔fab↔3D glue (`20260725210000_piece_wp_fab_3d_glue.sql`, PR #129)
 
 ## Problem
