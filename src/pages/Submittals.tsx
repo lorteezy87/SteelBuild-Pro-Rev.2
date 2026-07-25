@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
-import { lockLinkedSetsIfApproved, addSubmittalRound } from "@/hooks/useSubmittals";
+import { addSubmittalRound } from "@/hooks/useSubmittals";
 import { logActivity, logTransition } from "@/services/auditLogger";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
@@ -269,8 +269,7 @@ export default function Submittals() {
       qc.invalidateQueries({ queryKey: ["action-items", projectId] }),
       qc.invalidateQueries({ queryKey: ["action-items"] }),
     ]);
-    // Approving/releasing a submittal auto-locks its linked drawing sets.
-    // Fan out the drawingSet family so Doc Control reflects the settled write.
+    // Fan out the drawingSet family so Doc Control reflects any linked updates.
     await invalidateEntity(qc, "drawingSet", projectId);
   }, [qc, projectId]);
 
@@ -291,14 +290,9 @@ export default function Submittals() {
     },
   });
   const updateMut = useMutation({
-    // Lock-aware: terminal-approved statuses auto-lock the linked drawing sets
-    // (§20 moat). Routes through the canonical lockLinkedSetsIfApproved so this
-    // page's inline status edits + the verb CTA can't release a package to fab
-    // without locking it. (Previously this page's update bypassed the lock.)
     mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
       const prevStatus = rows.find((r: any) => r.id === id)?.status ?? null;
       const updated = await entities.Submittal.update(id, data);
-      await lockLinkedSetsIfApproved(updated as any);
       // Smart triggers: moves into Rejected / R&R / Approved-as-Noted queue a
       // draft detailing task (deduped inside; never throws).
       if (typeof data.status === "string") {
@@ -322,7 +316,7 @@ export default function Submittals() {
     },
   });
   // Verb CTA → the single audited write path: logs a submittal_rounds row +
-  // patches + auto-locks, atomically (activates the previously-empty round log).
+  // patches atomically (activates the previously-empty round log).
   const advanceMut = useMutation({
     mutationFn: (input: Parameters<typeof addSubmittalRound>[0]) => addSubmittalRound(input),
     onSuccess: async () => { await invalidate(); toast.success("Round logged"); setReleaseBlock(null); },
@@ -376,14 +370,7 @@ export default function Submittals() {
           const prior = (existing?.notes || "").trimEnd();
           rowPatch.notes = prior ? `${prior}\n\n${notesAppend}` : notesAppend;
         }
-        const updated = await entities.Submittal.update(id, rowPatch);
-        // §20: a bulk move to a terminal-approved status must auto-lock the
-        // linked drawing sets, exactly like the single-row updateMut — otherwise
-        // bulk-approving releases a package to fab without locking it. The
-        // canonical helper no-ops for non-approved statuses and rejects lock
-        // failures so a batch cannot report a completed approval without locks.
-        if (patchHasStatus) await lockLinkedSetsIfApproved(updated as any);
-        return updated;
+        return entities.Submittal.update(id, rowPatch);
       });
     },
     onSuccess: async (results, variables) => {
@@ -806,7 +793,7 @@ export default function Submittals() {
       }}
       onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
       // Verb CTA — advance via the audited write path: logs a round +
-      // patches + auto-locks atomically. Stamps the submitted date when
+      // patches atomically. Stamps the submitted date when
       // sending out (→OFA) and the returned date when logging a return
       // (→BFA); never a fake date otherwise (§22).
       onAdvance={(action) => {

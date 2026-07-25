@@ -23,7 +23,6 @@ import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { logTransition } from "@/services/auditLogger";
-import { lockSet } from "@/lib/drawingHub";
 import {
   CLOSED_SUBMITTAL_STATUSES,
   submittalStatusToStage,
@@ -56,67 +55,23 @@ const runStatusTriggers = runSubmittalStatusTriggers as unknown as (args: {
   nextStatus?: string | null;
 }) => Promise<unknown>;
 
-const lockDrawingSet = lockSet as unknown as (args: {
-  setId: string;
-  reason?: string | null;
-  userId?: string | null;
-}) => Promise<unknown>;
-
 export type Submittal = RowWithAliases<"submittals">;
 export type SubmittalRound = RowWithAliases<"submittal_rounds">;
 
-// ── Lock-on-approval: submittals are the workflow source of truth ──
-// When a submittal transitions to a terminal-approved status, every
-// drawing set linked via submittal.drawing_set_ids is locked from edits.
-// Document-side flows (SetApprovalModal) no longer trigger locks; this
-// is the single trigger path.
-//
-// Exported for testing — see src/hooks/__tests__/useSubmittals.test.ts.
+// Terminal-approved statuses used by document/register rollups (e.g. Drawings
+// page grouping). Approval no longer auto-locks linked drawing sets.
 export const TERMINAL_APPROVED_STATUSES = new Set([
   "Approved",
   "Approved as Noted",
   "Released for Fabrication",
 ]);
 
-export async function lockLinkedSetsIfApproved(
-  submittal: Partial<Submittal> | null | undefined,
-): Promise<void> {
-  if (!submittal || !submittal.status) return;
-  if (!TERMINAL_APPROVED_STATUSES.has(submittal.status as string)) return;
-  const setIds = Array.isArray(submittal.drawing_set_ids)
-    ? (submittal.drawing_set_ids as string[]).filter(Boolean)
-    : [];
-  if (!setIds.length) return;
-  const tag =
-    (submittal as Record<string, unknown>).submittal_number ||
-    submittal.id ||
-    "";
-  const reason = `Auto-locked: submittal ${tag} reached "${submittal.status}"`.trim();
-  const failures: string[] = [];
-  for (const setId of setIds) {
-    try {
-      await lockDrawingSet({ setId, reason });
-    } catch (err) {
-      failures.push(setId);
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[useSubmittals] Failed to lock drawing set ${setId} after approval:`,
-        err,
-      );
-    }
-  }
-  if (failures.length > 0) {
-    throw new Error(`Failed to lock ${failures.length} linked drawing set(s): ${failures.join(", ")}`);
-  }
-}
-
 /**
  * The single AUDITED write path for a submittal workflow move. Atomically:
  *   1. inserts a `submittal_rounds` row (the audit event),
  *   2. patches the submittal (status / ball_in_court / current_round_id /
  *      total_rounds, optional submitted/returned dates, optional revision bump
- *      on a Revise-and-Resubmit), and
- *   3. runs the terminal-approval auto-lock (§20 moat).
+ *      on a Revise-and-Resubmit).
  *
  * Every status move (verb CTA, inline select, Kanban drag) should funnel
  * through this so the round log can never drift from the current status — which
@@ -501,7 +456,6 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
     }
     throw err;
   }
-  await lockLinkedSetsIfApproved(updated as Partial<Submittal>);
   // Smart triggers: a move into Rejected / R&R / Approved-as-Noted queues a
   // draft detailing task (deduped, never throws — see submittalSmartTriggers).
   await runStatusTriggers({
@@ -709,7 +663,6 @@ export function useSubmittals(projectId: string | null | undefined) {
         id,
         data as Update<"submittals">
       );
-      await lockLinkedSetsIfApproved(updated);
       if (typeof (data as { status?: unknown }).status === "string") {
         await runStatusTriggers({
           submittal: updated,
@@ -821,33 +774,13 @@ export function useSubmittals(projectId: string | null | undefined) {
   const bulkUpdateMut = useMutation<BulkResult, Error, BulkUpdateVars>({
     mutationFn: async ({ ids, patch }) => {
       const results: BulkResult = { succeeded: 0, failed: [] };
-      const patchStatus = (patch as { status?: string }).status;
-      const isApprovingPatch =
-        !!patchStatus && TERMINAL_APPROVED_STATUSES.has(patchStatus);
-      // Look up existing rows in the cached list so we have drawing_set_ids
-      // for the lock pass without an extra round trip.
-      const submittalsById: Record<string, Submittal> = {};
-      if (isApprovingPatch) {
-        for (const s of submittals) submittalsById[s.id as string] = s;
-      }
       for (const id of ids) {
         try {
-          const updated = await entities.Submittal.update(
+          await entities.Submittal.update(
             id,
             patch as Update<"submittals">
           );
           results.succeeded++;
-          if (isApprovingPatch) {
-            // Prefer the freshly updated row, fall back to the cached
-            // copy so drawing_set_ids resolves even if the update RPC
-            // returns a thin payload.
-            const merged = {
-              ...(submittalsById[id] || {}),
-              ...(updated || {}),
-              status: patchStatus,
-            } as Partial<Submittal>;
-            await lockLinkedSetsIfApproved(merged);
-          }
         } catch (err: unknown) {
           const msg =
             (err as { message?: string } | undefined)?.message ?? String(err);

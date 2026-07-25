@@ -57,8 +57,7 @@ export const STATUS_COLORS: Record<string, string> = {
 // set in the canonical process board.
 //
 // NOT the same as useSubmittals' TERMINAL_APPROVED_STATUSES (which DOES include
-// Approved/AAN) — that set governs auto-LOCKING the linked drawing set from
-// edits, a separate concern from "closed" for due/triage. Don't merge the two.
+// Approved/AAN for document/register rollups). Don't merge the two.
 export const CLOSED_SUBMITTAL_STATUSES = new Set([
   "Released for Fabrication",
   "Void",

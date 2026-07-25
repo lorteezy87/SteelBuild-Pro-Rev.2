@@ -1,12 +1,9 @@
 /**
- * Tests for the lock-on-approval trigger that fires from useSubmittals.
+ * Tests for useSubmittals audited round writes + terminal status helpers.
  *
- * The trigger lives in `lockLinkedSetsIfApproved` and is the single
- * post-Sprint-1 path that locks drawing sets — submittals are workflow
- * source of truth, so when a submittal reaches a terminal-approved
- * status we must lock every set it links to.
- *
- * We mock `@/lib/drawingHub` so the test stays isolated from supabase.
+ * Auto-lock on terminal approval was removed — approval updates workflow
+ * state only. lockSet is mocked so a regression that reintroduces locking
+ * fails these tests.
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -45,7 +42,6 @@ vi.mock("@/lib/supabase", () => ({ supabase: { rpc: (...a: any[]) => rpcMock(...
 import { lockSet } from "@/lib/drawingHub";
 import { FabReleaseBlockedError } from "@/lib/fabRelease/releaseStatus";
 import {
-  lockLinkedSetsIfApproved,
   addSubmittalRound,
   planRoundWrite,
   TERMINAL_APPROVED_STATUSES,
@@ -73,130 +69,6 @@ describe("TERMINAL_APPROVED_STATUSES", () => {
     ]) {
       expect(TERMINAL_APPROVED_STATUSES.has(s)).toBe(false);
     }
-  });
-});
-
-describe("lockLinkedSetsIfApproved", () => {
-  beforeEach(() => {
-    mockLockSet.mockClear();
-  });
-
-  it("calls lockSet for each drawing_set_id when status is Approved", async () => {
-    await lockLinkedSetsIfApproved({
-      id: "sub-1",
-      submittal_number: "S-001",
-      status: "Approved",
-      drawing_set_ids: ["set-a", "set-b", "set-c"],
-    });
-    expect(mockLockSet).toHaveBeenCalledTimes(3);
-    expect(mockLockSet).toHaveBeenCalledWith(
-      expect.objectContaining({ setId: "set-a" }),
-    );
-    expect(mockLockSet).toHaveBeenCalledWith(
-      expect.objectContaining({ setId: "set-b" }),
-    );
-    expect(mockLockSet).toHaveBeenCalledWith(
-      expect.objectContaining({ setId: "set-c" }),
-    );
-  });
-
-  it("calls lockSet when status is 'Approved as Noted'", async () => {
-    await lockLinkedSetsIfApproved({
-      id: "sub-2",
-      status: "Approved as Noted",
-      drawing_set_ids: ["set-a"],
-    });
-    expect(mockLockSet).toHaveBeenCalledTimes(1);
-  });
-
-  it("calls lockSet when status is 'Released for Fabrication'", async () => {
-    await lockLinkedSetsIfApproved({
-      id: "sub-3",
-      status: "Released for Fabrication",
-      drawing_set_ids: ["set-a", "set-b"],
-    });
-    expect(mockLockSet).toHaveBeenCalledTimes(2);
-  });
-
-  it("passes a reason describing the submittal + status to lockSet", async () => {
-    await lockLinkedSetsIfApproved({
-      id: "sub-4",
-      submittal_number: "SHOP-042",
-      status: "Approved",
-      drawing_set_ids: ["set-a"],
-    });
-    const arg = mockLockSet.mock.calls[0][0];
-    expect(arg.reason).toContain("SHOP-042");
-    expect(arg.reason).toContain("Approved");
-  });
-
-  it("does NOT call lockSet for non-terminal statuses", async () => {
-    for (const status of [
-      "Submitted",
-      "Under Review",
-      "Draft",
-      "Rejected",
-      "Revise and Resubmit",
-    ]) {
-      mockLockSet.mockClear();
-      await lockLinkedSetsIfApproved({
-        id: "sub-x",
-        status,
-        drawing_set_ids: ["set-a"],
-      });
-      expect(mockLockSet).not.toHaveBeenCalled();
-    }
-  });
-
-  it("handles empty drawing_set_ids gracefully", async () => {
-    await lockLinkedSetsIfApproved({
-      id: "sub-5",
-      status: "Approved",
-      drawing_set_ids: [],
-    });
-    expect(mockLockSet).not.toHaveBeenCalled();
-  });
-
-  it("handles missing drawing_set_ids gracefully", async () => {
-    await lockLinkedSetsIfApproved({
-      id: "sub-6",
-      status: "Approved",
-    });
-    expect(mockLockSet).not.toHaveBeenCalled();
-  });
-
-  it("filters out null/empty values inside drawing_set_ids", async () => {
-    await lockLinkedSetsIfApproved({
-      id: "sub-7",
-      status: "Approved",
-      drawing_set_ids: ["set-a", null as unknown as string, "", "set-b"],
-    });
-    expect(mockLockSet).toHaveBeenCalledTimes(2);
-  });
-
-  it("returns silently when submittal is null/undefined", async () => {
-    await expect(lockLinkedSetsIfApproved(null)).resolves.toBeUndefined();
-    await expect(lockLinkedSetsIfApproved(undefined)).resolves.toBeUndefined();
-    expect(mockLockSet).not.toHaveBeenCalled();
-  });
-
-  it("rejects when any linked lock fails after attempting every set", async () => {
-    mockLockSet.mockImplementationOnce(async () => {
-      throw new Error("simulated lock failure");
-    });
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await expect(
-      lockLinkedSetsIfApproved({
-        id: "sub-8",
-        status: "Approved",
-        drawing_set_ids: ["set-a", "set-b"],
-      }),
-    ).rejects.toThrow(/Failed to lock/);
-    // Both calls run — failure on one set must not block the next, but the
-    // workflow cannot report a settled approval without all locks.
-    expect(mockLockSet).toHaveBeenCalledTimes(2);
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
   });
 });
 
@@ -254,7 +126,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     expect(updateSubmittal).toHaveBeenCalledWith("s1", expect.objectContaining({ total_rounds: 1, current_round_id: "r1" }));
   });
 
-  it("closes the OPEN round on a verdict (updates it; locks on approval — no new row)", async () => {
+  it("closes the OPEN round on a verdict without auto-locking drawing sets", async () => {
     filterRound.mockResolvedValueOnce([{ id: "r1", round_number: 1, status: "Under Review", submitted_date: "2026-06-01", returned_date: null }]);
     await addSubmittalRound({
       submittal: { id: "s1", project_id: "p1", drawing_set_ids: ["set-a"], status: "Under Review" },
@@ -265,7 +137,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     expect(updateRound).toHaveBeenCalledWith("r1", expect.objectContaining({ status: "Approved", returned_date: "2026-06-10" }));
     expect(createRound).not.toHaveBeenCalled();
     expect(updateSubmittal).toHaveBeenCalledWith("s1", expect.objectContaining({ status: "Approved", total_rounds: 1, current_round_id: "r1" }));
-    expect(mockLockSet).toHaveBeenCalled();
+    expect(mockLockSet).not.toHaveBeenCalled();
   });
 
   it("opens the NEXT cycle on a resubmit (send on a CLOSED round)", async () => {
@@ -280,7 +152,7 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     expect(updateSubmittal).toHaveBeenCalledWith("s1", expect.objectContaining({ total_rounds: 2 }));
   });
 
-  it("opens-and-closes cycle 1 on a verdict with no prior round, and locks on approval", async () => {
+  it("opens-and-closes cycle 1 on a verdict with no prior round, without locking", async () => {
     await addSubmittalRound({
       submittal: { id: "sub-1", project_id: "p1", drawing_set_ids: ["set-a"], status: "Under Review" },
       status: "Approved",
@@ -289,7 +161,41 @@ describe("addSubmittalRound (round = one submit→return cycle)", () => {
     });
     expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 1, status: "Approved", returned_date: "2026-06-01" }));
     expect(updateSubmittal).toHaveBeenCalledWith("sub-1", expect.objectContaining({ status: "Approved", total_rounds: 1, current_round_id: "round-1" }));
-    expect(mockLockSet).toHaveBeenCalled();
+    expect(mockLockSet).not.toHaveBeenCalled();
+  });
+
+  it("does not lock on Approved as Noted", async () => {
+    filterRound.mockResolvedValueOnce([]);
+    await addSubmittalRound({
+      submittal: { id: "sub-aan", project_id: "p1", drawing_set_ids: ["set-a"], status: "Under Review" },
+      status: "Approved as Noted",
+      ball_in_court: "Detailer",
+      returned_date: "2026-06-01",
+      ofsChecklist: {
+        comments_addressed: true,
+        markups_incorporated: true,
+        sheets_ready: true,
+        authorized_to_issue: true,
+      },
+    });
+    expect(mockLockSet).not.toHaveBeenCalled();
+  });
+
+  it("does not lock on Released for Fabrication", async () => {
+    filterRound.mockResolvedValueOnce([]);
+    await addSubmittalRound({
+      submittal: {
+        id: "sub-rff",
+        project_id: "p1",
+        drawing_set_ids: ["set-a"],
+        status: "Approved",
+        ball_in_court: "GC",
+      },
+      status: "Released for Fabrication",
+      ball_in_court: null,
+      returned_date: "2026-06-01",
+    });
+    expect(mockLockSet).not.toHaveBeenCalled();
   });
 
   it("bumps the submittal revision round_number only when bumpRevision is set", async () => {

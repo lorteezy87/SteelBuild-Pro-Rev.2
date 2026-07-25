@@ -12,9 +12,9 @@ describe("dashboard approval lifecycle SoT (Slice 9)", () => {
 
     expect(stages).toContain("R&R");
     expect(counts["R&R"]).toBe(1);
-    expect(counts.OFS).toBe(1);
-    expect(counts.IFC).toBe(1);
-    expect(counts.Released).toBe(1);
+    expect(counts["OFS"]).toBe(1);
+    expect(counts["IFC"]).toBe(1);
+    expect(counts["Released"]).toBe(1);
     expect(total).toBe(4);
   });
 });
