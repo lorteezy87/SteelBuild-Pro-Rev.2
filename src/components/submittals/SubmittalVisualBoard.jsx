@@ -1,3 +1,7 @@
+/**
+ * @deprecated Prefer `ProcessBoardPanel` (canonical Detailing Process Board).
+ * Kept for back-compat tests; hub routes use ProcessBoardPanel (Slice 10).
+ */
 import React, { useMemo, useState } from "react";
 import {
   AlertTriangle,

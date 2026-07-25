@@ -57,14 +57,11 @@ export const BOARD_LANES = ["Blocked", "Ready For Release", "Released", "In Shop
 
 const STAGE_ORDER = FAB_STAGES.map((stage) => stage.id);
 const CLOSED_STATUSES = new Set(["complete", "completed", "closed", "cancelled", "canceled"]);
+/** Slice 8 — only IFC / Released count as fab-ready (not OFS / bare Approved). */
 const RELEASED_DRAWING_STATES = new Set([
   "released",
   "ifc",
   "issued for construction",
-  "ofs",
-  "approved",
-  "approved as noted",
-  "approved_as_noted",
 ]);
 const DAY_MS = 24 * 60 * 60 * 1000;
 

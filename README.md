@@ -46,13 +46,12 @@ another's data. See
 
 ## Workflow (the moat)
 
-The detailing/submittal flow has 7 stages. **Submittals are the source of truth**
-for workflow status; drawings are document artifacts.
+The detailing/submittal flow has 8 **derived** workflow stages (7 stored sheet
+stages). **Submittals are the source of truth** for workflow status; drawings
+are document artifacts. See `docs/architecture/drawing-workflow-dual-source.md`.
 
 ```
-Not Started → IFA → OFA → BFA → OFS → IFC → Released for Fab
-                              ↑
-                              └─ R&R loops back to IFA
+Not Started → IFA → OFA → BFA → R&R → OFS → IFC → Released for Fab
 ```
 
 New users are walked through this flow by a data-driven **Getting Started**

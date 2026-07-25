@@ -187,7 +187,8 @@ The detailing/submittal workflow is the heart of the app. Stages
 └─ Released for Fab             (S&H internal release to fab shop)
 ```
 
-R&R (Revise and Resubmit / Rejected) outcomes loop back to IFA.
+R&R (Revise and Resubmit / Rejected) is a first-class derived workflow stage
+(after BFA); it is never written to `drawings.stage`.
 
 ### Workflow source of truth
 
@@ -719,6 +720,26 @@ AAN / R&R. Required unresolved statuses block OFS→IFC and R&R→OFA unless an
 audited override is recorded (`commentDispositionGate`). Sheet-level
 `submittal_sheet_responses` remain the per-sheet disposition SoT.
 `drawing_revisions` gains nullable `revision_source` / `revision_reason`.
+
+### 2026-07-25 — Package fab-release requires IFC/Released (Slice 8)
+
+`isApprovedForFab` / `computeFabReleaseGate` / SQL `evaluate_fab_release_package`
+align with piece-control Slice 6 readiness. Bare `set_approval_status` /
+`ifc_status` / OFS no longer pass package export. New blocker kind
+`not_ifc_ready`. Playwright fab-release E2E (RFI gate) unchanged.
+
+### 2026-07-25 — Dashboard SoT includes R&R; Approval = IFC/Released (Slice 9)
+
+Document Hub stage maps include R&R. `DrawingApprovalStatusCard` prefers
+`submittalPipelineRollupFromSubmittals`. `SteelExecutionStatusCard` Approval
+metric counts IFC/Released only (not OFS).
+
+### 2026-07-25 — Legacy cleanup + dual-source docs (Slice 10)
+
+Removed unreachable `DrawingKanban`. Documented remaining dual-source in
+`docs/architecture/drawing-workflow-dual-source.md`. Scrubbed stale
+“R&R → IFA” product copy. Sheet-stage recovery path kept for sets without
+submittals.
 
 ### 2026-07-25 — R&R/OFS/BFA risk aging + Critical ActionItems (Slice 7)
 

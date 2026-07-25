@@ -37,7 +37,7 @@
 // ⚠ TWO ORDERS, ON PURPOSE:
 //   • STAGES / STAGE_ORDER (7 values) — the SHEET stage enum. Mirrors the
 //     `chk_drawings_stage` DB CHECK and drives every sheet-stage WRITE path
-//     (BulkActionBar, AdvanceStageDialog legacy fallback, DrawingKanban,
+//     (BulkActionBar, AdvanceStageDialog legacy fallback,
 //     stage sort). "R&R" must NEVER appear here.
 //   • WORKFLOW_STAGES / WORKFLOW_STAGE_ORDER (8 values) — the DISPLAY order
 //     for submittal-derived workflow stages (process boards, chips,

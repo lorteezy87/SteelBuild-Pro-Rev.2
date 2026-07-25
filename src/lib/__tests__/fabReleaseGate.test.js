@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { findBlockingRfis, computeFabReleaseGate, linkedRfiNumbers, isUnresolvedCurrentRevision } from "../fabReleaseGate";
 
 // drawings.linked_rfi_ids is a COMMA-SEPARATED STRING of RFI numbers.
-const sheet = (id, linkedCsv) => ({ id, sheet_number: id, linked_rfi_ids: linkedCsv });
+// Slice 8: default stage Released so RFI-only cases aren't also not_ifc_ready.
+const sheet = (id, linkedCsv, extra = {}) => ({
+  id,
+  sheet_number: id,
+  linked_rfi_ids: linkedCsv,
+  stage: "Released",
+  ...extra,
+});
 const rfi = (number, status, extra = {}) => ({ id: `id-${number}`, rfi_number: number, status, ...extra });
 
 describe("linkedRfiNumbers", () => {
@@ -91,19 +98,30 @@ describe("computeFabReleaseGate — readiness checks beyond RFIs", () => {
     expect(kinds).not.toContain("revision_conflict");
   });
 
-  it("does NOT block an approved, non-superseded, RFI-free package", () => {
+  it("does NOT block an IFC/Released, non-superseded, RFI-free package", () => {
     const g = computeFabReleaseGate({
-      drawings: [{ id: "S1", stage: "Released" }, { id: "S2", set_approval_status: "approved" }],
+      drawings: [{ id: "S1", stage: "Released" }, { id: "S2", stage: "IFC" }],
     });
     expect(g.blocked).toBe(false);
     expect(g.reasons).toEqual([]);
   });
 
-  it("requireSignoffs blocks approved sheets without a fab sign-off; ignores in-progress sheets", () => {
+  it("blocks bare Approved / OFS sheets as not IFC ready (Slice 8)", () => {
+    const g = computeFabReleaseGate({
+      drawings: [
+        { id: "S1", stage: "Released" },
+        { id: "S2", stage: "OFS", set_approval_status: "approved" },
+      ],
+    });
+    expect(g.blocked).toBe(true);
+    expect(g.reasons.map((r) => r.kind)).toContain("not_ifc_ready");
+    expect(g.reasons.find((r) => r.kind === "not_ifc_ready").sheets.map((s) => s.id)).toEqual(["S2"]);
+  });
+
+  it("requireSignoffs blocks IFC/Released sheets without a fab sign-off", () => {
     const drawings = [
       { id: "A", stage: "Released" }, // approved, no sign-off → blocks
       { id: "B", stage: "Released" }, // approved, has sign-off → ok
-      { id: "C", stage: "IFA" }, // in progress → sign-off not required
     ];
     const signoffs = [{ drawing_id: "B", stamp_type: "approved_for_fabrication" }];
     const g = computeFabReleaseGate({ drawings, signoffs, requireSignoffs: true });

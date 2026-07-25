@@ -14,8 +14,9 @@ import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/project
  * Decide whether a stage transition is legal.
  *
  * The corrected submittal state machine (migration 077) is linear:
- *   Not Started → IFA → OFA → BFA → OFS → IFC → Released
- * with R&R outcomes that loop any post-prep stage back to IFA.
+ *   Not Started → IFA → OFA → BFA → R&R → OFS → IFC → Released
+ * R&R is a first-class *derived* stage (submittal status); sheet writes
+ * still use the 7-value drawings.stage enum (never store "R&R").
  * We allow:
  *   • Moving forward any number of steps (fast-track from IFA straight
  *     to Released is legitimate for small revisions)

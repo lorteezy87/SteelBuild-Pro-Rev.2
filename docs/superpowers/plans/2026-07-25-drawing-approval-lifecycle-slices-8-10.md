@@ -18,8 +18,8 @@
 - Document remaining dual-source (sheet enum vs submittal derivation vs fab_release_log)
 
 ## Tasks
-- [ ] Claim + plan
-- [ ] Slice 8 implementation + tests
-- [ ] Slice 9 implementation + tests
-- [ ] Slice 10 cleanup + docs
-- [ ] Verify + commit + PR
+- [x] Claim + plan
+- [x] Slice 8 implementation + tests
+- [x] Slice 9 implementation + tests
+- [x] Slice 10 cleanup + docs
+- [x] Verify + commit + PR
