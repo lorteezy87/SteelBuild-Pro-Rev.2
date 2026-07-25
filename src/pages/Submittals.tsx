@@ -19,7 +19,14 @@ import SubmittalBulkAddModal from "@/components/submittals/SubmittalBulkAddModal
 import NewRoundModalRaw from "@/components/submittals/NewRoundModal";
 import ReleaseGateOverrideModalRaw from "@/components/submittals/ReleaseGateOverrideModal";
 import SheetResponseGridRaw from "@/components/submittals/SheetResponseGrid";
-import { FabReleaseBlockedError, isFabReleaseBlocked } from "@/lib/fabRelease/releaseStatus";
+import { FabReleaseBlockedError } from "@/lib/fabRelease/releaseStatus";
+import { withProjectId } from "@/lib/mutations/standardMutation";
+import {
+  appendSubmittalNotes,
+  buildBulkSubmittalCreatePayload,
+  formatBulkSubmittalToast,
+  formatSubmittalWriteError,
+} from "./submittals/submittalMutationHelpers";
 import {
   collectOpenItems,
   pickCarryForwardResponses,
@@ -274,20 +281,13 @@ export default function Submittals() {
   }, [qc, projectId]);
 
   const createMut = useMutation({
-    mutationFn: (data: any) => entities.Submittal.create(data),
+    mutationFn: (data: any) => entities.Submittal.create(withProjectId(data, projectId)),
     onSuccess: async (row) => {
       await invalidate();
       await logActivity("submittal", "created", row, { projectId });
       setSelectedId(row?.id || null);
     },
-    onError: (err: any) => {
-      const msg = String(err?.message || "");
-      toast.error(
-        /submittals_unique_per_project|duplicate key/i.test(msg)
-          ? "That submittal number already exists in this project — use a different number."
-          : `Create failed: ${err.message}`,
-      );
-    },
+    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Create")),
   });
   const updateMut = useMutation({
     mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
@@ -304,16 +304,7 @@ export default function Submittals() {
       return updated;
     },
     onSuccess: async () => { await invalidate(); toast.success("Updated"); },
-    onError: (err: any) => {
-      const msg = String(err?.message || "");
-      toast.error(
-        isFabReleaseBlocked(err)
-          ? `Release blocked by open RFIs — use the "Release for Fabrication" action to override, or resolve the RFIs.`
-          : /submittals_unique_per_project|duplicate key/i.test(msg)
-            ? "That submittal number already exists in this project — use a different number."
-            : `Update failed: ${err.message}`,
-      );
-    },
+    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Update")),
   });
   // Verb CTA → the single audited write path: logs a submittal_rounds row +
   // patches atomically (activates the previously-empty round log).
@@ -326,7 +317,7 @@ export default function Submittals() {
       if (err instanceof FabReleaseBlockedError) {
         setReleaseBlock({ input: variables, rfis: err.blockingRfiNumbers || [] });
       } else {
-        toast.error(`Advance failed: ${err.message}`);
+        toast.error(formatSubmittalWriteError(err, "Advance"));
       }
     },
   });
@@ -342,7 +333,7 @@ export default function Submittals() {
       await logActivity("submittal", "deleted", rows.find((r: any) => r.id === id) || { id, project_id: projectId }, { projectId });
       await invalidate(); setSelectedId(null); setToDelete(null); toast.success("Deleted");
     },
-    onError: (err: any) => toast.error(`Delete failed: ${err.message}`),
+    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Delete")),
   });
 
   // ── Bulk mutations ────────────────────────────────────────────────
@@ -367,8 +358,7 @@ export default function Submittals() {
         const rowPatch: Record<string, any> = { ...patch };
         if (patchClosesCycle) rowPatch.ball_in_court = null;
         if (notesAppend) {
-          const prior = (existing?.notes || "").trimEnd();
-          rowPatch.notes = prior ? `${prior}\n\n${notesAppend}` : notesAppend;
+          rowPatch.notes = appendSubmittalNotes(existing?.notes, notesAppend);
         }
         return entities.Submittal.update(id, rowPatch);
       });
@@ -385,17 +375,10 @@ export default function Submittals() {
       const succeededIds = new Set(results.succeeded.map(({ item }: any) => item));
       setSelectedIds((prev) => new Set([...prev].filter((id) => !succeededIds.has(id))));
       if (ok > 0) setShowBulkEdit(false);
-      if (ok === 0 && failed > 0) {
-        toast.error(`No submittals updated; ${failed} failed. The selection remains for retry.`);
-        return;
-      }
-      if (failed > 0) {
-        toast.warning(`${ok} updated, ${failed} failed. Failed rows remain selected.`);
-      } else {
-        toast.success(`Updated ${ok} submittal${ok === 1 ? "" : "s"}`);
-      }
+      const toastInfo = formatBulkSubmittalToast("updated", ok, failed);
+      toast[toastInfo.level](toastInfo.message);
     },
-    onError: (err: any) => toast.error(`Bulk update failed: ${err.message}`),
+    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Bulk update")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -410,27 +393,21 @@ export default function Submittals() {
       if (selectedId && deletedIds.has(selectedId)) setSelectedId(null);
       setSelectedIds((prev) => new Set([...prev].filter((id) => !deletedIds.has(id))));
       if (ok > 0) setShowBulkDelete(false);
-      if (ok === 0 && failed > 0) {
-        toast.error(`No submittals deleted; ${failed} failed. The selection remains for retry.`);
-        return;
-      }
-      if (failed > 0) {
-        toast.warning(`${ok} deleted, ${failed} failed. Failed rows remain selected.`);
-      } else {
-        toast.success(`Deleted ${ok} submittal${ok === 1 ? "" : "s"}`);
-      }
+      const toastInfo = formatBulkSubmittalToast("deleted", ok, failed);
+      toast[toastInfo.level](toastInfo.message);
     },
-    onError: (err: any) => toast.error(`Bulk delete failed: ${err.message}`),
+    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Bulk delete")),
   });
 
   const bulkCreateMut = useMutation({
     mutationFn: async (newRows: any[]) => batchProcess(newRows, (row) =>
-      entities.Submittal.create({
-        project_id: projectId,
-        project_name: activeProject?.project_name || activeProject?.name || "",
-        round_number: 1,
-        ...row,
-      }),
+      entities.Submittal.create(
+        buildBulkSubmittalCreatePayload(
+          row,
+          projectId,
+          activeProject?.project_name || activeProject?.name || "",
+        ) as any,
+      ),
     ),
     onSuccess: async (results) => {
       await invalidate();
@@ -438,18 +415,11 @@ export default function Submittals() {
         logActivity("submittal", "created", value || item || { project_id: projectId }, { projectId })));
       const ok = results.succeeded.length;
       const failed = results.failed.length;
-      if (ok === 0 && failed > 0) {
-        toast.error(`No submittals added; ${failed} failed. Review the input and retry.`);
-        return;
-      }
       if (ok > 0) setShowBulkAdd(false);
-      if (failed > 0) {
-        toast.warning(`${ok} added, ${failed} failed`);
-      } else {
-        toast.success(`Added ${ok} submittal${ok === 1 ? "" : "s"}`);
-      }
+      const toastInfo = formatBulkSubmittalToast("added", ok, failed);
+      toast[toastInfo.level](toastInfo.message);
     },
-    onError: (err: any) => toast.error(`Bulk add failed: ${err.message}`),
+    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Bulk add")),
   });
 
   // ── Round mutations ───────────────────────────────────────────────
@@ -457,7 +427,7 @@ export default function Submittals() {
     mutationFn: async (data: any) => {
       let round: any = null;
       try {
-        round = await entities.SubmittalRound.create({ ...data, project_id: projectId });
+        round = await entities.SubmittalRound.create(withProjectId(data, projectId));
         if (round?.id && data.submittal_id) {
           await entities.Submittal.update(data.submittal_id, {
             current_round_id: round.id,
@@ -481,16 +451,13 @@ export default function Submittals() {
       }
     },
     onSuccess: async () => { await invalidate(); toast.success("Round created — submittal resubmitted"); setShowNewRound(false); },
-    onError: (err: any) => toast.error(`Failed to create round: ${err.message}`),
+    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Round")),
   });
 
   // ── Sheet response mutations ──────────────────────────────────────
   const saveSheetResponsesMut = useMutation({
     mutationFn: async ({ roundId, responses }: { roundId: string; responses: any[] }) => {
       const results = { succeeded: 0, failed: 0 };
-      // The page early-returns without a project, so this never runs unscoped;
-      // narrow projectId to a string for the row insert (no-op guard at runtime).
-      if (!projectId) return results;
       for (const resp of responses) {
         try {
           if (resp.id) {
@@ -499,15 +466,16 @@ export default function Submittals() {
               reviewer_comment: resp.reviewer_comment || null,
             });
           } else {
-            await entities.SubmittalSheetResponse.create({
-              project_id: projectId,
-              submittal_round_id: roundId,
-              drawing_id: resp.drawing_id || null,
-              drawing_set_id: resp.drawing_set_id || null,
-              sheet_number: resp.sheet_number || null,
-              response_status: resp.response_status,
-              reviewer_comment: resp.reviewer_comment || null,
-            });
+            await entities.SubmittalSheetResponse.create(
+              withProjectId({
+                submittal_round_id: roundId,
+                drawing_id: resp.drawing_id || null,
+                drawing_set_id: resp.drawing_set_id || null,
+                sheet_number: resp.sheet_number || null,
+                response_status: resp.response_status,
+                reviewer_comment: resp.reviewer_comment || null,
+              }, projectId),
+            );
           }
           results.succeeded++;
         } catch {
@@ -530,7 +498,7 @@ export default function Submittals() {
         toast.success(`${results.succeeded} sheet response(s) saved`);
       }
     },
-    onError: (err: any) => toast.error(`Failed to save responses: ${err.message}`),
+    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Sheet responses")),
   });
 
   // ── Filter/search ──────────────────────────────────────────────────

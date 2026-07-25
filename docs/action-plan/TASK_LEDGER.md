@@ -59,7 +59,7 @@ Status key:
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 21 | Partial | Submittals already TS + helpers; still ~1k LOC shell | `Submittals.tsx` |
+| 21 | Partial | Mutation helpers extracted (`submittalMutationHelpers.ts` + tests); shell still ~1k LOC | `WORK_NEXT_SLICE.md` |
 | 22 | Partial | Constraints already split under `pages/constraints/` | ~403 LOC shell |
 | 23 | Partial | RFIs already split under `pages/rfis/` | ~596 LOC |
 | 24 | Completed | Pure helpers extracted to `pages/resourceScheduling/`; page remains orchestrator | `resourceSchedulingHelpers.ts` + 27 tests |
@@ -72,11 +72,11 @@ Status key:
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
 | 47 | Completed | Standard mutation helpers introduced | `src/lib/mutations/standardMutation.ts` |
-| 48 | Partial | Toast patterns exist (sonner); helper `toUserErrorMessage` | same |
+| 48 | Partial | `toUserErrorMessage` adopted on Safety/Inspections/Procurement/SOV/Documents/Submittals; not universal | `WORK_NEXT_SLICE.md` |
 | 49 | Completed | `invalidateAfterMutation` helper | same + cacheRegistry |
-| 50 | Partial | Ad hoc mutations remain; `withProjectId` on many high-traffic creates | `WORK_NEXT_SLICE.md` |
+| 50 | Partial | `withProjectId` on field/QC/cost/schedule/drawings/submittals/commercial creates; ad hoc remain elsewhere | `WORK_NEXT_SLICE.md` |
 | 51 | Partial | Critical optimistic paths reviewed in prior PRs; not universal | — |
-| 52 | Partial | Project-scoped selects + invalidation + write shaping advanced; concurrent-edit E2E open | `withProjectId` |
+| 52 | Partial | Write shaping + scoped invalidation advanced across flagship pages; concurrent-edit E2E open | `withProjectId` |
 | 53 | Partial | Many KPI derives extracted; portfolio/financial KPIs tested in places | derive modules |
 | 54 | Partial | Payload helpers for CO/cost/closeout/schedule | domain helpers |
 | 55 | Completed | `assertProjectId` shared | useAppSecurity + standardMutation |

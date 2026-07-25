@@ -25,6 +25,7 @@ import COFormModal from "@/components/changeorders/COFormModal";
 import ChangeOrderImportModal from "@/components/changeorders/ChangeOrderImportModal";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import { toast } from "sonner";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -158,16 +159,13 @@ export default function ChangeOrders() {
   /* -- Mutations -- */
   const createMut = useMutation({
     mutationFn: async (d) => {
-      const userTyped = (d.co_number || "").trim();
+      const scoped = withProjectId(d, projectId);
+      const userTyped = (scoped.co_number || "").trim();
       let coNumber = userTyped;
-      const targetProjectId = d.project_id || projectId || null;
-      if (!targetProjectId) {
-        throw new Error("Select a project before creating a change order.");
-      }
-      if (!coNumber && targetProjectId) {
+      if (!coNumber) {
         try {
           coNumber = await getNextFormattedNumber({
-            projectId: targetProjectId,
+            projectId: scoped.project_id,
             recordType: "CO",
             entityName: "ChangeOrder",
             fieldName: "co_number",
@@ -182,9 +180,8 @@ export default function ChangeOrders() {
       }
       if (!coNumber) throw new Error("Unable to reserve a change order number. Please retry.");
       return entities.ChangeOrder.create({
-        ...d,
+        ...scoped,
         co_number: coNumber,
-        project_id: targetProjectId,
       });
     },
     onSuccess: async (created) => {
