@@ -44,7 +44,7 @@ default + transition graph parity.
 - [x] Wire gates into `addSubmittalRound`; tighten `submittalTransitions`
 - [x] IFC issue dialog with checklist; wire SubmittalDetail CTA
 - [x] Process-board / stage captions: “Out for Scrub”
-- [ ] Verify lint/test/build; commit; push; update PR #122
+- [x] Verify lint/test/build; commit; push; update PR #122
 
 ## Acceptance criteria
 
