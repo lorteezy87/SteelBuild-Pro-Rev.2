@@ -215,6 +215,10 @@ export async function createNewRevisionAndCarryZones({
   pdfPage = undefined,
   issuedAt = null,
   notes = null,
+  /** Slice 5 — where the revision originated (GC comments, RFI, ASI, …). */
+  revisionSource = null,
+  /** Slice 5 — free-text why this revision was issued. */
+  revisionReason = null,
 }) {
   if (!drawing?.id || !drawing?.project_id) {
     throw new Error("createNewRevisionAndCarryZones: drawing required");
@@ -268,6 +272,8 @@ export async function createNewRevisionAndCarryZones({
       pdf_page:               pdfPage !== undefined ? pdfPage : (drawing.pdf_page ?? null),
       issued_at:              issuedAt || null,
       revision_notes:         notes || null,
+      revision_source:        revisionSource || null,
+      revision_reason:        revisionReason || null,
       created_by:             userId || null,
     })
     .select()

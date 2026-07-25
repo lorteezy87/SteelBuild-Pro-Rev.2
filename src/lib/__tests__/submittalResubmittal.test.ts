@@ -4,6 +4,7 @@ import {
   collectOpenItems,
   pickCarryForwardResponses,
   formatCarryForwardNotes,
+  mergeCarryForwardNotes,
   buildResponseMatrix,
 } from "@/lib/submittalResubmittal";
 
@@ -100,6 +101,20 @@ describe("submittalResubmittal — formatCarryForwardNotes", () => {
   it("returns empty string when there is nothing to carry forward", () => {
     expect(formatCarryForwardNotes(3, [])).toBe("");
     expect(formatCarryForwardNotes(3, null)).toBe("");
+  });
+});
+
+describe("submittalResubmittal — mergeCarryForwardNotes", () => {
+  it("joins sheet + disposition notes with a blank line", () => {
+    expect(mergeCarryForwardNotes("Sheet notes", "Disposition notes")).toBe(
+      "Sheet notes\n\nDisposition notes",
+    );
+  });
+
+  it("omits empty parts", () => {
+    expect(mergeCarryForwardNotes("Sheet only", "")).toBe("Sheet only");
+    expect(mergeCarryForwardNotes(null, "Disp only")).toBe("Disp only");
+    expect(mergeCarryForwardNotes("", "")).toBe("");
   });
 });
 

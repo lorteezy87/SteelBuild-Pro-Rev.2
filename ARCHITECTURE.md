@@ -712,6 +712,14 @@ dispositions, release-gate unification) are specced in
 `docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-rr-stage.md`
 and `docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-ofs-slice4.md`.
 
+### 2026-07-25 — Returned-comment dispositions gate OFS/IFC and R&R/OFA (Slice 5)
+
+Structured `submittal_comment_dispositions` rows track comments returned with
+AAN / R&R. Required unresolved statuses block OFS→IFC and R&R→OFA unless an
+audited override is recorded (`commentDispositionGate`). Sheet-level
+`submittal_sheet_responses` remain the per-sheet disposition SoT.
+`drawing_revisions` gains nullable `revision_source` / `revision_reason`.
+
 ### 2026-07-25 — OFS is mandatory scrub before IFC (drawing approval lifecycle, Slice 4)
 
 Approved packages must pass through **OFS — Out for Scrub** before IFC /

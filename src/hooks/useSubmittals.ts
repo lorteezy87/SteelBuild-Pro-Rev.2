@@ -38,6 +38,10 @@ import {
   evaluateSkipOfsReleaseGate,
   type OfsChecklistState,
 } from "@/lib/ofsCompletionGate";
+import {
+  evaluateCommentDispositionGate,
+  type CommentDispositionLike,
+} from "@/lib/commentDispositionGate";
 import { roundRevision } from "@/lib/submittalCycles";
 import { supabase } from "@/lib/supabase";
 import {
@@ -157,6 +161,13 @@ export interface AddRoundInput {
    * satisfies the skip-OFS release gate when releasing for fab.
    */
   ofsOverrideReason?: string | null;
+  /**
+   * Optional preloaded comment dispositions for Slice 5 gates. When omitted
+   * on a gated move (OFS→IFC / R&R→OFA), addSubmittalRound loads them.
+   */
+  commentDispositions?: CommentDispositionLike[] | null;
+  /** Audited override for unresolved required comment dispositions. */
+  commentOverrideReason?: string | null;
   /** Bump the submittal's revision round_number (true on Revise & Resubmit). */
   bumpRevision?: boolean;
   /**
@@ -354,6 +365,49 @@ export async function addSubmittalRound(input: AddRoundInput): Promise<Submittal
   });
   if (skipOfs.ok === false) {
     throw new Error(skipOfs.reason);
+  }
+
+  // Comment-disposition gates (Slice 5): OFS→IFC and R&R→OFA require all
+  // required returned comments to be resolved (or an audited override).
+  // Callers may pass dispositions; otherwise we load live rows for the package.
+  const priorStageForComments = submittalStatusToStage(
+    s.status,
+    s.ball_in_court,
+    null,
+  );
+  let dispositions = input.commentDispositions ?? null;
+  const needsCommentGate =
+    (derivedNextStage === "IFC" && priorStageForComments === "OFS") ||
+    (["Revise and Resubmit", "Rejected"].includes(String(s.status ?? "")) &&
+      ["Submitted", "Under Review"].includes(input.status));
+  if (needsCommentGate && dispositions == null) {
+    try {
+      dispositions = (await entities.SubmittalCommentDisposition.filter({
+        submittal_id: s.id,
+      })) as CommentDispositionLike[];
+    } catch {
+      dispositions = [];
+    }
+  }
+  if (needsCommentGate) {
+    const commentOverride =
+      (input.commentOverrideReason || ofsOverride || "").trim() || null;
+    const ofsCommentGate = evaluateCommentDispositionGate({
+      kind: "ofs_to_ifc",
+      dispositions,
+      nextStage: derivedNextStage,
+      priorStage: priorStageForComments,
+      overrideReason: commentOverride,
+    });
+    if (ofsCommentGate.ok === false) throw new Error(ofsCommentGate.reason);
+    const rrCommentGate = evaluateCommentDispositionGate({
+      kind: "rr_to_ofa",
+      dispositions,
+      nextStatus: input.status,
+      priorStatus: s.status,
+      overrideReason: commentOverride,
+    });
+    if (rrCommentGate.ok === false) throw new Error(rrCommentGate.reason);
   }
 
   let round: { id?: string } | null;

@@ -47,6 +47,7 @@ Notes:
 | 2026-07-09T20:00:00Z | measurement-ship1 | Drawing-viewer measurement correctness | src/components/drawings/viewer/{AnnotationLayer.jsx,detectScale.js,measureLabel.js,useMarkup.js} · src/pages/drawingViewer/{useAutoScaleOnLoad.js,ViewerToolbar.jsx,usePdfLoader.js} · src/pages/DrawingViewer.jsx · src/utils/feetInches.js · supabase/migrations/** | Fix `drawing_markups` CHECK (7 of 8 markup kinds rejected → table holds 0 rows), per-page scale detection + explicit ambiguous state, canonical ft-in 1/16" formatter, save-failure toast, badge+detection outside canvas mode. Plan: docs/superpowers/plans/2026-07-09-drawing-viewer-measurement-ship1.md |
 
 ## Recently released
+- 2026-07-25 · cursor-rr-stage-3d17 · Drawing approval lifecycle Slices 0–5 shipped on PR #122 (R&R stage, cycles, evidence gate, OFS scrub/IFC checklist, comment dispositions). Branch cursor/drawing-approval-lifecycle-rr-stage-3d17.
 - 2026-07-25 · cursor-rr-stage-3d17 · Drawing approval lifecycle Slices 0–4 shipped on PR #122 (R&R stage, approval cycles, R&R evidence gate, mandatory OFS scrub + IFC checklist). Branch cursor/drawing-approval-lifecycle-rr-stage-3d17.
 - 2026-07-25 · cursor-rr-stage-3d17 · R&R promoted to a first-class derived workflow stage (Slices 0–1 of the drawing-approval-lifecycle plan; PR #122, branch cursor/drawing-approval-lifecycle-rr-stage-3d17). Display-derivation only — drawings.stage CHECK untouched.
 - 2026-07-24 · cursor-ap-14-17-d3a1 · Action plan IDs 14–17 sync honesty, corrected-flow retest, hooks check, Sentry triage.

@@ -23,7 +23,12 @@ import {
   collectOpenItems,
   pickCarryForwardResponses,
   formatCarryForwardNotes,
+  mergeCarryForwardNotes,
 } from "@/lib/submittalResubmittal";
+import {
+  collectUnresolvedRequiredComments,
+  formatUnresolvedCommentNotes,
+} from "@/lib/commentDispositionGate";
 import { forecastPortfolio } from "@/lib/submittalForecast";
 import { batchProcess } from "@/utils/batchProcess";
 import { usePermissions } from "@/services/permissions";
@@ -189,9 +194,21 @@ export default function Submittals() {
     staleTime: 30_000,
   });
 
+  // Returned-comment dispositions (Slice 5) — gate OFS→IFC / R&R→OFA.
+  const { data: allCommentDispositions = [] } = useQuery({
+    queryKey: ["comment-dispositions", projectId],
+    queryFn: () => projectId
+      ? entities.SubmittalCommentDisposition.filter({ project_id: projectId })
+      : [],
+    enabled: !!projectId,
+    staleTime: 30_000,
+  });
+  const invalidateCommentDispositions = () =>
+    qc.invalidateQueries({ queryKey: ["comment-dispositions", projectId] });
+
   // Opt-in routing correction: when on, a BFA "Approved" flows through the
   // detailer scrub (OFS → IFC → Released) exactly like "Approved as Noted".
-  // Default off — the verb CTA keeps its legacy "Approved" → IFC skip.
+  // Flag defaults ON since Slice 4 — verb CTA routes Approved through OFS.
   const approvedRoutesToScrub = useFlag("submittal_approved_to_scrub");
 
   // Phase 2 opt-in: when on, opening a NEW round because the prior disposition
@@ -656,6 +673,57 @@ export default function Submittals() {
             )
           : []
       }
+      commentDispositions={
+        selected
+          ? allCommentDispositions.filter((d: any) => d.submittal_id === selected.id)
+          : []
+      }
+      onCommentDispositionAdd={async (draft) => {
+        if (!selected?.id || !selected.project_id) return;
+        const rounds = roundsBySubmittal[selected.id] || [];
+        const roundId = rounds.at(-1)?.id;
+        if (!roundId) {
+          toast.error("Add an approval cycle before tracking returned comments.");
+          return;
+        }
+        try {
+          await entities.SubmittalCommentDisposition.create({
+            project_id: selected.project_id,
+            submittal_id: selected.id,
+            submittal_round_id: roundId,
+            comment_number: draft.comment_number,
+            source: draft.source,
+            location: draft.location || null,
+            comment_text: draft.comment_text,
+            is_required: draft.is_required,
+            status: "Unreviewed",
+          });
+          await invalidateCommentDispositions();
+          toast.success("Returned comment added");
+        } catch (err: any) {
+          toast.error(`Could not add comment: ${err?.message || err}`);
+        }
+      }}
+      onCommentDispositionStatus={async (id, status) => {
+        try {
+          const patch: Record<string, unknown> = { status };
+          if (status === "Complete" || status === "Incorporated" || status === "Not Applicable") {
+            patch.completed_at = new Date().toISOString();
+          }
+          await entities.SubmittalCommentDisposition.update(id, patch as any);
+          await invalidateCommentDispositions();
+        } catch (err: any) {
+          toast.error(`Could not update disposition: ${err?.message || err}`);
+        }
+      }}
+      onCommentDispositionResolution={async (id, resolution) => {
+        try {
+          await entities.SubmittalCommentDisposition.update(id, { resolution } as any);
+          await invalidateCommentDispositions();
+        } catch (err: any) {
+          toast.error(`Could not save resolution: ${err?.message || err}`);
+        }
+      }}
       drawings={allDrawings}
       cycleStats={reviewForecast.stats}
       today={today}
@@ -768,6 +836,10 @@ export default function Submittals() {
           nextStage: action.nextStage,
           ofsChecklist: action.ofsChecklist ?? undefined,
           ofsOverrideReason: action.ofsOverrideReason ?? undefined,
+          commentOverrideReason: action.commentOverrideReason ?? undefined,
+          commentDispositions: allCommentDispositions.filter(
+            (d: any) => d.submittal_id === selected.id,
+          ),
           extraPatch: Object.keys(extraPatch).length ? extraPatch : undefined,
         });
       }}
@@ -956,7 +1028,14 @@ export default function Submittals() {
         const carry = pickCarryForwardResponses(submittalRounds, allSheetResponses);
         const carryItems = collectOpenItems(carry.responses);
         const carryFromRound = carry.round?.round_number ?? null;
-        const seededNotes = formatCarryForwardNotes(carryFromRound, carryItems);
+        const sheetNotes = formatCarryForwardNotes(carryFromRound, carryItems);
+        const openDispositions = collectUnresolvedRequiredComments(
+          allCommentDispositions.filter((d: any) => d.submittal_id === selected.id),
+        );
+        const seededNotes = mergeCarryForwardNotes(
+          sheetNotes,
+          formatUnresolvedCommentNotes(openDispositions),
+        );
         return (
           <NewRoundModal
             open={showNewRound}

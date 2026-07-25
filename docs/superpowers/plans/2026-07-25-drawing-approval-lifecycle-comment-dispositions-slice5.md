@@ -21,10 +21,10 @@ soft `comments_addressed` checkbox is secondary; gate truth = disposition rows.
 
 ## Tasks
 
-- [ ] Claim + this plan
-- [ ] `commentDispositionGate` + tests
-- [ ] Migration + RLS + soft_delete_project + types + entity
-- [ ] Wire into `addSubmittalRound` / IfcIssueDialog messaging
-- [ ] Checklist UI on SubmittalDetail
-- [ ] Carry-forward integration in `submittalResubmittal`
-- [ ] Verify + commit + PR update
+- [x] Claim + this plan
+- [x] `commentDispositionGate` + tests
+- [x] Migration + RLS + soft_delete_project + types + entity
+- [x] Wire into `addSubmittalRound` / IfcIssueDialog messaging
+- [x] Checklist UI on SubmittalDetail
+- [x] Carry-forward integration in `submittalResubmittal`
+- [x] Verify + commit + PR update

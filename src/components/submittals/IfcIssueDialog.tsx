@@ -20,6 +20,10 @@ import {
   isOfsChecklistComplete,
   type OfsChecklistState,
 } from "@/lib/ofsCompletionGate";
+import {
+  collectUnresolvedRequiredComments,
+  type CommentDispositionLike,
+} from "@/lib/commentDispositionGate";
 
 // ui/dialog is still .jsx forwardRef — cast for typed children/className.
 type AnyProps = PropsWithChildren<Record<string, any>>;
@@ -33,6 +37,8 @@ export interface IfcIssueDialogProps {
   open: boolean;
   submittalNumber?: string | null;
   busy?: boolean;
+  /** Live comment dispositions — unresolved required rows also gate IFC. */
+  dispositions?: CommentDispositionLike[] | null;
   onClose: () => void;
   onConfirm: (args: {
     checklist: OfsChecklistState;
@@ -44,6 +50,7 @@ export default function IfcIssueDialog({
   open,
   submittalNumber,
   busy = false,
+  dispositions = null,
   onClose,
   onConfirm,
 }: IfcIssueDialogProps) {
@@ -52,8 +59,11 @@ export default function IfcIssueDialog({
   const [showOverride, setShowOverride] = useState(false);
 
   const complete = isOfsChecklistComplete(checklist);
+  const unresolvedComments = collectUnresolvedRequiredComments(dispositions);
+  const commentsClear = unresolvedComments.length === 0;
   const override = overrideReason.trim();
-  const canIssue = complete || override.length > 0;
+  // Checklist + comment clearance both required, unless an override covers gaps.
+  const canIssue = (complete && commentsClear) || override.length > 0;
 
   const toggle = (key: keyof OfsChecklistState) => {
     setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -95,8 +105,27 @@ export default function IfcIssueDialog({
         >
           This package is <strong style={{ color: "var(--text-primary)" }}>OFS — Out for Scrub</strong>.
           Scrub is post-approval cleanup, not a resubmittal. Complete the checklist
-          before issuing for construction.
+          and resolve required returned comments before issuing for construction.
         </p>
+
+        {!commentsClear && (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: "8px 10px",
+              border: "1px solid var(--status-warning)",
+              borderRadius: 2,
+              background: "rgba(245,158,11,0.08)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "var(--status-warning)",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {unresolvedComments.length} required returned comment(s) still unresolved.
+            Resolve them in the disposition checklist, or issue with an audited override.
+          </div>
+        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {OFS_CHECKLIST_ITEMS.map((item) => {
@@ -152,7 +181,7 @@ export default function IfcIssueDialog({
           })}
         </div>
 
-        {!complete && (
+        {(!complete || !commentsClear) && (
           <div style={{ marginTop: 14 }}>
             {!showOverride ? (
               <button

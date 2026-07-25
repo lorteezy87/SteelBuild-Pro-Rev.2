@@ -14,6 +14,8 @@ import CommentThreadRaw from "@/components/collaboration/CommentThread";
 import RoundTimelineRaw from "@/components/submittals/RoundTimeline";
 import ResponseMatrixRaw from "@/components/submittals/ResponseMatrix";
 import IfcIssueDialog from "@/components/submittals/IfcIssueDialog";
+import CommentDispositionChecklist from "@/components/submittals/CommentDispositionChecklist";
+import type { CommentDispositionStatus } from "@/lib/commentDispositionGate";
 import SubmittalForecastCard from "@/components/submittals/SubmittalForecastCard";
 import { buildResponseMatrix } from "@/lib/submittalResubmittal";
 import { forecastSubmittal } from "@/lib/submittalForecast";
@@ -370,6 +372,7 @@ interface SubmittalDetailProps {
     chainStepIndex?: number;
     ofsChecklist?: OfsChecklistState | null;
     ofsOverrideReason?: string | null;
+    commentOverrideReason?: string | null;
   }) => void;
   /**
    * When true (from the `submittal_approved_to_scrub` flag), a BFA "Approved"
@@ -377,6 +380,17 @@ interface SubmittalDetailProps {
    * skipping to IFC. Defaults to true — mandatory scrub (Slice 4).
    */
   approvedRoutesToScrub?: boolean;
+  /** Returned-comment dispositions for this submittal (Slice 5). */
+  commentDispositions?: any[];
+  onCommentDispositionAdd?: (draft: {
+    comment_number: string;
+    source: string;
+    location: string;
+    comment_text: string;
+    is_required: boolean;
+  }) => void | Promise<void>;
+  onCommentDispositionStatus?: (id: string, status: CommentDispositionStatus) => void | Promise<void>;
+  onCommentDispositionResolution?: (id: string, resolution: string) => void | Promise<void>;
   /**
    * Phase 3 splitting (flag `submittal_splitting`): when true, show the "Spin
    * off child" action + the lineage card. Defaults to false — nothing renders.
@@ -404,7 +418,7 @@ interface SubmittalDetailProps {
   onComponentRemoveType?: (component: SubmittalComponent) => void;
 }
 
-export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = true, splittingEnabled = false, onSpinOff, onSelectSubmittal, drawingTypesEnabled = false, components = [], onComponentSetReceived, onComponentSetReleased, onComponentAddType, onComponentRemoveType }: SubmittalDetailProps) {
+export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [], rounds = [], allRfis = [], allTasks = [], projectName = "Project", project = null, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound, sheetResponses = [], drawings = [], cycleStats = null, today = "", onAdvance, approvedRoutesToScrub = true, commentDispositions = [], onCommentDispositionAdd, onCommentDispositionStatus, onCommentDispositionResolution, splittingEnabled = false, onSpinOff, onSelectSubmittal, drawingTypesEnabled = false, components = [], onComponentSetReceived, onComponentSetReleased, onComponentAddType, onComponentRemoveType }: SubmittalDetailProps) {
   // Pending OFS→IFC action while the scrub checklist dialog is open.
   const [pendingIfcAction, setPendingIfcAction] = useState<{
     nextStatus: string | null;
@@ -553,6 +567,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
         <IfcIssueDialog
           open={!!pendingIfcAction}
           submittalNumber={submittal.submittal_number}
+          dispositions={commentDispositions}
           onClose={() => setPendingIfcAction(null)}
           onConfirm={({ checklist, overrideReason }) => {
             if (!pendingIfcAction || !onAdvance) return;
@@ -562,6 +577,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
               ...action,
               ofsChecklist: checklist,
               ofsOverrideReason: overrideReason,
+              commentOverrideReason: overrideReason,
             });
           }}
         />
@@ -784,6 +800,23 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
         {responseMatrix.rows.length > 0 && (
           <DetailSection title={`Response matrix (${responseMatrix.rows.length} sheet${responseMatrix.rows.length === 1 ? "" : "s"})`}>
             <ResponseMatrix columns={responseMatrix.columns} rows={responseMatrix.rows} />
+          </DetailSection>
+        )}
+
+        {/* Returned-comment dispositions (Slice 5) — required unresolved rows
+            block OFS→IFC and R&R→OFA. Shown for AAN / Approved / R&R packages. */}
+        {onCommentDispositionAdd &&
+          onCommentDispositionStatus &&
+          ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"].includes(
+            submittal.status ?? "",
+          ) && (
+          <DetailSection title={`Returned comments (${commentDispositions.length})`}>
+            <CommentDispositionChecklist
+              dispositions={commentDispositions}
+              onAdd={onCommentDispositionAdd}
+              onUpdateStatus={onCommentDispositionStatus}
+              onUpdateResolution={onCommentDispositionResolution}
+            />
           </DetailSection>
         )}
 
