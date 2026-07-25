@@ -61,7 +61,7 @@ Status key:
 |---|---|---|---|
 | 21 | Partial | Mutation helpers extracted (`submittalMutationHelpers.ts` + tests); shell still ~1k LOC | `WORK_NEXT_SLICE.md` |
 | 22 | Partial | Constraints already split under `pages/constraints/` | ~403 LOC shell |
-| 23 | Partial | RFIs already split under `pages/rfis/` | ~596 LOC |
+| 23 | Partial | `rfiMutationHelpers` extracted + tested; create/alert/doc attach scoped; shell still ~600 LOC | `WORK_NEXT_SLICE.md` |
 | 24 | Completed | Pure helpers extracted to `pages/resourceScheduling/`; page remains orchestrator | `resourceSchedulingHelpers.ts` + 27 tests |
 | 25 | Partial | Layout reduced to shell (~429) | `Layout.jsx` |
 | 26 | Partial | Deliveries already split | `pages/deliveries/` |
@@ -72,11 +72,11 @@ Status key:
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
 | 47 | Completed | Standard mutation helpers introduced | `src/lib/mutations/standardMutation.ts` |
-| 48 | Partial | `toUserErrorMessage` adopted on Safety/Inspections/Procurement/SOV/Documents/Submittals; not universal | `WORK_NEXT_SLICE.md` |
+| 48 | Partial | `toUserErrorMessage` adopted across field/commercial/RFIs/ops/email escalate paths; not universal | `WORK_NEXT_SLICE.md` |
 | 49 | Completed | `invalidateAfterMutation` helper | same + cacheRegistry |
-| 50 | Partial | `withProjectId` on field/QC/cost/schedule/drawings/submittals/commercial creates; ad hoc remain elsewhere | `WORK_NEXT_SLICE.md` |
+| 50 | Partial | `withProjectId` on RFIs/ActionItems/DailyLogs/Constraints/LookAhead/WPs/email/escalate + prior cluster; ad hoc remain | `WORK_NEXT_SLICE.md` |
 | 51 | Partial | Critical optimistic paths reviewed in prior PRs; not universal | — |
-| 52 | Partial | Write shaping + scoped invalidation advanced across flagship pages; concurrent-edit E2E open | `withProjectId` |
+| 52 | Partial | Write shaping + scoped invalidation advanced across flagship + ops pages; concurrent-edit E2E open | `withProjectId` |
 | 53 | Partial | Many KPI derives extracted; portfolio/financial KPIs tested in places | derive modules |
 | 54 | Partial | Payload helpers for CO/cost/closeout/schedule | domain helpers |
 | 55 | Completed | `assertProjectId` shared | useAppSecurity + standardMutation |

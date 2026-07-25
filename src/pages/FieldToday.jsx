@@ -220,12 +220,12 @@ export default function FieldToday() {
         }
         try {
           const result = await integrations.Core.UploadFile({ file, workflow: "photo" });
-          await entities.Photo.create({
+          await entities.Photo.create(withProjectId({
             ...meta,
             file_url: result.file_url || result.path,
             file_name: file.name,
             client_op_id: clientOpId,
-          });
+          }, projectId));
           added += 1;
         } catch (err) {
           if (isLikelyOfflineError(err)) {
