@@ -18,6 +18,7 @@ import { logActivity } from "@/services/auditLogger";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { invalidateEntity, getQueryKey } from "@/services/cacheRegistry";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -28,6 +29,7 @@ import { usePermissions } from "@/services/permissions";
 import { getNextNumber } from "@/components/shared/numberSequencing";
 import { withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
+import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
 import WPFormModalRaw from "@/components/workpackages/WPFormModal";
 import { Button as ButtonRaw, EmptyState as EmptyStateRaw } from "@/components/design-system";
 import SequenceFilterRaw from "@/components/shared/SequenceFilter";
@@ -89,6 +91,13 @@ export default function FabRelease() {
   const [deleteTarget, setDeleteTarget] = useState<EnrichedWorkPackage | null>(null);
   const allocationInFlightRef = useRef(false);
   const [isAllocatingNumber, setIsAllocatingNumber] = useState(false);
+
+  useResetOnProjectChange(projectId, () => {
+    setDetailWP(null);
+    setEditingWP(null);
+    setWPModalOpen(false);
+    setDeleteTarget(null);
+  });
 
   useEffect(() => {
     const savedView = localStorage.getItem("fabReleaseView");
@@ -474,6 +483,9 @@ export default function FabRelease() {
   return (
     <div className="sb-dashboard-reference-page fab-release-page">
       <style>{FAB_RELEASE_STYLES}</style>
+      <div style={{ padding: "0 24px" }}>
+        <ListTruncationNotice count={workPackages.length} label="fab packages" />
+      </div>
       <FabReleaseControlCenter
         projectName={projectName}
         metrics={metrics}

@@ -1,18 +1,36 @@
-# Action-plan — post-deploy checkpoint (2026-07-26 batch #139–#149)
+# Action-plan — closeout sweep checkpoint (2026-07-26)
 
-**Merged + prod:** #139 · #140 · #141 · #150 (#142–#149) → https://www.steelbuild-pro.com  
-**Deployment:** `dpl_87XoFH5EeR7mXBmptcx64ETQz2uM`  
-**Prior prod:** #133–#137 (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL`)
+**Branch / PR:** `cursor/action-plan-closeout-sweep-d3a1` → #153  
+**Prior prod:** #139–#151 → https://www.steelbuild-pro.com
 
-| ID | Status | What shipped |
-|---|---|---|
-| **18** | **Done** | LoadingSkeleton / RegisterFetchBody / INLINE error gates across DMS, Contacts, field, ops, commercial pages |
-| **48** | In Progress | Toast helper adoption advanced; not universal |
-| **50** | In Progress | `withProjectId` on DMS Document/LinkedFolder, Contact, EmailAccount, DrawingReview/Transmittal, ProductionNote; org-level remain |
-| **102** | Blocked | Interactive UAT + GH Actions billing |
+## Closed this sweep
 
-## Next slices (suggested)
+**21 tracker IDs → Done**, including hygiene docs/tests **and** major page extracts:
 
-- Large page thins 21 / 23 / 27
-- Concurrent-edit E2E (52)
-- Residual toast/create gaps (Projects org-level, Schedule surface)
+| Cluster | IDs |
+|---|---|
+| Shells / structure | 20, 22, 25, 26, 36, 37, 57 |
+| Mutations / logic | 48, 50, 51, 53, 54, 56, 87, 93 |
+| UX / workflows | 75, 81, 83 |
+| Large page refactors | **21** (Submittals ~756), **23** (RFIs ~393), **27** (Drawings ~886) |
+
+## Tracker snapshot
+
+**Done 100 · In Progress 4 · Blocked 1** (of 105)  
+Open: **52, 77, 80, 88, 102**
+
+## Remaining (cannot close without owner/UAT)
+
+| ID | Why |
+|---|---|
+| **52** | Concurrent-edit E2E |
+| **77** | RFI field UAT |
+| **80** | Schedule / look-ahead field UAT |
+| **88** | Cross-page project-switch interactive UAT |
+| **102** | Full UAT blocked on staging + GH Actions billing |
+
+## Next (owner)
+
+1. Restore GH Actions billing / staging credentials  
+2. Run interactive UAT checklist (ties 77/80/88/102)  
+3. Optional Playwright for concurrent-edit (52)

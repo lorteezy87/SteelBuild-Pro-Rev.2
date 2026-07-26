@@ -12,6 +12,7 @@ Known near-duplicates and the **canonical** choice. Prefer the canonical path fo
 | BulkActionBar (RFIs) | `src/pages/rfis/BulkActionBar.jsx` vs `src/components/design-system/BulkActionBar.jsx` | **design-system** | Orphan page-local file **deleted**; RFIs imports design-system |
 | WeeklySummary | `src/components/dailylogs/WeeklySummary.jsx`, `src/pages/reports/WeeklySummary.jsx` | N/A (unused) | Both **deleted** (zero importers; PortfolioOverview mention was comment-only) |
 | Legacy PDF viewer folder | `src/components/viewer/` vs `src/components/drawings/viewer/` | **`src/components/drawings/viewer/`** | Dead `src/components/viewer/` **deleted** |
+| Status pills / badges | `design-system/StatusPill`, `shared/StatusBadge`, `desktop/module/StatusPill`, command `Pill` | **`design-system/StatusPill`** for app chrome; **command `Pill`** for control-center decks; **`StatusBadge`** for dense register cells | Keep role separation (ID 56). Prefer enums from `src/lib/enums.ts` for status strings. Do not merge into one mega-pill without a product decision. |
 
 ## Notes
 

@@ -9,7 +9,7 @@ import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { addDaysIso, applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
@@ -23,6 +23,8 @@ import ScheduleCommandCenter from "./schedule/ScheduleCommandCenter";
 import ScheduleBody from "./schedule/ScheduleBody";
 import { useScheduleModals } from "./schedule/useScheduleModals";
 import { useTaskSelection } from "./schedule/useTaskSelection";
+import { buildScheduleResourceAssignPatch } from "./schedule/scheduleAssignmentHelpers";
+import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
@@ -62,6 +64,22 @@ export default function Schedule() {
   const selection = useTaskSelection();
   const { selectedIds, setSelectedIds } = selection;
   const qc = useQueryClient();
+
+  useResetOnProjectChange(projectId, () => {
+    setShowDrawer(false);
+    setShowAddTask(false);
+    setShowBulkAdd(false);
+    setShowWbsBuilder(false);
+    setShowBulkResource(false);
+    setShowBulkDates(false);
+    setShowBulkDuration(false);
+    setShowBulkParent(false);
+    setShowBulkDeleteConfirm(false);
+    setSelectedTask(null);
+    setDeleteTarget(null);
+    setSelectedIds(new Set());
+    setExpandedTask(null);
+  });
 
   // useScheduleTasks is still .js and yields DB rows (RowWithAliases<"schedule_tasks">,
   // whose nullable columns are `string | null`). ScheduleTask is the loose view-model
@@ -175,7 +193,7 @@ export default function Schedule() {
       setSelectedTask(null);
       toast.success("Task updated");
     },
-    onError: (err: any) => toast.error("Update failed: " + err.message),
+    onError: (err: unknown) => toast.error(`Update failed: ${toUserErrorMessage(err)}`),
   });
 
   const reparentMut = useMutation({
@@ -191,7 +209,10 @@ export default function Schedule() {
       setSelectedIds(new Set());
       toast.success(vars.ids.length > 1 ? `Reparented ${vars.ids.length} tasks` : "Task moved");
     },
-    onError: (err: any) => { invalidateEntity(qc, "schedule_task", projectId); toast.error(err?.message || "Reparent failed"); },
+    onError: (err: unknown) => {
+      invalidateEntity(qc, "schedule_task", projectId);
+      toast.error(toUserErrorMessage(err, "Reparent failed"));
+    },
   });
 
   const createTaskMut = useMutation({
@@ -205,7 +226,7 @@ export default function Schedule() {
       setShowAddTask(false);
       toast.success("Task created");
     },
-    onError: (err: any) => toast.error("Create failed: " + err.message),
+    onError: (err: unknown) => toast.error(`Create failed: ${toUserErrorMessage(err)}`),
   });
 
   const deleteTaskMut = useMutation({
@@ -222,7 +243,7 @@ export default function Schedule() {
       });
       toast.success("Task deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   const bulkUpdateMut = useMutation({
@@ -248,7 +269,7 @@ export default function Schedule() {
         toast.success(`Updated ${variables.ids.length} tasks`);
       }
     },
-    onError: () => toast.error("Bulk update failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk update failed")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -272,14 +293,15 @@ export default function Schedule() {
         toast.success("Tasks deleted");
       }
     },
-    onError: () => toast.error("Bulk delete failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   const bulkResourceMut = useMutation({
     mutationFn: async ({ ids, resource_names }: { ids: string[]; resource_names: string }) => {
+      const patch = buildScheduleResourceAssignPatch(resource_names);
       const results = await batchProcess(
         ids,
-        (id) => entities.ScheduleTask.update(id, { resource_names, assigned_to: resource_names }),
+        (id) => entities.ScheduleTask.update(id, patch),
       );
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
@@ -297,7 +319,7 @@ export default function Schedule() {
         toast.success(`Resources assigned to ${results.succeeded.length} tasks`);
       }
     },
-    onError: () => toast.error("Bulk resource assignment failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk resource assignment failed")),
   });
 
   const bulkDateMut = useMutation({
@@ -335,7 +357,7 @@ export default function Schedule() {
         toast.success(`${results.succeeded.length} task date${results.succeeded.length === 1 ? "" : "s"} updated.${skippedMsg}`);
       }
     },
-    onError: (err: any) => toast.error(err?.message || "Bulk date update failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk date update failed")),
   });
 
   const bulkDurationMut = useMutation({
@@ -388,7 +410,7 @@ export default function Schedule() {
         toast.success(`${results.succeeded.length} task duration${results.succeeded.length === 1 ? "" : "s"} updated.${skippedMsg}`);
       }
     },
-    onError: (err: any) => toast.error(err?.message || "Bulk duration update failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk duration update failed")),
   });
 
   const handleBulkAdd = async (rows: any[]) => {
@@ -406,8 +428,8 @@ export default function Schedule() {
       invalidateEntity(qc, "schedule_task", projectId);
       setShowBulkAdd(false);
       toast.success(`Created ${rows.length} task${rows.length !== 1 ? "s" : ""}`);
-    } catch (err: any) {
-      toast.error("Bulk add failed: " + err.message);
+    } catch (err: unknown) {
+      toast.error(`Bulk add failed: ${toUserErrorMessage(err)}`);
     } finally {
       setBulkSaving(false);
     }
@@ -504,8 +526,8 @@ export default function Schedule() {
 
       invalidateEntity(qc, "schedule_task", projectId);
       toast.success(`Imported ${Object.keys(uidToDbId).length} tasks from ${file.name}`);
-    } catch (e: any) {
-      toast.error(e.message || "Import failed");
+    } catch (e: unknown) {
+      toast.error(toUserErrorMessage(e, "Import failed"));
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -545,9 +567,9 @@ export default function Schedule() {
         `Exported ${filename}${pageCount > 1 ? ` (${pageCount} pages)` : ""}`,
         { id: t },
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Schedule] PDF export failed:", err);
-      toast.error(`PDF export failed: ${err?.message || "unknown error"}`, { id: t });
+      toast.error(`PDF export failed: ${toUserErrorMessage(err, "unknown error")}`, { id: t });
     } finally {
       setExportingPdf(false);
     }

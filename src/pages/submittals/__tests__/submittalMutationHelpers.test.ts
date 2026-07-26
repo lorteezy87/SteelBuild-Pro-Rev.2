@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   appendSubmittalNotes,
   buildBulkSubmittalCreatePayload,
+  buildBulkUpdateRowPatch,
   classifyBulkOutcome,
   formatBulkSubmittalToast,
+  formatSheetResponseSaveToast,
   formatSubmittalWriteError,
   isSubmittalDuplicateNumberError,
+  splitCreateSubmittalPayload,
 } from "../submittalMutationHelpers";
 
 describe("appendSubmittalNotes", () => {
@@ -69,5 +72,60 @@ describe("buildBulkSubmittalCreatePayload", () => {
 
   it("throws when no project is selected", () => {
     expect(() => buildBulkSubmittalCreatePayload({}, null, "")).toThrow(/Select a project/);
+  });
+});
+
+describe("buildBulkUpdateRowPatch", () => {
+  it("appends notes and clears BIC on completed status", () => {
+    expect(
+      buildBulkUpdateRowPatch(
+        { notes: "prior" },
+        { status: "Released for Fabrication", ball_in_court: "EOR" },
+        "extra",
+      ),
+    ).toEqual({
+      status: "Released for Fabrication",
+      ball_in_court: null,
+      notes: "prior\n\nextra",
+    });
+  });
+
+  it("leaves BIC alone for non-closing patches without notes", () => {
+    expect(buildBulkUpdateRowPatch(null, { ball_in_court: "GC" })).toEqual({
+      ball_in_court: "GC",
+    });
+  });
+});
+
+describe("formatSheetResponseSaveToast", () => {
+  it("keeps dialog open on total failure", () => {
+    expect(formatSheetResponseSaveToast(0, 2)).toEqual({
+      level: "error",
+      message: "No sheet responses saved; 2 failed. The dialog remains open for retry.",
+      closeDialog: false,
+    });
+  });
+
+  it("closes on partial or full success", () => {
+    expect(formatSheetResponseSaveToast(1, 1).closeDialog).toBe(true);
+    expect(formatSheetResponseSaveToast(3, 0)).toEqual({
+      level: "success",
+      message: "3 sheet response(s) saved",
+      closeDialog: true,
+    });
+  });
+});
+
+describe("splitCreateSubmittalPayload", () => {
+  it("strips drawing_types from the insert payload", () => {
+    expect(
+      splitCreateSubmittalPayload({
+        title: "Beams",
+        drawing_types: ["Shop", "Erection"],
+      }),
+    ).toEqual({
+      chosenTypes: ["Shop", "Erection"],
+      submittalData: { title: "Beams" },
+    });
   });
 });

@@ -48,6 +48,11 @@ import {
   isFabReleaseBlocked,
   parseBlockedRfiNumbers,
 } from "@/lib/fabRelease/releaseStatus";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import {
+  applyOptimisticRowPatch,
+  shouldRollbackOptimistic,
+} from "@/lib/mutations/optimisticCache";
 
 const runStatusTriggers = runSubmittalStatusTriggers as unknown as (args: {
   submittal: Partial<Submittal> | null | undefined;
@@ -649,7 +654,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       toast.success("Submittal created");
     },
     onError: (err) => {
-      toast.error(`Failed to create submittal: ${err.message}`);
+      toast.error(`Failed to create submittal: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -676,15 +681,15 @@ export function useSubmittals(projectId: string | null | undefined) {
       await qc.cancelQueries({ queryKey });
       const previous = qc.getQueryData<Submittal[]>(queryKey);
       qc.setQueryData<Submittal[]>(queryKey, (old) =>
-        (old || []).map((s) =>
-          s.id === vars.id ? { ...s, ...vars } : s
-        )
+        applyOptimisticRowPatch(old, vars.id, vars as Partial<Submittal>),
       );
       return { previous };
     },
     onError: (err, _vars, context) => {
-      if (context?.previous) qc.setQueryData(queryKey, context.previous);
-      toast.error(`Failed to update submittal: ${err.message}`);
+      if (shouldRollbackOptimistic(context?.previous)) {
+        qc.setQueryData(queryKey, context.previous);
+      }
+      toast.error(`Failed to update submittal: ${toUserErrorMessage(err)}`);
     },
     onSettled: async () => {
       await invalidateAll();
@@ -706,7 +711,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       toast.success("Submittal deleted");
     },
     onError: (err) => {
-      toast.error(`Failed to delete submittal: ${err.message}`);
+      toast.error(`Failed to delete submittal: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -743,7 +748,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       toast.success("Round created");
     },
     onError: (err) => {
-      toast.error(`Failed to create round: ${err.message}`);
+      toast.error(`Failed to create round: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -762,7 +767,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       toast.success("Round updated");
     },
     onError: (err) => {
-      toast.error(`Failed to update round: ${err.message}`);
+      toast.error(`Failed to update round: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -782,9 +787,7 @@ export function useSubmittals(projectId: string | null | undefined) {
           );
           results.succeeded++;
         } catch (err: unknown) {
-          const msg =
-            (err as { message?: string } | undefined)?.message ?? String(err);
-          results.failed.push({ id, error: msg });
+          results.failed.push({ id, error: toUserErrorMessage(err) });
         }
       }
       if (results.failed.length > 0 && results.succeeded === 0) {
@@ -804,7 +807,7 @@ export function useSubmittals(projectId: string | null | undefined) {
     },
     onError: (err) => {
       invalidateAll();
-      toast.error(`Bulk update failed: ${err.message}`);
+      toast.error(`Bulk update failed: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -817,9 +820,7 @@ export function useSubmittals(projectId: string | null | undefined) {
           await entities.Submittal.delete(id);
           results.succeeded++;
         } catch (err: unknown) {
-          const msg =
-            (err as { message?: string } | undefined)?.message ?? String(err);
-          results.failed.push({ id, error: msg });
+          results.failed.push({ id, error: toUserErrorMessage(err) });
         }
       }
       if (results.failed.length > 0 && results.succeeded === 0) {
@@ -839,7 +840,7 @@ export function useSubmittals(projectId: string | null | undefined) {
     },
     onError: (err) => {
       invalidateAll();
-      toast.error(`Bulk delete failed: ${err.message}`);
+      toast.error(`Bulk delete failed: ${toUserErrorMessage(err)}`);
     },
   });
 

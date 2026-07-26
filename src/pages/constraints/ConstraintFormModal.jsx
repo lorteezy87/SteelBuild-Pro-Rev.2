@@ -21,24 +21,25 @@ import {
 
 const STATUS_OPTIONS = ["Open", "In Progress", "Resolved", "Closed"];
 
-export default function ConstraintFormModal({ projectId, constraint, wps, onClose, onSave }) {
-  const isEdit = !!constraint;
-  const [form, setForm] = useState(
-    constraint
-      ? { ...constraint }
-      : {
-          title: "",
-          constraint_type: "Other",
-          description: "",
-          project_area: "",
-          work_package_id: "",
-          assigned_to: "",
-          due_date: "",
-          status: "Open",
-          priority: "High",
-          project_id: projectId || "",
-        }
-  );
+export default function ConstraintFormModal({ projectId, constraint, prefill = null, wps, onClose, onSave }) {
+  // Prefill (e.g. RFI → constraint handoff) is create-only; edit requires a real id.
+  const isEdit = !!constraint?.id;
+  const [form, setForm] = useState(() => {
+    if (isEdit) return { ...constraint };
+    return {
+      title: "",
+      constraint_type: "Other",
+      description: "",
+      project_area: "",
+      work_package_id: "",
+      assigned_to: "",
+      due_date: "",
+      status: "Open",
+      priority: "High",
+      project_id: projectId || "",
+      ...(prefill || {}),
+    };
+  });
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
