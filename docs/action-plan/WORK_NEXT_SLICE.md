@@ -1,17 +1,28 @@
-# Action-plan — post-deploy checkpoint (2026-07-26)
+# Action-plan next slice — EmailInbox + SOV loading gates
 
-**Merged + prod:** #133 · #134 · #135 · #136 · #137 → https://www.steelbuild-pro.com  
-**Deployment:** `dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL`
+**Branch / PR:** `cursor/action-plan-commercial-loading-d3a1`  
+**Dates:** 2026-07-26  
+**Prior prod:** #133–#137 deployed (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL`)  
+**Open siblings:** #139–#145
 
-| ID | Status | What shipped |
-|---|---|---|
-| **18** | **Done** | `RegisterFetchBody` (thin CRUD/QC) + Photos/Safety INLINE gates |
-| **48** | In Progress | Toast hygiene across modals/import/Doc Control/commercial/inbox — not universal |
-| **50** | In Progress | `withProjectId` on modals, CSV imports, Doc Control creates, Backcharges/SOV import — upload pipelines + org-level remain |
-| **102** | Blocked | Interactive UAT + GH Actions billing |
+## Code (IDs 18 / 48)
 
-## Next slices (suggested)
+| File | Change |
+|---|---|
+| `EmailInbox.tsx` | List loader → `LoadingSkeleton` + error/retry via `toUserErrorMessage` |
+| `SOV.jsx` | Page-shell `LoadingSkeleton` + error/retry before `SovControlCenter` |
 
-- DMS UploadModal / DocumentEditModal / LinkedFolderBrowser create+toast
+## Still open
+
+- Merge #139–#145 (+ this)
+- BudgetHours page-shell gates + preset toast
 - Large page thins 21 / 23 / 27
 - Concurrent-edit E2E (52)
+- **Blocked:** 102
+
+## Validation
+
+```bash
+npx eslint src/pages/EmailInbox.tsx src/pages/SOV.jsx --quiet
+npx vitest run src/lib/mutations/__tests__/standardMutation.test.ts
+```
