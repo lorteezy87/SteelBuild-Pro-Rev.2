@@ -3,6 +3,7 @@ import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Modal, Button } from "@/components/design-system";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const INITIAL_FORM = {
   first_name: "",
@@ -42,13 +43,14 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
   });
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.Contact.create(data),
+    mutationFn: (data) =>
+      entities.Contact.create(withProjectId(data, data.project_id || projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       toast.success("Contact created");
       onClose();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to create contact")),
   });
 
   const handleChange = (field, value) => {

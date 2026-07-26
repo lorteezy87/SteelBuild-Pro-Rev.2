@@ -9,6 +9,8 @@ import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Upload } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
 import { CONTACT_TYPE } from "@/lib/enums";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 
 const TYPE_COLORS = {
   [CONTACT_TYPE.OWNER]: "var(--status-error)",
@@ -31,7 +33,13 @@ export default function Contacts() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState("grid");
 
-  const { data: contacts = [], isLoading } = useQuery({
+  const {
+    data: contacts = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["contacts", projectId],
     queryFn: () =>
       projectId
@@ -46,24 +54,28 @@ export default function Contacts() {
   });
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.Contact.create(data),
+    mutationFn: (data) =>
+      entities.Contact.create(withProjectId(data, data.project_id || projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       toast.success("Contact created");
       setShowForm(false);
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to create contact")),
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => entities.Contact.update(id, data),
+    mutationFn: ({ id, data }) => {
+      const pid = projectId || data.project_id;
+      return entities.Contact.update(id, pid ? withProjectId(data, pid) : data);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       setEditingContact(null);
       setShowForm(false);
       toast.success("Contact updated");
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to update contact")),
   });
 
   const deleteMut = useMutation({
@@ -73,7 +85,7 @@ export default function Contacts() {
       setDeleteTarget(null);
       toast.success("Contact deleted");
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Delete failed")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to delete contact")),
   });
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : null;
@@ -105,30 +117,12 @@ export default function Contacts() {
 
   const typeOptions = ["all", ...Object.values(CONTACT_TYPE)];
 
-  if (isLoading) {
-    return (
-      <div
-        className="sb-dashboard-reference-page"
-        style={{
-          textAlign: "center",
-          padding: "48px 24px",
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--text-muted)",
-          letterSpacing: "0.12em",
-        }}
-      >
-        LOADING CONTACTS...
-      </div>
-    );
-  }
-
   return (
     <div className="sb-dashboard-reference-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
         title="Contacts"
-        count={filtered.length}
+        count={isLoading ? undefined : filtered.length}
         unit=" · CONTACTS"
         subtitle={`Project directory · Owner / GC / Engineer / Subs / Suppliers / Inspectors${filterType !== "all" ? ` · filtered: ${filterType}` : ""}`}
       >
@@ -247,14 +241,27 @@ export default function Contacts() {
         </div>
       </div>
 
-      {/* List */}
-      <ContactList
-        contacts={filtered}
-        view={view}
-        onEdit={(c) => { setEditingContact(c); setShowForm(true); }}
-        onDelete={setDeleteTarget}
-        onAdd={() => { setEditingContact(null); setShowForm(true); }}
-      />
+      <RegisterFetchBody
+        isLoading={isLoading}
+        isError={isError}
+        errorMessage={toUserErrorMessage(error, "Failed to load contacts")}
+        onRetry={() => refetch()}
+        totalCount={contacts.length}
+        filteredCount={filtered.length}
+        emptyTitle="No contacts yet"
+        emptyBody="Add owner, GC, engineer, sub, and supplier contacts for this project directory."
+        emptyActionLabel="+ New Contact"
+        onEmptyAction={() => { setEditingContact(null); setShowForm(true); }}
+        onClearFilters={() => { setFilterType("all"); setSearch(""); }}
+      >
+        <ContactList
+          contacts={filtered}
+          view={view}
+          onEdit={(c) => { setEditingContact(c); setShowForm(true); }}
+          onDelete={setDeleteTarget}
+          onAdd={() => { setEditingContact(null); setShowForm(true); }}
+        />
+      </RegisterFetchBody>
 
       {(showForm || editingContact) && (
         <ContactFormModal

@@ -54,7 +54,7 @@ Deployed **2026-07-24** to https://www.steelbuild-pro.com from `main` including 
 
 **2026-07-26 (deploy batch):** Merged **#133–#137** to `main` and deployed to production (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL` → https://www.steelbuild-pro.com). ID **18** Done; IDs **48**/**50** advanced. Local vitest/eslint/build green; GH Actions still billing-blocked.
 
-**2026-07-26 (open):** DMS scoping PR — `UploadModal` / `LinkedFolderBrowser` Document.create + Edit/Detail toast hygiene (IDs 48/50).
+**2026-07-26 (contacts-dms):** Contacts `RegisterFetchBody` + Contact/`LinkedFolder` create fail-closed + Vendors toast hygiene (`cursor/action-plan-contacts-dms-d3a1`). Sibling PR **#139** still open for DMS Upload/Edit/LinkedFolderBrowser. Tracker: Done **79** · In Progress **25** · Blocked **1**.
 
 ## How to refresh next time
 
