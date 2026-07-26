@@ -51,7 +51,7 @@ Status key:
 | 15 | Done (automated) | Corrected-flow retest harness — 18 files / 155 tests PASS; interactive UAT = ID 102 | `npm run test:corrected-flows`, `RETEST_CORRECTED_FLOWS.md` |
 | 16 | Done | `react-hooks/rules-of-hooks` clean across `src/` | `npm run check:hooks` |
 | 17 | Done | Console/Sentry review; residual CSP-RO/staging-ops/noise documented | `WORK_14_17.md` |
-| 18 | Partial | Critical modules have loading/empty patterns; not universal | existing control centers |
+| 18 | Completed | Shared `RegisterFetchBody` + wired Warranty/CR/Closeout/Punchlist/QC; CCs already patterned | `RegisterFetchStates.jsx` + tests; `WORK_NEXT_SLICE.md` |
 | 19 | Completed | Null project guards + `withProjectId` on high-traffic creates | `standardMutation.withProjectId` + wired pages |
 | 20 | Partial | Modal project-switch safety varies by module | remaining risk |
 
@@ -72,7 +72,7 @@ Status key:
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
 | 47 | Completed | Standard mutation helpers introduced | `src/lib/mutations/standardMutation.ts` |
-| 48 | Partial | `toUserErrorMessage` on project-scoped form modals + Expenses/Scope/Photos/ProductionNotes (+ prior field/commercial); page Warranty/QC/CR/Closeout/Punchlist on PR #133; not universal | `WORK_NEXT_SLICE.md` |
+| 48 | Partial | `toUserErrorMessage` on form modals + Expenses/Scope/Photos/ProductionNotes + Warranty/QC/CR/Closeout/Punchlist (+ prior field/commercial); not universal | `WORK_NEXT_SLICE.md` |
 | 49 | Completed | `invalidateAfterMutation` helper | same + cacheRegistry |
 | 50 | Partial | Modal creates fail-closed (ActionItem/Scope/Delivery/Photo/Risk/Resource/ProductionNote) + prior page wiring; Contacts/Vendors/Projects/FeatureFlags + drawing upload pipelines still open | `WORK_NEXT_SLICE.md` |
 | 51 | Partial | Critical optimistic paths reviewed in prior PRs; not universal | — |

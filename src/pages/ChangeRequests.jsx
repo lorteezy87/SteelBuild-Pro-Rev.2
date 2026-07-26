@@ -10,7 +10,8 @@ import { CommandBar, KpiTile } from "@/components/design-system";
 import { formatCurrency } from "@/components/shared/formatters";
 import { Plus } from "lucide-react";
 import { CHANGE_REQUEST_STATUS, PRIORITY } from "@/lib/enums";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 
 export default function ChangeRequests() {
   const projectId = useProjectId();
@@ -21,7 +22,13 @@ export default function ChangeRequests() {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const { data: changeRequests = [] } = useQuery({
+  const {
+    data: changeRequests = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["change-requests", projectId],
     queryFn: () =>
       projectId
@@ -61,7 +68,7 @@ export default function ChangeRequests() {
       setEditing(null);
       toast.success("Request created");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const updateMut = useMutation({
@@ -72,7 +79,7 @@ export default function ChangeRequests() {
       setEditing(null);
       toast.success("Request updated");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -86,7 +93,7 @@ export default function ChangeRequests() {
       setDeleteTarget(null);
       toast.success("Request deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   const handleSave = (data) => {
@@ -170,7 +177,21 @@ export default function ChangeRequests() {
       )}
 
       {/* Change Requests List */}
-      <ChangeRequestList requests={filtered} onEdit={(cr) => {setEditing(cr); setShowForm(true);}} onDelete={setDeleteTarget} />
+      <RegisterFetchBody
+        isLoading={isLoading}
+        isError={isError}
+        errorMessage={toUserErrorMessage(error, "Failed to load change requests")}
+        onRetry={() => refetch()}
+        totalCount={changeRequests.length}
+        filteredCount={filtered.length}
+        emptyTitle="No change requests yet"
+        emptyBody="Log scope or cost change requests for this project."
+        emptyActionLabel="+ New Request"
+        onEmptyAction={() => { setEditing(null); setShowForm(true); }}
+        onClearFilters={() => { setFilterStatus("all"); setFilterPriority("all"); }}
+      >
+        <ChangeRequestList requests={filtered} onEdit={(cr) => {setEditing(cr); setShowForm(true);}} onDelete={setDeleteTarget} />
+      </RegisterFetchBody>
 
       {/* Delete Dialog */}
       <DeleteDialog

@@ -46,6 +46,7 @@ Notes:
 
 ## Recently released
 - 2026-07-26 · cursor-ap-modal-scoping-d3a1 · Modal withProjectId + toast hygiene (ActionItem/Scope/Delivery/Photo/Risk/Resource/ProductionNote; Expenses/ScopeExclusions).
+- 2026-07-26 · cursor-ap-loading-toasts-d3a1 · RegisterFetchBody + loading/empty/error on Warranty/CR/Closeout/Punchlist/QC; toast helper adoption (ID 18 Done / 48 advanced).
 - 2026-07-26 · cursor-ap-next-slice-d3a1 · Drawings mutation helpers + FabRelease/Contract/Schedule/Deliveries create scoping on PR #123.
 - 2026-07-26 · cursor-ap-next-slice-d3a1 · RFIs helpers + ops/email/escalate withProjectId adoption on PR #123.
 - 2026-07-26 · cursor-ap-next-slice-d3a1 · Mutation adoption continuation (Submittals helpers, commercial withProjectId, toast helper adoption) on PR #123.
