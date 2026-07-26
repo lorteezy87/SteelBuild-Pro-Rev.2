@@ -9,6 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const TYPES = [
   "Steel Fabrication",
@@ -79,14 +80,14 @@ export default function Inspections() {
   );
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.Inspection.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.Inspection.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inspections", projectId] });
       setShowForm(false);
       setEditing(null);
       toast.success("Inspection created");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const updateMut = useMutation({
@@ -97,7 +98,7 @@ export default function Inspections() {
       setEditing(null);
       toast.success("Inspection updated");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -111,7 +112,7 @@ export default function Inspections() {
       setDeleteTarget(null);
       toast.success("Inspection deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   // C3 — Convert inspection deficiencies into punchlist items.
@@ -129,25 +130,26 @@ export default function Inspections() {
         const desc = count > 1
           ? `[${inspNumber} #${i + 1}/${count}] ${baseDescription}`
           : `[${inspNumber}] ${baseDescription}`;
-        items.push(await entities.PunchlistItem.create({
-          project_id: inspection.project_id,
-          description: desc,
-          category: "Other",
-          location: inspection.location || "",
-          assigned_to: "",
-          priority: inspection.sign_off_status === "Rejected" ? "High" : "Medium",
-          status: "Open",
-          percent_complete: 0,
-          notes: inspection.corrective_actions || "",
-          inspection_id: inspection.id,
-          metadata: {
+        items.push(await entities.PunchlistItem.create(
+          withProjectId({
+            description: desc,
+            category: "Other",
+            location: inspection.location || "",
+            assigned_to: "",
+            priority: inspection.sign_off_status === "Rejected" ? "High" : "Medium",
+            status: "Open",
+            percent_complete: 0,
+            notes: inspection.corrective_actions || "",
             inspection_id: inspection.id,
-            inspection_number: inspNumber,
-            inspection_type: inspection.inspection_type,
-            deficiency_index: i + 1,
-            deficiency_count: count,
-          },
-        }));
+            metadata: {
+              inspection_id: inspection.id,
+              inspection_number: inspNumber,
+              inspection_type: inspection.inspection_type,
+              deficiency_index: i + 1,
+              deficiency_count: count,
+            },
+          }, projectId || inspection.project_id),
+        ));
       }
       // Stamp the inspection so the convert button hides on re-render
       await entities.Inspection.update(inspection.id, {
@@ -168,7 +170,7 @@ export default function Inspections() {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       toast.success(`Created ${count} punchlist item${count === 1 ? "" : "s"} from inspection`);
     },
-    onError: (err) => toast.error(`Convert failed: ${err.message}`),
+    onError: (err) => toast.error(`Convert failed: ${toUserErrorMessage(err)}`),
   });
 
   const handleSave = (data) => {

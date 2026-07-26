@@ -10,6 +10,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import { useTransmittals } from "@/hooks/useTransmittals";
 import type { TransmittalAttachment, TransmittalRow } from "@/hooks/useTransmittals";
@@ -292,17 +293,19 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!projectId) throw new Error("Select a project before logging a transmittal");
       const patch = headerPatch(form);
       if (!patch.transmittal_number) throw new Error("Transmittal number is required");
-      const transmittal = await entities.DrawingTransmittal.create({ project_id: projectId, ...patch } as never);
+      const transmittal = await entities.DrawingTransmittal.create(
+        withProjectId({ ...patch } as Record<string, unknown>, projectId) as never,
+      );
       const transmittalId = (transmittal as { id: string }).id;
       for (const revisionId of selected) {
-        await entities.DrawingTransmittalItem.create({
-          project_id: projectId,
-          transmittal_id: transmittalId,
-          drawing_revision_id: revisionId,
-        } as never);
+        await entities.DrawingTransmittalItem.create(
+          withProjectId({
+            transmittal_id: transmittalId,
+            drawing_revision_id: revisionId,
+          }, projectId) as never,
+        );
       }
       return selected.size;
     },
@@ -313,7 +316,7 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     },
     onError: (mutationError) => {
       queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
-      toast.error("Failed to log transmittal: " + ((mutationError as Error)?.message || "unknown"));
+      toast.error(`Failed to log transmittal: ${toUserErrorMessage(mutationError, "unknown")}`);
     },
   });
 
@@ -330,11 +333,12 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
       const additions = [...selected].filter((revisionId) => !existingByRevision.has(revisionId));
       const removals = transmittal.items.filter((item) => !selected.has(item.drawing_revision_id));
       await Promise.all([
-        ...additions.map((revisionId) => entities.DrawingTransmittalItem.create({
-          project_id: projectId,
-          transmittal_id: transmittal.id,
-          drawing_revision_id: revisionId,
-        } as never)),
+        ...additions.map((revisionId) => entities.DrawingTransmittalItem.create(
+          withProjectId({
+            transmittal_id: transmittal.id,
+            drawing_revision_id: revisionId,
+          }, projectId) as never,
+        )),
         ...removals.map((item) => entities.DrawingTransmittalItem.delete(item.id)),
       ]);
       return selected.size;
@@ -346,7 +350,7 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     },
     onError: (mutationError) => {
       queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
-      toast.error("Failed to update transmittal: " + ((mutationError as Error)?.message || "unknown"));
+      toast.error(`Failed to update transmittal: ${toUserErrorMessage(mutationError, "unknown")}`);
     },
   });
 
@@ -363,7 +367,7 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     },
     onError: (mutationError) => {
       queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
-      toast.error("Failed to delete transmittal: " + ((mutationError as Error)?.message || "unknown"));
+      toast.error(`Failed to delete transmittal: ${toUserErrorMessage(mutationError, "unknown")}`);
     },
   });
 

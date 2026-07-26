@@ -15,6 +15,7 @@ import { PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatPercent, roundCurrency } from "../components/shared/formatters";
 import { getNextNumber } from "../components/shared/numberSequencing";
 import { toast } from "sonner";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import SovImportReviewModal from "../components/sov/SovImportReviewModal";
 import {
@@ -186,21 +187,18 @@ export default function SOV() {
   /* ── Mutations ── */
   const createMut = useMutation({
     mutationFn: async (d) => {
-      if (!activeProject?.id) {
-        throw new Error("Select a project before creating a SOV item.");
-      }
+      const scoped = withProjectId(d, activeProject?.id);
       let sovId;
       try {
-        sovId = await getNextNumber(activeProject.id, "SOV");
+        sovId = await getNextNumber(scoped.project_id, "SOV");
       } catch (e) {
         console.warn("[SOV] getNextNumber failed:", e?.message);
         throw new Error("Unable to reserve a SOV id. Please retry.");
       }
       if (!sovId) throw new Error("Unable to reserve a SOV id. Please retry.");
       return entities.SOVItem.create({
-        ...d,
+        ...scoped,
         sov_id: sovId,
-        project_id: d.project_id || activeProject?.id,
       });
     },
     onSuccess: () => {
@@ -210,7 +208,7 @@ export default function SOV() {
       toast.success("SOV item created");
     },
     onError: (err) => {
-      toast.error("Failed to create SOV item: " + (err?.message || "Check that a project is selected and try again."));
+      toast.error(`Failed to create SOV item: ${toUserErrorMessage(err, "Check that a project is selected and try again.")}`);
     },
   });
 
@@ -223,7 +221,7 @@ export default function SOV() {
       toast.success("SOV item updated");
     },
     onError: (err) => {
-      toast.error("Failed to update SOV item: " + (err?.message || "Unknown error"));
+      toast.error(`Failed to update SOV item: ${toUserErrorMessage(err)}`);
     },
   });
 
@@ -234,8 +232,8 @@ export default function SOV() {
       setDeleteTarget(null);
       toast.success("SOV item deleted");
     },
-    onError: () => {
-      toast.error("Failed to delete SOV item");
+    onError: (err) => {
+      toast.error(toUserErrorMessage(err, "Failed to delete SOV item"));
     },
   });
 
@@ -246,7 +244,7 @@ export default function SOV() {
       qc.invalidateQueries({ queryKey: ["sov-items"] });
       toast.success("Filled to 100%");
     },
-    onError: () => toast.error("Failed to update"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to update")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -258,7 +256,7 @@ export default function SOV() {
       setBulkDeleteOpen(false);
       toast.success("Deleted selected SOV items");
     },
-    onError: () => toast.error("Bulk delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   const bulkStatusMut = useMutation({
@@ -269,7 +267,7 @@ export default function SOV() {
       setSelectedIds(new Set());
       toast.success("Status updated");
     },
-    onError: () => toast.error("Bulk status update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk status update failed")),
   });
 
   const bulkFillMut = useMutation({
@@ -280,7 +278,7 @@ export default function SOV() {
       setSelectedIds(new Set());
       toast.success("Filled selected to 100%");
     },
-    onError: () => toast.error("Bulk fill failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk fill failed")),
   });
 
   const toggleSelect = (id) => setSelectedIds((prev) => {
@@ -366,7 +364,7 @@ export default function SOV() {
       setReviewOpen(true);
     } catch (err) {
       console.error("SOV import parse failed:", err);
-      toast.error("Could not read file: " + (err?.message || "unknown error"));
+      toast.error(`Could not read file: ${toUserErrorMessage(err, "unknown error")}`);
     } finally {
       setImporting(false);
     }
@@ -377,14 +375,15 @@ export default function SOV() {
     if (!validRecords?.length) return;
     setImporting(true);
     try {
-      await entities.SOVItem.bulkCreate(validRecords);
+      const scoped = validRecords.map((row) => withProjectId(row, activeProject?.id));
+      await entities.SOVItem.bulkCreate(scoped);
       await qc.invalidateQueries({ queryKey: ["sov-items"] });
       toast.success(`Imported ${validRecords.length} SOV line item${validRecords.length === 1 ? "" : "s"}`);
       setReviewOpen(false);
       setStagedImport([]);
     } catch (err) {
       console.error("SOV import failed:", err);
-      toast.error("Import failed: " + (err?.message || "unknown error"));
+      toast.error(`Import failed: ${toUserErrorMessage(err, "unknown error")}`);
     } finally {
       setImporting(false);
     }

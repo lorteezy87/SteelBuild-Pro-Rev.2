@@ -8,6 +8,8 @@ import ProjectCloseoutChecklist from "@/components/closeout/ProjectCloseoutCheck
 import ProjectCloseoutSummary from "@/components/closeout/ProjectCloseoutSummary";
 import { CommandBar } from "@/components/design-system";
 import { buildCloseoutDbPayload } from "@/lib/closeout/closeoutPayload";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 
 export default function ProjectCloseout() {
   const projectId = useProjectId();
@@ -20,7 +22,13 @@ export default function ProjectCloseout() {
   });
 
   const closeoutQueryKey = ["closeouts", projectId];
-  const { data: closeouts = [] } = useQuery({
+  const {
+    data: closeouts = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: closeoutQueryKey,
     queryFn: () =>
       projectId
@@ -36,12 +44,12 @@ export default function ProjectCloseout() {
   const qc = useQueryClient();
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.ProjectCloseout.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.ProjectCloseout.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: closeoutQueryKey });
       toast.success("Closeout record created");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const updateMut = useMutation({
@@ -56,7 +64,7 @@ export default function ProjectCloseout() {
     },
     onError: (err, _variables, context) => {
       if (context?.previous) qc.setQueryData(closeoutQueryKey, context.previous);
-      toast.error(err.message);
+      toast.error(toUserErrorMessage(err, "Update failed"));
     },
     onSuccess: (updated) => {
       qc.setQueryData(closeoutQueryKey, (current = []) =>
@@ -95,7 +103,17 @@ export default function ProjectCloseout() {
         subtitle="Handover checklist · final billing summary · lessons learned"
       />
 
-      {!projectCloseout ? (
+      {isLoading || isError ? (
+        <RegisterFetchBody
+          isLoading={isLoading}
+          isError={isError}
+          errorMessage={toUserErrorMessage(error, "Failed to load closeout")}
+          onRetry={() => refetch()}
+          totalCount={0}
+          filteredCount={0}
+          emptyTitle="No closeout record"
+        />
+      ) : !projectCloseout ? (
         <ProjectCloseoutForm projectId={projectId} onSave={handleSave} />
       ) : (
         <>
@@ -138,7 +156,8 @@ export default function ProjectCloseout() {
               closeout={projectCloseout}
               onUpdate={handleChecklistUpdate}
             />
-          )}          {activeTab === "lessons" && <ProjectCloseoutLessons closeout={projectCloseout} />}
+          )}
+          {activeTab === "lessons" && <ProjectCloseoutLessons closeout={projectCloseout} />}
         </>
       )}
     </div>

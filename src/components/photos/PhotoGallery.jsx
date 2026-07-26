@@ -18,6 +18,7 @@ import {
   Save,
 } from "lucide-react";
 import PhotoThumb from "./PhotoThumb";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const CATEGORY_COLORS = {
   Progress: "var(--status-info)",
@@ -95,7 +96,7 @@ export default function PhotoGallery({ photos = [] }) {
       qc.invalidateQueries({ queryKey: ["photos"] });
       toast.success("Photo deleted");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   const updateMutation = useMutation({
@@ -104,7 +105,7 @@ export default function PhotoGallery({ photos = [] }) {
       qc.invalidateQueries({ queryKey: ["photos"] });
       toast.success("Photo updated");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const goPrev = useCallback(() => {

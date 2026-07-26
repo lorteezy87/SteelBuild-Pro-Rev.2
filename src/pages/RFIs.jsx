@@ -44,6 +44,13 @@ import NudgeDraftModal from "./rfis/NudgeDraftModal";
 import { buildRfiAgenda } from "@/lib/commandCenter/rfiAgenda";
 import RfiControlCenter from "./rfis/RfiControlCenter";
 import { calcWpProgress } from "@/utils/projectKpis";
+import {
+  buildRfiAlertPayload,
+  buildRfiAttachmentDocumentPayload,
+  buildRfiCreatePayload,
+  formatBulkRfiToast,
+  formatRfiNotifyError,
+} from "./rfis/rfiMutationHelpers";
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
@@ -112,7 +119,7 @@ export default function RFIs() {
 
   /* ── Mutations ── */
   const createMut = useMutation({
-    mutationFn: (data) => entities.RFI.create(data),
+    mutationFn: (data) => entities.RFI.create(buildRfiCreatePayload(data, projectId)),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, rfiQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       await invalidateCrudQueries(qc, rfiQueryKeys);
@@ -156,11 +163,8 @@ export default function RFIs() {
       const succeededIds = new Set(results.succeeded.map(({ item }) => item));
       setSelectedIds((current) => new Set([...current].filter((id) => !succeededIds.has(id))));
       await invalidateCrudQueries(qc, rfiQueryKeys);
-      if (results.failed.length > 0) {
-        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
-      } else {
-        toast.success("RFIs updated");
-      }
+      const toastInfo = formatBulkRfiToast("updated", results.succeeded.length, results.failed.length);
+      toast[toastInfo.level](toastInfo.message);
     },
     onError: (e) => toastCrudError(e, "Bulk update failed"),
   });
@@ -174,17 +178,13 @@ export default function RFIs() {
       return results;
     },
     onSuccess: async (results) => {
-      const count = results.succeeded.length;
       const deletedIds = new Set(results.succeeded.map(({ item }) => item));
       setSelectedIds((current) => new Set([...current].filter((id) => !deletedIds.has(id))));
       setShowBulkDelete(false);
       if (selectedRFI && deletedIds.has(selectedRFI.id)) setSelectedRFI(null);
       await invalidateCrudQueries(qc, rfiQueryKeys);
-      if (results.failed.length > 0) {
-        toast.warning(`${count} deleted, ${results.failed.length} failed`);
-      } else {
-        toast.success(`${count} RFI${count === 1 ? "" : "s"} deleted`);
-      }
+      const toastInfo = formatBulkRfiToast("deleted", results.succeeded.length, results.failed.length);
+      toast[toastInfo.level](toastInfo.message);
     },
     onError: (e) => toastCrudError(e, "Bulk delete failed"),
   });
@@ -238,16 +238,15 @@ export default function RFIs() {
           const liveProjectName = projectMap[r.project_id] || "";
           const alertTitle = isOD ? `${r.rfi_number} OVERDUE — ${daysLate}d` : `${r.rfi_number} due in ≤3 days`;
           if (existingTitles.has(alertTitle)) continue;
-          await entities.Alert.create({
+          await entities.Alert.create(buildRfiAlertPayload({
             alert_type: "RFI_Overdue",
             severity: r.priority === "Critical" || daysLate >= 7 ? "Critical" : daysLate >= 3 || r.priority === "High" ? "High" : "Medium",
             title: alertTitle,
             description: `${r.rfi_number}: "${(r.title || "").slice(0, 60)}" · BIC: ${r.ball_in_court || "Contractor"} · Priority: ${r.priority}`,
-            project_id: r.project_id,
             project_name: liveProjectName,
             related_record_id: r.id,
             record_type: "RFI",
-          });
+          }, r.project_id));
           alertsCreatedRef.current.add(r.id);
         }
       } catch (e) {
@@ -261,21 +260,20 @@ export default function RFIs() {
   /* ── Notify field of an answered RFI (slice 4 downstream action) ── */
   const notifyFieldMut = useMutation({
     mutationFn: (r) =>
-      entities.Alert.create({
+      entities.Alert.create(buildRfiAlertPayload({
         alert_type: "RFI_Field_Action",
         severity: r.priority === "Critical" ? "Critical" : r.priority === "High" ? "High" : "Medium",
         title: `${r.rfi_number || "RFI"} answered — field action`,
         description: `"${(r.title || "RFI").slice(0, 60)}" · Answer: ${(r.answer || "see RFI").slice(0, 90)}`,
-        project_id: r.project_id,
         project_name: projectMap[r.project_id] || "",
         related_record_id: r.id,
-      }),
+      }, r.project_id)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["alerts"] });
       qc.invalidateQueries({ queryKey: ["alerts-nav"] });
       toast.success("Field notified — alert posted");
     },
-    onError: (e) => toast.error(`Couldn't notify field: ${e?.message || "unknown error"}`),
+    onError: (e) => toast.error(formatRfiNotifyError(e)),
   });
 
   const uploadRfiPdfDocuments = async (rfiRecord, files = []) => {
@@ -294,8 +292,7 @@ export default function RFIs() {
       for (const file of files) {
         try {
           const uploaded = await integrations.Core.UploadFile({ file, workflow: "attachment" });
-          await entities.Document.create({
-            project_id: rfiRecord.project_id || projectId,
+          await entities.Document.create(buildRfiAttachmentDocumentPayload({
             project_name: rfiRecord.project_name || project?.name || "",
             rfi_id: rfiRecord.id,
             display_name: file.name,
@@ -314,7 +311,7 @@ export default function RFIs() {
             uploaded_by: uploadedBy || "Unknown",
             uploaded_date: now,
             tags: ["RFI", rfiRecord.rfi_number || rfiRecord.id].filter(Boolean),
-          });
+          }, rfiRecord.project_id || projectId));
           succeeded += 1;
         } catch (error) {
           failed.push({ name: file.name, message: error?.message || "Upload failed" });

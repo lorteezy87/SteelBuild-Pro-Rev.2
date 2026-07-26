@@ -18,6 +18,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 
 // Local aliases so the ~30 call sites below don't need to change. Both
@@ -701,7 +702,7 @@ export default function ContractManagement() {
 
   // ── SOV Item Mutations ───────────────────────────────────────────────────
   const createSOVMut = useMutation({
-    mutationFn: (data) => entities.SOVItem.create({ ...data, project_id: projectId }),
+    mutationFn: (data) => entities.SOVItem.create(withProjectId(data, projectId)),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, sovQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       await invalidateCrudQueries(qc, sovQueryKeys);

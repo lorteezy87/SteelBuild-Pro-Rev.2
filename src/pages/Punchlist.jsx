@@ -13,6 +13,8 @@ import { makePunchCreateOp, newClientOpId, isLikelyOfflineError } from "@/lib/fi
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 
 export default function Punchlist() {
   const projectId = useProjectId();
@@ -39,7 +41,13 @@ export default function Punchlist() {
   };
   const clearSelection = () => setSelectedIds([]);
 
-  const { data: rawPunchlist = [], isLoading } = useQuery({
+  const {
+    data: rawPunchlist = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["punchlist", projectId],
     queryFn: () =>
       projectId
@@ -69,8 +77,7 @@ export default function Punchlist() {
     : null;
 
   const createMut = useMutation({
-    mutationFn: (data) =>
-      entities.PunchlistItem.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.PunchlistItem.create(withProjectId(data, projectId)),
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       setShowForm(false);
@@ -88,14 +95,19 @@ export default function Punchlist() {
       // retry, so a lost-response replay can't mint a duplicate (punchlist_items
       // has a partial-unique index on client_op_id — see baseline schema).
       if (isLikelyOfflineError(err)) {
-        const record = { ...data, project_id: data.project_id || projectId };
-        enqueueOutbox(makePunchCreateOp(record, record.client_op_id, Date.now()));
-        setShowForm(false);
-        setEditing(null);
-        toast.message("Saved offline — will sync when you're back online");
-        return;
+        try {
+          const record = withProjectId(data, projectId);
+          enqueueOutbox(makePunchCreateOp(record, record.client_op_id, Date.now()));
+          setShowForm(false);
+          setEditing(null);
+          toast.message("Saved offline — will sync when you're back online");
+          return;
+        } catch (scopeErr) {
+          toast.error(scopeErr.message || err.message);
+          return;
+        }
       }
-      toast.error(err.message);
+      toast.error(toUserErrorMessage(err, "Create failed"));
     },
   });
 
@@ -127,7 +139,7 @@ export default function Punchlist() {
         logActivity("punchlist_item", "updated", updated, { projectId });
       }
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -142,7 +154,7 @@ export default function Punchlist() {
       toast.success("Item deleted");
       logActivity("punchlist_item", "deleted", { id: deletedId }, { projectId });
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   // C4 — Batch close-out with text signature.
@@ -186,7 +198,7 @@ export default function Punchlist() {
       setCloseoutSignature("");
       setSelectedIds([]);
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Close-out failed")),
   });
 
   const handleSave = (data) => {
@@ -299,13 +311,31 @@ export default function Punchlist() {
       {showForm && <PunchlistFormModal projectId={projectId} item={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
 
       {/* Punchlist */}
-      <PunchlistList
-        items={filtered}
-        selectedIds={selectedIds}
-        onToggleSelect={toggleSelect}
-        onEdit={(item) => { setEditing(item); setShowForm(true); }}
-        onDelete={setDeleteTarget}
-      />
+      <RegisterFetchBody
+        isLoading={isLoading}
+        isError={isError}
+        errorMessage={toUserErrorMessage(error, "Failed to load punchlist")}
+        onRetry={() => refetch()}
+        totalCount={punchlist.length}
+        filteredCount={filtered.length}
+        emptyTitle="No punchlist items yet"
+        emptyBody="Track punch items and close them out as work completes."
+        emptyActionLabel="+ New Item"
+        onEmptyAction={() => { setEditing(null); setShowForm(true); }}
+        onClearFilters={() => {
+          setFilterStatus("all");
+          setFilterCategory("all");
+          setFilterPriority("all");
+        }}
+      >
+        <PunchlistList
+          items={filtered}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onEdit={(item) => { setEditing(item); setShowForm(true); }}
+          onDelete={setDeleteTarget}
+        />
+      </RegisterFetchBody>
 
       {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Item" description="Delete this record? This cannot be undone." />

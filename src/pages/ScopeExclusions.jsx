@@ -9,6 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
 import { Check, X, Info, Search, Upload } from "lucide-react";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -47,7 +48,7 @@ export default function ScopeExclusions() {
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.ScopeItem.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item updated"); setShowForm(false); setEditing(null); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   // Lightweight checkbox toggle — does not open the form modal. Writes the
@@ -61,7 +62,7 @@ export default function ScopeExclusions() {
         ...(is_completed ? { in_progress: false, in_progress_at: null } : {}),
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   // Toggle the in-progress flag. If the row is complete, this is a no-op at
@@ -73,13 +74,13 @@ export default function ScopeExclusions() {
         in_progress_at: in_progress ? new Date().toISOString() : null,
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => entities.ScopeItem.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item deleted"); setDeleteTarget(null); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   const handleSave = (data) => {
@@ -108,7 +109,7 @@ export default function ScopeExclusions() {
       toast.success(`Updated ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
       clearSelection();
     } catch (e) {
-      toast.error("Bulk update failed: " + (e?.message || "Unknown error"));
+      toast.error(`Bulk update failed: ${toUserErrorMessage(e, "Unknown error")}`);
     } finally {
       setBulkActionBusy(false);
     }
@@ -125,7 +126,7 @@ export default function ScopeExclusions() {
       toast.success(`Deleted ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
       clearSelection();
     } catch (e) {
-      toast.error("Bulk delete failed: " + (e?.message || "Unknown error"));
+      toast.error(`Bulk delete failed: ${toUserErrorMessage(e, "Unknown error")}`);
     } finally {
       setBulkActionBusy(false);
     }

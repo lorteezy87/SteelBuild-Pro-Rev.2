@@ -24,6 +24,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { toast } from "sonner";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import { KpiTile as KpiTileRaw, Modal as ModalRaw, BulkActionBar as BulkActionBarRaw } from "@/components/design-system";
 import {
   Archive, Clock, Eye, Inbox, Mail, PenSquare, Search, Send, Settings, Star, XCircle,
@@ -109,7 +110,7 @@ export default function EmailInbox() {
     onSuccess: () => {
       invalidateEntity(qc, "email_message", projectId);
     },
-    onError: (e: any) => toast.error("Update failed: " + (e?.message || "Unknown error")),
+    onError: (e: unknown) => toast.error(`Update failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   const bulkUpdateMut = useMutation({
@@ -121,7 +122,7 @@ export default function EmailInbox() {
       invalidateEntity(qc, "email_message", projectId);
       setSelectedIds(new Set());
     },
-    onError: (e: any) => toast.error("Bulk update failed: " + (e?.message || "Unknown error")),
+    onError: (e: unknown) => toast.error(`Bulk update failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   // ── Collect all labels used across messages ────────────────────────

@@ -17,6 +17,7 @@ import React, { useState, useMemo, useCallback, useRef, Suspense, lazy } from "r
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { toast } from "sonner";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -114,17 +115,18 @@ export default function Documents() {
 
   const createFolderMut = useMutation({
     mutationFn: ({ name, parentFolderId }) =>
-      entities.DocumentFolder.create({
-        project_id: activeProject.id,
-        parent_folder_id: parentFolderId,
-        name,
-      }),
+      entities.DocumentFolder.create(
+        withProjectId({
+          parent_folder_id: parentFolderId,
+          name,
+        }, activeProject?.id),
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
       toast.success("Folder created");
     },
     onError: (err) => {
-      const msg = err?.message || "Failed to create folder";
+      const msg = toUserErrorMessage(err, "Failed to create folder");
       // Surface the unique-name-per-parent collision in plain English.
       if (/document_folders_unique_name_per_parent/.test(msg)) {
         toast.error("A folder with that name already exists here.");
@@ -141,7 +143,7 @@ export default function Documents() {
       toast.success("Folder renamed");
     },
     onError: (err) => {
-      const msg = err?.message || "Failed to rename folder";
+      const msg = toUserErrorMessage(err, "Failed to rename folder");
       if (/document_folders_unique_name_per_parent/.test(msg)) {
         toast.error("Another folder at this level already uses that name.");
       } else {
@@ -201,7 +203,7 @@ export default function Documents() {
           : "Folder deleted",
       );
     },
-    onError: (err) => toast.error(err?.message || "Failed to delete folder"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to delete folder")),
   });
 
   /**
@@ -227,7 +229,7 @@ export default function Documents() {
         toast.warning(`Moved ${succeeded.length} of ${total} — ${failed.length} failed`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Move failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Move failed")),
   });
 
   /**
@@ -252,7 +254,7 @@ export default function Documents() {
         toast.warning(`Moved ${succeeded.length} of ${total} — ${failed.length} failed`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Folder move failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Folder move failed")),
   });
 
   /**
@@ -271,7 +273,7 @@ export default function Documents() {
         toast.warning(`Deleted ${succeeded.length} of ${total} — ${failed.length} failed`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Bulk delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   /**
@@ -290,11 +292,12 @@ export default function Documents() {
         ? (currentFolderId ?? null)
         : (stack[item.depth - 1] ?? currentFolderId ?? null);
       try {
-        const row = await entities.DocumentFolder.create({
-          project_id: activeProject.id,
-          parent_folder_id: parentId,
-          name: item.name,
-        });
+        const row = await entities.DocumentFolder.create(
+          withProjectId({
+            parent_folder_id: parentId,
+            name: item.name,
+          }, activeProject?.id),
+        );
         stack[item.depth] = row?.id ?? null;
         // Truncate stack so deeper-level entries from a sibling don't
         // leak into the next branch.
@@ -369,7 +372,7 @@ export default function Documents() {
         toast.success(`Updated ${results.succeeded.length} document(s)`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Bulk status update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk status update failed")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -394,7 +397,7 @@ export default function Documents() {
         toast.success(`Deleted ${count} document(s)`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Bulk delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   /* ── Handlers ── */
@@ -419,7 +422,7 @@ export default function Documents() {
       a.click();
       a.remove();
     } catch (err) {
-      toast.error("Download failed: " + (err?.message || "Unknown error"));
+      toast.error(`Download failed: ${toUserErrorMessage(err, "Unknown error")}`);
     }
   };
 
@@ -434,8 +437,8 @@ export default function Documents() {
         return next;
       });
       toast.success("Document deleted");
-    } catch {
-      toast.error("Failed to delete document");
+    } catch (err) {
+      toast.error(toUserErrorMessage(err, "Failed to delete document"));
     }
   };
 

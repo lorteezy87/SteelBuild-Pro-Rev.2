@@ -9,6 +9,7 @@ import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { addDaysIso, applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
@@ -195,10 +196,9 @@ export default function Schedule() {
 
   const createTaskMut = useMutation({
     mutationFn: (data: ScheduleTask) => {
-      const pid = data.project_id || projectId;
-      if (!pid) throw new Error("Select a project first");
-      const wbs = data.wbs_code || generateWBS(data.phase, scheduleTasks);
-      return entities.ScheduleTask.create({ ...data, project_id: pid, wbs_code: wbs } as any);
+      const scoped = withProjectId(data as Record<string, unknown>, projectId);
+      const wbs = (scoped.wbs_code as string | undefined) || generateWBS(scoped.phase as string | undefined, scheduleTasks);
+      return entities.ScheduleTask.create({ ...scoped, wbs_code: wbs } as any);
     },
     onSuccess: () => {
       invalidateEntity(qc, "schedule_task", projectId);
@@ -392,17 +392,16 @@ export default function Schedule() {
   });
 
   const handleBulkAdd = async (rows: any[]) => {
-    if (!projectId) return;
     setBulkSaving(true);
     try {
-      const pid = projectId;
       // Build a running snapshot of tasks so each new WBS is unique
       const snapshot = [...scheduleTasks];
       for (const row of rows) {
-        const wbs = row.wbs_code || generateWBS(row.phase, snapshot);
-        const task = { ...row, project_id: pid, wbs_code: wbs };
+        const scoped = withProjectId(row as Record<string, unknown>, projectId);
+        const wbs = (scoped.wbs_code as string | undefined) || generateWBS(scoped.phase as string | undefined, snapshot);
+        const task = { ...scoped, wbs_code: wbs };
         await entities.ScheduleTask.create(task);
-        snapshot.push(task); // include in snapshot for next WBS calculation
+        snapshot.push(task as any); // include in snapshot for next WBS calculation
       }
       invalidateEntity(qc, "schedule_task", projectId);
       setShowBulkAdd(false);
@@ -464,8 +463,7 @@ export default function Schedule() {
         const parentUid = uidToParentUid[t.uid];
         const parentDbId = parentUid ? uidToDbId[parentUid] : null;
 
-        const record = await entities.ScheduleTask.create({
-          project_id: pid,
+        const record = await entities.ScheduleTask.create(withProjectId({
           task_name: t.name,
           task_type: inferTaskType(t.name, t.isSummary, t.milestone),
           phase: PHASES.includes(phase) ? phase : "Fabrication",
@@ -484,7 +482,7 @@ export default function Schedule() {
           notes: t.notes || null,
           is_summary: t.isSummary || false,
           // Dependencies will be set in a second pass after all tasks exist
-        });
+        }, pid) as any);
         uidToDbId[t.uid] = record.id;
       }
 

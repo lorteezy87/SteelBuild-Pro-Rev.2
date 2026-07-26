@@ -22,6 +22,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import { localToday } from "@/utils/dates";
 
@@ -144,7 +145,7 @@ export default function DailyLogs() {
   }, [filteredLogs]);
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.DailyLog.create(data),
+    mutationFn: (data) => entities.DailyLog.create(withProjectId(data, projectId)),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, dailyLogQueryKeys, created);
       toast.success("Daily log created");
