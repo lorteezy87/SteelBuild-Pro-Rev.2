@@ -206,29 +206,31 @@ export default function RfiControlCenter(props: RfiControlCenterProps) {
           />
         ) : null}
 
-        <RfiFilterToolbarView
-          search={search}
-          onSearch={onSearch}
-          filter={filter}
-          onFilterChange={onFilterChange}
-          disciplineFilter={disciplineFilter}
-          onDisciplineChange={onDisciplineChange}
-          density={density}
-          onDensityChange={onDensityChange}
-          rfis={rfis}
-          seqFilter={seqFilter}
-          onSeqFilter={onSeqFilter}
-          agendaOpen={agendaOpen}
-          onToggleAgenda={onToggleAgenda}
-          agenda={agenda}
-          agendaUrgent={agendaUrgent}
-          filteredCount={filtered.length}
-          totalCount={rfis.length}
-          onClearFilters={onClearFilters}
-          onImport={onImport}
-          onExport={onExport}
-          onCreate={onCreate}
-        />
+        <div className="rfi-register-pin">
+          <RfiFilterToolbarView
+            search={search}
+            onSearch={onSearch}
+            filter={filter}
+            onFilterChange={onFilterChange}
+            disciplineFilter={disciplineFilter}
+            onDisciplineChange={onDisciplineChange}
+            density={density}
+            onDensityChange={onDensityChange}
+            rfis={rfis}
+            seqFilter={seqFilter}
+            onSeqFilter={onSeqFilter}
+            agendaOpen={agendaOpen}
+            onToggleAgenda={onToggleAgenda}
+            agenda={agenda}
+            agendaUrgent={agendaUrgent}
+            filteredCount={filtered.length}
+            totalCount={rfis.length}
+            onClearFilters={onClearFilters}
+            onImport={onImport}
+            onExport={onExport}
+            onCreate={onCreate}
+          />
+        </div>
 
         {agendaOpen ? (
           <AgendaPanelView

@@ -373,10 +373,21 @@
   background: var(--stage-color, var(--accent));
 }
 
-.rfi-filter-toolbar {
+.rfi-register-pin {
   position: sticky;
   top: 0;
   z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 10px;
+  background: var(--bg-app, var(--bg-page, transparent));
+}
+
+.rfi-filter-toolbar {
+  position: relative;
+  top: auto;
+  z-index: auto;
   display: grid;
   grid-template-columns: minmax(320px, 0.7fr) minmax(0, 1fr) auto auto;
   align-items: center;
@@ -384,7 +395,7 @@
   padding: 12px;
   border: 1px solid var(--border-default);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-surface) 98%, #000 2%);
+  background: var(--bg-surface);
   box-shadow: 0 10px 24px rgba(0,0,0,0.16);
 }
 
@@ -577,18 +588,22 @@
 }
 
 .rfi-table-header {
-  position: sticky;
-  top: 64px;
-  z-index: 4;
+  /* Was sticky at top:64px under a wrapping filter toolbar, so the column
+     ribbon overlapped the first RFI row. Sticky pinning is only on
+     .rfi-register-pin (filter); this ribbon stays in document flow. */
+  position: relative;
+  top: auto;
+  z-index: 1;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-default);
-  background: color-mix(in srgb, var(--bg-surface-low) 96%, #000 4%);
+  background: var(--bg-surface-low);
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border-default) 70%, transparent);
 }
 
 .rfi-table-body {
@@ -956,4 +971,71 @@
     margin-left: 0;
     width: 100%;
   }
+}
+
+/* Command Control Center: keep the register readable on the light island.
+   Opaque pin + solid column ribbon so scrolling rows never print through. */
+[data-skin="command"] .rfi-cc .cmd-panel__body {
+  padding-top: 10px;
+}
+
+[data-skin="command"] .rfi-cc .rfi-register-pin {
+  background: var(--cmd-bg);
+}
+
+[data-skin="command"] .rfi-cc .rfi-filter-toolbar {
+  background: var(--cmd-surface);
+  border-color: var(--cmd-border);
+  box-shadow: 0 8px 18px rgba(27, 36, 48, 0.08);
+}
+
+[data-skin="command"] .rfi-cc .rfi-table-shell {
+  background: var(--cmd-surface);
+  border: 1px solid var(--cmd-border);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+[data-skin="command"] .rfi-cc .rfi-table-header {
+  background: #f3f5f8;
+  color: var(--cmd-text-muted);
+  border-bottom-color: var(--cmd-border);
+  box-shadow: none;
+}
+
+[data-skin="command"] .rfi-cc .rfi-record-row {
+  background: var(--cmd-surface);
+  border-bottom-color: var(--cmd-border);
+}
+
+[data-skin="command"] .rfi-cc .rfi-record-row:nth-child(even) {
+  background: #fafbfc;
+}
+
+[data-skin="command"] .rfi-cc .rfi-record-row:hover,
+[data-skin="command"] .rfi-cc .rfi-record-row.is-selected {
+  background: #f7f9fc;
+}
+
+[data-skin="command"] .rfi-cc .rfi-row-number {
+  color: var(--cmd-info);
+}
+
+[data-skin="command"] .rfi-cc .rfi-row-title-main,
+[data-skin="command"] .rfi-cc .rfi-row-date {
+  color: var(--cmd-text);
+}
+
+[data-skin="command"] .rfi-cc .rfi-row-age,
+[data-skin="command"] .rfi-cc .rfi-row-meta,
+[data-skin="command"] .rfi-cc .rfi-row-owner-sub,
+[data-skin="command"] .rfi-cc .rfi-row-date-sub,
+[data-skin="command"] .rfi-cc .rfi-row-impact-sub,
+[data-skin="command"] .rfi-cc .rfi-row-actions,
+[data-skin="command"] .rfi-cc .rfi-toolbar-count {
+  color: var(--cmd-text-muted);
+}
+
+[data-skin="command"] .rfi-cc .rfi-row-impact {
+  color: var(--cmd-text-muted);
 }
