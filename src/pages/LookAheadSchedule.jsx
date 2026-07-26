@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
 import { summarizeBlockingConstraints } from "@/services/scheduleGatekeeper";
 
@@ -235,7 +236,13 @@ export default function LookAheadSchedule() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current 2-week window
 
-  const { data: items = [], isLoading, refetch } = useQuery({
+  const {
+    data: items = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["lookahead", activeProject?.id],
     queryFn: () => activeProject?.id
       ? entities.LookAhead.filter({ project_id: activeProject.id }, "-created_at")
@@ -309,7 +316,7 @@ export default function LookAheadSchedule() {
       setDeleteTarget(null);
       toast.success("Look-ahead item deleted");
     },
-    onError: () => toast.error("Failed to delete look-ahead item"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to delete look-ahead item")),
   });
   const handleSave = (d) => { if (editing) updateMut.mutate({ id: editing.id, data: d }); else createMut.mutate(d); };
 
@@ -482,10 +489,46 @@ export default function LookAheadSchedule() {
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={10} style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>Loading...</td></tr>
+                <tr>
+                  <td colSpan={10} style={{ padding: 24 }}>
+                    <LoadingSkeleton variant="table" rows={6} />
+                  </td>
+                </tr>
               )}
 
-              {!isLoading && items.length === 0 && (
+              {!isLoading && isError && (
+                <tr>
+                  <td colSpan={10} style={{ padding: "48px 24px", textAlign: "center" }}>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>
+                      Couldn’t load look-ahead items
+                    </div>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginBottom: 16 }}>
+                      {toUserErrorMessage(error, "Something went wrong. Try again.")}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => refetch()}
+                      style={{
+                        background: "transparent",
+                        color: "var(--accent)",
+                        border: "1px solid var(--accent)",
+                        borderRadius: "var(--radius-btn)",
+                        padding: "8px 14px",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </td>
+                </tr>
+              )}
+
+              {!isLoading && !isError && items.length === 0 && (
                 <tr>
                   <td colSpan={10}>
                     <div style={{ padding: "64px 24px", textAlign: "center" }}>
@@ -505,7 +548,7 @@ export default function LookAheadSchedule() {
                 </tr>
               )}
 
-              {!isLoading && groupKeys.map(key => {
+              {!isLoading && !isError && groupKeys.map(key => {
                 const grpItems = getGroupItems(key);
                 if (grpItems.length === 0) return null;
                 const phaseCfg = PHASE_COLORS[key];

@@ -54,7 +54,9 @@ Deployed **2026-07-24** to https://www.steelbuild-pro.com from `main` including 
 
 **2026-07-26 (deploy batch):** Merged **#133–#137** to `main` and deployed to production (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL` → https://www.steelbuild-pro.com). ID **18** Done; IDs **48**/**50** advanced. Local vitest/eslint/build green; GH Actions still billing-blocked.
 
-**2026-07-26 (email-review):** EmailAccount + DrawingReview + DrawingTransmittal create fail-closed + loading skeletons (`cursor/action-plan-email-review-d3a1`). Open siblings **#139** / **#140**. Tracker: Done **79** · In Progress **25** · Blocked **1**.
+**2026-07-26 (expenses-contract):** Expenses + ContractManagement `LoadingSkeleton` + error/retry (`cursor/action-plan-expenses-contract-d3a1`). Sibling **#148** DailyLogs isError. Open **#139–#148**. Tracker: Done **79** · In Progress **25** · Blocked **1**.
+
+**2026-07-26 (batch deploy):** Merged **#139–#149** to `main` (DMS/Contacts/EmailAccount/Doc Control/Inspections/ProductionNotes/ActionItems/Constraints/Procurement/LookAhead/Alerts/LEMs/EmailInbox/SOV/BudgetHours/FieldPlan/PayApps/DailyLogs/Expenses/ContractManagement hygiene). Deployed to production via `npx vercel --prod` (`steelbuildpro-og`). Tracker: Done **79** · In Progress **25** · Blocked **1**.
 
 ## How to refresh next time
 

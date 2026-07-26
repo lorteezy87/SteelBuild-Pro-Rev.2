@@ -43,6 +43,8 @@ import { PROCUREMENT_CATEGORIES, ALL_STATUSES, addWeeks } from './procurement/fo
 import ProcurementControlCenter from './procurement/ProcurementControlCenter';
 import { ProcurementFormModal } from './procurement/components';
 import DeleteDialog from '@/components/shared/DeleteDialog';
+import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
+import { Button } from '@/components/design-system';
 import type { ProcurementItem } from './procurement/procurementControlCenter.derive';
 
 
@@ -71,7 +73,13 @@ export default function Procurement() {
     setShowForm(true);
   }, { enabled: !!projectId });
 
-  const { data: rawItems = [] } = useQuery({
+  const {
+    data: rawItems = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['procurement', projectId],
     queryFn: () => projectId
       ? entities.Delivery.filter({ project_id: projectId })
@@ -293,7 +301,37 @@ export default function Procurement() {
     );
   }
 
-  // Canonical Procurement control center. Page-owned mutations and modals remain here.
+  // Gate fetch states at the page shell — ProcurementControlCenter has no loading props
+  // (same pattern as ActionItems / RFIs / ChangeOrders / Backcharges).
+  if (isLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '48px 24px',
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', margin: 0 }}>
+          Couldn’t load procurement items
+        </p>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', margin: 0, textAlign: 'center', maxWidth: 320 }}>
+          {toUserErrorMessage(error, 'Something went wrong. Try again.')}
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+      </div>
+    );
+  }
+
   // Canonical Procurement control center. Page-owned mutations and modals remain below.
     return (
       <>
