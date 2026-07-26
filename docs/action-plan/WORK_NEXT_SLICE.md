@@ -1,6 +1,7 @@
 # Action-plan — post-deploy checkpoint (2026-07-26 batch #139–#149)
 
-**Merged + prod:** #139 · #140 · #141 · #142–#149 (via batch deploy) → https://www.steelbuild-pro.com  
+**Merged + prod:** #139 · #140 · #141 · #150 (#142–#149) → https://www.steelbuild-pro.com  
+**Deployment:** `dpl_87XoFH5EeR7mXBmptcx64ETQz2uM`  
 **Prior prod:** #133–#137 (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL`)
 
 | ID | Status | What shipped |
