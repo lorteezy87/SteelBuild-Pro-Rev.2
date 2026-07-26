@@ -45,6 +45,7 @@ Notes:
 | 2026-07-09T20:00:00Z | measurement-ship1 | Drawing-viewer measurement correctness | src/components/drawings/viewer/{AnnotationLayer.jsx,detectScale.js,measureLabel.js,useMarkup.js} · src/pages/drawingViewer/{useAutoScaleOnLoad.js,ViewerToolbar.jsx,usePdfLoader.js} · src/pages/DrawingViewer.jsx · src/utils/feetInches.js · supabase/migrations/** | Fix `drawing_markups` CHECK (7 of 8 markup kinds rejected → table holds 0 rows), per-page scale detection + explicit ambiguous state, canonical ft-in 1/16" formatter, save-failure toast, badge+detection outside canvas mode. Plan: docs/superpowers/plans/2026-07-09-drawing-viewer-measurement-ship1.md |
 
 ## Recently released
+- 2026-07-26 · cursor-ap-import-doccontrol-d3a1 · Expense/CO CSV import + ReviewQueue/ImpactBoard/RFIFormModal withProjectId; Doc Control/Resource toast hygiene.
 - 2026-07-26 · cursor-ap-modal-scoping-d3a1 · Modal withProjectId + toast hygiene (ActionItem/Scope/Delivery/Photo/Risk/Resource/ProductionNote; Expenses/ScopeExclusions).
 - 2026-07-26 · cursor-ap-loading-toasts-d3a1 · RegisterFetchBody + loading/empty/error on Warranty/CR/Closeout/Punchlist/QC; toast helper adoption (ID 18 Done / 48 advanced).
 - 2026-07-26 · cursor-ap-next-slice-d3a1 · Drawings mutation helpers + FabRelease/Contract/Schedule/Deliveries create scoping on PR #123.
