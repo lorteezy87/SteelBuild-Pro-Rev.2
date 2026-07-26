@@ -374,14 +374,15 @@
 }
 
 .rfi-register-pin {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  /* Do not sticky-pin the filter: a tall wrapping toolbar covers the column
+     ribbon and the first RFI row when the register scrolls into view. */
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-bottom: 10px;
-  background: var(--bg-app, var(--bg-page, transparent));
+  padding-bottom: 4px;
+  background: transparent;
 }
 
 .rfi-filter-toolbar {
@@ -588,12 +589,11 @@
 }
 
 .rfi-table-header {
-  /* Was sticky at top:64px under a wrapping filter toolbar, so the column
-     ribbon overlapped the first RFI row. Sticky pinning is only on
-     .rfi-register-pin (filter); this ribbon stays in document flow. */
+  /* Keep the column ribbon in normal flow (no sticky). Sticky headers were
+     painting over the first RFI under the filter toolbar. */
   position: relative;
   top: auto;
-  z-index: 1;
+  z-index: 0;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-surface-low);
@@ -603,12 +603,20 @@
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--border-default) 70%, transparent);
 }
 
 .rfi-table-body {
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 0;
+}
+
+.rfi-table-body > .rfi-record-row:first-child {
+  /* Clear separation from the column ribbon so the first lot never sits
+     under / through the header text. */
+  border-top: 0;
+  scroll-margin-top: 12px;
 }
 
 .rfi-record-row {
@@ -973,14 +981,48 @@
   }
 }
 
-/* Command Control Center: keep the register readable on the light island.
-   Opaque pin + solid column ribbon so scrolling rows never print through. */
-[data-skin="command"] .rfi-cc .cmd-panel__body {
-  padding-top: 10px;
+/* Command Control Center: alias dark-theme tokens → light kit (same pattern
+   as .detailing-cc). Without this, register rows keep --text-primary from the
+   dark app shell and disappear on the white table surface. */
+[data-skin="command"] .rfi-cc {
+  --bg-page: var(--cmd-bg);
+  --bg-app: var(--cmd-bg);
+  --bg-surface: var(--cmd-surface);
+  --bg-surface-low: #f3f5f8;
+  --bg-surface-high: var(--cmd-surface);
+  --bg-surface-mid: #f1f4f8;
+  --bg-surface-secondary: #f7f9fc;
+  --bg-input: var(--cmd-surface);
+  --bg-hover: #f1f4f8;
+  --hover-bg: #f7f9fc;
+
+  --text-primary: var(--cmd-text);
+  --text-secondary: #3f4a57;
+  --text-muted: var(--cmd-text-muted);
+
+  --border: var(--cmd-border);
+  --border-default: var(--cmd-border);
+  --border-strong: #d3d9e1;
+  --divider: var(--cmd-border);
+
+  --accent: var(--cmd-gold);
+  --accent-border: #f0d79a;
+  --status-success: var(--cmd-good);
+  --status-warning: var(--cmd-warn);
+  --status-error: var(--cmd-danger);
+  --status-info: var(--cmd-info);
+  --danger: var(--cmd-danger);
+  --info: var(--cmd-info);
 }
 
-[data-skin="command"] .rfi-cc .rfi-register-pin {
-  background: var(--cmd-bg);
+[data-skin="command"] .rfi-cc .cmd-panel__body {
+  padding-top: 12px;
+}
+
+[data-skin="command"] .rfi-cc .cmd-panel__head {
+  position: relative;
+  z-index: 1;
+  background: var(--cmd-surface);
 }
 
 [data-skin="command"] .rfi-cc .rfi-filter-toolbar {
@@ -999,13 +1041,13 @@
 [data-skin="command"] .rfi-cc .rfi-table-header {
   background: #f3f5f8;
   color: var(--cmd-text-muted);
-  border-bottom-color: var(--cmd-border);
-  box-shadow: none;
+  border-bottom: 1px solid var(--cmd-border);
 }
 
 [data-skin="command"] .rfi-cc .rfi-record-row {
   background: var(--cmd-surface);
   border-bottom-color: var(--cmd-border);
+  color: var(--cmd-text);
 }
 
 [data-skin="command"] .rfi-cc .rfi-record-row:nth-child(even) {
@@ -1019,23 +1061,4 @@
 
 [data-skin="command"] .rfi-cc .rfi-row-number {
   color: var(--cmd-info);
-}
-
-[data-skin="command"] .rfi-cc .rfi-row-title-main,
-[data-skin="command"] .rfi-cc .rfi-row-date {
-  color: var(--cmd-text);
-}
-
-[data-skin="command"] .rfi-cc .rfi-row-age,
-[data-skin="command"] .rfi-cc .rfi-row-meta,
-[data-skin="command"] .rfi-cc .rfi-row-owner-sub,
-[data-skin="command"] .rfi-cc .rfi-row-date-sub,
-[data-skin="command"] .rfi-cc .rfi-row-impact-sub,
-[data-skin="command"] .rfi-cc .rfi-row-actions,
-[data-skin="command"] .rfi-cc .rfi-toolbar-count {
-  color: var(--cmd-text-muted);
-}
-
-[data-skin="command"] .rfi-cc .rfi-row-impact {
-  color: var(--cmd-text-muted);
 }
