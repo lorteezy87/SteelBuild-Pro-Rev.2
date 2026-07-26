@@ -28,6 +28,7 @@ describe("usePdfRenderer", () => {
     const renderCalls = [];
 
     const pdfDoc = {
+      numPages: 3,
       getPage: vi.fn(async (pageNumber) => ({
         getViewport: viewport,
         getAnnotations: vi.fn(async () => []),
@@ -75,9 +76,37 @@ describe("usePdfRenderer", () => {
     expect(onRenderError).not.toHaveBeenCalledWith(expect.stringContaining("same canvas"));
   });
 
+  it("clamps an out-of-range currentPage before calling getPage", async () => {
+    const onRenderError = vi.fn();
+    const getPage = vi.fn(async () => ({
+      getViewport: viewport,
+      getAnnotations: vi.fn(async () => []),
+      render: () => ({
+        promise: Promise.resolve(),
+        cancel: vi.fn(),
+      }),
+    }));
+    const pdfDoc = { numPages: 2, getPage };
+
+    const { result, rerender } = renderHook(
+      (props) => usePdfRenderer(props),
+      { initialProps: { pdfDoc: null, currentPage: 1, zoom: 1, rotation: 0, onRenderError } },
+    );
+
+    const canvas = document.createElement("canvas");
+    canvas.getContext = vi.fn(() => ({}));
+    act(() => { result.current.canvasRef.current = canvas; });
+
+    rerender({ pdfDoc, currentPage: 99, zoom: 1, rotation: 0, onRenderError });
+
+    await waitFor(() => expect(getPage).toHaveBeenCalledWith(2));
+    expect(onRenderError).not.toHaveBeenCalledWith(expect.stringContaining("Invalid page"));
+  });
+
   it("surfaces a render failure so the viewer can offer browser-PDF fallback", async () => {
     const onRenderError = vi.fn();
     const pdfDoc = {
+      numPages: 1,
       getPage: vi.fn(async () => ({
         getViewport: viewport,
         render: () => { throw new Error("render exploded"); },

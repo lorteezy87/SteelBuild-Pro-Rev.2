@@ -70,6 +70,18 @@ passed lint, all typecheck ratchets, Vitest, the production build, dependency
 audit, Vercel production deployment, and the post-deploy health check for merge
 `91918d592effec0961560bab03a2cb216b08e8e0`.
 
+### Follow-up (2026-07-26) — invalid page + sticky error
+
+After #96, the viewer could still fail on multi-sheet PDFs when
+`DrawingViewer` set `currentPage` from `pdf_page` **unclamped** after
+`usePdfLoader` had already clamped it. PDF.js then threw
+`Invalid page request`, and `pdfError` stuck for every sibling sheet that
+shared the same `file_url` (error cleared only on URL change).
+
+Fix branch `cursor/drawing-viewer-page-clamp-3d17`: remove the unclamped
+page effect, clear `pdfError` on drawing id change, clamp in the renderer,
+and show a resolve/load skeleton instead of a blank paper.
+
 ## Staging evidence
 
 The `staging` branch was fast-forwarded to the production merge. Its separate

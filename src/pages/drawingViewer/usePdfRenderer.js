@@ -64,7 +64,16 @@ export function usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderEr
     setRendering(true);
     let renderTask = null;
     try {
-      const page = await pdfDoc.getPage(currentPage);
+      // Defense in depth: never ask PDF.js for a page outside [1, numPages].
+      // Callers should clamp, but a stale unclamped currentPage was the root
+      // of blank/error viewer states after sheet switches on multi-page PDFs.
+      const requested = Math.max(1, Number(currentPage) || 1);
+      const pageCount = Number(pdfDoc.numPages);
+      const safePage =
+        Number.isFinite(pageCount) && pageCount >= 1
+          ? Math.min(pageCount, requested)
+          : requested;
+      const page = await pdfDoc.getPage(safePage);
       if (renderRunRef.current !== runId || !canvasRef.current) return;
 
       const baseViewport = page.getViewport({ scale: 1, rotation });
