@@ -143,7 +143,7 @@ export default function Documents() {
       toast.success("Folder renamed");
     },
     onError: (err) => {
-      const msg = err?.message || "Failed to rename folder";
+      const msg = toUserErrorMessage(err, "Failed to rename folder");
       if (/document_folders_unique_name_per_parent/.test(msg)) {
         toast.error("Another folder at this level already uses that name.");
       } else {
@@ -203,7 +203,7 @@ export default function Documents() {
           : "Folder deleted",
       );
     },
-    onError: (err) => toast.error(err?.message || "Failed to delete folder"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to delete folder")),
   });
 
   /**
@@ -229,7 +229,7 @@ export default function Documents() {
         toast.warning(`Moved ${succeeded.length} of ${total} — ${failed.length} failed`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Move failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Move failed")),
   });
 
   /**
@@ -254,7 +254,7 @@ export default function Documents() {
         toast.warning(`Moved ${succeeded.length} of ${total} — ${failed.length} failed`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Folder move failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Folder move failed")),
   });
 
   /**
@@ -273,7 +273,7 @@ export default function Documents() {
         toast.warning(`Deleted ${succeeded.length} of ${total} — ${failed.length} failed`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Bulk delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   /**
@@ -372,7 +372,7 @@ export default function Documents() {
         toast.success(`Updated ${results.succeeded.length} document(s)`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Bulk status update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk status update failed")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -397,7 +397,7 @@ export default function Documents() {
         toast.success(`Deleted ${count} document(s)`);
       }
     },
-    onError: (err) => toast.error(err?.message || "Bulk delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   /* ── Handlers ── */
@@ -422,7 +422,7 @@ export default function Documents() {
       a.click();
       a.remove();
     } catch (err) {
-      toast.error("Download failed: " + (err?.message || "Unknown error"));
+      toast.error(`Download failed: ${toUserErrorMessage(err, "Unknown error")}`);
     }
   };
 
@@ -437,8 +437,8 @@ export default function Documents() {
         return next;
       });
       toast.success("Document deleted");
-    } catch {
-      toast.error("Failed to delete document");
+    } catch (err) {
+      toast.error(toUserErrorMessage(err, "Failed to delete document"));
     }
   };
 

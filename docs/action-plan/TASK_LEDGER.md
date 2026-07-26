@@ -72,9 +72,9 @@ Status key:
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
 | 47 | Completed | Standard mutation helpers introduced | `src/lib/mutations/standardMutation.ts` |
-| 48 | Partial | Import/Doc Control/RFIFormModal/Transmittal/Resource/ActionItems-bulk toasts (+ prior #133/#134); not universal | `WORK_NEXT_SLICE.md` |
+| 48 | Partial | Commercial/inbox residual (Backcharges/PayApps/EmailInbox/Documents/SOV) + prior #133–#135; not universal | `WORK_NEXT_SLICE.md` |
 | 49 | Completed | `invalidateAfterMutation` helper | same + cacheRegistry |
-| 50 | Partial | CSV Expense/CO import + ReviewQueue/ImpactBoard + RFIFormModal fallback fail-closed; upload pipelines + org-level + FeatureFlags remain | `WORK_NEXT_SLICE.md` |
+| 50 | Partial | Backcharge/T&M + SOV import fail-closed; PayApps assertProjectId; prior page/modal/import wiring; upload pipelines + org-level remain | `WORK_NEXT_SLICE.md` |
 | 51 | Partial | Critical optimistic paths reviewed in prior PRs; not universal | — |
 | 52 | Partial | Write shaping + scoped invalidation advanced across flagship + ops pages; concurrent-edit E2E open | `withProjectId` |
 | 53 | Partial | Many KPI derives extracted; portfolio/financial KPIs tested in places | derive modules |
