@@ -9,13 +9,14 @@ export default function RfiTable({ rows, totalCount, selectedIds = new Set(), on
   const allVisibleSelected = rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
 
   return (
-    <div className="rfi-table-shell">
-      <div className="rfi-table-header">
+    <div className="rfi-table-shell" data-testid="rfi-table-shell">
+      <div className="rfi-table-header" role="row" data-testid="rfi-table-header">
         <div>
           <input
             type="checkbox"
             checked={allVisibleSelected}
             onChange={(e) => onToggleAll(e.target.checked)}
+            aria-label="Select all visible RFIs"
           />
         </div>
         <div>RFI</div>
@@ -27,7 +28,7 @@ export default function RfiTable({ rows, totalCount, selectedIds = new Set(), on
         <div></div>
       </div>
       {rows.length > 0 ? (
-        <div className="rfi-table-body">
+        <div className="rfi-table-body" data-testid="rfi-table-body">
           {rows.map((r) => (
             <RfiRow
               key={r.id}

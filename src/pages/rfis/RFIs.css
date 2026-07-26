@@ -373,10 +373,24 @@
   background: var(--stage-color, var(--accent));
 }
 
+.rfi-register-pin {
+  /* Do not sticky-pin the filter: a tall wrapping toolbar covers the column
+     ribbon and the first RFI row when the register scrolls into view. */
+  position: static !important;
+  top: auto !important;
+  z-index: auto !important;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 4px;
+  background: transparent;
+  transform: none !important;
+}
+
 .rfi-filter-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  position: relative;
+  top: auto;
+  z-index: auto;
   display: grid;
   grid-template-columns: minmax(320px, 0.7fr) minmax(0, 1fr) auto auto;
   align-items: center;
@@ -384,7 +398,7 @@
   padding: 12px;
   border: 1px solid var(--border-default);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-surface) 98%, #000 2%);
+  background: var(--bg-surface);
   box-shadow: 0 10px 24px rgba(0,0,0,0.16);
 }
 
@@ -563,8 +577,11 @@
 }
 
 .rfi-table-shell {
+  display: flex;
+  flex-direction: column;
   overflow-x: auto;
   overflow-y: visible;
+  isolation: isolate;
 }
 
 .rfi-table-header,
@@ -577,12 +594,18 @@
 }
 
 .rfi-table-header {
-  position: sticky;
-  top: 64px;
-  z-index: 4;
+  /* Never sticky/absolute — a wrapping filter toolbar made a fixed sticky
+     offset paint this ribbon over the first RFI row. Force normal flow. */
+  position: static !important;
+  top: auto !important;
+  inset: auto !important;
+  z-index: auto !important;
+  flex: 0 0 auto;
+  transform: none !important;
   padding: 12px 16px;
+  margin: 0;
   border-bottom: 1px solid var(--border-default);
-  background: color-mix(in srgb, var(--bg-surface-low) 96%, #000 4%);
+  background: var(--bg-surface-low);
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 9px;
@@ -593,10 +616,23 @@
 
 .rfi-table-body {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  position: static;
+  z-index: auto;
+  margin: 0;
+  padding: 0;
+  transform: none;
+}
+
+.rfi-table-body > .rfi-record-row:first-child {
+  border-top: 0;
+  margin-top: 0;
+  position: static !important;
 }
 
 .rfi-record-row {
+  position: static !important;
   min-height: var(--density-row-height, 58px);
   padding: 12px 16px;
   border-bottom: 1px solid var(--divider);
@@ -956,4 +992,86 @@
     margin-left: 0;
     width: 100%;
   }
+}
+
+/* Command Control Center: alias dark-theme tokens → light kit (same pattern
+   as .detailing-cc). Without this, register rows keep --text-primary from the
+   dark app shell and disappear on the white table surface. */
+[data-skin="command"] .rfi-cc {
+  --bg-page: var(--cmd-bg);
+  --bg-app: var(--cmd-bg);
+  --bg-surface: var(--cmd-surface);
+  --bg-surface-low: #f3f5f8;
+  --bg-surface-high: var(--cmd-surface);
+  --bg-surface-mid: #f1f4f8;
+  --bg-surface-secondary: #f7f9fc;
+  --bg-input: var(--cmd-surface);
+  --bg-hover: #f1f4f8;
+  --hover-bg: #f7f9fc;
+
+  --text-primary: var(--cmd-text);
+  --text-secondary: #3f4a57;
+  --text-muted: var(--cmd-text-muted);
+
+  --border: var(--cmd-border);
+  --border-default: var(--cmd-border);
+  --border-strong: #d3d9e1;
+  --divider: var(--cmd-border);
+
+  --accent: var(--cmd-gold);
+  --accent-border: #f0d79a;
+  --status-success: var(--cmd-good);
+  --status-warning: var(--cmd-warn);
+  --status-error: var(--cmd-danger);
+  --status-info: var(--cmd-info);
+  --danger: var(--cmd-danger);
+  --info: var(--cmd-info);
+}
+
+[data-skin="command"] .rfi-cc .cmd-panel__body {
+  padding-top: 12px;
+}
+
+[data-skin="command"] .rfi-cc .cmd-panel__head {
+  position: relative;
+  z-index: 1;
+  background: var(--cmd-surface);
+}
+
+[data-skin="command"] .rfi-cc .rfi-filter-toolbar {
+  background: var(--cmd-surface);
+  border-color: var(--cmd-border);
+  box-shadow: 0 8px 18px rgba(27, 36, 48, 0.08);
+}
+
+[data-skin="command"] .rfi-cc .rfi-table-shell {
+  background: var(--cmd-surface);
+  border: 1px solid var(--cmd-border);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+[data-skin="command"] .rfi-cc .rfi-table-header {
+  background: #f3f5f8;
+  color: var(--cmd-text-muted);
+  border-bottom: 1px solid var(--cmd-border);
+}
+
+[data-skin="command"] .rfi-cc .rfi-record-row {
+  background: var(--cmd-surface);
+  border-bottom-color: var(--cmd-border);
+  color: var(--cmd-text);
+}
+
+[data-skin="command"] .rfi-cc .rfi-record-row:nth-child(even) {
+  background: #fafbfc;
+}
+
+[data-skin="command"] .rfi-cc .rfi-record-row:hover,
+[data-skin="command"] .rfi-cc .rfi-record-row.is-selected {
+  background: #f7f9fc;
+}
+
+[data-skin="command"] .rfi-cc .rfi-row-number {
+  color: var(--cmd-info);
 }
