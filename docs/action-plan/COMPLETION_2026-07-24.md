@@ -52,6 +52,8 @@ Deployed **2026-07-24** to https://www.steelbuild-pro.com from `main` including 
 
 **2026-07-26:** PR **#123** (`withProjectId` write shaping + Submittals/RFIs/Drawings mutation helpers + tracker checkpoint **Done 78 / In Progress 26 / Blocked 1**) merged to `main` and deployed to production. GitHub Actions CI remains blocked by org billing/spending limit — validated locally (lint + four typecheck gates + helper tests + build) then deployed via `npx vercel --prod` (`steelbuildpro-og`).
 
+**2026-07-26 (open):** PR **#133** — ID 18 Done (`RegisterFetchBody` on thin CRUD/QC). PR **modal-scoping** — ID 50/48 advanced (modal `withProjectId` + toast hygiene).
+
 ## How to refresh next time
 
 1. Update `TASK_LEDGER.md` statuses from PRs/deploys.  

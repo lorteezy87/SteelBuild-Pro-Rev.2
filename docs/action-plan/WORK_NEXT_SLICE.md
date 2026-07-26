@@ -1,56 +1,41 @@
-# Action-plan next slice — `withProjectId` + tracker checkpoint
+# Action-plan next slice — modal `withProjectId` + toast hygiene
 
-**Branch / PR:** `cursor/action-plan-next-slice-d3a1` → **#123** (merged + prod 2026-07-26)  
-**Dates:** 2026-07-25 (initial) · 2026-07-26 (adoption continuation + merge/deploy)
+**Branch / PR:** `cursor/action-plan-modal-scoping-d3a1`  
+**Dates:** 2026-07-26  
+**Prior open:** PR **#133** (RegisterFetchBody / page toast hygiene — ID 18) still unmerged
 
 ## Code
 
-Added `withProjectId()` in `src/lib/mutations/standardMutation.ts`:
+### ID 50 — write shaping on modal creates
 
-- Calls `assertProjectId` (fails closed when no active project)
-- Forces `project_id` to the active project when a mismatched value is supplied
-- Covered by unit tests in `standardMutation.test.ts`
-
-### Creates wired (2026-07-25)
-
-| Area | Files |
+| Modal | Change |
 |---|---|
-| Field / QC | `Punchlist`, `FieldToday`, `Inspections`, `Safety`, `QualityControl`, `Warranty`, `ChangeRequests`, `ProjectCloseout` |
-| Cost | `costCodeSave.ts`, `Expenses`, `BudgetHours` |
-| Drawings / Doc control | `Drawings`, `TransmittalLogPanel` |
-| Schedule / resources | `Schedule`, `WbsBuilderModal`, `ResourceScheduling` |
+| `ActionItemFormModal` | Fallback create uses `withProjectId`; **prefers parent `onSave` for create+edit** (fixes ActionItems page create bypassing page `createMut`) |
+| `ScopeItemFormModal` | Create mutation uses `withProjectId` |
+| `DeliveryFormModal` | Create uses `withProjectId` |
+| `PhotoUploadModal` | `Photo.create(withProjectId(...))` |
+| `RiskFormModal` | Create uses `withProjectId` |
+| `ResourceFormModal` | Create uses `withProjectId` |
+| `ProductionNoteFormModal` | Create stamps from form/`projectId` prop (multi-project meeting notes) |
 
-### Adoption continuation (2026-07-26)
+Skipped intentionally: Contacts / Vendors / Projects; drawing/submittal upload pipelines.
 
-| Area | Work |
-|---|---|
-| Submittals (ID 21) | Extracted `submittalMutationHelpers.ts` + tests; create/round/sheet/bulk paths use `withProjectId` + shared toast/error helpers |
-| Commercial | `ChangeOrders`, `SOV`, `Procurement`, `Documents` (folder creates) |
-| Toasts (ID 48) | `toUserErrorMessage` on Safety/Inspections/Procurement/SOV/Documents mutation errors |
-| RFIs (ID 23) | Extracted `rfiMutationHelpers.ts` + tests; create/alert/doc attach + bulk toast helpers |
-| Ops / field | `ActionItems`, `DailyLogs`, `Constraints`, `LookAheadSchedule`, `WorkPackages` (+ bulk prep), `FieldToday` photos |
-| Cross-page create | `EscalateModal`, `emailInbox/modals` entity + document creates |
-| Drawings (ID 27) | Extracted `drawingMutationHelpers.ts` + tests; create/update/delete/set toast helpers |
-| Remaining creates | `FabRelease` WP create, `ContractManagement` SOV, Schedule MPP import, Submittal comment dispositions, Deliveries overdue alerts |
+### ID 48 — toast pattern
 
-## Tracker IDs moved to Done (2026-07-25 checkpoint)
+`toUserErrorMessage` on the modals above + `PhotoGallery`, `Expenses`, `ScopeExclusions`, `ProductionNotes` mutation errors.
 
-19, 43, 64, 68, 70, 84, 89, 92, 94, 95, 97, 99, 103, 104, 105
+## Tracker
 
-## Still In Progress (intentionally)
-
-- Large page thinning: **21** / **23** / **27** (mutation helpers started; shells still large)
-- Universal mutation/toast adoption: 18, **48**, **50**, 51, **52**, 53, 54, 56 — advanced widely; org-level Contacts/Vendors/Projects intentionally skipped
-- UX / UAT: 20, 75, 77, 80, 81, 83, 87, 88
-- **Blocked:** 102 (interactive UAT — staging credentials + GH Actions billing)
+| ID | Status | Note |
+|---|---|---|
+| **50** | In Progress | Modal creates advanced; ad hoc remain |
+| **48** | In Progress | Advanced; not universal |
+| **18** | Done on **#133** (not yet on `main`) | — |
 
 ## Validation
 
 ```bash
-npx vitest run src/lib/mutations/__tests__/standardMutation.test.ts \
-  src/pages/submittals/__tests__/submittalMutationHelpers.test.ts \
-  src/pages/rfis/__tests__/rfiMutationHelpers.test.ts \
-  src/pages/drawings/__tests__/drawingMutationHelpers.test.ts \
-  src/pages/workPackages/__tests__/creation.test.ts
-npx eslint <touched files> --quiet
+npx vitest run src/lib/mutations/__tests__/standardMutation.test.ts
+npx eslint src/components/{actionitems,scope,deliveries,photos,risks,resources,productionnotes}/**/*.{js,jsx} \
+  src/pages/{Expenses,ScopeExclusions,ProductionNotes}.jsx --quiet
 ```
