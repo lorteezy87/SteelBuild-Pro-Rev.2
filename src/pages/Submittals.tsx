@@ -1,11 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
-import { addSubmittalRound } from "@/hooks/useSubmittals";
-import { logActivity, logTransition } from "@/services/auditLogger";
-import { invalidateEntity } from "@/services/cacheRegistry";
-import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { ensureCriticalAgingActionItems } from "@/lib/submittalAgingTriggers";
 import { localToday } from "@/utils/dates";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -19,39 +15,27 @@ import SubmittalBulkAddModal from "@/components/submittals/SubmittalBulkAddModal
 import NewRoundModalRaw from "@/components/submittals/NewRoundModal";
 import ReleaseGateOverrideModalRaw from "@/components/submittals/ReleaseGateOverrideModal";
 import SheetResponseGridRaw from "@/components/submittals/SheetResponseGrid";
-import { FabReleaseBlockedError } from "@/lib/fabRelease/releaseStatus";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import {
-  appendSubmittalNotes,
-  buildBulkSubmittalCreatePayload,
-  formatBulkSubmittalToast,
-  formatSubmittalWriteError,
+  splitCreateSubmittalPayload,
 } from "./submittals/submittalMutationHelpers";
 import {
-  collectOpenItems,
-  pickCarryForwardResponses,
-  formatCarryForwardNotes,
-  mergeCarryForwardNotes,
-} from "@/lib/submittalResubmittal";
-import {
-  collectUnresolvedRequiredComments,
-  formatUnresolvedCommentNotes,
-} from "@/lib/commentDispositionGate";
+  buildNewRoundCarrySeed,
+  buildStatusChangeWrite,
+  buildVerbCtaAdvanceInput,
+} from "./submittals/submittalAdvanceHelpers";
 import { forecastPortfolio } from "@/lib/submittalForecast";
-import { batchProcess } from "@/utils/batchProcess";
 import { usePermissions } from "@/services/permissions";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useSubmittalComponents } from "@/hooks/useSubmittalComponents";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import type { DrawingType } from "@/lib/submittalComponents";
-import { CLOSED_SUBMITTAL_STATUSES, submittalStatusToStage } from "@/lib/submittalStageMapping";
-import { shouldBumpRevisionOnResubmit } from "@/lib/submittalRevision";
-import { decideWorkdayDue } from "@/lib/submittalWorkdayDue";
 import { Dialog, DialogContent } from "./submittals/uiCompat";
 import { SubmittalDetail, SubmittalVirtualList } from "./submittals/components";
 import SubmittalRegisterPanel from "./submittals/SubmittalRegisterPanel";
 import { computeSubmittalStats, filterAndSortSubmittals, getVisibleSelectionState } from "./submittals/submittalRegister.derive";
 import SubmittalFormModal from "./submittals/SubmittalFormModal";
+import { useSubmittalsPageMutations } from "./submittals/useSubmittalsPageMutations";
 import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types";
 
 /**
@@ -63,7 +47,8 @@ import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types"
  * with.
  *
  * The SubmittalRegisterPanel is the canonical route presentation. The page
- * remains the owner of queries, mutations, workflow flags, and detail panels.
+ * remains the owner of queries, workflow flags, and detail panels; mutations
+ * live in useSubmittalsPageMutations (ID 21).
  */
 
 // These modals and the bulk action bar are still .jsx, so TS infers their array
@@ -185,7 +170,7 @@ export default function Submittals() {
     staleTime: 60_000,
   });
 
-  // ── Schedule tasks for linked-entity picker ─────────────────────��─
+  // ── Schedule tasks for linked-entity picker ────────────────────────
   const { data: allTasks = [] } = useQuery({
     queryKey: ["schedule-tasks", projectId],
     queryFn: () => projectId
@@ -267,238 +252,31 @@ export default function Submittals() {
     remove: removeComponentMut,
   } = useSubmittalComponents(projectId, drawingTypesEnabled);
 
-  const invalidate = useCallback(async () => {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: ["submittals", projectId] }),
-      qc.invalidateQueries({ queryKey: ["submittal-rounds", projectId] }),
-      qc.invalidateQueries({ queryKey: ["sheet-responses", projectId] }),
-      // Status moves can auto-queue a detailing task (submittalSmartTriggers).
-      qc.invalidateQueries({ queryKey: ["action-items", projectId] }),
-      qc.invalidateQueries({ queryKey: ["action-items"] }),
-    ]);
-    // Fan out the drawingSet family so Doc Control reflects any linked updates.
-    await invalidateEntity(qc, "drawingSet", projectId);
-  }, [qc, projectId]);
-
-  const createMut = useMutation({
-    mutationFn: (data: any) => entities.Submittal.create(withProjectId(data, projectId)),
-    onSuccess: async (row) => {
-      await invalidate();
-      await logActivity("submittal", "created", row, { projectId });
-      setSelectedId(row?.id || null);
-    },
-    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Create")),
-  });
-  const updateMut = useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
-      const prevStatus = rows.find((r: any) => r.id === id)?.status ?? null;
-      const updated = await entities.Submittal.update(id, data);
-      // Smart triggers: moves into Rejected / R&R / Approved-as-Noted queue a
-      // draft detailing task (deduped inside; never throws).
-      if (typeof data.status === "string") {
-        await runSubmittalStatusTriggers({ submittal: updated as any, prevStatus, nextStatus: data.status });
-        await logTransition("submittal", updated as any, prevStatus ?? "—", data.status, { projectId });
-      } else {
-        await logActivity("submittal", "updated", updated as any, { projectId });
-      }
-      return updated;
-    },
-    onSuccess: async () => { await invalidate(); toast.success("Updated"); },
-    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Update")),
-  });
-  // Verb CTA → the single audited write path: logs a submittal_rounds row +
-  // patches atomically (activates the previously-empty round log).
-  const advanceMut = useMutation({
-    mutationFn: (input: Parameters<typeof addSubmittalRound>[0]) => addSubmittalRound(input),
-    onSuccess: async () => { await invalidate(); toast.success("Round logged"); setReleaseBlock(null); },
-    onError: (err: any, variables) => {
-      // A blocked "Release for Fabrication" opens the override dialog with the
-      // pending move so a PM can release with a reason (or cancel + resolve).
-      if (err instanceof FabReleaseBlockedError) {
-        setReleaseBlock({ input: variables, rfis: err.blockingRfiNumbers || [] });
-      } else {
-        toast.error(formatSubmittalWriteError(err, "Advance"));
-      }
-    },
-  });
-  const advanceInFlight = useRef(false);
-  const runAdvance = useCallback((input: Parameters<typeof addSubmittalRound>[0]) => {
-    if (advanceInFlight.current) return;
-    advanceInFlight.current = true;
-    advanceMut.mutate(input, { onSettled: () => { advanceInFlight.current = false; } });
-  }, [advanceMut]);
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => entities.Submittal.delete(id),
-    onSuccess: async (_d, id) => {
-      await logActivity("submittal", "deleted", rows.find((r: any) => r.id === id) || { id, project_id: projectId }, { projectId });
-      await invalidate(); setSelectedId(null); setToDelete(null); toast.success("Deleted");
-    },
-    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Delete")),
-  });
-
-  // ── Bulk mutations ────────────────────────────────────────────────
-  // Bulk update — handles the special "__notes_append" sentinel from
-  // SubmittalBulkEditModal. When present, we read each row's existing
-  // notes off the cache and append the new text per row instead of
-  // overwriting. Every other field is a flat patch applied uniformly.
-  const bulkUpdateMut = useMutation({
-    mutationFn: async ({ ids, data }: { ids: string[]; data: any }) => {
-      const { __notes_append: notesAppend, ...patch } = data || {};
-      // Snapshot the current cache once — avoids N reads per row.
-      const cached = (qc.getQueryData(["submittals", projectId]) || []) as any[];
-      const byId = new Map(cached.map((r) => [r.id, r]));
-      const patchHasStatus = typeof patch.status === "string";
-      // A bulk move to a COMPLETED status (Released for Fabrication / Void)
-      // clears the ball-in-court, matching the audited round path (§20). The
-      // UI then renders "Closed" instead of a stale reviewer.
-      const patchClosesCycle =
-        patchHasStatus && CLOSED_SUBMITTAL_STATUSES.has(patch.status);
-      return batchProcess(ids, async (id) => {
-        const existing = byId.get(id);
-        const rowPatch: Record<string, any> = { ...patch };
-        if (patchClosesCycle) rowPatch.ball_in_court = null;
-        if (notesAppend) {
-          rowPatch.notes = appendSubmittalNotes(existing?.notes, notesAppend);
-        }
-        return entities.Submittal.update(id, rowPatch);
-      });
-    },
-    onSuccess: async (results, variables) => {
-      await invalidate();
-      const patchStatus = (variables as any)?.data?.status;
-      await Promise.all(results.succeeded.map(async ({ value, item }: any) => {
-        if (patchStatus) await logActivity("submittal", "status_changed", value || { id: item, project_id: projectId }, { projectId, description: `→ ${patchStatus}` });
-        else await logActivity("submittal", "updated", value || { id: item, project_id: projectId }, { projectId });
-      }));
-      const ok = results.succeeded.length;
-      const failed = results.failed.length;
-      const succeededIds = new Set(results.succeeded.map(({ item }: any) => item));
-      setSelectedIds((prev) => new Set([...prev].filter((id) => !succeededIds.has(id))));
-      if (ok > 0) setShowBulkEdit(false);
-      const toastInfo = formatBulkSubmittalToast("updated", ok, failed);
-      toast[toastInfo.level](toastInfo.message);
-    },
-    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Bulk update")),
-  });
-
-  const bulkDeleteMut = useMutation({
-    mutationFn: async (ids: string[]) => batchProcess(ids, (id) => entities.Submittal.delete(id)),
-    onSuccess: async (results) => {
-      await invalidate();
-      await Promise.all(results.succeeded.map(({ item }: any) =>
-        logActivity("submittal", "deleted", rows.find((r: any) => r.id === item) || { id: item, project_id: projectId }, { projectId })));
-      const ok = results.succeeded.length;
-      const failed = results.failed.length;
-      const deletedIds = new Set(results.succeeded.map(({ item }: any) => item));
-      if (selectedId && deletedIds.has(selectedId)) setSelectedId(null);
-      setSelectedIds((prev) => new Set([...prev].filter((id) => !deletedIds.has(id))));
-      if (ok > 0) setShowBulkDelete(false);
-      const toastInfo = formatBulkSubmittalToast("deleted", ok, failed);
-      toast[toastInfo.level](toastInfo.message);
-    },
-    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Bulk delete")),
-  });
-
-  const bulkCreateMut = useMutation({
-    mutationFn: async (newRows: any[]) => batchProcess(newRows, (row) =>
-      entities.Submittal.create(
-        buildBulkSubmittalCreatePayload(
-          row,
-          projectId,
-          activeProject?.project_name || activeProject?.name || "",
-        ) as any,
-      ),
-    ),
-    onSuccess: async (results) => {
-      await invalidate();
-      await Promise.all(results.succeeded.map(({ value, item }: any) =>
-        logActivity("submittal", "created", value || item || { project_id: projectId }, { projectId })));
-      const ok = results.succeeded.length;
-      const failed = results.failed.length;
-      if (ok > 0) setShowBulkAdd(false);
-      const toastInfo = formatBulkSubmittalToast("added", ok, failed);
-      toast[toastInfo.level](toastInfo.message);
-    },
-    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Bulk add")),
-  });
-
-  // ── Round mutations ───────────────────────────────────────────────
-  const createRoundMut = useMutation({
-    mutationFn: async (data: any) => {
-      let round: any = null;
-      try {
-        round = await entities.SubmittalRound.create(withProjectId(data, projectId));
-        if (round?.id && data.submittal_id) {
-          await entities.Submittal.update(data.submittal_id, {
-            current_round_id: round.id,
-            total_rounds: data.round_number || 1,
-            status: "Submitted",
-            ball_in_court: data.ball_in_court || "EOR",
-            submitted_date: data.submitted_date || new Date().toISOString().split("T")[0],
-          });
-          await logActivity("submittal", "round_created", {
-            id: data.submittal_id,
-            project_id: projectId,
-            round_number: data.round_number,
-          }, { projectId, description: `Round ${data.round_number || 1} created` });
-        }
-        return round;
-      } catch (err) {
-        if (round?.id) {
-          try { await entities.SubmittalRound.delete(round.id); } catch { /* preserve original failure */ }
-        }
-        throw err;
-      }
-    },
-    onSuccess: async () => { await invalidate(); toast.success("Round created — submittal resubmitted"); setShowNewRound(false); },
-    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Round")),
-  });
-
-  // ── Sheet response mutations ──────────────────────────────────────
-  const saveSheetResponsesMut = useMutation({
-    mutationFn: async ({ roundId, responses }: { roundId: string; responses: any[] }) => {
-      const results = { succeeded: 0, failed: 0 };
-      for (const resp of responses) {
-        try {
-          if (resp.id) {
-            await entities.SubmittalSheetResponse.update(resp.id, {
-              response_status: resp.response_status,
-              reviewer_comment: resp.reviewer_comment || null,
-            });
-          } else {
-            await entities.SubmittalSheetResponse.create(
-              withProjectId({
-                submittal_round_id: roundId,
-                drawing_id: resp.drawing_id || null,
-                drawing_set_id: resp.drawing_set_id || null,
-                sheet_number: resp.sheet_number || null,
-                response_status: resp.response_status,
-                reviewer_comment: resp.reviewer_comment || null,
-              }, projectId),
-            );
-          }
-          results.succeeded++;
-        } catch {
-          results.failed++;
-        }
-      }
-      return results;
-    },
-    onSuccess: async (results) => {
-      await invalidate();
-      if (results.failed > 0) {
-        if (results.succeeded === 0) {
-          toast.error(`No sheet responses saved; ${results.failed} failed. The dialog remains open for retry.`);
-          return;
-        }
-        setShowSheetResponse(null);
-        toast.warning(`${results.succeeded} saved, ${results.failed} failed`);
-      } else {
-        setShowSheetResponse(null);
-        toast.success(`${results.succeeded} sheet response(s) saved`);
-      }
-    },
-    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Sheet responses")),
+  const {
+    createMut,
+    updateMut,
+    advanceMut,
+    runAdvance,
+    deleteMut,
+    bulkUpdateMut,
+    bulkDeleteMut,
+    bulkCreateMut,
+    createRoundMut,
+    saveSheetResponsesMut,
+  } = useSubmittalsPageMutations({
+    projectId,
+    rows: rows as any[],
+    activeProject,
+    selectedId,
+    setSelectedId,
+    setToDelete,
+    setReleaseBlock,
+    setSelectedIds,
+    setShowBulkEdit,
+    setShowBulkDelete,
+    setShowBulkAdd,
+    setShowNewRound,
+    setShowSheetResponse,
   });
 
   // ── Filter/search ──────────────────────────────────────────────────
@@ -573,6 +351,15 @@ export default function Submittals() {
       return next;
     });
   }, [filtered]);
+
+  const newRoundSeed = showNewRound && selected
+    ? buildNewRoundCarrySeed({
+        submittalId: selected.id,
+        submittalRounds: roundsBySubmittal[selected.id] || [],
+        allSheetResponses,
+        allCommentDispositions,
+      })
+    : null;
 
   // ── Canonical register list + detail elements ───────────────────────────
   // The canonical panel owns presentation; these elements retain the complete
@@ -705,60 +492,17 @@ export default function Submittals() {
       onEdit={() => selected && setEditingId(selected.id)}
       onDelete={() => selected && setToDelete(selected.id)}
       onStatusChange={(status) => {
-        if (!selected || status === selected.status) return;
-        const today = localToday();
-        // Funnel real workflow moves through the audited round path so the
-        // round log stays the submit→return CYCLE truth (§20): a SEND opens
-        // (or advances) the open cycle, a VERDICT closes it — addSubmittalRound
-        // updates the open round in place or opens the next cycle. Draft/Void
-        // are plain status edits (no round). The round log sat empty because
-        // inline status changes used to bypass this entirely.
-        const isVerdict = [
-          "Approved", "Approved as Noted", "Revise and Resubmit",
-          "Rejected", "Released for Fabrication",
-        ].includes(status);
-        const isSent = status === "Submitted" || status === "Under Review";
-        if (isVerdict || isSent) {
-          // Phase 2: a resubmit SEND (prior disposition R&R/Rejected)
-          // opens the next round — auto-bump the text revision then, not
-          // on the verdict that closed the prior cycle. Flag-gated inside
-          // shouldBumpRevisionOnResubmit (off → false → revision untouched).
-          const bumpTextRevision =
-            isSent && shouldBumpRevisionOnResubmit(selected.status, revisionAutoBump);
-          // Phase 5: derive the operational stage this (status, BIC) lands
-          // in and, when it's outbound (OFA/OFS) and no due date is set,
-          // stamp a working-day due date. Flag-gated inside decideWorkdayDue
-          // (off → null → required_date untouched). BIC is unchanged on an
-          // inline status edit, so it drives OFA-vs-OFS the same way the
-          // stage chips do.
-          const nextStage = submittalStatusToStage(status, selected.ball_in_court ?? null, selected.approved_date ?? null);
-          const workdayDue = decideWorkdayDue({
-            stage: nextStage,
-            currentRequiredDate: selected.required_date ?? null,
-            today,
-            flagEnabled: workdayDuesEnabled,
-            projectMeta: activeProject?.metadata ?? null,
-          });
-          runAdvance({
-            submittal: selected as any,
-            status,
-            ball_in_court: selected.ball_in_court ?? null,
-            submitted_date: isSent ? today : (selected.submitted_date ?? undefined),
-            returned_date: isVerdict ? today : undefined,
-            bumpTextRevision,
-            currentRevision: selected.revision ?? null,
-            extraPatch: workdayDue.requiredDate
-              ? { required_date: workdayDue.requiredDate }
-              : undefined,
-          });
-        } else {
-          // Void is a plain status edit (no round), so the centralized
-          // BIC-clear in addSubmittalRound doesn't fire — null it here so
-          // a voided submittal shows "Closed", not a stale reviewer (§20).
-          const patch: { id: string; [key: string]: any } = { id: selected.id, status };
-          if (CLOSED_SUBMITTAL_STATUSES.has(status)) patch.ball_in_court = null;
-          updateMut.mutate(patch);
-        }
+        if (!selected) return;
+        const write = buildStatusChangeWrite({
+          selected: selected as any,
+          status,
+          today: localToday(),
+          revisionAutoBump,
+          workdayDuesEnabled,
+          projectMeta: activeProject?.metadata ?? null,
+        });
+        if (write.kind === "advance") runAdvance(write.input);
+        else if (write.kind === "update") updateMut.mutate(write.patch as any);
       }}
       onBICChange={(bic) => selected && updateMut.mutate({ id: selected.id, ball_in_court: bic })}
       // Verb CTA — advance via the audited write path: logs a round +
@@ -766,52 +510,19 @@ export default function Submittals() {
       // sending out (→OFA) and the returned date when logging a return
       // (→BFA); never a fake date otherwise (§22).
       onAdvance={(action) => {
-        if (!selected || !action.nextStatus) return;
-        const today = localToday();
-        // Stamp the submitted date on the FIRST outbound hop (or a
-        // fresh resubmit after R&R) — multi-party routing chains pass
-        // through OFA several times and must not re-stamp each hop.
-        const isResubmit = ["Revise and Resubmit", "Rejected"].includes(selected.status);
-        const stampSubmitted =
-          action.nextStage === "OFA" && (isResubmit || !selected.submitted_date);
-        // Phase 2: the fresh-resubmit outbound hop (→OFA with a prior
-        // R&R/Rejected disposition) opens the next round — auto-bump the
-        // text revision here. Flag-gated (off → false → untouched).
-        const bumpTextRevision =
-          action.nextStage === "OFA" &&
-          shouldBumpRevisionOnResubmit(selected.status, revisionAutoBump);
-        // Phase 5: the verb CTA already knows the stage it's advancing to
-        // (action.nextStage). On an outbound hop (OFA/OFS) with no due date
-        // set, stamp a working-day due date. Flag-gated inside
-        // decideWorkdayDue (off → null → required_date untouched). Merged
-        // into any existing extraPatch so the chain-step patch survives.
-        const workdayDue = decideWorkdayDue({
-          stage: action.nextStage,
-          currentRequiredDate: selected.required_date ?? null,
-          today,
-          flagEnabled: workdayDuesEnabled,
+        if (!selected) return;
+        const input = buildVerbCtaAdvanceInput({
+          selected: selected as any,
+          action,
+          today: localToday(),
+          revisionAutoBump,
+          workdayDuesEnabled,
           projectMeta: activeProject?.metadata ?? null,
-        });
-        const extraPatch: Record<string, unknown> = {};
-        if (action.chainStepIndex != null) extraPatch.approval_chain_step = action.chainStepIndex;
-        if (workdayDue.requiredDate) extraPatch.required_date = workdayDue.requiredDate;
-        runAdvance({
-          submittal: selected as any,
-          status: action.nextStatus,
-          ball_in_court: action.nextBallInCourt,
-          submitted_date: stampSubmitted ? today : undefined,
-          returned_date: action.nextStage === "BFA" ? today : undefined,
-          bumpTextRevision,
-          currentRevision: selected.revision ?? null,
-          nextStage: action.nextStage,
-          ofsChecklist: action.ofsChecklist ?? undefined,
-          ofsOverrideReason: action.ofsOverrideReason ?? undefined,
-          commentOverrideReason: action.commentOverrideReason ?? undefined,
           commentDispositions: allCommentDispositions.filter(
             (d: any) => d.submittal_id === selected.id,
           ),
-          extraPatch: Object.keys(extraPatch).length ? extraPatch : undefined,
         });
+        if (input) runAdvance(input);
       }}
       // Inline-edit hook — every editable cell in the detail
       // panel calls this with a single-field patch so we don't
@@ -887,9 +598,9 @@ export default function Submittals() {
               // tracking) — split it off the record so it never hits the
               // submittals insert as a phantom column. Component rows are created
               // after the submittal insert (need its id + project_id).
-              const { drawing_types: chosenTypes, ...submittalData } = data as {
-                drawing_types?: DrawingType[];
-              } & Record<string, unknown>;
+              const { chosenTypes, submittalData } = splitCreateSubmittalPayload(
+                data as { drawing_types?: DrawingType[] } & Record<string, unknown>,
+              );
               // Covers both a plain create and a spin-off child (the record
               // already carries parent_submittal_id + split_reason when split).
               const created = await createMut.mutateAsync(submittalData);
@@ -987,39 +698,19 @@ export default function Submittals() {
       {/* New Round modal — creates a new submittal round for the
           selected submittal. Carries forward drawing sets and
           increments the round number automatically. */}
-      {showNewRound && selected && (() => {
-        // Carry the prior round's unresolved reviewer dispositions forward so
-        // the resubmittal starts from exactly what must be addressed (§20) —
-        // the open items seed an editable checklist into the round's notes and
-        // render as a read-only "comments to address" panel. Derived from
-        // submittal_sheet_responses (already round-scoped): no migration.
-        const submittalRounds = roundsBySubmittal[selected.id] || [];
-        const previousRound = submittalRounds.length > 0 ? submittalRounds.at(-1) : null;
-        const carry = pickCarryForwardResponses(submittalRounds, allSheetResponses);
-        const carryItems = collectOpenItems(carry.responses);
-        const carryFromRound = carry.round?.round_number ?? null;
-        const sheetNotes = formatCarryForwardNotes(carryFromRound, carryItems);
-        const openDispositions = collectUnresolvedRequiredComments(
-          allCommentDispositions.filter((d: any) => d.submittal_id === selected.id),
-        );
-        const seededNotes = mergeCarryForwardNotes(
-          sheetNotes,
-          formatUnresolvedCommentNotes(openDispositions),
-        );
-        return (
-          <NewRoundModal
-            open={showNewRound}
-            submittal={selected}
-            previousRound={previousRound}
-            carryItems={carryItems}
-            carryFromRound={carryFromRound}
-            seededNotes={seededNotes}
-            busy={createRoundMut.isPending}
-            onClose={() => setShowNewRound(false)}
-            onSubmit={(data) => createRoundMut.mutateAsync(data)}
-          />
-        );
-      })()}
+      {showNewRound && selected && newRoundSeed && (
+        <NewRoundModal
+          open={showNewRound}
+          submittal={selected}
+          previousRound={newRoundSeed.previousRound}
+          carryItems={newRoundSeed.carryItems}
+          carryFromRound={newRoundSeed.carryFromRound}
+          seededNotes={newRoundSeed.seededNotes}
+          busy={createRoundMut.isPending}
+          onClose={() => setShowNewRound(false)}
+          onSubmit={(data) => createRoundMut.mutateAsync(data)}
+        />
+      )}
 
       {/* Fab-release gate override — a "Release for Fabrication" move blocked by
           open RFIs reopens here so a PM can release with a recorded reason. */}

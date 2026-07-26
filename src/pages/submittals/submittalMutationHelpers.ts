@@ -5,6 +5,8 @@
 
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { isFabReleaseBlocked } from "@/lib/fabRelease/releaseStatus";
+import { CLOSED_SUBMITTAL_STATUSES } from "@/lib/submittalStageMapping";
+import type { DrawingType } from "@/lib/submittalComponents";
 
 /** Append bulk-edit notes to an existing notes field (blank-safe). */
 export function appendSubmittalNotes(
@@ -118,4 +120,61 @@ export function buildBulkSubmittalCreatePayload(
       projectId,
     ),
   };
+}
+
+/**
+ * Per-row patch for bulk edit — appends notes when `__notes_append` was
+ * present, and clears ball-in-court when moving to a completed status.
+ */
+export function buildBulkUpdateRowPatch(
+  existing: { notes?: string | null } | null | undefined,
+  patch: Record<string, unknown>,
+  notesAppend?: string,
+): Record<string, unknown> {
+  const patchHasStatus = typeof patch.status === "string";
+  const patchClosesCycle =
+    patchHasStatus && CLOSED_SUBMITTAL_STATUSES.has(patch.status as string);
+  const rowPatch: Record<string, unknown> = { ...patch };
+  if (patchClosesCycle) rowPatch.ball_in_court = null;
+  if (notesAppend) {
+    rowPatch.notes = appendSubmittalNotes(existing?.notes, notesAppend);
+  }
+  return rowPatch;
+}
+
+/** Toast + dialog-close decision after saving sheet responses. */
+export function formatSheetResponseSaveToast(
+  succeeded: number,
+  failed: number,
+): { level: "error" | "warning" | "success"; message: string; closeDialog: boolean } {
+  if (failed > 0) {
+    if (succeeded === 0) {
+      return {
+        level: "error",
+        message: `No sheet responses saved; ${failed} failed. The dialog remains open for retry.`,
+        closeDialog: false,
+      };
+    }
+    return {
+      level: "warning",
+      message: `${succeeded} saved, ${failed} failed`,
+      closeDialog: true,
+    };
+  }
+  return {
+    level: "success",
+    message: `${succeeded} sheet response(s) saved`,
+    closeDialog: true,
+  };
+}
+
+/**
+ * Split UI-only `drawing_types` off a create payload so it never hits the
+ * submittals insert as a phantom column.
+ */
+export function splitCreateSubmittalPayload(
+  data: Record<string, unknown> & { drawing_types?: DrawingType[] },
+): { chosenTypes: DrawingType[] | undefined; submittalData: Record<string, unknown> } {
+  const { drawing_types: chosenTypes, ...submittalData } = data;
+  return { chosenTypes, submittalData };
 }
