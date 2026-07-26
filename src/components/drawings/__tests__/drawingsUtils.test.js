@@ -166,12 +166,20 @@ describe("buildSubmittalsBySetId", () => {
 });
 
 describe("drawing workflow authority helpers", () => {
-  it("blocks direct stage writes for sets linked to a submittal", () => {
+  it("blocks direct stage writes while a linked submittal is still open", () => {
     expect(classifyDrawingStageMutation(
       { drawing_set_id: "set-1" },
       "IFC",
-      { "set-1": { total: 1, latestStatus: "Under Review" } },
-    )).toMatchObject({ kind: "submittal", allowed: false });
+      { "set-1": { total: 1, open: 1, latestStatus: "Under Review", latestId: "sub-1" } },
+    )).toMatchObject({ kind: "submittal", allowed: false, latestId: "sub-1" });
+  });
+
+  it("allows sheet-stage sync after all linked submittals are closed", () => {
+    expect(classifyDrawingStageMutation(
+      { drawing_set_id: "set-1" },
+      "IFC",
+      { "set-1": { total: 2, open: 0, latestStatus: "Approved as Noted", latestId: "sub-9" } },
+    )).toMatchObject({ kind: "closed-set-sync", allowed: true });
   });
 
   it("allows constrained legacy recovery when no submittal is linked", () => {

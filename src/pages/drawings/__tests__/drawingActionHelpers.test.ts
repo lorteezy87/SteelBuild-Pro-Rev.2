@@ -150,7 +150,7 @@ describe("planBulkStageApply", () => {
     ).toBe("noop");
   });
 
-  it("rejects unknown stage and linked sets", () => {
+  it("rejects unknown stage", () => {
     expect(
       planBulkStageApply({
         bulkStage: "Nope",
@@ -161,29 +161,76 @@ describe("planBulkStageApply", () => {
         classify: () => ({ allowed: true }),
       }),
     ).toMatchObject({ kind: "error" });
-
-    expect(
-      planBulkStageApply({
-        bulkStage: "IFA",
-        selected: new Set(["a"]),
-        drawings: [{ id: "a", drawing_set_id: "s1" }],
-        stageOrder: STAGE_ORDER,
-        submittalsBySetId: { s1: { total: 1 } },
-        classify: () => ({ allowed: false }),
-      }),
-    ).toMatchObject({ kind: "blocked" });
   });
 
-  it("returns apply plan with info message", () => {
+  it("aborts when every selected sheet has an open linked submittal", () => {
+    const plan = planBulkStageApply({
+      bulkStage: "IFA",
+      selected: new Set(["a"]),
+      drawings: [{ id: "a", drawing_set_id: "s1" }],
+      stageOrder: STAGE_ORDER,
+      submittalsBySetId: { s1: { total: 1, open: 1 } },
+      classify: () => ({
+        allowed: false,
+        kind: "submittal",
+        setId: "s1",
+        latestStatus: "Under Review",
+      }),
+      resolveSetLabel: () => "Anchor Bolts",
+    });
+    expect(plan).toMatchObject({
+      kind: "apply",
+      ids: [],
+      blockedIds: ["a"],
+      blockedToast: { abort: true },
+    });
+    expect(plan.kind === "apply" && plan.blockedToast?.message).toMatch(/Anchor Bolts/);
+  });
+
+  it("allows closed-set sync while keeping open blockers selected", () => {
+    const plan = planBulkStageApply({
+      bulkStage: "IFA",
+      selected: new Set(["a", "b"]),
+      drawings: [
+        { id: "a", drawing_set_id: "s1" },
+        { id: "b", drawing_set_id: "s2" },
+      ],
+      stageOrder: STAGE_ORDER,
+      submittalsBySetId: {},
+      classify: (drawing) =>
+        drawing.id === "a"
+          ? { allowed: true, kind: "closed-set-sync", setId: "s1" }
+          : {
+              allowed: false,
+              kind: "submittal",
+              setId: "s2",
+              latestStatus: "Submitted",
+            },
+    });
+    expect(plan).toMatchObject({
+      kind: "apply",
+      ids: ["a"],
+      blockedIds: ["b"],
+      infoMessage: expect.stringMatching(/already closed/),
+      blockedToast: { abort: false },
+    });
+  });
+
+  it("returns apply plan with info message for legacy recovery", () => {
     const plan = planBulkStageApply({
       bulkStage: "IFA",
       selected: new Set(["a", "b"]),
       drawings: [{ id: "a" }, { id: "b" }],
       stageOrder: STAGE_ORDER,
       submittalsBySetId: {},
-      classify: () => ({ allowed: true }),
+      classify: () => ({ allowed: true, kind: "legacy-recovery" }),
     });
-    expect(plan).toMatchObject({ kind: "apply", ids: ["a", "b"] });
+    expect(plan).toMatchObject({
+      kind: "apply",
+      ids: ["a", "b"],
+      blockedIds: [],
+      infoMessage: expect.stringMatching(/without open linked/),
+    });
   });
 });
 

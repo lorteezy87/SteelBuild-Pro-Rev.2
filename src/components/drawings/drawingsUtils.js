@@ -49,23 +49,35 @@ export function validateStageTransition(from, to) {
 
 /**
  * Classify a direct sheet-stage write before it reaches the entity client.
- * Linked sets belong to the Submittal workflow; only rows without a linked
- * submittal may use the legacy sheet-stage recovery path.
+ *
+ * Open linked submittals own the workflow — block Drawings-page stage writes
+ * and send the user to Submittals. Once every linked submittal is terminal
+ * (open === 0), allow sheet-stage recovery so operators can sync the legacy
+ * `drawings.stage` column after the workflow already moved elsewhere.
  */
 export function classifyDrawingStageMutation(drawing, targetStage, submittalsBySetId = {}) {
   const setId = drawing?.drawing_set_id || null;
-  const linked = !!setId && Number(submittalsBySetId[setId]?.total || 0) > 0;
-  if (linked) {
+  const link = setId ? submittalsBySetId[setId] : null;
+  const openLinked = !!setId && Number(link?.open || 0) > 0;
+  if (openLinked) {
     return {
       kind: "submittal",
       allowed: false,
-      reason: `Set has a linked submittal (${submittalsBySetId[setId]?.latestStatus || "workflow"}).`,
+      setId,
+      latestStatus: link?.latestStatus || null,
+      latestId: link?.latestId || null,
+      open: Number(link?.open || 0),
+      reason: `Set has ${link.open} open linked submittal(s) (${link.latestStatus || "workflow"}).`,
     };
   }
+  const closedLinked = !!setId && Number(link?.total || 0) > 0;
   return {
-    kind: "legacy-recovery",
+    kind: closedLinked ? "closed-set-sync" : "legacy-recovery",
     allowed: true,
-    reason: `Sheet-stage recovery to ${targetStage} for a set without a linked submittal.`,
+    setId,
+    reason: closedLinked
+      ? `Sheet-stage sync to ${targetStage} after linked submittal(s) closed.`
+      : `Sheet-stage recovery to ${targetStage} for a set without a linked submittal.`,
   };
 }
 

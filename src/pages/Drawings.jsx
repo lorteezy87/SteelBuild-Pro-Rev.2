@@ -419,13 +419,31 @@ export default function Drawings({ embedded = false } = {}) {
       stageOrder: STAGE_ORDER,
       submittalsBySetId,
       classify: classifyDrawingStageMutation,
+      resolveSetLabel: (setId) => drawingSetMap[setId]?.set_name,
     });
     if (plan.kind === "noop") return;
-    if (plan.kind === "error" || plan.kind === "blocked") {
+    if (plan.kind === "error") {
       toast.error(plan.message);
       return;
     }
-    toast.info(plan.infoMessage, { duration: 4000 });
+
+    if (plan.blockedToast) {
+      const targetSetId = plan.blockedToast.blockedSetIds[0] || null;
+      const mapped = stageToSubmittalStatus(bulkStage);
+      const qs = buildSubmittalAdvanceSearch(targetSetId, mapped?.status);
+      toast.error(plan.blockedToast.message, {
+        duration: 8000,
+        action: {
+          label: "Open Submittals",
+          onClick: () => navigate(`/Submittals${qs}`),
+        },
+      });
+      if (plan.blockedToast.abort) return;
+    }
+
+    if (plan.infoMessage) {
+      toast.info(plan.infoMessage, { duration: 4000 });
+    }
     const { succeeded, failed } = await batchProcess(
       plan.ids,
       (id) => {
@@ -444,12 +462,14 @@ export default function Drawings({ embedded = false } = {}) {
       },
     );
     await invalidate();
-    const toastInfo = formatBulkUpdateToast(succeeded.length, failed.length);
-    if (toastInfo.clearSelection) {
-      setSelected(new Set());
-      setBulkStage("");
+    if (failed.length > 0) {
+      toast.warning(`${succeeded.length} updated, ${failed.length} failed`);
+    } else {
+      // Keep blocked sheets selected so the operator can jump to Submittals.
+      setSelected(new Set(plan.blockedIds));
+      if (plan.blockedIds.length === 0) setBulkStage("");
+      toast.success(`Updated ${succeeded.length} sheets`);
     }
-    toast[toastInfo.level](toastInfo.message);
   };
 
   const handleBulkDelete = () => {

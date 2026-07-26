@@ -16,9 +16,12 @@ Do not collapse them without an explicit migration.
 
 - CHECK constraint: 7 values
   (`Not Started`, `IFA`, `OFA`, `BFA`, `OFS`, `IFC`, `Released`)
-- Recovery / legacy writes when a set has **no** governing submittal
-  (`classifyDrawingStageMutation`, Advance Stage dialog)
+- Recovery / legacy writes when a set has **no open** governing submittal
+  (`classifyDrawingStageMutation`, Advance Stage dialog). Closed linked
+  submittals still allow sheet-stage sync so the Drawings register can
+  catch up after the workflow moved in Submittals.
 - Prefer creating/updating a submittal instead of mutating sheet stage
+  while any linked submittal is still open
 
 ## 3. Fabrication release audit (`fab_release_log`)
 

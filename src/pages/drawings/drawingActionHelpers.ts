@@ -151,13 +151,34 @@ export function planAdvanceStage(
   };
 }
 
+export type BulkStageBlockedToast = {
+  message: string;
+  /** Set ids that still have open linked submittals (for Submittals deep-link). */
+  blockedSetIds: string[];
+  latestStatus: string | null;
+  /** When true, no sheets can be updated — abort after the toast. */
+  abort: boolean;
+};
+
 export type BulkStagePlan =
   | { kind: "noop" }
   | { kind: "error"; message: string }
-  | { kind: "blocked"; message: string }
-  | { kind: "apply"; ids: string[]; infoMessage: string };
+  | {
+      kind: "apply";
+      /** Sheet ids allowed to update (excludes open-submittal blockers). */
+      ids: string[];
+      /** Blocked sheet ids retained in selection after a partial apply. */
+      blockedIds: string[];
+      infoMessage: string;
+      /** Present when some/all selected sheets are blocked by open linked submittals. */
+      blockedToast?: BulkStageBlockedToast;
+    };
 
-/** Validate bulk stage apply before touching the DB. */
+/**
+ * Plan bulk stage APPLY (#152 semantics):
+ * - Block only sheets whose linked submittals are still open.
+ * - Allow closed-set sync + legacy recovery for the rest.
+ */
 export function planBulkStageApply(opts: {
   bulkStage: string;
   selected: Set<string> | Iterable<string>;
@@ -169,30 +190,73 @@ export function planBulkStageApply(opts: {
     targetStage: string,
     submittalsBySetId: SubmittalsBySetId,
   ) => StageMutationDecision;
+  /** Optional label resolver for blocked set ids (set_name). */
+  resolveSetLabel?: (setId: string) => string | null | undefined;
 }): BulkStagePlan {
-  const { bulkStage, drawings, stageOrder, submittalsBySetId, classify } = opts;
+  const { bulkStage, drawings, stageOrder, submittalsBySetId, classify, resolveSetLabel } = opts;
   const selected = opts.selected instanceof Set ? opts.selected : new Set(opts.selected);
   if (!bulkStage || selected.size === 0) return { kind: "noop" };
   if (!stageOrder.includes(bulkStage)) {
     return { kind: "error", message: `Cannot apply unknown stage "${bulkStage}"` };
   }
+
   const ids = [...selected];
-  const blocked = ids
-    .map((id) => drawings.find((d) => d.id === id))
-    .filter(Boolean)
-    .map((drawing) => classify(drawing as DrawingLike, bulkStage, submittalsBySetId))
-    .find((decision) => !decision.allowed);
-  if (blocked) {
+  const decisions = ids.map((id) => {
+    const drawing = drawings.find((d) => d.id === id);
     return {
-      kind: "blocked",
-      message:
-        "Bulk workflow stage changes must be performed from Submittals; the selection includes a linked set.",
+      id,
+      decision: drawing
+        ? classify(drawing, bulkStage, submittalsBySetId)
+        : { allowed: false, kind: "missing", reason: "Sheet not found." },
     };
+  });
+  const blockedRows = decisions.filter((row) => !row.decision.allowed);
+  const allowedIds = decisions.filter((row) => row.decision.allowed).map((row) => row.id);
+  const blockedIds = blockedRows.map((row) => row.id);
+
+  let blockedToast: BulkStageBlockedToast | undefined;
+  if (blockedRows.length > 0) {
+    const blockedSetIds = [
+      ...new Set(
+        blockedRows
+          .map((row) => row.decision.setId as string | null | undefined)
+          .filter((id): id is string => typeof id === "string" && !!id),
+      ),
+    ];
+    const setLabel = blockedSetIds
+      .map((setId) => resolveSetLabel?.(setId) || "Linked set")
+      .slice(0, 2)
+      .join(", ");
+    const status = (blockedRows[0]?.decision?.latestStatus as string | null | undefined) || null;
+    blockedToast = {
+      abort: allowedIds.length === 0,
+      blockedSetIds,
+      latestStatus: status,
+      message:
+        allowedIds.length === 0
+          ? `${setLabel || "Selection"} still has an open linked submittal${status ? ` (${status})` : ""}. Advance the workflow from Submittals.`
+          : `${blockedRows.length} sheet(s) blocked — open linked submittal on ${setLabel || "a linked set"}${status ? ` (${status})` : ""}.`,
+    };
+    if (allowedIds.length === 0) {
+      return {
+        kind: "apply",
+        ids: [],
+        blockedIds,
+        infoMessage: "",
+        blockedToast,
+      };
+    }
   }
+
+  const syncingClosed = decisions.some((row) => row.decision.kind === "closed-set-sync");
   return {
     kind: "apply",
-    ids,
-    infoMessage: "Applying legacy sheet-stage recovery to sets without linked submittals.",
+    ids: allowedIds,
+    blockedIds,
+    infoMessage: syncingClosed
+      ? "Syncing sheet stages for sets whose linked submittals are already closed."
+      : "Applying legacy sheet-stage recovery to sets without open linked submittals.",
+    blockedToast,
   };
 }
 
