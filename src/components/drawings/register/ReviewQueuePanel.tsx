@@ -20,6 +20,7 @@ import { Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
 import { attachableRegisterRows, filterReviews } from "./docControl.derive";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 const ROLES = ["project_manager", "detailer", "shop", "field_ops", "document_control", "executive"];
 const DECIDE_OPTIONS = ["approved", "approved_with_notes", "rejected", "not_required"];
@@ -92,8 +93,20 @@ export function ReviewQueuePanel({ projectId }: { projectId: string | null }) {
   const rows = useMemo(() => filterReviews(reviews, pendingOnly), [reviews, pendingOnly]);
 
   if (!projectId) return <div style={{ padding: 24, color: "var(--cmd-text-muted)", fontSize: 13 }}>Select a project.</div>;
-  if (isLoading) return <div style={{ padding: 24, color: "var(--cmd-text-muted)", fontSize: 13 }}>Loading reviews…</div>;
-  if (error) return <div style={{ padding: 24, color: "var(--cmd-danger)", fontSize: 13 }}>Failed to load reviews: {(error as Error)?.message || "unknown"}</div>;
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={4} />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ padding: 24, color: "var(--cmd-danger)", fontSize: 13 }}>
+        Failed to load reviews: {toUserErrorMessage(error, "unknown")}
+      </div>
+    );
+  }
 
   return (
     <section className="detailing-cc" style={{ padding: 0, gap: 12 }}>

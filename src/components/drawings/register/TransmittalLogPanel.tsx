@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { usePermissions } from "@/services/permissions";
 import { useTransmittals } from "@/hooks/useTransmittals";
 import type { TransmittalAttachment, TransmittalRow } from "@/hooks/useTransmittals";
@@ -372,8 +373,20 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
   });
 
   if (!projectId) return <div style={{ padding: 24, color: "var(--cmd-text-muted)", fontSize: 13 }}>Select a project.</div>;
-  if (isLoading) return <div style={{ padding: 24, color: "var(--cmd-text-muted)", fontSize: 13 }}>Loading transmittals…</div>;
-  if (error) return <div style={{ padding: 24, color: "var(--cmd-danger)", fontSize: 13 }}>Failed to load transmittals: {(error as Error)?.message || "unknown"}</div>;
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={4} />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ padding: 24, color: "var(--cmd-danger)", fontSize: 13 }}>
+        Failed to load transmittals: {toUserErrorMessage(error, "unknown")}
+      </div>
+    );
+  }
 
   return (
     <section className="detailing-cc" style={{ padding: 0, gap: 12 }}>
