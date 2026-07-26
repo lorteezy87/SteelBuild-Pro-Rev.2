@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 export default function DeliveryFormModal({ projectId, onClose, delivery = null }) {
   const qc = useQueryClient();
@@ -95,13 +96,18 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
 
   const mutation = useMutation({
     mutationFn: (data) =>
-      isEdit ? entities.Delivery.update(delivery.id, data) : entities.Delivery.create(data),
+      isEdit
+        ? entities.Delivery.update(delivery.id, data)
+        : entities.Delivery.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["deliveries"] });
       toast.success(isEdit ? "Delivery updated" : "Delivery created");
       onClose();
     },
-    onError: (err) => toast.error((isEdit ? "Update" : "Create") + " failed: " + err.message),
+    onError: (err) =>
+      toast.error(
+        `${isEdit ? "Update" : "Create"} failed: ${toUserErrorMessage(err)}`,
+      ),
   });
 
   const set = (k, v) => setFormData((p) => ({ ...p, [k]: v }));

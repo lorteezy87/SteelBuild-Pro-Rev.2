@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../components/shared/ProjectContext";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { toast } from "sonner";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
 import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
@@ -89,7 +89,7 @@ export default function ResourceScheduling() {
       setNewRes(emptyNewRes);
       toast.success("Resource created");
     },
-    onError: (err: any) => toast.error(err.message || "Failed to create resource"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Failed to create resource")),
   });
 
   // The board could create resources but never edit them, so a resource added
@@ -103,7 +103,7 @@ export default function ResourceScheduling() {
       setEditingResource(null);
       toast.success("Resource updated");
     },
-    onError: (err: any) => toast.error(err?.message || "Failed to update resource"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Failed to update resource")),
   });
 
   // Data queries

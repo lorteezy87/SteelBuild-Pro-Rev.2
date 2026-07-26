@@ -10,7 +10,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import { useTransmittals } from "@/hooks/useTransmittals";
 import type { TransmittalAttachment, TransmittalRow } from "@/hooks/useTransmittals";
@@ -316,7 +316,7 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     },
     onError: (mutationError) => {
       queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
-      toast.error("Failed to log transmittal: " + ((mutationError as Error)?.message || "unknown"));
+      toast.error(`Failed to log transmittal: ${toUserErrorMessage(mutationError, "unknown")}`);
     },
   });
 
@@ -350,7 +350,7 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     },
     onError: (mutationError) => {
       queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
-      toast.error("Failed to update transmittal: " + ((mutationError as Error)?.message || "unknown"));
+      toast.error(`Failed to update transmittal: ${toUserErrorMessage(mutationError, "unknown")}`);
     },
   });
 
@@ -367,7 +367,7 @@ export function TransmittalLogPanel({ projectId }: { projectId: string | null })
     },
     onError: (mutationError) => {
       queryClient.invalidateQueries({ queryKey: ["drawing-transmittals", projectId] });
-      toast.error("Failed to delete transmittal: " + ((mutationError as Error)?.message || "unknown"));
+      toast.error(`Failed to delete transmittal: ${toUserErrorMessage(mutationError, "unknown")}`);
     },
   });
 

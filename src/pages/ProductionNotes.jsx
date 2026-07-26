@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { CommandBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 // ─── Date helpers ──────────────────────────────────────────────────────────
 const toISODate = (d) => {
@@ -95,7 +96,7 @@ export default function ProductionNotes() {
     },
     onError: (err, _data, ctx) => {
       if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error(err.message || "Failed to add bullet");
+      toast.error(toUserErrorMessage(err, "Failed to add bullet"));
     },
     onSuccess: (record, vars) => {
       qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] });
@@ -119,7 +120,7 @@ export default function ProductionNotes() {
     },
     onError: (err, _data, ctx) => {
       if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error(err.message || "Update failed");
+      toast.error(toUserErrorMessage(err, "Update failed"));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] }),
   });
@@ -134,7 +135,7 @@ export default function ProductionNotes() {
     },
     onError: (err, _id, ctx) => {
       if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error("Delete failed");
+      toast.error(toUserErrorMessage(err, "Delete failed"));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] }),
   });
