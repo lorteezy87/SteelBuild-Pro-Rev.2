@@ -642,7 +642,7 @@ export default function Submittals() {
           open={!!toDelete}
           onClose={() => setToDelete(null)}
           busy={deleteMut.isPending}
-          onConfirm={() => deleteMut.mutate(toDelete)}
+          onConfirm={() => deleteMut.mutateAsync(toDelete)}
           title="Delete submittal"
           description="This submittal and its comment thread will be soft-deleted. This cannot be undone from the UI."
         />
@@ -674,8 +674,8 @@ export default function Submittals() {
         count={selectedIds.size}
         onCancel={() => setShowBulkEdit(false)}
         busy={bulkUpdateMut.isPending}
-        onSubmit={(data) => {
-          bulkUpdateMut.mutate({ ids: [...selectedIds], data });
+        onSubmit={async (data) => {
+          await bulkUpdateMut.mutateAsync({ ids: [...selectedIds], data });
         }}
       />
 
@@ -690,7 +690,7 @@ export default function Submittals() {
         open={showBulkDelete}
         onClose={() => setShowBulkDelete(false)}
         busy={bulkDeleteMut.isPending}
-        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+        onConfirm={() => bulkDeleteMut.mutateAsync([...selectedIds])}
         title={`Delete ${selectedIds.size} submittal${selectedIds.size === 1 ? "" : "s"}`}
         description={`Soft-delete ${selectedIds.size} selected submittal${selectedIds.size === 1 ? "" : "s"}? This cannot be undone from the UI.`}
       />

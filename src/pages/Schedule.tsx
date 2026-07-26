@@ -601,15 +601,24 @@ export default function Schedule() {
 
   const bulkSetParent = (newParentId: string | null) => {
     const ids = Array.from(selectedIds);
-    if (!ids.length) return;
-    reparentMut.mutate({ ids, newParentId });
-    setShowBulkParent(false);
+    if (!ids.length || reparentMut.isPending) return;
+    void reparentMut.mutateAsync({ ids, newParentId }).then(
+      () => setShowBulkParent(false),
+      () => {
+        /* toast via onError; keep picker open for retry */
+      },
+    );
   };
 
   const confirmBulkDelete = () => {
     const ids = Array.from(selectedIds);
-    bulkDeleteMut.mutate(ids);
-    setShowBulkDeleteConfirm(false);
+    if (!ids.length || bulkDeleteMut.isPending) return;
+    void bulkDeleteMut.mutateAsync(ids).then(
+      () => setShowBulkDeleteConfirm(false),
+      () => {
+        /* toast via onError; keep confirm open for retry */
+      },
+    );
   };
 
   // Legal parent options for the bulk "Set Parent" picker — intersection of

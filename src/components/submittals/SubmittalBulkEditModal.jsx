@@ -56,7 +56,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
   const [clearRequiredDate, setClearRequiredDate] = useState(false);
   const [notesAppend, setNotesAppend] = useState("");
 
-  const apply = () => {
+  const apply = async () => {
     if (busy) return;
     const data = {};
     if (status) data.status = status;
@@ -74,7 +74,11 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
       return;
     }
 
-    onSubmit({ ...data, ...meta });
+    try {
+      await Promise.resolve(onSubmit({ ...data, ...meta }));
+    } catch {
+      // Keep open; parent mutation toasts onError.
+    }
   };
 
   const reset = () => {

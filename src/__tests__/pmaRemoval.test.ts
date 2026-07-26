@@ -16,6 +16,7 @@ const ACTIVE_FILES = [
   "src/config/routes.js",
   "src/config/moduleRegistry.js",
   "src/api/client/entities.ts",
+  "src/api/client/functions.ts",
   "src/api/client/softDelete.ts",
   "src/instrument.js",
   "src/lib/workspaceExport.ts",

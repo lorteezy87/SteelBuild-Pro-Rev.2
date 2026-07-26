@@ -57,7 +57,7 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.project_id) {
       toast.error("Select a project");
       return;
@@ -68,11 +68,15 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
     }
 
     if (isEdit) {
-      onSave && onSave(formData);
-      onClose();
-    } else {
-      createMut.mutate(formData);
+      // Await parent update so a rejected write keeps the modal open with values.
+      try {
+        await Promise.resolve(onSave?.(formData));
+      } catch {
+        // Parent mutation toasts onError.
+      }
+      return;
     }
+    createMut.mutate(formData);
   };
 
   const inputStyle = {

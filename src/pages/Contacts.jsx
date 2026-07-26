@@ -270,10 +270,9 @@ export default function Contacts() {
           onClose={() => { setShowForm(false); setEditingContact(null); }}
           onSave={(data) => {
             if (editingContact) {
-              updateMut.mutate({ id: editingContact.id, data });
-            } else {
-              createMut.mutate(data);
+              return updateMut.mutateAsync({ id: editingContact.id, data });
             }
+            createMut.mutate(data);
           }}
         />
       )}
@@ -281,7 +280,8 @@ export default function Contacts() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        busy={deleteMut.isPending}
+        onConfirm={() => deleteTarget && deleteMut.mutateAsync(deleteTarget.id)}
         title="Delete Contact"
         description={`Delete ${deleteTarget?.first_name} ${deleteTarget?.last_name}? This cannot be undone.`}
       />
