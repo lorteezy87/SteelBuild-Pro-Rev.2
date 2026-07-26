@@ -1,17 +1,29 @@
-# Action-plan — post-deploy checkpoint (2026-07-26)
+# Action-plan next slice — BudgetHours / FieldPlan / PayApps loading gates
 
-**Merged + prod:** #133 · #134 · #135 · #136 · #137 → https://www.steelbuild-pro.com  
-**Deployment:** `dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL`
+**Branch / PR:** `cursor/action-plan-budget-field-d3a1`  
+**Dates:** 2026-07-26  
+**Prior prod:** #133–#137 deployed (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL`)  
+**Open siblings:** #139–#146
 
-| ID | Status | What shipped |
-|---|---|---|
-| **18** | **Done** | `RegisterFetchBody` (thin CRUD/QC) + Photos/Safety INLINE gates |
-| **48** | In Progress | Toast hygiene across modals/import/Doc Control/commercial/inbox — not universal |
-| **50** | In Progress | `withProjectId` on modals, CSV imports, Doc Control creates, Backcharges/SOV import — upload pipelines + org-level remain |
-| **102** | Blocked | Interactive UAT + GH Actions billing |
+## Code (IDs 18 / 48)
 
-## Next slices (suggested)
+| File | Change |
+|---|---|
+| `BudgetHours.jsx` | Page-shell `LoadingSkeleton` + error/retry; preset toast via `toUserErrorMessage` |
+| `FieldPlan.jsx` | Board loader → skeleton + error/retry |
+| `PayApplications.jsx` | Page-shell skeleton + error/retry before ControlCenter |
 
-- DMS UploadModal / DocumentEditModal / LinkedFolderBrowser create+toast
+## Still open
+
+- Merge #139–#146 (+ this)
 - Large page thins 21 / 23 / 27
 - Concurrent-edit E2E (52)
+- DailyLogs `isError` polish
+- **Blocked:** 102
+
+## Validation
+
+```bash
+npx eslint src/pages/BudgetHours.jsx src/pages/FieldPlan.jsx src/pages/PayApplications.jsx --quiet
+npx vitest run src/lib/mutations/__tests__/standardMutation.test.ts
+```

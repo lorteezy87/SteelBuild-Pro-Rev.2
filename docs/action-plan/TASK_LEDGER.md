@@ -51,7 +51,7 @@ Status key:
 | 15 | Done (automated) | Corrected-flow retest harness — 18 files / 155 tests PASS; interactive UAT = ID 102 | `npm run test:corrected-flows`, `RETEST_CORRECTED_FLOWS.md` |
 | 16 | Done | `react-hooks/rules-of-hooks` clean across `src/` | `npm run check:hooks` |
 | 17 | Done | Console/Sentry review; residual CSP-RO/staging-ops/noise documented | `WORK_14_17.md` |
-| 18 | Partial | Photos + Safety INLINE loading/error/empty; thin CRUD RegisterFetchBody on PR #133; not universal | `WORK_NEXT_SLICE.md` |
+| 18 | Done | Photos/Safety + thin CRUD (#133/#137); commercial/ops page-shell gates through BudgetHours/FieldPlan/PayApps; not universal | `WORK_NEXT_SLICE.md` |
 | 19 | Completed | Null project guards + `withProjectId` on high-traffic creates | `standardMutation.withProjectId` + wired pages |
 | 20 | Partial | Modal project-switch safety varies by module | remaining risk |
 
@@ -72,7 +72,7 @@ Status key:
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
 | 47 | Completed | Standard mutation helpers introduced | `src/lib/mutations/standardMutation.ts` |
-| 48 | Partial | Commercial/inbox residual (Backcharges/PayApps/EmailInbox/Documents/SOV) + prior #133–#135; not universal | `WORK_NEXT_SLICE.md` |
+| 48 | Partial | BudgetHours preset toast helper + prior #133–#137 / EmailInbox stack; #139–#146 open; not universal | `WORK_NEXT_SLICE.md` |
 | 49 | Completed | `invalidateAfterMutation` helper | same + cacheRegistry |
 | 50 | Partial | Backcharge/T&M + SOV import fail-closed; PayApps assertProjectId; prior page/modal/import wiring; upload pipelines + org-level remain | `WORK_NEXT_SLICE.md` |
 | 51 | Partial | Critical optimistic paths reviewed in prior PRs; not universal | — |

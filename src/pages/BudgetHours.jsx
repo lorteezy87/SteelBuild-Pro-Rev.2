@@ -33,8 +33,10 @@ import { usePermissions } from "@/services/permissions";
 import { logActivity } from "@/services/auditLogger";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toastCrudError } from "@/components/shared/crudFeedback";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { Button } from "@/components/design-system";
 import BudgetHoursControlCenter from "./budgetHours/BudgetHoursControlCenter";
 import ScopeItemFormModal from "./budgetHours/ScopeItemFormModal";
 
@@ -514,7 +516,13 @@ export default function BudgetHours() {
   // every downstream consumer (the Standard / Specialty buckets, the
   // Misses sub-table, totals) sees an "active rows only" view and the
   // user actually sees the row disappear after they click Remove.
-  const { data: rawRows = [], isLoading } = useQuery({
+  const {
+    data: rawRows = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["budget-hour-items", projectId],
     queryFn: () => (projectId ? entities.BudgetHourItem.filter({ project_id: projectId }, "sort_order") : []),
     enabled: !!projectId,
@@ -627,7 +635,7 @@ export default function BudgetHours() {
       try {
         await entities.BudgetHourItem.create(withProjectId(row, projectId));
       } catch (e) {
-        toast.error(`Preset row "${row.scope_item}" failed: ${e.message || "unknown"}`);
+        toast.error(`Preset row "${row.scope_item}" failed: ${toUserErrorMessage(e, "unknown")}`);
       }
     }
     qc.invalidateQueries({ queryKey: ["budget-hour-items", projectId] });
@@ -669,6 +677,49 @@ export default function BudgetHours() {
     if (!deleteTarget?.id) return;
     deleteMut.mutate(deleteTarget.id, { onSettled: () => setDeleteTarget(null) });
   };
+
+  if (!projectId) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Select a project
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
+          Budget Hours is project-scoped. Choose a project from the top nav.
+        </div>
+      </div>
+    );
+  }
+
+  // Gate fetch states at the page shell — BudgetHoursControlCenter has no loading props.
+  if (isLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px",
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load budget hours
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(error, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+      </div>
+    );
+  }
 
   /* ── Canonical Budget Hours control center ── */
     // Apply search + category + over-budget filter for the DataTable.
