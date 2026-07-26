@@ -7,8 +7,9 @@ import { computeRevisedContractValue } from "@/services/costRollup";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { formatDate, formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
-import { CommandBar } from "@/components/design-system";
+import { CommandBar, Button } from "@/components/design-system";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import SOVFormModal from "@/components/sov/SOVFormModal";
 import { Pencil, Trash2 } from "lucide-react";
 import {
@@ -18,7 +19,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 
 // Local aliases so the ~30 call sites below don't need to change. Both
@@ -663,7 +664,13 @@ export default function ContractManagement() {
   const [contractForm, setContractForm] = useState({});
 
   // ── Queries ───────────────────────────────────────────────────────────────
-  const { data: project, isLoading: projectLoading } = useQuery({
+  const {
+    data: project,
+    isLoading: projectLoading,
+    isError: projectError,
+    error: projectErrorValue,
+    refetch: refetchProject,
+  } = useQuery({
     queryKey: getQueryKey("project", projectId),
     queryFn: () => entities.Project.list(),
     enabled: !!projectId,
@@ -671,21 +678,39 @@ export default function ContractManagement() {
     select: (projects) => (projects || []).find((p) => p.id === projectId),
   });
 
-  const { data: changeOrders = [], isLoading: cosLoading } = useQuery({
+  const {
+    data: changeOrders = [],
+    isLoading: cosLoading,
+    isError: cosError,
+    error: cosErrorValue,
+    refetch: refetchCos,
+  } = useQuery({
     queryKey: getQueryKey("change_order", projectId),
     queryFn: () => entities.ChangeOrder.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: sovItems = [], isLoading: sovLoading } = useQuery({
+  const {
+    data: sovItems = [],
+    isLoading: sovLoading,
+    isError: sovError,
+    error: sovErrorValue,
+    refetch: refetchSov,
+  } = useQuery({
     queryKey: getQueryKey("sov_item", projectId),
     queryFn: () => entities.SOVItem.filter({ project_id: projectId }),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: expenses = [], isLoading: expensesLoading } = useQuery({
+  const {
+    data: expenses = [],
+    isLoading: expensesLoading,
+    isError: expensesError,
+    error: expensesErrorValue,
+    refetch: refetchExpenses,
+  } = useQuery({
     queryKey: getQueryKey("expense", projectId),
     queryFn: () => entities.Expense.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -801,6 +826,14 @@ export default function ContractManagement() {
   const revisedValue = computeRevisedContractValue(project, changeOrders);
 
   const isLoading = projectLoading || cosLoading || sovLoading || expensesLoading;
+  const isError = projectError || cosError || sovError || expensesError;
+  const loadError = projectErrorValue || cosErrorValue || sovErrorValue || expensesErrorValue;
+  const refetchAll = () => {
+    refetchProject();
+    refetchCos();
+    refetchSov();
+    refetchExpenses();
+  };
 
   // ── No project selected ───────────────────────────────────────────────────
   if (!projectId) return (
@@ -811,21 +844,42 @@ export default function ContractManagement() {
     </div>
   );
 
-  // ── Loading ───────────────────────────────────────────────────────────────
-  if (isLoading) return (
-    <div className="sb-dashboard-reference-page" style={{ padding: "24px 28px" }}>
-      <CommandBar
-        eyebrow="CONTRACT"
-        title="Contract Management"
-        subtitle="Loading..."
-      />
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
-        {[1, 2, 3].map(i => (
-          <div key={i} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", height: 80, animation: "pulse 1.5s ease-in-out infinite", opacity: 0.5 }} />
-        ))}
+  // ── Loading / error ───────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: "24px 28px" }}>
+        <CommandBar
+          eyebrow="CONTRACT"
+          title="Contract Management"
+          subtitle="Loading contract data"
+        />
+        <div style={{ marginTop: 20 }}>
+          <LoadingSkeleton variant="table" rows={8} />
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px",
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load contract data
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(loadError, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={refetchAll}>Retry</Button>
+      </div>
+    );
+  }
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
   const TABS = ["CHANGE ORDERS", "BILLING & SOV", "CONTRACT SUMMARY"];

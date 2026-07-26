@@ -54,6 +54,8 @@ Deployed **2026-07-24** to https://www.steelbuild-pro.com from `main` including 
 
 **2026-07-26 (deploy batch):** Merged **#133–#137** to `main` and deployed to production (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL` → https://www.steelbuild-pro.com). ID **18** Done; IDs **48**/**50** advanced. Local vitest/eslint/build green; GH Actions still billing-blocked.
 
+**2026-07-26 (expenses-contract):** Expenses + ContractManagement `LoadingSkeleton` + error/retry (`cursor/action-plan-expenses-contract-d3a1`). Sibling **#148** DailyLogs isError. Open **#139–#148**. Tracker: Done **79** · In Progress **25** · Blocked **1**.
+
 ## How to refresh next time
 
 1. Update `TASK_LEDGER.md` statuses from PRs/deploys.  
