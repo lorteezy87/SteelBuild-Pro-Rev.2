@@ -32,6 +32,7 @@ import {
 } from "@/lib/backcharge/defensePackage";
 import { buildDefensePdf } from "@/lib/backcharge/defensePdf";
 import { entities } from "@/api/supabaseClient";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import {
   BACKCHARGE_REASON_CODES,
   BACKCHARGE_REASON_LABELS,
@@ -286,27 +287,38 @@ export default function Backcharges() {
   };
 
   const createMut = useMutation({
-    mutationFn: (form) => createBackcharge({ ...form, project_id: projectId }),
+    mutationFn: (form) => createBackcharge(withProjectId({ ...form }, projectId)),
     onSuccess: (bc) => { refetchAll(); setFormOpen(false); setEditing(null); setSelectedId(bc.id); toast.success("Backcharge created"); },
-    onError: (e) => toast.error(e?.message?.includes("row-level security") ? "Only PM+ can create backcharges." : `Create failed: ${e?.message}`),
+    onError: (e) => {
+      const msg = toUserErrorMessage(e);
+      toast.error(msg.includes("row-level security") ? "Only PM+ can create backcharges." : `Create failed: ${msg}`);
+    },
   });
   const updateMut = useMutation({
     mutationFn: ({ id, patch, prev }) => updateBackcharge(id, patch, prev),
     onSuccess: () => { refetchAll(); setFormOpen(false); setEditing(null); toast.success("Saved"); },
-    onError: (e) => toast.error(`Save failed: ${e?.message}`),
+    onError: (e) => toast.error(`Save failed: ${toUserErrorMessage(e)}`),
   });
   const addTicketMut = useMutation({
-    mutationFn: (t) => addTmTicket({
-      ...t, backcharge_id: selectedId, project_id: projectId,
+    mutationFn: (t) => addTmTicket(withProjectId({
+      ...t, backcharge_id: selectedId,
       labor_hours: Number(t.labor_hours) || 0, labor_rate: Number(t.labor_rate) || 0,
       equipment_cost: Number(t.equipment_cost) || 0, material_cost: Number(t.material_cost) || 0,
       markup_percent: Number(t.markup_percent) || 0, ticket_date: t.ticket_date || null,
-    }),
+    }, projectId)),
     onSuccess: () => { refetchAll(); toast.success("T&M ticket added"); },
-    onError: (e) => toast.error(`Add failed: ${e?.message}`),
+    onError: (e) => toast.error(`Add failed: ${toUserErrorMessage(e)}`),
   });
-  const delTicketMut = useMutation({ mutationFn: (id) => softDeleteTmTicket(id), onSuccess: () => { refetchAll(); }, onError: (e) => toast.error(`Delete failed: ${e?.message}`) });
-  const delMut = useMutation({ mutationFn: (id) => softDeleteBackcharge(id), onSuccess: () => { refetchAll(); setSelectedId(null); toast.success("Deleted"); }, onError: (e) => toast.error(`Delete failed: ${e?.message}`) });
+  const delTicketMut = useMutation({
+    mutationFn: (id) => softDeleteTmTicket(id),
+    onSuccess: () => { refetchAll(); },
+    onError: (e) => toast.error(`Delete failed: ${toUserErrorMessage(e)}`),
+  });
+  const delMut = useMutation({
+    mutationFn: (id) => softDeleteBackcharge(id),
+    onSuccess: () => { refetchAll(); setSelectedId(null); toast.success("Deleted"); },
+    onError: (e) => toast.error(`Delete failed: ${toUserErrorMessage(e)}`),
+  });
 
   const exportDefense = async (bc0) => {
     try {
@@ -316,7 +328,7 @@ export default function Backcharges() {
       buildDefensePdf({ backcharge: bc, tickets: tks, events: evs, project: activeProject }).save(`${stem}.pdf`);
       downloadTextFile(buildDefenseManifestCsv(bc, tks, evs), `${stem}_manifest.csv`, "text/csv;charset=utf-8");
       toast.success("Defense package exported (PDF + CSV)");
-    } catch (e) { toast.error(`Export failed: ${e?.message}`); }
+    } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };
 
   if (!projectId) return <div style={{ ...mono, padding: 24, color: "var(--text-muted)" }}>Select a project to manage backcharges.</div>;
