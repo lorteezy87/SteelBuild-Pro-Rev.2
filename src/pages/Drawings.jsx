@@ -24,6 +24,29 @@ import {
   formatDeleteSetSuccessMessage,
   formatDrawingWriteError,
 } from "./drawings/drawingMutationHelpers";
+import {
+  buildApprovalSetState,
+  buildBulkDeleteConfirm,
+  buildDeleteSetConfirm,
+  buildDeleteSheetConfirm,
+  buildMarkerSetState,
+  buildParentApprovalPatch,
+  buildRenameSetState,
+  buildSheetApprovalPatch,
+  buildSubmittalAdvanceSearch,
+  formatBulkDeleteToast,
+  formatBulkUpdateToast,
+  formatRenameSetToast,
+  formatSetApprovalToast,
+  planAdvanceStage,
+  planBulkStageApply,
+  planDeleteSetMutation,
+  resolveApprovalEffectiveDate,
+  resolveApprovalParentSetId,
+  resolveSheetsToApprove,
+  toggleIdInSet,
+  toggleSelectAllIds,
+} from "./drawings/drawingActionHelpers";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { batchProcess } from "@/utils/batchProcess";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
@@ -31,11 +54,11 @@ import { usePermissions } from "@/services/permissions";
 
 // ── Domain config & utils ───────────────────────────────────────────────────
 import {
-  STAGE_ORDER, DISCIPLINES, EMPTY_FORM,
+  STAGE_ORDER, DISCIPLINES,
   mono, surface, stageUpdatePatch,
 } from "@/components/drawings/drawingsConfig";
 import {
-  exportTransmittal, computeStatsFromSubmittals, computeDisciplineCounts, buildRevisionAlerts,
+  computeStatsFromSubmittals, computeDisciplineCounts, buildRevisionAlerts,
   validateStageTransition, classifyDrawingStageMutation, buildRfiMap, buildSubmittalsBySetId, filterDrawings,
   groupByDrawingSetName, computeExistingSetNames, buildDrawingSetMap, computeSelectedSetName,
   computeStagePipeline,
@@ -51,28 +74,12 @@ import { DisciplineChips, FilterBar, BulkActionsBar } from "@/components/drawing
 import AlertBanner from "@/components/drawings/AlertBanner";
 import ActiveFilterPills from "@/components/drawings/ActiveFilterPills";
 import DrawingContextMenu from "@/components/drawings/DrawingContextMenu";
-import SheetFormModal from "@/components/drawings/SheetFormModal";
-import SetApprovalModal from "@/components/drawings/SetApprovalModal";
-import AdvanceStageDialog from "@/components/drawings/AdvanceStageDialog";
-import RenameSetModal from "@/components/drawings/RenameSetModal";
-import TitleblockMarkerModal from "@/components/drawings/TitleblockMarkerModal";
-import BulkEditModal from "@/components/drawings/BulkEditModal";
-import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
-import DrawingLogImportModal from "@/components/drawings/DrawingLogImportModal";
-import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
-import RevisionCompareModal from "@/components/drawings/RevisionCompareModal";
-import RevisionImpactReportModal from "@/components/drawings/RevisionImpactReportModal";
-import ExportFabReleaseModal from "@/components/drawings/ExportFabReleaseModal";
-import DeleteDialog from "@/components/shared/DeleteDialog";
+import DrawingsPageModals from "./drawings/DrawingsPageModals";
+import DrawingsPageToolbar from "./drawings/DrawingsPageToolbar";
 import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 
 // ── Design-system chrome (Claude Design redesign) ─────────────────────────
-import {
-  CommandBar,
-  KpiTile,
-  PhaseChevron,
-  Button,
-} from "@/components/design-system";
+import { PhaseChevron } from "@/components/design-system";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -309,18 +316,16 @@ export default function Drawings({ embedded = false } = {}) {
   // set only by legacy drawing_set_name (no FK yet).
   const deleteSetMut = useMutation({
     mutationFn: async ({ setId, sheetIds }) => {
-      // Set-only (parent row, no child sheets): soft-delete parent directly
-      if (setId && sheetIds.length === 0) {
-        await entities.DrawingSet.delete(setId);
+      const strategy = planDeleteSetMutation({ setId, sheetIds });
+      if (strategy.kind === "parentOnly") {
+        await entities.DrawingSet.delete(strategy.setId);
         return { deleted: 0, parentOnly: true };
       }
-      // Normal cascade: parent + children in one transaction
-      if (setId) {
-        const result = await entities.DrawingSet.deleteCascade(setId);
-        return { deleted: result.deletedChildCount ?? sheetIds.length };
+      if (strategy.kind === "cascade") {
+        const result = await entities.DrawingSet.deleteCascade(strategy.setId);
+        return { deleted: result.deletedChildCount ?? strategy.sheetCount };
       }
-      // Legacy fallback: no parent row, just sweep the children.
-      const { succeeded, failed } = await batchProcess(sheetIds, (id) => entities.Drawing.delete(id));
+      const { succeeded, failed } = await batchProcess(strategy.sheetIds, (id) => entities.Drawing.delete(id));
       return { deleted: succeeded.length, deletedSheetIds: succeeded, failed };
     },
     onSuccess: async ({ deleted, parentOnly, deletedSheetIds = [], failed = [] }, { setId, sheetIds, setName }) => {
@@ -362,7 +367,7 @@ export default function Drawings({ embedded = false } = {}) {
     onError: (e) => toast.error(formatDrawingWriteError(e, "delete set")),
   });
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // ── Handlers (planning in drawingActionHelpers; IO stays here) ────────────
   const handleSave = async (form) => {
     setSaving(true);
     try {
@@ -378,82 +383,53 @@ export default function Drawings({ embedded = false } = {}) {
 
   const handleDelete = (id) => {
     setContextMenu(null);
-    const d = drawings.find(x => x.id === id);
-    const label = d?.sheet_number ? `"${d.sheet_number}"` : "this sheet";
-    setConfirmState({
-      title: `Delete ${label}?`,
-      description: "The sheet will be removed from the project. You can undo this from the toast that appears after deletion.",
-      run: () => deleteMut.mutate(id),
-    });
+    const confirm = buildDeleteSheetConfirm(drawings.find((x) => x.id === id));
+    setConfirmState({ ...confirm, run: () => deleteMut.mutate(id) });
   };
 
   const handleDeleteSet = (group) => {
-    if (group.isUngrouped) return;
-    const total = group.sheets.length;
-    // For set-only groups (imported from Drive, no child sheets yet) the
-    // parent id lives on group.setId or group.parent.id directly.
-    // For groups with child sheets, derive from the children's FK.
-    const setIdCandidates = group.sheets.map(s => s.drawing_set_id).filter(Boolean);
-    const setId = setIdCandidates[0] || group.setId || group.parent?.id || null;
-    const sheetIds = group.sheets.map(s => s.id);
-    const desc = total > 0
-      ? `The set and all ${total} sheet${total === 1 ? "" : "s"} inside it will be removed. You can undo this from the toast that appears after deletion.`
-      : "This drawing set will be removed. You can undo this from the toast that appears after deletion.";
+    const plan = buildDeleteSetConfirm(group);
+    if (!plan) return;
     setConfirmState({
-      title: `Delete drawing set "${group.name}"?`,
-      description: desc,
-      run: () => deleteSetMut.mutate({ setId, sheetIds, setName: group.name }),
+      title: plan.title,
+      description: plan.description,
+      run: () => deleteSetMut.mutate(plan.mutateArgs),
     });
   };
 
   const handleAdvanceStage = (drawing) => {
-    const idx = STAGE_ORDER.indexOf(drawing.stage);
-    if (idx < 0) {
-      toast.error(`Cannot advance sheet: unknown current stage "${drawing.stage || "∅"}"`);
-      setContextMenu(null);
-      return;
-    }
-    if (idx >= STAGE_ORDER.length - 1) {
-      toast.info("Already at final stage (IFC)");
-      setContextMenu(null);
-      return;
-    }
-    const target = STAGE_ORDER[idx + 1];
-    const v = validateStageTransition(drawing.stage, target);
-    if (!v.ok) { toast.error(v.reason); setContextMenu(null); return; }
-    const stageMutation = classifyDrawingStageMutation(drawing, target, submittalsBySetId);
-    setAdvanceTarget({
-      drawingId: drawing.id,
-      setId: drawing.drawing_set_id || null,
-      currentStage: drawing.stage,
-      targetStage: target,
-      allowLegacy: stageMutation.allowed,
-    });
+    const plan = planAdvanceStage(
+      drawing,
+      STAGE_ORDER,
+      submittalsBySetId,
+      validateStageTransition,
+      classifyDrawingStageMutation,
+    );
+    if (plan.kind === "error") toast.error(plan.message);
+    else if (plan.kind === "info") toast.info(plan.message);
+    else setAdvanceTarget(plan.target);
     setContextMenu(null);
   };
 
   const handleBulkStageApply = async () => {
-    if (!bulkStage || selected.size === 0) return;
-    // Guard against typo'd or dropped stages before we touch the DB.
-    if (!STAGE_ORDER.includes(bulkStage)) {
-      toast.error(`Cannot apply unknown stage "${bulkStage}"`);
+    const plan = planBulkStageApply({
+      bulkStage,
+      selected,
+      drawings,
+      stageOrder: STAGE_ORDER,
+      submittalsBySetId,
+      classify: classifyDrawingStageMutation,
+    });
+    if (plan.kind === "noop") return;
+    if (plan.kind === "error" || plan.kind === "blocked") {
+      toast.error(plan.message);
       return;
     }
-    const ids = [...selected];
-    const blocked = ids
-      .map((id) => drawings.find((d) => d.id === id))
-      .filter(Boolean)
-      .map((drawing) => classifyDrawingStageMutation(drawing, bulkStage, submittalsBySetId))
-      .find((decision) => !decision.allowed);
-    if (blocked) {
-      toast.error("Bulk workflow stage changes must be performed from Submittals; the selection includes a linked set.");
-      return;
-    }
-    toast.info("Applying legacy sheet-stage recovery to sets without linked submittals.", { duration: 4000 });
+    toast.info(plan.infoMessage, { duration: 4000 });
     const { succeeded, failed } = await batchProcess(
-      ids,
+      plan.ids,
       (id) => {
-        const current = drawings.find(d => d.id === id);
+        const current = drawings.find((d) => d.id === id);
         if (current) {
           const v = validateStageTransition(current.stage, bulkStage);
           if (!v.ok) throw new Error(v.reason);
@@ -468,48 +444,47 @@ export default function Drawings({ embedded = false } = {}) {
       },
     );
     await invalidate();
-    if (failed.length > 0) {
-      toast.warning(`${succeeded.length} updated, ${failed.length} failed`);
-    } else {
+    const toastInfo = formatBulkUpdateToast(succeeded.length, failed.length);
+    if (toastInfo.clearSelection) {
       setSelected(new Set());
       setBulkStage("");
-      toast.success(`Updated ${succeeded.length} sheets`);
     }
+    toast[toastInfo.level](toastInfo.message);
   };
 
   const handleBulkDelete = () => {
-    const count = selected.size;
-    if (count === 0) return;
+    const confirm = buildBulkDeleteConfirm(selected.size);
+    if (!confirm) return;
     setConfirmState({
-      title: `Delete ${count} sheet${count === 1 ? "" : "s"}?`,
-      description: "The selected sheets will be removed from the project. You can undo this from the toast that appears after deletion.",
+      ...confirm,
       run: async () => {
         const ids = [...selected];
         const { succeeded, failed } = await batchProcess(ids, (id) => entities.Drawing.delete(id));
         await invalidate();
+        const toastInfo = formatBulkDeleteToast(succeeded.length, failed.length);
         if (failed.length > 0) {
           setSelected(new Set(failed));
-          toast.warning(`${succeeded.length} deleted, ${failed.length} failed`);
-        } else {
-          setSelected(new Set());
-          // F19: bulk undo. Restore every id we successfully soft-deleted.
-          toast.success(`Deleted ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`, {
-            action: {
-              label: "Undo",
-              onClick: async () => {
-                try {
-                  await batchProcess(succeeded, (id) =>
-                    entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
-                  );
-                    await invalidate();
-                  toast.success(`Restored ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`);
-                } catch (err) {
-                  toast.error("Restore failed: " + (err?.message || "unknown"));
-                }
-              },
-            },
-          });
+          toast.warning(toastInfo.message);
+          return;
         }
+        setSelected(new Set());
+        // F19: bulk undo. Restore every id we successfully soft-deleted.
+        toast.success(toastInfo.message, {
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                await batchProcess(succeeded, (id) =>
+                  entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
+                );
+                await invalidate();
+                toast.success(`Restored ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`);
+              } catch (err) {
+                toast.error("Restore failed: " + (err?.message || "unknown"));
+              }
+            },
+          },
+        });
       },
     });
   };
@@ -524,58 +499,51 @@ export default function Drawings({ embedded = false } = {}) {
       (id) => entities.Drawing.update(id, payload),
     );
     await invalidate();
-    if (failed.length > 0) {
-      setSelected(new Set(failed));
-      toast.warning(`${succeeded.length} updated, ${failed.length} failed (${fieldCount} field${fieldCount === 1 ? "" : "s"})`);
-    } else {
-      setSelected(new Set());
-      toast.success(`Updated ${fieldCount} field${fieldCount === 1 ? "" : "s"} on ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`);
-    }
+    const toastInfo = formatBulkUpdateToast(succeeded.length, failed.length, { fieldCount });
+    if (failed.length > 0) setSelected(new Set(failed));
+    else if (toastInfo.clearSelection) setSelected(new Set());
+    toast[toastInfo.level](toastInfo.message);
   };
 
   const handleSetApproval = async ({ status, revision, _approvedBy, approvalDate, applyToSheets, notes }) => {
     if (!approvalSet) return;
     setSavingApproval(true);
     try {
-      const effectiveDate = approvalDate || new Date().toISOString().split("T")[0];
+      const effectiveDate = resolveApprovalEffectiveDate(approvalDate);
       // F11: write approval state to the parent drawing_sets row so it's
       // stored in one canonical place. The per-sheet mirror below stays for
       // back-compat until migration 026 drops those columns.
-      const parentSetId =
-        approvalSet.setId ||
-        approvalSet.sheets.map(s => s.drawing_set_id).find(Boolean);
+      const parentSetId = resolveApprovalParentSetId(approvalSet);
       if (parentSetId) {
-        await entities.DrawingSet.update(parentSetId, {
-          set_approval_status: status,
-          set_approved_date:   effectiveDate,
-          set_approved_by:     _approvedBy || null,
-          set_approval_notes:  notes || null,
-          ...(revision ? { revision } : {}),
-        });
+        await entities.DrawingSet.update(
+          parentSetId,
+          buildParentApprovalPatch({
+            status,
+            effectiveDate,
+            approvedBy: _approvedBy,
+            notes,
+            revision,
+          }),
+        );
       }
 
-      const sheetsToUpdate = applyToSheets ? approvalSet.sheets : [approvalSet.sheets[0]];
+      const sheetsToUpdate = resolveSheetsToApprove(approvalSet, applyToSheets);
       const { succeeded, failed } = await batchProcess(
         sheetsToUpdate,
-        (s) => entities.Drawing.update(s.id, {
-          set_approval_status: status,
-          set_approved_date: effectiveDate,
-          ...(revision ? { revision_number: revision } : {}),
-          ...(notes ? { notes: (s.notes ? s.notes + "\n" : "") + `[${status.toUpperCase()}] ${notes}` } : {}),
-        }),
+        (s) => entities.Drawing.update(
+          s.id,
+          buildSheetApprovalPatch(s, { status, effectiveDate, revision, notes }),
+        ),
       );
       // Locking is now driven by submittal status, not document-side
       // approval. When a submittal linked to this set reaches a
       // terminal-approved status, useSubmittals.ts will lock the set
       // automatically. The document-side approval here just records the
       // legacy set_approval_status mirror.
-                  await invalidate();
-      if (failed.length > 0) {
-        toast.warning(`${succeeded.length} sheets updated, ${failed.length} failed`);
-      } else {
-        toast.success(`Set "${approvalSet.setName}" marked as ${status}`);
-        setApprovalSet(null);
-      }
+      await invalidate();
+      const toastInfo = formatSetApprovalToast(approvalSet.setName, status, succeeded.length, failed.length);
+      toast[toastInfo.level](toastInfo.message);
+      if (toastInfo.clearSelection) setApprovalSet(null);
     } catch (err) {
       toast.error("Approval update failed: " + (err?.message || "Unknown error"));
     } finally {
@@ -584,47 +552,23 @@ export default function Drawings({ embedded = false } = {}) {
   };
 
   const openSetApproval = (target) => {
-    const normalized = typeof target === "string" ? { name: target } : (target || {});
-    const setId = normalized.setId || normalized.drawing_set_id || null;
-    const sheets = setId
-      ? drawings.filter((d) => d.drawing_set_id === setId)
-      : drawings.filter((d) => !d.drawing_set_id && d.drawing_set_name?.trim() === normalized.name?.trim());
-    if (!sheets.length) return;
-    const parentName = setId ? drawingSetMap[setId]?.set_name : null;
-    setApprovalSet({ setName: parentName || normalized.name || sheets[0]?.drawing_set_name || "Drawing set", setId, sheets });
+    const next = buildApprovalSetState(target, drawings, drawingSetMap);
+    if (next) setApprovalSet(next);
   };
 
   const openRenameSet = (group) => {
-    // Group is what DrawingsTable passes to onDeleteSet — same shape works:
-    //   { name, sheets, setId?, parent? }
-    if (!group || group.isUngrouped) return;
-    const setIdCandidates = (group.sheets || []).map(s => s.drawing_set_id).filter(Boolean);
-    const setId = setIdCandidates[0] || group.setId || group.parent?.id || null;
-    setRenameSet({ setId, setName: group.name, sheets: group.sheets || [] });
+    const next = buildRenameSetState(group);
+    if (next) setRenameSet(next);
   };
 
   const openMarkTitleblock = (group) => {
-    // Same shape resolution as openRenameSet — we need the setId so the
-    // modal can persist the rectangles to drawing_sets, plus the sheets
-    // and the parent's file_url so we can render a preview PDF.
-    if (!group || group.isUngrouped) return;
-    const setIdCandidates = (group.sheets || []).map(s => s.drawing_set_id).filter(Boolean);
-    const setId = setIdCandidates[0] || group.setId || group.parent?.id || null;
-    if (!setId) {
-      toast.error("This group has no parent drawing-set record yet — upload it as a set first.");
+    const plan = buildMarkerSetState(group, activeProject?.id);
+    if (plan.kind === "noop") return;
+    if (plan.kind === "error") {
+      toast.error(plan.message);
       return;
     }
-    setMarkerSet({
-      id: setId,
-      set_name: group.name,
-      project_id: activeProject?.id || (group.sheets || [])[0]?.project_id || null,
-      // Carry across what the parent row stores so the modal can pre-seed
-      // existing rectangles + the source file URL.
-      file_url: group.parent?.file_url || (group.sheets || [])[0]?.file_url || null,
-      titleblock_title_rect:  group.parent?.titleblock_title_rect  ?? null,
-      titleblock_number_rect: group.parent?.titleblock_number_rect ?? null,
-      sheets: group.sheets || [],
-    });
+    setMarkerSet(plan.markerSet);
   };
 
   const handleRenameSet = async (newName) => {
@@ -632,14 +576,10 @@ export default function Drawings({ embedded = false } = {}) {
     const { setId, setName: oldName, sheets } = renameSet;
     setSavingRename(true);
     try {
-      // Update the parent drawing_sets row when one exists.
       if (setId) {
         await entities.DrawingSet.update(setId, { set_name: newName });
       }
-      // Also update every child sheet's denormalized drawing_set_name so the
-      // table grouping follows the rename even for legacy rows that don't
-      // have a parent FK. Uses the same batch helper as bulk stage apply.
-      const sheetIds = (sheets || []).map(s => s.id);
+      const sheetIds = (sheets || []).map((s) => s.id);
       if (sheetIds.length > 0) {
         const result = await batchProcess(sheetIds, (id) =>
           entities.Drawing.update(id, { drawing_set_name: newName })
@@ -647,12 +587,14 @@ export default function Drawings({ embedded = false } = {}) {
         if (result.failed.length > 0) {
           await invalidate();
           setSelected(new Set(result.failed));
-          toast.warning(`Renamed parent, but ${result.failed.length} sheet${result.failed.length === 1 ? "" : "s"} failed`);
+          const toastInfo = formatRenameSetToast(oldName, newName, result.failed.length);
+          toast[toastInfo.level](toastInfo.message);
           return;
         }
       }
       await invalidate();
-      toast.success(`Renamed "${oldName}" → "${newName}"`);
+      const toastInfo = formatRenameSetToast(oldName, newName);
+      toast[toastInfo.level](toastInfo.message);
       setRenameSet(null);
     } catch (err) {
       toast.error("Rename failed: " + (err?.message || "Unknown error"));
@@ -661,20 +603,11 @@ export default function Drawings({ embedded = false } = {}) {
     }
   };
 
-  const toggleSelect = (id) => {
-    const s = new Set(selected);
-    s.has(id) ? s.delete(id) : s.add(id);
-    setSelected(s);
-  };
+  const toggleSelect = (id) => setSelected(toggleIdInSet(selected, id));
 
   const toggleSelectAll = () => {
     const visibleIds = filtered.map((d) => d.id);
-    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
-    setSelected((previous) => {
-      const next = new Set(previous);
-      visibleIds.forEach((id) => (allVisibleSelected ? next.delete(id) : next.add(id)));
-      return next;
-    });
+    setSelected((previous) => toggleSelectAllIds(previous, visibleIds));
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -697,88 +630,23 @@ export default function Drawings({ embedded = false } = {}) {
         : { minHeight: "100vh", background: "var(--bg-page)" }}
       onClick={() => { setContextMenu(null); }}
     >
-      {/* ── Secondary-view banner: this is the full editor; the Hub is the command center ── */}
-      {!embedded && (
-        <div
-          style={{
-            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-            padding: "8px 14px", marginBottom: 14, borderRadius: 8,
-            border: "1px solid var(--border-default)",
-            background: "var(--bg-surface-low)",
-          }}
-        >
-          <span style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", flexShrink: 0 }}>
-            Full Editor
-          </span>
-          <span style={{ fontSize: 12.5, color: "var(--text-secondary, var(--text-muted))", lineHeight: 1.5 }}>
-            The <strong style={{ color: "var(--text-primary)" }}>Detailing Control Center</strong> is your command center. This page is the detailed editor — filters, bulk actions, rename / delete, per-sheet.
-          </span>
-          <span style={{ flex: 1 }} />
-          <button
-            type="button"
-            className="sbd-btn sbd-btn-primary"
-            style={{ whiteSpace: "nowrap" }}
-            onClick={() => navigate("/DrawingSubmittalHub")}
-          >
-            ← Back to the Hub
-          </button>
-        </div>
-      )}
-
-      {/* ── CommandBar ─────────────────────────────────────────────────────── */}
-      <CommandBar
-        eyebrow={`DESIGN & DOCUMENTS · ${(activeProject?.name || "").toUpperCase()}`}
-        title="Drawings & Submittals"
-        count={stats.total}
-        unit={` · ${stats.sheetCount} SHEETS`}
-        subtitle="Not Started → IFA → OFA → BFA → OFS → IFC → Released"
-      >
-        <Button variant="secondary" icon="download" onClick={() => exportTransmittal(filtered, activeProject?.name)}>
-          TRANSMITTAL
-        </Button>
-        <Button variant="secondary" icon="download" onClick={() => setExportPkgKind("fab_release")}>
-          EXPORT FAB RELEASE
-        </Button>
-        <Button variant="secondary" icon="download" onClick={() => setExportPkgKind("turnover")}>
-          TURNOVER PACKAGE
-        </Button>
-        <Button variant="secondary" icon="download" onClick={() => setExportPkgKind("claims")}>
-          CLAIMS PACKAGE
-        </Button>
-        {can("create", "drawing") && (
-          <Button variant="secondary" icon="plus" onClick={() => { setEditing(null); setShowModal(true); }}>
-            ADD SHEET
-          </Button>
-        )}
-        <Button
-          variant="outline"
-          icon="arrow"
-          onClick={() => setRevisionOpen(true)}
-          disabled={drawingSetRecords.length === 0 && existingSetNames.length === 0}
-          title="Upload a new revision of an existing set"
-        >
-          NEW REVISION
-        </Button>
-        {can("create", "drawing") && (
-          <Button variant="outline" icon="upload" onClick={() => setLogImportOpen(true)} title="Import a detailer Drawing Complete / Submittal Log (.xls)">
-            IMPORT LOG
-          </Button>
-        )}
-        <Button variant="primary" icon="upload" onClick={() => setUploadSetOpen(true)}>
-          UPLOAD SET
-        </Button>
-      </CommandBar>
-
-      {/* ── KPI Row (hidden when embedded — the hub shows its own KPIs) ─────── */}
-      {!embedded && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 14 }}>
-          <KpiTile compact label="PACKAGES"  value={stats.total}    color="var(--accent)"          active={stageFilter === "ALL"}        onClick={() => setStageFilter("ALL")} />
-          <KpiTile compact label="RELEASED"  value={stats.released} color="var(--status-success)"  active={stageFilter === "Released"}   onClick={() => setStageFilter("Released")} />
-          <KpiTile compact label="IN REVIEW" value={stats.inReview} color="var(--status-info)"     active={stageFilter === "_inReview"}  onClick={() => setStageFilter(stageFilter === "_inReview" ? "ALL" : "_inReview")} />
-          <KpiTile compact label="OVERDUE"   value={stats.overdue}  color="var(--status-error)"    active={stageFilter === "_overdue"}   onClick={() => setStageFilter(stageFilter === "_overdue" ? "ALL" : "_overdue")} />
-          <KpiTile compact label="PRIORITY"  value={stats.priority} color="var(--status-review)"   active={stageFilter === "_priority"}  onClick={() => setStageFilter(stageFilter === "_priority" ? "ALL" : "_priority")} />
-        </div>
-      )}
+      <DrawingsPageToolbar
+        embedded={embedded}
+        projectName={activeProject?.name}
+        stats={stats}
+        filtered={filtered}
+        canCreateDrawing={can("create", "drawing")}
+        drawingSetRecordsLength={drawingSetRecords.length}
+        existingSetNamesLength={existingSetNames.length}
+        stageFilter={stageFilter}
+        onBackToHub={() => navigate("/DrawingSubmittalHub")}
+        onExportPkg={setExportPkgKind}
+        onAddSheet={() => { setEditing(null); setShowModal(true); }}
+        onOpenRevision={() => setRevisionOpen(true)}
+        onOpenLogImport={() => setLogImportOpen(true)}
+        onOpenUploadSet={() => setUploadSetOpen(true)}
+        onStageFilter={setStageFilter}
+      />
 
       {/* ── Revision Alerts ────────────────────────────────────────────────── */}
       {revisionAlerts.length > 0 && (
@@ -931,32 +799,20 @@ export default function Drawings({ embedded = false } = {}) {
       />
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
-      {showModal && (
-        <SheetFormModal
-          initial={editing || EMPTY_FORM}
-          onSave={handleSave}
-          onClose={() => { setShowModal(false); setEditing(null); }}
-          saving={saving}
-          existingSetNames={existingSetNames}
-        />
-      )}
-
-      <BulkEditModal
-        open={bulkEditOpen}
-        onClose={() => setBulkEditOpen(false)}
-        onApply={handleBulkEdit}
+      <DrawingsPageModals
+        showModal={showModal}
+        editing={editing}
+        saving={saving}
+        existingSetNames={existingSetNames}
+        onSave={handleSave}
+        onCloseSheetModal={() => { setShowModal(false); setEditing(null); }}
+        bulkEditOpen={bulkEditOpen}
+        onCloseBulkEdit={() => setBulkEditOpen(false)}
+        onBulkEdit={handleBulkEdit}
         selectedCount={selected.size}
-      />
-
-      <AdvanceStageDialog
-        open={!!advanceTarget}
-        currentStage={advanceTarget?.currentStage}
-        targetStage={advanceTarget?.targetStage}
-        drawingId={advanceTarget?.drawingId}
-        setId={advanceTarget?.setId}
-        allowLegacy={advanceTarget?.allowLegacy}
-        onClose={() => setAdvanceTarget(null)}
-        onLegacy={({ drawingId, targetStage }) => {
+        advanceTarget={advanceTarget}
+        onCloseAdvance={() => setAdvanceTarget(null)}
+        onLegacyAdvance={({ drawingId, targetStage }) => {
           // Pre-Sprint-2 fallback: mutate drawings.stage directly. The
           // workflow source of truth is now on submittals; this path is
           // kept for cleanup of orphan sheets without linked submittals.
@@ -974,120 +830,56 @@ export default function Drawings({ embedded = false } = {}) {
           // navigating without a status if the stage maps to "Not Started"
           // or an unknown stage (stageToSubmittalStatus returns null).
           const mapped = stageToSubmittalStatus(targetStage);
-          const params = new URLSearchParams();
-          if (setId) params.set("targetSetId", setId);
-          if (mapped?.status) params.set("prefilledStatus", mapped.status);
-          navigate(`/Submittals${params.toString() ? `?${params.toString()}` : ""}`);
+          navigate(`/Submittals${buildSubmittalAdvanceSearch(setId, mapped?.status)}`);
           setAdvanceTarget(null);
         }}
-      />
-
-      <SetApprovalModal
-        open={!!approvalSet}
-        onClose={() => setApprovalSet(null)}
-        setName={approvalSet?.setName || ""}
-        sheetCount={approvalSet?.sheets?.length || 0}
-        existingRevision={approvalSet?.sheets?.[0]?.revision_number || ""}
-        onConfirm={handleSetApproval}
-        saving={savingApproval}
-      />
-
-      <RenameSetModal
-        open={!!renameSet}
-        initialName={renameSet?.setName || ""}
-        onClose={() => setRenameSet(null)}
-        onSave={handleRenameSet}
-        saving={savingRename}
-      />
-
-      {markerSet && (
-        <TitleblockMarkerModal
-          set={markerSet}
-          onClose={() => setMarkerSet(null)}
-          onSaved={() => {
-            // Pull fresh set rows so the templated indicator shows up
-            // immediately on the row that was just marked.
-            void invalidate();
-          }}
-        />
-      )}
-
-      <DrawingSetUploadModal
-        open={uploadSetOpen}
-        onClose={() => setUploadSetOpen(false)}
-        onComplete={() => {
+        approvalSet={approvalSet}
+        onCloseApproval={() => setApprovalSet(null)}
+        onConfirmApproval={handleSetApproval}
+        savingApproval={savingApproval}
+        renameSet={renameSet}
+        onCloseRename={() => setRenameSet(null)}
+        onSaveRename={handleRenameSet}
+        savingRename={savingRename}
+        markerSet={markerSet}
+        onCloseMarker={() => setMarkerSet(null)}
+        onMarkerSaved={() => {
+          // Pull fresh set rows so the templated indicator shows up
+          // immediately on the row that was just marked.
+          void invalidate();
+        }}
+        uploadSetOpen={uploadSetOpen}
+        onCloseUploadSet={() => setUploadSetOpen(false)}
+        onUploadComplete={() => {
           void invalidate();
           qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
         }}
         activeProject={activeProject}
-        existingDrawings={drawings}
-        existingSetNames={existingSetNames}
-      />
-
-      <DrawingLogImportModal
-        open={logImportOpen}
-        projectId={projectId}
-        projectName={activeProject?.name}
-        onClose={() => setLogImportOpen(false)}
-        onImported={() => {
-          void invalidate();
-          qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
-        }}
-      />
-
-      {/* New Revision flow — marks prior sheets is_superseded=true and
-          inserts the replacement revision under the same set. F14. */}
-      <RevisionUploadModal
-        open={revisionOpen}
-        onClose={() => setRevisionOpen(false)}
-        onComplete={() => { void invalidate(); setRevisionOpen(false); }}
-        activeProject={activeProject}
-        drawingSets={drawingSetRecords}
-      />
-
-      {/* Overlay compare — old revision red / new revision blue, from the
-          per-sheet slip-sheet history. Opened via the row context menu. */}
-      {compareDrawing && (
-        <RevisionCompareModal
-          open={!!compareDrawing}
-          onClose={() => setCompareDrawing(null)}
-          drawing={compareDrawing}
-        />
-      )}
-
-      {/* Package-level AI Revision Impact Report — launched from a set's
-          "Impact Report" action (flag-gated). */}
-      {reportSet && (
-        <RevisionImpactReportModal
-          open
-          onClose={() => setReportSet(null)}
-          set={reportSet}
-          projectId={projectId}
-        />
-      )}
-
-      {/* Sprint 4 — package exports (fab release / turnover / claims). One
-          shared modal switches behavior based on `kind`. */}
-      <ExportFabReleaseModal
-        open={!!exportPkgKind}
-        onClose={() => setExportPkgKind(null)}
-        kind={exportPkgKind || "fab_release"}
-        project={activeProject}
         drawings={drawings}
-      />
-
-      {/* F18: styled confirm replacing window.confirm() for destructive
-          actions. Sits on top of every list/set/bulk delete path. */}
-      <DeleteDialog
-        open={!!confirmState}
-        onClose={() => setConfirmState(null)}
-        onConfirm={() => {
+        logImportOpen={logImportOpen}
+        projectId={projectId}
+        onCloseLogImport={() => setLogImportOpen(false)}
+        onLogImported={() => {
+          void invalidate();
+          qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
+        }}
+        revisionOpen={revisionOpen}
+        onCloseRevision={() => setRevisionOpen(false)}
+        onRevisionComplete={() => { void invalidate(); setRevisionOpen(false); }}
+        drawingSetRecords={drawingSetRecords}
+        compareDrawing={compareDrawing}
+        onCloseCompare={() => setCompareDrawing(null)}
+        reportSet={reportSet}
+        onCloseReport={() => setReportSet(null)}
+        exportPkgKind={exportPkgKind}
+        onCloseExport={() => setExportPkgKind(null)}
+        confirmState={confirmState}
+        onCloseConfirm={() => setConfirmState(null)}
+        onConfirmDelete={() => {
           const run = confirmState?.run;
           setConfirmState(null);
           if (typeof run === "function") run();
         }}
-        title={confirmState?.title}
-        description={confirmState?.description}
       />
     </div>
   );
