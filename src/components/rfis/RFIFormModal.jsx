@@ -9,6 +9,8 @@ import AutoLinkSuggestions from "@/components/shared/AutoLinkSuggestions";
 import { RFI_TYPES, buildRfiPreflight } from "@/lib/rfiPreflight";
 import { findDuplicateRfis } from "@/lib/rfiDedup";
 import FormField from "@/components/shared/FormField";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { buildRfiCreatePayload } from "@/pages/rfis/rfiMutationHelpers";
 
 /** @type {import('react').CSSProperties} */
 const iStyle = {
@@ -248,9 +250,9 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       if (rfi) {
         return entities.RFI.update(rfi.id, clean);
       }
-      if (!clean.project_id) throw new Error("Select a project before creating an RFI.");
+      const scoped = buildRfiCreatePayload(clean, projectId || clean.project_id);
       const rfiNumber = await getNextFormattedNumber({
-        projectId: clean.project_id,
+        projectId: scoped.project_id,
         recordType: "RFI",
         entityName: "RFI",
         fieldName: "rfi_number",
@@ -258,7 +260,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       });
       if (!rfiNumber) throw new Error("RFI number allocation failed. The RFI was not saved.");
       return entities.RFI.create({
-        ...clean,
+        ...scoped,
         rfi_number: rfiNumber,
       });
     },
@@ -270,7 +272,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       onClose();
     },
     onError: (err) =>
-      toast.error("Failed to save RFI: " + (err?.message || "Unknown error")),
+      toast.error(`Failed to save RFI: ${toUserErrorMessage(err, "Unknown error")}`),
   });
 
   const submitInFlightRef = useRef(false);
@@ -283,7 +285,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
       toast.success(`Status set to ${status}`);
       setFormData((f) => ({ ...f, status }));
     },
-    onError: () => toast.error("Status update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Status update failed")),
   });
 
   // Whether save is in progress — prefer parent's flag, fall back to internal

@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabase";
 import { readChangeOrderCsvFile } from "@/lib/importChangeOrderCsv";
 import { batchProcess } from "@/utils/batchProcess";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -104,7 +105,7 @@ export default function ChangeOrderImportModal({
 
       setStep("preview");
     } catch (e) {
-      setErr(e?.message || String(e));
+      setErr(toUserErrorMessage(e, String(e)));
       setStep("upload");
     }
   };
@@ -152,8 +153,7 @@ export default function ChangeOrderImportModal({
         const displayNumber = /^\d+$/.test(r.co_number)
           ? `CO-${r.co_number.padStart(3, "0")}`
           : r.co_number;
-        toInsert.push({
-          project_id:           chosenProjectId,
+        toInsert.push(withProjectId({
           project_name:         projLabel,
           co_number:            displayNumber,
           title:                r.title || null,
@@ -167,7 +167,7 @@ export default function ChangeOrderImportModal({
           notes:                r.notes,
           schedule_impact_days: r.schedule_impact_days,
           margin_percent:       r.margin_percent,
-        });
+        }, chosenProjectId));
       }
 
       // One bad row must not abort the rest of the import. This loop used to
@@ -200,7 +200,7 @@ export default function ChangeOrderImportModal({
       setStep("done");
       setTimeout(() => { reset(); onClose(); }, 1500);
     } catch (e) {
-      setErr(e?.message || String(e));
+      setErr(toUserErrorMessage(e, String(e)));
       setStep("preview");
     }
   };
