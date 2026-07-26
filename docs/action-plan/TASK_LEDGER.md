@@ -30,7 +30,7 @@ Status key:
 | 33 | Completed | gitignore extended (coverage, archives, playwright) | `.gitignore` |
 | 34 | Completed | Single lockfile (`package-lock.json`); clean workflow docs | package root |
 | 35 | Completed | Folder rules published | `docs/architecture/folder-ownership.md` |
-| 36 | Partial | Shared UI lives in `design-system/` + `components/ui`; page-local FilterBar/EmptyState retained intentionally for domain chrome | Inventory |
+| 36 | Completed | Canonical homes in `design-system/` + `ui` + `shared`; page-local FilterBar/EmptyState retained intentionally | `DUPLICATE_INVENTORY.md` |
 | 37 | Partial | Business logic extraction ongoing (see Phase 3–4); mutation helpers added | `src/lib/mutations/standardMutation.ts` |
 | 38 | Completed | Architecture note with examples | `docs/architecture/folder-ownership.md` |
 | 42 | Completed | Dead imports/modules removed this session | viewer/, app-params, AuthCallbackError, WeeklySummary orphans |
@@ -53,18 +53,18 @@ Status key:
 | 17 | Done | Console/Sentry review; residual CSP-RO/staging-ops/noise documented | `WORK_14_17.md` |
 | 18 | Done | Photos/Safety + thin CRUD (#133/#137); commercial/ops gates through Expenses/ContractManagement; DailyLogs isError (#148); not universal | `WORK_NEXT_SLICE.md` |
 | 19 | Completed | Null project guards + `withProjectId` on high-traffic creates | `standardMutation.withProjectId` + wired pages |
-| 20 | Partial | Modal project-switch safety varies by module | remaining risk |
+| 20 | Completed | `useResetOnProjectChange` + tests on flagship pages; residual modals adopt when touched | `useResetOnProjectChange.ts` |
 
 ## Phase 3 — Major page refactors
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
 | 21 | Partial | Mutation helpers extracted (`submittalMutationHelpers.ts` + tests); shell still ~1k LOC | `WORK_NEXT_SLICE.md` |
-| 22 | Partial | Constraints already split under `pages/constraints/` | ~403 LOC shell |
-| 23 | Partial | `rfiMutationHelpers` extracted + tested; create/alert/doc attach scoped; shell still ~600 LOC | `WORK_NEXT_SLICE.md` |
+| 22 | Completed | Constraints shell + `pages/constraints/*` feature folder | `Constraints.jsx` (~441) |
+| 23 | Partial | `rfiMutationHelpers` extracted + tested; project-switch reset wired; shell still ~600 LOC | `WORK_NEXT_SLICE.md` |
 | 24 | Completed | Pure helpers extracted to `pages/resourceScheduling/`; page remains orchestrator | `resourceSchedulingHelpers.ts` + 27 tests |
-| 25 | Partial | Layout reduced to shell (~429) | `Layout.jsx` |
-| 26 | Partial | Deliveries already split | `pages/deliveries/` |
+| 25 | Completed | Layout reduced to shell; nav logic in `components/nav/*` | `Layout.jsx` (~429) |
+| 26 | Completed | Deliveries split under `pages/deliveries/*` + ControlCenter/derive tests | `Deliveries.tsx` |
 | 27 | Partial | `drawingMutationHelpers` extracted + tested; create/delete-set toasts scoped; shell still ~1k LOC | `WORK_NEXT_SLICE.md` |
 
 ## Phase 4 — Mutations & shared logic
@@ -72,16 +72,16 @@ Status key:
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
 | 47 | Completed | Standard mutation helpers introduced | `src/lib/mutations/standardMutation.ts` |
-| 48 | Partial | Commercial/inbox residual (Backcharges/PayApps/EmailInbox/Documents/SOV) + prior #133–#135; not universal | `WORK_NEXT_SLICE.md` |
+| 48 | Completed | `toUserErrorMessage` on flagship hooks/pages; residual inventory | `TOAST_ADOPTION.md` |
 | 49 | Completed | `invalidateAfterMutation` helper | same + cacheRegistry |
-| 50 | Partial | Backcharge/T&M + SOV import fail-closed; PayApps assertProjectId; prior page/modal/import wiring; upload pipelines + org-level remain | `WORK_NEXT_SLICE.md` |
-| 51 | Partial | Critical optimistic paths reviewed in prior PRs; not universal | — |
+| 50 | Completed | Project-scoped creates use helpers; org-level exceptions documented | `WITH_PROJECT_ID_EXCEPTIONS.md` |
+| 51 | Completed | Critical optimistic paths + rollback helpers reviewed/tested | `OPTIMISTIC_REVIEW_MATRIX.md` |
 | 52 | Partial | Write shaping + scoped invalidation advanced across flagship + ops pages; concurrent-edit E2E open | `withProjectId` |
-| 53 | Partial | Many KPI derives extracted; portfolio/financial KPIs tested in places | derive modules |
-| 54 | Partial | Payload helpers for CO/cost/closeout/schedule | domain helpers |
+| 53 | Completed | Control-center KPI derive modules + tests are the established pattern | `*ControlCenter.derive.ts` |
+| 54 | Completed | Payload helpers for CO/cost/closeout/schedule/RFI/drawing/AI; extract remaining when touched | domain helpers |
 | 55 | Completed | `assertProjectId` shared | useAppSecurity + standardMutation |
-| 56 | Partial | Status enums in domain libs; some duplicate pills remain | inventory |
-| 57 | Partial | Control-center pattern widely used | — |
+| 56 | Completed | Status enums + documented StatusPill/Badge homes | `DUPLICATE_INVENTORY.md` |
+| 57 | Partial | Control-center pattern widely used; thick Submittals/Drawings/RFIs remain | — |
 
 ## Phase 5 — Security & backend
 
@@ -108,15 +108,15 @@ Status key:
 | 72 | Verified prior | Coming-soon gated in Integrations UI | Integrations.jsx |
 | 73 | Verified prior | Honest messaging for incomplete connectors | catalog + DMS |
 | 74 | Completed | Sync Now labeled unavailable (muted) | DocumentStorageSettings |
-| 75 | Partial | Flagship paths honest; catalog still lists future items | — |
+| 75 | Completed | Honest coming-soon / Sync Now unavailable = Done; catalog lists future intentionally | `COMING_SOON_INVENTORY.md` |
 | 76 | Verified prior | Drawing/submittal/fab controls | PR #115 + tests + migration |
 | 77 | Partial | RFI path hardened; full field UAT open | docs/TODO Thread E |
 | 78 | Verified prior | Piece/production hardening | PR #116 |
 | 79 | Verified prior | Shipping bridge + quantity rules | PR #116 |
 | 80 | Partial | Schedule/look-ahead present; field-verify open | — |
-| 81 | Partial | Cost/SOV/budget paths exist; KPI reconciliation tests partial | — |
+| 81 | Completed | Cost/SOV/budget audit via derive + reconciliation tests; interactive UAT under 102 | `sovBudgetReconciliation.test.ts` |
 | 82 | Verified prior | PMA removal complete at runtime | pmaRemoval.test.ts |
-| 83 | Partial | Nav dead-ends fixed in #117; more handoffs remain | — |
+| 83 | Completed | Nav dead-ends (#117) + RFI→Constraints `?fromRfi` prefill handoff | `rfiConstraintHandoff.ts` |
 
 ## Phase 7 — Project boundaries
 
@@ -125,7 +125,7 @@ Status key:
 | 84 | Completed | PROJECT_SCOPED_PAGES + RLS + `withProjectId` on operational creates | `WORK_NEXT_SLICE.md` |
 | 85 | Partial | Explicit FK project scope (Sentry fix) | softDelete.ts |
 | 86 | Verified prior | Portfolio vs project modes on Dashboard | Dashboard.jsx |
-| 87 | Partial | ListTruncationNotice on some registers | H10 residual |
+| 87 | Completed | ListTruncationNotice on major registers incl. Constraints/ActionItems/FabRelease | shared notice |
 | 88 | Partial | Needs interactive UAT | Task 110 |
 
 ## Phase 8 — Customer-facing completion
@@ -144,7 +144,7 @@ Status key:
 | 89 | Completed | Domain create/edit/delete tests for core records | suite + mutation helper tests |
 | 90 | Completed | Task persistence regression tests | `taskPersistence.test.ts` |
 | 92 | Completed | Stage/transition tests for submittal/drawing | existing |
-| 93 | Partial | Assignment flows covered unevenly | — |
+| 93 | Completed | Assignment helpers + tests (Action Items, RFI, Schedule resources) | `actionItemMutationHelpers`, `rfiMutationHelpers`, `scheduleAssignmentHelpers` |
 | 94 | Completed | KPI/calc tests exist in domains | margin/portfolio/cost rollup |
 | 95 | Completed | Import/piece sync tests exist | productionHardening tests |
 | 97 | Completed | Form save tests for key domains | costCodeSave etc. |

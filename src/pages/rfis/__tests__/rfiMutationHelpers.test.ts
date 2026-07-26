@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRfiAlertPayload,
+  buildRfiAssignPatch,
   buildRfiAttachmentDocumentPayload,
   buildRfiCreatePayload,
+  buildRfiCreateWithAssigneePayload,
   classifyBulkOutcome,
   formatBulkRfiToast,
   formatRfiNotifyError,
@@ -45,5 +47,27 @@ describe("bulk toast helpers", () => {
 describe("formatRfiNotifyError", () => {
   it("prefixes a normalized message", () => {
     expect(formatRfiNotifyError(new Error("boom"))).toBe("Couldn't notify field: boom");
+  });
+});
+
+describe("assignment flows", () => {
+  it("builds assign / clear patches", () => {
+    expect(buildRfiAssignPatch("  EOR  ")).toEqual({ assigned_to: "EOR" });
+    expect(buildRfiAssignPatch("")).toEqual({ assigned_to: null });
+    expect(buildRfiAssignPatch(null)).toEqual({ assigned_to: null });
+  });
+
+  it("creates with assignee under the active project", () => {
+    expect(
+      buildRfiCreateWithAssigneePayload(
+        { title: "Clarify weld", project_id: "other" },
+        "proj-1",
+        "Detailer",
+      ),
+    ).toEqual({
+      title: "Clarify weld",
+      project_id: "proj-1",
+      assigned_to: "Detailer",
+    });
   });
 });

@@ -15,6 +15,7 @@ import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { usePlan } from "@/hooks/usePlan";
 import { withinLimit } from "@/lib/billing/plans";
 import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import ProjectsControlCenter from "./projects/ProjectsControlCenter";
 
 /* ─────────────────────────────────────────────
@@ -611,12 +612,12 @@ export default function Projects() {
   const createMut = useMutation({
     mutationFn: (d) => entities.Project.create(d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project created"); },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to create project")),
   });
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.Project.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project updated"); },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to update project")),
   });
   const deleteMut = useMutation({
     mutationFn: (id) => entities.Project.delete(id),
@@ -627,7 +628,7 @@ export default function Projects() {
       setDeleteTarget(null);
       toast.success("Project archived");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to archive project")),
   });
   const handleSave = (d) => {
     if (editing) updateMut.mutate({ id: editing.id, data: d });

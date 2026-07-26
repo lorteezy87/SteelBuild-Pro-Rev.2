@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -75,6 +76,17 @@ export default function RFIs() {
   const saveInFlightRef = useRef(false);
   const { density, densityPreset, setDensity: handleDensityChange } = useRfiDensity();
   const { insightsCollapsed, toggleInsights: handleToggleInsights } = useRfiInsightsCollapsed();
+
+  useResetOnProjectChange(projectId, () => {
+    setShowForm(false);
+    setShowLogImport(false);
+    setEditingRFI(null);
+    setSelectedRFI(null);
+    setNudgeRFI(null);
+    setDeleteTarget(null);
+    setShowBulkDelete(false);
+    setShowBulkEdit(false);
+  });
 
   /* ── Data ── */
   const { data: projects = [] } = useQuery({
@@ -384,17 +396,15 @@ export default function RFIs() {
             notifyFieldMut.mutate(r);
             return;
           }
-          // Create CO + the drawing jump land WITH context (ChangeOrders reads
-          // ?fromRfi to prefill the CO form; Drawings filters by ?sheet). WP +
-          // Constraints don't consume a param yet, so navigate to the module
-          // honestly rather than tack on a dangling, unread ?fromRfi.
+          // Create CO + constraint land WITH context (?fromRfi prefills the form).
+          // Drawings filters by ?sheet. WP does not consume a param yet.
           const dest = {
             create_co: `/ChangeOrders?fromRfi=${r.id}`,
             update_drawing: r.drawing_reference
               ? `/Drawings?sheet=${encodeURIComponent(r.drawing_reference)}`
               : "/Drawings",
             open_wp: "/WorkPackages",
-            add_constraint: "/Constraints",
+            add_constraint: `/Constraints?fromRfi=${r.id}`,
           }[key];
           if (dest) navigate(dest);
         }}

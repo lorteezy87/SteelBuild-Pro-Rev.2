@@ -71,3 +71,27 @@ export function formatBulkRfiToast(
 export function formatRfiNotifyError(err: unknown): string {
   return `Couldn't notify field: ${toUserErrorMessage(err, "unknown error")}`;
 }
+
+/**
+ * Build the patch for assigning / reassigning an RFI.
+ * Empty / whitespace clears the assignee (null).
+ */
+export function buildRfiAssignPatch(
+  assignee: string | null | undefined,
+): { assigned_to: string | null } {
+  if (assignee == null) return { assigned_to: null };
+  const trimmed = String(assignee).trim();
+  return { assigned_to: trimmed === "" ? null : trimmed };
+}
+
+/** Create payload that includes an initial assignee under the active project. */
+export function buildRfiCreateWithAssigneePayload(
+  data: Record<string, unknown>,
+  projectId: string | null | undefined,
+  assignee: string | null | undefined,
+): Record<string, unknown> & { project_id: string; assigned_to: string | null } {
+  return {
+    ...buildRfiCreatePayload(data, projectId),
+    ...buildRfiAssignPatch(assignee),
+  };
+}

@@ -28,6 +28,7 @@ import { computeRevisedContractValue, preferManualActual } from "@/services/cost
 import { COST_CODES } from "@/components/shared/costCodes";
 import { calcEVM } from "@/utils/projectKpis";
 import { logActivity } from "@/services/auditLogger";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 export type CostCode = RowWithAliases<'cost_codes'>;
 export type Expense = RowWithAliases<'expenses'>;
@@ -582,7 +583,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       });
       toast.success("Cost code created");
     },
-    onError: (err) => toast.error(`Failed to create cost code: ${err.message}`),
+    onError: (err) => toast.error(`Failed to create cost code: ${toUserErrorMessage(err)}`),
   });
 
   type CostCodeUpdate = { id: string } & Record<string, unknown>;
@@ -599,7 +600,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       });
       toast.success("Cost code updated");
     },
-    onError: (err) => toast.error(`Failed to update cost code: ${err.message}`),
+    onError: (err) => toast.error(`Failed to update cost code: ${toUserErrorMessage(err)}`),
   });
 
   const costCodeDeleteMut = useMutation<string, Error, string>({
@@ -616,7 +617,7 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
       });
       toast.success("Cost code archived");
     },
-    onError: (err) => toast.error(`Failed to archive cost code: ${err.message}`),
+    onError: (err) => toast.error(`Failed to archive cost code: ${toUserErrorMessage(err)}`),
   });
 
   return {
