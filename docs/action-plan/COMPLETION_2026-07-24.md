@@ -52,7 +52,7 @@ Deployed **2026-07-24** to https://www.steelbuild-pro.com from `main` including 
 
 **2026-07-26:** PR **#123** (`withProjectId` write shaping + Submittals/RFIs/Drawings mutation helpers + tracker checkpoint **Done 78 / In Progress 26 / Blocked 1**) merged to `main` and deployed to production. GitHub Actions CI remains blocked by org billing/spending limit — validated locally (lint + four typecheck gates + helper tests + build) then deployed via `npx vercel --prod` (`steelbuildpro-og`).
 
-**2026-07-26 (open PRs):** #133–#136 mutation/loading stack · **photos-safety-loading** Photos/Safety INLINE loading/empty (ID 18).
+**2026-07-26 (deploy batch):** Merged **#133–#137** to `main` and deployed to production (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL` → https://www.steelbuild-pro.com). ID **18** Done; IDs **48**/**50** advanced. Local vitest/eslint/build green; GH Actions still billing-blocked.
 
 ## How to refresh next time
 
