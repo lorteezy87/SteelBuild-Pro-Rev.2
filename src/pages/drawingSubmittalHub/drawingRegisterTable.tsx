@@ -4,6 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Lock, Search } from "lucide-react";
+import { toast } from "sonner";
 import { SectionCard, StatusPill } from "@/components/desktop/module";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { lazyWithRetry } from "@/lib/lazyRetry";
@@ -11,6 +12,12 @@ import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawing
 import { effectiveDetailingState } from "@/lib/detailingPackageState";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { usePermissions } from "@/services/permissions";
+import { entities } from "@/api/supabaseClient";
+import {
+  ensureSetLinked,
+  openLinkedSubmittalsForSet,
+} from "@/lib/submittalLinkGlue";
+import AttachRevisionToSubmittalModal from "@/components/submittals/AttachRevisionToSubmittalModal";
 import {
   accent,
   border,
@@ -231,6 +238,8 @@ export function DrawingRegisterTable({
   const canEdit = can("edit", "drawing");
   const [search, setSearch] = useState("");
   const [revisionSet, setRevisionSet] = useState<any>(null);
+  const [attachPrompt, setAttachPrompt] = useState<any>(null);
+  const [attachBusy, setAttachBusy] = useState(false);
   const [reportSet, setReportSet] = useState<any>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [logImportOpen, setLogImportOpen] = useState(false);
@@ -238,6 +247,10 @@ export function DrawingRegisterTable({
   const [sortByHealth, setSortByHealth] = useState<null | "asc" | "desc">(null);
 
   const allSheets = useMemo(() => (setPackages || []).flatMap((p: any) => p.sheets || []), [setPackages]);
+  const allSubmittals = useMemo(
+    () => (setPackages || []).flatMap((p: any) => p.submittals || []),
+    [setPackages],
+  );
   const existingSetNames = useMemo(() => [...new Set((setPackages || []).map((p: any) => p.name).filter(Boolean))], [setPackages]);
   const refetchDrawings = () => {
     qc.invalidateQueries({ queryKey: ["drawings"] });
@@ -468,8 +481,60 @@ export function DrawingRegisterTable({
 
       {revisionSet && (
         <Suspense fallback={<ModalLoadingFallback />}>
-          <RevisionUploadModal open onClose={() => setRevisionSet(null)} onComplete={() => { onRevisionUploaded?.(revisionSet?.key); setRevisionSet(null); }} activeProject={activeProject} preSelectedSet={revisionSet?.parent || revisionSet} drawingSets={drawingSets} />
+          <RevisionUploadModal
+            open
+            onClose={() => setRevisionSet(null)}
+            onComplete={(payload: any) => {
+              onRevisionUploaded?.(revisionSet?.key);
+              const pre = revisionSet?.parent || revisionSet;
+              const setId = payload?.setId || pre?.id || null;
+              setRevisionSet(null);
+              if (!setId) return;
+              const candidates = openLinkedSubmittalsForSet(setId, allSubmittals);
+              if (candidates.length === 0) return;
+              setAttachPrompt({
+                setId,
+                setName: payload?.setName || pre?.name || revisionSet?.name || null,
+                revisionLabel: payload?.revisionLabel || null,
+                candidates,
+              });
+            }}
+            activeProject={activeProject}
+            preSelectedSet={revisionSet?.parent || revisionSet}
+            drawingSets={drawingSets}
+          />
         </Suspense>
+      )}
+      {attachPrompt && (
+        <AttachRevisionToSubmittalModal
+          open
+          setName={attachPrompt.setName}
+          revisionLabel={attachPrompt.revisionLabel}
+          candidates={attachPrompt.candidates}
+          busy={attachBusy}
+          onDismiss={() => setAttachPrompt(null)}
+          onAttach={async (submittalId) => {
+            setAttachBusy(true);
+            try {
+              const row = allSubmittals.find((s: any) => s.id === submittalId);
+              if (!row || !openLinkedSubmittalsForSet(attachPrompt.setId, [row]).length) {
+                toast.error("That submittal is no longer open — refresh and try again.");
+                setAttachPrompt(null);
+                refetchDrawings();
+                return;
+              }
+              const nextIds = ensureSetLinked(row.drawing_set_ids, attachPrompt.setId);
+              await entities.Submittal.update(submittalId, { drawing_set_ids: nextIds });
+              toast.success("Revision kept linked to open submittal");
+              setAttachPrompt(null);
+              refetchDrawings();
+            } catch (err: any) {
+              toast.error(err?.message || "Failed to attach revision to submittal");
+            } finally {
+              setAttachBusy(false);
+            }
+          }}
+        />
       )}
       {reportSet && (
         <Suspense fallback={null}>

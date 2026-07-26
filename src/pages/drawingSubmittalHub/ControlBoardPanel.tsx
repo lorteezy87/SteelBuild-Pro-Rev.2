@@ -22,6 +22,7 @@ import {
   ArrowRight, FileQuestion, CircleDollarSign,
   AlertTriangle, Clock3, ShieldCheck, CalendarClock, ClipboardList,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { DecisionPanel, Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
 import { buildControlBoardModel } from "./drawingControlCenter.derive";
@@ -106,6 +107,7 @@ function QueueRow({ item, onOpenTab }: { item: any; onOpenTab: (k: string) => vo
 }
 
 export default function ControlBoardPanel(props: ControlBoardPanelProps) {
+  const navigate = useNavigate();
   const {
     triage, kpis, isLoading, onOpenTab,
     onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness,
@@ -182,6 +184,16 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
               >
                 Open Work <ArrowRight size={14} />
               </button>
+              {focus.kind === "Drawing Set" && focus._drawingSetId && (focus._canDraft || focus._needsUnlinkedHint) && (
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--ghost"
+                  onClick={() => navigate(`/Submittals?targetSetId=${encodeURIComponent(focus._drawingSetId)}`)}
+                  title="Create a submittal linked to this drawing set"
+                >
+                  Create submittal
+                </button>
+              )}
               {onEscalate && (
                 <>
                   <button

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCreateInitialFromSet,
   buildStatusSuggestPatch,
+  filterSuggestAgainstCurrent,
   isOpenForLink,
   needsUnlinkedSubmittalHint,
   openLinkedSubmittalsForSet,
@@ -122,5 +123,24 @@ describe("buildCreateInitialFromSet", () => {
       status: "Submitted",
       requireLinkedSet: true,
     });
+  });
+});
+
+describe("filterSuggestAgainstCurrent", () => {
+  it("drops BIC/dates already written on the updated row", () => {
+    const filtered = filterSuggestAgainstCurrent(
+      { ball_in_court: "EOR", submitted_date: "2026-07-26", returned_date: "2026-07-26" },
+      { ball_in_court: "EOR", submitted_date: "2026-07-26", returned_date: null },
+    );
+    expect(filtered).toEqual({ returned_date: "2026-07-26" });
+  });
+
+  it("returns null when nothing remains", () => {
+    expect(
+      filterSuggestAgainstCurrent(
+        { ball_in_court: "Detailer", returned_date: "2026-07-10" },
+        { ball_in_court: "Detailer", returned_date: "2026-07-10" },
+      ),
+    ).toBeNull();
   });
 });

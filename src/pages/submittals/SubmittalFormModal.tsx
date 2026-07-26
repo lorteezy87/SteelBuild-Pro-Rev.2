@@ -39,12 +39,17 @@ interface SubmittalFormModalProps {
    * Default false — the picker is hidden and no `drawing_types` key is emitted.
    */
   drawingTypesEnabled?: boolean;
+  /**
+   * Event glue: when true (create-from-set context), block save until at least
+   * one drawing set is linked. Plain create from the register leaves this false.
+   */
+  requireLinkedSet?: boolean;
   saving?: boolean;
   onClose: () => void;
   onSubmit: (record: Record<string, any>) => void | Promise<void>;
 }
 
-export default function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], existingNumbers, parentSubmittal = null, drawingTypesEnabled = false, saving = false, onClose, onSubmit }: SubmittalFormModalProps) {
+export default function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], allDrawings = [], allRfis = [], existingNumbers, parentSubmittal = null, drawingTypesEnabled = false, requireLinkedSet = false, saving = false, onClose, onSubmit }: SubmittalFormModalProps) {
   // Only treat this as a spin-off when creating a NEW submittal from a parent —
   // never when editing an existing row (even a child row keeps its lineage via
   // its own parent_submittal_id, edited through the normal path, not re-split).
@@ -90,6 +95,10 @@ export default function SubmittalFormModal({ open, initial, projectId, projectNa
     // edit with its own number is fine.
     if (existingNumbers?.has(number)) {
       toast.error(`Submittal # "${number}" already exists in this project — use a different number.`);
+      return;
+    }
+    if (requireLinkedSet && (!Array.isArray(form.drawing_set_ids) || form.drawing_set_ids.length === 0)) {
+      toast.error("Link at least one drawing set — this submittal was opened from a set.");
       return;
     }
     const record: Record<string, any> = {

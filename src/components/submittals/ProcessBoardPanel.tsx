@@ -19,6 +19,7 @@
  * `dueInfoFor` dispatcher with the same source-gating. No behavior change.
  */
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
@@ -264,6 +265,7 @@ function ProcessColumn({ stage, items, onOpenTab }: { stage: string; items: Boar
 // ── Card ──────────────────────────────────────────────────────────────────
 
 function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: string) => void }) {
+  const navigate = useNavigate();
   const accent = item.risk?.tier === "critical" || item.due.overdue
     ? "var(--cmd-danger)"
     : item.risk?.tier === "urgent" || item.needsAction
@@ -353,6 +355,26 @@ function ProcessCard({ item, onOpenTab }: { item: BoardItem; onOpenTab?: (k: str
         )}
         {item.needsAction && <Pill tone="review">{item.isRR ? "R&R" : "Action"}</Pill>}
         {!item.linked && <Pill tone="warn">Unlinked</Pill>}
+        {!item.linked && item.kind === "Drawing Set" && item.drawingSetId && (
+          <span
+            role="link"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/Submittals?targetSetId=${encodeURIComponent(item.drawingSetId!)}`);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate(`/Submittals?targetSetId=${encodeURIComponent(item.drawingSetId!)}`);
+              }
+            }}
+            title="Create a submittal linked to this drawing set"
+          >
+            <Pill tone="info">Create submittal</Pill>
+          </span>
+        )}
       </div>
 
       <div style={{

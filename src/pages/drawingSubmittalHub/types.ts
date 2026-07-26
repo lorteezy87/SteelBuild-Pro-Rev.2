@@ -86,6 +86,8 @@ export interface TriageItem {
   detailingState?: string;
   /** True when no submittal governs the package, so a drafting state applies. */
   _canDraft?: boolean;
+  /** Event glue: in-flight package with zero open linked submittals. */
+  _needsUnlinkedHint?: boolean;
   /** The raw manual drawing_sets.detailing_state value (null = Not Started). */
   _detailingStateRaw?: string | null;
   /** Per-package readiness read-model (computeDetailingReadiness output). */

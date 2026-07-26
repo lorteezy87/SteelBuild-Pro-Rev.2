@@ -38,3 +38,15 @@ Do not collapse them without an explicit migration.
 ## Removed in Slice 10
 
 - Unreachable `DrawingKanban` sheet-stage board (hub uses Process Board)
+
+## Event glue (2026-07-26)
+
+Detailing CC / Submittals cut manual create-link and post-status bookkeeping
+without changing SoT:
+
+- Create-from-set (`?targetSetId=`) seeds `drawing_set_ids`; save requires ≥1 set.
+- Revision upload → confirm attach to open linked submittal(s).
+- Status change → boards refresh derived stage from SoT (no `"R&R"` sheet writes);
+  BIC / dates use suggest + Apply (`src/lib/submittalLinkGlue.ts`).
+
+See `docs/superpowers/specs/2026-07-26-detailing-cc-event-glue-design.md`.

@@ -148,3 +148,25 @@ export function ensureSetLinked(
   if (ids.includes(setId)) return ids;
   return [...ids, setId];
 }
+
+/**
+ * Drop suggest fields already present on the post-mutation row (e.g. advance
+ * already stamped BIC/dates) so the strip only asks for remaining confirms.
+ */
+export function filterSuggestAgainstCurrent(
+  patch: StatusSuggestPatch | null | undefined,
+  current: LinkableSubmittal | null | undefined,
+): StatusSuggestPatch | null {
+  if (!patch) return null;
+  const out: StatusSuggestPatch = {};
+  if (
+    "ball_in_court" in patch &&
+    (patch.ball_in_court ?? null) !== (current?.ball_in_court ?? null)
+  ) {
+    out.ball_in_court = patch.ball_in_court ?? null;
+  }
+  if (patch.submitted_date && !current?.submitted_date) out.submitted_date = patch.submitted_date;
+  if (patch.returned_date && !current?.returned_date) out.returned_date = patch.returned_date;
+  if (patch.approved_date && !current?.approved_date) out.approved_date = patch.approved_date;
+  return Object.keys(out).length > 0 ? out : null;
+}

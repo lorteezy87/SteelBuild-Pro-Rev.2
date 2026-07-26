@@ -2,6 +2,7 @@ import { ClipboardList, FileStack, Gauge, GitCompareArrows, Layers3, ShieldCheck
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { DRAFTING_STATES, effectiveDetailingState, hasGoverningSubmittal, isPackageRR } from "@/lib/detailingPackageState";
+import { needsUnlinkedSubmittalHint, openLinkedSubmittalsForSet } from "@/lib/submittalLinkGlue";
 import { computeSequenceReadiness } from "@/lib/detailingReadiness";
 import { workingDaysBetween } from "@/lib/workingDays";
 import { todayLocalISO } from "@/lib/dateMath";
@@ -567,6 +568,13 @@ export function buildTriage(
       );
       const status = governingSubmittal?.status || rollupDrawingStage(pkg.sheets);
       const canDraft = !hasGoverningSubmittal(pkg.submittals);
+      const openLinkedCount = pkg.setId
+        ? openLinkedSubmittalsForSet(pkg.setId, pkg.submittals).length
+        : 0;
+      const needsUnlinkedHint = needsUnlinkedSubmittalHint({
+        hasInFlightWork: !closed && ((pkg.sheets || []).length > 0 || canDraft),
+        openLinkedCount,
+      });
       const firstSheet = pkg.sheets[0] || null;
       const owner =
         governingSubmittal?.ball_in_court ||
@@ -594,6 +602,7 @@ export function buildTriage(
         detailingState,
         isRR,
         _canDraft: canDraft,
+        _needsUnlinkedHint: needsUnlinkedHint,
         _detailingStateRaw: pkg.parent?.detailing_state ?? null,
         _readiness: readinessByKey.get(pkg.key) || null,
         // Entity references for inline editing

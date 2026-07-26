@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { entities } from "@/api/supabaseClient";
 import { addSubmittalRound } from "@/hooks/useSubmittals";
 import { logActivity, logTransition } from "@/services/auditLogger";
@@ -8,6 +9,12 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import { runSubmittalStatusTriggers } from "@/lib/submittalSmartTriggers";
 import { ensureCriticalAgingActionItems } from "@/lib/submittalAgingTriggers";
 import { localToday } from "@/utils/dates";
+import {
+  buildCreateInitialFromSet,
+  buildStatusSuggestPatch,
+  filterSuggestAgainstCurrent,
+  type StatusSuggestPatch,
+} from "@/lib/submittalLinkGlue";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import {
   BulkActionBar as BulkActionBarRaw,
@@ -52,6 +59,7 @@ import { SubmittalDetail, SubmittalVirtualList } from "./submittals/components";
 import SubmittalRegisterPanel from "./submittals/SubmittalRegisterPanel";
 import { computeSubmittalStats, filterAndSortSubmittals, getVisibleSelectionState } from "./submittals/submittalRegister.derive";
 import SubmittalFormModal from "./submittals/SubmittalFormModal";
+import StatusSuggestStrip from "./submittals/StatusSuggestStrip";
 import type { DrawingSet, DrawingSetsById, Submittal } from "./submittals/types";
 
 /**
@@ -76,6 +84,7 @@ const SheetResponseGrid = SheetResponseGridRaw as unknown as ComponentType<AnyPr
 
 export default function Submittals() {
   const qc = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const activeProject = useProjectContext().activeProject as any;
   const projectId = activeProject?.id as string | undefined;
   const { can } = usePermissions();
@@ -83,6 +92,12 @@ export default function Submittals() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** Event glue: create opened from a set (`?targetSetId=`) — seeds linked sets. */
+  const [createFromSet, setCreateFromSet] = useState<{
+    drawing_set_ids: string[];
+    status?: string;
+    requireLinkedSet: boolean;
+  } | null>(null);
   // Phase 3 splitting: when set, the create form opens as a "spin off child"
   // with this submittal as the parent (project + drawing sets prefilled).
   const [spinOffParentId, setSpinOffParentId] = useState<string | null>(null);
@@ -102,6 +117,16 @@ export default function Submittals() {
   // override dialog (the server gate refused; PM can release with a reason).
   const [releaseBlock, setReleaseBlock] = useState<{ input: any; rfis: string[] } | null>(null);
   const [showSheetResponse, setShowSheetResponse] = useState<any>(null); // round object or null
+  /** Event glue: after status change, suggest BIC/dates that still need confirm. */
+  const [statusSuggest, setStatusSuggest] = useState<{
+    submittalId: string;
+    patch: StatusSuggestPatch;
+  } | null>(null);
+  const pendingSuggestRef = useRef<{
+    id: string;
+    before: Submittal;
+    nextStatus: string;
+  } | null>(null);
 
   // Key ["submittals", projectId] matches getQueryKey("submittal", projectId) in useSubmittals.ts — React Query dedupes; no second fetch when embedded in the DCC hub.
   const { data: rows = [], isLoading } = useQuery({
@@ -116,6 +141,29 @@ export default function Submittals() {
     enabled: !isLoading,
     param: "recordId",
   });
+
+  // Event glue: Drawings / Detailing CC navigate with ?targetSetId= (+ optional
+  // prefilledStatus). Open create with that set pre-linked, then strip params
+  // so refresh doesn't re-open the modal.
+  useEffect(() => {
+    const targetSetId = searchParams.get("targetSetId");
+    if (!targetSetId) return;
+    const seeded = buildCreateInitialFromSet(targetSetId, {
+      prefilledStatus: searchParams.get("prefilledStatus"),
+    });
+    setCreateFromSet({
+      drawing_set_ids: seeded.drawing_set_ids,
+      status: seeded.status,
+      requireLinkedSet: true,
+    });
+    setShowCreate(true);
+    setSpinOffParentId(null);
+    setEditingId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("targetSetId");
+    next.delete("prefilledStatus");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Slice 7: draft ActionItems for Critical R&R/OFS/BFA aging (deduped).
   // Honest path — never invents Alerts Center rows / generate-alerts.
@@ -275,10 +323,28 @@ export default function Submittals() {
       // Status moves can auto-queue a detailing task (submittalSmartTriggers).
       qc.invalidateQueries({ queryKey: ["action-items", projectId] }),
       qc.invalidateQueries({ queryKey: ["action-items"] }),
+      // Event glue hard path: hub/process boards recompute derived stage from SoT.
+      qc.invalidateQueries({ queryKey: ["drawings", projectId] }),
     ]);
     // Fan out the drawingSet family so Doc Control reflects any linked updates.
     await invalidateEntity(qc, "drawingSet", projectId);
+    await invalidateEntity(qc, "drawing", projectId);
+    await invalidateEntity(qc, "submittal", projectId);
   }, [qc, projectId]);
+
+  const settleStatusSuggest = useCallback((updatedRow: any | null | undefined) => {
+    const pending = pendingSuggestRef.current;
+    pendingSuggestRef.current = null;
+    if (!pending) return;
+    const raw = buildStatusSuggestPatch(pending.before, pending.nextStatus, {
+      today: localToday(),
+    });
+    const remaining = filterSuggestAgainstCurrent(raw, updatedRow || pending.before);
+    if (remaining) {
+      setStatusSuggest({ submittalId: pending.id, patch: remaining });
+      setSelectedId(pending.id);
+    }
+  }, []);
 
   const createMut = useMutation({
     mutationFn: (data: any) => entities.Submittal.create(withProjectId(data, projectId)),
@@ -303,20 +369,36 @@ export default function Submittals() {
       }
       return updated;
     },
-    onSuccess: async () => { await invalidate(); toast.success("Updated"); },
-    onError: (err: any) => toast.error(formatSubmittalWriteError(err, "Update")),
+    onSuccess: async (updated) => {
+      await invalidate();
+      toast.success("Updated");
+      settleStatusSuggest(updated);
+    },
+    onError: (err: any) => {
+      pendingSuggestRef.current = null;
+      toast.error(formatSubmittalWriteError(err, "Update"));
+    },
   });
   // Verb CTA → the single audited write path: logs a submittal_rounds row +
   // patches atomically (activates the previously-empty round log).
   const advanceMut = useMutation({
     mutationFn: (input: Parameters<typeof addSubmittalRound>[0]) => addSubmittalRound(input),
-    onSuccess: async () => { await invalidate(); toast.success("Round logged"); setReleaseBlock(null); },
+    onSuccess: async (result) => {
+      await invalidate();
+      toast.success("Round logged");
+      setReleaseBlock(null);
+      // addSubmittalRound returns the updated submittal (or { submittal }) depending on path.
+      const updated = (result as any)?.submittal || (result as any)?.id ? result : null;
+      settleStatusSuggest(updated);
+    },
     onError: (err: any, variables) => {
       // A blocked "Release for Fabrication" opens the override dialog with the
       // pending move so a PM can release with a reason (or cancel + resolve).
       if (err instanceof FabReleaseBlockedError) {
+        // Keep pendingSuggestRef — override retry may still need the strip.
         setReleaseBlock({ input: variables, rfis: err.blockingRfiNumbers || [] });
       } else {
+        pendingSuggestRef.current = null;
         toast.error(formatSubmittalWriteError(err, "Advance"));
       }
     },
@@ -594,7 +676,24 @@ export default function Submittals() {
     />
   );
 
-  const detailEl = (
+  const detailEl = selectedView ? (
+    <>
+      {statusSuggest && statusSuggest.submittalId === selectedView.id && (
+        <StatusSuggestStrip
+          patch={statusSuggest.patch}
+          busy={updateMut.isPending}
+          onDismiss={() => setStatusSuggest(null)}
+          onApply={async (patch) => {
+            try {
+              await updateMut.mutateAsync({ id: statusSuggest.submittalId, ...patch });
+              setStatusSuggest(null);
+              toast.success("Suggested fields applied");
+            } catch {
+              /* updateMut toasts */
+            }
+          }}
+        />
+      )}
     <SubmittalDetail
       approvedRoutesToScrub={approvedRoutesToScrub}
       splittingEnabled={splittingEnabled}
@@ -628,7 +727,7 @@ export default function Submittals() {
         if (component.id) removeComponentMut.mutate(component.id);
       }}
       onSpinOff={() => selected && setSpinOffParentId(selected.id)}
-      onSelectSubmittal={(id) => setSelectedId(id)}
+      onSelectSubmittal={(id) => { setStatusSuggest(null); setSelectedId(id); }}
       submittal={selectedView}
       allSubmittals={rowsView}
       drawingSets={drawingSetsView}
@@ -701,12 +800,17 @@ export default function Submittals() {
       allTasks={allTasks}
       projectName={activeProject?.project_name || activeProject?.name || "Project"}
       project={activeProject}
-      onClose={() => setSelectedId(null)}
+      onClose={() => { setStatusSuggest(null); setSelectedId(null); }}
       onEdit={() => selected && setEditingId(selected.id)}
       onDelete={() => selected && setToDelete(selected.id)}
       onStatusChange={(status) => {
         if (!selected || status === selected.status) return;
         const today = localToday();
+        pendingSuggestRef.current = {
+          id: selected.id as string,
+          before: { ...selected },
+          nextStatus: status,
+        };
         // Funnel real workflow moves through the audited round path so the
         // round log stays the submit→return CYCLE truth (§20): a SEND opens
         // (or advances) the open cycle, a VERDICT closes it — addSubmittalRound
@@ -768,6 +872,11 @@ export default function Submittals() {
       onAdvance={(action) => {
         if (!selected || !action.nextStatus) return;
         const today = localToday();
+        pendingSuggestRef.current = {
+          id: selected.id as string,
+          before: { ...selected },
+          nextStatus: action.nextStatus,
+        };
         // Stamp the submitted date on the FIRST outbound hop (or a
         // fresh resubmit after R&R) — multi-party routing chains pass
         // through OFA several times and must not re-stamp each hop.
@@ -824,7 +933,8 @@ export default function Submittals() {
         if (round) setShowSheetResponse(round);
       }}
     />
-  );
+    </>
+  ) : null;
 
   if (!projectId) return (
     <div className="submittals-page" style={{ textAlign: "center" }}>
@@ -852,7 +962,7 @@ export default function Submittals() {
         toggleAll={toggleAll}
         projectLabel={activeProject?.project_name || "Project"}
         canCreate={can("create", "submittal")}
-        onNewSubmittal={() => setShowCreate(true)}
+        onNewSubmittal={() => { setCreateFromSet(null); setShowCreate(true); }}
         onBulkAdd={() => setShowBulkAdd(true)}
         list={listEl}
         detail={detailEl}
@@ -862,8 +972,17 @@ export default function Submittals() {
         <SubmittalFormModal
           open={showCreate || !!editing || !!spinOffParent}
           // Spin-off: seed from the parent (project + drawing sets carried over).
-          // Edit: the row being edited. Plain create: empty.
-          initial={editingView || (spinOffParent ? (spinOffInitial as Submittal) : {})}
+          // Edit: the row being edited. Create-from-set: seeded ids. Plain create: empty.
+          initial={
+            editingView
+            || (spinOffParent ? (spinOffInitial as Submittal) : null)
+            || (createFromSet
+              ? ({
+                  drawing_set_ids: createFromSet.drawing_set_ids,
+                  ...(createFromSet.status ? { status: createFromSet.status } : {}),
+                } as Submittal)
+              : ({} as Submittal))
+          }
           projectId={projectId}
           projectName={activeProject?.project_name || activeProject?.name || ""}
           availableSets={drawingSetsView}
@@ -871,6 +990,7 @@ export default function Submittals() {
           allRfis={allRfis}
           parentSubmittal={spinOffParent as Submittal | null}
           drawingTypesEnabled={drawingTypesEnabled}
+          requireLinkedSet={!!createFromSet?.requireLinkedSet && !editing && !spinOffParent}
           saving={createMut.isPending || updateMut.isPending}
           existingNumbers={new Set(
             rows
@@ -878,7 +998,12 @@ export default function Submittals() {
               .map((r: any) => String(r.submittal_number || "").trim())
               .filter(Boolean),
           )}
-          onClose={() => { setShowCreate(false); setEditingId(null); setSpinOffParentId(null); }}
+          onClose={() => {
+            setShowCreate(false);
+            setEditingId(null);
+            setSpinOffParentId(null);
+            setCreateFromSet(null);
+          }}
           onSubmit={async (data) => {
             if (editing) {
               await updateMut.mutateAsync({ id: editing.id, ...data });
@@ -922,6 +1047,7 @@ export default function Submittals() {
             setShowCreate(false);
             setEditingId(null);
             setSpinOffParentId(null);
+            setCreateFromSet(null);
           }}
         />
       )}

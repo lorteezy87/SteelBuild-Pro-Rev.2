@@ -801,7 +801,13 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       setProcessingPct(100);
       await new Promise(r => setTimeout(r, 500));
       setStep("success");
-      if (onComplete) onComplete();
+      if (onComplete) {
+        onComplete({
+          setId: selectedSet?.id || null,
+          setName: selectedSet?.name || selectedSet?.set_name || selectedSet?.title || null,
+          revisionLabel: revMeta?.revisionLabel || null,
+        });
+      }
     } catch (error) {
       console.error("Revision apply failed:", error);
       setFlowError(error?.message || "Failed to apply revision changes.");

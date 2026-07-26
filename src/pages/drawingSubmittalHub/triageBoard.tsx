@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ComponentType, CSSProperties } from "react";
+import { useNavigate } from "react-router-dom";
 import { SectionCard, StatusPill } from "@/components/desktop/module";
 import {
   AlertTriangle,
@@ -88,6 +89,7 @@ interface TriageBoardProps {
 }
 
 export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, onUpdateOwner, onUpdateDueDate, onAdvanceDetailing, onToggleReadiness, sequenceReadiness, revisionImpact, isSaving, onEscalate, onCompareRevision, modelMapping, modelElementRows, onImportModelElements }: TriageBoardProps) {
+  const navigate = useNavigate();
   if (isLoading) return <LoadingSkeleton />;
 
   const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
@@ -211,6 +213,17 @@ export function TriageBoard({ triage, kpis, drawingKpis, isLoading, onOpenTab, o
                   Open Work
                   <ArrowRight size={14} />
                 </button>
+                {focusItem.kind === "Drawing Set" && focusItem._drawingSetId && (focusItem._canDraft || focusItem._needsUnlinkedHint) && (
+                  <button
+                    type="button"
+                    className="sbd-btn-ghost"
+                    onClick={() => navigate(`/Submittals?targetSetId=${encodeURIComponent(focusItem._drawingSetId)}`)}
+                    title="Create a submittal linked to this drawing set"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}
+                  >
+                    Create submittal
+                  </button>
+                )}
                 {/* Contextual escalation — turn the blocker into a draft RFI
                     or a potential CO without leaving the control board. */}
                 {onEscalate && (
