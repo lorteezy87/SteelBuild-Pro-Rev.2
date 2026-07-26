@@ -7,6 +7,7 @@ import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { batchProcess } from "@/utils/batchProcess";
 import { toast } from "sonner";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 // Loose Alert shape — the entity client is still untyped (Phase 3). Once the entity
 // boundary is typed, this will be replaced with the generated Database row type.
@@ -25,7 +26,13 @@ export function useAlerts() {
   const projectId = useProjectId();
   const [generating, setGenerating] = useState(false);
 
-  const { data: alerts = [], isLoading, refetch } = useQuery<Alert[]>({
+  const {
+    data: alerts = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<Alert[]>({
     queryKey: ["alerts", projectId],
     queryFn: () =>
       projectId
@@ -99,8 +106,7 @@ export function useAlerts() {
         "Alerts refreshed. Overdue RFIs and deliveries create alerts from their modules; a cross-module scanner is not deployed.",
       );
     } catch (err: unknown) {
-      const msg = (err as { message?: string } | undefined)?.message || "Unknown error";
-      toast.error("Failed to refresh alerts: " + msg);
+      toast.error(`Failed to refresh alerts: ${toUserErrorMessage(err, "Unknown error")}`);
     } finally {
       setGenerating(false);
     }
@@ -111,6 +117,8 @@ export function useAlerts() {
   return {
     alerts,
     isLoading,
+    isError,
+    error,
     refetch,
     generating,
     unreadCount,

@@ -7,6 +7,8 @@ import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
 import { useAlerts } from "@/hooks/useAlerts";
 import { CommandBar } from "@/components/design-system";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const PAGE_MAP = {
   RFI: "RFIs",
@@ -39,6 +41,9 @@ export default function AlertsCenter() {
   const {
     alerts,
     isLoading,
+    isError,
+    error,
+    refetch,
     generating,
     unreadCount,
     markRead,
@@ -122,7 +127,20 @@ export default function AlertsCenter() {
       </div>
 
       {isLoading ? (
-        <div style={{ textAlign: "center", padding: "60px 0", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>LOADING ALERTS...</div>
+        <LoadingSkeleton variant="table" rows={6} />
+      ) : isError ? (
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
+        }}>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+            Couldn’t load alerts
+          </p>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+            {toUserErrorMessage(error, "Something went wrong. Try again.")}
+          </p>
+          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+        </div>
       ) : filtered.length === 0 ? (
         <div className="sbd-card" style={{ padding: "60px 24px", textAlign: "center" }}>
           <Bell style={{ width: 36, height: 36, color: "var(--text-muted)", margin: "0 auto 12px" }} />

@@ -67,7 +67,13 @@ export default function ExpensesPage() {
   }, [search]);
 
   /* ── Queries ── */
-  const { data: expenses = [], isLoading, refetch } = useQuery({
+  const {
+    data: expenses = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["expenses", activeProject?.id],
     queryFn: async () => {
       if (!activeProject?.id) return [];
@@ -494,6 +500,9 @@ export default function ExpensesPage() {
         <ExpenseTable
           filtered={filtered}
           isLoading={isLoading}
+          isError={isError}
+          errorMessage={toUserErrorMessage(error, "Something went wrong. Try again.")}
+          onRetry={() => refetch()}
           selected={selected}
           onToggleSelect={toggleSelect}
           onToggleAll={toggleAll}

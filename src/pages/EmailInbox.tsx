@@ -25,7 +25,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { toast } from "sonner";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
-import { KpiTile as KpiTileRaw, Modal as ModalRaw, BulkActionBar as BulkActionBarRaw } from "@/components/design-system";
+import { KpiTile as KpiTileRaw, Modal as ModalRaw, BulkActionBar as BulkActionBarRaw, Button as ButtonRaw } from "@/components/design-system";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import {
   Archive, Clock, Eye, Inbox, Mail, PenSquare, Search, Send, Settings, Star, XCircle,
 } from "lucide-react";
@@ -45,6 +46,7 @@ type AnyProps = PropsWithChildren<Record<string, unknown>>;
 const KpiTile = KpiTileRaw as unknown as ComponentType<AnyProps>;
 const Modal = ModalRaw as unknown as ComponentType<AnyProps>;
 const BulkActionBar = BulkActionBarRaw as unknown as ComponentType<AnyProps>;
+const Button = ButtonRaw as unknown as ComponentType<AnyProps>;
 
 export default function EmailInbox() {
   const projectId = useProjectId();
@@ -71,7 +73,13 @@ export default function EmailInbox() {
   // ── Data fetching ──────────────────────────────────────────────────
   // the generated generated row types lag the live schema (missing labels/direction/
   // is_read/etc.), so cast to the local EmailMessage/EmailAttachment shapes.
-  const { data: messagesData = [], isLoading, error } = useQuery({
+  const {
+    data: messagesData = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["email-messages", projectId],
     queryFn: () => entities.EmailMessage.filter({ project_id: projectId }, "-received_at"),
     enabled: !!projectId,
@@ -496,12 +504,25 @@ export default function EmailInbox() {
           {/* Email rows */}
           <div style={{ flex: 1, overflowY: "auto" }}>
             {isLoading ? (
-              <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)", fontFamily: "var(--font-body)", fontSize: 12 }}>
-                Loading emails...
+              <div style={{ padding: 16 }}>
+                <LoadingSkeleton variant="table" rows={8} />
               </div>
-            ) : error ? (
-              <div style={{ textAlign: "center", padding: 40, color: "var(--status-error)", fontFamily: "var(--font-body)", fontSize: 12 }}>
-                Failed to load: {(error as any)?.message || "Unknown"}
+            ) : isError ? (
+              <div style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "40px 24px",
+                gap: 12,
+              }}>
+                <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+                  Couldn’t load emails
+                </p>
+                <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 280 }}>
+                  {toUserErrorMessage(error, "Something went wrong. Try again.")}
+                </p>
+                <Button variant="outline" onClick={() => refetch()}>Retry</Button>
               </div>
             ) : filtered.length === 0 ? (
               <div style={{ textAlign: "center", padding: 40 }}>

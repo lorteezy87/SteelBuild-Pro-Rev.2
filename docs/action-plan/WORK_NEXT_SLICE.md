@@ -1,32 +1,17 @@
-# Action-plan next slice — Email accounts + Doc Control register hygiene
+# Action-plan — post-deploy checkpoint (2026-07-26 batch #139–#149)
 
-**Branch / PR:** `cursor/action-plan-email-review-d3a1`  
-**Dates:** 2026-07-26  
-**Prior prod:** #133–#137 deployed (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL`)  
-**Open siblings:** #139 (DMS Upload/Edit), #140 (Contacts/LinkedFolder/Vendors)
+**Merged + prod:** #139 · #140 · #141 · #142–#149 (via batch deploy) → https://www.steelbuild-pro.com  
+**Prior prod:** #133–#137 (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL`)
 
-## Code (IDs 18 / 48 / 50)
+| ID | Status | What shipped |
+|---|---|---|
+| **18** | **Done** | LoadingSkeleton / RegisterFetchBody / INLINE error gates across DMS, Contacts, field, ops, commercial pages |
+| **48** | In Progress | Toast helper adoption advanced; not universal |
+| **50** | In Progress | `withProjectId` on DMS Document/LinkedFolder, Contact, EmailAccount, DrawingReview/Transmittal, ProductionNote; org-level remain |
+| **102** | Blocked | Interactive UAT + GH Actions billing |
 
-| File | Change |
-|---|---|
-| `EmailAccountSettings.jsx` | `EmailAccount.create(withProjectId)` + toast helper + `LoadingSkeleton` |
-| `ReviewQueue.tsx` | `DrawingReview.create(withProjectId)` + toast/error helper + skeleton |
-| `ReviewQueuePanel.tsx` | loading/error chrome parity (mutations already clean) |
-| `TransmittalLog.tsx` | transmittal + item create via `withProjectId` + toast/skeleton |
-| `TransmittalLogPanel.tsx` | loading/error chrome parity (mutations already clean) |
+## Next slices (suggested)
 
-## Still open
-
-- Merge #139 / #140
 - Large page thins 21 / 23 / 27
 - Concurrent-edit E2E (52)
-- **Blocked:** 102
-
-## Validation
-
-```bash
-npx vitest run src/lib/mutations/__tests__/standardMutation.test.ts
-npx eslint src/components/email/EmailAccountSettings.jsx \
-  src/components/drawings/register/{ReviewQueue,ReviewQueuePanel,TransmittalLog,TransmittalLogPanel}.tsx \
-  --quiet
-```
+- Residual toast/create gaps (Projects org-level, Schedule surface)
