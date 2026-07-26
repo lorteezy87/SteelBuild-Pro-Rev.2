@@ -29,7 +29,7 @@ import { getNextNumber } from "../components/shared/numberSequencing";
 // Invalidate the FULL expense family (project list + ["expenses-all"] used by
 // Dashboard/Reports + cost rollups), not just the unscoped ["expenses"] prefix.
 import { invalidateEntity } from "@/services/cacheRegistry";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 import { safeNum, buildRedFlagAlerts, exportExpensesCSV } from "./expenses/utils";
 import { computeCostCodeTotals } from "@/services/costRollup";
@@ -123,7 +123,7 @@ export default function ExpensesPage() {
       setEditing(null);
       toast.success("Expense created");
     },
-    onError: (err) => toast.error("Failed to create expense: " + (err?.message || "Unknown error")),
+    onError: (err) => toast.error(`Failed to create expense: ${toUserErrorMessage(err, "Unknown error")}`),
   });
 
   const updateMut = useMutation({
@@ -134,7 +134,7 @@ export default function ExpensesPage() {
       setEditing(null);
       toast.success("Expense updated");
     },
-    onError: (err) => toast.error("Failed to update expense: " + (err?.message || "Unknown error")),
+    onError: (err) => toast.error(`Failed to update expense: ${toUserErrorMessage(err, "Unknown error")}`),
   });
 
   const deleteMut = useMutation({
@@ -148,7 +148,7 @@ export default function ExpensesPage() {
       if (deleteTarget?.id === deletedId) setDeleteTarget(null);
       toast.success("Expense deleted");
     },
-    onError: () => toast.error("Failed to delete expense"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to delete expense")),
   });
 
   const bulkUpdateMut = useMutation({
@@ -168,7 +168,7 @@ export default function ExpensesPage() {
     onError: (err) => {
       invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
-      toast.error(err.message);
+      toast.error(toUserErrorMessage(err, "Bulk update failed"));
     },
   });
 
@@ -189,7 +189,7 @@ export default function ExpensesPage() {
     onError: (err) => {
       invalidateEntity(qc, "expense", activeProject?.id);
       setSelected([]);
-      toast.error(err.message);
+      toast.error(toUserErrorMessage(err, "Bulk delete failed"));
     },
   });
 

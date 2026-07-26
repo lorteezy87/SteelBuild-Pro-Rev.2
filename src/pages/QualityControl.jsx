@@ -6,9 +6,9 @@ import { toast } from "sonner";
 import QCFormModal from "@/components/qc/QCFormModal";
 import QCList from "@/components/qc/QCList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 export default function QualityControl() {
   const projectId = useProjectId();
@@ -24,19 +24,19 @@ export default function QualityControl() {
   const createMut = useMutation({
     mutationFn: (data) => entities.QualityControlRecord.create(withProjectId(data, projectId)),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records", projectId] }); toast.success("Record created"); setShowForm(false); setEditing(null); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Create failed")),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, ...data }) => entities.QualityControlRecord.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records"] }); toast.success("Record updated"); setShowForm(false); setEditing(null); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Update failed")),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => entities.QualityControlRecord.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records"] }); toast.success("Record deleted"); setDeleteTarget(null); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Delete failed")),
   });
 
   const handleSave = (data) => {
@@ -44,7 +44,13 @@ export default function QualityControl() {
     else createMut.mutate(data);
   };
 
-  const { data: rawQcRecords = [], isLoading } = useQuery({
+  const {
+    data: rawQcRecords = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["qc-records", projectId],
     queryFn: () =>
       projectId
@@ -213,33 +219,21 @@ export default function QualityControl() {
       )}
 
       {/* QC Records List */}
-      {isLoading ? (
-        <LoadingSkeleton variant="table" rows={5} />
-      ) : filtered.length === 0 ? (
-        qcRecords.length === 0 ? (
-          /* Truly empty — no records at all */
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: "16px" }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-              <path d="M9 14l2 2 4-4" />
-            </svg>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", margin: 0, textAlign: "center" }}>No quality control records yet</p>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: "11px", color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>Create your first test record to start tracking material certifications, NDT results, and inspection outcomes.</p>
-            <Button variant="primary" onClick={() => { setEditing(null); setShowForm(true); }} style={{ marginTop: 4 }}>
-              + New Test Record
-            </Button>
-          </div>
-        ) : (
-          /* Has records but filters exclude everything */
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "36px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: "12px" }}>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>No records match the current filters</p>
-            <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
-          </div>
-        )
-      ) : (
+      <RegisterFetchBody
+        isLoading={isLoading}
+        isError={isError}
+        errorMessage={toUserErrorMessage(error, "Failed to load QC records")}
+        onRetry={() => refetch()}
+        totalCount={qcRecords.length}
+        filteredCount={filtered.length}
+        emptyTitle="No quality control records yet"
+        emptyBody="Create your first test record to start tracking material certifications, NDT results, and inspection outcomes."
+        emptyActionLabel="+ New Test Record"
+        onEmptyAction={() => { setEditing(null); setShowForm(true); }}
+        onClearFilters={clearFilters}
+      >
         <QCList records={filtered} onEdit={(record) => {setEditing(record); setShowForm(true);}} onDelete={setDeleteTarget} />
-      )}
+      </RegisterFetchBody>
 
       {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Record" description="Delete this record? This cannot be undone." />
