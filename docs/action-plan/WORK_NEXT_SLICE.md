@@ -1,56 +1,59 @@
-# Action-plan next slice — `withProjectId` + tracker checkpoint
+# Action-plan next slice — loading/empty/error + toast hygiene
 
-**Branch / PR:** `cursor/action-plan-next-slice-d3a1` → **#123** (merged + prod 2026-07-26)  
-**Dates:** 2026-07-25 (initial) · 2026-07-26 (adoption continuation + merge/deploy)
+**Branch / PR:** `cursor/action-plan-loading-toasts-d3a1`  
+**Dates:** 2026-07-26  
+**Prior:** PR **#123** (`withProjectId` + mutation helpers) merged + prod
 
 ## Code
 
-Added `withProjectId()` in `src/lib/mutations/standardMutation.ts`:
+### ID 18 — loading / empty / error
 
-- Calls `assertProjectId` (fails closed when no active project)
-- Forces `project_id` to the active project when a mismatched value is supplied
-- Covered by unit tests in `standardMutation.test.ts`
+Added `src/components/shared/RegisterFetchStates.jsx` → `RegisterFetchBody`:
 
-### Creates wired (2026-07-25)
+- loading → `LoadingSkeleton` (table)
+- error → message + Retry
+- true-empty → title/body + optional create CTA
+- filter-empty → Clear Filters
+- else → children (list)
 
-| Area | Files |
+Wired on:
+
+| Page | Notes |
 |---|---|
-| Field / QC | `Punchlist`, `FieldToday`, `Inspections`, `Safety`, `QualityControl`, `Warranty`, `ChangeRequests`, `ProjectCloseout` |
-| Cost | `costCodeSave.ts`, `Expenses`, `BudgetHours` |
-| Drawings / Doc control | `Drawings`, `TransmittalLogPanel` |
-| Schedule / resources | `Schedule`, `WbsBuilderModal`, `ResourceScheduling` |
+| `Warranty.jsx` | fetch states + create CTA |
+| `ChangeRequests.jsx` | fetch states + create CTA |
+| `Punchlist.jsx` | already had `isLoading` for auto-open; now gates list body |
+| `QualityControl.jsx` | replaced inline empty chrome with shared helper (+ error/retry) |
+| `ProjectCloseout.jsx` | loading/error gate so create form does not flash while fetching |
 
-### Adoption continuation (2026-07-26)
+Covered by `src/components/shared/__tests__/RegisterFetchStates.test.jsx`.
 
-| Area | Work |
-|---|---|
-| Submittals (ID 21) | Extracted `submittalMutationHelpers.ts` + tests; create/round/sheet/bulk paths use `withProjectId` + shared toast/error helpers |
-| Commercial | `ChangeOrders`, `SOV`, `Procurement`, `Documents` (folder creates) |
-| Toasts (ID 48) | `toUserErrorMessage` on Safety/Inspections/Procurement/SOV/Documents mutation errors |
-| RFIs (ID 23) | Extracted `rfiMutationHelpers.ts` + tests; create/alert/doc attach + bulk toast helpers |
-| Ops / field | `ActionItems`, `DailyLogs`, `Constraints`, `LookAheadSchedule`, `WorkPackages` (+ bulk prep), `FieldToday` photos |
-| Cross-page create | `EscalateModal`, `emailInbox/modals` entity + document creates |
-| Drawings (ID 27) | Extracted `drawingMutationHelpers.ts` + tests; create/update/delete/set toast helpers |
-| Remaining creates | `FabRelease` WP create, `ContractManagement` SOV, Schedule MPP import, Submittal comment dispositions, Deliveries overdue alerts |
+### ID 48 — toast pattern (incidental)
 
-## Tracker IDs moved to Done (2026-07-25 checkpoint)
+`toUserErrorMessage` on create/update/delete (and Punchlist close-out) errors for the pages above.
 
-19, 43, 64, 68, 70, 84, 89, 92, 94, 95, 97, 99, 103, 104, 105
+## Tracker
+
+| ID | Status | Note |
+|---|---|---|
+| **18** | **Done** | Shared helper + thin CRUD/QC; CCs already patterned |
+| **48** | In Progress | Advanced; not universal |
+
+Checkpoint after this slice: **Done 79 · In Progress 25 · Blocked 1** (ID 102 still blocked).
 
 ## Still In Progress (intentionally)
 
-- Large page thinning: **21** / **23** / **27** (mutation helpers started; shells still large)
-- Universal mutation/toast adoption: 18, **48**, **50**, 51, **52**, 53, 54, 56 — advanced widely; org-level Contacts/Vendors/Projects intentionally skipped
+- Large page thinning: **21** / **23** / **27**
+- Mutation/toast adoption: **48**, **50**, 51, **52**, 53, 54, 56
 - UX / UAT: 20, 75, 77, 80, 81, 83, 87, 88
-- **Blocked:** 102 (interactive UAT — staging credentials + GH Actions billing)
+- **Blocked:** 102
 
 ## Validation
 
 ```bash
-npx vitest run src/lib/mutations/__tests__/standardMutation.test.ts \
-  src/pages/submittals/__tests__/submittalMutationHelpers.test.ts \
-  src/pages/rfis/__tests__/rfiMutationHelpers.test.ts \
-  src/pages/drawings/__tests__/drawingMutationHelpers.test.ts \
-  src/pages/workPackages/__tests__/creation.test.ts
-npx eslint <touched files> --quiet
+npx vitest run src/components/shared/__tests__/RegisterFetchStates.test.jsx \
+  src/lib/mutations/__tests__/standardMutation.test.ts
+npx eslint src/components/shared/RegisterFetchStates.jsx \
+  src/pages/{Warranty,ChangeRequests,ProjectCloseout,Punchlist,QualityControl}.jsx \
+  src/components/shared/__tests__/RegisterFetchStates.test.jsx --quiet
 ```
