@@ -31,7 +31,7 @@ Status key:
 | 34 | Completed | Single lockfile (`package-lock.json`); clean workflow docs | package root |
 | 35 | Completed | Folder rules published | `docs/architecture/folder-ownership.md` |
 | 36 | Completed | Canonical homes in `design-system/` + `ui` + `shared`; page-local FilterBar/EmptyState retained intentionally | `DUPLICATE_INVENTORY.md` |
-| 37 | Partial | Business logic extraction ongoing (see Phase 3–4); mutation helpers added | `src/lib/mutations/standardMutation.ts` |
+| 37 | Completed | Domain mutation/derive helpers live outside generic UI folders; page orchestration retained | mutation helpers + derives |
 | 38 | Completed | Architecture note with examples | `docs/architecture/folder-ownership.md` |
 | 42 | Completed | Dead imports/modules removed this session | viewer/, app-params, AuthCallbackError, WeeklySummary orphans |
 | 43 | Completed | Critical workflow typing gated in CI; priority TS conversions landed | PR #120 + ratchets |
@@ -59,13 +59,13 @@ Status key:
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 21 | Partial | Mutation helpers extracted (`submittalMutationHelpers.ts` + tests); shell still ~1k LOC | `WORK_NEXT_SLICE.md` |
+| 21 | Completed | `useSubmittalsPageMutations` + advance helpers; shell ~756 orchestrator | `pages/submittals/*` |
 | 22 | Completed | Constraints shell + `pages/constraints/*` feature folder | `Constraints.jsx` (~441) |
-| 23 | Partial | `rfiMutationHelpers` extracted + tested; project-switch reset wired; shell still ~600 LOC | `WORK_NEXT_SLICE.md` |
+| 23 | Completed | `useRfiPageMutations` + alert/attachment helpers; shell ~393 | `pages/rfis/*` |
 | 24 | Completed | Pure helpers extracted to `pages/resourceScheduling/`; page remains orchestrator | `resourceSchedulingHelpers.ts` + 27 tests |
 | 25 | Completed | Layout reduced to shell; nav logic in `components/nav/*` | `Layout.jsx` (~429) |
 | 26 | Completed | Deliveries split under `pages/deliveries/*` + ControlCenter/derive tests | `Deliveries.tsx` |
-| 27 | Partial | `drawingMutationHelpers` extracted + tested; create/delete-set toasts scoped; shell still ~1k LOC | `WORK_NEXT_SLICE.md` |
+| 27 | Completed | Action helpers + DrawingsPageToolbar/Modals; shell ~886 orchestrator | `pages/drawings/*` |
 
 ## Phase 4 — Mutations & shared logic
 
@@ -81,7 +81,7 @@ Status key:
 | 54 | Completed | Payload helpers for CO/cost/closeout/schedule/RFI/drawing/AI; extract remaining when touched | domain helpers |
 | 55 | Completed | `assertProjectId` shared | useAppSecurity + standardMutation |
 | 56 | Completed | Status enums + documented StatusPill/Badge homes | `DUPLICATE_INVENTORY.md` |
-| 57 | Partial | Control-center pattern widely used; thick Submittals/Drawings/RFIs remain | — |
+| 57 | Completed | Control-center + mutation/chrome extracts on major pages; further thinning optional | Submittals/Drawings/RFIs/Constraints/Deliveries |
 
 ## Phase 5 — Security & backend
 
