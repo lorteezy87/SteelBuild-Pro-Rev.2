@@ -20,6 +20,7 @@ import {
   buildLinkedFolderSyncDefaults,
   buildUnavailableSyncStatusPatch,
 } from "@/lib/dms/sharepointSyncHonesty";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 // ── Provider config ───────────────────────────────────────────────────
 const PROVIDERS = [
@@ -85,13 +86,13 @@ export default function DocumentStorageSettings({ projectId }) {
 
   // ── Mutations ───────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => entities.LinkedFolder.create(data),
+    mutationFn: (data) => entities.LinkedFolder.create(withProjectId(data, projectId)),
     onSuccess: () => {
       invalidateEntity(qc, "linked_folder", projectId);
       toast.success("Folder linked successfully");
       resetForm();
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to link folder")),
   });
 
   const updateMut = useMutation({
@@ -99,7 +100,7 @@ export default function DocumentStorageSettings({ projectId }) {
     onSuccess: () => {
       invalidateEntity(qc, "linked_folder", projectId);
     },
-    onError: (e) => toast.error("Update failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -108,7 +109,7 @@ export default function DocumentStorageSettings({ projectId }) {
       invalidateEntity(qc, "linked_folder", projectId);
       toast.success("Folder unlinked");
     },
-    onError: (e) => toast.error("Delete failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to unlink folder")),
   });
 
   // ── Handlers ────────────────────────────────────────────────────────
