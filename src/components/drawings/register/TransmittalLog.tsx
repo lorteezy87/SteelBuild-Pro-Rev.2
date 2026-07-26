@@ -12,6 +12,8 @@ import { usePermissions } from "@/services/permissions";
 import { useTransmittals } from "@/hooks/useTransmittals";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 const muted = "var(--text-muted)";
 const primary = "var(--text-primary)";
@@ -58,8 +60,7 @@ export function TransmittalLog({ projectId }: { projectId: string | null }) {
       const num = form.transmittal_number.trim();
       if (!num) throw new Error("Transmittal number is required");
       const incoming = form.direction === "incoming";
-      const transmittal = await entities.DrawingTransmittal.create({
-        project_id: projectId as string,
+      const transmittal = await entities.DrawingTransmittal.create(withProjectId({
         transmittal_number: num,
         direction: form.direction,
         received_from: incoming ? (form.party.trim() || null) : null,
@@ -68,17 +69,16 @@ export function TransmittalLog({ projectId }: { projectId: string | null }) {
         date_sent: !incoming ? (form.date || null) : null,
         date_received: incoming ? (form.date || null) : null,
         notes: form.notes.trim() || null,
-      } as never);
+      }, projectId) as never);
       const tid = (transmittal as { id: string }).id;
       const items = [...selected]
         .map((drawingId) => attachable.find((r) => r.drawing_id === drawingId)?.current_revision_id)
         .filter(Boolean) as string[];
       for (const revId of items) {
-        await entities.DrawingTransmittalItem.create({
-          project_id: projectId as string,
+        await entities.DrawingTransmittalItem.create(withProjectId({
           transmittal_id: tid,
           drawing_revision_id: revId,
-        } as never);
+        }, projectId) as never);
       }
       return items.length;
     },
@@ -87,15 +87,27 @@ export function TransmittalLog({ projectId }: { projectId: string | null }) {
       toast.success(`Transmittal logged${n ? ` · ${n} sheet${n === 1 ? "" : "s"}` : ""}`);
       setForm(EMPTY_FORM); setSelected(new Set()); setOpen(false);
     },
-    onError: (e) => toast.error("Failed to log transmittal: " + ((e as Error)?.message || "unknown")),
+    onError: (e) => toast.error(`Failed to log transmittal: ${toUserErrorMessage(e, "unknown")}`),
   });
 
   const toggleSheet = (id: string) =>
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   if (!projectId) return <div style={{ padding: 24, color: muted, fontSize: 13 }}>Select a project.</div>;
-  if (isLoading) return <div style={{ padding: 24, color: muted, fontSize: 13 }}>Loading transmittals…</div>;
-  if (error) return <div style={{ padding: 24, color: "var(--status-error)", fontSize: 13 }}>Failed to load transmittals: {(error as Error)?.message || "unknown"}</div>;
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={4} />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ padding: 24, color: "var(--status-error)", fontSize: 13 }}>
+        Failed to load transmittals: {toUserErrorMessage(error, "unknown")}
+      </div>
+    );
+  }
 
   return (
     <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>

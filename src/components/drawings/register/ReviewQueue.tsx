@@ -13,6 +13,8 @@ import { usePermissions } from "@/services/permissions";
 import { useDrawingReviews, type DrawingReviewRow } from "@/hooks/useDrawingReviews";
 import { useDrawingRegister } from "@/hooks/useDrawingRegister";
 import { fmtDate } from "@/pages/drawingSubmittalHub/format";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 const muted = "var(--text-muted)";
 const primary = "var(--text-primary)";
@@ -68,17 +70,20 @@ export function ReviewQueue({ projectId }: { projectId: string | null }) {
     mutationFn: async () => {
       const sheet = attachable.find((r) => r.drawing_id === reqDrawing);
       if (!sheet?.current_revision_id) throw new Error("Pick a sheet with a current revision");
-      await entities.DrawingReview.create({
-        project_id: projectId as string,
+      await entities.DrawingReview.create(withProjectId({
         drawing_revision_id: sheet.current_revision_id,
         review_role: reqRole,
         decision: "pending",
-      } as never);
+      }, projectId) as never);
     },
     onSuccess: () => { invalidate(); toast.success("Review requested"); setReqOpen(false); setReqDrawing(""); },
     onError: (e) => {
-      const msg = (e as { code?: string; message?: string });
-      toast.error(msg?.code === "23505" ? "That role already has a review on this revision." : "Failed: " + (msg?.message || "unknown"));
+      const msg = e as { code?: string; message?: string };
+      toast.error(
+        msg?.code === "23505"
+          ? "That role already has a review on this revision."
+          : `Failed: ${toUserErrorMessage(e, "unknown")}`,
+      );
     },
   });
 
@@ -91,7 +96,7 @@ export function ReviewQueue({ projectId }: { projectId: string | null }) {
       } as never);
     },
     onSuccess: (_d, { decision }) => { invalidate(); toast.success(`Decision: ${label(decision)}`); },
-    onError: (e) => toast.error("Failed to record decision: " + ((e as Error)?.message || "unknown")),
+    onError: (e) => toast.error(`Failed to record decision: ${toUserErrorMessage(e, "unknown")}`),
   });
 
   const rows = useMemo(
@@ -100,8 +105,20 @@ export function ReviewQueue({ projectId }: { projectId: string | null }) {
   );
 
   if (!projectId) return <div style={{ padding: 24, color: muted, fontSize: 13 }}>Select a project.</div>;
-  if (isLoading) return <div style={{ padding: 24, color: muted, fontSize: 13 }}>Loading reviews…</div>;
-  if (error) return <div style={{ padding: 24, color: "var(--status-error)", fontSize: 13 }}>Failed to load reviews: {(error as Error)?.message || "unknown"}</div>;
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={4} />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ padding: 24, color: "var(--status-error)", fontSize: 13 }}>
+        Failed to load reviews: {toUserErrorMessage(error, "unknown")}
+      </div>
+    );
+  }
 
   return (
     <section className="sbd-card" style={{ padding: 16, borderRadius: 14, minWidth: 0 }}>

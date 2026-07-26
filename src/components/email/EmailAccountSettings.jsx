@@ -16,6 +16,8 @@ import {
   Mail, Plus, Trash2, Power, PowerOff, Clock, Copy,
   Check,
 } from "lucide-react";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 // ── Time helper ────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
@@ -46,7 +48,7 @@ export default function EmailAccountSettings({ projectId }) {
 
   // ── Mutations ────────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => entities.EmailAccount.create(data),
+    mutationFn: (data) => entities.EmailAccount.create(withProjectId(data, projectId)),
     onSuccess: () => {
       invalidateEntity(qc, "email_account", projectId);
       toast.success("Email account added");
@@ -54,7 +56,7 @@ export default function EmailAccountSettings({ projectId }) {
       setNewEmail("");
       setNewDisplayName("");
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to add email account")),
   });
 
   const updateMut = useMutation({
@@ -62,7 +64,7 @@ export default function EmailAccountSettings({ projectId }) {
     onSuccess: () => {
       invalidateEntity(qc, "email_account", projectId);
     },
-    onError: (e) => toast.error("Update failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -71,7 +73,7 @@ export default function EmailAccountSettings({ projectId }) {
       invalidateEntity(qc, "email_account", projectId);
       toast.success("Email account removed");
     },
-    onError: (e) => toast.error("Delete failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to remove email account")),
   });
 
   // ── Handlers ─────────────────────────────────────────────────────────
@@ -316,14 +318,8 @@ export default function EmailAccountSettings({ projectId }) {
       {/* Account list */}
       <div style={{ padding: accounts.length > 0 ? 0 : "20px 18px" }}>
         {isLoading ? (
-          <div style={{
-            textAlign: "center",
-            padding: 20,
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-body)",
-            fontSize: 12,
-          }}>
-            Loading accounts...
+          <div style={{ padding: "12px 18px" }}>
+            <LoadingSkeleton variant="table" rows={3} />
           </div>
         ) : accounts.length === 0 ? (
           <div style={{
