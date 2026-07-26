@@ -4,6 +4,7 @@ import { entities } from "@/api/supabaseClient";
 import { COST_CODES } from '../shared/costCodes';
 import { getNextNumber } from '../shared/numberSequencing';
 import { toast } from 'sonner';
+import { withProjectId } from '@/lib/mutations/standardMutation';
 
 const EXPENSE_TYPES = ['Labor', 'Materials', 'Equipment', 'Subcontractor', 'Misc.', 'Overhead'];
 const PAYMENT_STATUSES = ['Unpaid', 'Paid', 'Pending Approval', 'Disputed', 'Voided'];
@@ -281,8 +282,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
           continue;
         }
 
-        const payload = {
-          project_id: activeProject.id,
+        const payload = withProjectId({
           project_name: activeProject.name || '',
           expense_number: expenseNumber,
           expense_date: rec.expense_date,
@@ -303,7 +303,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
           work_package_name: rec.work_package_name || '',
           submitted_by: rec.submitted_by || '',
           notes: rec.notes || '',
-        };
+        }, activeProject.id);
 
         await entities.Expense.create(payload);
         succeeded += 1;

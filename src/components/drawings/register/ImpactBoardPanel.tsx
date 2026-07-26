@@ -19,6 +19,7 @@ import { fmtDate } from "@/pages/drawingSubmittalHub/format";
 import { Pill } from "@/components/command";
 import type { PillTone } from "@/components/command";
 import { IMPACT_STATUSES, attachableRegisterRows, groupImpactsByStatus } from "./docControl.derive";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const IMPACT_TYPES = [
   "fabrication", "erection", "embed", "anchor_bolts", "connections", "material_takeoff",
@@ -76,18 +77,17 @@ export function ImpactBoardPanel({ projectId }: { projectId: string | null }) {
       const sheet = attachable.find((r) => r.drawing_id === form.drawing_id);
       if (!sheet?.current_revision_id) throw new Error("Pick a sheet with a current revision");
       if (!form.title.trim()) throw new Error("Title is required");
-      await entities.DrawingImpact.create({
-        project_id: projectId as string,
+      await entities.DrawingImpact.create(withProjectId({
         drawing_revision_id: sheet.current_revision_id,
         impact_type: form.impact_type,
         status: "open",
         priority: form.priority,
         title: form.title.trim(),
         due_date: form.due_date || null,
-      } as never);
+      }, projectId) as never);
     },
     onSuccess: () => { invalidate(); toast.success("Impact added"); setForm(EMPTY); setOpen(false); },
-    onError: (e) => toast.error("Failed to add impact: " + ((e as Error)?.message || "unknown")),
+    onError: (e) => toast.error(`Failed to add impact: ${toUserErrorMessage(e, "unknown")}`),
   });
 
   const statusMut = useMutation({
@@ -99,7 +99,7 @@ export function ImpactBoardPanel({ projectId }: { projectId: string | null }) {
       } as never);
     },
     onSuccess: () => invalidate(),
-    onError: (e) => toast.error("Failed to move impact: " + ((e as Error)?.message || "unknown")),
+    onError: (e) => toast.error(`Failed to move impact: ${toUserErrorMessage(e, "unknown")}`),
   });
 
   if (!projectId) return <div style={{ padding: 24, color: "var(--cmd-text-muted)", fontSize: 13 }}>Select a project.</div>;

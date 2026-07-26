@@ -7,7 +7,8 @@ import WarrantyFormModal from "@/components/warranty/WarrantyFormModal";
 import WarrantyList from "@/components/warranty/WarrantyList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import StatCard from "@/components/shared/StatCard";
-import { withProjectId } from "@/lib/mutations/standardMutation";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import { RegisterFetchBody } from "@/components/shared/RegisterFetchStates";
 
 export default function Warranty() {
   const projectId = useProjectId();
@@ -15,7 +16,13 @@ export default function Warranty() {
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data: warranties = [] } = useQuery({
+  const {
+    data: warranties = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["warranties", projectId],
     queryFn: () =>
       projectId
@@ -45,7 +52,7 @@ export default function Warranty() {
       setEditing(null);
       toast.success("Warranty created");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const updateMut = useMutation({
@@ -56,7 +63,7 @@ export default function Warranty() {
       setEditing(null);
       toast.success("Warranty updated");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -70,7 +77,7 @@ export default function Warranty() {
       setDeleteTarget(null);
       toast.success("Warranty deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   const handleSave = (data) => {
@@ -164,7 +171,21 @@ export default function Warranty() {
       {showForm && <WarrantyFormModal projectId={projectId} warranty={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
 
       {/* Warranties List */}
-      <WarrantyList warranties={filtered} onEdit={(warranty) => {setEditing(warranty); setShowForm(true);}} onDelete={setDeleteTarget} />
+      <RegisterFetchBody
+        isLoading={isLoading}
+        isError={isError}
+        errorMessage={toUserErrorMessage(error, "Failed to load warranties")}
+        onRetry={() => refetch()}
+        totalCount={warranties.length}
+        filteredCount={filtered.length}
+        emptyTitle="No warranties yet"
+        emptyBody="Track material, coating, and installation warranties for this project."
+        emptyActionLabel="+ Add Warranty"
+        onEmptyAction={() => { setEditing(null); setShowForm(true); }}
+        onClearFilters={() => { setFilterType("all"); setFilterStatus("all"); }}
+      >
+        <WarrantyList warranties={filtered} onEdit={(warranty) => {setEditing(warranty); setShowForm(true);}} onDelete={setDeleteTarget} />
+      </RegisterFetchBody>
 
       {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Warranty" description="Delete this record? This cannot be undone." />

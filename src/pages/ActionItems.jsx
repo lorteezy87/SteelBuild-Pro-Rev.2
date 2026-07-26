@@ -166,7 +166,7 @@ export default function ActionItems() {
     },
     onError: (e) => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
-      toast.error(e?.message || "Bulk update failed");
+      toast.error(toUserErrorMessage(e, "Bulk update failed"));
     },
   });
 
@@ -186,7 +186,7 @@ export default function ActionItems() {
     },
     onError: (e) => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
-      toast.error(e?.message || "Bulk update failed");
+      toast.error(toUserErrorMessage(e, "Bulk update failed"));
     },
   });
 

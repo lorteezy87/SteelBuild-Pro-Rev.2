@@ -27,6 +27,7 @@ import { computeG702, lineFigures } from "@/lib/payapp/g702";
 import { PAY_APP_STATUSES, PAY_APP_STATUS_LABELS } from "@/lib/payapp/types";
 import { buildPayAppPdf, suggestPayAppFilename } from "@/lib/payapp/payAppPdf";
 import PayApplicationsControlCenter from "./payApplications/PayApplicationsControlCenter";
+import { assertProjectId, toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: 16 };
@@ -106,9 +107,15 @@ export default function PayApplications() {
   };
 
   const createMut = useMutation({
-    mutationFn: (input) => createPayApplication({ projectId, ...input }, { sovItems, contract }),
+    mutationFn: (input) => {
+      assertProjectId(projectId);
+      return createPayApplication({ projectId, ...input }, { sovItems, contract });
+    },
     onSuccess: (app) => { logActivity("pay_application", "created", app, { projectId }); refresh(); setNewOpen(false); setSelectedId(app.id); toast.success(`Pay Application #${app.application_number} created`); },
-    onError: (e) => toast.error(e?.message?.includes("row-level security") ? "Only PM+ can create pay applications." : `Create failed: ${e?.message}`),
+    onError: (e) => {
+      const msg = toUserErrorMessage(e);
+      toast.error(msg.includes("row-level security") ? "Only PM+ can create pay applications." : `Create failed: ${msg}`);
+    },
   });
   const lineMut = useMutation({
     mutationFn: ({ line, edit }) => updateLine(line, edit, num(selectedApp?.retainage_percent)),
@@ -120,16 +127,24 @@ export default function PayApplications() {
       logActivity("pay_application", "updated", { id: selectedApp?.id, project_id: projectId, application_number: selectedApp?.application_number }, { projectId, description: desc });
       refresh();
     },
-    onError: (e) => toast.error(`Update failed: ${e?.message}`),
+    onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e)}`),
   });
-  const statusMut = useMutation({ mutationFn: ({ id, status }) => updatePayApplication(id, { status }), onSuccess: (data, { status }) => { logActivity("pay_application", "status_changed", data, { projectId, description: `→ ${status}` }); refresh(); toast.success("Updated"); }, onError: (e) => toast.error(`Update failed: ${e?.message}`) });
-  const delMut = useMutation({ mutationFn: (id) => softDeletePayApplication(id), onSuccess: (_r, id) => { logActivity("pay_application", "deleted", { id, project_id: projectId }, { projectId }); refresh(); setSelectedId(null); toast.success("Deleted"); }, onError: (e) => toast.error(`Delete failed: ${e?.message}`) });
+  const statusMut = useMutation({
+    mutationFn: ({ id, status }) => updatePayApplication(id, { status }),
+    onSuccess: (data, { status }) => { logActivity("pay_application", "status_changed", data, { projectId, description: `→ ${status}` }); refresh(); toast.success("Updated"); },
+    onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e)}`),
+  });
+  const delMut = useMutation({
+    mutationFn: (id) => softDeletePayApplication(id),
+    onSuccess: (_r, id) => { logActivity("pay_application", "deleted", { id, project_id: projectId }, { projectId }); refresh(); setSelectedId(null); toast.success("Deleted"); },
+    onError: (e) => toast.error(`Delete failed: ${toUserErrorMessage(e)}`),
+  });
 
   const exportPdf = () => {
     try {
       buildPayAppPdf({ app: selectedApp, lines, project: activeProject }).save(`${suggestPayAppFilename(selectedApp, activeProject)}.pdf`);
       toast.success("Pay application PDF exported");
-    } catch (e) { toast.error(`Export failed: ${e?.message}`); }
+    } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };
 
   if (!projectId) return <div style={{ ...mono, padding: 24, color: "var(--text-muted)" }}>Select a project to manage pay applications.</div>;

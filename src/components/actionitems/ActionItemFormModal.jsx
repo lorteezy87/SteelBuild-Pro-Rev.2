@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { Button, Modal } from "@/components/design-system";
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const PRIORITY_OPTIONS = [
   { value: "Low",      label: "Low",      color: "var(--text-muted)",     bg: "rgba(100,116,139,0.12)", border: "rgba(100,116,139,0.3)" },
@@ -65,23 +66,25 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
   });
 
   const mutation = useMutation({
-    mutationFn: (data) => entities.ActionItem.create(data),
+    mutationFn: (data) => entities.ActionItem.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
       toast.success("Action item created");
       onClose();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const handleSubmit = async () => {
     if (!runValidation(formData)) return;
-    if (actionItem && onSave) {
+    // Prefer parent onSave for both create and edit when provided (page owns
+    // withProjectId + toast). Fallback create path is fail-closed via withProjectId.
+    if (onSave) {
       try {
         await onSave(formData);
         onClose();
       } catch (err) {
-        toast.error(err?.message || "Action item could not be saved");
+        toast.error(toUserErrorMessage(err, "Action item could not be saved"));
       }
       return;
     }

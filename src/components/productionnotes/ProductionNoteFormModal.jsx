@@ -3,6 +3,7 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const LABEL_STYLE = {
   fontFamily: "var(--font-mono)",
@@ -194,13 +195,16 @@ export default function ProductionNoteFormModal({ projectId, onClose, note = nul
   });
 
   const mutation = useMutation({
-    mutationFn: (data) => entities.ProductionNote.create(data),
+    // Multi-project meeting notes: stamp from the modal's selected projectId
+    // (not the global nav project). Fail closed when none is set.
+    mutationFn: (data) =>
+      entities.ProductionNote.create(withProjectId(data, data.project_id || projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["production-notes"] });
       toast.success("Production note created");
       onClose();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const handleSubmit = (e) => {
