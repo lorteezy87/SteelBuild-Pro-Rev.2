@@ -51,7 +51,7 @@ Status key:
 | 15 | Done (automated) | Corrected-flow retest harness — 18 files / 155 tests PASS; interactive UAT = ID 102 | `npm run test:corrected-flows`, `RETEST_CORRECTED_FLOWS.md` |
 | 16 | Done | `react-hooks/rules-of-hooks` clean across `src/` | `npm run check:hooks` |
 | 17 | Done | Console/Sentry review; residual CSP-RO/staging-ops/noise documented | `WORK_14_17.md` |
-| 18 | Partial | Photos + Safety INLINE loading/error/empty; thin CRUD RegisterFetchBody on PR #133; not universal | `WORK_NEXT_SLICE.md` |
+| 18 | Done | Photos/Safety + thin CRUD (#133/#137); ActionItems (#143) + Constraints/Procurement page-shell gates; not universal | `WORK_NEXT_SLICE.md` |
 | 19 | Completed | Null project guards + `withProjectId` on high-traffic creates | `standardMutation.withProjectId` + wired pages |
 | 20 | Partial | Modal project-switch safety varies by module | remaining risk |
 
