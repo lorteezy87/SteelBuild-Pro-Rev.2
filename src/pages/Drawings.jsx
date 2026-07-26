@@ -440,18 +440,56 @@ export default function Drawings({ embedded = false } = {}) {
       return;
     }
     const ids = [...selected];
-    const blocked = ids
-      .map((id) => drawings.find((d) => d.id === id))
-      .filter(Boolean)
-      .map((drawing) => classifyDrawingStageMutation(drawing, bulkStage, submittalsBySetId))
-      .find((decision) => !decision.allowed);
-    if (blocked) {
-      toast.error("Bulk workflow stage changes must be performed from Submittals; the selection includes a linked set.");
-      return;
+    const decisions = ids.map((id) => {
+      const drawing = drawings.find((d) => d.id === id);
+      return {
+        id,
+        drawing,
+        decision: drawing
+          ? classifyDrawingStageMutation(drawing, bulkStage, submittalsBySetId)
+          : { allowed: false, kind: "missing", reason: "Sheet not found." },
+      };
+    });
+    const blocked = decisions.filter((row) => !row.decision.allowed);
+    const allowedIds = decisions.filter((row) => row.decision.allowed).map((row) => row.id);
+
+    if (blocked.length > 0) {
+      const blockedSetIds = [...new Set(blocked.map((row) => row.decision.setId).filter(Boolean))];
+      const setLabel = blockedSetIds
+        .map((setId) => drawingSetMap[setId]?.set_name || "Linked set")
+        .slice(0, 2)
+        .join(", ");
+      const status = blocked[0]?.decision?.latestStatus;
+      const targetSetId = blockedSetIds[0] || null;
+      const params = new URLSearchParams();
+      if (targetSetId) params.set("targetSetId", targetSetId);
+      const mapped = stageToSubmittalStatus(bulkStage);
+      if (mapped?.status) params.set("prefilledStatus", mapped.status);
+
+      toast.error(
+        allowedIds.length === 0
+          ? `${setLabel || "Selection"} still has an open linked submittal${status ? ` (${status})` : ""}. Advance the workflow from Submittals.`
+          : `${blocked.length} sheet(s) blocked — open linked submittal on ${setLabel || "a linked set"}${status ? ` (${status})` : ""}.`,
+        {
+          duration: 8000,
+          action: {
+            label: "Open Submittals",
+            onClick: () => navigate(`/Submittals${params.toString() ? `?${params.toString()}` : ""}`),
+          },
+        },
+      );
+      if (allowedIds.length === 0) return;
     }
-    toast.info("Applying legacy sheet-stage recovery to sets without linked submittals.", { duration: 4000 });
+
+    const syncingClosed = decisions.some((row) => row.decision.kind === "closed-set-sync");
+    toast.info(
+      syncingClosed
+        ? "Syncing sheet stages for sets whose linked submittals are already closed."
+        : "Applying legacy sheet-stage recovery to sets without open linked submittals.",
+      { duration: 4000 },
+    );
     const { succeeded, failed } = await batchProcess(
-      ids,
+      allowedIds,
       (id) => {
         const current = drawings.find(d => d.id === id);
         if (current) {
@@ -471,8 +509,8 @@ export default function Drawings({ embedded = false } = {}) {
     if (failed.length > 0) {
       toast.warning(`${succeeded.length} updated, ${failed.length} failed`);
     } else {
-      setSelected(new Set());
-      setBulkStage("");
+      setSelected(new Set(blocked.map((row) => row.id)));
+      if (blocked.length === 0) setBulkStage("");
       toast.success(`Updated ${succeeded.length} sheets`);
     }
   };
