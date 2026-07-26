@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { entities, auth, integrations } from "@/api/supabaseClient";
 import { toast } from "sonner";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 export default function UploadModal({ projectId, folderId = null, onClose }) {
   const [files, setFiles] = useState([]);
@@ -29,8 +30,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
           ? new Date(today.getTime() + scheduleLink.reviewLeadTime * 86400000).toISOString().split("T")[0]
           : undefined;
 
-        const doc = await entities.Document.create({
-          project_id: projectId,
+        const doc = await entities.Document.create(withProjectId({
           // Drop the document into the folder the user is currently
           // browsing in the Documents page. NULL = project root.
           folder_id: folderId,
@@ -53,7 +53,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
           is_submittal: scheduleLink.isSubmittal,
           ...(scheduleLink.isSubmittal && scheduleLink.linkedWpId ? { linked_wp_id: scheduleLink.linkedWpId } : {}),
           ...(scheduleLink.isSubmittal ? { review_lead_time: scheduleLink.reviewLeadTime, due_date: dueDate } : {}),
-        });
+        }, projectId));
         created.push(doc);
       }
       return created;
@@ -64,7 +64,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
           onClose();
     },
     onError: (err) => {
-      toast.error("Upload failed: " + (err?.message || "Unknown error"));
+      toast.error(`Upload failed: ${toUserErrorMessage(err, "Unknown error")}`);
     }
   });
 

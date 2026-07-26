@@ -11,6 +11,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { invalidateEntity, invalidateEntities } from "@/services/cacheRegistry";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import {
   X, CheckCircle, XCircle, Download, RotateCcw,
   FileText, Image, FileSpreadsheet, File, Clock, SkipForward,
@@ -100,14 +101,13 @@ export default function LinkedFolderBrowser({
     onSuccess: () => {
       invalidateEntity(qc, "document_import", projectId);
     },
-    onError: (e) => toast.error("Update failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   const importMut = useMutation({
     mutationFn: async ({ queueItem }) => {
       // 1. Create a document record
-      const doc = await entities.Document.create({
-        project_id: projectId,
+      const doc = await entities.Document.create(withProjectId({
         title: queueItem.file_name,
         file_name: queueItem.file_name,
         file_size: queueItem.file_size,
@@ -115,7 +115,7 @@ export default function LinkedFolderBrowser({
         external_provider: provider,
         external_file_id: queueItem.external_file_id,
         source: "linked_folder",
-      });
+      }, projectId));
       // 2. Update queue item to imported
       await entities.DocumentImportQueue.update(queueItem.id, {
         import_status: "imported",
@@ -128,7 +128,7 @@ export default function LinkedFolderBrowser({
       invalidateEntities(qc, ["document_import", "document"], projectId);
       toast.success("File imported to documents");
     },
-    onError: (e) => toast.error("Import failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Import failed: ${toUserErrorMessage(e, "Unknown error")}`),
   });
 
   // ── Handlers ────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ export default function LinkedFolderBrowser({
         toast.success(`${ids.length} file(s) ${status}`);
         setSelected(new Set());
       })
-      .catch((e) => toast.error("Bulk update failed: " + (e?.message || "Unknown error")));
+      .catch((e) => toast.error(`Bulk update failed: ${toUserErrorMessage(e, "Unknown error")}`));
   };
 
   const toggleSelect = (id) => {
