@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import SafetyIncidentFormModal from "@/components/safety/SafetyIncidentFormModal";
 import SafetyIncidentList from "@/components/safety/SafetyIncidentList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
@@ -19,7 +20,13 @@ export default function Safety() {
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data: rawIncidents = [], isLoading } = useQuery({
+  const {
+    data: rawIncidents = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["safety-incidents", projectId],
     queryFn: () =>
       projectId
@@ -193,7 +200,57 @@ export default function Safety() {
       {showForm && <SafetyIncidentFormModal projectId={projectId} incident={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
 
       {/* Incidents List */}
-      <SafetyIncidentList incidents={filtered} onEdit={(incident) => {setEditing(incident); setShowForm(true);}} onDelete={setDeleteTarget} onStatusChange={handleStatusChange} />
+      {isLoading ? (
+        <LoadingSkeleton variant="table" rows={5} />
+      ) : isError ? (
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
+        }}>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+            Couldn’t load incidents
+          </p>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+            {toUserErrorMessage(error, "Something went wrong. Try again.")}
+          </p>
+          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+        </div>
+      ) : filtered.length === 0 ? (
+        incidents.length === 0 ? (
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
+          }}>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+              No safety incidents yet
+            </p>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+              Report injuries, near-misses, and hazards so the project has a clear safety trail.
+            </p>
+            <Button variant="primary" onClick={() => { setEditing(null); setShowForm(true); }}>
+              + Report Incident
+            </Button>
+          </div>
+        ) : (
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            padding: "36px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 12,
+          }}>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+              No incidents match the current filters
+            </p>
+            <Button variant="outline" onClick={() => {
+              setFilterType("all");
+              setFilterSeverity("all");
+              setFilterStatus("all");
+            }}>
+              Clear Filters
+            </Button>
+          </div>
+        )
+      ) : (
+        <SafetyIncidentList incidents={filtered} onEdit={(incident) => {setEditing(incident); setShowForm(true);}} onDelete={setDeleteTarget} onStatusChange={handleStatusChange} />
+      )}
 
       {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Incident" description="Delete this record? This cannot be undone." />

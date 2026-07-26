@@ -1,56 +1,26 @@
-# Action-plan next slice — `withProjectId` + tracker checkpoint
+# Action-plan next slice — Photos + Safety loading/empty (ID 18)
 
-**Branch / PR:** `cursor/action-plan-next-slice-d3a1` → **#123** (merged + prod 2026-07-26)  
-**Dates:** 2026-07-25 (initial) · 2026-07-26 (adoption continuation + merge/deploy)
+**Branch / PR:** `cursor/action-plan-photos-safety-loading-d3a1`  
+**Dates:** 2026-07-26  
+**Open siblings:** #133–#136
 
 ## Code
 
-Added `withProjectId()` in `src/lib/mutations/standardMutation.ts`:
+INLINE loading/empty/error gates (uses existing `LoadingSkeleton` — **does not** depend on #133 `RegisterFetchBody`):
 
-- Calls `assertProjectId` (fails closed when no active project)
-- Forces `project_id` to the active project when a mismatched value is supplied
-- Covered by unit tests in `standardMutation.test.ts`
-
-### Creates wired (2026-07-25)
-
-| Area | Files |
+| Page | Change |
 |---|---|
-| Field / QC | `Punchlist`, `FieldToday`, `Inspections`, `Safety`, `QualityControl`, `Warranty`, `ChangeRequests`, `ProjectCloseout` |
-| Cost | `costCodeSave.ts`, `Expenses`, `BudgetHours` |
-| Drawings / Doc control | `Drawings`, `TransmittalLogPanel` |
-| Schedule / resources | `Schedule`, `WbsBuilderModal`, `ResourceScheduling` |
+| `Photos.jsx` | `isLoading` / `isError` + Retry; gallery only after fetch settles (stops empty flash) |
+| `Safety.jsx` | Skeleton while loading; error+Retry; true-empty CTA vs filter-empty Clear Filters |
 
-### Adoption continuation (2026-07-26)
+## Tracker
 
-| Area | Work |
-|---|---|
-| Submittals (ID 21) | Extracted `submittalMutationHelpers.ts` + tests; create/round/sheet/bulk paths use `withProjectId` + shared toast/error helpers |
-| Commercial | `ChangeOrders`, `SOV`, `Procurement`, `Documents` (folder creates) |
-| Toasts (ID 48) | `toUserErrorMessage` on Safety/Inspections/Procurement/SOV/Documents mutation errors |
-| RFIs (ID 23) | Extracted `rfiMutationHelpers.ts` + tests; create/alert/doc attach + bulk toast helpers |
-| Ops / field | `ActionItems`, `DailyLogs`, `Constraints`, `LookAheadSchedule`, `WorkPackages` (+ bulk prep), `FieldToday` photos |
-| Cross-page create | `EscalateModal`, `emailInbox/modals` entity + document creates |
-| Drawings (ID 27) | Extracted `drawingMutationHelpers.ts` + tests; create/update/delete/set toast helpers |
-| Remaining creates | `FabRelease` WP create, `ContractManagement` SOV, Schedule MPP import, Submittal comment dispositions, Deliveries overdue alerts |
-
-## Tracker IDs moved to Done (2026-07-25 checkpoint)
-
-19, 43, 64, 68, 70, 84, 89, 92, 94, 95, 97, 99, 103, 104, 105
-
-## Still In Progress (intentionally)
-
-- Large page thinning: **21** / **23** / **27** (mutation helpers started; shells still large)
-- Universal mutation/toast adoption: 18, **48**, **50**, 51, **52**, 53, 54, 56 — advanced widely; org-level Contacts/Vendors/Projects intentionally skipped
-- UX / UAT: 20, 75, 77, 80, 81, 83, 87, 88
-- **Blocked:** 102 (interactive UAT — staging credentials + GH Actions billing)
+| ID | Status | Note |
+|---|---|---|
+| **18** | In Progress | Photos/Safety gated; #133 covers thin CRUD RegisterFetchBody — Done when both merge |
 
 ## Validation
 
 ```bash
-npx vitest run src/lib/mutations/__tests__/standardMutation.test.ts \
-  src/pages/submittals/__tests__/submittalMutationHelpers.test.ts \
-  src/pages/rfis/__tests__/rfiMutationHelpers.test.ts \
-  src/pages/drawings/__tests__/drawingMutationHelpers.test.ts \
-  src/pages/workPackages/__tests__/creation.test.ts
-npx eslint <touched files> --quiet
+npx eslint src/pages/Photos.jsx src/pages/Safety.jsx --quiet
 ```
