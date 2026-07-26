@@ -4,6 +4,7 @@ import { entities, integrations } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Paperclip, Upload, X as XIcon } from "lucide-react";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 export default function ScopeItemFormModal({ projectId, editing, onClose, onSave }) {
   const qc = useQueryClient();
@@ -30,17 +31,19 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
   });
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.ScopeItem.create(data),
+    mutationFn: (data) => entities.ScopeItem.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scope-items"] });
       toast.success("Scope item created");
       onClose();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // Edit routes through parent onSave; create stays on the modal mutation
+    // (ScopeExclusions and peers only pass onSave for updates).
     if (editing && onSave) {
       onSave(formData);
     } else {
@@ -64,7 +67,7 @@ export default function ScopeItemFormModal({ projectId, editing, onClose, onSave
       setFormData(prev => ({ ...prev, file_url, storage_path: path || "", file_name: file.name }));
       toast.success("PDF attached");
     } catch (err) {
-      toast.error("Upload failed: " + (err?.message || "Unknown error"));
+      toast.error(`Upload failed: ${toUserErrorMessage(err, "Unknown error")}`);
     } finally {
       setUploading(false);
     }
