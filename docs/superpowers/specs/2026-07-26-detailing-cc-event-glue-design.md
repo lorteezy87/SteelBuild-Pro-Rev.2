@@ -1,7 +1,7 @@
 # Detailing Control Center — Event Glue (Create/Link + Status Sync)
 
 **Date:** 2026-07-26  
-**Status:** Draft — awaiting owner review  
+**Status:** Approved — implementing  
 **Area:** Detailing Control Center / Submittals / Drawings linking  
 **Approach:** Event glue (Approach 1) — thin automations on create, revision upload, and status change  
 **Related:** `docs/detailing-control-center-design.md`, `docs/architecture/drawing-workflow-dual-source.md`, `src/lib/submittalActionEngine.ts`, `src/lib/submittalStageMapping.ts`
