@@ -672,13 +672,10 @@ export default function DrawingViewer() {
             });
           }}
           style={{
-            flex: 1,
-            overflow: "auto",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "stretch",
-            // Neutral workspace — works in both light + dark themes.
-            background: "var(--bg-void)",
+            // Layout/background come from .drawing-viewer-canvas-scroll —
+            // do not override with var(--bg-void) (light theme turns it slate
+            // and fights the dark drawing work-surface) or alignItems:stretch
+            // (collapses empty-state visibility inside a zero-height flex fix).
             cursor: spacePan ? "grab" : "default",
           }}
         >
