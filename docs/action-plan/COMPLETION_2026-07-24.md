@@ -16,10 +16,12 @@ Workbook sheets: **Changelog** (this refresh), **Tracker** (IDs 1–105), **Summ
 
 ## Headline counts (IDs 1–105)
 
+Updated **2026-07-25** (`cursor/action-plan-next-slice-d3a1` — see `WORK_NEXT_SLICE.md`):
+
 | Status | Count |
 |---|---|
-| Done | **62** |
-| In Progress | **42** |
+| Done | **78** |
+| In Progress | **26** |
 | Blocked | **1** (ID 102 — full interactive core-workflow UAT) |
 | Not Started | **0** |
 
@@ -47,6 +49,8 @@ Large-page thinning (Submittals/Drawings/RFIs/…), universal mutation/toast ado
 ## Production
 
 Deployed **2026-07-24** to https://www.steelbuild-pro.com from `main` including merges **#119** (action-plan + Sentry) and **#120** (TypeScript standard). PR **#118** closed as superseded by #119.
+
+**2026-07-26:** PR **#123** (`withProjectId` write shaping + Submittals/RFIs/Drawings mutation helpers + tracker checkpoint **Done 78 / In Progress 26 / Blocked 1**) merged to `main` and deployed to production. GitHub Actions CI remains blocked by org billing/spending limit — validated locally (lint + four typecheck gates + helper tests + build) then deployed via `npx vercel --prod` (`steelbuildpro-og`).
 
 ## How to refresh next time
 

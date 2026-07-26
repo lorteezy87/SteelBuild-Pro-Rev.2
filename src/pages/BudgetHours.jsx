@@ -33,6 +33,7 @@ import { usePermissions } from "@/services/permissions";
 import { logActivity } from "@/services/auditLogger";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { toastCrudError } from "@/components/shared/crudFeedback";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import BudgetHoursControlCenter from "./budgetHours/BudgetHoursControlCenter";
 import ScopeItemFormModal from "./budgetHours/ScopeItemFormModal";
@@ -536,7 +537,7 @@ export default function BudgetHours() {
      budget-hour-items key) + toastCrudError on failure. deleteMut stays a
      SOFT delete (is_deleted flag) — recoverable, never a hard delete. */
   const createMut = useMutation({
-    mutationFn: (data) => entities.BudgetHourItem.create(data),
+    mutationFn: (data) => entities.BudgetHourItem.create(withProjectId(data, projectId)),
     onSuccess: async (created) => {
       logActivity("budget_hour_item", "created", created, { projectId });
       await invalidateEntity(qc, "budget_hour_item", projectId);
@@ -624,7 +625,7 @@ export default function BudgetHours() {
     // Sequentially create so sort_order stays stable; small list (≤12).
     for (const row of built) {
       try {
-        await entities.BudgetHourItem.create({ ...row, project_id: projectId });
+        await entities.BudgetHourItem.create(withProjectId(row, projectId));
       } catch (e) {
         toast.error(`Preset row "${row.scope_item}" failed: ${e.message || "unknown"}`);
       }

@@ -8,6 +8,7 @@ import QCList from "@/components/qc/QCList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 
 export default function QualityControl() {
   const projectId = useProjectId();
@@ -21,8 +22,8 @@ export default function QualityControl() {
   const qc = useQueryClient();
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.QualityControlRecord.create(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records"] }); toast.success("Record created"); setShowForm(false); setEditing(null); },
+    mutationFn: (data) => entities.QualityControlRecord.create(withProjectId(data, projectId)),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records", projectId] }); toast.success("Record created"); setShowForm(false); setEditing(null); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -40,7 +41,7 @@ export default function QualityControl() {
 
   const handleSave = (data) => {
     if (editing?.id) updateMut.mutate({ id: editing.id, ...data });
-    else createMut.mutate({ ...data, project_id: projectId });
+    else createMut.mutate(data);
   };
 
   const { data: rawQcRecords = [], isLoading } = useQuery({

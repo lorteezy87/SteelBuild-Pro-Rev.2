@@ -4,7 +4,7 @@
  * than fire-and-forget mutate; otherwise the dialog closes before Supabase has
  * accepted the write and the user's values are lost on failure.
  */
-import { assertProjectId } from "@/lib/mutations/standardMutation";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 
 type Mutator = {
   mutateAsync: (payload: Record<string, unknown>) => Promise<unknown>;
@@ -23,11 +23,11 @@ export async function persistCostCode({
   createMutation: Mutator;
   updateMutation: Mutator;
 }) {
-  assertProjectId(projectId);
-
   if (editingId) {
+    // Updates keep the existing row's project; still require an active project context.
+    withProjectId({}, projectId);
     return updateMutation.mutateAsync({ id: editingId, ...data });
   }
 
-  return createMutation.mutateAsync({ ...data, project_id: projectId });
+  return createMutation.mutateAsync(withProjectId(data, projectId));
 }

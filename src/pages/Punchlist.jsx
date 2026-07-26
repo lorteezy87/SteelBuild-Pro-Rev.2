@@ -13,6 +13,7 @@ import { makePunchCreateOp, newClientOpId, isLikelyOfflineError } from "@/lib/fi
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 
 export default function Punchlist() {
   const projectId = useProjectId();
@@ -69,8 +70,7 @@ export default function Punchlist() {
     : null;
 
   const createMut = useMutation({
-    mutationFn: (data) =>
-      entities.PunchlistItem.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.PunchlistItem.create(withProjectId(data, projectId)),
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       setShowForm(false);
@@ -88,12 +88,17 @@ export default function Punchlist() {
       // retry, so a lost-response replay can't mint a duplicate (punchlist_items
       // has a partial-unique index on client_op_id — see baseline schema).
       if (isLikelyOfflineError(err)) {
-        const record = { ...data, project_id: data.project_id || projectId };
-        enqueueOutbox(makePunchCreateOp(record, record.client_op_id, Date.now()));
-        setShowForm(false);
-        setEditing(null);
-        toast.message("Saved offline — will sync when you're back online");
-        return;
+        try {
+          const record = withProjectId(data, projectId);
+          enqueueOutbox(makePunchCreateOp(record, record.client_op_id, Date.now()));
+          setShowForm(false);
+          setEditing(null);
+          toast.message("Saved offline — will sync when you're back online");
+          return;
+        } catch (scopeErr) {
+          toast.error(scopeErr.message || err.message);
+          return;
+        }
       }
       toast.error(err.message);
     },

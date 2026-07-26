@@ -8,6 +8,7 @@ import ProjectCloseoutChecklist from "@/components/closeout/ProjectCloseoutCheck
 import ProjectCloseoutSummary from "@/components/closeout/ProjectCloseoutSummary";
 import { CommandBar } from "@/components/design-system";
 import { buildCloseoutDbPayload } from "@/lib/closeout/closeoutPayload";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 
 export default function ProjectCloseout() {
   const projectId = useProjectId();
@@ -36,7 +37,7 @@ export default function ProjectCloseout() {
   const qc = useQueryClient();
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.ProjectCloseout.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.ProjectCloseout.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: closeoutQueryKey });
       toast.success("Closeout record created");

@@ -1077,7 +1077,7 @@ export default function PieceRegister() {
               <button
                 type="button"
                 className="cmd-btn cmd-btn--secondary"
-                disabled={mode === "off"}
+                disabled={!projectId || !enabled}
                 onClick={() => {
                   void linkModelElementsToPieces(projectId)
                     .then((summary) => {

@@ -10,11 +10,12 @@ describe("dashboard approval lifecycle SoT (Slice 9)", () => {
       { id: "4", status: "Released for Fabrication", ball_in_court: null },
     ]);
 
+    const byStage = counts as Record<string, number>;
     expect(stages).toContain("R&R");
-    expect(counts["R&R"]).toBe(1);
-    expect(counts["OFS"]).toBe(1);
-    expect(counts["IFC"]).toBe(1);
-    expect(counts["Released"]).toBe(1);
+    expect(byStage["R&R"]).toBe(1);
+    expect(byStage["OFS"]).toBe(1);
+    expect(byStage["IFC"]).toBe(1);
+    expect(byStage["Released"]).toBe(1);
     expect(total).toBe(4);
   });
 });

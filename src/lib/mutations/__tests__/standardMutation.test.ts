@@ -3,6 +3,7 @@ import {
   assertProjectId,
   invalidateAfterMutation,
   toUserErrorMessage,
+  withProjectId,
   type MutationResult,
 } from "../standardMutation";
 
@@ -19,6 +20,26 @@ describe("assertProjectId", () => {
 
   it("uses a custom label in the error message", () => {
     expect(() => assertProjectId("", "workspace")).toThrow(/Select a workspace first/);
+  });
+});
+
+describe("withProjectId", () => {
+  it("stamps the active project id", () => {
+    expect(withProjectId({ name: "x" }, "proj-1")).toEqual({ name: "x", project_id: "proj-1" });
+  });
+
+  it("forces a mismatched project_id onto the active project", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(withProjectId({ project_id: "other", name: "x" }, "active")).toEqual({
+      project_id: "active",
+      name: "x",
+    });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("throws when no active project is selected", () => {
+    expect(() => withProjectId({ name: "x" }, null)).toThrow(/Select a project first/);
   });
 });
 

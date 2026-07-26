@@ -19,6 +19,11 @@ import { entities } from "@/api/supabaseClient";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { toast } from "sonner";
+import {
+  buildDrawingCreatePayload,
+  formatDeleteSetSuccessMessage,
+  formatDrawingWriteError,
+} from "./drawings/drawingMutationHelpers";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { batchProcess } from "@/utils/batchProcess";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
@@ -232,7 +237,9 @@ export default function Drawings({ embedded = false } = {}) {
   };
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.Drawing.create({ ...data, project_id: projectId, project_name: activeProject?.name }),
+    mutationFn: (data) => entities.Drawing.create(
+      buildDrawingCreatePayload(data, projectId, activeProject?.name),
+    ),
     onSuccess: async (created) => {
       await invalidate();
       toast.success("Sheet added");
@@ -252,7 +259,7 @@ export default function Drawings({ embedded = false } = {}) {
         }
       }
     },
-    onError: (e) => toast.error("Failed to add: " + (e?.message || "unknown")),
+    onError: (e) => toast.error(formatDrawingWriteError(e, "add")),
   });
 
   const updateMut = useMutation({
@@ -267,7 +274,7 @@ export default function Drawings({ embedded = false } = {}) {
       setEditing(null);
       setShowModal(false);
     },
-    onError: (e) => toast.error("Failed to update: " + (e?.message || "unknown")),
+    onError: (e) => toast.error(formatDrawingWriteError(e, "update")),
   });
 
   // F19: soft-delete with undo. The id is a single drawing row; we can flip
@@ -287,13 +294,13 @@ export default function Drawings({ embedded = false } = {}) {
               await invalidate();
               toast.success("Sheet restored");
             } catch (err) {
-              toast.error("Restore failed: " + (err?.message || "unknown"));
+              toast.error(formatDrawingWriteError(err, "restore"));
             }
           },
         },
       });
     },
-    onError: (e) => toast.error("Failed to delete: " + (e?.message || "unknown")),
+    onError: (e) => toast.error(formatDrawingWriteError(e, "delete")),
   });
 
   // Cascade-delete an entire drawing set (parent + all child sheets) in one
@@ -319,11 +326,13 @@ export default function Drawings({ embedded = false } = {}) {
     onSuccess: async ({ deleted, parentOnly, deletedSheetIds = [], failed = [] }, { setId, sheetIds, setName }) => {
       await invalidate();
       setSelected(failed.length > 0 ? new Set(failed) : new Set());
-      const msg = parentOnly
-        ? `Deleted set "${setName}"`
-        : `Deleted "${setName}" and ${deleted} sheet${deleted === 1 ? "" : "s"}`;
-      const notify = failed.length > 0 ? toast.warning : toast.success;
-      notify(failed.length > 0 ? `${msg}; ${failed.length} sheet${failed.length === 1 ? "" : "s"} failed` : msg, {
+      const toastInfo = formatDeleteSetSuccessMessage({
+        setName,
+        deleted,
+        parentOnly,
+        failedCount: failed.length,
+      });
+      toast[toastInfo.level](toastInfo.message, {
         action: {
           label: "Undo",
           onClick: async () => {
@@ -344,13 +353,13 @@ export default function Drawings({ embedded = false } = {}) {
               await invalidate();
               toast.success(`Restored "${setName}"`);
             } catch (err) {
-              toast.error("Restore failed: " + (err?.message || "unknown"));
+              toast.error(formatDrawingWriteError(err, "restore"));
             }
           },
         },
       });
     },
-    onError: (e) => toast.error("Failed to delete set: " + (e?.message || "unknown")),
+    onError: (e) => toast.error(formatDrawingWriteError(e, "delete set")),
   });
 
   // ── Handlers ──────────────────────────────────────────────────────────────

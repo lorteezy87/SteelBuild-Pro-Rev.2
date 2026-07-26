@@ -6,6 +6,7 @@ import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import ActionItemFormModal from "@/components/actionitems/ActionItemFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { BulkActionBar } from "@/components/design-system";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 import { daysUntil } from "@/lib/dateMath";
@@ -107,14 +108,14 @@ export default function ActionItems() {
 
   // ─── Mutations ───────────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => entities.ActionItem.create(data),
+    mutationFn: (data) => entities.ActionItem.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
       qc.invalidateQueries({ queryKey: ["action-items-all"] });
       toast.success("Action item created");
       setShowForm(false);
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e)}`),
   });
 
   const updateMut = useMutation({
@@ -126,7 +127,7 @@ export default function ActionItems() {
       setEditingItem(null);
       setShowForm(false);
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e)}`),
   });
 
   const deleteMut = useMutation({
@@ -137,7 +138,7 @@ export default function ActionItems() {
       setDeleteTarget(null);
       toast.success("Action item deleted");
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Delete failed")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Delete failed")}`),
   });
 
   // ─── Bulk mutation — per-row heterogeneous updates ───────────────────────

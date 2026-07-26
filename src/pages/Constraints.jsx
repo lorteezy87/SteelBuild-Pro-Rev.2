@@ -18,6 +18,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { isOverdue } from "./constraints/utils";
 import KpiStrip from "./constraints/KpiStrip";
 import PriorityBar from "./constraints/PriorityBar";
@@ -108,14 +109,14 @@ export default function Constraints() {
 
   // -- Mutations ----------------------------------------------------------------------
   const createMut = useMutation({
-    mutationFn: (data) => entities.ActionItem.create(data),
+    mutationFn: (data) => entities.ActionItem.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["constraints"] });
       toast.success("Constraint logged");
       setShowForm(false);
       setEditing(null);
     },
-    onError: (err) => toast.error(err?.message || "Create failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const updateMut = useMutation({
@@ -126,7 +127,7 @@ export default function Constraints() {
       setShowForm(false);
       setEditing(null);
     },
-    onError: (err) => toast.error(err?.message || "Update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -136,7 +137,7 @@ export default function Constraints() {
       setDeleteTarget(null);
       toast.success("Constraint deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   // -- Derived data ----------------------------------------------------------------------

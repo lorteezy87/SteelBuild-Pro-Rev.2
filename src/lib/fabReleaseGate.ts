@@ -212,7 +212,7 @@ export function computeFabReleaseGate({
         drawing_id: String(s.drawing_id),
         stamp_type: String(s.stamp_type || s.status || ""),
         is_voided: s.is_voided ?? false,
-        drawing_revision_id: null,
+        drawing_revision_id: null as string | null,
       })),
     drawingRevisions: drawingRevisions ?? [],
   };

@@ -13,6 +13,7 @@ import { formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { deriveOperationalConstraints } from "@/services/constraintEngine";
 import { summarizeBlockingConstraints } from "@/services/scheduleGatekeeper";
 
@@ -274,7 +275,7 @@ export default function LookAheadSchedule() {
   );
 
   const createMut = useMutation({
-    mutationFn: d => entities.LookAhead.create(d),
+    mutationFn: (d) => entities.LookAhead.create(withProjectId(d, activeProject?.id)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lookahead"] });
       setModalOpen(false);
@@ -282,7 +283,7 @@ export default function LookAheadSchedule() {
       toast.success("Look-ahead item created");
     },
     onError: (err) => {
-      toast.error(`Failed to create look-ahead item: ${err?.message || "Unknown error"}`);
+      toast.error(`Failed to create look-ahead item: ${toUserErrorMessage(err)}`);
     },
   });
   const updateMut = useMutation({
@@ -294,7 +295,7 @@ export default function LookAheadSchedule() {
       toast.success("Look-ahead item updated");
     },
     onError: (err) => {
-      toast.error(`Failed to update look-ahead item: ${err?.message || "Unknown error"}`);
+      toast.error(`Failed to update look-ahead item: ${toUserErrorMessage(err)}`);
     },
   });
   const deleteMut = useMutation({

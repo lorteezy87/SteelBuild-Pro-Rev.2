@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../components/shared/ProjectContext";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { toast } from "sonner";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
 import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
@@ -78,14 +79,17 @@ export default function ResourceScheduling() {
   const [newRes, setNewRes] = useState(emptyNewRes);
 
   const createResMut = useMutation({
-    mutationFn: (data: any) => entities.Resource.create({ ...data, project_id: activeProject?.id, project_name: activeProject?.name || "" }),
+    mutationFn: (data: any) => entities.Resource.create({
+      ...withProjectId(data as Record<string, unknown>, activeProject?.id),
+      project_name: activeProject?.name || "",
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["resources"] });
       setShowNewResource(false);
       setNewRes(emptyNewRes);
       toast.success("Resource created");
     },
-    onError: (err) => toast.error(err.message || "Failed to create resource"),
+    onError: (err: any) => toast.error(err.message || "Failed to create resource"),
   });
 
   // The board could create resources but never edit them, so a resource added

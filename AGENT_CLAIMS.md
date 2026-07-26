@@ -45,6 +45,9 @@ Notes:
 | 2026-07-09T20:00:00Z | measurement-ship1 | Drawing-viewer measurement correctness | src/components/drawings/viewer/{AnnotationLayer.jsx,detectScale.js,measureLabel.js,useMarkup.js} · src/pages/drawingViewer/{useAutoScaleOnLoad.js,ViewerToolbar.jsx,usePdfLoader.js} · src/pages/DrawingViewer.jsx · src/utils/feetInches.js · supabase/migrations/** | Fix `drawing_markups` CHECK (7 of 8 markup kinds rejected → table holds 0 rows), per-page scale detection + explicit ambiguous state, canonical ft-in 1/16" formatter, save-failure toast, badge+detection outside canvas mode. Plan: docs/superpowers/plans/2026-07-09-drawing-viewer-measurement-ship1.md |
 
 ## Recently released
+- 2026-07-26 · cursor-ap-next-slice-d3a1 · Drawings mutation helpers + FabRelease/Contract/Schedule/Deliveries create scoping on PR #123.
+- 2026-07-26 · cursor-ap-next-slice-d3a1 · RFIs helpers + ops/email/escalate withProjectId adoption on PR #123.
+- 2026-07-26 · cursor-ap-next-slice-d3a1 · Mutation adoption continuation (Submittals helpers, commercial withProjectId, toast helper adoption) on PR #123.
 - 2026-07-25 · cursor-piece-wp-3d-glue-3d17 · Piece↔WP↔fab↔3D glue shipped (PR #129). Apply migration `20260725210000` on prod.
 - 2026-07-25 · cursor-remove-autolock-3d17 · Removed drawing-set auto-lock on terminal submittal approval (PR #126); deployed to production.
 - 2026-07-25 · cursor-unlock-drawing-sets-3d17 · Unlock all locked drawing sets (migration `20260725203000`; PR #124). Local + prod applied (owner ran unlock SQL on `kjrwqagyeswwoxpjkcko`).
@@ -53,6 +56,7 @@ Notes:
 - 2026-07-25 · cursor-rr-stage-3d17 · Drawing approval lifecycle Slices 0–5 shipped on PR #122 (R&R stage, cycles, evidence gate, OFS scrub/IFC checklist, comment dispositions). Branch cursor/drawing-approval-lifecycle-rr-stage-3d17.
 - 2026-07-25 · cursor-rr-stage-3d17 · Drawing approval lifecycle Slices 0–4 shipped on PR #122 (R&R stage, approval cycles, R&R evidence gate, mandatory OFS scrub + IFC checklist). Branch cursor/drawing-approval-lifecycle-rr-stage-3d17.
 - 2026-07-25 · cursor-rr-stage-3d17 · R&R promoted to a first-class derived workflow stage (Slices 0–1 of the drawing-approval-lifecycle plan; PR #122, branch cursor/drawing-approval-lifecycle-rr-stage-3d17). Display-derivation only — drawings.stage CHECK untouched.
+- 2026-07-25 · cursor-ap-next-slice-d3a1 · withProjectId write shaping + action-plan tracker checkpoint (IDs 19/43/64/68/70/84/89/92/94/95/97/99/103–105).
 - 2026-07-24 · cursor-ap-14-17-d3a1 · Action plan IDs 14–17 sync honesty, corrected-flow retest, hooks check, Sentry triage.
 - 2026-07-24 · cursor-action-plan-d3a1 · Action-plan completion pass (ledger, hygiene, security identity, ResourceScheduling helpers).
 - 2026-07-24 · cursor-debug-prod-sentry-d3a1 · Prod Sentry fixes cherry-picked into action-plan branch.

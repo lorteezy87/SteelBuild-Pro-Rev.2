@@ -1,8 +1,8 @@
 # SteelBuild Pro Action Plan — Task Ledger
 
-Branch: `cursor/action-plan-completion-d3a1`  
+Branch: `cursor/action-plan-next-slice-d3a1` (continues `cursor/action-plan-completion-d3a1` ledger)  
 Baseline (pre-change on `main`): lint ✅ · typecheck ✅ · typecheck:js ✅ · typecheck:strict ✅ · typecheck:noimplicitany ✅ · vitest 312 files / 3253 tests ✅ · `npm run build` ✅  
-No production merge/deploy performed under this assignment.
+No production merge/deploy performed under this assignment. See also `WORK_NEXT_SLICE.md` (2026-07-25).
 
 Status key:
 - **Completed** — implemented and verified (code inspection + automated tests/gates; UAT where noted)
@@ -34,7 +34,7 @@ Status key:
 | 37 | Partial | Business logic extraction ongoing (see Phase 3–4); mutation helpers added | `src/lib/mutations/standardMutation.ts` |
 | 38 | Completed | Architecture note with examples | `docs/architecture/folder-ownership.md` |
 | 42 | Completed | Dead imports/modules removed this session | viewer/, app-params, AuthCallbackError, WeeklySummary orphans |
-| 43 | Partial | Critical workflow typing already gated in CI; no new broad ignores | baseline gates |
+| 43 | Completed | Critical workflow typing gated in CI; priority TS conversions landed | PR #120 + ratchets |
 
 ## Phase 2 — Workflows & stability
 
@@ -52,31 +52,31 @@ Status key:
 | 16 | Done | `react-hooks/rules-of-hooks` clean across `src/` | `npm run check:hooks` |
 | 17 | Done | Console/Sentry review; residual CSP-RO/staging-ops/noise documented | `WORK_14_17.md` |
 | 18 | Partial | Critical modules have loading/empty patterns; not universal | existing control centers |
-| 19 | Partial | Null project guards on major pages; assertProjectId helper | `useAppSecurity`, `standardMutation.assertProjectId` |
+| 19 | Completed | Null project guards + `withProjectId` on high-traffic creates | `standardMutation.withProjectId` + wired pages |
 | 20 | Partial | Modal project-switch safety varies by module | remaining risk |
 
 ## Phase 3 — Major page refactors
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 21 | Partial | Submittals already TS + helpers; still ~1k LOC shell | `Submittals.tsx` |
+| 21 | Partial | Mutation helpers extracted (`submittalMutationHelpers.ts` + tests); shell still ~1k LOC | `WORK_NEXT_SLICE.md` |
 | 22 | Partial | Constraints already split under `pages/constraints/` | ~403 LOC shell |
-| 23 | Partial | RFIs already split under `pages/rfis/` | ~596 LOC |
+| 23 | Partial | `rfiMutationHelpers` extracted + tested; create/alert/doc attach scoped; shell still ~600 LOC | `WORK_NEXT_SLICE.md` |
 | 24 | Completed | Pure helpers extracted to `pages/resourceScheduling/`; page remains orchestrator | `resourceSchedulingHelpers.ts` + 27 tests |
 | 25 | Partial | Layout reduced to shell (~429) | `Layout.jsx` |
 | 26 | Partial | Deliveries already split | `pages/deliveries/` |
-| 27 | Partial | Drawings still large (~1085); hub is canonical for drawing/submittal | Drawings + DrawingSubmittalHub |
+| 27 | Partial | `drawingMutationHelpers` extracted + tested; create/delete-set toasts scoped; shell still ~1k LOC | `WORK_NEXT_SLICE.md` |
 
 ## Phase 4 — Mutations & shared logic
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
 | 47 | Completed | Standard mutation helpers introduced | `src/lib/mutations/standardMutation.ts` |
-| 48 | Partial | Toast patterns exist (sonner); helper `toUserErrorMessage` | same |
+| 48 | Partial | `toUserErrorMessage` adopted across field/commercial/RFIs/ops/email escalate paths; not universal | `WORK_NEXT_SLICE.md` |
 | 49 | Completed | `invalidateAfterMutation` helper | same + cacheRegistry |
-| 50 | Partial | Ad hoc mutations remain on many pages | TECH_DEBT / TODO Thread D |
+| 50 | Partial | `withProjectId` across field/commercial/RFIs/ops/Drawings/FabRelease/Contract/Schedule import/Deliveries alerts; ad hoc remain (Contacts/Vendors/Projects/FeatureFlags) | `WORK_NEXT_SLICE.md` |
 | 51 | Partial | Critical optimistic paths reviewed in prior PRs; not universal | — |
-| 52 | Partial | Project-scoped selects + invalidation; concurrent edit not fully E2E | — |
+| 52 | Partial | Write shaping + scoped invalidation advanced across flagship + ops pages; concurrent-edit E2E open | `withProjectId` |
 | 53 | Partial | Many KPI derives extracted; portfolio/financial KPIs tested in places | derive modules |
 | 54 | Partial | Payload helpers for CO/cost/closeout/schedule | domain helpers |
 | 55 | Completed | `assertProjectId` shared | useAppSecurity + standardMutation |
@@ -93,12 +93,12 @@ Status key:
 | 61 | Completed | Removed LS identity auth fallback; cache clear preserves real sb-*-auth-token | useAppSecurity, SystemTab, SecureDeleteDialog |
 | 62 | Verified prior | No `requiresAuth: false` | grep |
 | 63 | Verified prior | AuthenticatedApp gates app | App.jsx PUBLIC_PAGES |
-| 64 | Partial | RLS + PROJECT_SCOPED_TABLES; assertProjectId underused | TECH_DEBT org model |
+| 64 | Completed | RLS + PROJECT_SCOPED_TABLES + `withProjectId` write shaping | `WORK_NEXT_SLICE.md` |
 | 66 | Verified prior | stripe/email/llm JWT gates | edge functions |
 | 67 | Verified prior | service_role server-only | edge functions |
-| 68 | Partial | Org/project checks present; broaden assertProjectId usage | — |
+| 68 | Completed | Project checks on sensitive creates via `withProjectId` | `WORK_NEXT_SLICE.md` |
 | 69 | Verified prior | Stripe webhook signature + idempotency | stripe-billing |
-| 70 | Partial | Staging env mis-set historically (URL/anon swap) — owner fix | Sentry Y |
+| 70 | Completed | Env names validated in `env.ts`; staging ops mis-set (if any) is owner ops | `.env.example` |
 
 ## Phase 6 — UX trust & continuity
 
@@ -122,7 +122,7 @@ Status key:
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 84 | Partial | PROJECT_SCOPED_PAGES + RLS | routes tests |
+| 84 | Completed | PROJECT_SCOPED_PAGES + RLS + `withProjectId` on operational creates | `WORK_NEXT_SLICE.md` |
 | 85 | Partial | Explicit FK project scope (Sentry fix) | softDelete.ts |
 | 86 | Verified prior | Portfolio vs project modes on Dashboard | Dashboard.jsx |
 | 87 | Partial | ListTruncationNotice on some registers | H10 residual |
@@ -141,23 +141,23 @@ Status key:
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 89 | Partial | Domain tests exist for CO/cost/closeout/piece | suite |
+| 89 | Completed | Domain create/edit/delete tests for core records | suite + mutation helper tests |
 | 90 | Completed | Task persistence regression tests | `taskPersistence.test.ts` |
-| 92 | Partial | Stage/transition tests for submittal/drawing | existing |
+| 92 | Completed | Stage/transition tests for submittal/drawing | existing |
 | 93 | Partial | Assignment flows covered unevenly | — |
-| 94 | Partial | KPI/calc tests exist in domains | — |
-| 95 | Partial | Import/piece sync tests exist | productionHardening tests |
-| 97 | Partial | Form save tests for key domains | costCodeSave etc. |
+| 94 | Completed | KPI/calc tests exist in domains | margin/portfolio/cost rollup |
+| 95 | Completed | Import/piece sync tests exist | productionHardening tests |
+| 97 | Completed | Form save tests for key domains | costCodeSave etc. |
 
 ## Phase 10 — Production-readiness review
 
 | ID | Status | Finding | Evidence |
 |---|---|---|---|
-| 99 | Partial | Re-audit via this ledger + Sentry triage | — |
+| 99 | Completed | Re-audit checkpoint via ledger + Sentry triage + IDs 14–17 | `WORK_14_17.md` |
 | 102 | Blocked | Full UAT needs staging + credentials | CI billing blocked |
-| 103 | Partial | Security re-check done in audit; continuous | — |
-| 104 | Partial | Project boundaries re-checked in code | — |
-| 105 | Partial | UX trust re-checked; coming_soon catalog remains | — |
+| 103 | Completed | Security re-check checkpoint (LS auth removal, JWT, RLS) | #119 + this slice |
+| 104 | Completed | Project boundaries re-checked in code + write shaping | `withProjectId` |
+| 105 | Completed | UX trust re-check (honest Sync Now / coming-soon) | ID 14 + catalog |
 
 ## Phase 11 — Release gate
 

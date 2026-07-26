@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../submittals/
 import { entities } from "@/api/supabaseClient";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import { border, error as errorTone, fmtDate, mono, surface2, textMuted, textPrimary } from "./format";
 
@@ -80,8 +81,7 @@ export default function EscalateModal({ item, initialKind = "rfi", projectId, pr
         const rfiNumber = await getNextFormattedNumber({
           projectId, recordType: "RFI", entityName: "RFI", fieldName: "rfi_number", prefix: "RFI #",
         });
-        await entities.RFI.create({
-          project_id: projectId,
+        await entities.RFI.create(withProjectId({
           project_name: projectName || null,
           rfi_number: rfiNumber,
           title: title.trim(),
@@ -92,15 +92,14 @@ export default function EscalateModal({ item, initialKind = "rfi", projectId, pr
           drawing_set_id: item._drawingSetId || null,
           date_required: item.dueDate ? String(item.dueDate).slice(0, 10) : null,
           metadata: { origin },
-        } as any);
+        }, projectId) as any);
         await invalidateEntity(qc, "rfi", projectId);
         toast.success(`${rfiNumber} drafted from "${item.title}" — see RFIs`);
       } else {
         const coNumber = await getNextFormattedNumber({
           projectId, recordType: "CO", entityName: "ChangeOrder", fieldName: "co_number", prefix: "CO #",
         });
-        await entities.ChangeOrder.create({
-          project_id: projectId,
+        await entities.ChangeOrder.create(withProjectId({
           project_name: projectName || null,
           co_number: coNumber,
           title: title.trim(),
@@ -109,13 +108,13 @@ export default function EscalateModal({ item, initialKind = "rfi", projectId, pr
           reason_code: reasonCode,
           co_amount: amount !== "" && Number.isFinite(Number(amount)) ? Number(amount) : null,
           metadata: { origin, pco: true },
-        } as any);
+        }, projectId) as any);
         await invalidateEntity(qc, "change_order", projectId);
         toast.success(`${coNumber} drafted as a potential CO — see Change Orders`);
       }
       onClose();
     } catch (err: any) {
-      toast.error(`Failed to create draft: ${err?.message || "Unknown error"}`);
+      toast.error(`Failed to create draft: ${toUserErrorMessage(err)}`);
     } finally {
       setSaving(false);
     }

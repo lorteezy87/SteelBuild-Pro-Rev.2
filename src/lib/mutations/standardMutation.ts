@@ -18,6 +18,25 @@ export function assertProjectId(
   }
 }
 
+/**
+ * Stamp `project_id` on a create/update payload with the *active* project.
+ * Forces the active id when a mismatched `project_id` is supplied (write shaping).
+ */
+export function withProjectId<T extends Record<string, unknown>>(
+  data: T,
+  projectId: string | null | undefined,
+  label = "project",
+): T & { project_id: string } {
+  assertProjectId(projectId, label);
+  if (data.project_id && data.project_id !== projectId) {
+    console.warn(
+      "[Security] project_id mismatch on write — forcing to active project",
+      { provided: data.project_id, active: projectId },
+    );
+  }
+  return { ...data, project_id: projectId };
+}
+
 /** Normalize unknown thrown values into a short user-facing message. */
 export function toUserErrorMessage(err: unknown, fallback = "Something went wrong"): string {
   if (err instanceof Error && err.message.trim()) return err.message.trim();

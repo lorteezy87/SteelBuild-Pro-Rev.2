@@ -17,6 +17,7 @@ import React, { useState, useMemo, useCallback, useRef, Suspense, lazy } from "r
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities, resolveFileUrl } from "@/api/supabaseClient";
 import { toast } from "sonner";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -114,17 +115,18 @@ export default function Documents() {
 
   const createFolderMut = useMutation({
     mutationFn: ({ name, parentFolderId }) =>
-      entities.DocumentFolder.create({
-        project_id: activeProject.id,
-        parent_folder_id: parentFolderId,
-        name,
-      }),
+      entities.DocumentFolder.create(
+        withProjectId({
+          parent_folder_id: parentFolderId,
+          name,
+        }, activeProject?.id),
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
       toast.success("Folder created");
     },
     onError: (err) => {
-      const msg = err?.message || "Failed to create folder";
+      const msg = toUserErrorMessage(err, "Failed to create folder");
       // Surface the unique-name-per-parent collision in plain English.
       if (/document_folders_unique_name_per_parent/.test(msg)) {
         toast.error("A folder with that name already exists here.");
@@ -290,11 +292,12 @@ export default function Documents() {
         ? (currentFolderId ?? null)
         : (stack[item.depth - 1] ?? currentFolderId ?? null);
       try {
-        const row = await entities.DocumentFolder.create({
-          project_id: activeProject.id,
-          parent_folder_id: parentId,
-          name: item.name,
-        });
+        const row = await entities.DocumentFolder.create(
+          withProjectId({
+            parent_folder_id: parentId,
+            name: item.name,
+          }, activeProject?.id),
+        );
         stack[item.depth] = row?.id ?? null;
         // Truncate stack so deeper-level entries from a sibling don't
         // leak into the next branch.

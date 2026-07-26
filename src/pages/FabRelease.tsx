@@ -26,6 +26,7 @@ import {
 } from "@/components/shared/crudFeedback";
 import { usePermissions } from "@/services/permissions";
 import { getNextNumber } from "@/components/shared/numberSequencing";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import WPFormModalRaw from "@/components/workpackages/WPFormModal";
 import { Button as ButtonRaw, EmptyState as EmptyStateRaw } from "@/components/design-system";
@@ -166,7 +167,9 @@ export default function FabRelease() {
   const invalidateWorkPackages = () => invalidateEntity(qc, "work_package", projectId);
 
   const createWPMut = useMutation({
-    mutationFn: (data: any) => entities.WorkPackage.create(data),
+    mutationFn: (data: any) => entities.WorkPackage.create(
+      withProjectId(data as Record<string, unknown>, projectId),
+    ),
     onSuccess: async (created) => {
       logActivity("work_package", "created", created, { projectId });
       appendRecordToCaches(qc, wpQueryKeys, created, ((record: any, key: any) => !key[1] || record.project_id === key[1]) as unknown as () => boolean);

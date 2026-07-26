@@ -37,6 +37,7 @@ import type { RowWithAliases } from '@/api/supabaseClient';
 import type { Json } from '@/types/supabase';
 import { useProjectId } from '@/hooks/useProjectId';
 import { useAutoOpenCreate } from '@/hooks/useAutoOpenCreate';
+import { toUserErrorMessage, withProjectId } from '@/lib/mutations/standardMutation';
 import { exportToCSV } from '@/lib/csv';
 import { PROCUREMENT_CATEGORIES, ALL_STATUSES, addWeeks } from './procurement/format';
 import ProcurementControlCenter from './procurement/ProcurementControlCenter';
@@ -105,11 +106,9 @@ export default function Procurement() {
   );
 
   const createMut = useMutation({
-    mutationFn: (data: any) => entities.Delivery.create({
-      ...data,
-      delivery_type: 'PROCUREMENT',
-      project_id: projectId,
-    }),
+    mutationFn: (data: any) => entities.Delivery.create(
+      withProjectId({ ...data, delivery_type: 'PROCUREMENT' }, projectId),
+    ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement'] });
       qc.invalidateQueries({ queryKey: ['deliveries-all'] });
@@ -117,7 +116,7 @@ export default function Procurement() {
       setEditing(null);
       toast.success('Item added');
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, 'Failed to add item')),
   });
 
   const updateMut = useMutation({
@@ -129,7 +128,7 @@ export default function Procurement() {
       setEditing(null);
       toast.success('Item updated');
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, 'Failed to update item')),
   });
 
   // Soft-delete mirrors the Budget Hours pattern. Hard delete was
@@ -150,6 +149,7 @@ export default function Procurement() {
       setDeleteTarget(null);
       toast.success('Item removed');
     },
+    onError: (err) => toast.error(toUserErrorMessage(err, 'Failed to remove item')),
   });
 
   const today = useMemo(() => new Date(), []);

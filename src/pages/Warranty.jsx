@@ -7,6 +7,7 @@ import WarrantyFormModal from "@/components/warranty/WarrantyFormModal";
 import WarrantyList from "@/components/warranty/WarrantyList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import StatCard from "@/components/shared/StatCard";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 
 export default function Warranty() {
   const projectId = useProjectId();
@@ -37,7 +38,7 @@ export default function Warranty() {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const createMut = useMutation({
-    mutationFn: (data) => entities.Warranty.create({ ...data, project_id: data.project_id || projectId }),
+    mutationFn: (data) => entities.Warranty.create(withProjectId(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["warranties", projectId] });
       setShowForm(false);
