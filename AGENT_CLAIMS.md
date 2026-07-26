@@ -43,9 +43,9 @@ Notes:
 | 2026-07-06T12:00:00Z | dashboard-command-ui-handoff | Dashboard command_ui portfolio + fetch gating | src/pages/Dashboard.jsx | Reuse command-style Portfolio Control Center for `!projectId` and skip portfolio-irrelevant dashboard queries in portfolio mode. |
 | 2026-07-06T19:05:00Z | dashboard-command-ui-handoff | Dashboard + Portfolio derive parity cleanup | src/pages/Dashboard.jsx, src/pages/portfolio/portfolioControlCenter.derive.ts, src/pages/portfolio/__tests__/portfolioControlCenter.derive.test.ts | Add command-mode portfolio entrypoint data wiring/buffering + sync scoring inputs with shared `computePortfolioProjectHealth` helper; update derive tests for delayed-task and late-delivery semantics. |
 | 2026-07-09T20:00:00Z | measurement-ship1 | Drawing-viewer measurement correctness | src/components/drawings/viewer/{AnnotationLayer.jsx,detectScale.js,measureLabel.js,useMarkup.js} · src/pages/drawingViewer/{useAutoScaleOnLoad.js,ViewerToolbar.jsx,usePdfLoader.js} · src/pages/DrawingViewer.jsx · src/utils/feetInches.js · supabase/migrations/** | Fix `drawing_markups` CHECK (7 of 8 markup kinds rejected → table holds 0 rows), per-page scale detection + explicit ambiguous state, canonical ft-in 1/16" formatter, save-failure toast, badge+detection outside canvas mode. Plan: docs/superpowers/plans/2026-07-09-drawing-viewer-measurement-ship1.md |
-| 2026-07-26T17:42:04Z | cursor-ap-dailylogs-iserror-d3a1 | DailyLogs isError gate (ID 18) | src/pages/DailyLogs.jsx · docs/action-plan/* | Add INLINE isError/retry after LoadingSkeleton; avoid #139–#147 file sets |
 
 ## Recently released
+- 2026-07-26 · cursor-ap-dailylogs-iserror-d3a1 · DailyLogs INLINE isError + retry gate (ID 18).
 - 2026-07-26 · cursor-ap-photos-safety-loading-d3a1 · Photos + Safety INLINE LoadingSkeleton + error/empty gates (ID 18).
 - 2026-07-26 · cursor-ap-commercial-toasts-d3a1 · Backcharges/PayApps/EmailInbox/Documents/SOV toast + create fail-closed hygiene (IDs 48/50).
 - 2026-07-26 · cursor-ap-import-doccontrol-d3a1 · Expense/CO CSV import + ReviewQueue/ImpactBoard/RFIFormModal withProjectId; Doc Control/Resource toast hygiene.
