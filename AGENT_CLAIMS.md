@@ -45,6 +45,7 @@ Notes:
 | 2026-07-09T20:00:00Z | measurement-ship1 | Drawing-viewer measurement correctness | src/components/drawings/viewer/{AnnotationLayer.jsx,detectScale.js,measureLabel.js,useMarkup.js} · src/pages/drawingViewer/{useAutoScaleOnLoad.js,ViewerToolbar.jsx,usePdfLoader.js} · src/pages/DrawingViewer.jsx · src/utils/feetInches.js · supabase/migrations/** | Fix `drawing_markups` CHECK (7 of 8 markup kinds rejected → table holds 0 rows), per-page scale detection + explicit ambiguous state, canonical ft-in 1/16" formatter, save-failure toast, badge+detection outside canvas mode. Plan: docs/superpowers/plans/2026-07-09-drawing-viewer-measurement-ship1.md |
 
 ## Recently released
+- 2026-07-26 · cursor-ap-dms-scoping-d3a1 · DMS UploadModal/LinkedFolderBrowser Document.create withProjectId + Edit/Detail toast hygiene.
 - 2026-07-26 · cursor-ap-photos-safety-loading-d3a1 · Photos + Safety INLINE LoadingSkeleton + error/empty gates (ID 18).
 - 2026-07-26 · cursor-ap-commercial-toasts-d3a1 · Backcharges/PayApps/EmailInbox/Documents/SOV toast + create fail-closed hygiene (IDs 48/50).
 - 2026-07-26 · cursor-ap-import-doccontrol-d3a1 · Expense/CO CSV import + ReviewQueue/ImpactBoard/RFIFormModal withProjectId; Doc Control/Resource toast hygiene.

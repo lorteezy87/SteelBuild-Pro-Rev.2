@@ -1,17 +1,30 @@
-# Action-plan — post-deploy checkpoint (2026-07-26)
+# Action-plan next slice — DMS create + toast hygiene
 
-**Merged + prod:** #133 · #134 · #135 · #136 · #137 → https://www.steelbuild-pro.com  
-**Deployment:** `dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL`
+**Branch / PR:** `cursor/action-plan-dms-scoping-d3a1`  
+**Dates:** 2026-07-26  
+**Prior prod:** #133–#137 deployed (`dpl_3HLTVWMirhvfe7rASEc6XPBmpKyL`)
 
-| ID | Status | What shipped |
-|---|---|---|
-| **18** | **Done** | `RegisterFetchBody` (thin CRUD/QC) + Photos/Safety INLINE gates |
-| **48** | In Progress | Toast hygiene across modals/import/Doc Control/commercial/inbox — not universal |
-| **50** | In Progress | `withProjectId` on modals, CSV imports, Doc Control creates, Backcharges/SOV import — upload pipelines + org-level remain |
-| **102** | Blocked | Interactive UAT + GH Actions billing |
+## Code (IDs 50 / 48)
 
-## Next slices (suggested)
+| File | Change |
+|---|---|
+| `UploadModal.jsx` | `Document.create(withProjectId(...))` + toast helper |
+| `LinkedFolderBrowser.jsx` | Import-path `Document.create(withProjectId(...))` + toast helper |
+| `DocumentEditModal.jsx` | Update payload stamped via `withProjectId` + toast helper |
+| `DocumentDetailPanel.jsx` | Download/share errors via `toUserErrorMessage` |
 
-- DMS UploadModal / DocumentEditModal / LinkedFolderBrowser create+toast
+**Skipped:** `DocumentStorageSettings.jsx` (open stale claim `opus-phase1-batch1` on that file).
+
+## Still open
+
+- LinkedFolder create in DocumentStorageSettings
 - Large page thins 21 / 23 / 27
 - Concurrent-edit E2E (52)
+- **Blocked:** 102
+
+## Validation
+
+```bash
+npx vitest run src/lib/mutations/__tests__/standardMutation.test.ts
+npx eslint src/components/dms/{UploadModal,DocumentEditModal,LinkedFolderBrowser,DocumentDetailPanel}.jsx --quiet
+```

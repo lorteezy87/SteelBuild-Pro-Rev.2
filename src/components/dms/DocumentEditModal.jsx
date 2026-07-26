@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const INPUT_STYLE = {
   width: "100%",
@@ -76,7 +77,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       toast.success("Document updated");
       onClose();
     },
-    onError: (err) => toast.error(err?.message || "Update failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Update failed")),
   });
 
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -91,7 +92,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       .map((t) => t.trim())
       .filter(Boolean);
 
-    mut.mutate({
+    mut.mutate(withProjectId({
       display_name: form.displayName,
       document_number: form.documentNumber,
       revision_number: form.revisionNumber,
@@ -106,8 +107,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       change_order_id: form.change_order_id || null,
       submittal_id: form.submittal_id || null,
       is_current: form.is_current,
-      project_id: projectId,
-    });
+    }, projectId));
   };
 
   return (

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatLocalDate } from "@/utils/dates";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const STATUS_COLORS = {
   "Draft":                   { bg: "rgba(100,116,139,0.15)", color: "#94a3b8" },
@@ -71,8 +72,8 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
       document.body.appendChild(a);
       a.click();
       a.remove();
-    } catch (_err) {
-      toast.error("Download failed");
+    } catch (err) {
+      toast.error(toUserErrorMessage(err, "Download failed"));
     }
   };
 
@@ -86,8 +87,8 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
       if (!url) { toast.error("No file URL available"); return; }
       await navigator.clipboard.writeText(url);
       toast.success("Link copied to clipboard (valid 1 hour)");
-    } catch (_err) {
-      toast.error("Failed to generate share link");
+    } catch (err) {
+      toast.error(toUserErrorMessage(err, "Failed to generate share link"));
     }
   };
 
