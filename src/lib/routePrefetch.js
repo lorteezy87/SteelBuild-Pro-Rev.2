@@ -1,12 +1,9 @@
 /**
  * Route-level code prefetching.
  *
- * On the feature branch `pages.config.js` eagerly imports every page, so
- * prefetching here is a no-op (all chunks are already in the main bundle).
- * On the deploy branch `src/config/routes.js` lazy-loads pages via
- * `lazyWithRetry`; importing the same module twice is de-duped by the
- * browser, so calling `prefetchRoute(name)` on hover/focus costs nothing
- * after the first warm-up.
+ * `src/config/routes.js` lazy-loads pages via `lazyWithRetry`; importing the
+ * same module twice is de-duped by the browser, so calling
+ * `prefetchRoute(name)` on hover/focus costs nothing after the first warm-up.
  *
  * Pages that want to participate register an importer at module init:
  *

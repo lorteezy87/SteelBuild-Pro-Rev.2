@@ -6,7 +6,7 @@
  *  - Desktop sidebar navigation
  *  - Mobile hamburger drawer
  *  - Content area with error banner
- *  - Global search modal, quick-add FAB, toast notifications
+ *  - Global search modal and toast notifications
  *
  * All data definitions live in src/config/moduleRegistry.js.
  * All sub-components live in src/components/nav/.
@@ -43,11 +43,6 @@ const GlobalSearchModal = lazyWithRetry(() => import("./components/search/Global
 const MobileDrawer = lazyWithRetry(() => import("./components/nav/MobileDrawer"));
 const Toaster = lazyWithRetry(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
 const SidebarNav = lazyWithRetry(() => import("./components/nav/SidebarNav"));
-// QuickAddFAB intentionally not imported — the floating "+" shortcut at
-// bottom-right was hidden per user request. Component file is preserved
-// in src/components/shared/QuickAddFAB.jsx; uncomment this import + its
-// render below to re-enable.
-// import QuickAddFAB from "./components/shared/QuickAddFAB";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 
 // Context
@@ -400,8 +395,6 @@ export default function Layout({ children, currentPageName }) {
             <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
           </Suspense>
         )}
-        {/* QuickAddFAB removed per user request — the bottom-right "+"
-            shortcut remains hidden site-wide. */}
         <Suspense fallback={null}>
           <Toaster
             theme={isDarkTheme ? "dark" : "light"}

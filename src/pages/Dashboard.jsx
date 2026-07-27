@@ -60,7 +60,7 @@ export default function Dashboard() {
   // Portfolio rollups must exclude on-hold projects (and their child entity
   // contributions); on-hold projects are visible only on the /Projects page.
   // `liveProjectIds` is the active (non-on-hold) id set used by every
-  // portfolio aggregation downstream (scopePortfolioRows + PortfolioView).
+  // portfolio aggregation downstream (scopePortfolioRows + PortfolioControlCenter).
   const portfolioProjects = useMemo(() => projects.filter((p) => !p.on_hold), [projects]);
   const liveProjectIds = useMemo(() => new Set(portfolioProjects.map((p) => p.id).filter(Boolean)), [portfolioProjects]);
   const activeProjectIsLive = !pid || projectsLoading || liveProjectIds.has(pid);
