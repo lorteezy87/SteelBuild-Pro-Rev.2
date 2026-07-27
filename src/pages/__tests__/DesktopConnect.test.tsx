@@ -67,7 +67,7 @@ describe("DesktopConnect", () => {
       />,
     );
 
-    expect(screen.getByText(/connecting/i)).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: /connecting securely/i })).toBeInTheDocument();
     await waitFor(() => expect(attemptSoftRedirect).toHaveBeenCalledTimes(1));
     expect(redirect).not.toHaveBeenCalled();
     const callback = attemptSoftRedirect.mock.calls[0]?.[0] as string;
@@ -103,7 +103,7 @@ describe("DesktopConnect", () => {
 
     expect(await screen.findByRole("button", { name: /retry/i })).toBeInTheDocument();
     expect(screen.getByText(/DC-SESSION/)).toBeInTheDocument();
-    expect(screen.getByText(/sign in to SteelBuild/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/sign in to SteelBuild/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/refresh-secret/i)).not.toBeInTheDocument();
   });
 

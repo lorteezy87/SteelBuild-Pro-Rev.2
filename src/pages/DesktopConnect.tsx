@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 
+import {
+  DesktopConnectShell,
+  DesktopConnectSpinner,
+  desktopConnectBody,
+  desktopConnectErrorBox,
+} from "@/components/desktopConnect/DesktopConnectShell";
 import { supabase } from "@/lib/supabase";
 import {
   DESKTOP_SESSION_ALGORITHM,
@@ -203,45 +209,64 @@ export function DesktopConnect({
     };
   }, [attempt, dependencies, parseQuery, search]);
 
+  if (status === "connecting") {
+    return (
+      <DesktopConnectShell
+        title="Connect SteelBuild"
+        subtitle="Connecting securely to Desktop Command Center. Sign in in this tab if prompted."
+      >
+        <DesktopConnectSpinner label="Connecting securely…" />
+      </DesktopConnectShell>
+    );
+  }
+
+  if (status === "returning") {
+    return (
+      <DesktopConnectShell
+        title="Handoff ready"
+        subtitle="If Desktop Command Center is still waiting, click the button below and allow the app to open."
+        footer="This link is one-time and expires quickly. It never contains your password or refresh token."
+      >
+        {callbackUrl ? (
+          <a
+            href={callbackUrl}
+            className="sbd-btn sbd-btn-primary"
+            style={{
+              display: "inline-flex",
+              width: "100%",
+              justifyContent: "center",
+              minHeight: 44,
+              fontSize: 14,
+              textDecoration: "none",
+            }}
+          >
+            Open Desktop Command Center
+          </a>
+        ) : null}
+      </DesktopConnectShell>
+    );
+  }
+
   return (
-    <main style={{ maxWidth: 560, margin: "8vh auto", padding: 32 }} aria-live="polite">
-      <p style={{ letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>
-        Desktop Command Center
+    <DesktopConnectShell
+      title="Connection failed"
+      subtitle="The secure desktop connection could not be completed."
+    >
+      <div role="alert" style={{ ...desktopConnectErrorBox, marginBottom: 18 }}>
+        {failure ? failureMessages[failure] : "The secure desktop connection could not be completed."}
+      </div>
+      <button
+        type="button"
+        className="sbd-btn sbd-btn-primary"
+        onClick={() => setAttempt((value) => value + 1)}
+        style={{ width: "100%", justifyContent: "center", minHeight: 44, fontSize: 14 }}
+      >
+        Retry connection
+      </button>
+      <p style={{ ...desktopConnectBody, margin: "16px 0 0" }}>
+        Sign in to SteelBuild in this browser tab before retrying. Close this tab and start again from Desktop Command Center if the problem persists.
       </p>
-      <h1>Connect SteelBuild</h1>
-      {status === "connecting" && (
-        <p>Connecting securely to the desktop application… Sign in in this tab if prompted.</p>
-      )}
-      {status === "returning" && (
-        <>
-          <p>Handoff ready. If Desktop Command Center is still waiting, click the button below and allow the app to open.</p>
-          {callbackUrl ? (
-            <p style={{ marginTop: 24 }}>
-              <a
-                href={callbackUrl}
-                style={{
-                  display: "inline-block",
-                  padding: "12px 18px",
-                  background: "var(--accent, #1677ff)",
-                  color: "#fff",
-                  textDecoration: "none",
-                  borderRadius: 8,
-                  fontWeight: 600,
-                }}
-              >
-                Open Desktop Command Center
-              </a>
-            </p>
-          ) : null}
-        </>
-      )}
-      {status === "error" && (
-        <>
-          <p>{failure ? failureMessages[failure] : "The secure desktop connection could not be completed."}</p>
-          <button type="button" onClick={() => setAttempt((value) => value + 1)}>Retry connection</button>
-        </>
-      )}
-    </main>
+    </DesktopConnectShell>
   );
 }
 
