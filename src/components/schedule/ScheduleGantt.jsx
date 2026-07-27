@@ -30,16 +30,26 @@ import {
 } from "./scheduleGanttBars";
 import {
   addDaysUTC, shiftDateOnly,
-  findFirstRowAtOrAfter, findFirstRowAfter,
   getTaskMetadata, getTaskBaseline, hasBaselineDrift, isCriticalTask,
-  taskSearchHaystack, pluralize, isStalledTask, isSummaryScheduleTask,
-  isActionableScheduleTask, taskOwner, isUnassignedTask, hasLogicGapTask, isLookaheadTask,
+  pluralize, isSummaryScheduleTask,
+  isActionableScheduleTask, taskOwner, isUnassignedTask, hasLogicGapTask,
 } from "./scheduleGanttHelpers";
 import { GanttStatsBar, GanttQuickFilters, GanttMetricCards, GanttLegend } from "./ScheduleGanttToolbar";
 import { useColumnResize } from "./useColumnResize";
 import { useGanttLayout } from "./useGanttLayout";
 import { useTaskBarDrag } from "./useTaskBarDrag";
 import { useTaskRowDnD } from "./useTaskRowDnD";
+import {
+  computeScheduleStats,
+  computeSuccessorCountById,
+  computeVisibleTaskIds,
+  buildTaskPositions,
+  buildDepArrows,
+  buildRowLayout,
+  sliceVirtualRows,
+  computeVirtualPadding,
+  filterVisibleDepArrows,
+} from "./scheduleGanttDerive";
 
 const DELIVERY_STATUS_DOT = {
   "Scheduled":  GANTT_PHASE_HEX.Procurement,
@@ -361,50 +371,18 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
 
   // Stats: one pass over the visible schedule model. This keeps filter/search
   // changes responsive on large imported schedules.
-  const scheduleStats = useMemo(() => {
-    const stats = {
-      totalTasks: allTasks.length,
-      completeTasks: 0,
-      overdueTasks: 0,
-      inProgressTasks: 0,
-      unscheduledTasks: 0,
-      lookaheadTasks: 0,
-      stalledTasks: 0,
-      criticalTasks: 0,
-      milestoneTasks: 0,
-      shiftedTasks: 0,
-      totalShiftDays: 0,
-      unassignedTasks: 0,
-      weatherRiskTasks: 0,
-      dependencyLinks: 0,
-      progressTotal: 0,
-      progressCount: 0,
-    };
-    for (const task of allTasks) {
-      const actionable = isActionableScheduleTask(task);
-      if (task.status === "Complete") stats.completeTasks += 1;
-      if (task.status === "In Progress") stats.inProgressTasks += 1;
-      if (actionable && isOverdue(task)) stats.overdueTasks += 1;
-      if (actionable && (!effStart(task) || !effEnd(task))) stats.unscheduledTasks += 1;
-      if (actionable && isLookaheadTask(task, today, effStart, effEnd)) stats.lookaheadTasks += 1;
-      if (actionable && isStalledTask(task, today, (item) => parseDateUTC(effStart(item)))) stats.stalledTasks += 1;
-      if (actionable && isCriticalTask(task)) stats.criticalTasks += 1;
-      if (actionable && isMilestoneTask(task)) stats.milestoneTasks += 1;
-      if (actionable && effectiveDates[task.id]?.shifted) stats.shiftedTasks += 1;
-      if (actionable) stats.totalShiftDays += Number(effectiveDates[task.id]?.shiftedBy) || 0;
-      if (actionable && isUnassignedTask(task)) stats.unassignedTasks += 1;
-      if (actionable && weatherRiskByTask[task.id]) stats.weatherRiskTasks += 1;
-      if (actionable) stats.dependencyLinks += parseDeps(task.dependencies).length;
-      if (actionable) {
-        stats.progressTotal += displayPct(task);
-        stats.progressCount += 1;
-      }
-    }
-    return {
-      ...stats,
-      avgProgress: stats.progressCount > 0 ? Math.round(stats.progressTotal / stats.progressCount) : 0,
-    };
-  }, [allTasks, effectiveDates, today, weatherRiskByTask]);
+  const scheduleStats = useMemo(
+    () => computeScheduleStats({
+      allTasks,
+      effectiveDates,
+      today,
+      weatherRiskByTask,
+      isOverdue,
+      effStart,
+      effEnd,
+    }),
+    [allTasks, effectiveDates, today, weatherRiskByTask],
+  );
 
   const {
     totalTasks,
@@ -517,76 +495,38 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     }
   };
 
-  const successorCountById = useMemo(() => {
-    const out = {};
-    allTasks.forEach((task) => {
-      parseDeps(task.dependencies).forEach((predId) => {
-        out[predId] = (out[predId] || 0) + 1;
-      });
-    });
-    return out;
-  }, [allTasks]);
+  const successorCountById = useMemo(() => computeSuccessorCountById(allTasks), [allTasks]);
   const logicGapTasks = allTasks.filter(t => hasLogicGapTask(t, successorCountById)).length;
 
   const normalizedSearch = searchText.trim().toLowerCase();
   const hasActiveRowFilter = normalizedSearch.length > 0 || quickFilter !== "all";
 
-  const visibleTaskIds = useMemo(() => {
-    if (!hasActiveRowFilter) return null;
-
-    const allById = new Map(allTasks.map((task) => [task.id, task]));
-    const phaseById = new Map();
-    grouped.forEach(({ phase, tasks }) => {
-      tasks.forEach((task) => phaseById.set(task.id, phase));
-    });
-
-    const directMatches = new Set();
-    allTasks.forEach((task) => {
-      const phase = phaseById.get(task.id);
-      const matchesText = !normalizedSearch || taskSearchHaystack(task, phase?.label || phase?.key || "").includes(normalizedSearch);
-      const matchesQuick = (() => {
-        if (quickFilter !== "all" && isSummaryScheduleTask(task)) return false;
-        if (quickFilter === "all") return true;
-        if (quickFilter === "lookahead") return isLookaheadTask(task, today, effStart, effEnd);
-        if (quickFilter === "critical") return isCriticalTask(task);
-        if (quickFilter === "delayed") return String(task.status || "").toLowerCase().includes("delay");
-        if (quickFilter === "stalled") return isStalledTask(task, today, (item) => parseDateUTC(effStart(item)));
-        if (quickFilter === "overdue") return isOverdue(task);
-        if (quickFilter === "tbd") return !effStart(task) || !effEnd(task);
-        if (quickFilter === "logic") return hasLogicGapTask(task, successorCountById);
-        if (quickFilter === "unassigned") return isUnassignedTask(task);
-        if (quickFilter === "shifted") return Boolean(effectiveDates[task.id]?.shifted);
-        if (quickFilter === "deps") return parseDeps(task.dependencies).length > 0 || successorCountById[task.id] > 0;
-        if (quickFilter === "unlinked") return parseDeps(task.dependencies).length === 0 && !successorCountById[task.id] && !task.parent_task_id && !task._hasChildren;
-        if (quickFilter === "milestones") return isMilestoneTask(task);
-        if (quickFilter === "weather") return Boolean(weatherRiskByTask[task.id]);
-        return true;
-      })();
-      if (matchesText && matchesQuick) directMatches.add(task.id);
-    });
-
-    const withAncestors = new Set(directMatches);
-    directMatches.forEach((taskId) => {
-      let parentId = allById.get(taskId)?.parent_task_id;
-      const guard = new Set();
-      while (parentId && !guard.has(parentId)) {
-        guard.add(parentId);
-        withAncestors.add(parentId);
-        parentId = allById.get(parentId)?.parent_task_id;
-      }
-    });
-
-    return withAncestors;
-  }, [
-    allTasks,
-    grouped,
-    normalizedSearch,
-    quickFilter,
-    hasActiveRowFilter,
-    effectiveDates,
-    successorCountById,
-    weatherRiskByTask,
-  ]);
+  const visibleTaskIds = useMemo(
+    () => computeVisibleTaskIds({
+      allTasks,
+      grouped,
+      normalizedSearch,
+      quickFilter,
+      hasActiveRowFilter,
+      effectiveDates,
+      successorCountById,
+      weatherRiskByTask,
+      today,
+      isOverdue,
+      effStart,
+      effEnd,
+    }),
+    [
+      allTasks,
+      grouped,
+      normalizedSearch,
+      quickFilter,
+      hasActiveRowFilter,
+      effectiveDates,
+      successorCountById,
+      weatherRiskByTask,
+    ],
+  );
 
   const visibleGrouped = useMemo(() => {
     if (!visibleTaskIds) return grouped;
@@ -684,77 +624,22 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     return list;
   }, [visibleGrouped, collapsed, collapsedTasks, showDeliveries, deliveries, collapsedDeliveries]);
 
-  // Build task ID → row index + Y position map for dependency arrows
-  const taskPositions = useMemo(() => {
-    const posMap = {};
-    let y = 0;
-    rows.forEach((row) => {
-      if (row.type === "summary" || row.type === "delivery-summary") {
-        y += SUM_H;
-      } else if (row.type === "task") {
-        posMap[row.task.id] = { y: y + ROW_H / 2 }; // center of the row
-        y += ROW_H;
-      } else {
-        y += ROW_H; // delivery rows
-      }
-    });
-    return posMap;
-  }, [rows]);
+  const taskPositions = useMemo(() => buildTaskPositions(rows, ROW_H, SUM_H), [rows]);
 
-  // Build dependency arrows
-  const depArrows = useMemo(() => {
-    const arrows = [];
-    rows.forEach((row) => {
-      if (row.type !== "task") return;
-      const task = row.task;
-      const deps = parseDeps(task.dependencies);
-      if (!deps.length) return;
-      const toPos = taskPositions[task.id];
-      const taskEffStart = effStart(task);
-      if (!toPos || !taskEffStart) return;
-      const toX = px(taskEffStart);
-      deps.forEach((predId) => {
-        const predPos = taskPositions[predId];
-        if (!predPos) return; // predecessor not visible (collapsed or filtered)
-        const predTask = taskById.get(predId);
-        const predEnd = predTask ? effEnd(predTask) : null;
-        if (!predTask || !predEnd) return;
-        const fromX = px(predEnd);
-        arrows.push({
-          key: `${predId}-${task.id}`,
-          fromX, fromY: predPos.y,
-          toX, toY: toPos.y,
-        });
-      });
-    });
-    return arrows;
-  }, [rows, taskPositions, taskById]);
+  const depArrows = useMemo(
+    () => buildDepArrows({ rows, taskPositions, taskById, effStart, effEnd, px }),
+    [rows, taskPositions, taskById],
+  );
 
-  const rowLayout = useMemo(() => {
-    let top = 0;
-    const items = rows.map((row, index) => {
-      const height = (row.type === "summary" || row.type === "delivery-summary") ? SUM_H : ROW_H;
-      const item = { row, index, top, height };
-      top += height;
-      return item;
-    });
-    return { items, totalHeight: top };
-  }, [rows]);
+  const rowLayout = useMemo(() => buildRowLayout(rows, ROW_H, SUM_H), [rows]);
 
   const totalHeight = rowLayout.totalHeight;
-  const virtualRows = useMemo(() => {
-    const overscan = 320;
-    const start = Math.max(0, bodyViewport.scrollTop - overscan);
-    const end = bodyViewport.scrollTop + bodyViewport.height + overscan;
-    const startIndex = findFirstRowAtOrAfter(rowLayout.items, start);
-    const endIndex = findFirstRowAfter(rowLayout.items, end);
-    return rowLayout.items.slice(startIndex, endIndex);
-  }, [rowLayout, bodyViewport]);
+  const virtualRows = useMemo(
+    () => sliceVirtualRows(rowLayout, bodyViewport.scrollTop, bodyViewport.height),
+    [rowLayout, bodyViewport],
+  );
 
-  const virtualTopPadding = virtualRows[0]?.top || 0;
-  const virtualBottomPadding = virtualRows.length
-    ? Math.max(0, totalHeight - (virtualRows[virtualRows.length - 1].top + virtualRows[virtualRows.length - 1].height))
-    : 0;
+  const { virtualTopPadding, virtualBottomPadding } = computeVirtualPadding(virtualRows, totalHeight);
 
   useEffect(() => {
     if (!focusedTaskId) return;
@@ -773,14 +658,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     });
   }, [focusedTaskId, rowLayout, externalFocus?.requestedAt]);
 
-  const visibleDepArrows = useMemo(() => {
-    const overscan = 320;
-    const start = Math.max(0, bodyViewport.scrollTop - overscan);
-    const end = bodyViewport.scrollTop + bodyViewport.height + overscan;
-    return depArrows.filter(({ fromY, toY }) => (
-      (fromY >= start && fromY <= end) || (toY >= start && toY <= end)
-    ));
-  }, [depArrows, bodyViewport]);
+  const visibleDepArrows = useMemo(
+    () => filterVisibleDepArrows(depArrows, bodyViewport.scrollTop, bodyViewport.height),
+    [depArrows, bodyViewport],
+  );
 
   return (
     <div ref={containerRef} data-gantt-export-root style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--sbd-gantt-bg)", overflow: "hidden" }}>

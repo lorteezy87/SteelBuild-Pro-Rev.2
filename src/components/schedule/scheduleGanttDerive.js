@@ -1,0 +1,228 @@
+// Pure derive helpers extracted from ScheduleGantt.jsx — row layout, dependency
+// arrows, viewport windowing, and schedule stats. No React imports; safe to
+// unit-test in isolation. Bodies are byte-identical to the originals.
+import { parseDateUTC } from "./scheduleDateUtils";
+import { displayPct, isMilestoneTask } from "./scheduleTaskUtils";
+import { parseDeps } from "./scheduleDependencies";
+import {
+  findFirstRowAtOrAfter,
+  findFirstRowAfter,
+  isActionableScheduleTask,
+  isCriticalTask,
+  isLookaheadTask,
+  isStalledTask,
+  isUnassignedTask,
+  hasLogicGapTask,
+  isSummaryScheduleTask,
+  taskSearchHaystack,
+} from "./scheduleGanttHelpers";
+
+export const GANTT_ROW_H = 40;
+export const GANTT_SUM_H = 36;
+export const GANTT_VIRTUAL_OVERSCAN = 320;
+
+/** One pass over tasks for toolbar stats + quick-filter counts. */
+export function computeScheduleStats({
+  allTasks,
+  effectiveDates,
+  today,
+  weatherRiskByTask,
+  isOverdue,
+  effStart,
+  effEnd,
+}) {
+  const stats = {
+    totalTasks: allTasks.length,
+    completeTasks: 0,
+    overdueTasks: 0,
+    inProgressTasks: 0,
+    unscheduledTasks: 0,
+    lookaheadTasks: 0,
+    stalledTasks: 0,
+    criticalTasks: 0,
+    milestoneTasks: 0,
+    shiftedTasks: 0,
+    totalShiftDays: 0,
+    unassignedTasks: 0,
+    weatherRiskTasks: 0,
+    dependencyLinks: 0,
+    progressTotal: 0,
+    progressCount: 0,
+  };
+  for (const task of allTasks) {
+    const actionable = isActionableScheduleTask(task);
+    if (task.status === "Complete") stats.completeTasks += 1;
+    if (task.status === "In Progress") stats.inProgressTasks += 1;
+    if (actionable && isOverdue(task)) stats.overdueTasks += 1;
+    if (actionable && (!effStart(task) || !effEnd(task))) stats.unscheduledTasks += 1;
+    if (actionable && isLookaheadTask(task, today, effStart, effEnd)) stats.lookaheadTasks += 1;
+    if (actionable && isStalledTask(task, today, (item) => parseDateUTC(effStart(item)))) stats.stalledTasks += 1;
+    if (actionable && isCriticalTask(task)) stats.criticalTasks += 1;
+    if (actionable && isMilestoneTask(task)) stats.milestoneTasks += 1;
+    if (actionable && effectiveDates[task.id]?.shifted) stats.shiftedTasks += 1;
+    if (actionable) stats.totalShiftDays += Number(effectiveDates[task.id]?.shiftedBy) || 0;
+    if (actionable && isUnassignedTask(task)) stats.unassignedTasks += 1;
+    if (actionable && weatherRiskByTask[task.id]) stats.weatherRiskTasks += 1;
+    if (actionable) stats.dependencyLinks += parseDeps(task.dependencies).length;
+    if (actionable) {
+      stats.progressTotal += displayPct(task);
+      stats.progressCount += 1;
+    }
+  }
+  return {
+    ...stats,
+    avgProgress: stats.progressCount > 0 ? Math.round(stats.progressTotal / stats.progressCount) : 0,
+  };
+}
+
+export function computeSuccessorCountById(allTasks) {
+  const out = {};
+  allTasks.forEach((task) => {
+    parseDeps(task.dependencies).forEach((predId) => {
+      out[predId] = (out[predId] || 0) + 1;
+    });
+  });
+  return out;
+}
+
+export function computeVisibleTaskIds({
+  allTasks,
+  grouped,
+  normalizedSearch,
+  quickFilter,
+  hasActiveRowFilter,
+  effectiveDates,
+  successorCountById,
+  weatherRiskByTask,
+  today,
+  isOverdue,
+  effStart,
+  effEnd,
+}) {
+  if (!hasActiveRowFilter) return null;
+
+  const allById = new Map(allTasks.map((task) => [task.id, task]));
+  const phaseById = new Map();
+  grouped.forEach(({ phase, tasks }) => {
+    tasks.forEach((task) => phaseById.set(task.id, phase));
+  });
+
+  const directMatches = new Set();
+  allTasks.forEach((task) => {
+    const phase = phaseById.get(task.id);
+    const matchesText = !normalizedSearch || taskSearchHaystack(task, phase?.label || phase?.key || "").includes(normalizedSearch);
+    const matchesQuick = (() => {
+      if (quickFilter !== "all" && isSummaryScheduleTask(task)) return false;
+      if (quickFilter === "all") return true;
+      if (quickFilter === "lookahead") return isLookaheadTask(task, today, effStart, effEnd);
+      if (quickFilter === "critical") return isCriticalTask(task);
+      if (quickFilter === "delayed") return String(task.status || "").toLowerCase().includes("delay");
+      if (quickFilter === "stalled") return isStalledTask(task, today, (item) => parseDateUTC(effStart(item)));
+      if (quickFilter === "overdue") return isOverdue(task);
+      if (quickFilter === "tbd") return !effStart(task) || !effEnd(task);
+      if (quickFilter === "logic") return hasLogicGapTask(task, successorCountById);
+      if (quickFilter === "unassigned") return isUnassignedTask(task);
+      if (quickFilter === "shifted") return Boolean(effectiveDates[task.id]?.shifted);
+      if (quickFilter === "deps") return parseDeps(task.dependencies).length > 0 || successorCountById[task.id] > 0;
+      if (quickFilter === "unlinked") return parseDeps(task.dependencies).length === 0 && !successorCountById[task.id] && !task.parent_task_id && !task._hasChildren;
+      if (quickFilter === "milestones") return isMilestoneTask(task);
+      if (quickFilter === "weather") return Boolean(weatherRiskByTask[task.id]);
+      return true;
+    })();
+    if (matchesText && matchesQuick) directMatches.add(task.id);
+  });
+
+  const withAncestors = new Set(directMatches);
+  directMatches.forEach((taskId) => {
+    let parentId = allById.get(taskId)?.parent_task_id;
+    const guard = new Set();
+    while (parentId && !guard.has(parentId)) {
+      guard.add(parentId);
+      withAncestors.add(parentId);
+      parentId = allById.get(parentId)?.parent_task_id;
+    }
+  });
+
+  return withAncestors;
+}
+
+export function buildTaskPositions(rows, rowH = GANTT_ROW_H, sumH = GANTT_SUM_H) {
+  const posMap = {};
+  let y = 0;
+  rows.forEach((row) => {
+    if (row.type === "summary" || row.type === "delivery-summary") {
+      y += sumH;
+    } else if (row.type === "task") {
+      posMap[row.task.id] = { y: y + rowH / 2 };
+      y += rowH;
+    } else {
+      y += rowH;
+    }
+  });
+  return posMap;
+}
+
+export function buildDepArrows({ rows, taskPositions, taskById, effStart, effEnd, px }) {
+  const arrows = [];
+  rows.forEach((row) => {
+    if (row.type !== "task") return;
+    const task = row.task;
+    const deps = parseDeps(task.dependencies);
+    if (!deps.length) return;
+    const toPos = taskPositions[task.id];
+    const taskEffStart = effStart(task);
+    if (!toPos || !taskEffStart) return;
+    const toX = px(taskEffStart);
+    deps.forEach((predId) => {
+      const predPos = taskPositions[predId];
+      if (!predPos) return;
+      const predTask = taskById.get(predId);
+      const predEnd = predTask ? effEnd(predTask) : null;
+      if (!predTask || !predEnd) return;
+      const fromX = px(predEnd);
+      arrows.push({
+        key: `${predId}-${task.id}`,
+        fromX,
+        fromY: predPos.y,
+        toX,
+        toY: toPos.y,
+      });
+    });
+  });
+  return arrows;
+}
+
+export function buildRowLayout(rows, rowH = GANTT_ROW_H, sumH = GANTT_SUM_H) {
+  let top = 0;
+  const items = rows.map((row, index) => {
+    const height = (row.type === "summary" || row.type === "delivery-summary") ? sumH : rowH;
+    const item = { row, index, top, height };
+    top += height;
+    return item;
+  });
+  return { items, totalHeight: top };
+}
+
+export function sliceVirtualRows(rowLayout, scrollTop, height, overscan = GANTT_VIRTUAL_OVERSCAN) {
+  const start = Math.max(0, scrollTop - overscan);
+  const end = scrollTop + height + overscan;
+  const startIndex = findFirstRowAtOrAfter(rowLayout.items, start);
+  const endIndex = findFirstRowAfter(rowLayout.items, end);
+  return rowLayout.items.slice(startIndex, endIndex);
+}
+
+export function computeVirtualPadding(virtualRows, totalHeight) {
+  const virtualTopPadding = virtualRows[0]?.top || 0;
+  const virtualBottomPadding = virtualRows.length
+    ? Math.max(0, totalHeight - (virtualRows[virtualRows.length - 1].top + virtualRows[virtualRows.length - 1].height))
+    : 0;
+  return { virtualTopPadding, virtualBottomPadding };
+}
+
+export function filterVisibleDepArrows(depArrows, scrollTop, height, overscan = GANTT_VIRTUAL_OVERSCAN) {
+  const start = Math.max(0, scrollTop - overscan);
+  const end = scrollTop + height + overscan;
+  return depArrows.filter(({ fromY, toY }) => (
+    (fromY >= start && fromY <= end) || (toY >= start && toY <= end)
+  ));
+}

@@ -399,10 +399,9 @@ export default function PortfolioOverview() {
               />
             ))}
             <div style={{
-              ...body, fontSize: 9, color: "var(--text-muted)",
+              ...mono, fontSize: 9, color: "var(--text-muted)",
               letterSpacing: "0.08em", textTransform: "uppercase",
               marginTop: 8, display: "flex", gap: 14, justifyContent: "flex-end",
-              fontFamily: "var(--font-mono)",
             }}>
               <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <span style={{ width: 14, height: 4, background: "var(--text-muted)", opacity: 0.7, borderRadius: 2 }} />

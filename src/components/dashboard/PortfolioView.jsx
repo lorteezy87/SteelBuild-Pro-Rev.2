@@ -12,7 +12,7 @@ import {
   computeDataIssues, computeFinancials, computeProductionData,
   computeProjectMap, computeProjectMetrics, enrichProjectMetrics, computeBudgetChartData,
   computePortfolioKPIs, computePccData,
-  applyMetricsView, selectWatchlist,
+  applyMetricsView,
   computeTodayLabel,
 } from "./portfolioDerive";
 import { Button } from "@/components/design-system";
@@ -20,7 +20,8 @@ import { Card, HeaderBar } from "./portfolioPrimitives";
 import DeliveryRail from "./DeliveryRail";
 import CoExposurePanel from "./CoExposurePanel";
 import { useLiveHealthSnapshot } from "./useLiveHealthSnapshot";
-import ProjectHealthRow from "./portfolio/ProjectHealthRow";
+import PortfolioHeader from "./PortfolioHeader";
+import PortfolioProjectTable from "./PortfolioProjectTable";
 import PriorityColumn from "./portfolio/PriorityColumn";
 import WaitingOnColumn from "./portfolio/WaitingOnColumn";
 import RiskWatchColumn from "./portfolio/RiskWatchColumn";
@@ -136,182 +137,13 @@ export default function PortfolioView({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 92px)", background: "var(--bg-page)" }}>
-      {/* Brand Header */}
-      <div
-        style={{
-          background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 78%, #000 22%) 0%, color-mix(in srgb, var(--bg-surface) 94%, #000 6%) 100%)",
-          borderBottom: "1px solid var(--divider)",
-          padding: "22px 24px 20px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexShrink: 0,
-          boxShadow: "0 14px 34px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.04)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden>
-            <rect x="4" y="4" width="28" height="5" rx="1" fill="var(--accent)" />
-            <rect x="15" y="9" width="6" height="18" rx="0" fill="var(--accent)" />
-            <rect x="4" y="27" width="28" height="5" rx="1" fill="var(--accent)" />
-          </svg>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span
-              style={{
-                fontFamily: "Space Grotesk, var(--font-display)",
-                fontWeight: 800,
-                fontSize: 22,
-                letterSpacing: "-0.02em",
-                color: "var(--text-primary)",
-                textTransform: "uppercase",
-              }}
-            >
-              SteelBuild Pro
-            </span>
-            <span
-              style={{
-                fontFamily: "IBM Plex Mono, var(--font-mono)",
-                fontSize: 9,
-                color: "var(--text-muted)",
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-              }}
-            >
-              Structural Steel Construction Management — S&H Steel
-            </span>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              fontFamily: "IBM Plex Mono, var(--font-mono)",
-              fontSize: 10,
-              color: "var(--text-muted)",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            {today.replace(/,/g, " ·")}
-          </div>
-          <Button variant="primary" icon="plus" onClick={() => navigate("/Projects")}>
-            New Project
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Priority Watchlist — surfaces the top 3 projects in worst health,
-           each with a 1-line "what's wrong" narrative. Click-to-drill opens
-           that project's dashboard. When every project is On Track we show an
-           all-clear state so the slot doesn't collapse and feel like a bug.
-           Consumes enrichedMetrics, which already carries healthScore +
-           healthReasons, so zero extra computation. */}
-      {(() => {
-        const sorted = selectWatchlist(enrichedMetrics);
-        const hasRisks = sorted.length > 0;
-        return (
-          <div
-            style={{
-              background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 72%, #000 28%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)",
-              borderBottom: "1px solid var(--divider)",
-              padding: "14px 24px",
-              display: "flex",
-              alignItems: "stretch",
-              gap: 12,
-              flexShrink: 0,
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 160 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: hasRisks ? "var(--status-error)" : "var(--status-success)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                {hasRisks ? "Priority Watchlist" : "All Clear"}
-              </div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginTop: 2, lineHeight: 1.25 }}>
-                {hasRisks ? "Top projects needing your attention" : "No projects flagged this hour"}
-              </div>
-            </div>
-            <div style={{ flex: 1, display: "grid", gridTemplateColumns: `repeat(${Math.max(sorted.length, 1)}, minmax(0, 1fr))`, gap: 10 }}>
-              {hasRisks ? sorted.map((p) => {
-                const sev = p.effectiveHealth === "At Risk" ? "error" : p.effectiveHealth === "Watch" ? "warning" : "info";
-                const sevColor = sev === "error" ? "var(--status-error)" : sev === "warning" ? "var(--status-warning)" : "var(--status-info)";
-                const reasons = (p.healthReasons || []).slice(0, 2);
-                return (
-                  <div
-                    key={p.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Open ${p.name || p.project_name || "project"} dashboard — ${p.effectiveHealth}`}
-                    onClick={() => openProjectDashboard(p.id)}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openProjectDashboard(p.id); } }}
-                    className="sbd-card sbd-card-hover"
-                    style={{
-                      background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 76%, #000 24%) 0%, var(--bg-surface) 100%)",
-                      border: `1px solid var(--border-default)`,
-                      borderLeft: `3px solid ${sevColor}`,
-                      borderRadius: 14,
-                      padding: "10px 12px",
-                      cursor: "pointer",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 4,
-                      transition: "border-color 0.12s, transform 0.12s, box-shadow 0.12s",
-                      boxShadow: "0 10px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "var(--accent)";
-                      e.currentTarget.style.transform = "translateY(-1px)";
-                      e.currentTarget.style.boxShadow = "0 16px 30px rgba(0,0,0,0.24), 0 0 20px color-mix(in srgb, var(--accent) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.05)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border-default)";
-                      e.currentTarget.style.transform = "none";
-                      e.currentTarget.style.boxShadow = "0 10px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)";
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.06em" }}>
-                        {p.project_number || "—"}
-                      </span>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                        {p.name || p.project_name || "—"}
-                      </span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 3, background: `color-mix(in srgb, ${sevColor} 14%, transparent)`, color: sevColor, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
-                        {p.effectiveHealth}
-                      </span>
-                    </div>
-                    <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4, overflow: "hidden" }}>
-                      {reasons.length > 0 ? reasons.join(" · ") : "No specific signals available"}
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
-                        Health {p.healthScore ?? "—"}/100
-                      </span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.06em" }}>
-                        Open →
-                      </span>
-                    </div>
-                  </div>
-                );
-              }) : (
-                <div
-                  style={{
-                    background: "var(--success-muted)",
-                    border: "1px solid var(--success-border)",
-                    borderRadius: 4,
-                    padding: "10px 14px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--status-success)" }}>✓</span>
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>
-                    Every project is tracking on schedule. Keep an eye on pending COs and long-lead deliveries to stay ahead.
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
+      <PortfolioHeader
+        today={today}
+        navigate={navigate}
+        projects={projects}
+        enrichedMetrics={enrichedMetrics}
+        openProjectDashboard={openProjectDashboard}
+      />
 
       {/* Status Bar — all tiles are clickable filters with sparklines */}
       <KPIStatusBar portfolioKPIs={portfolioKPIs} projects={projects} kpiFilter={kpiFilter} setKpiFilter={setKpiFilter} sparkFor={sparkFor} />
@@ -422,144 +254,16 @@ export default function PortfolioView({
 
         {/* Project Health Table */}
         <ErrorBoundary label="Project Health Overview">
-        <Card style={{ gridColumn: "span 12" }}>
-          <HeaderBar
-            title="Project Health Overview"
-            count={displayMetrics.length}
-            right={
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {[
-                  { key: "health", label: "Default" },
-                  { key: "rfi", label: "Most RFIs" },
-                  { key: "deadline", label: "Soonest Deadline" },
-                ].map((opt) => (
-                  <Button
-                    key={opt.key}
-                    onClick={() => setSortMode(opt.key)}
-                    variant={sortMode === opt.key ? "primary" : "secondary"}
-                    size="sm"
-                  >
-                    {opt.label}
-                  </Button>
-                ))}
-                {kpiFilter && (
-                  <Button onClick={() => setKpiFilter(null)} variant="danger" size="sm">
-                    Clear Filter ✕
-                  </Button>
-                )}
-                <Button onClick={() => navigate("/Projects")} variant="secondary" size="sm">
-                  Manage Projects →
-                </Button>
-              </div>
-            }
+          <PortfolioProjectTable
+            displayMetrics={displayMetrics}
+            sortMode={sortMode}
+            setSortMode={setSortMode}
+            kpiFilter={kpiFilter}
+            setKpiFilter={setKpiFilter}
+            navigate={navigate}
+            projectScheduleSummaries={projectScheduleSummaries}
+            openProjectDashboard={openProjectDashboard}
           />
-          {/* Project Health Overview scroll wrapper
-           *
-           * Keeps horizontal scrolling for the 14-column table on narrow
-           * screens. The vertical bound is now viewport-proportional
-           * (`min(980px, 78vh)`) so a 15-project portfolio shows roughly
-           * 12-14 rows at a glance on a 1080p monitor — up from the old
-           * 520px hard cap that only surfaced 6-7 rows. The outer grid
-           * scroll still catches anything past the card height, so no
-           * data is hidden, it just flows past the fold. */}
-          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "min(980px, 78vh)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 74%, #000 26%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)" }}>
-                  {["#", "Project", "Phase", "Timeline", "Health", "Budget", "Actual", "Variance", "Proj. Margin", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage", ""].map((h, idx) => (
-                    <th
-                      key={idx}
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 9,
-                        color: "var(--text-muted)",
-                        letterSpacing: "0.14em",
-                        textTransform: "uppercase",
-                        padding: "10px 8px",
-                        textAlign: idx <= 2 ? "left" : "center",
-                        whiteSpace: "nowrap",
-                        position: "sticky",
-                        top: 0,
-                        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 74%, #000 26%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)",
-                        zIndex: 2,
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {displayMetrics.map((p, i) => (
-                  <ProjectHealthRow
-                    key={p.id}
-                    p={p}
-                    i={i}
-                    projectScheduleSummaries={projectScheduleSummaries}
-                    openProjectDashboard={openProjectDashboard}
-                    navigate={navigate}
-                  />
-                ))}
-                {displayMetrics.length === 0 && (
-                  <tr>
-                    <td colSpan={15} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexDirection: "column" }}>
-                        {kpiFilter ? (
-                          <>
-                            No projects match the active filter.
-                            <button
-                              onClick={() => setKpiFilter(null)}
-                              style={{
-                                background: "var(--bg-surface)",
-                                color: "var(--accent)",
-                                borderRadius: "var(--radius-btn)",
-                                border: "1px solid var(--accent-border)",
-                                fontFamily: "var(--font-mono)",
-                                fontSize: 10,
-                                fontWeight: 700,
-                                padding: "6px 12px",
-                                letterSpacing: "0.08em",
-                                cursor: "pointer",
-                              }}
-                            >
-                              Clear Filter
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <svg width="48" height="48" viewBox="0 0 36 36" aria-hidden style={{ opacity: 0.15 }}>
-                              <rect x="4" y="4" width="28" height="5" rx="1" fill="var(--text-muted)" />
-                              <rect x="15" y="9" width="6" height="18" rx="0" fill="var(--text-muted)" />
-                              <rect x="4" y="27" width="28" height="5" rx="1" fill="var(--text-muted)" />
-                            </svg>
-                            NO ACTIVE PROJECTS — Add a project to begin tracking
-                            <button
-                              onClick={() => navigate("/Projects")}
-                              style={{
-                                background: "var(--accent)",
-                                color: "var(--accent-text)",
-                                borderRadius: "var(--radius-btn)",
-                                border: "1px solid var(--accent-border)",
-                                fontFamily: "var(--font-mono)",
-                                fontSize: 10,
-                                fontWeight: 700,
-                                padding: "6px 12px",
-                                letterSpacing: "0.08em",
-                                cursor: "pointer",
-                              }}
-                            >
-                              + New Project
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
         </ErrorBoundary>
         {/* ═══ FINANCIAL CONTROL LAYER ═══ */}
         <ErrorBoundary label="Financial Control">
