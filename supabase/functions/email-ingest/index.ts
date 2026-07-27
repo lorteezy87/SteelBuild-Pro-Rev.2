@@ -32,6 +32,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { reportError } from "../_shared/reportError.ts";
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_TOTAL_BYTES,
@@ -902,7 +903,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return await handle(req);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[email-ingest] Unhandled: ${message}`);
+    await reportError(err, "email-ingest", { unhandled: true });
     return json({ error: `Internal error: ${message}` }, 500);
   }
 });

@@ -52,6 +52,11 @@ import {
   taskSearchHaystack, pluralize, isStalledTask, isSummaryScheduleTask,
   isActionableScheduleTask, taskOwner, isUnassignedTask, hasLogicGapTask, isLookaheadTask,
 } from "./scheduleGanttHelpers";
+import {
+  WEATHER_SENSITIVE_PHASES as WEATHER_SENSITIVE_PHASES_SET,
+  buildWeatherRiskByTask,
+  computeScheduleStats,
+} from "./scheduleGanttStats";
 import { GanttStatsBar, GanttQuickFilters, GanttMetricCards, GanttLegend } from "./ScheduleGanttToolbar";
 import { useColumnResize } from "./useColumnResize";
 import { useGanttLayout } from "./useGanttLayout";
@@ -303,20 +308,14 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   // Indoor work doesn't get flagged — a rainy day in Phoenix isn't a
   // problem for Detailing. Memoised keyed by (weatherRisk, allTasks)
   // so the lookup per row is O(1).
-  const WEATHER_SENSITIVE_PHASES = useMemo(() => new Set(["Installation", "Delivery", "Erection", "Erection/Installation"]), []);
-  const weatherRiskByTask = useMemo(() => {
-    const out = {};
-    if (!weatherRisk?.risks?.length || !allTasks?.length) return out;
-    for (const t of allTasks) {
-      if (!WEATHER_SENSITIVE_PHASES.has(t.phase)) continue;
-      const hits = risksForTaskWindow(weatherRisk.risks, effStart(t), effEnd(t));
-      if (hits.length > 0) out[t.id] = hits;
-    }
-    return out;
+  const WEATHER_SENSITIVE_PHASES = WEATHER_SENSITIVE_PHASES_SET;
+  const weatherRiskByTask = useMemo(
+    () => buildWeatherRiskByTask(weatherRisk, allTasks, effStart, effEnd, risksForTaskWindow, WEATHER_SENSITIVE_PHASES),
     // effStart/effEnd depend on effectiveDates; adding it to deps keeps
     // the memo honest if dependencies shift a task into bad weather.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weatherRisk, allTasks, effectiveDates, WEATHER_SENSITIVE_PHASES]);
+    [weatherRisk, allTasks, effectiveDates, WEATHER_SENSITIVE_PHASES],
+  );
 
   // Overdue uses the *effective* finish so a task whose predecessor slipped
   // is judged against where the bar actually sits in the gantt — not the
@@ -379,50 +378,19 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
 
   // Stats: one pass over the visible schedule model. This keeps filter/search
   // changes responsive on large imported schedules.
-  const scheduleStats = useMemo(() => {
-    const stats = {
-      totalTasks: allTasks.length,
-      completeTasks: 0,
-      overdueTasks: 0,
-      inProgressTasks: 0,
-      unscheduledTasks: 0,
-      lookaheadTasks: 0,
-      stalledTasks: 0,
-      criticalTasks: 0,
-      milestoneTasks: 0,
-      shiftedTasks: 0,
-      totalShiftDays: 0,
-      unassignedTasks: 0,
-      weatherRiskTasks: 0,
-      dependencyLinks: 0,
-      progressTotal: 0,
-      progressCount: 0,
-    };
-    for (const task of allTasks) {
-      const actionable = isActionableScheduleTask(task);
-      if (task.status === "Complete") stats.completeTasks += 1;
-      if (task.status === "In Progress") stats.inProgressTasks += 1;
-      if (actionable && isOverdue(task)) stats.overdueTasks += 1;
-      if (actionable && (!effStart(task) || !effEnd(task))) stats.unscheduledTasks += 1;
-      if (actionable && isLookaheadTask(task, today, effStart, effEnd)) stats.lookaheadTasks += 1;
-      if (actionable && isStalledTask(task, today, (item) => parseDateUTC(effStart(item)))) stats.stalledTasks += 1;
-      if (actionable && isCriticalTask(task)) stats.criticalTasks += 1;
-      if (actionable && isMilestoneTask(task)) stats.milestoneTasks += 1;
-      if (actionable && effectiveDates[task.id]?.shifted) stats.shiftedTasks += 1;
-      if (actionable) stats.totalShiftDays += Number(effectiveDates[task.id]?.shiftedBy) || 0;
-      if (actionable && isUnassignedTask(task)) stats.unassignedTasks += 1;
-      if (actionable && weatherRiskByTask[task.id]) stats.weatherRiskTasks += 1;
-      if (actionable) stats.dependencyLinks += parseDeps(task.dependencies).length;
-      if (actionable) {
-        stats.progressTotal += displayPct(task);
-        stats.progressCount += 1;
-      }
-    }
-    return {
-      ...stats,
-      avgProgress: stats.progressCount > 0 ? Math.round(stats.progressTotal / stats.progressCount) : 0,
-    };
-  }, [allTasks, effectiveDates, today, weatherRiskByTask]);
+  const scheduleStats = useMemo(
+    () =>
+      computeScheduleStats(allTasks, {
+        today,
+        effectiveDates,
+        weatherRiskByTask,
+        effStart,
+        effEnd,
+        isOverdue,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allTasks, effectiveDates, today, weatherRiskByTask],
+  );
 
   const {
     totalTasks,

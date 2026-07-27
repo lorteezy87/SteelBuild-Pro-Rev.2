@@ -20,6 +20,7 @@
 import Stripe from "https://esm.sh/stripe@17?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
+import { reportError } from "../_shared/reportError.ts";
 import { type BillingConfig, checkoutOrgUpdate, subscriptionOrgUpdate } from "./webhookLogic.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -122,7 +123,7 @@ Deno.serve(async (req) => {
     // an opaque CORS failure rather than a readable error. NOTE: the webhook path
     // (Stripe, no browser) handles its own errors above and returns before this;
     // any escape here is an app-action or config failure where CORS matters.
-    console.error("stripe-billing unhandled error", e);
+    await reportError(e, "stripe-billing", { unhandled: true });
     const message = e instanceof Error ? e.message : String(e);
     return json({ error: `Internal error: ${message}` }, 500, req);
   }
@@ -165,7 +166,7 @@ async function handleRequest(req: Request): Promise<Response> {
     try {
       await handleEvent(stripe, event, cfg);
     } catch (e) {
-      console.error("webhook handler error", e);
+      await reportError(e, "stripe-billing", { path: "/webhook", eventType: event.type });
       // NOT marked processed → Stripe's retry re-runs handleEvent. That's the fix.
       return new Response("handler error", { status: 500 });
     }

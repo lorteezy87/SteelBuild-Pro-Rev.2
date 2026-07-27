@@ -50,6 +50,7 @@ Notes:
 | 2026-07-09T20:00:00Z | measurement-ship1 | Drawing-viewer measurement correctness | src/components/drawings/viewer/{AnnotationLayer.jsx,detectScale.js,measureLabel.js,useMarkup.js} · src/pages/drawingViewer/{useAutoScaleOnLoad.js,ViewerToolbar.jsx,usePdfLoader.js} · src/pages/DrawingViewer.jsx · src/utils/feetInches.js · supabase/migrations/** | Fix `drawing_markups` CHECK (7 of 8 markup kinds rejected → table holds 0 rows), per-page scale detection + explicit ambiguous state, canonical ft-in 1/16" formatter, save-failure toast, badge+detection outside canvas mode. Plan: docs/superpowers/plans/2026-07-09-drawing-viewer-measurement-ship1.md |
 
 ## Recently released
+- 2026-07-27 · cursor-eng-quality-tier3-0569 · Eng quality Tier 3: MutationCache, edge reportError, org/billing types patch, ScheduleGantt/TaskDetailDrawer/Portfolio/SubmittalDetail extracts, schedule helpers TS conversion; claim released after PR open.
 - 2026-07-27 · cursor-dual-theme-dark-0b3b · Dual-theme dark completion Phase 4 closed; claim released after docs/status/owner-lock cleanup.
 - 2026-07-27 · opus-command-ui-lock · Retired historical light-only `command_ui` owner lock. Command Control Centers now remain on `--cmd-*` under `[data-skin="command"]`; dark is maintained through token remap, not `.sbd-*` wrappers or `LayoutRoute` light forcing.
 - 2026-07-26 · cursor-ap-batch-deploy-d3a1 · Merged #139–#149 action-plan hygiene batch + production deploy.

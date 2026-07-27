@@ -38,6 +38,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { reportError } from "../_shared/reportError.ts";
 
 // ── Pure export shaping (mirror of src/services/projectExportService.ts) ──────
 
@@ -477,7 +478,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return await handle(req);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[project-export] Unhandled: ${message}`);
+    await reportError(err, "project-export", { unhandled: true });
     return errorResponse(500, `Internal error: ${message}`, req);
   }
 });

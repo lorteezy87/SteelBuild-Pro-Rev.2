@@ -1,4 +1,4 @@
-import { QueryCache, QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import * as Sentry from '@sentry/react';
 import { toast } from 'sonner';
 import { normalizeThrownQueryError } from '@/lib/postgrestErrors';
@@ -42,8 +42,26 @@ const queryCache = new QueryCache({
 	},
 });
 
+// ── Global mutation error surface ─────────────────────────────────────────────
+// Mutations almost always define a local `onError` toast. Always report to
+// Sentry; only toast globally when the call site did NOT handle the failure
+// (avoids double toasts on the happy path of existing mutation UX).
+const mutationCache = new MutationCache({
+	onError: (error, _variables, _context, mutation) => {
+		const normalized = normalizeThrownQueryError(error);
+		Sentry.captureException(normalized, {
+			tags: { source: 'react-query-mutation' },
+			extra: { mutationKey: mutation.options.mutationKey },
+		});
+		if (typeof mutation.options.onError === 'function') return;
+		if (mutation.meta?.suppressGlobalErrorToast) return;
+		toast.error('Something went wrong. Please try again.');
+	},
+});
+
 export const queryClientInstance = new QueryClient({
 	queryCache,
+	mutationCache,
 	defaultOptions: {
 		queries: {
 			refetchOnWindowFocus: false,

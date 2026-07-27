@@ -54,19 +54,16 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { computeCostCodeTotals } from "@/services/costRollup";
 import {
   Activity, AlertTriangle, BarChart3, Building2, CalendarDays,
   CircleDot, DollarSign, Layers, ShieldAlert, Sparkles, TrendingUp,
 } from "lucide-react";
 
 import {
-  isRfiOpen,
-  isCoPending,
   isActionItemOpen,
 } from "@/lib/entityPredicates";
 import { mono, body } from "./constants";
-import { computeHealth, exportReportCSV } from "./utils";
+import { exportReportCSV } from "./utils";
 import { formatCurrencyShort } from "@/components/shared/formatters";
 import { BarChartSVG, DonutChartSVG } from "./charts";
 import { severityColor } from "./risks/severity";
@@ -75,261 +72,45 @@ import ProjectStatusMatrix from "./ProjectStatusMatrix";
 import ReportShell from "./ReportShell";
 import { ToggleGroup } from "./ReportFilters";
 import SectionCard from "@/pages/dashboard/sections/SectionCard";
-
-/* ── one shared "Tile" component shaped like the project dashboard's ── */
-function Tile({ icon: Icon, label, value, sub, accent, active, onClick, badge }) {
-  const interactive = typeof onClick === "function";
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background: "var(--bg-surface)",
-        border: `1px solid ${active ? accent : "var(--border-default)"}`,
-        borderRadius: 10,
-        padding: "14px 16px",
-        cursor: interactive ? "pointer" : "default",
-        transition: "border-color 0.12s, transform 0.12s",
-        position: "relative",
-        outline: active ? `1px solid ${accent}` : "none",
-      }}
-      onMouseEnter={(e) => {
-        if (interactive) e.currentTarget.style.borderColor = accent;
-      }}
-      onMouseLeave={(e) => {
-        if (interactive && !active) e.currentTarget.style.borderColor = "var(--border-default)";
-      }}
-    >
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 8, gap: 8,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {Icon && (
-            <div style={{
-              width: 24, height: 24, borderRadius: 6,
-              background: accent + "1A",
-              color: accent,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              <Icon size={13} />
-            </div>
-          )}
-          <div style={{
-            ...mono, fontSize: 9, fontWeight: 700,
-            letterSpacing: "0.10em", textTransform: "uppercase",
-            color: "var(--text-muted)",
-          }}>
-            {label}
-          </div>
-        </div>
-        {badge != null && (
-          <span style={{
-            ...mono, fontSize: 8, fontWeight: 700,
-            color: "var(--accent-text)", background: "var(--status-error)",
-            borderRadius: "var(--radius-badge)",
-            padding: "2px 6px",
-            textTransform: "uppercase", letterSpacing: "0.08em",
-          }}>
-            {badge}
-          </span>
-        )}
-      </div>
-      <div style={{
-        ...mono, fontSize: 22, fontWeight: 700,
-        color: accent || "var(--text-primary)",
-        lineHeight: 1.1, marginBottom: 4,
-        fontVariantNumeric: "tabular-nums",
-      }}>
-        {value}
-      </div>
-      {sub && (
-        <div style={{
-          ...body, fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4,
-        }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── small drift bar: schedule elapsed vs work complete ── */
-function DriftRow({ row, onClick }) {
-  const elapsed = Math.max(0, Math.min(100, row.elapsedPct || 0));
-  const complete = Math.max(0, Math.min(100, row.wpPct || 0));
-  const drift = elapsed - complete;
-  const driftColor =
-    drift >= 25 ? "var(--status-error)"
-      : drift >= 10 ? "var(--status-warning)"
-      : "var(--status-success)";
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(180px, 2fr) 1fr 90px",
-        gap: 14,
-        alignItems: "center",
-        padding: "10px 12px",
-        borderRadius: 8,
-        cursor: onClick ? "pointer" : "default",
-        background: "var(--bg-surface-low)",
-        border: "1px solid var(--border-default)",
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-row-hover)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface-low)")}
-    >
-      <div style={{ overflow: "hidden" }}>
-        <div style={{
-          ...body, fontSize: 12, fontWeight: 600,
-          color: "var(--text-primary)",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {row.name}
-        </div>
-        <div style={{
-          ...mono, fontSize: 9, color: "var(--text-muted)",
-          letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2,
-        }}>
-          {row.phase}
-        </div>
-      </div>
-      <div style={{ position: "relative", height: 18 }}>
-        {/* schedule (elapsed) bar — wider, muted */}
-        <div style={{
-          position: "absolute", inset: 0,
-          height: 6, top: 4,
-          background: "var(--bg-surface-high)",
-          borderRadius: 3,
-        }} />
-        <div style={{
-          position: "absolute", left: 0, top: 4,
-          width: `${elapsed}%`, height: 6,
-          background: "var(--text-muted)",
-          borderRadius: 3,
-          opacity: 0.7,
-        }} />
-        {/* progress (complete) bar — overlaid, full color */}
-        <div style={{
-          position: "absolute", left: 0, top: 4,
-          width: `${complete}%`, height: 6,
-          background: driftColor,
-          borderRadius: 3,
-        }} />
-      </div>
-      <div style={{
-        ...mono, fontSize: 11, fontWeight: 700,
-        color: driftColor,
-        textAlign: "right",
-        fontVariantNumeric: "tabular-nums",
-      }}>
-        {complete.toFixed(0)}% / {elapsed.toFixed(0)}%
-      </div>
-    </div>
-  );
-}
-
-/* ── compact urgent-item card ── */
-function UrgentTile({ item, onClick }) {
-  const SEV = {
-    critical: "var(--status-error)",
-    high:     "var(--status-warning)",
-    medium:   "var(--status-info)",
-    low:      "var(--text-muted)",
-  };
-  const color = SEV[item.severity] || SEV.medium;
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        minWidth: 240, maxWidth: 280, flexShrink: 0,
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderLeft: `3px solid ${color}`,
-        borderRadius: 8,
-        padding: "12px 14px",
-        cursor: onClick ? "pointer" : "default",
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = color)}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
-    >
-      <div style={{
-        display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: 6,
-      }}>
-        <span style={{
-          ...mono, fontSize: 8, fontWeight: 700, color,
-          textTransform: "uppercase", letterSpacing: "0.10em",
-        }}>
-          {item.kind}
-        </span>
-        <span style={{
-          ...mono, fontSize: 8, color: "var(--text-muted)",
-          textTransform: "uppercase", letterSpacing: "0.08em",
-        }}>
-          {item.severity}
-        </span>
-      </div>
-      <div style={{
-        ...body, fontSize: 12, fontWeight: 600,
-        color: "var(--text-primary)", marginBottom: 4, lineHeight: 1.3,
-      }}>
-        {item.title}
-      </div>
-      <div style={{
-        ...body, fontSize: 11, color: "var(--text-secondary)",
-        marginBottom: 4, lineHeight: 1.4,
-        overflow: "hidden", textOverflow: "ellipsis",
-        display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-      }}>
-        {item.subtitle}
-      </div>
-      {item.meta && (
-        <div style={{
-          ...mono, fontSize: 8, color: "var(--text-muted)",
-          textTransform: "uppercase", letterSpacing: "0.08em",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {item.meta}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── small numeric stat block for "this week" ── */
-function WeekStat({ label, value, color = "var(--text-primary)", sub }) {
-  return (
-    <div style={{
-      padding: "12px 14px",
-      background: "var(--bg-surface-low)",
-      border: "1px solid var(--border-default)",
-      borderRadius: 8,
-    }}>
-      <div style={{
-        ...mono, fontSize: 9, fontWeight: 700,
-        letterSpacing: "0.10em", textTransform: "uppercase",
-        color: "var(--text-muted)", marginBottom: 6,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        ...mono, fontSize: 18, fontWeight: 700,
-        color, lineHeight: 1, fontVariantNumeric: "tabular-nums",
-      }}>
-        {value}
-      </div>
-      {sub && (
-        <div style={{
-          ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4,
-        }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
+import {
+  buildBarChartData,
+  buildDriftRows,
+  buildHealthRollup,
+  buildProjectRows,
+  buildRfiDonutData,
+  buildTopRisks,
+  buildUrgentItems,
+  buildWeeklySummary,
+  countCriticalAlerts,
+  filterAndSortProjectRows,
+  filterSoftDeleted,
+  selectActiveProjects,
+  selectCriticalRisks,
+  selectLateDeliveries,
+  selectOpenRfis,
+  selectOpenRisks,
+  selectOverdueActionItems,
+  selectOverdueRfis,
+  selectPendingChangeOrders,
+  sumBudgetVariance,
+  sumPendingChangeOrderValue,
+  sumPlannedTonnage,
+  sumPortfolioContract,
+  sumPortfolioRevised,
+  sumProducedTonnage,
+} from "./portfolioOverview.derive";
+import {
+  ChartPanel,
+  DriftRow,
+  EmptyMicro,
+  ExecutiveCallout,
+  ExecutiveColumn,
+  ExecutiveLine,
+  HealthBucket,
+  Tile,
+  UrgentTile,
+  WeekStat,
+} from "./portfolioOverviewComponents";
 
 export default function PortfolioOverview() {
   const navigate = useNavigate();
@@ -388,15 +169,15 @@ export default function PortfolioOverview() {
        reads from `projects`, `action_items`, and `cost_codes` which
        don't have soft-delete columns yet — and the filter is a no-op
        for rows without `is_deleted`. ── */
-  const projects     = useMemo(() => rawProjects.filter((p) => !p?.is_deleted), [rawProjects]);
-  const rfis         = useMemo(() => rawRfis.filter((r) => !r?.is_deleted), [rawRfis]);
-  const changeOrders = useMemo(() => rawCOs.filter((c) => !c?.is_deleted), [rawCOs]);
-  const actionItems  = useMemo(() => rawActions.filter((a) => !a?.is_deleted), [rawActions]);
-  const deliveries   = useMemo(() => rawDeliveries.filter((d) => !d?.is_deleted), [rawDeliveries]);
-  const workPackages = useMemo(() => rawWPs.filter((w) => !w?.is_deleted), [rawWPs]);
-  const costCodes    = useMemo(() => rawCostCodes.filter((c) => !c?.is_deleted), [rawCostCodes]);
-  const expenses     = useMemo(() => rawExpenses.filter((e) => !e?.is_deleted), [rawExpenses]);
-  const risks        = useMemo(() => rawRisks.filter((r) => !r?.is_deleted), [rawRisks]);
+  const projects     = useMemo(() => filterSoftDeleted(rawProjects), [rawProjects]);
+  const rfis         = useMemo(() => filterSoftDeleted(rawRfis), [rawRfis]);
+  const changeOrders = useMemo(() => filterSoftDeleted(rawCOs), [rawCOs]);
+  const actionItems  = useMemo(() => filterSoftDeleted(rawActions), [rawActions]);
+  const deliveries   = useMemo(() => filterSoftDeleted(rawDeliveries), [rawDeliveries]);
+  const workPackages = useMemo(() => filterSoftDeleted(rawWPs), [rawWPs]);
+  const costCodes    = useMemo(() => filterSoftDeleted(rawCostCodes), [rawCostCodes]);
+  const expenses     = useMemo(() => filterSoftDeleted(rawExpenses), [rawExpenses]);
+  const risks        = useMemo(() => filterSoftDeleted(rawRisks), [rawRisks]);
 
   const now = useMemo(() => new Date(), []);
 
@@ -404,27 +185,24 @@ export default function PortfolioOverview() {
        All four "open / pending" predicates come from the shared
        `entityPredicates` module so this report can't drift from the
        project dashboard or ProjectDetails. */
-  const openRFIs = useMemo(() => rfis.filter(isRfiOpen), [rfis]);
+  const openRFIs = useMemo(() => selectOpenRfis(rfis), [rfis]);
   const overdueRFIs = useMemo(
-    () => openRFIs.filter((r) => r.date_required && new Date(r.date_required) < now),
+    () => selectOverdueRfis(openRFIs, now),
     [openRFIs] // eslint-disable-line react-hooks/exhaustive-deps
   );
   /** Pending CO = Submitted + Under Review (per change_orders CHECK
    *  constraint). There is no literal "Pending" status. */
   const pendingCOs = useMemo(
-    () => changeOrders.filter(isCoPending),
+    () => selectPendingChangeOrders(changeOrders),
     [changeOrders]
   );
   const pendingCOValue = useMemo(
-    () => pendingCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0),
+    () => sumPendingChangeOrderValue(pendingCOs),
     [pendingCOs]
   );
 
   const overdueActions = useMemo(
-    () =>
-      actionItems.filter(
-        (a) => isActionItemOpen(a) && a.due_date && new Date(a.due_date) < now
-      ),
+    () => selectOverdueActionItems(actionItems, now),
     [actionItems] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
@@ -432,25 +210,18 @@ export default function PortfolioOverview() {
    *  / `actual_date`, not `expected_delivery_date` / `actual_delivery_date`.
    *  The original page read both non-existent columns. */
   const lateDeliveries = useMemo(
-    () =>
-      deliveries.filter(
-        (d) =>
-          d.status !== "Delivered" &&
-          d.status !== "Cancelled" &&
-          d.scheduled_date &&
-          new Date(d.scheduled_date) < now
-      ),
+    () => selectLateDeliveries(deliveries, now),
     [deliveries] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   /** Open risks = anything still on the books. Closed/Mitigated are
    *  considered resolved per `severity.js#isActiveRisk`. */
   const openRisks = useMemo(
-    () => risks.filter((r) => !["Closed", "Mitigated"].includes(r.status)),
+    () => selectOpenRisks(risks),
     [risks]
   );
   const criticalRisks = useMemo(
-    () => openRisks.filter((r) => r.severity === "Critical"),
+    () => selectCriticalRisks(openRisks),
     [openRisks]
   );
 
@@ -458,98 +229,34 @@ export default function PortfolioOverview() {
    *  filtered `p.status` which doesn't exist on the projects table —
    *  every project was silently treated as Active. */
   const activeProjects = useMemo(
-    () => projects.filter((p) => p.phase !== "Closeout"),
+    () => selectActiveProjects(projects),
     [projects]
   );
 
   /* ── Per-project rollup ── */
   const projectRows = useMemo(() => {
-    return projects.map((p) => {
-      const pCodes = costCodes.filter((c) => c.project_id === p.id);
-      const pCodeTotals = computeCostCodeTotals(pCodes);
-      const ccBudget = pCodeTotals.budget;
-      const baseContract = Number(p.original_contract_value) || 0;
-      // Approved-CO delta lifts the working budget so a project that
-      // gained $200K in approved COs reads as "in budget" against the
-      // revised number, not the original.
-      const approvedDelta = changeOrders
-        .filter((c) => c.project_id === p.id && c.status === "Approved")
-        .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-      const revisedContract = baseContract + approvedDelta;
-      // Use cost-code budget when populated, else revised contract.
-      const budget = ccBudget || revisedContract || baseContract;
-      // Sum actuals from `expenses` (the canonical source — Voided rows
-      // excluded). cost_codes.actual_cost was empty on 148 of 150 live
-      // rows, so the prior calc rendered $0 actual for every project
-      // even when the project had paid expenses. Fall back to the
-      // cost-code actual_cost only when no expenses exist for a
-      // project (covers any historical row that pre-dates the
-      // expenses table).
-      const pExpenses = expenses.filter((e) => e.project_id === p.id && e.payment_status !== "Voided");
-      const expenseActual = pExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-      const ccActual = pCodeTotals.actual;
-      const actual = expenseActual > 0 ? expenseActual : ccActual;
-      const variance = budget > 0 ? actual - budget : 0;
-      const var_pct = budget > 0 ? (variance / budget) * 100 : 0;
-      const health = computeHealth(budget, actual);
-
-      const pRFIs = rfis.filter((r) => r.project_id === p.id && isRfiOpen(r));
-      const pCOs  = changeOrders.filter((c) => c.project_id === p.id && isCoPending(c));
-      const pWPs = workPackages.filter((w) => w.project_id === p.id);
-      const wpTotal = pWPs.length;
-      // wpPct uses percent_complete average rather than the binary
-      // status check the original used (which left "Shipped" — a
-      // non-canonical WP status — as a dead branch).
-      const wpPct = wpTotal > 0
-        ? pWPs.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / wpTotal
-        : 0;
-
-      // Schedule elapsed % (for the drift micro-bar). Mirrors
-      // timelineElapsedPct() in projectMetrics so the matrix and the
-      // project dashboard read the same number.
-      const startDate = p.start_date ? new Date(p.start_date) : null;
-      const targetDate = p.target_completion_date
-        ? new Date(p.target_completion_date)
-        : (p.forecast_completion_date ? new Date(p.forecast_completion_date) : null);
-      let elapsedPct = 0;
-      if (startDate && targetDate && targetDate > startDate) {
-        const total = targetDate - startDate;
-        const used = Math.max(0, now - startDate);
-        elapsedPct = Math.min(100, Math.max(0, (used / total) * 100));
-      }
-
-      return {
-        id: p.id,
-        number: p.project_number || `P-${p.id.slice(0, 6)}`,
-        name: p.name || "Untitled Project",
-        phase: p.phase || "Unknown",
-        health,
-        budget,
-        actual,
-        variance,
-        var_pct,
-        revisedContract,
-        approvedDelta,
-        openRFIs: pRFIs.length,
-        openCOs: pCOs.length,
-        wpPct,
-        elapsedPct,
-        raw: p,
-      };
+    return buildProjectRows({
+      projects,
+      costCodes,
+      expenses,
+      rfis,
+      changeOrders,
+      workPackages,
+      now,
     });
   }, [projects, costCodes, expenses, rfis, changeOrders, workPackages, now]);
 
   /* ── Portfolio totals ── */
   const portfolioContract = useMemo(
-    () => projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0),
+    () => sumPortfolioContract(projects),
     [projects]
   );
   const portfolioRevised = useMemo(
-    () => projectRows.reduce((s, r) => s + r.revisedContract, 0),
+    () => sumPortfolioRevised(projectRows),
     [projectRows]
   );
   const budgetVariance = useMemo(
-    () => projectRows.reduce((s, r) => s + r.variance, 0),
+    () => sumBudgetVariance(projectRows),
     [projectRows]
   );
 
@@ -557,12 +264,10 @@ export default function PortfolioOverview() {
        Flagged as a derived rollup; callers wanting "actually erected"
        tonnage should swap in the proper field once it lands. ── */
   const tonsProduced = useMemo(() => {
-    return workPackages
-      .filter((w) => Number(w.percent_complete) >= 100 || w.status === "Complete")
-      .reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+    return sumProducedTonnage(workPackages);
   }, [workPackages]);
   const tonsPlanned = useMemo(
-    () => workPackages.reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
+    () => sumPlannedTonnage(workPackages),
     [workPackages]
   );
 
@@ -571,59 +276,31 @@ export default function PortfolioOverview() {
        risks + late deliveries. Not pulled from a single Alerts
        entity — that would be a wider rewrite. ── */
   const criticalAlertCount = useMemo(() => {
-    const critRFIs = openRFIs.filter((r) => r.priority === "Critical").length;
-    return critRFIs + criticalRisks.length + lateDeliveries.length;
+    return countCriticalAlerts({
+      openRfis: openRFIs,
+      criticalRisks,
+      lateDeliveries,
+    });
   }, [openRFIs, criticalRisks, lateDeliveries]);
 
   /* ── Health rollup ── */
   const healthRollup = useMemo(() => {
-    const acc = { good: 0, watch: 0, risk: 0, neutral: 0 };
-    for (const r of projectRows) acc[r.health] = (acc[r.health] || 0) + 1;
-    return acc;
+    return buildHealthRollup(projectRows);
   }, [projectRows]);
 
   /* ── Filter + sort the matrix ── */
   const filteredRows = useMemo(() => {
-    let rows = [...projectRows];
-    if (kpiFilter === "value") rows = rows.filter((r) => r.revisedContract > 0);
-    else if (kpiFilter === "active")
-      rows = rows.filter((r) => r.phase !== "Closeout");
-    else if (kpiFilter === "rfis") rows = rows.filter((r) => r.openRFIs > 0);
-    else if (kpiFilter === "cos") rows = rows.filter((r) => r.openCOs > 0);
-    else if (kpiFilter === "variance") rows = rows.filter((r) => r.variance !== 0);
-    else if (kpiFilter === "overdue") {
-      const ids = new Set(overdueActions.map((a) => a.project_id));
-      rows = rows.filter((r) => ids.has(r.id));
-    } else if (kpiFilter === "risks") {
-      const ids = new Set(criticalRisks.map((r) => r.project_id));
-      rows = rows.filter((r) => ids.has(r.id));
-    } else if (kpiFilter === "alerts") {
-      const ids = new Set([
-        ...openRFIs.filter((r) => r.priority === "Critical").map((r) => r.project_id),
-        ...criticalRisks.map((r) => r.project_id),
-        ...lateDeliveries.map((d) => d.project_id),
-      ]);
-      rows = rows.filter((r) => ids.has(r.id));
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      rows = rows.filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.number.toLowerCase().includes(q) ||
-          r.phase.toLowerCase().includes(q)
-      );
-    }
-    rows.sort((a, b) => {
-      let av = a[sortField];
-      let bv = b[sortField];
-      if (typeof av === "string") av = av.toLowerCase();
-      if (typeof bv === "string") bv = bv.toLowerCase();
-      if (av < bv) return sortDir === "asc" ? -1 : 1;
-      if (av > bv) return sortDir === "asc" ? 1 : -1;
-      return 0;
+    return filterAndSortProjectRows({
+      projectRows,
+      kpiFilter,
+      search,
+      sortField,
+      sortDir,
+      overdueActions,
+      criticalRisks,
+      openRfis: openRFIs,
+      lateDeliveries,
     });
-    return rows;
   }, [
     projectRows, kpiFilter, search, sortField, sortDir,
     overdueActions, criticalRisks, openRFIs, lateDeliveries,
@@ -639,87 +316,35 @@ export default function PortfolioOverview() {
 
   /* ── Charts ── */
   const barChartData = useMemo(
-    () =>
-      projectRows
-        .filter((r) => r.budget > 0 || r.actual > 0)
-        .slice(0, 12)
-        .map((r) => ({ name: r.number, budget: r.budget, actual: r.actual })),
+    () => buildBarChartData(projectRows),
     [projectRows]
   );
 
   const rfiDonutData = useMemo(() => {
-    const counts = {
-      Open: rfis.filter((r) => r.status === "Open").length,
-      "Under Review": rfis.filter((r) => r.status === "Under Review").length,
-      Answered: rfis.filter((r) => r.status === "Answered").length,
-      Closed: rfis.filter((r) => r.status === "Closed").length,
-    };
-    return [
-      { label: "Open", value: counts.Open, color: "var(--status-warning)" },
-      { label: "Under Review", value: counts["Under Review"], color: "var(--status-info)" },
-      { label: "Answered", value: counts.Answered, color: "var(--status-success)" },
-      { label: "Closed", value: counts.Closed, color: "var(--text-muted)" },
-    ].filter((s) => s.value > 0);
+    return buildRfiDonutData(rfis);
   }, [rfis]);
 
   /* ── Drift rows — projects sorted by drift descending, top 8. ── */
   const driftRows = useMemo(() => {
-    return [...projectRows]
-      .filter((r) => r.phase !== "Closeout")
-      .map((r) => ({
-        ...r,
-        drift: (r.elapsedPct || 0) - (r.wpPct || 0),
-      }))
-      .sort((a, b) => b.drift - a.drift)
-      .slice(0, 8);
+    return buildDriftRows(projectRows);
   }, [projectRows]);
 
   /* ── Top urgent items ── */
   const urgentItems = useMemo(() => {
-    const items = [];
-    overdueRFIs.slice(0, 6).forEach((r) => {
-      const proj = projects.find((p) => p.id === r.project_id);
-      items.push({
-        kind: "RFI",
-        title: r.rfi_number || r.title || "RFI",
-        subtitle: r.title || r.subject || r.question || "Overdue response",
-        severity: r.priority === "Critical" ? "critical" : r.priority === "High" ? "high" : "medium",
-        meta: proj ? proj.name : "",
-        onClick: () => navigate(createPageUrl("RFIs")),
-      });
-    });
-    pendingCOs.slice(0, 4).forEach((c) => {
-      const proj = projects.find((p) => p.id === c.project_id);
-      items.push({
-        kind: "CO",
-        title: c.co_number || "CO",
-        subtitle: `${c.title || c.description || "Change order"} · ${formatCurrencyShort(c.co_amount)}`,
-        severity: (Number(c.co_amount) || 0) > 50000 ? "high" : "medium",
-        meta: proj ? proj.name : "",
-        onClick: () => navigate(createPageUrl("ChangeOrders")),
-      });
-    });
-    lateDeliveries.slice(0, 4).forEach((d) => {
-      const proj = projects.find((p) => p.id === d.project_id);
-      items.push({
-        kind: "DELIVERY",
-        title: d.po_number || d.vendor || "Delivery",
-        subtitle: d.description || d.vendor || "Late delivery",
-        severity: "high",
-        meta: proj ? proj.name : "",
-        onClick: () => navigate(createPageUrl("Deliveries")),
-      });
-    });
-    return items;
+    return buildUrgentItems({
+      overdueRfis: overdueRFIs,
+      pendingChangeOrders: pendingCOs,
+      lateDeliveries,
+      projects,
+    }).map((item) => ({
+      ...item,
+      onClick: () => navigate(createPageUrl(item.page)),
+    }));
   }, [overdueRFIs, pendingCOs, lateDeliveries, projects, navigate]);
 
   /* ── Top open risks (Critical + High by score) ── */
   const topRisks = useMemo(() => {
-    return [...openRisks]
-      .filter((r) => ["Critical", "High"].includes(r.severity))
-      .map((r) => ({ ...r, _score: (Number(r.probability) || 0) * (Number(r.impact) || 0) }))
-      .sort((a, b) => b._score - a._score)
-      .slice(0, 5);
+    return buildTopRisks(openRisks);
   }, [openRisks]);
 
   /* ── This week's activity (last 7 days) ──
@@ -727,54 +352,13 @@ export default function PortfolioOverview() {
        `updated_at` as the proxy for "completed-this-week" — close
        enough since closing a row writes updated_at. */
   const weekly = useMemo(() => {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    const weekAgoIso = weekAgo.toISOString();
-
-    const newRFIs = rfis.filter(
-      (r) => (r.created_at || r.created_date || r.submitted_date) &&
-             new Date(r.created_at || r.created_date || r.submitted_date) >= weekAgo
-    );
-    const closedRFIs = rfis.filter(
-      (r) => r.status === "Closed" && r.date_answered &&
-             new Date(r.date_answered) >= weekAgo
-    );
-    const newCOs = changeOrders.filter(
-      (c) => (c.created_at || c.created_date) &&
-             new Date(c.created_at || c.created_date) >= weekAgo
-    );
-    /* AUDIT FIX: use approved_date, not approval_date. */
-    const approvedCOs = changeOrders.filter(
-      (c) => c.status === "Approved" && c.approved_date &&
-             new Date(c.approved_date) >= weekAgo
-    );
-    const approvedCOValue = approvedCOs.reduce(
-      (s, c) => s + (Number(c.co_amount) || 0), 0
-    );
-    /* AUDIT NOTE: action_items has no completed_date — proxy on
-       updated_at for status that became Complete/Closed/Resolved. */
-    const completedActions = actionItems.filter(
-      (a) =>
-        ["Complete", "Closed", "Resolved"].includes(a.status) &&
-        a.updated_at && a.updated_at >= weekAgoIso
-    );
-    /* AUDIT FIX: deliveries.actual_date, not actual_delivery_date. */
-    const recentDeliveries = deliveries.filter(
-      (d) => d.status === "Delivered" && d.actual_date &&
-             new Date(d.actual_date) >= weekAgo
-    );
-
-    return {
-      newRFIs: newRFIs.length,
-      closedRFIs: closedRFIs.length,
-      newCOs: newCOs.length,
-      approvedCOs: approvedCOs.length,
-      approvedCOValue,
-      completedActions: completedActions.length,
-      recentDeliveries: recentDeliveries.length,
-      weekStart: weekAgo.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      weekEnd: now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-    };
+    return buildWeeklySummary({
+      rfis,
+      changeOrders,
+      actionItems,
+      deliveries,
+      now,
+    });
   }, [rfis, changeOrders, actionItems, deliveries, now]);
 
   const handleExportCSV = () =>
@@ -1324,121 +908,5 @@ export default function PortfolioOverview() {
         navigate={navigate}
       />
     </ReportShell>
-  );
-}
-
-/* ── Local subcomponents ── */
-function HealthBucket({ label, count, color, description }) {
-  return (
-    <div style={{
-      padding: "12px 14px",
-      background: "var(--bg-surface-low)",
-      border: "1px solid var(--border-default)",
-      borderLeft: `3px solid ${color}`,
-      borderRadius: 8,
-    }}>
-      <div style={{
-        ...mono, fontSize: 9, fontWeight: 700,
-        letterSpacing: "0.10em", textTransform: "uppercase",
-        color: "var(--text-muted)", marginBottom: 6,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        ...mono, fontSize: 22, fontWeight: 700, color, lineHeight: 1,
-        marginBottom: 6, fontVariantNumeric: "tabular-nums",
-      }}>
-        {count}
-      </div>
-      <div style={{
-        ...body, fontSize: 11, color: "var(--text-secondary)",
-      }}>
-        {description}
-      </div>
-    </div>
-  );
-}
-
-function ChartPanel({ title, subtitle, children }) {
-  return (
-    <div style={{
-      background: "var(--bg-surface-low)",
-      border: "1px solid var(--border-default)",
-      borderRadius: 10,
-      padding: "14px 16px",
-    }}>
-      <div style={{
-        ...mono, fontSize: 9, fontWeight: 700,
-        letterSpacing: "0.10em", textTransform: "uppercase",
-        color: "var(--text-primary)", marginBottom: 4,
-      }}>
-        {title}
-      </div>
-      {subtitle && (
-        <div style={{
-          ...body, fontSize: 11, color: "var(--text-muted)", marginBottom: 12,
-        }}>
-          {subtitle}
-        </div>
-      )}
-      {children}
-    </div>
-  );
-}
-
-function EmptyMicro({ label }) {
-  return (
-    <div style={{
-      padding: "32px 16px", textAlign: "center",
-      ...mono, fontSize: 10,
-      color: "var(--text-muted)",
-      letterSpacing: "0.08em", textTransform: "uppercase",
-    }}>
-      {label}
-    </div>
-  );
-}
-
-function ExecutiveColumn({ title, accent, children }) {
-  return (
-    <div>
-      <div style={{
-        ...mono, fontSize: 9, fontWeight: 700,
-        letterSpacing: "0.12em", color: accent, marginBottom: 10,
-      }}>
-        {title.toUpperCase()}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function ExecutiveLine({ label, value, color }) {
-  return (
-    <div style={{
-      display: "flex", justifyContent: "space-between",
-      alignItems: "center",
-    }}>
-      <span style={{ ...body, fontSize: 12, color: "var(--text-secondary)" }}>{label}</span>
-      <span style={{
-        ...mono, fontSize: 14, fontWeight: 700, color,
-        fontVariantNumeric: "tabular-nums",
-      }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function ExecutiveCallout({ color, children }) {
-  return (
-    <div style={{
-      ...body, fontSize: 12, color,
-      borderLeft: `3px solid ${color}`, paddingLeft: 10,
-    }}>
-      {children}
-    </div>
   );
 }
