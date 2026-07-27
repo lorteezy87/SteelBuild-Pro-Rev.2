@@ -471,3 +471,201 @@ export function isShopWorkPackage(wp: WorkPackageLike | null | undefined): boole
 export function toIsoDate(dt: Date): string {
   return dt.toISOString().split("T")[0];
 }
+
+export type ScheduleSummaryCard = {
+  label: string;
+  value: string | number;
+  color: string;
+};
+
+/** Hours / assignment strip cards for the Resource Scheduling header. */
+export function buildScheduleSummaryCards(opts: {
+  filteredWorkPackages: WorkPackageLike[];
+  scheduledWps: WorkPackageLike[];
+  topLevelResources: ResourceLike[];
+  effectiveCapacityById: Record<string, number>;
+}): ScheduleSummaryCard[] {
+  const {
+    filteredWorkPackages,
+    scheduledWps,
+    topLevelResources,
+    effectiveCapacityById,
+  } = opts;
+  // Phase-aware totals: each WP contributes only its phase-relevant
+  // hours bucket, so shop + field WPs don't double-count at the
+  // portfolio stat.
+  const totalBudgetHrs = filteredWorkPackages.reduce(
+    (s, wp) => s + wpBudgetHoursForResource(wp),
+    0,
+  );
+  const totalActualHrs = filteredWorkPackages.reduce(
+    (s, wp) => s + wpActualHoursForResource(wp),
+    0,
+  );
+  const totalShopBudget = filteredWorkPackages.reduce(
+    (s, wp) => s + (Number(wp.shop_hours_budget) || 0),
+    0,
+  );
+  const totalShopActual = filteredWorkPackages.reduce(
+    (s, wp) => s + (Number(wp.shop_hours_actual) || 0),
+    0,
+  );
+  const totalFieldBudget = filteredWorkPackages.reduce(
+    (s, wp) => s + (Number(wp.field_hours_budget) || 0),
+    0,
+  );
+  const totalFieldActual = filteredWorkPackages.reduce(
+    (s, wp) => s + (Number(wp.field_hours_actual) || 0),
+    0,
+  );
+  const assignedWPCount = scheduledWps.filter((wp) => wp.crew).length;
+  const unassignedCount = filteredWorkPackages.filter((wp) => !wp.crew).length;
+  // Count how many top-level resources are over-allocated. Over-
+  // alloc = assigned WP budget > effective capacity (rollup from
+  // crew members when applicable). Uses phase-aware hour bucketing
+  // so a field crew isn't charged for a WP's shop hours and vice
+  // versa.
+  const overAllocatedResources = topLevelResources.filter((res) => {
+    const resWPs = scheduledWps.filter((wp) => wp.crew === res.name);
+    const resBudget = resWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
+    const effCap = effectiveCapacityById[res.id] || 0;
+    return effCap > 0 && resBudget > effCap;
+  }).length;
+
+  return [
+    {
+      label: "TOTAL ESTIMATED",
+      value: `${totalBudgetHrs.toLocaleString()}h`,
+      color: "var(--accent)",
+    },
+    {
+      label: "TOTAL ACTUAL",
+      value: `${totalActualHrs.toLocaleString()}h`,
+      color:
+        totalActualHrs > totalBudgetHrs
+          ? "var(--status-error)"
+          : "var(--status-success)",
+    },
+    {
+      label: "SHOP HRS",
+      value: `${totalShopActual.toLocaleString()} / ${totalShopBudget.toLocaleString()}`,
+      color:
+        totalShopActual > totalShopBudget
+          ? "var(--status-error)"
+          : "var(--text-secondary)",
+    },
+    {
+      label: "FIELD HRS",
+      value: `${totalFieldActual.toLocaleString()} / ${totalFieldBudget.toLocaleString()}`,
+      color:
+        totalFieldActual > totalFieldBudget
+          ? "var(--status-error)"
+          : "var(--text-secondary)",
+    },
+    {
+      label: "ASSIGNED / TOTAL",
+      value: `${assignedWPCount} / ${filteredWorkPackages.length} WPs`,
+      color: unassignedCount > 0 ? "var(--status-warning)" : "var(--status-success)",
+    },
+    {
+      label: "OVER-ALLOCATED",
+      value: overAllocatedResources,
+      color:
+        overAllocatedResources > 0 ? "var(--status-error)" : "var(--status-success)",
+    },
+  ];
+}
+
+export type ResourceSidebarRow = {
+  id: string;
+  name: string;
+  role: string;
+  memberCount: number;
+  skills: string[];
+  budgetHours: number;
+  actualHours: number;
+  burnPct: number;
+  isOverBudget: boolean;
+  isOverAllocated: boolean;
+  capacityHours: number;
+  assignedWpCount: number;
+  tonnage: number;
+  heatBg: string;
+};
+
+export type ResourceSidebarGroup = {
+  type: string;
+  resources: ResourceSidebarRow[];
+};
+
+const RESOURCE_SIDEBAR_TYPES = [
+  "Person",
+  "Crew",
+  "Labor",
+  "Equipment",
+  "Subcontractor",
+  "Material",
+  "Bay",
+] as const;
+
+/** Capacity-stack rows for the left Resource Scheduling sidebar. */
+export function buildResourceSidebarGroups(opts: {
+  topLevelResources: ResourceLike[];
+  scheduledWps: WorkPackageLike[];
+  membersByParentId: Record<string, ResourceLike[]>;
+  effectiveCapacityById: Record<string, number>;
+  extractSkills: (resource: ResourceLike) => string[];
+  getRowCapacityBg: (burnPct: number, isOverAllocated: boolean) => string;
+}): ResourceSidebarGroup[] {
+  const {
+    topLevelResources,
+    scheduledWps,
+    membersByParentId,
+    effectiveCapacityById,
+    extractSkills,
+    getRowCapacityBg,
+  } = opts;
+
+  return RESOURCE_SIDEBAR_TYPES.map((type) => {
+    const typeResources = topLevelResources.filter(
+      (r) => (r.resource_type || "Person") === type,
+    );
+    if (typeResources.length === 0) return null;
+
+    const resources = typeResources.map((res) => {
+      const assignedWPs = scheduledWps.filter((wp) => wp.crew === res.name);
+      const resBudgetHrs = assignedWPs.reduce(
+        (s, wp) => s + wpBudgetHoursForResource(wp),
+        0,
+      );
+      const resActualHrs = assignedWPs.reduce(
+        (s, wp) => s + wpActualHoursForResource(wp),
+        0,
+      );
+      const resBurnPct =
+        resBudgetHrs > 0 ? Math.round((resActualHrs / resBudgetHrs) * 100) : 0;
+      const isOverBudget = resActualHrs > resBudgetHrs && resBudgetHrs > 0;
+      const resBudgetFromEntity = effectiveCapacityById[res.id] || 0;
+      const isOverAllocated =
+        resBudgetFromEntity > 0 && resBudgetHrs > resBudgetFromEntity;
+      return {
+        id: res.id,
+        name: String(res.name || ""),
+        role: String(res.role || "\u2014"),
+        memberCount: (membersByParentId[res.id] || []).length,
+        skills: extractSkills(res),
+        budgetHours: resBudgetHrs,
+        actualHours: resActualHrs,
+        burnPct: resBurnPct,
+        isOverBudget,
+        isOverAllocated,
+        capacityHours: resBudgetFromEntity,
+        assignedWpCount: assignedWPs.length,
+        tonnage: assignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0),
+        heatBg: getRowCapacityBg(resBurnPct, isOverAllocated),
+      };
+    });
+
+    return { type, resources };
+  }).filter((group): group is ResourceSidebarGroup => Boolean(group));
+}

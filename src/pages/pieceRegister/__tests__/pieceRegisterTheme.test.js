@@ -52,7 +52,7 @@ describe("Piece Register command theme", () => {
 
   it("keeps the Overview shipment CTA compact", () => {
     const pageSource = readFileSync(
-      fileURLToPath(new URL("../../PieceRegister.tsx", import.meta.url)),
+      fileURLToPath(new URL("../PieceRegisterOverview.tsx", import.meta.url)),
       "utf8",
     );
     const styleSource = readFileSync(
