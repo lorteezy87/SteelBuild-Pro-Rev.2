@@ -246,6 +246,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotError, setForgotError] = useState(null);
   const [forgotNotice, setForgotNotice] = useState(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [demoForm, setDemoForm] = useState({ name: "", email: "", company: "", tonnage: "", message: "" });
@@ -317,12 +318,21 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
     e.preventDefault();
     setSignupError(null);
     if (!email.trim() || !password) return;
+    if (!termsAccepted) {
+      setSignupError("Please accept the Terms of Service and Privacy Policy to create an account.");
+      return;
+    }
     if (password.length < 8) {
       setSignupError("Use at least 8 characters for your password.");
       return;
     }
     setSignupBusy(true);
-    const res = await onSignUp?.({ email: email.trim(), password, fullName: fullName.trim() || undefined });
+    const res = await onSignUp?.({
+      email: email.trim(),
+      password,
+      fullName: fullName.trim() || undefined,
+      termsAccepted: true,
+    });
     setSignupBusy(false);
     if (res?.success) {
       if (res.needsConfirmation) {
@@ -763,8 +773,24 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
                   {authMode !== "forgot" && <div><label htmlFor="auth-password" style={monoLabel({ display: "block", marginBottom: 6 })}>Password</label><input id="auth-password" className="lp-input" type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder={authMode === "signup" ? "At least 8 characters" : "Password"} value={password} onChange={(e) => setPassword(e.target.value)} /></div>}
                   {authMode === "signin" && <div style={{ textAlign: "right", marginTop: -6 }}><button type="button" onClick={() => { setAuthMode("forgot"); setForgotError(null); setForgotNotice(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 800, cursor: "pointer", font: "inherit", fontSize: 12.5 }}>Forgot password?</button></div>}
                   {(authMode === "signup" ? signupError : authMode === "forgot" ? forgotError : loginError) && <div style={{ padding: "10px 13px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 12, color: C.red, fontSize: 13 }} role="alert">{authMode === "signup" ? signupError : authMode === "forgot" ? forgotError : loginError}</div>}
-                  <button type="submit" disabled={authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", opacity: (authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting) ? .65 : 1, cursor: (authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting) ? "not-allowed" : "pointer" }}>{authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : authMode === "forgot" ? (forgotBusy ? "Sending…" : "Send reset link") : (isSubmitting ? "Signing in…" : "Sign in")}</button>
-                  {authMode === "signup" && <p style={{ fontSize: 12, color: C.muted, textAlign: "center", lineHeight: 1.5, margin: 0 }}>By creating an account you agree to the <a href="/terms" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Terms</a> and <a href="/privacy" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Privacy Policy</a>.</p>}
+                  {authMode === "signup" && (
+                    <label htmlFor="auth-terms" style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 12.5, color: C.body, lineHeight: 1.45, cursor: "pointer" }}>
+                      <input
+                        id="auth-terms"
+                        type="checkbox"
+                        checked={termsAccepted}
+                        onChange={(e) => setTermsAccepted(e.target.checked)}
+                        style={{ marginTop: 2, accentColor: C.amberDark, width: 16, height: 16, flexShrink: 0 }}
+                      />
+                      <span>
+                        I agree to the{" "}
+                        <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Terms of Service</a>
+                        {" "}and{" "}
+                        <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Privacy Policy</a>.
+                      </span>
+                    </label>
+                  )}
+                  <button type="submit" disabled={authMode === "signup" ? (signupBusy || !termsAccepted) : authMode === "forgot" ? forgotBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", opacity: (authMode === "signup" ? (signupBusy || !termsAccepted) : authMode === "forgot" ? forgotBusy : isSubmitting) ? .65 : 1, cursor: (authMode === "signup" ? (signupBusy || !termsAccepted) : authMode === "forgot" ? forgotBusy : isSubmitting) ? "not-allowed" : "pointer" }}>{authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : authMode === "forgot" ? (forgotBusy ? "Sending…" : "Send reset link") : (isSubmitting ? "Signing in…" : "Sign in")}</button>
                 </form>
                 <div style={{ marginTop: 18, textAlign: "center", fontSize: 13.5, color: C.body }}>
                   {authMode === "signup" ? <>Already have an account? <button type="button" onClick={() => { setAuthMode("signin"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Sign in</button></> : authMode === "forgot" ? <>Remembered it? <button type="button" onClick={() => { setAuthMode("signin"); setForgotError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Back to sign in</button></> : <>New to SteelBuild Pro? <button type="button" onClick={() => { setAuthMode("signup"); setSignupError(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 900, cursor: "pointer", font: "inherit" }}>Create an account</button></>}
