@@ -94,7 +94,7 @@ export default function Layout({ children, currentPageName }) {
   const [gridOpen, setGridOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const isMobile = useResponsiveBreakpoint();
+  const { isPhone, isTablet, isDesktop, isMobile } = useResponsiveBreakpoint();
   const useDashboardChrome = isDashboardPage && !isMobile;
 
   // Density preference
