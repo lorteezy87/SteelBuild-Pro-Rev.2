@@ -5,7 +5,6 @@
  *   components/drawings/DrawingsTable.jsx   — list view
  *   components/drawings/DrawingsGrid.jsx    — card grid view
  *   components/drawings/DrawingsToolbar.jsx — stats, filters, bulk actions
- *   components/drawings/StagePipeline.jsx   — chevron pipeline
  *   components/drawings/SheetFormModal.jsx  — create/edit modal
  *   components/drawings/AlertBanner.jsx     — revision-control alerts
  *   components/drawings/drawingsConfig.js   — constants & shared styles

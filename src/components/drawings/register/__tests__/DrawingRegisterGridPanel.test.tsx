@@ -39,7 +39,7 @@ vi.mock("@/lib/drawingHub/revisions", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-import { DrawingRegisterGrid } from "../DrawingRegisterGrid";
+import { DrawingRegisterGridPanel } from "../DrawingRegisterGridPanel";
 
 function makeRow(over: Partial<DrawingRegisterRow> = {}): DrawingRegisterRow {
   return {
@@ -68,12 +68,12 @@ function renderGrid() {
   qc.invalidateQueries = invalidateQueries as any;
   return render(
     <QueryClientProvider client={qc}>
-      <DrawingRegisterGrid projectId="proj-1" />
+      <DrawingRegisterGridPanel projectId="proj-1" />
     </QueryClientProvider>,
   );
 }
 
-describe("DrawingRegisterGrid — release affordance", () => {
+describe("DrawingRegisterGridPanel — release affordance", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ensureCurrentRevision.mockResolvedValue({ id: "rev-new", is_current: true });
