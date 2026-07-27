@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 
 /**
- * useAutoOpenCreate — when QuickAddFAB navigates to a page with `?new=1`,
+ * useAutoOpenCreate — when a caller navigates to a page with `?new=1`,
  * fire the page's create-modal opener once on mount and strip the param
  * from the URL so a refresh doesn't re-open the modal.
  *

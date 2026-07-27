@@ -35,8 +35,9 @@ export class SupabaseOperationError extends Error {
     this.details = orig.details;
     this.hint = orig.hint;
     // Propagate HTTP status for smart retry logic (400 = bad column, 404 = missing table)
-    this.status = orig.code === 'PGRST204' ? 404
-      : msg.includes('does not exist') ? 400
+    // PGRST204 = missing column in schema cache; PGRST205 = missing table/view.
+    this.status = orig.code === 'PGRST204' || orig.code === 'PGRST205' ? 404
+      : /schema cache|Could not find the table|does not exist/i.test(msg) ? 404
       : orig.status ?? null;
   }
 }

@@ -355,18 +355,14 @@ export default function DrawingViewer() {
     }
   }, [currentRevision, activeDrawing, refetchZones]);
 
-  // When the active drawing changes, jump to its source PDF page so callouts
-  // overlay the correct sheet. Stored as `pdf_page` by DrawingSetUploadModal;
-  // legacy rows without it default to page 1.
-  useEffect(() => {
-    if (!activeDrawing) return;
-    const page = Number(activeDrawing.pdf_page) || 1;
-    setCurrentPage(page);
-  }, [activeDrawing, setCurrentPage]);
+  // Page jumps for the active sheet are owned by usePdfLoader (clamped to
+  // pdfDoc.numPages). Do not setCurrentPage(pdf_page) here unclamped — that
+  // raced after the loader clamp and could request an invalid page, leaving
+  // the viewer on a sticky pdfError for every sheet that shares the PDF.
 
   // Callout → navigation handler. If the targetSheetNumber resolves to a
-  // drawing in the project list, switch to it. The effect above then jumps
-  // to that drawing's pdf_page automatically.
+  // drawing in the project list, switch to it. usePdfLoader then jumps to
+  // that drawing's pdf_page (clamped).
   const onCalloutClick = useCallback((callout) => {
     if (!callout?.targetSheetNumber) return;
     const target = drawings.find(d =>
@@ -676,13 +672,10 @@ export default function DrawingViewer() {
             });
           }}
           style={{
-            flex: 1,
-            overflow: "auto",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "stretch",
-            // Neutral workspace — works in both light + dark themes.
-            background: "var(--bg-void)",
+            // Layout/background come from .drawing-viewer-canvas-scroll —
+            // do not override with var(--bg-void) (light theme turns it slate
+            // and fights the dark drawing work-surface) or alignItems:stretch
+            // (collapses empty-state visibility inside a zero-height flex fix).
             cursor: spacePan ? "grab" : "default",
           }}
         >
@@ -736,6 +729,10 @@ export default function DrawingViewer() {
                   Open in new tab
                 </button>
               )}
+            </div>
+          ) : !resolvedUrl || !pdfDoc ? (
+            <div className="drawing-viewer-paper-wrap">
+              <RenderSkeleton label={!resolvedUrl ? "Resolving drawing file…" : "Loading PDF…"} />
             </div>
           ) : (
             <div className="drawing-viewer-paper-wrap">

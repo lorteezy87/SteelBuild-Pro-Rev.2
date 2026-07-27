@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
+    "backup:storage": "node scripts/storage-backup.mjs",
     "preview": "vite preview",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
@@ -25,13 +26,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:staging:readonly": "playwright test e2e/smoke.spec.ts e2e/daily-workflow.spec.ts",
+    "test:e2e:staging:readonly": "playwright test e2e/smoke.spec.ts e2e/daily-workflow.spec.ts && playwright test e2e/staging-auth-boundary.spec.ts",
     "test:e2e:staging:mutations": "playwright test e2e/fab-release-gate.spec.ts e2e/piece-control-pilot.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
-    "@hello-pangea/dnd": "^17.0.0",
     "@hookform/resolvers": "^4.1.2",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",

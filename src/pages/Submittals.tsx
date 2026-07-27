@@ -28,6 +28,7 @@ import { forecastPortfolio } from "@/lib/submittalForecast";
 import { usePermissions } from "@/services/permissions";
 import { useFlag } from "@/hooks/useFeatureFlag";
 import { useSubmittalComponents } from "@/hooks/useSubmittalComponents";
+import { isMissingSchemaObjectError } from "@/lib/postgrestErrors";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import type { DrawingType } from "@/lib/submittalComponents";
 import { Dialog, DialogContent } from "./submittals/uiCompat";
@@ -201,11 +202,27 @@ export default function Submittals() {
   });
 
   // Returned-comment dispositions (Slice 5) — gate OFS→IFC / R&R→OFA.
+  // Soft-fail when the migration is not applied yet (prod PGRST205) so the
+  // Submittals register still loads; checklist simply stays empty.
   const { data: allCommentDispositions = [] } = useQuery({
     queryKey: ["comment-dispositions", projectId],
-    queryFn: () => projectId
-      ? entities.SubmittalCommentDisposition.filter({ project_id: projectId })
-      : [],
+    queryFn: async () => {
+      if (!projectId) return [];
+      try {
+        return await entities.SubmittalCommentDisposition.filter({
+          project_id: projectId,
+        });
+      } catch (error) {
+        if (isMissingSchemaObjectError(error)) {
+          console.warn(
+            "[submittals] comment dispositions unavailable — apply pending migration",
+            error,
+          );
+          return [];
+        }
+        throw error;
+      }
+    },
     enabled: !!projectId,
     staleTime: 30_000,
   });
@@ -642,7 +659,7 @@ export default function Submittals() {
           open={!!toDelete}
           onClose={() => setToDelete(null)}
           busy={deleteMut.isPending}
-          onConfirm={() => deleteMut.mutate(toDelete)}
+          onConfirm={() => deleteMut.mutateAsync(toDelete)}
           title="Delete submittal"
           description="This submittal and its comment thread will be soft-deleted. This cannot be undone from the UI."
         />
@@ -674,8 +691,8 @@ export default function Submittals() {
         count={selectedIds.size}
         onCancel={() => setShowBulkEdit(false)}
         busy={bulkUpdateMut.isPending}
-        onSubmit={(data) => {
-          bulkUpdateMut.mutate({ ids: [...selectedIds], data });
+        onSubmit={async (data) => {
+          await bulkUpdateMut.mutateAsync({ ids: [...selectedIds], data });
         }}
       />
 
@@ -690,7 +707,7 @@ export default function Submittals() {
         open={showBulkDelete}
         onClose={() => setShowBulkDelete(false)}
         busy={bulkDeleteMut.isPending}
-        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+        onConfirm={() => bulkDeleteMut.mutateAsync([...selectedIds])}
         title={`Delete ${selectedIds.size} submittal${selectedIds.size === 1 ? "" : "s"}`}
         description={`Soft-delete ${selectedIds.size} selected submittal${selectedIds.size === 1 ? "" : "s"}? This cannot be undone from the UI.`}
       />

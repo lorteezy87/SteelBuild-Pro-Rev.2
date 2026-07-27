@@ -17,6 +17,8 @@ import {
   computeTodayOffset,
   isShopWorkPackage,
   toIsoDate,
+  buildScheduleSummaryCards,
+  buildResourceSidebarGroups,
 } from "../resourceSchedulingHelpers";
 
 describe("filterTopLevelResources / buildMembersByParentId / buildEffectiveCapacityById", () => {
@@ -364,5 +366,83 @@ describe("computeTodayOffset / isShopWorkPackage / toIsoDate", () => {
 
   it("formats ISO dates as YYYY-MM-DD", () => {
     expect(toIsoDate(new Date("2026-06-15T12:00:00.000Z"))).toBe("2026-06-15");
+  });
+});
+
+describe("buildScheduleSummaryCards / buildResourceSidebarGroups", () => {
+  it("builds phase-aware summary cards and over-allocation count", () => {
+    const cards = buildScheduleSummaryCards({
+      filteredWorkPackages: [
+        {
+          id: "wp1",
+          crew: "Crew A",
+          phase: "Fabrication",
+          shop_hours_budget: 40,
+          shop_hours_actual: 20,
+          field_hours_budget: 0,
+          field_hours_actual: 0,
+        },
+        {
+          id: "wp2",
+          crew: null,
+          phase: "Erection",
+          shop_hours_budget: 0,
+          shop_hours_actual: 0,
+          field_hours_budget: 30,
+          field_hours_actual: 10,
+        },
+      ],
+      scheduledWps: [
+        {
+          id: "wp1",
+          crew: "Crew A",
+          phase: "Fabrication",
+          shop_hours_budget: 40,
+          shop_hours_actual: 20,
+        },
+      ],
+      topLevelResources: [{ id: "r1", name: "Crew A", capacity: 10 }],
+      effectiveCapacityById: { r1: 10 },
+    });
+
+    expect(cards.find((c) => c.label === "TOTAL ESTIMATED")?.value).toBe("70h");
+    expect(cards.find((c) => c.label === "ASSIGNED / TOTAL")?.value).toBe("1 / 2 WPs");
+    expect(cards.find((c) => c.label === "OVER-ALLOCATED")?.value).toBe(1);
+  });
+
+  it("groups sidebar resources with burn and capacity signals", () => {
+    const groups = buildResourceSidebarGroups({
+      topLevelResources: [
+        { id: "r1", name: "Crew A", resource_type: "Crew", role: "Shop", capacity: 40 },
+      ],
+      scheduledWps: [
+        {
+          id: "wp1",
+          crew: "Crew A",
+          phase: "Fabrication",
+          tonnage: 12,
+          shop_hours_budget: 50,
+          shop_hours_actual: 25,
+        },
+      ],
+      membersByParentId: { r1: [{ id: "m1", name: "Welder" }] },
+      effectiveCapacityById: { r1: 40 },
+      extractSkills: () => ["fit"],
+      getRowCapacityBg: () => "rgba(0,0,0,0.05)",
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].type).toBe("Crew");
+    expect(groups[0].resources[0]).toMatchObject({
+      name: "Crew A",
+      memberCount: 1,
+      budgetHours: 50,
+      actualHours: 25,
+      burnPct: 50,
+      isOverAllocated: true,
+      assignedWpCount: 1,
+      tonnage: 12,
+      skills: ["fit"],
+    });
   });
 });

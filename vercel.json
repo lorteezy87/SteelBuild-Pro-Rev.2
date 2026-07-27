@@ -2,7 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "git": { "deploymentEnabled": { "main": false, "staging": false } },
+  "git": { "deploymentEnabled": { "main": true, "staging": false } },
   "headers": [
     {
       "source": "/assets/(.*)",

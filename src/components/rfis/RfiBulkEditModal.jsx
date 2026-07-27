@@ -26,7 +26,7 @@ export default function RfiBulkEditModal({ open, count, onCancel, onSubmit }) {
   const [dateRequired, setDateRequired] = useState("");
   const [clearDateRequired, setClearDateRequired] = useState(false);
 
-  const apply = () => {
+  const apply = async () => {
     const data = {};
     if (priority) data.priority = priority;
     if (status) data.status = status;
@@ -37,7 +37,11 @@ export default function RfiBulkEditModal({ open, count, onCancel, onSubmit }) {
       onCancel();
       return;
     }
-    onSubmit(data);
+    try {
+      await Promise.resolve(onSubmit(data));
+    } catch {
+      // Keep open; parent mutation toasts onError.
+    }
   };
 
   const reset = () => {
