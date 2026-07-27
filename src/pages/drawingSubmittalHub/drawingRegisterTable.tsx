@@ -240,7 +240,9 @@ export function DrawingRegisterTable({
   const allSheets = useMemo(() => (setPackages || []).flatMap((p: any) => p.sheets || []), [setPackages]);
   const existingSetNames = useMemo(() => [...new Set((setPackages || []).map((p: any) => p.name).filter(Boolean))], [setPackages]);
   const refetchDrawings = () => {
-    qc.invalidateQueries({ queryKey: ["drawings"] });
+    // Scope every key with projectId — bare ["drawings"] refetches every
+    // project's drawing queries still in the cache (portfolio fan-out).
+    qc.invalidateQueries({ queryKey: ["drawings", projectId] });
     qc.invalidateQueries({ queryKey: ["drawing-sets", projectId] });
     qc.invalidateQueries({ queryKey: ["drawing-revisions", projectId] });
     // Doc Control register reads the current revision from drawing_register_view

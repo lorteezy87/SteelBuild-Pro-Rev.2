@@ -75,6 +75,7 @@ export interface PortfolioWorkPackage extends SoftDeleteRow {
 }
 
 export interface PortfolioCostCode extends SoftDeleteRow {
+  [key: string]: unknown;
   id?: string | null;
   project_id?: string | null;
   budget_amount?: number | string | null;

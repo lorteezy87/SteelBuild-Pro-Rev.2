@@ -183,7 +183,12 @@ export function SubmittalDetail({
     chainStepIndex?: number;
   } | null>(null);
   const responseMatrix = useMemo(
-    () => buildResponseMatrix({ rounds, responses: sheetResponses, drawings }),
+    () =>
+      buildResponseMatrix({
+        rounds,
+        responses: sheetResponses as never,
+        drawings: drawings as never,
+      }),
     [rounds, sheetResponses, drawings],
   );
   const forecast = useMemo(
@@ -550,7 +555,7 @@ export function SubmittalDetail({
           ) && (
           <DetailSection title={`Returned comments (${commentDispositions.length})`}>
             <CommentDispositionChecklist
-              dispositions={commentDispositions}
+              dispositions={commentDispositions as never}
               onAdd={onCommentDispositionAdd}
               onUpdateStatus={onCommentDispositionStatus}
               onUpdateResolution={onCommentDispositionResolution}
@@ -1164,7 +1169,13 @@ function EditableMeta({ label, value, displayValue, kind = "text", choices, allo
   );
 
   if (!editing) {
-    const shown = displayValue || value;
+    const shownRaw = displayValue ?? value;
+    const shownLabel =
+      shownRaw === null || shownRaw === undefined || shownRaw === ""
+        ? "—"
+        : typeof shownRaw === "string" || typeof shownRaw === "number"
+          ? String(shownRaw)
+          : String(shownRaw);
     return (
       <div>
         {labelEl}
@@ -1174,7 +1185,7 @@ function EditableMeta({ label, value, displayValue, kind = "text", choices, allo
           style={{
             fontFamily: "var(--font-body)",
             fontSize: 12,
-            color: warn ? "var(--status-error)" : (shown ? "var(--text-primary)" : "var(--text-muted)"),
+            color: warn ? "var(--status-error)" : (shownLabel !== "—" ? "var(--text-primary)" : "var(--text-muted)"),
             fontWeight: warn ? 700 : 500,
             cursor: "text",
             padding: "2px 0",
@@ -1183,7 +1194,7 @@ function EditableMeta({ label, value, displayValue, kind = "text", choices, allo
           onMouseEnter={(e) => { e.currentTarget.style.borderBottom = "1px dashed var(--border-default)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.borderBottom = "1px dashed transparent"; }}
         >
-          {shown || "—"}
+          {shownLabel}
         </div>
       </div>
     );
