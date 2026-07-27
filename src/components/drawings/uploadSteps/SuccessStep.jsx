@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 
 // ─── Step 5: Success ─────────────────────────────────────────────────
-export default function StepSuccess({ createdCount, fileResults, onViewLog, onUploadAnother }) {
+export default function SuccessStep({ createdCount, fileResults, onViewLog, onUploadAnother }) {
   return (
     <div style={{ textAlign: "center", padding: "30px 0" }}>
       <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--success-muted)", border: "2px solid var(--success-border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>

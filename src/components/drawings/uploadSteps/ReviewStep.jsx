@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft, AlertTriangle } from "lucide-react";
 import { sheetReviewFlags } from "@/components/drawings/intakeReview";
-import { DISCIPLINES } from "./uploadWizardConstants";
+import { DISCIPLINES } from "../upload/uploadWizardConstants";
 
-// ─── Step 4: Review Sheets ────────────────────────────────────────────
-export default function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFields = {}, onBack, onCreate, existingDrawings = [] }) {
+// ─── Review: verify AI-extracted sheets ───────────────────────────────
+export default function ReviewStep({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFields = {}, onBack, onCreate, existingDrawings = [] }) {
   const [search, setSearch]         = useState("");
   const [discFilter, setDiscFilter] = useState("all");
   const [fileFilter, setFileFilter] = useState("all");

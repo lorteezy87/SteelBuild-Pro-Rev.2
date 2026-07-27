@@ -4,13 +4,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronRight, ChevronLeft } from "lucide-react";
-import { DISCIPLINES, STAGES } from "./uploadWizardConstants";
+import { DISCIPLINES, STAGES } from "../upload/uploadWizardConstants";
 
-// ─── Step 1: Set Name + optional defaults (BEFORE file selection) ─────
-// The only required field is the Drawing Set Name. All other fields are
-// defaults that get applied per-sheet unless the AI extraction finds
-// something better (or the user edits the child rows on the review step).
-export default function StepMeta({ meta, setMeta, onBack, onNext, projectName, existingSetNames = [] }) {
+// ─── Set info: name + optional defaults (BEFORE file selection) ─────
+export default function SetInfoStep({ meta, setMeta, onBack, onNext, projectName, existingSetNames = [] }) {
   const set = (k, v) => setMeta(p => ({ ...p, [k]: v }));
   const trimmedName = (meta.setName || "").trim();
   const canContinue = trimmedName.length > 0;
