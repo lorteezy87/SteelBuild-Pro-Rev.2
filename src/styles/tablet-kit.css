@@ -89,6 +89,15 @@
   grid-template-columns: 1fr 1fr;
 }
 
+.tablet-list-detail__list,
+.tablet-list-detail__detail {
+  min-width: 0;
+}
+
+.tablet-list-detail__list--full {
+  grid-column: 1 / -1;
+}
+
 .tablet-data-table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
