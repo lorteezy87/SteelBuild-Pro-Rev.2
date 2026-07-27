@@ -12,6 +12,7 @@ import type {
   DrawingSignoffEvidence,
   ReadinessDrawing,
   ReadinessPieceDrawing,
+  ReadinessPieceDrawingSet,
   ReadinessWorkPackage,
   SheetResponseEvidence,
   SubmittalEvidence,
@@ -28,6 +29,7 @@ export interface PieceCommentDispositionEvidence extends CommentDispositionLike 
 export interface PieceRelationshipSnapshot {
   pieces: PieceRegisterRow[];
   pieceDrawings: ReadinessPieceDrawing[];
+  pieceDrawingSets: ReadinessPieceDrawingSet[];
   drawings: ReadinessDrawing[];
   workPackages: ReadinessWorkPackage[];
   drawingSets: DrawingSetEvidence[];
@@ -112,6 +114,7 @@ export async function fetchPieceRelationshipSnapshot(
   // strand WP assignment. Readiness panels degrade gracefully with empty sets.
   const [
     pieceDrawings,
+    pieceDrawingSets,
     drawings,
     drawingSets,
     submittals,
@@ -122,6 +125,11 @@ export async function fetchPieceRelationshipSnapshot(
     commentDispositions,
   ] = await Promise.all([
     fetchOptionalProjectRows<ReadinessPieceDrawing>("piece_drawings", projectId),
+    fetchOptionalProjectRows<ReadinessPieceDrawingSet>(
+      "piece_drawing_sets",
+      projectId,
+      "piece_id, drawing_set_id, project_id",
+    ),
     fetchOptionalProjectRows<ReadinessDrawing>(
       "drawings",
       projectId,
@@ -130,7 +138,7 @@ export async function fetchPieceRelationshipSnapshot(
     fetchOptionalProjectRows<DrawingSetEvidence>(
       "drawing_sets",
       projectId,
-      "id, set_approval_status, is_deleted, deleted_at",
+      "id, set_name, set_approval_status, is_deleted, deleted_at",
     ),
     fetchOptionalProjectRows<SubmittalEvidence>(
       "submittals",
@@ -167,6 +175,7 @@ export async function fetchPieceRelationshipSnapshot(
   return {
     pieces,
     pieceDrawings,
+    pieceDrawingSets,
     drawings,
     workPackages,
     drawingSets,
@@ -217,5 +226,29 @@ export function unlinkPieceDrawing(projectId: string, pieceId: string, drawingId
     p_project_id: projectId,
     p_piece_id: pieceId,
     p_drawing_id: drawingId,
+  });
+}
+
+export function linkPieceDrawingSet(
+  projectId: string,
+  pieceId: string,
+  drawingSetId: string,
+) {
+  return callRpc("link_piece_drawing_set", {
+    p_project_id: projectId,
+    p_piece_id: pieceId,
+    p_drawing_set_id: drawingSetId,
+  });
+}
+
+export function unlinkPieceDrawingSet(
+  projectId: string,
+  pieceId: string,
+  drawingSetId: string,
+) {
+  return callRpc("unlink_piece_drawing_set", {
+    p_project_id: projectId,
+    p_piece_id: pieceId,
+    p_drawing_set_id: drawingSetId,
   });
 }
