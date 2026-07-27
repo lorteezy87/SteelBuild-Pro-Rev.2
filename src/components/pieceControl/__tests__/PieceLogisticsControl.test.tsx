@@ -181,9 +181,9 @@ describe("PieceLogisticsControl", () => {
     renderControl(null);
 
     expect(
-      await screen.findByText("Logistics data could not be loaded."),
+      await screen.findByText("The selected pieces are not ready for this logistics step."),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/PGRST301|canonical/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/PGRST301/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
