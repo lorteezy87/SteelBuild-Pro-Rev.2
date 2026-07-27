@@ -1,7 +1,7 @@
 # Dual Theme Dark Completion — Design Spec
 
 - **Date:** 2026-07-27
-- **Status:** Approved (design) — awaiting implementation plan
+- **Status:** Approved (design) — implementation plan ready (`docs/superpowers/plans/2026-07-27-dual-theme-dark-completion.md`)
 - **Branch:** `cursor/dual-theme-dark-completion-0b3b`
 - **Continues:** [[2026-06-28-light-command-theme-global-rollout-design]] Phase 4 (previously deferred)
 - **Supersedes (directive):** `AGENT_CLAIMS.md` owner lock “do NOT dark-theme command_ui” — replaced by dual-theme rules below
