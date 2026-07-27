@@ -236,6 +236,7 @@ export default function PieceRelationshipManager({
       work_package_id: piece.work_package_id,
       sequence_number: piece.sequence_number,
       erection_area: piece.erection_area,
+      metadata: piece.metadata,
       is_deleted: Boolean(piece.is_deleted || piece.deleted_at),
     }));
     let workPackages = snapshot?.workPackages ?? [];
@@ -463,7 +464,7 @@ export default function PieceRelationshipManager({
             }}
           >
             <Sparkles size={14} aria-hidden="true" />
-            {" "}Auto-assign by sequence / area
+            {" "}Auto-assign by import / sequence
           </button>
         </div>
 
@@ -472,13 +473,21 @@ export default function PieceRelationshipManager({
             <p>
               <strong>Auto-assign preview</strong>
               {" — "}
-              matches sequence number first, then erection area. Ambiguous matches are skipped.
+              matches import filename to work package name first, then sequence / area.
+              Ambiguous matches are skipped.
             </p>
             <p>
               <Pill tone="info">{autoAssignPlan.assignments.length} to assign</Pill>
               {" "}
               <Pill tone="neutral">{autoAssignPlan.skipped.length} skipped</Pill>
             </p>
+            {autoAssignPlan.assignments.length === 0 && (
+              <p>
+                No confident matches. Pieces need an import filename that lines up with a
+                work package name (e.g. “Anchor Bolt” → WP Anchor Bolts), or matching
+                sequence / area fields on both sides.
+              </p>
+            )}
             {autoAssignSkipSummary && Object.keys(autoAssignSkipSummary).length > 0 && (
               <ul className="piece-readiness-card__blockers">
                 {Object.entries(autoAssignSkipSummary).map(([reason, count]) => (
