@@ -49,15 +49,20 @@ export const functions = {
         throw new SupabaseOperationError('number_sequences', 'get_next_sequence_number', lastError);
       }
 
-      // LLM proxy
+      // LLM proxy — prefer integrations.Core.InvokeLLM (src/api/client/llm.ts).
+      // This legacy dispatcher path must still fail closed: never return a
+      // success-shaped payload with error: null when the proxy is unavailable.
       case 'invokeLLM':
       case 'anthropicProxy': {
         try {
           const { data, error } = await supabase.functions.invoke('llm-proxy', { body: params });
           if (error) throw error;
           return { data };
-        } catch {
-          return { data: { text: 'AI features require the "llm-proxy" Supabase Edge Function.', error: null } };
+        } catch (err: unknown) {
+          const detail =
+            (err as { message?: string } | undefined)?.message ||
+            'AI features require the "llm-proxy" Supabase Edge Function.';
+          return { data: { text: null, error: detail } };
         }
       }
 
@@ -69,14 +74,12 @@ export const functions = {
           'Cross-module alert scan is unavailable: the generate-alerts Edge Function is not deployed. Alerts are created from module workflows (RFIs, Deliveries).',
         );
 
-      // Agent memory
+      // Agent memory — retired with the chat assistant. Do not invoke a
+      // remote function or return a null "success" that hides the retirement.
       case 'agentMemory':
-        try {
-          const { data } = await supabase.functions.invoke('agent-memory', { body: params });
-          return { data };
-        } catch {
-          return { data: null };
-        }
+        throw new Error(
+          'Agent memory is unavailable: the retired memory Edge Function is not deployed.',
+        );
 
       default:
         throw new Error(`Unsupported backend function: ${name}`);

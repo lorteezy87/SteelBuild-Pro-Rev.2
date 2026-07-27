@@ -210,7 +210,13 @@ export function useSubmittalsPageMutations(args: {
   });
 
   const bulkDeleteMut = useMutation({
-    mutationFn: async (ids: string[]) => batchProcess(ids, (id) => entities.Submittal.delete(id)),
+    mutationFn: async (ids: string[]) => {
+      const results = await batchProcess(ids, (id) => entities.Submittal.delete(id));
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} deletes failed.`);
+      }
+      return results;
+    },
     onSuccess: async (results) => {
       await invalidate();
       await Promise.all(
