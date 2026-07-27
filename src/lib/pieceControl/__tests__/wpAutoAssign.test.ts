@@ -242,6 +242,33 @@ describe("planWorkPackageAutoAssign", () => {
     expect(plan.skipped[0]).toMatchObject({ reason: "ambiguous" });
   });
 
+  it("treats pieces on soft-deleted work packages as unassigned", () => {
+    const plan = planWorkPackageAutoAssign(
+      [
+        {
+          id: "p1",
+          mark: "B1",
+          sequence_number: "2",
+          work_package_id: "wp-dead",
+        },
+      ],
+      [
+        ...wps,
+        {
+          id: "wp-dead",
+          wp_number: "WP-099",
+          name: "Gone",
+          is_deleted: true,
+          deleted_at: "2026-07-01T00:00:00Z",
+        },
+      ],
+    );
+    expect(plan.assignments[0]).toMatchObject({
+      workPackageId: "wp-2",
+      fromWorkPackageId: null,
+    });
+  });
+
   it("skips pieces with no sequence, area, or import source", () => {
     const plan = planWorkPackageAutoAssign(
       [{ id: "p1", mark: "B1", work_package_id: null }],

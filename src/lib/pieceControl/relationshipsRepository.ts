@@ -93,7 +93,7 @@ export async function fetchPieceRelationshipSnapshot(
   projectId: string,
 ): Promise<PieceRelationshipSnapshot> {
   // Core rows: fail closed — without these the assignment UI cannot run.
-  const [pieces, workPackages] = await Promise.all([
+  const [pieces, workPackagesRaw] = await Promise.all([
     fetchPieceRegister(projectId).catch((error) => {
       throw taggedTableError("pieces", error);
     }),
@@ -104,6 +104,9 @@ export async function fetchPieceRelationshipSnapshot(
       "id, project_id, wp_number, name, sequence_number, area, is_deleted, deleted_at",
     ),
   ]);
+  const workPackages = workPackagesRaw.filter(
+    (wp) => !wp.is_deleted && !wp.deleted_at,
+  );
 
   // Everything else is best-effort so a single missing/denied table does not
   // strand WP assignment. Readiness panels degrade gracefully with empty sets.

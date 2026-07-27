@@ -82,20 +82,33 @@ export default function PieceRelationshipManager({
     ),
     [containerIds, snapshot?.pieces],
   );
+  const workPackageMap = useMemo(
+    () => new Map(
+      (snapshot?.workPackages ?? []).map((wp) => [wp.id, formatWorkPackageTitle(wp)]),
+    ),
+    [snapshot?.workPackages],
+  );
+  const liveWorkPackageId = (piece: { work_package_id?: string | null }) =>
+    piece.work_package_id && workPackageMap.has(piece.work_package_id)
+      ? piece.work_package_id
+      : null;
+
   const packageScopedLeaves = focusedWorkPackageId
-    ? leafPieces.filter((piece) =>
-      !piece.work_package_id || piece.work_package_id === focusedWorkPackageId
-    )
+    ? leafPieces.filter((piece) => {
+      const liveId = liveWorkPackageId(piece);
+      return !liveId || liveId === focusedWorkPackageId;
+    })
     : leafPieces;
 
   const selectablePieces = useMemo(() => {
     const mark = markFilter.trim().toLowerCase();
     return packageScopedLeaves.filter((piece) => {
-      if (scopeFilter === "unassigned" && piece.work_package_id) return false;
+      const liveId = liveWorkPackageId(piece);
+      if (scopeFilter === "unassigned" && liveId) return false;
       if (
         scopeFilter === "package" &&
         focusedWorkPackageId &&
-        piece.work_package_id !== focusedWorkPackageId
+        liveId !== focusedWorkPackageId
       ) {
         return false;
       }
@@ -104,7 +117,11 @@ export default function PieceRelationshipManager({
       }
       return true;
     });
-  }, [focusedWorkPackageId, markFilter, packageScopedLeaves, scopeFilter]);
+  }, [focusedWorkPackageId, markFilter, packageScopedLeaves, scopeFilter, workPackageMap]);
+
+  const drawingPieces = focusedWorkPackageId
+    ? leafPieces.filter((piece) => liveWorkPackageId(piece) === focusedWorkPackageId)
+    : leafPieces;
 
   const selectedTons = useMemo(() => {
     let lbs = 0;
@@ -127,10 +144,6 @@ export default function PieceRelationshipManager({
     }
     return { tons: lbs / 2000, known, selected: selectedPieceIds.size };
   }, [selectablePieces, selectedPieceIds]);
-
-  const drawingPieces = focusedWorkPackageId
-    ? leafPieces.filter((piece) => piece.work_package_id === focusedWorkPackageId)
-    : leafPieces;
 
   const readiness = useMemo(() => {
     if (!snapshot) return [];
@@ -157,9 +170,6 @@ export default function PieceRelationshipManager({
     (link) => link.piece_id === selectedDrawingPieceId,
   );
   const drawingMap = new Map((snapshot?.drawings ?? []).map((drawing) => [drawing.id, drawing]));
-  const workPackageMap = new Map(
-    (snapshot?.workPackages ?? []).map((wp) => [wp.id, formatWorkPackageTitle(wp)]),
-  );
 
   const invalidate = async () => {
     await Promise.all([
@@ -408,7 +418,9 @@ export default function PieceRelationshipManager({
               <strong>{piece.piece_mark}</strong>
               <span className="piece-assignment-row__lot">Lot {piece.lot_code}</span>
               <span className="piece-assignment-row__package">
-                {piece.work_package_id ? workPackageMap.get(piece.work_package_id) ?? "Assigned" : "Unassigned"}
+                {liveWorkPackageId(piece)
+                  ? workPackageMap.get(liveWorkPackageId(piece)!) ?? "Assigned"
+                  : "Unassigned"}
               </span>
             </label>
           ))}
@@ -531,13 +543,6 @@ export default function PieceRelationshipManager({
                   autoAssignPlan.assignments.length === 0 || autoAssignMutation.isPending
                 }
                 onClick={() => {
-                  if (
-                    !window.confirm(
-                      `Assign ${autoAssignPlan.assignments.length} piece(s) to matched work packages?`,
-                    )
-                  ) {
-                    return;
-                  }
                   autoAssignMutation.mutate(autoAssignPlan);
                 }}
               >
