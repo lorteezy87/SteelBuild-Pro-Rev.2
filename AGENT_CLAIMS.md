@@ -29,6 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-07-27T01:57:00Z | cursor-tablet-task-7-3d17 | Tablet list/detail primitive | src/components/tablet/TabletListDetail.tsx, src/components/tablet/__tests__/TabletListDetail.test.tsx, src/styles/tablet-kit.css, .superpowers/sdd/task-7-report.md | Implement Task 7 TabletListDetail with TDD, split/stacked detail behavior, and RED/GREEN report. |
 | 2026-07-27T01:32:00Z | cursor-tablet-pm-kit-design-3d17 | Tablet PM layout kit design | docs/superpowers/specs/2026-07-27-tablet-pm-layout-kit-design.md | Spec tablet-first shared layout kit + migration order for Dashboard/Projects/RFIs/Detailing. |
 | 2026-07-26T04:00:00Z | cursor-ap-contacts-dms-d3a1 | Contacts + DocumentStorageSettings hygiene | src/pages/Contacts.jsx, src/components/contacts/ContactFormModal.jsx, src/components/dms/DocumentStorageSettings.jsx, src/pages/Vendors.jsx | RegisterFetchBody + Contact create withProjectId/toasts; LinkedFolder.create fail-closed; Vendors toast hygiene (IDs 18/48/50). |
 | 2026-07-12T00:00:00Z | opus-phase1-batch1 | False-success cleanup batch 1 | src/api/client/functions.ts, src/config/routes.js, src/pages/AgentMemory.jsx, src/components/dms/DocumentStorageSettings.jsx | Fail-close unavailable backend invokes; remove AgentMemory route exposure; disable fake linked-folder Sync now action until backend implementation exists. |
