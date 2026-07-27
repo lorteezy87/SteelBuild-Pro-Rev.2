@@ -22,6 +22,19 @@
   --cmd-danger-text: #b42318;
   --cmd-info: #2e90e0;
   --cmd-review: #8b5cf6;
+  --cmd-chip-bg: #e9edf2;
+  --cmd-chip-good-bg: #d6f0de;
+  --cmd-chip-warn-bg: #fbe5c0;
+  --cmd-chip-danger-bg: #f9d2ce;
+  --cmd-chip-info-bg: #d7e5fb;
+  --cmd-icon-wash: #fdf3da;
+  --cmd-kpi-icon-bg: #f1f4f8;
+  --cmd-row-hover: #f7f9fc;
+  --cmd-hero-fade: rgba(255, 255, 255, 0.42);
+  --cmd-on-gold: #20160a;
+  --cmd-pill-good-fg: #04331d;
+  --cmd-pill-warn-fg: #422c00;
+  --cmd-pill-neutral-fg: #3d4753;
   background: var(--cmd-bg);
   color: var(--cmd-text);
 }
@@ -32,28 +45,28 @@
 
 /* Hero — shared art sits on the right at a deliberately smaller scale so the
    full construction scene reads as a scene rather than a close-up crop. */
-[data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 14px; background-color: var(--cmd-surface); background-image: linear-gradient(90deg, var(--cmd-surface) 14%, rgba(255,255,255,0.42) 44%, rgba(255,255,255,0.00) 100%), var(--cmd-hero-photo, url("/photos/steelbuildpro-hero.svg")); background-size: 100% 100%, min(54%, 820px) auto; background-position: center, right center; background-repeat: no-repeat; overflow: hidden; }
+[data-skin="command"] .cmd-hero { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 24px; border: 1px solid var(--cmd-border); border-radius: 14px; background-color: var(--cmd-surface); background-image: linear-gradient(90deg, var(--cmd-surface) 14%, var(--cmd-hero-fade) 44%, rgba(255,255,255,0.00) 100%), var(--cmd-hero-photo, url("/photos/steelbuildpro-hero.svg")); background-size: 100% 100%, min(54%, 820px) auto; background-position: center, right center; background-repeat: no-repeat; overflow: hidden; }
 /* The gradient sits above the image so each page title, status, and action stays
    readable. `PageHero` supplies the shared artwork; the fallback also covers any
    command hero rendered outside of that component. */
 [data-skin="command"] .cmd-hero--photo {
-  background-image: linear-gradient(90deg, var(--cmd-surface) 14%, rgba(255,255,255,0.42) 44%, rgba(255,255,255,0.00) 100%), var(--cmd-hero-photo, url("/photos/steelbuildpro-hero.svg"));
+  background-image: linear-gradient(90deg, var(--cmd-surface) 14%, var(--cmd-hero-fade) 44%, rgba(255,255,255,0.00) 100%), var(--cmd-hero-photo, url("/photos/steelbuildpro-hero.svg"));
   background-size: 100% 100%, min(54%, 820px) auto;
   background-position: center, right center;
   background-repeat: no-repeat;
 }
 [data-skin="command"] .cmd-hero__left, [data-skin="command"] .cmd-hero__right { position: relative; z-index: 2; }
 [data-skin="command"] .cmd-hero__left { display: flex; gap: 14px; align-items: flex-start; }
-[data-skin="command"] .cmd-hero__icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #fdf3da; color: var(--cmd-gold); flex-shrink: 0; }
+[data-skin="command"] .cmd-hero__icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--cmd-icon-wash); color: var(--cmd-gold); flex-shrink: 0; }
 [data-skin="command"] .cmd-hero__title { font-size: 26px; font-weight: 700; margin: 0; color: var(--cmd-text); }
 [data-skin="command"] .cmd-hero__subtitle { margin: 3px 0 11px; max-width: 520px; color: var(--cmd-text-muted); font-size: 13px; }
 [data-skin="command"] .cmd-hero__chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 [data-skin="command"] .cmd-hero__project { font-weight: 600; font-size: 13px; color: var(--cmd-text); }
-[data-skin="command"] .cmd-chip { padding: 3px 10px; border-radius: 999px; background: #e9edf2; color: var(--cmd-text-muted); font-size: 12px; }
-[data-skin="command"] .cmd-chip--good { background: #d6f0de; color: var(--cmd-good-text); }
-[data-skin="command"] .cmd-chip--warn { background: #fbe5c0; color: var(--cmd-warn-text); }
-[data-skin="command"] .cmd-chip--danger { background: #f9d2ce; color: var(--cmd-danger-text); }
-[data-skin="command"] .cmd-chip--info { background: #d7e5fb; color: var(--cmd-info); }
+[data-skin="command"] .cmd-chip { padding: 3px 10px; border-radius: 999px; background: var(--cmd-chip-bg); color: var(--cmd-text-muted); font-size: 12px; }
+[data-skin="command"] .cmd-chip--good { background: var(--cmd-chip-good-bg); color: var(--cmd-good-text); }
+[data-skin="command"] .cmd-chip--warn { background: var(--cmd-chip-warn-bg); color: var(--cmd-warn-text); }
+[data-skin="command"] .cmd-chip--danger { background: var(--cmd-chip-danger-bg); color: var(--cmd-danger-text); }
+[data-skin="command"] .cmd-chip--info { background: var(--cmd-chip-info-bg); color: var(--cmd-info); }
 [data-skin="command"] .cmd-hero__right { display: flex; gap: 12px; }
 [data-skin="command"] .cmd-statcard { min-width: 96px; padding: 10px 14px; border: 1px solid var(--cmd-border); border-radius: 10px; background: var(--cmd-surface); text-align: center; }
 [data-skin="command"] .cmd-statcard__value { font-size: 24px; font-weight: 700; color: var(--cmd-text); }
@@ -62,18 +75,18 @@
 /* KPI cards — a row of individual white cards */
 [data-skin="command"] .cmd-kpi-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
 [data-skin="command"] .cmd-kpi { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; padding: 14px; }
-[data-skin="command"] .cmd-kpi__icon { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: #f1f4f8; color: var(--cmd-text-muted); margin-bottom: 8px; }
+[data-skin="command"] .cmd-kpi__icon { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: var(--cmd-kpi-icon-bg); color: var(--cmd-text-muted); margin-bottom: 8px; }
 [data-skin="command"] .cmd-kpi__value { font-size: 26px; font-weight: 700; line-height: 1.1; color: var(--cmd-text); }
 [data-skin="command"] .cmd-kpi__label { font-size: 12px; color: var(--cmd-text); margin-top: 2px; }
 [data-skin="command"] .cmd-kpi__sub { font-size: 11px; color: var(--cmd-text-muted); }
 [data-skin="command"] .cmd-kpi--good .cmd-kpi__value { color: var(--cmd-good); }
-[data-skin="command"] .cmd-kpi--good .cmd-kpi__icon { background: #d6f0de; color: var(--cmd-good); }
+[data-skin="command"] .cmd-kpi--good .cmd-kpi__icon { background: var(--cmd-chip-good-bg); color: var(--cmd-good); }
 [data-skin="command"] .cmd-kpi--warn .cmd-kpi__value { color: var(--cmd-warn); }
-[data-skin="command"] .cmd-kpi--warn .cmd-kpi__icon { background: #fbe5c0; color: var(--cmd-warn); }
+[data-skin="command"] .cmd-kpi--warn .cmd-kpi__icon { background: var(--cmd-chip-warn-bg); color: var(--cmd-warn); }
 [data-skin="command"] .cmd-kpi--danger .cmd-kpi__value { color: var(--cmd-danger); }
-[data-skin="command"] .cmd-kpi--danger .cmd-kpi__icon { background: #f9d2ce; color: var(--cmd-danger); }
+[data-skin="command"] .cmd-kpi--danger .cmd-kpi__icon { background: var(--cmd-chip-danger-bg); color: var(--cmd-danger); }
 [data-skin="command"] .cmd-kpi--info .cmd-kpi__value { color: var(--cmd-info); }
-[data-skin="command"] .cmd-kpi--info .cmd-kpi__icon { background: #d7e5fb; color: var(--cmd-info); }
+[data-skin="command"] .cmd-kpi--info .cmd-kpi__icon { background: var(--cmd-chip-info-bg); color: var(--cmd-info); }
 
 /* Decision panels */
 [data-skin="command"] .cmd-panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
@@ -90,9 +103,9 @@
 
 /* Pills */
 [data-skin="command"] .cmd-pill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-[data-skin="command"] .cmd-pill--neutral { background: #e9edf2; color: #3d4753; }
-[data-skin="command"] .cmd-pill--good { background: var(--cmd-good); color: #04331d; }
-[data-skin="command"] .cmd-pill--warn { background: var(--cmd-warn); color: #422c00; }
+[data-skin="command"] .cmd-pill--neutral { background: var(--cmd-chip-bg); color: var(--cmd-pill-neutral-fg); }
+[data-skin="command"] .cmd-pill--good { background: var(--cmd-good); color: var(--cmd-pill-good-fg); }
+[data-skin="command"] .cmd-pill--warn { background: var(--cmd-warn); color: var(--cmd-pill-warn-fg); }
 [data-skin="command"] .cmd-pill--danger { background: var(--cmd-danger); color: #fff; }
 [data-skin="command"] .cmd-pill--info { background: var(--cmd-info); color: #fff; }
 [data-skin="command"] .cmd-pill--review { background: var(--cmd-review); color: #fff; }
@@ -105,10 +118,10 @@
 [data-skin="command"] .cmd-filterbar__filters { display: flex; gap: 8px; flex: 1; flex-wrap: wrap; }
 [data-skin="command"] .cmd-filterbar__actions { display: flex; gap: 8px; }
 [data-skin="command"] .cmd-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--cmd-border); background: var(--cmd-surface); color: var(--cmd-text); }
-[data-skin="command"] .cmd-btn--primary { background: var(--cmd-gold); border-color: var(--cmd-gold); color: #20160a; }
+[data-skin="command"] .cmd-btn--primary { background: var(--cmd-gold); border-color: var(--cmd-gold); color: var(--cmd-on-gold); }
 [data-skin="command"] .cmd-btn--ghost { background: transparent; }
 [data-skin="command"] .cmd-chip-btn { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--cmd-border); background: var(--cmd-surface); color: var(--cmd-text-muted); cursor: pointer; font-size: 12px; }
-[data-skin="command"] .cmd-chip-btn.is-active { background: var(--cmd-gold); border-color: var(--cmd-gold); color: #20160a; }
+[data-skin="command"] .cmd-chip-btn.is-active { background: var(--cmd-gold); border-color: var(--cmd-gold); color: var(--cmd-on-gold); }
 
 /* Table */
 [data-skin="command"] .cmd-table-wrap { background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; overflow: auto; }
@@ -116,7 +129,7 @@
 [data-skin="command"] .cmd-table th { text-align: left; padding: 10px 14px; color: var(--cmd-text-muted); font-weight: 600; border-bottom: 1px solid var(--cmd-border); white-space: nowrap; background: var(--cmd-surface); }
 [data-skin="command"] .cmd-table td { padding: 11px 14px; border-bottom: 1px solid var(--cmd-border); color: var(--cmd-text); }
 [data-skin="command"] .cmd-table tr.is-clickable { cursor: pointer; }
-[data-skin="command"] .cmd-table tr.is-clickable:hover td { background: #f7f9fc; }
+[data-skin="command"] .cmd-table tr.is-clickable:hover td { background: var(--cmd-row-hover); }
 [data-skin="command"] .cmd-table__empty { text-align: center; color: var(--cmd-text-muted); padding: 32px; }
 [data-skin="command"] .cmd-overdue { color: var(--cmd-danger); font-weight: 600; }
 [data-skin="command"] .cmd-check { width: 15px; height: 15px; cursor: pointer; accent-color: var(--cmd-gold); vertical-align: middle; }
@@ -131,6 +144,39 @@
   [data-skin="command"] .cmd-hero { flex-direction: column; align-items: flex-start; }
 }
 
+/* Dual theme — command dark maps onto SteelBuild Dark (Phase 4). */
+html.steelbuild-dark[data-skin="command"],
+[data-skin="command"][data-theme="dark"] {
+  --cmd-bg: var(--sbd-bg-base, var(--bg-page));
+  --cmd-surface: var(--sbd-bg-surface, var(--bg-surface));
+  --cmd-border: var(--sbd-border, var(--border-default));
+  --cmd-text: var(--sbd-text, var(--text-primary));
+  --cmd-text-muted: var(--sbd-text-muted, var(--text-muted));
+  --cmd-gold: var(--sbd-gold, var(--accent-light));
+  --cmd-good: var(--sbd-success, var(--status-success));
+  --cmd-warn: var(--sbd-warning, var(--status-warning));
+  --cmd-danger: var(--sbd-error, var(--status-error));
+  --cmd-info: var(--sbd-info, var(--status-info));
+  --cmd-review: var(--sbd-review, var(--status-review));
+  /* Text-on-chip: lighter tones for dark pastel fills */
+  --cmd-good-text: #6ee7b7;
+  --cmd-warn-text: #fcd34d;
+  --cmd-danger-text: #fca5a5;
+  --cmd-chip-bg: rgba(255, 255, 255, 0.08);
+  --cmd-chip-good-bg: rgba(52, 211, 153, 0.16);
+  --cmd-chip-warn-bg: rgba(224, 176, 48, 0.16);
+  --cmd-chip-danger-bg: rgba(248, 113, 113, 0.16);
+  --cmd-chip-info-bg: rgba(96, 165, 250, 0.16);
+  --cmd-icon-wash: rgba(224, 176, 48, 0.18);
+  --cmd-kpi-icon-bg: rgba(255, 255, 255, 0.06);
+  --cmd-row-hover: rgba(255, 255, 255, 0.04);
+  --cmd-hero-fade: rgba(5, 8, 16, 0.55);
+  --cmd-on-gold: #20160a;
+  --cmd-pill-good-fg: #04331d;
+  --cmd-pill-warn-fg: #422c00;
+  --cmd-pill-neutral-fg: var(--cmd-text);
+}
+
 /* ===========================================================================
    Detailing Control Center — panel light-palette port
    ---------------------------------------------------------------------------
@@ -140,41 +186,41 @@
    which are scoped to [data-skin="desktop"]) plus inline `var(--theme)` tokens.
    Under the command shell ([data-skin="command"], NOT "desktop") the desk-*
    rules never match — so cards/pills/tables render UNSTYLED — and the inline
-   theme tokens resolve to the global dark/light theme, so text is dark-on-light
-   or invisible. This block makes the panels read as one finished light surface:
-     (a) alias every theme var the panels consume to the kit's light palette;
+   theme tokens can resolve away from the command shell. This block makes the
+   panels read as one finished command surface:
+     (a) alias every theme var the panels consume to the active command palette;
      (b) re-declare the desktop and SBD chrome classes for command scope.
    Everything is scoped to `.detailing-cc` so it never touches the sidebar/topbar
-   chrome or any other Control Center. The kit is always-light by design, so we
-   force the light palette regardless of the active data-theme.
+   chrome or any other Control Center. The kit follows active `--cmd-*` tokens,
+   light or dark, so command dark mode flows through without SBD page chrome.
    =========================================================================== */
 
-/* (a) Token alias — theme vars the panels consume → kit light palette. */
+/* (a) Token alias — theme vars the panels consume → active command palette. */
 [data-skin="command"] .detailing-cc {
   --bg-page: var(--cmd-bg);
   --bg-surface: var(--cmd-surface);
-  --bg-surface-low: #f7f9fc;
+  --bg-surface-low: var(--cmd-row-hover);
   --bg-surface-high: var(--cmd-surface);
-  --bg-surface-mid: #f1f4f8;
-  --bg-surface-secondary: #f7f9fc;
+  --bg-surface-mid: var(--cmd-kpi-icon-bg);
+  --bg-surface-secondary: var(--cmd-row-hover);
   --bg-input: var(--cmd-surface);
-  --bg-hover: #f1f4f8;
-  --nav-hover-bg: #f1f4f8;
+  --bg-hover: var(--cmd-kpi-icon-bg);
+  --nav-hover-bg: var(--cmd-kpi-icon-bg);
 
   --text-primary: var(--cmd-text);
-  --text-secondary: #3f4a57;
+  --text-secondary: var(--cmd-text-muted);
   --text-muted: var(--cmd-text-muted);
-  --text-disabled: #9aa3af;
+  --text-disabled: var(--cmd-text-muted);
 
   --border: var(--cmd-border);
   --border-default: var(--cmd-border);
-  --border-strong: #d3d9e1;
+  --border-strong: var(--cmd-border);
   --divider: var(--cmd-border);
 
   --accent: var(--cmd-gold);
-  --accent-hover: #d9920a;
-  --accent-muted: #fdf3da;
-  --accent-border: #f0d79a;
+  --accent-hover: var(--cmd-gold);
+  --accent-muted: var(--cmd-icon-wash);
+  --accent-border: var(--cmd-gold);
 
   --status-success: var(--cmd-good);
   --status-warning: var(--cmd-warn);
@@ -185,20 +231,20 @@
   --warning: var(--cmd-warn);
   --danger: var(--cmd-danger);
   --info: var(--cmd-info);
-  --success-muted: #d6f0de;
-  --warning-muted: #fbe5c0;
-  --danger-muted: #f9d2ce;
-  --info-muted: #d7e5fb;
-  --success-border: #bce6cc;
-  --warning-border: #f5dca6;
-  --danger-border: #f3c6c2;
-  --info-border: #cfe0f8;
+  --success-muted: var(--cmd-chip-good-bg);
+  --warning-muted: var(--cmd-chip-warn-bg);
+  --danger-muted: var(--cmd-chip-danger-bg);
+  --info-muted: var(--cmd-chip-info-bg);
+  --success-border: var(--cmd-chip-good-bg);
+  --warning-border: var(--cmd-chip-warn-bg);
+  --danger-border: var(--cmd-chip-danger-bg);
+  --info-border: var(--cmd-chip-info-bg);
 
   --shadow-card: 0 4px 18px rgba(15, 23, 42, 0.08);
 }
 
 /* (b) desk-* chrome — re-declared for the command scope (the [data-skin="desktop"]
-   rules don't apply here). Layout mirrors desktop.css; colors → kit light. */
+   rules don't apply here). Layout mirrors desktop.css; colors → command kit. */
 [data-skin="command"] .detailing-cc .desk-section-card {
   border-radius: 14px;
   border: 1px solid var(--cmd-border);
@@ -218,17 +264,17 @@
 /* Status pills — 12 desktop tones collapsed onto the kit's 4 semantic chips. */
 [data-skin="command"] .detailing-cc .desk-status-pill {
   font-size: 10px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
-  display: inline-block; background: #e9edf2; color: #3d4753;
+  display: inline-block; background: var(--cmd-chip-bg); color: var(--cmd-pill-neutral-fg);
 }
 [data-skin="command"] .detailing-cc .desk-status-pill--open,
 [data-skin="command"] .detailing-cc .desk-status-pill--atrisk,
-[data-skin="command"] .detailing-cc .desk-status-pill--needsaction { background: var(--cmd-warn); color: #422c00; }
+[data-skin="command"] .detailing-cc .desk-status-pill--needsaction { background: var(--cmd-warn); color: var(--cmd-pill-warn-fg); }
 [data-skin="command"] .detailing-cc .desk-status-pill--review,
 [data-skin="command"] .detailing-cc .desk-status-pill--inreview,
 [data-skin="command"] .detailing-cc .desk-status-pill--fieldready { background: var(--cmd-info); color: #fff; }
 [data-skin="command"] .detailing-cc .desk-status-pill--done,
 [data-skin="command"] .detailing-cc .desk-status-pill--approved,
-[data-skin="command"] .detailing-cc .desk-status-pill--fabready { background: var(--cmd-good); color: #04331d; }
+[data-skin="command"] .detailing-cc .desk-status-pill--fabready { background: var(--cmd-good); color: var(--cmd-pill-good-fg); }
 [data-skin="command"] .detailing-cc .desk-status-pill--danger,
 [data-skin="command"] .detailing-cc .desk-status-pill--overdue,
 [data-skin="command"] .detailing-cc .desk-status-pill--blocked { background: var(--cmd-danger); color: #fff; }
@@ -238,18 +284,18 @@
 [data-skin="command"] .detailing-cc .desk-table th {
   text-align: left; font-size: 9px; letter-spacing: .5px; text-transform: uppercase;
   color: var(--cmd-text-muted); font-weight: 700; padding: 8px 10px;
-  border-bottom: 1px solid var(--cmd-border); background: #f7f9fc;
+  border-bottom: 1px solid var(--cmd-border); background: var(--cmd-row-hover);
 }
-[data-skin="command"] .detailing-cc .desk-table td { padding: 9px 10px; border-bottom: 1px solid var(--cmd-border); color: #3f4a57; }
-[data-skin="command"] .detailing-cc .desk-table tbody tr:hover td { background: #f7f9fc; }
+[data-skin="command"] .detailing-cc .desk-table td { padding: 9px 10px; border-bottom: 1px solid var(--cmd-border); color: var(--cmd-text-muted); }
+[data-skin="command"] .detailing-cc .desk-table tbody tr:hover td { background: var(--cmd-row-hover); }
 [data-skin="command"] .detailing-cc .desk-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
-[data-skin="command"] .detailing-cc .sbd-table tbody tr:hover { background: #f7f9fc; }
+[data-skin="command"] .detailing-cc .sbd-table tbody tr:hover { background: var(--cmd-row-hover); }
 
 /* Buttons used inside panels. */
 [data-skin="command"] .detailing-cc .desk-btn-primary,
 [data-skin="command"] .detailing-cc .sbd-btn-primary {
   display: inline-flex; align-items: center; gap: 6px; background: var(--cmd-gold);
-  color: #20160a; border: 1px solid var(--cmd-gold); border-radius: 8px;
+  color: var(--cmd-on-gold); border: 1px solid var(--cmd-gold); border-radius: 8px;
   font-weight: 600; font-size: 12px; padding: 8px 14px; cursor: pointer;
 }
 [data-skin="command"] .detailing-cc .desk-btn-secondary,
@@ -260,17 +306,17 @@
   font-size: 12px; padding: 8px 14px; cursor: pointer;
 }
 [data-skin="command"] .detailing-cc .desk-btn-danger {
-  display: inline-flex; align-items: center; gap: 6px; background: #f9d2ce;
-  color: var(--cmd-danger); border: 1px solid #f3c6c2; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 6px; background: var(--cmd-chip-danger-bg);
+  color: var(--cmd-danger); border: 1px solid var(--cmd-chip-danger-bg); border-radius: 8px;
   font-size: 12px; padding: 8px 14px; cursor: pointer;
 }
 
 /* Empty / loading states + badges. */
 [data-skin="command"] .detailing-cc .desk-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 36px 20px; color: var(--cmd-text-muted); }
-[data-skin="command"] .detailing-cc .desk-state__title { font-size: 14px; font-weight: 600; color: #3f4a57; }
+[data-skin="command"] .detailing-cc .desk-state__title { font-size: 14px; font-weight: 600; color: var(--cmd-text-muted); }
 [data-skin="command"] .detailing-cc .desk-state__msg { font-size: 12px; color: var(--cmd-text-muted); max-width: 360px; }
 [data-skin="command"] .detailing-cc .desk-skeleton { background: linear-gradient(90deg, rgba(30,41,59,.06), rgba(30,41,59,.12), rgba(30,41,59,.06)); background-size: 200% 100%; border-radius: 6px; animation: desk-shimmer 1.3s ease-in-out infinite; }
-[data-skin="command"] .detailing-cc .sbd-badge-info { background: #d7e5fb; color: var(--cmd-info); border: 1px solid #cfe0f8; }
+[data-skin="command"] .detailing-cc .sbd-badge-info { background: var(--cmd-chip-info-bg); color: var(--cmd-info); border: 1px solid var(--cmd-chip-info-bg); }
 
 /* sbd-* cards — replace the dark white-alpha inset shadows with light ones. */
 [data-skin="command"] .detailing-cc .sbd-card,
