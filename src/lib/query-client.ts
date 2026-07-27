@@ -1,6 +1,7 @@
 import { QueryCache, QueryClient } from '@tanstack/react-query';
 import * as Sentry from '@sentry/react';
 import { toast } from 'sonner';
+import { normalizeThrownQueryError } from '@/lib/postgrestErrors';
 
 type MaybeStatusError = { status?: number; response?: { status?: number } } | null | undefined;
 
@@ -18,7 +19,10 @@ const BACKGROUND_TOAST_THROTTLE_MS = 30 * 1000;
 
 const queryCache = new QueryCache({
 	onError: (error, query) => {
-		Sentry.captureException(error, {
+		// Supabase often rejects with a plain `{ code, message, ... }` object.
+		// Normalize so Sentry and presenters keep the real PostgREST text.
+		const normalized = normalizeThrownQueryError(error);
+		Sentry.captureException(normalized, {
 			tags: { source: 'react-query' },
 			extra: { queryKey: query.queryKey },
 		});

@@ -1,5 +1,9 @@
 import { supabase } from "@/lib/supabase";
 import type { CommentDispositionLike } from "@/lib/commentDispositionGate";
+import {
+  isMissingSchemaObjectError,
+  postgrestErrorMessage,
+} from "@/lib/postgrestErrors";
 import { fetchPieceRegister, type PieceRegisterRow } from "./repository";
 import type {
   DrawingReviewEvidence,
@@ -37,16 +41,8 @@ export interface PieceRelationshipSnapshot {
 
 const db = supabase as any;
 
-function postgrestMessage(error: unknown): string {
-  if (!error || typeof error !== "object") return String(error ?? "");
-  const record = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
-  return [record.message, record.details, record.hint, record.code]
-    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
-    .join(" — ");
-}
-
 function taggedTableError(table: string, error: unknown): Error {
-  const detail = postgrestMessage(error) || "query failed";
+  const detail = postgrestErrorMessage(error) || "query failed";
   return new Error(`[${table}] ${detail}`);
 }
 
@@ -82,7 +78,13 @@ async function fetchOptionalProjectRows<T>(
   try {
     return await fetchProjectRows<T>(table, projectId, select);
   } catch (error) {
-    console.warn(`[piece-relationships] optional table unavailable:`, error);
+    // Migration lag (PGRST205) and transient RLS/network noise on enrichment
+    // tables must not blank Lots & links — WP assign still needs pieces + WPs.
+    if (isMissingSchemaObjectError(error)) {
+      console.warn(`[piece-relationships] optional table missing:`, error);
+    } else {
+      console.warn(`[piece-relationships] optional table unavailable:`, error);
+    }
     return [];
   }
 }
