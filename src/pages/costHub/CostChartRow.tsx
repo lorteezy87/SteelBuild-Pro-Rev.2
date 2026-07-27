@@ -18,8 +18,8 @@ import {
   AreaChart, Area, ReferenceLine,
 } from "recharts";
 import { formatCurrencyShort, formatCurrency } from "@/components/shared/formatters";
+import { getChartTheme } from "@/components/shared/RechartsThemeConfig";
 import type { BarChartDatum, CumulativeDatum, PieDatum } from "./costControlCenter.derive";
-import { CATEGORY_COLORS } from "./costControlCenter.derive";
 
 // ─── Shared tooltip ──────────────────────────────────────────────────────────
 
@@ -27,20 +27,22 @@ function CustomTooltip({ active, payload, label }: {
   active?: boolean;
   payload?: Array<{ color: string; name: string; value: number }>;
   label?: string;
+  chartTheme?: ReturnType<typeof getChartTheme>;
 }) {
   if (!active || !payload?.length) return null;
+  const theme = chartTheme ?? getChartTheme();
   return (
     <div style={{
-      background: "var(--bg-surface)",
-      border: "1px solid var(--accent-border)",
-      borderRadius: 8,
+      background: theme.tooltip.background,
+      border: theme.tooltip.border,
+      borderRadius: theme.tooltip.borderRadius,
       padding: "10px 14px",
-      fontFamily: "var(--font-mono)",
+      fontFamily: theme.tooltip.fontFamily,
       fontSize: 10,
-      color: "var(--text-primary)",
-      boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+      color: theme.tooltip.color,
+      boxShadow: "var(--shadow-card)",
     }}>
-      <div style={{ fontWeight: 700, marginBottom: 6, color: "var(--accent)", fontSize: 11 }}>{label}</div>
+      <div style={{ fontWeight: 700, marginBottom: 6, color: theme.colors.primary, fontSize: 11 }}>{label}</div>
       {payload.map((entry, i) => (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
           <div style={{ width: 8, height: 8, borderRadius: 2, background: entry.color }} />
@@ -54,8 +56,6 @@ function CustomTooltip({ active, payload, label }: {
 
 // ─── Axis style helpers ──────────────────────────────────────────────────────
 
-const AXIS_TICK = { fill: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 };
-const AXIS_LINE = { stroke: "var(--border-default)" };
 const LEGEND_STYLE = { fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" };
 const EMPTY_STYLE: React.CSSProperties = {
   textAlign: "center",
@@ -113,6 +113,13 @@ export default function CostChartRow({
   totalBudget,
   contingency = 0,
 }: CostChartRowProps) {
+  const chartTheme = getChartTheme();
+  const axisTick = { ...chartTheme.axis, fontSize: 9 };
+  const axisLine = { stroke: chartTheme.text.muted };
+  const budgetColor = chartTheme.colors.primary;
+  const actualColor = chartTheme.colors.info;
+  const committedColor = chartTheme.colors.warning;
+  const categoryPalette = chartTheme.palette;
   // Don't render the whole section if there's genuinely no data
   const hasAny = barData.length > 0 || cumulativeData.length > 1 || pieData.length > 0;
   if (!hasAny) return null;
@@ -134,22 +141,22 @@ export default function CostChartRow({
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={barData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--divider)" />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.text.muted} opacity={0.35} />
               <XAxis
                 dataKey="label"
-                tick={AXIS_TICK}
-                axisLine={AXIS_LINE}
+                tick={axisTick}
+                axisLine={axisLine}
               />
               <YAxis
-                tick={AXIS_TICK}
-                axisLine={AXIS_LINE}
+                tick={axisTick}
+                axisLine={axisLine}
                 tickFormatter={(v) => formatCurrencyShort(v)}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip chartTheme={chartTheme} />} />
               <Legend iconSize={8} wrapperStyle={LEGEND_STYLE} />
-              <Bar dataKey="budget" name="Budget" fill="var(--accent)" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="actual" name="Actual" fill="#3B82F6" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="committed" name="Committed" fill="#FFB300" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="budget" name="Budget" fill={budgetColor} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="actual" name="Actual" fill={actualColor} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="committed" name="Committed" fill={committedColor} radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -163,19 +170,19 @@ export default function CostChartRow({
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={cumulativeData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
               <defs>
-                <linearGradient id="ccc-budgetGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.20} />
-                  <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+                <linearGradient id="costBudgetGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={budgetColor} stopOpacity={0.20} />
+                  <stop offset="95%" stopColor={budgetColor} stopOpacity={0} />
                 </linearGradient>
-                <linearGradient id="ccc-actualGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.20} />
-                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                <linearGradient id="costActualGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={actualColor} stopOpacity={0.20} />
+                  <stop offset="95%" stopColor={actualColor} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--divider)" />
-              <XAxis dataKey="name" tick={AXIS_TICK} axisLine={AXIS_LINE} />
-              <YAxis tick={AXIS_TICK} axisLine={AXIS_LINE} tickFormatter={(v) => formatCurrencyShort(v)} />
-              <Tooltip content={<CustomTooltip />} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.text.muted} opacity={0.35} />
+              <XAxis dataKey="name" tick={axisTick} axisLine={axisLine} />
+              <YAxis tick={axisTick} axisLine={axisLine} tickFormatter={(v) => formatCurrencyShort(v)} />
+              <Tooltip content={<CustomTooltip chartTheme={chartTheme} />} />
               <Legend iconSize={8} wrapperStyle={LEGEND_STYLE} />
               {contingency > 0 && (
                 <ReferenceLine
@@ -185,8 +192,8 @@ export default function CostChartRow({
                   label={{ value: "Contingency Limit", fill: "var(--status-error)", fontSize: 9, fontFamily: "var(--font-mono)" }}
                 />
               )}
-              <Area type="monotone" dataKey="budget" name="Budget" stroke="var(--accent)" fill="url(#ccc-budgetGrad)" strokeWidth={2} />
-              <Area type="monotone" dataKey="actual" name="Actual" stroke="#3B82F6" fill="url(#ccc-actualGrad)" strokeWidth={2} />
+              <Area type="monotone" dataKey="budget" name="Budget" stroke={budgetColor} fill="url(#costBudgetGrad)" strokeWidth={2} />
+              <Area type="monotone" dataKey="actual" name="Actual" stroke={actualColor} fill="url(#costActualGrad)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -212,11 +219,11 @@ export default function CostChartRow({
                 {pieData.map((d, i) => (
                   <Cell
                     key={i}
-                    fill={(CATEGORY_COLORS as Record<string, string>)[d.name] ?? "var(--accent)"}
+                    fill={categoryPalette[i % categoryPalette.length]}
                   />
                 ))}
               </Pie>
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip chartTheme={chartTheme} />} />
               <Legend iconSize={8} wrapperStyle={LEGEND_STYLE} />
             </PieChart>
           </ResponsiveContainer>

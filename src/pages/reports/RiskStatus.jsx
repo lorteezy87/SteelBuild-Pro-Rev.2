@@ -190,7 +190,7 @@ export default function RiskStatus() {
                         fontWeight: 700,
                         color:
                           count > 0
-                            ? "rgba(0,0,0,0.55)"
+                            ? "color-mix(in srgb, var(--bg-base) 55%, transparent)"
                             : "var(--text-muted)",
                         letterSpacing: "0.10em",
                         textTransform: "uppercase",

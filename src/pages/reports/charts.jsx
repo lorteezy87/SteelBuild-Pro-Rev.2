@@ -12,11 +12,13 @@
  */
 
 import React from "react";
+import { getChartTheme } from "@/components/shared/RechartsThemeConfig";
 import { mono } from "./constants";
 import { formatCurrency } from "./utils";
 
 export function BarChartSVG({ data, width = 400, height = 200 }) {
   if (!data || data.length === 0) return null;
+  const chartTheme = getChartTheme();
   const padding = { top: 20, right: 16, bottom: 40, left: 56 };
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
@@ -35,8 +37,8 @@ export function BarChartSVG({ data, width = 400, height = 200 }) {
         const y = padding.top + chartH - (chartH * (gridStep * i)) / maxVal;
         return (
           <g key={i}>
-            <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="var(--divider)" strokeDasharray="3 3" />
-            <text x={padding.left - 8} y={y + 3} textAnchor="end" style={{ ...mono, fontSize: 8, fill: "var(--text-muted)" }}>
+            <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke={chartTheme.text.muted} strokeDasharray="3 3" opacity={0.35} />
+            <text x={padding.left - 8} y={y + 3} textAnchor="end" style={{ ...mono, fontSize: 8, fill: chartTheme.axis.fill }}>
               {formatCurrency(gridStep * i)}
             </text>
           </g>
@@ -49,19 +51,19 @@ export function BarChartSVG({ data, width = 400, height = 200 }) {
         const aH = (d.actual / maxVal) * chartH;
         return (
           <g key={i}>
-            <rect x={cx - barW - gap / 2} y={padding.top + chartH - bH} width={barW} height={bH} rx={2} fill="var(--bg-surface-highest)" />
-            <rect x={cx + gap / 2}        y={padding.top + chartH - aH} width={barW} height={aH} rx={2} fill="var(--accent)" />
-            <text x={cx} y={height - padding.bottom + 14} textAnchor="middle" style={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}>
+            <rect x={cx - barW - gap / 2} y={padding.top + chartH - bH} width={barW} height={bH} rx={2} fill={chartTheme.background.secondary} />
+            <rect x={cx + gap / 2}        y={padding.top + chartH - aH} width={barW} height={aH} rx={2} fill={chartTheme.colors.primary} />
+            <text x={cx} y={height - padding.bottom + 14} textAnchor="middle" style={{ ...mono, fontSize: 9, fill: chartTheme.axis.fill }}>
               {d.name?.length > 10 ? d.name.slice(0, 10) + ".." : d.name}
             </text>
           </g>
         );
       })}
       {/* Legend */}
-      <rect x={width - 120} y={4} width={8} height={8} rx={2} fill="var(--bg-surface-highest)" />
-      <text x={width - 108} y={11} style={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}>Budget</text>
-      <rect x={width - 60}  y={4} width={8} height={8} rx={2} fill="var(--accent)" />
-      <text x={width - 48}  y={11} style={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}>Actual</text>
+      <rect x={width - 120} y={4} width={8} height={8} rx={2} fill={chartTheme.background.secondary} />
+      <text x={width - 108} y={11} style={{ ...mono, fontSize: 9, fill: chartTheme.axis.fill }}>Budget</text>
+      <rect x={width - 60}  y={4} width={8} height={8} rx={2} fill={chartTheme.colors.primary} />
+      <text x={width - 48}  y={11} style={{ ...mono, fontSize: 9, fill: chartTheme.axis.fill }}>Actual</text>
     </svg>
   );
 }
@@ -75,6 +77,7 @@ export function BarChartSVG({ data, width = 400, height = 200 }) {
  */
 export function LineChartSVG({ data, width = 560, height = 220, valueFormatter }) {
   if (!data || data.length === 0) return null;
+  const chartTheme = getChartTheme();
   const padding = { top: 16, right: 16, bottom: 32, left: 56 };
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
@@ -112,22 +115,22 @@ export function LineChartSVG({ data, width = 560, height = 220, valueFormatter }
         const y = padding.top + chartH - (chartH * (gridStep * i)) / maxVal;
         return (
           <g key={i}>
-            <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="var(--divider)" strokeDasharray="3 3" />
-            <text x={padding.left - 8} y={y + 3} textAnchor="end" style={{ ...mono, fontSize: 8, fill: "var(--text-muted)" }}>
+            <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke={chartTheme.text.muted} strokeDasharray="3 3" opacity={0.35} />
+            <text x={padding.left - 8} y={y + 3} textAnchor="end" style={{ ...mono, fontSize: 8, fill: chartTheme.axis.fill }}>
               {fmt(gridStep * i)}
             </text>
           </g>
         );
       })}
-      {solidPath && <path d={solidPath} fill="none" stroke="var(--accent)" strokeWidth={2} />}
-      {dashedPath && <path d={dashedPath} fill="none" stroke="var(--accent)" strokeWidth={2} strokeDasharray="5 4" opacity={0.7} />}
+      {solidPath && <path d={solidPath} fill="none" stroke={chartTheme.colors.primary} strokeWidth={2} />}
+      {dashedPath && <path d={dashedPath} fill="none" stroke={chartTheme.colors.primary} strokeWidth={2} strokeDasharray="5 4" opacity={0.7} />}
       {points.map((pt, i) => (
         <g key={i}>
-          <circle cx={pt.x} cy={pt.y} r={3} fill={pt.forecast ? "var(--bg-surface)" : "var(--accent)"} stroke="var(--accent)" strokeWidth={1.5}>
+          <circle cx={pt.x} cy={pt.y} r={3} fill={pt.forecast ? chartTheme.background.surface : chartTheme.colors.primary} stroke={chartTheme.colors.primary} strokeWidth={1.5}>
             <title>{`${pt.label}: ${fmt(pt.value)}${pt.forecast ? " (forecast)" : ""}`}</title>
           </circle>
           {i % Math.ceil(points.length / 8 || 1) === 0 && (
-            <text x={pt.x} y={height - padding.bottom + 14} textAnchor="middle" style={{ ...mono, fontSize: 8, fill: "var(--text-muted)" }}>
+            <text x={pt.x} y={height - padding.bottom + 14} textAnchor="middle" style={{ ...mono, fontSize: 8, fill: chartTheme.axis.fill }}>
               {pt.label}
             </text>
           )}
@@ -139,6 +142,7 @@ export function LineChartSVG({ data, width = 560, height = 220, valueFormatter }
 
 export function DonutChartSVG({ segments, size = 180, innerRadius = 50, outerRadius = 72 }) {
   if (!segments || segments.length === 0) return null;
+  const chartTheme = getChartTheme();
   const total = segments.reduce((s, seg) => s + seg.value, 0);
   if (total === 0) return null;
   const cx = size / 2;
@@ -176,18 +180,18 @@ export function DonutChartSVG({ segments, size = 180, innerRadius = 50, outerRad
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
       <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, maxWidth: "100%" }}>
         {arcs.map((arc, i) => (
-          <path key={i} d={arc.path} fill={arc.color} stroke="var(--bg-surface)" strokeWidth={1.5}>
+          <path key={i} d={arc.path} fill={arc.color} stroke={chartTheme.background.surface} strokeWidth={1.5}>
             <title>{`${arc.label}: ${arc.value} (${arc.pct}%)`}</title>
           </path>
         ))}
-        <text x={cx} y={cy - 4}  textAnchor="middle" style={{ ...mono, fontSize: 16, fontWeight: 700, fill: "var(--text-primary)" }}>{total}</text>
-        <text x={cx} y={cy + 10} textAnchor="middle" style={{ ...mono, fontSize: 9,  fill: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Total</text>
+        <text x={cx} y={cy - 4}  textAnchor="middle" style={{ ...mono, fontSize: 16, fontWeight: 700, fill: chartTheme.text.primary }}>{total}</text>
+        <text x={cx} y={cy + 10} textAnchor="middle" style={{ ...mono, fontSize: 9,  fill: chartTheme.axis.fill, textTransform: "uppercase", letterSpacing: "0.1em" }}>Total</text>
       </svg>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", justifyContent: "center" }}>
         {arcs.map((arc, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <div style={{ width: 8, height: 8, borderRadius: 2, background: arc.color }} />
-            <span style={{ ...mono, fontSize: 8, color: "var(--text-muted)" }}>
+            <span style={{ ...mono, fontSize: 8, color: chartTheme.text.muted }}>
               {arc.label} ({arc.value})
             </span>
           </div>

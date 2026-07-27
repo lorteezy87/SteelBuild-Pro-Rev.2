@@ -42,7 +42,7 @@ export default function ExecutiveSummary({
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <FinRow label="Total Budget"     value={formatCurrency(portfolioValue)} color="var(--text-primary)" />
             <FinRow label="Variance"         value={formatCurrency(budgetVariance)} color={budgetVariance <= 0 ? "var(--status-success)" : "var(--status-error)"} />
-            <FinRow label="Pending CO Value" value={formatCurrency(pendingCOValue)} color="#F97316" />
+            <FinRow label="Pending CO Value" value={formatCurrency(pendingCOValue)} color="var(--status-review)" />
           </div>
         </div>
 
@@ -61,7 +61,7 @@ export default function ExecutiveSummary({
               </ActionLine>
             )}
             {lateDeliveries.length > 0 && (
-              <ActionLine color="#F97316">
+              <ActionLine color="var(--status-review)">
                 {lateDeliveries.length} late deliver{lateDeliveries.length !== 1 ? "ies" : "y"}
               </ActionLine>
             )}

@@ -168,7 +168,7 @@ export default function Profit() {
           <span
             style={{
               ...mono,
-              color: r.approvedCOTotal > 0 ? "#F97316" : "var(--text-muted)",
+              color: r.approvedCOTotal > 0 ? "var(--status-review)" : "var(--text-muted)",
             }}
           >
             {formatCurrencyFull(r.approvedCOTotal)}
@@ -315,7 +315,7 @@ export default function Profit() {
           label="Approved COs"
           value={formatCurrencyFull(totals.approvedCOTotal)}
           detail="Across visible projects"
-          borderColor="#F97316"
+          borderColor="var(--status-review)"
         />
       </div>
 

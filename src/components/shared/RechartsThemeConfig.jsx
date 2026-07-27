@@ -6,52 +6,53 @@
 
 export const getChartTheme = () => {
   // Get colors from computed CSS variables
-  const getVar = (name) => {
-    if (typeof window === 'undefined') return 'var(--accent)'; // Server-side fallback
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const getVar = (name, fallback = 'var(--accent)') => {
+    if (typeof window === 'undefined') return fallback; // Server-side fallback
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
   };
 
   return {
     colors: {
       primary: getVar('--accent'),
-      success: getVar('--status-success'),
-      warning: getVar('--status-warning'),
-      error: getVar('--status-error'),
-      info: getVar('--status-info'),
-      chart1: getVar('--chart-1'),
-      chart2: getVar('--chart-2'),
-      chart3: getVar('--chart-3'),
-      chart4: getVar('--chart-4'),
-      chart5: getVar('--chart-5'),
+      success: getVar('--status-success', 'var(--status-success)'),
+      warning: getVar('--status-warning', 'var(--status-warning)'),
+      error: getVar('--status-error', 'var(--status-error)'),
+      info: getVar('--status-info', 'var(--status-info)'),
+      review: getVar('--status-review', 'var(--status-review)'),
+      chart1: getVar('--chart-1', 'var(--accent)'),
+      chart2: getVar('--chart-2', 'var(--status-info)'),
+      chart3: getVar('--chart-3', 'var(--status-success)'),
+      chart4: getVar('--chart-4', 'var(--status-warning)'),
+      chart5: getVar('--chart-5', 'var(--status-review)'),
     },
     palette: [
-      getVar('--chart-1'),
-      getVar('--chart-2'),
-      getVar('--chart-3'),
-      getVar('--chart-4'),
-      getVar('--chart-5'),
+      getVar('--chart-1', 'var(--accent)'),
+      getVar('--chart-2', 'var(--status-info)'),
+      getVar('--chart-3', 'var(--status-success)'),
+      getVar('--chart-4', 'var(--status-warning)'),
+      getVar('--chart-5', 'var(--status-review)'),
       getVar('--accent'),
     ],
     axis: {
-      fill: getVar('--text-muted'),
+      fill: getVar('--text-muted', 'var(--text-muted)'),
       fontSize: 12,
       fontFamily: "'IBM Plex Mono', monospace",
     },
     tooltip: {
-      background: getVar('--bg-elevated'),
-      border: `1px solid ${getVar('--border-default')}`,
+      background: getVar('--bg-elevated', 'var(--bg-elevated)'),
+      border: `1px solid ${getVar('--border-default', 'var(--border-default)')}`,
       borderRadius: 8,
-      color: getVar('--text-primary'),
+      color: getVar('--text-primary', 'var(--text-primary)'),
       fontFamily: "'IBM Plex Mono', monospace",
     },
     text: {
-      primary: getVar('--text-primary'),
-      secondary: getVar('--text-secondary'),
-      muted: getVar('--text-muted'),
+      primary: getVar('--text-primary', 'var(--text-primary)'),
+      secondary: getVar('--text-secondary', 'var(--text-secondary)'),
+      muted: getVar('--text-muted', 'var(--text-muted)'),
     },
     background: {
-      surface: getVar('--bg-surface'),
-      secondary: getVar('--bg-surface-secondary'),
+      surface: getVar('--bg-surface', 'var(--bg-surface)'),
+      secondary: getVar('--bg-surface-secondary', 'var(--bg-surface-secondary)'),
     },
   };
 };

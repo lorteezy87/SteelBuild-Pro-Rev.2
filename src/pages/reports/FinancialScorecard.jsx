@@ -88,10 +88,10 @@ function KpiCard({ label, value, unit, health, gradeLabel, description, benchmar
           fontWeight: 700,
           padding: "2px 6px",
           borderRadius: 4,
-          background: health === "good" ? "rgba(34,197,94,0.1)" :
-            health === "watch" ? "rgba(245,158,11,0.1)" :
-            health === "risk" ? "rgba(239,68,68,0.1)" :
-            "rgba(128,128,128,0.1)",
+          background: health === "good" ? "color-mix(in srgb, var(--status-success) 10%, transparent)" :
+            health === "watch" ? "color-mix(in srgb, var(--status-warning) 10%, transparent)" :
+            health === "risk" ? "color-mix(in srgb, var(--status-error) 10%, transparent)" :
+            "color-mix(in srgb, var(--text-muted) 10%, transparent)",
           color: c,
           textTransform: "uppercase",
           letterSpacing: "0.08em",

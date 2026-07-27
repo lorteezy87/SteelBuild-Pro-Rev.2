@@ -549,7 +549,7 @@ export default function ProjectDetails() {
               label="Pending COs"
               value={pendingCOs}
               detail={`${projectCOs.length} total`}
-              borderColor="#F97316"
+              borderColor="var(--status-review)"
             />
             <KPICard
               label="Work Packages"

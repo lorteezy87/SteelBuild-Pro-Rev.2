@@ -125,7 +125,7 @@ function GanttRow({ row, from, to, onClick }) {
           style={{
             ...mono,
             fontSize: 9,
-            color: "#fff",
+            color: "var(--accent-text)",
             fontWeight: 700,
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -436,7 +436,7 @@ export default function ProjectStatusGantt() {
                         top: 0,
                         bottom: 0,
                         borderLeft: `2px solid ${GANTT_TODAY_HEX}`,
-                        boxShadow: "0 0 10px rgba(255,107,0,0.35)",
+                        boxShadow: "0 0 10px color-mix(in srgb, var(--sbd-gantt-today) 35%, transparent)",
                         zIndex: 3,
                       }}
                     />

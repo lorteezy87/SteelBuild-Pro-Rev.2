@@ -11,43 +11,23 @@ import {
   Pie,
   Cell,
 } from "recharts";
-
-const SERIES = [
-  {
-    key: "Budget",
-    color: "var(--accent)",
-    softColor: "rgba(173,198,255,0.22)",
-    textColor: "var(--accent-light)",
-  },
-  {
-    key: "Actual",
-    color: "var(--status-warning)",
-    softColor: "rgba(245,158,11,0.22)",
-    textColor: "var(--status-warning)",
-  },
-  {
-    key: "Forecast",
-    color: "var(--status-success)",
-    softColor: "rgba(74,225,118,0.18)",
-    textColor: "var(--status-success)",
-  },
-];
+import { getChartTheme } from "@/components/shared/RechartsThemeConfig";
 
 function formatK(value) {
   return `$${Math.round(Number(value) || 0)}K`;
 }
 
-function ChartTooltip({ active, payload }) {
+function ChartTooltip({ active, payload, chartTheme }) {
   if (!active || !payload?.length) return null;
 
   return (
     <div
       style={{
-        background: "var(--bg-elevated)",
-        border: "1px solid var(--border-default)",
-        borderRadius: 8,
+        background: chartTheme.tooltip.background,
+        border: chartTheme.tooltip.border,
+        borderRadius: chartTheme.tooltip.borderRadius,
         padding: "10px 12px",
-        boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+        boxShadow: "var(--shadow-card)",
       }}
     >
       <div
@@ -110,6 +90,27 @@ function ChartTooltip({ active, payload }) {
 }
 
 export default function BudgetOverviewChart({ summary }) {
+  const chartTheme = getChartTheme();
+  const series = [
+    {
+      key: "Budget",
+      color: chartTheme.colors.primary,
+      softColor: `color-mix(in srgb, ${chartTheme.colors.primary} 22%, transparent)`,
+      textColor: chartTheme.colors.primary,
+    },
+    {
+      key: "Actual",
+      color: chartTheme.colors.warning,
+      softColor: `color-mix(in srgb, ${chartTheme.colors.warning} 22%, transparent)`,
+      textColor: chartTheme.colors.warning,
+    },
+    {
+      key: "Forecast",
+      color: chartTheme.colors.success,
+      softColor: `color-mix(in srgb, ${chartTheme.colors.success} 18%, transparent)`,
+      textColor: chartTheme.colors.success,
+    },
+  ];
   const budget = Number(summary?.budget) || 0;
   const actual = Number(summary?.actual) || 0;
   const forecast = Number(summary?.forecast) || 0;
@@ -127,18 +128,18 @@ export default function BudgetOverviewChart({ summary }) {
   ];
 
   const donutData = [
-    { name: "Spent", value: actual, color: "var(--accent)" },
+    { name: "Spent", value: actual, color: chartTheme.colors.primary },
     {
       name: "Remaining",
       value: Math.max(0, budget - actual),
-      color: "var(--bg-surface-highest)",
+      color: chartTheme.background.secondary,
     },
   ];
 
   return (
     <div
       style={{
-        background: "linear-gradient(180deg, rgba(173,198,255,0.03) 0%, rgba(19,19,20,0) 100%), var(--bg-surface)",
+        background: "linear-gradient(180deg, color-mix(in srgb, var(--accent) 3%, transparent) 0%, transparent 100%), var(--bg-surface)",
         border: "1px solid var(--border-default)",
         borderRadius: "12px",
         padding: "18px",
@@ -264,8 +265,7 @@ export default function BudgetOverviewChart({ summary }) {
                 axisLine={false}
                 tickLine={false}
                 tick={{
-                  fill: "var(--text-muted)",
-                  fontFamily: "var(--font-mono)",
+                  ...chartTheme.axis,
                   fontSize: 9,
                 }}
               />
@@ -275,13 +275,12 @@ export default function BudgetOverviewChart({ summary }) {
                 width={56}
                 tickFormatter={(value) => `$${value}K`}
                 tick={{
-                  fill: "var(--text-muted)",
-                  fontFamily: "var(--font-mono)",
+                  ...chartTheme.axis,
                   fontSize: 9,
                 }}
               />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--hover-bg)" }} />
-              {SERIES.map((series) => (
+              <Tooltip content={<ChartTooltip chartTheme={chartTheme} />} cursor={{ fill: chartTheme.background.secondary }} />
+              {series.map((series) => (
                 <Bar
                   key={series.key}
                   dataKey={series.key}
@@ -340,15 +339,15 @@ export default function BudgetOverviewChart({ summary }) {
           </div>
 
           {[
-            { label: "Budget", value: budget, ...SERIES[0] },
-            { label: "Actual", value: actual, ...SERIES[1] },
-            { label: "Forecast", value: forecast, ...SERIES[2] },
+            { label: "Budget", value: budget, ...series[0] },
+            { label: "Actual", value: actual, ...series[1] },
+            { label: "Forecast", value: forecast, ...series[2] },
             {
               label: variance >= 0 ? "Variance" : "Overrun",
               value: Math.abs(variance),
-              color: variance >= 0 ? "var(--status-success)" : "var(--status-error)",
-              softColor: variance >= 0 ? "rgba(74,225,118,0.16)" : "rgba(255,180,171,0.16)",
-              textColor: variance >= 0 ? "var(--status-success)" : "var(--status-error)",
+              color: variance >= 0 ? chartTheme.colors.success : chartTheme.colors.error,
+              softColor: `color-mix(in srgb, ${variance >= 0 ? chartTheme.colors.success : chartTheme.colors.error} 16%, transparent)`,
+              textColor: variance >= 0 ? chartTheme.colors.success : chartTheme.colors.error,
             },
           ].map((row, index) => (
             <div

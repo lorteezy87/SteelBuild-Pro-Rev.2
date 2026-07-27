@@ -60,7 +60,7 @@ export default function RichEmptyState({ navigate }) {
           onClick={() => navigate(createPageUrl("Projects"))}
           style={{
             background: "var(--accent)",
-            color: "#fff",
+            color: "var(--accent-text)",
             border: "none",
             borderRadius: "var(--radius-btn)",
             padding: "10px 20px",
