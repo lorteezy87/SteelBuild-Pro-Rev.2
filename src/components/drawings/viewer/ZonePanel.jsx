@@ -335,7 +335,7 @@ export default function ZonePanel({
                 ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
                 padding: "4px 10px",
                 background: "var(--accent)",
-                color: "#000",
+                color: "var(--on-accent)",
                 border: "none",
                 borderRadius: 3,
                 cursor: "pointer",

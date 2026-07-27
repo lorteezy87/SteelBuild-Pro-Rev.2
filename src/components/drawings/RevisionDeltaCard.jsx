@@ -32,7 +32,7 @@ export default function RevisionDeltaCard({ delta: d, onToggleDismiss, onCreateR
         {d.sheet_number && <span style={{ fontFamily: mono, fontSize: 8.5, color: "var(--text-muted)" }}>{d.sheet_number}</span>}
         <span style={{ flex: 1 }} />
         {d.linked_rfi_id ? (
-          <span title="An RFI has been raised from this change" style={{ display: "inline-flex", alignItems: "center", gap: 3, fontFamily: mono, fontSize: 8.5, fontWeight: 700, color: "#3FB950" }}>
+          <span title="An RFI has been raised from this change" style={{ display: "inline-flex", alignItems: "center", gap: 3, fontFamily: mono, fontSize: 8.5, fontWeight: 700, color: "var(--status-success)" }}>
             <Link2 size={11} /> {d._linkedRfiNumber || "RFI"}
           </span>
         ) : onCreateRfi ? (

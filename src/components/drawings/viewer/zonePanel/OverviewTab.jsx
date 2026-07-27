@@ -123,7 +123,7 @@ export function OverviewTab({ zone, items, counts, computed, readiness, dependen
                   fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
                   padding: "3px 8px",
                   background: suggestionColor,
-                  color: "#000",
+                  color: "var(--on-accent)",
                   border: "none",
                   borderRadius: 2,
                   cursor: "pointer",

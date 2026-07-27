@@ -60,7 +60,12 @@ export const STATUS_COLOR = {
   Critical:              "#FF6B35",
 };
 
-/** Ball-in-Court colors. */
+/**
+ * Ball-in-Court colors.
+ *
+ * contrast-check: semantic identity hues only; consumers render them on
+ * tokenized surfaces, not as chrome colors. // semantic stage — allowlisted
+ */
 export const BIC_COLOR = {
   Contractor: "#C89B20",
   GC:         "#3B82F6",
@@ -69,17 +74,31 @@ export const BIC_COLOR = {
   Owner:      "#22C55E",
 };
 
-/** Drawing-stage ordering + per-stage tint. Corrected 7-stage flow
- *  (migration 077): Not Started → IFA → OFA → BFA → OFS → IFC → Released. */
+/**
+ * Drawing-stage ordering + per-stage tint. Corrected 7-stage flow
+ * (migration 077): Not Started → IFA → OFA → BFA → OFS → IFC → Released.
+ *
+ * contrast-check: semantic workflow hues only; keep centralized here so color
+ * audits can allowlist this one map. // semantic stage — allowlisted
+ */
 export const DRAWING_STAGES = [
-  { id: "Not Started", label: "NOT STARTED", color: "var(--text-muted)"     },
-  { id: "IFA",         label: "IFA",         color: "#60A5FA"               }, // sky
-  { id: "OFA",         label: "OFA",         color: "#2563EB"               }, // blue
-  { id: "BFA",         label: "BFA",         color: "#FBBF24"               }, // amber
-  { id: "OFS",         label: "OFS",         color: "#F97316"               }, // orange
-  { id: "IFC",         label: "IFC",         color: "#34D399"               }, // mint
-  { id: "Released",    label: "RELEASED",    color: "var(--status-success)" }, // emerald
+  { id: "Not Started", key: "Not Started", label: "NOT STARTED", color: "var(--text-muted)", bg: "rgba(100,116,139,0.16)" },
+  { id: "IFA",         key: "IFA",         label: "IFA",         color: "#60A5FA", bg: "rgba(96,165,250,0.16)"  }, // sky
+  { id: "OFA",         key: "OFA",         label: "OFA",         color: "#2563EB", bg: "rgba(37,99,235,0.18)"   }, // blue
+  { id: "BFA",         key: "BFA",         label: "BFA",         color: "#FBBF24", bg: "rgba(251,191,36,0.16)"  }, // amber
+  { id: "OFS",         key: "OFS",         label: "OFS — Out for Scrub", color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // orange
+  { id: "IFC",         key: "IFC",         label: "IFC",         color: "#34D399", bg: "rgba(52,211,153,0.16)"  }, // mint
+  { id: "Released",    key: "Released",    label: "RELEASED",    color: "#10B981", bg: "rgba(16,185,129,0.18)"  }, // emerald
 ];
+
+/** Derived workflow-only stage; never written to `drawings.stage`. */
+export const DRAWING_RR_STAGE = {
+  id: "R&R",
+  key: "R&R",
+  label: "R&R",
+  color: "#F59E0B",
+  bg: "rgba(245,158,11,0.16)",
+};
 
 /** Small utility: convert #RRGGBB → rgb triplet. */
 export function hexToRgb(hex) {

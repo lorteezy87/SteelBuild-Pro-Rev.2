@@ -240,7 +240,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
             <Td style={{ textAlign: "center" }}>
               {sub.round_number > 1 && (
                 <span style={{
-                  background: warning, color: "#000",
+                  background: warning, color: "var(--cmd-pill-warn-fg)",
                   padding: "1px 6px", borderRadius: 3, fontSize: 10, fontWeight: 700,
                 }}>
                   R{sub.round_number}

@@ -23,7 +23,7 @@ export default function StepSuccess({ createdCount, fileResults, onViewLog, onUp
       </div>
       <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
         <Button variant="outline" onClick={onUploadAnother}>Upload Another Set</Button>
-        <Button onClick={onViewLog} style={{ background: "var(--accent)", color: "#fff", border: "none" }}>
+        <Button onClick={onViewLog} style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none" }}>
           View Drawing Log
         </Button>
       </div>

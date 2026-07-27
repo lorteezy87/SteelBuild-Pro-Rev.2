@@ -373,17 +373,17 @@ function SheetSection({ result: r, onToggleDismiss, onCreateRfi, onLogBackcharge
         <Layers size={13} style={{ color: "var(--text-muted)" }} />
         <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{r.sheetNumber || "Sheet"}</span>
         {r.downstream && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: "#F85149", textTransform: "uppercase" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: "var(--status-error)", textTransform: "uppercase" }}>
             <AlertTriangle size={11} /> {r.downstream}
           </span>
         )}
         {reworkExposed && (backcharged ? (
-          <span title="A backcharge has been logged for this rework exposure" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: "#3FB950", textTransform: "uppercase" }}>
+          <span title="A backcharge has been logged for this rework exposure" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", color: "var(--status-success)", textTransform: "uppercase" }}>
             <Check size={11} /> BC logged
           </span>
         ) : (
           <button type="button" onClick={() => onLogBackcharge?.(r)} title="Log a rework backcharge for this already-fabricated/delivered sheet"
-            style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid rgba(248,81,73,0.4)", borderRadius: 4, padding: "1px 6px", cursor: "pointer", color: "#F85149", fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em" }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "1px 6px", cursor: "pointer", color: "var(--status-error)", fontFamily: mono, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em" }}>
             <DollarSign size={11} /> Log backcharge
           </button>
         ))}

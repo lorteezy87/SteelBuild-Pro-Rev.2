@@ -11,18 +11,18 @@ import type { CurrentRevisionInfo, Drawing, DrawingRevision, DrawingSet, DueInfo
 // ── Design-system tokens ──────────────────────────────────────────────────
 // Use the SAME CSS custom-property names as the rest of the app (Submittals,
 // Drawings, RFIs, etc.).
-export const accent = "var(--accent)";
-export const surface1 = "var(--bg-surface-low)";
-export const surface2 = "var(--bg-surface-high)";
-export const border = "var(--border-default)";
-export const textPrimary = "var(--text-primary)";
-export const textMuted = "var(--text-muted)";
+export const accent = "var(--cmd-gold)";
+export const surface1 = "var(--cmd-surface)";
+export const surface2 = "var(--cmd-row-hover)";
+export const border = "var(--cmd-border)";
+export const textPrimary = "var(--cmd-text)";
+export const textMuted = "var(--cmd-text-muted)";
 export const mono = "var(--font-mono)";
-export const success = "var(--status-success)";
-export const warning = "var(--status-warning)";
-export const error = "var(--status-error)";
-export const info = "var(--status-info)";
-export const review = "var(--status-review)";
+export const success = "var(--cmd-good)";
+export const warning = "var(--cmd-warn)";
+export const error = "var(--cmd-danger)";
+export const info = "var(--cmd-info)";
+export const review = "var(--cmd-review)";
 
 export const TABS = [
   { key: "overview", label: "Control Board", icon: Gauge },

@@ -89,7 +89,7 @@ export default function StepMeta({ meta, setMeta, onBack, onNext, projectName, e
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
         <Button onClick={onNext} disabled={!canContinue}
-          style={{ background: "var(--accent)", color: "#fff", border: "none", opacity: canContinue ? 1 : 0.5 }}>
+          style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none", opacity: canContinue ? 1 : 0.5 }}>
           Next: Add Files <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
         </Button>
       </div>

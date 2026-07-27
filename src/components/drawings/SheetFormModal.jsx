@@ -236,7 +236,7 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
             disabled={saving || uploading || !form.sheet_number || !form.title}
             style={{
               padding: "8px 24px", background: "var(--accent)", border: "none", borderRadius: 2,
-              color: "#000", ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
+              color: "var(--on-accent)", ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
               cursor: (saving || uploading) ? "not-allowed" : "pointer",
               opacity: (saving || uploading) ? 0.7 : 1,
             }}

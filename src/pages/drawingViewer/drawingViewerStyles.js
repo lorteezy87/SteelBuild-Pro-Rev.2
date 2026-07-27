@@ -2,8 +2,8 @@ export const drawingViewerStyles = `
 .drawing-viewer-redesign {
   --viewer-sidebar-width: 320px;
   --viewer-context-width: 336px;
-  --viewer-panel-bg: color-mix(in srgb, var(--bg-surface) 96%, #111827 4%);
-  --viewer-panel-bg-soft: color-mix(in srgb, var(--bg-surface-low) 92%, #0f172a 8%);
+  --viewer-panel-bg: color-mix(in srgb, var(--bg-surface) 96%, var(--bg-page) 4%);
+  --viewer-panel-bg-soft: color-mix(in srgb, var(--bg-surface-low) 92%, var(--bg-page) 8%);
   --viewer-line: color-mix(in srgb, var(--border-default) 82%, transparent);
   --viewer-paper-shadow: 0 22px 70px rgba(0,0,0,0.52), 0 4px 14px rgba(0,0,0,0.34);
   position: relative;
@@ -153,9 +153,9 @@ export const drawingViewerStyles = `
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  border: 1px solid rgba(200,155,32,0.62);
+  border: 1px solid var(--accent-border);
   border-radius: 6px;
-  background: rgba(24, 20, 12, 0.92);
+  background: color-mix(in srgb, var(--bg-page) 92%, var(--accent) 8%);
   color: var(--accent);
   box-shadow: 0 10px 24px rgba(0,0,0,0.38);
   cursor: pointer;
@@ -319,8 +319,8 @@ export const drawingViewerStyles = `
 }
 
 [data-skin="command"] .drawing-viewer-redesign.detailing-cc .drawing-viewer-export-markups {
-  background: var(--accent-muted, #fdf3da);
-  border-color: var(--accent-border, #f0d79a);
+  background: var(--accent-muted);
+  border-color: var(--accent-border);
   color: var(--accent);
   box-shadow: 0 10px 24px rgba(15,23,42,0.16);
 }

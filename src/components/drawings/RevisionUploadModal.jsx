@@ -155,7 +155,7 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
           <label style={{ margin: 0 }}>New Revision Label *</label>
           {autoFilled && (
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#0284C7", background: "rgba(2,132,199,0.10)", border: "1px solid rgba(2,132,199,0.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.08em", fontWeight: 700 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-info)", background: "var(--info-muted)", border: "1px solid var(--info-border)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.08em", fontWeight: 700 }}>
               AUTO
             </span>
           )}
@@ -440,7 +440,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
         </button>
         <button onClick={onConfirm} style={{
           padding: "7px 16px", borderRadius: 8, cursor: "pointer",
-          background: "var(--accent)", border: "none", color: "#fff",
+          background: "var(--accent)", border: "none", color: "var(--on-accent)",
           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
           display: "flex", alignItems: "center", gap: 6
         }}>
@@ -487,7 +487,7 @@ function StepSuccess({ selectedSet, revMeta, stats, onClose }) {
       </div>
       <button onClick={onClose} style={{
         padding: "9px 22px", borderRadius: 8, cursor: "pointer",
-        background: "var(--accent)", border: "none", color: "#fff",
+        background: "var(--accent)", border: "none", color: "var(--on-accent)",
         fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em"
       }}>View Drawing Log</button>
     </div>

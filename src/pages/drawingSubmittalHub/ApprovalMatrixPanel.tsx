@@ -219,7 +219,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
       {expanded && allSubmittals
         .filter((s) => s.id !== sub?.id)
         .map((s) => (
-          <tr key={s.id} style={{ background: "#f7f9fc" }}>
+          <tr key={s.id} style={{ background: "var(--cmd-row-hover)" }}>
             <td style={{ paddingLeft: 32, color: "var(--cmd-text-muted)" }}>↳</td>
             <td />
             <td />
@@ -239,7 +239,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal, use
 
       {/* Expanded: round history for the latest submittal */}
       {expanded && sub && roundsBySubmittal[sub.id]?.length > 0 && (
-        <tr style={{ background: "#f7f9fc" }}>
+        <tr style={{ background: "var(--cmd-row-hover)" }}>
           <td colSpan={12} style={{ padding: "8px 32px 12px" }}>
             <RoundTimeline rounds={roundsBySubmittal[sub.id]} />
           </td>

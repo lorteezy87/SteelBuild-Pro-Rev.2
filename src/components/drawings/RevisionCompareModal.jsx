@@ -93,7 +93,7 @@ function RevisionAiPanel({
             display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px", borderRadius: 8,
             background: "color-mix(in srgb, #F85149 14%, transparent)", border: "1px solid color-mix(in srgb, #F85149 40%, transparent)",
           }}>
-            <AlertTriangle size={14} style={{ color: "#F85149", flexShrink: 0, marginTop: 1 }} />
+            <AlertTriangle size={14} style={{ color: "var(--status-error)", flexShrink: 0, marginTop: 1 }} />
             <span style={{ fontFamily: "var(--font-body)", fontSize: 11.5, color: "var(--text-primary)", lineHeight: 1.5 }}>
               This sheet is already <strong>{downstream}</strong> — any real change here may mean rework or a backcharge.
             </span>

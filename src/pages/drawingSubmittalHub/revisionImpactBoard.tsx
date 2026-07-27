@@ -5,7 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { GitCompareArrows, Search } from "lucide-react";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
 import { GridCell, GridHeaderCell, Td, Th } from "./primitives";
-import { accent, border, mono, surface1, textMuted, textPrimary } from "./format";
+import { accent, border, error, mono, surface1, textMuted, textPrimary, warning } from "./format";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -14,9 +14,9 @@ const LoadingSkeleton = LoadingSkeletonRaw as unknown as ComponentType<AnyProps>
 
 // ── Revision Impact Board (slice 4 of the Hub Command Center) ──────────────
 const REV_DOWNSTREAM: Record<string, { label: string; color: string }> = {
-  critical: { label: "In field", color: "#F85149" },
-  high: { label: "Delivered", color: "#F0883E" },
-  medium: { label: "Fabricated", color: "#D29922" },
+  critical: { label: "In field", color: error },
+  high: { label: "Delivered", color: warning },
+  medium: { label: "Fabricated", color: accent },
   low: { label: "Not downstream", color: textMuted },
 };
 
@@ -57,12 +57,12 @@ function RevisionGridCells({ r, onCompareRevision }: { r: any; onCompareRevision
       </GridCell>
       <GridCell align="right">
         {r.rfiCount ? (
-          <span style={{ fontFamily: mono, fontSize: 11, color: r.openRfiCount ? "#F0883E" : textMuted }}>{r.openRfiCount}<span style={{ color: textMuted }}> / {r.rfiCount}</span></span>
+          <span style={{ fontFamily: mono, fontSize: 11, color: r.openRfiCount ? warning : textMuted }}>{r.openRfiCount}<span style={{ color: textMuted }}> / {r.rfiCount}</span></span>
         ) : <span style={{ color: textMuted }}>—</span>}
       </GridCell>
       <GridCell>
         {r.fabBlocked
-          ? <span style={{ fontFamily: mono, fontSize: 9.5, fontWeight: 800, color: "#F85149", background: "rgba(248,81,73,0.12)", border: "1px solid rgba(248,81,73,0.4)", borderRadius: 4, padding: "1px 6px", textTransform: "uppercase" }}>Yes</span>
+          ? <span style={{ fontFamily: mono, fontSize: 9.5, fontWeight: 800, color: error, background: `color-mix(in srgb, ${error} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${error} 40%, transparent)`, borderRadius: 4, padding: "1px 6px", textTransform: "uppercase" }}>Yes</span>
           : <span style={{ fontFamily: mono, fontSize: 9.5, color: textMuted }}>No</span>}
       </GridCell>
       <GridCell align="right" style={{ color: r.affectedPieces != null ? textPrimary : textMuted }}>{r.affectedPieces != null ? r.affectedPieces : "—"}</GridCell>
@@ -114,6 +114,7 @@ function RevisionVirtualList({ rows, onCompareRevision }: { rows: any[]; onCompa
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const r = rows[virtualRow.index];
+            const dm = REV_DOWNSTREAM[r.severity] || REV_DOWNSTREAM.low;
             return (
               <div
                 key={r.revisionId || `${r.drawingId}-${r.revisionCode}`}
@@ -124,7 +125,7 @@ function RevisionVirtualList({ rows, onCompareRevision }: { rows: any[]; onCompa
                   transform: `translateY(${virtualRow.start}px)`,
                   display: "grid", gridTemplateColumns: REVISION_GRID_COLS,
                   borderTop: virtualRow.index === 0 ? "none" : `1px solid ${border}`,
-                  borderLeft: r.severity === "critical" ? "3px solid #F85149" : r.severity === "high" ? "3px solid #F0883E" : "3px solid transparent",
+                  borderLeft: r.severity === "critical" || r.severity === "high" ? `3px solid ${dm.color}` : "3px solid transparent",
                 }}
               >
                 <RevisionGridCells r={r} onCompareRevision={onCompareRevision} />
@@ -210,7 +211,7 @@ export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }:
                 return (
                   <tr key={r.revisionId || `${r.drawingId}-${r.revisionCode}`} style={{
                     borderTop: `1px solid ${border}`,
-                    borderLeft: r.severity === "critical" ? "3px solid #F85149" : r.severity === "high" ? "3px solid #F0883E" : "3px solid transparent",
+                    borderLeft: r.severity === "critical" || r.severity === "high" ? `3px solid ${dm.color}` : "3px solid transparent",
                   }}>
                     {/* ⚠ MIRROR of RevisionGridCells (virtualized branch) — edit both when changing columns. */}
                     <Td style={{ color: textPrimary, fontWeight: 600 }}>
@@ -224,7 +225,7 @@ export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }:
                     <Td style={{ color: r.wpNames?.length ? textPrimary : textMuted }}>{r.wpNames?.length ? r.wpNames.join(", ") : "—"}</Td>
                     <Td style={{ textAlign: "right" }}>
                       {r.rfiCount ? (
-                        <span style={{ fontFamily: mono, fontSize: 11, color: r.openRfiCount ? "#F0883E" : textMuted }}>{r.openRfiCount}<span style={{ color: textMuted }}> / {r.rfiCount}</span></span>
+                        <span style={{ fontFamily: mono, fontSize: 11, color: r.openRfiCount ? warning : textMuted }}>{r.openRfiCount}<span style={{ color: textMuted }}> / {r.rfiCount}</span></span>
                       ) : <span style={{ color: textMuted }}>—</span>}
                     </Td>
                     <Td>
@@ -247,7 +248,7 @@ export function RevisionImpactBoard({ rows = [], onCompareRevision, isLoading }:
         </div>
         )}
         <div style={{ fontFamily: mono, fontSize: 9, color: textMuted, lineHeight: 1.5 }}>
-          Downstream severity: <span style={{ color: "#F85149" }}>in field</span> &gt; <span style={{ color: "#F0883E" }}>delivered</span> &gt; <span style={{ color: "#D29922" }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
+          Downstream severity: <span style={{ color: REV_DOWNSTREAM.critical.color }}>in field</span> &gt; <span style={{ color: REV_DOWNSTREAM.high.color }}>delivered</span> &gt; <span style={{ color: REV_DOWNSTREAM.medium.color }}>fabricated</span>. &quot;Pieces ≈&quot; counts pieces tied to the set — exact when the roster links them, else estimated via the linked work-package sequence.
         </div>
       </div>
     </SectionCard>

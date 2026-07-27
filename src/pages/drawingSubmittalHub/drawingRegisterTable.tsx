@@ -82,7 +82,7 @@ function RegisterGridCells({ r, h }: { r: any; h: RegisterRowHandlers }) {
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", minWidth: 0 }}>
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.pkg.name}</span>
           {r.locked && (
-            <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "#f59e0b", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.4)", textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
+            <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "var(--cmd-warn-text)", background: "var(--cmd-chip-warn-bg)", border: "1px solid color-mix(in srgb, var(--cmd-warn) 40%, transparent)", textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
               <Lock size={9} /> Locked
             </span>
           )}
@@ -411,7 +411,7 @@ export function DrawingRegisterTable({
                 <Td style={{ color: textPrimary, fontWeight: 600 }}>
                   {r.pkg.name}
                   {r.locked && (
-                    <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "#f59e0b", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.4)", textTransform: "uppercase", letterSpacing: "0.04em", verticalAlign: "middle" }}>
+                    <span title={r.lockedReason || "Locked — released for fabrication"} style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 4, fontFamily: mono, fontSize: 8.5, fontWeight: 800, color: "var(--cmd-warn-text)", background: "var(--cmd-chip-warn-bg)", border: "1px solid color-mix(in srgb, var(--cmd-warn) 40%, transparent)", textTransform: "uppercase", letterSpacing: "0.04em", verticalAlign: "middle" }}>
                       <Lock size={9} /> Locked
                     </span>
                   )}

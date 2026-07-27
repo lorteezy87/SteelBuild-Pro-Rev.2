@@ -118,7 +118,7 @@ export default function SignoffStampPanel({
             style={{
               ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
               padding: "4px 8px", borderRadius: 4,
-              background: "var(--accent)", border: "none", color: "#fff",
+              background: "var(--accent)", border: "none", color: "var(--on-accent)",
               cursor: "pointer", textTransform: "uppercase",
             }}
           >
@@ -385,7 +385,7 @@ const btnPrimary = {
   padding: "8px 16px",
   background: "var(--accent)",
   border: "none",
-  color: "#fff",
+  color: "var(--on-accent)",
   borderRadius: 6,
   cursor: "pointer",
   ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",

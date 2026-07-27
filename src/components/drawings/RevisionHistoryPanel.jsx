@@ -136,7 +136,7 @@ export default function RevisionHistoryPanel({ drawingSet, onClose, onUploadNewR
             width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             padding: "9px 0", borderRadius: 8, cursor: "pointer",
             background: "var(--accent)", border: "none",
-            color: "#fff", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+            color: "var(--on-accent)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
             letterSpacing: "0.08em"
           }}>
             <Upload style={{ width: 12, height: 12 }} /> UPLOAD NEW REVISION

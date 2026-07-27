@@ -99,7 +99,7 @@ export function DependenciesTab({
             ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
             padding: "4px 10px",
             background: "var(--accent)",
-            color: "#000",
+            color: "var(--on-accent)",
             border: "none",
             borderRadius: 3,
             cursor: "pointer",
@@ -117,12 +117,12 @@ export function DependenciesTab({
         <div
           style={{
             padding: "8px 10px",
-            background: "color-mix(in srgb, #EF4444 8%, var(--bg-page))",
-            border: "1px solid #EF4444",
+            background: "color-mix(in srgb, var(--status-error-bright) 8%, var(--bg-page))",
+            border: "1px solid var(--status-error-bright)",
             borderRadius: 3,
           }}
         >
-          <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "#EF4444", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
+          <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--status-error-bright)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
             Upstream drag · -{Math.round(dependencyImpact.drag * 100)}%
           </div>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 2 }}>
