@@ -26,10 +26,6 @@ export function TabletDataTable<Row extends { id: string }>({
   const allowedColumnIds = new Set(visibleColumnIds(columns, band));
   const visibleColumns = columns.filter((column) => allowedColumnIds.has(column.id));
 
-  const openRow = (row: Row) => {
-    onRowOpen?.(row);
-  };
-
   const handleRowKeyDown =
     (row: Row) =>
     (event: React.KeyboardEvent<HTMLTableRowElement>) => {
@@ -38,7 +34,7 @@ export function TabletDataTable<Row extends { id: string }>({
       }
 
       event.preventDefault();
-      openRow(row);
+      onRowOpen?.(row);
     };
 
   return (
@@ -58,9 +54,9 @@ export function TabletDataTable<Row extends { id: string }>({
             rows.map((row) => (
               <tr
                 key={row.id}
-                tabIndex={0}
-                onClick={() => openRow(row)}
-                onKeyDown={handleRowKeyDown(row)}
+                tabIndex={onRowOpen ? 0 : undefined}
+                onClick={onRowOpen ? () => onRowOpen(row) : undefined}
+                onKeyDown={onRowOpen ? handleRowKeyDown(row) : undefined}
               >
                 {visibleColumns.map((column) => (
                   <td key={column.id}>{column.cell(row)}</td>

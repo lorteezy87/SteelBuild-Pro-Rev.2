@@ -57,6 +57,15 @@ describe("TabletDataTable", () => {
     expect(screen.queryByText("2026-07-27")).not.toBeInTheDocument();
   });
 
+  it("does not make rows keyboard-focusable when onRowOpen is omitted", () => {
+    render(<TabletDataTable columns={columns} rows={rows} band="tablet" />);
+
+    const [firstRow, secondRow] = screen.getAllByRole("row").slice(1);
+
+    expect(firstRow).not.toHaveAttribute("tabindex");
+    expect(secondRow).not.toHaveAttribute("tabindex");
+  });
+
   it("opens a row on click, Enter, and Space", async () => {
     const user = userEvent.setup();
     const onRowOpen = vi.fn();

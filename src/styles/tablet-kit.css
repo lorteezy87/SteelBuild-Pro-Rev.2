@@ -60,6 +60,18 @@
   overflow: hidden;
 }
 
+.tablet-form-sheet__header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--density-gap, 8px);
+  min-height: var(--tablet-touch-min);
+  padding: var(--tablet-page-pad);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-surface);
+}
+
 .tablet-form-sheet__body {
   flex: 1;
   min-height: 0;

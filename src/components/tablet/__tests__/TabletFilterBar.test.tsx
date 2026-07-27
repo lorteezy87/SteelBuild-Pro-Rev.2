@@ -36,8 +36,10 @@ describe("TabletFilterBar", () => {
 
     await user.click(screen.getByRole("button", { name: "Filters" }));
 
+    const trigger = screen.getByRole("button", { name: "Filters" });
     const dialog = screen.getByRole("dialog", { name: "Filters" });
 
+    expect(trigger).toHaveAttribute("aria-controls", dialog.getAttribute("id"));
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(screen.getByRole("button", { name: "Close filters" })).toHaveFocus();
     expect(screen.getByRole("button", { name: "Trade" })).toBeInTheDocument();
@@ -57,6 +59,8 @@ describe("TabletFilterBar", () => {
 
     const trigger = screen.getByRole("button", { name: "Filters" });
 
+    expect(trigger).not.toHaveAttribute("aria-controls");
+
     trigger.focus();
     await user.click(trigger);
     await user.keyboard("{Escape}");
@@ -65,6 +69,7 @@ describe("TabletFilterBar", () => {
     expect(trigger).toHaveFocus();
 
     await user.click(trigger);
+    expect(trigger).toHaveAttribute("aria-controls");
     await user.click(screen.getByRole("button", { name: "Close filters" }));
 
     expect(screen.queryByRole("dialog", { name: "Filters" })).not.toBeInTheDocument();

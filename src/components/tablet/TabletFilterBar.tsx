@@ -52,7 +52,7 @@ export function TabletFilterBar({
             type="button"
             className="tablet-touch-target"
             aria-expanded={isOverflowOpen}
-            aria-controls={dialogId}
+            aria-controls={isOverflowOpen ? dialogId : undefined}
             onClick={() => setIsOverflowOpen((current) => !current)}
           >
             {overflowLabel}
