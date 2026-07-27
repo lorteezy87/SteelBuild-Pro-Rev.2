@@ -65,6 +65,14 @@ describe("fetchPieceRelationshipSnapshot", () => {
               is_deleted: false,
               deleted_at: null,
             },
+            {
+              id: "wp-dead",
+              project_id: "project-1",
+              wp_number: "WP-99",
+              name: "Deleted package",
+              is_deleted: true,
+              deleted_at: "2026-07-01T00:00:00Z",
+            },
           ],
           error: null,
         });
@@ -93,6 +101,7 @@ describe("fetchPieceRelationshipSnapshot", () => {
 
     expect(snapshot.pieces).toHaveLength(1);
     expect(snapshot.workPackages).toHaveLength(1);
+    expect(snapshot.workPackages[0].id).toBe("wp-1");
     expect(snapshot.commentDispositions).toEqual([]);
     expect(workPackagesSelect).toContain("sequence_number");
     expect(workPackagesSelect).toContain("area");

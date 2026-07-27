@@ -29,6 +29,7 @@ export type AutoAssignWorkPackage = {
   sequence_number?: string | null;
   area?: string | null;
   is_deleted?: boolean | null;
+  deleted_at?: string | null;
 };
 
 export type AutoAssignMatchReason =
@@ -250,7 +251,10 @@ export function planWorkPackageAutoAssign(
   options: AutoAssignOptions = {},
 ): AutoAssignPlan {
   const reassignExisting = options.reassignExisting === true;
-  const activeWps = workPackages.filter((wp) => !wp.is_deleted && wp.id);
+  const activeWps = workPackages.filter(
+    (wp) => !wp.is_deleted && !wp.deleted_at && wp.id,
+  );
+  const activeWpIds = new Set(activeWps.map((wp) => wp.id));
   const assignments: AutoAssignAssignment[] = [];
   const skipped: AutoAssignSkip[] = [];
   const byWorkPackage: Record<string, string[]> = {};
@@ -268,7 +272,11 @@ export function planWorkPackageAutoAssign(
       continue;
     }
 
-    const existingWpId = piece.work_package_id ? String(piece.work_package_id) : null;
+    // Treat assignments to soft-deleted / unknown WPs as unassigned so
+    // auto-assign can reclaim them (dropdowns no longer list those WPs).
+    const rawWpId = piece.work_package_id ? String(piece.work_package_id) : null;
+    const existingWpId =
+      rawWpId && activeWpIds.has(rawWpId) ? rawWpId : null;
     if (existingWpId && !reassignExisting) {
       skipped.push({
         pieceId: piece.id,

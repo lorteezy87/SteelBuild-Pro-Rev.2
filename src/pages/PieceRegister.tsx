@@ -265,9 +265,10 @@ export default function PieceRegister() {
   const displayRows = useMemo(
     () => (piecesQuery.data ?? []).map((piece) => ({
       ...piece,
-      workPackageLabel: piece.work_package_id
-        ? workPackageMap.get(piece.work_package_id) ?? "Unknown package"
-        : "Unassigned",
+      workPackageLabel:
+        piece.work_package_id && workPackageMap.has(piece.work_package_id)
+          ? workPackageMap.get(piece.work_package_id)!
+          : "Unassigned",
     })),
     [piecesQuery.data, workPackageMap],
   );
