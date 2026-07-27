@@ -1,6 +1,7 @@
 /**
- * Post-import drawing links from CSV sheet_number hints.
- * Exact sheet match only; fail closed on ambiguity. Never writes during apply.
+ * Post-import drawing-set links from CSV sheet_number hints.
+ * sheet_number resolves to its drawing set (exact sheet match, fail-closed).
+ * Never writes during apply — only post-apply RPC links.
  */
 
 export type ImportDrawingHintRow = {
@@ -12,14 +13,15 @@ export type ImportDrawingHintRow = {
 
 export type DrawingSheetRef = {
   id: string;
+  drawing_set_id?: string | null;
   sheet_number?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
   is_superseded?: boolean | null;
 };
 
-export type PieceDrawingLinkPlan = {
-  links: Array<{ pieceId: string; drawingId: string; sheetNumber: string }>;
+export type PieceDrawingSetLinkPlan = {
+  links: Array<{ pieceId: string; drawingSetId: string; sheetNumber: string }>;
   skipped: Array<{ pieceId?: string; reason: string; detail?: string }>;
 };
 
@@ -34,7 +36,7 @@ function sheetHintFromPayload(
   payload: Record<string, unknown> | null | undefined,
 ): string {
   if (!payload || typeof payload !== "object") return "";
-  for (const key of ["sheet_number", "drawing_sheet", "sheet", "drawing_no"]) {
+  for (const key of ["sheet_number", "drawing_sheet", "sheet", "drawing_no", "drawing_set", "set_name"]) {
     const raw = payload[key];
     if (typeof raw === "string" && raw.trim()) return raw.trim();
   }
@@ -67,7 +69,7 @@ export function collectAppliedPieceSheetHints(
 export function planImportDrawingLinks(
   hints: Array<{ pieceId: string; sheetNumber: string }>,
   drawings: DrawingSheetRef[],
-): PieceDrawingLinkPlan {
+): PieceDrawingSetLinkPlan {
   const active = drawings.filter(
     (drawing) => !drawing.is_deleted && !drawing.deleted_at && !drawing.is_superseded,
   );
@@ -79,8 +81,8 @@ export function planImportDrawingLinks(
     bySheet.get(key)!.push(drawing);
   }
 
-  const links: PieceDrawingLinkPlan["links"] = [];
-  const skipped: PieceDrawingLinkPlan["skipped"] = [];
+  const links: PieceDrawingSetLinkPlan["links"] = [];
+  const skipped: PieceDrawingSetLinkPlan["skipped"] = [];
   const linkedPair = new Set<string>();
 
   for (const hint of hints) {
@@ -103,12 +105,21 @@ export function planImportDrawingLinks(
       continue;
     }
     const drawing = matches[0];
-    const pairKey = `${hint.pieceId}::${drawing.id}`;
+    const drawingSetId = drawing.drawing_set_id ? String(drawing.drawing_set_id) : "";
+    if (!drawingSetId) {
+      skipped.push({
+        pieceId: hint.pieceId,
+        reason: "no_set",
+        detail: hint.sheetNumber,
+      });
+      continue;
+    }
+    const pairKey = `${hint.pieceId}::${drawingSetId}`;
     if (linkedPair.has(pairKey)) continue;
     linkedPair.add(pairKey);
     links.push({
       pieceId: hint.pieceId,
-      drawingId: drawing.id,
+      drawingSetId,
       sheetNumber: hint.sheetNumber,
     });
   }
@@ -116,20 +127,20 @@ export function planImportDrawingLinks(
   return { links, skipped };
 }
 
-export type LinkPieceDrawingFn = (
+export type LinkPieceDrawingSetFn = (
   pieceId: string,
-  drawingId: string,
+  drawingSetId: string,
 ) => Promise<unknown>;
 
 export async function applyImportDrawingLinks(
-  plan: PieceDrawingLinkPlan,
-  linkPieceDrawing: LinkPieceDrawingFn,
+  plan: PieceDrawingSetLinkPlan,
+  linkPieceDrawingSet: LinkPieceDrawingSetFn,
 ): Promise<{ linked: number; errors: Array<{ pieceId: string; message: string }> }> {
   let linked = 0;
   const errors: Array<{ pieceId: string; message: string }> = [];
   for (const row of plan.links) {
     try {
-      await linkPieceDrawing(row.pieceId, row.drawingId);
+      await linkPieceDrawingSet(row.pieceId, row.drawingSetId);
       linked += 1;
     } catch (error) {
       errors.push({

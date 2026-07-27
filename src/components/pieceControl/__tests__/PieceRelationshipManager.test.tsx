@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   fetchPieceRelationshipSnapshot,
-  linkPieceDrawing,
+  linkPieceDrawingSet,
 } from "@/lib/pieceControl/relationshipsRepository";
 import PieceRelationshipManager from "../PieceRelationshipManager";
 
@@ -21,9 +21,9 @@ vi.mock("@/components/shared/ProjectContext", () => ({
 vi.mock("@/lib/pieceControl/relationshipsRepository", () => ({
   assignPiecesToWorkPackage: vi.fn(),
   fetchPieceRelationshipSnapshot: vi.fn(),
-  linkPieceDrawing: vi.fn(),
+  linkPieceDrawingSet: vi.fn(),
   unassignPiecesFromWorkPackage: vi.fn(),
-  unlinkPieceDrawing: vi.fn(),
+  unlinkPieceDrawingSet: vi.fn(),
 }));
 
 describe("PieceRelationshipManager", () => {
@@ -31,6 +31,7 @@ describe("PieceRelationshipManager", () => {
     vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
       pieces: [],
       pieceDrawings: [],
+      pieceDrawingSets: [],
       drawings: [],
       workPackages: [
         {
@@ -86,12 +87,12 @@ describe("PieceRelationshipManager", () => {
     expect(screen.queryByText(/canonical pieces/i)).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "Import or add active pieces to the Piece Register before linking drawings.",
+        "Import or add active pieces to the Piece Register before linking drawing sets.",
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Add active project drawings before creating piece links.",
+        "Add active project drawing sets before creating piece links.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Piece")).not.toBeInTheDocument();
@@ -127,6 +128,7 @@ describe("PieceRelationshipManager", () => {
     vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
       pieces: [],
       pieceDrawings: [],
+      pieceDrawingSets: [],
       drawings: [],
       workPackages: [],
       drawingSets: [],
@@ -156,7 +158,7 @@ describe("PieceRelationshipManager", () => {
 
     expect(
       await screen.findByText(
-        "Assign active pieces to this work package before linking drawings.",
+        "Assign active pieces to this work package before linking drawing sets.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -192,6 +194,7 @@ describe("PieceRelationshipManager", () => {
         },
       ],
       pieceDrawings: [],
+      pieceDrawingSets: [],
       drawings: [],
       workPackages: [
         {
@@ -277,6 +280,7 @@ describe("PieceRelationshipManager", () => {
     vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
       pieces,
       pieceDrawings: [],
+      pieceDrawingSets: [],
       drawings: [],
       workPackages: [
         {
@@ -335,7 +339,7 @@ describe("PieceRelationshipManager", () => {
     expect(screen.getByText(/3 selected/i)).toBeInTheDocument();
   });
 
-  it("bulk-links the selected pieces to one drawing", async () => {
+  it("bulk-links the selected pieces to one drawing set", async () => {
     const pieces = ["A", "B"].map((mark, index) => ({
       id: `piece-${index + 1}`,
       project_id: "project-1",
@@ -360,22 +364,18 @@ describe("PieceRelationshipManager", () => {
     vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
       pieces,
       pieceDrawings: [],
-      drawings: [
+      pieceDrawingSets: [],
+      drawings: [],
+      workPackages: [],
+      drawingSets: [
         {
-          id: "drawing-1",
-          project_id: "project-1",
-          drawing_set_id: "set-1",
-          sheet_number: "S-101",
-          title: "Embeds",
-          stage: "Released",
+          id: "set-1",
+          set_name: "Shop Drawings Demo",
           set_approval_status: null,
           is_deleted: false,
           deleted_at: null,
-          is_superseded: false,
         },
       ],
-      workPackages: [],
-      drawingSets: [],
       submittals: [],
       sheetResponses: [],
       drawingRevisions: [],
@@ -383,7 +383,7 @@ describe("PieceRelationshipManager", () => {
       drawingSignoffs: [],
       commentDispositions: [],
     });
-    vi.mocked(linkPieceDrawing).mockResolvedValue({ linked: true } as never);
+    vi.mocked(linkPieceDrawingSet).mockResolvedValue({ linked: true } as never);
 
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -402,7 +402,7 @@ describe("PieceRelationshipManager", () => {
     );
 
     expect(
-      await screen.findByRole("button", { name: /Link drawing to selected/i }),
+      await screen.findByRole("button", { name: /Link set to selected/i }),
     ).toBeDisabled();
 
     fireEvent.click(
@@ -412,28 +412,28 @@ describe("PieceRelationshipManager", () => {
       document.getElementById("piece-assignment-piece-2")!.closest("label")!,
     );
 
-    fireEvent.change(screen.getByLabelText("Drawing"), {
-      target: { value: "drawing-1" },
+    fireEvent.change(screen.getByLabelText("Drawing set"), {
+      target: { value: "set-1" },
     });
 
     const bulkButton = screen.getByRole("button", {
-      name: /Link drawing to 2 selected/i,
+      name: /Link set to 2 selected/i,
     });
     expect(bulkButton).toBeEnabled();
     fireEvent.click(bulkButton);
 
     await waitFor(() => {
-      expect(linkPieceDrawing).toHaveBeenCalledTimes(2);
+      expect(linkPieceDrawingSet).toHaveBeenCalledTimes(2);
     });
-    expect(linkPieceDrawing).toHaveBeenCalledWith(
+    expect(linkPieceDrawingSet).toHaveBeenCalledWith(
       "project-1",
       "piece-1",
-      "drawing-1",
+      "set-1",
     );
-    expect(linkPieceDrawing).toHaveBeenCalledWith(
+    expect(linkPieceDrawingSet).toHaveBeenCalledWith(
       "project-1",
       "piece-2",
-      "drawing-1",
+      "set-1",
     );
   });
 });

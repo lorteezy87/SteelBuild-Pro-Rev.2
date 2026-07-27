@@ -1,23 +1,23 @@
 /**
- * Bulk link many pieces to one drawing via existing link_piece_drawing RPC.
+ * Bulk link many pieces to one drawing set via link_piece_drawing_set RPC.
  */
 
-export type LinkPieceDrawingFn = (
+export type LinkPieceDrawingSetFn = (
   pieceId: string,
-  drawingId: string,
+  drawingSetId: string,
 ) => Promise<unknown>;
 
-export async function linkPiecesToDrawing(
+export async function linkPiecesToDrawingSet(
   pieceIds: string[],
-  drawingId: string,
-  linkPieceDrawing: LinkPieceDrawingFn,
+  drawingSetId: string,
+  linkPieceDrawingSet: LinkPieceDrawingSetFn,
 ): Promise<{ linked: number; errors: Array<{ pieceId: string; message: string }> }> {
   const uniqueIds = [...new Set(pieceIds.filter(Boolean))];
   let linked = 0;
   const errors: Array<{ pieceId: string; message: string }> = [];
   for (const pieceId of uniqueIds) {
     try {
-      await linkPieceDrawing(pieceId, drawingId);
+      await linkPieceDrawingSet(pieceId, drawingSetId);
       linked += 1;
     } catch (error) {
       errors.push({

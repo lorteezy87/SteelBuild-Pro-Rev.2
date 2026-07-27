@@ -76,7 +76,7 @@ import type { ImportPayload, PieceImportSourceType } from "@/lib/pieceControl/re
 import {
   assignPiecesToWorkPackage,
   fetchPieceRelationshipSnapshot,
-  linkPieceDrawing,
+  linkPieceDrawingSet,
   unassignPiecesFromWorkPackage,
 } from "@/lib/pieceControl/relationshipsRepository";
 import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
@@ -436,8 +436,8 @@ export default function PieceRegister() {
     if (hints.length > 0) {
       const snapshot = await fetchPieceRelationshipSnapshot(projectId!);
       const plan = planImportDrawingLinks(hints, snapshot.drawings);
-      const result = await applyImportDrawingLinks(plan, (pieceId, drawingId) =>
-        linkPieceDrawing(projectId!, pieceId, drawingId),
+      const result = await applyImportDrawingLinks(plan, (pieceId, drawingSetId) =>
+        linkPieceDrawingSet(projectId!, pieceId, drawingSetId),
       );
       linked = result.linked;
     }

@@ -9,12 +9,12 @@ import { evaluateWorkPackageReadiness } from "@/lib/pieceControl/readiness";
 import {
   assignPiecesToWorkPackage,
   fetchPieceRelationshipSnapshot,
-  linkPieceDrawing,
+  linkPieceDrawingSet,
   unassignPiecesFromWorkPackage,
-  unlinkPieceDrawing,
+  unlinkPieceDrawingSet,
 } from "@/lib/pieceControl/relationshipsRepository";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
-import { linkPiecesToDrawing } from "@/lib/pieceControl/bulkLinkDrawings";
+import { linkPiecesToDrawingSet } from "@/lib/pieceControl/bulkLinkDrawings";
 import {
   addIdsToSelection,
   selectIdRange,
@@ -58,7 +58,7 @@ export default function PieceRelationshipManager({
   const [selectedPieceIds, setSelectedPieceIds] = useState<Set<string>>(new Set());
   const [targetWorkPackageId, setTargetWorkPackageId] = useState(focusedWorkPackageId ?? "");
   const [drawingPieceId, setDrawingPieceId] = useState("");
-  const [drawingId, setDrawingId] = useState("");
+  const [drawingSetId, setDrawingSetId] = useState("");
   const [drawingFilter, setDrawingFilter] = useState("");
   const [markFilter, setMarkFilter] = useState("");
   const [scopeFilter, setScopeFilter] = useState<"unassigned" | "package" | "all">(
@@ -186,26 +186,34 @@ export default function PieceRelationshipManager({
         drawingReviews: snapshot.drawingReviews,
         drawingSignoffs: snapshot.drawingSignoffs,
       },
+      snapshot.pieceDrawingSets ?? [],
     );
   }, [snapshot]);
   const visibleReadiness = focusedWorkPackageId
     ? readiness.filter((row) => row.workPackageId === focusedWorkPackageId)
     : readiness;
   const selectedDrawingPieceId = drawingPieceId || drawingPieces[0]?.id || "";
-  const linksForPiece = (snapshot?.pieceDrawings ?? []).filter(
+  const linksForPiece = (snapshot?.pieceDrawingSets ?? []).filter(
     (link) => link.piece_id === selectedDrawingPieceId,
   );
-  const drawingMap = new Map((snapshot?.drawings ?? []).map((drawing) => [drawing.id, drawing]));
-  const filteredDrawings = useMemo(() => {
+  const drawingSetMap = new Map(
+    (snapshot?.drawingSets ?? []).map((set) => [set.id, set]),
+  );
+  const activeDrawingSets = useMemo(
+    () =>
+      (snapshot?.drawingSets ?? []).filter(
+        (set) => !set.is_deleted && !set.deleted_at,
+      ),
+    [snapshot?.drawingSets],
+  );
+  const filteredDrawingSets = useMemo(() => {
     const needle = drawingFilter.trim().toLowerCase();
-    const drawings = snapshot?.drawings ?? [];
-    if (!needle) return drawings;
-    return drawings.filter((drawing) => {
-      const sheet = String(drawing.sheet_number ?? "").toLowerCase();
-      const title = String(drawing.title ?? "").toLowerCase();
-      return sheet.includes(needle) || title.includes(needle);
+    if (!needle) return activeDrawingSets;
+    return activeDrawingSets.filter((set) => {
+      const name = String(set.set_name ?? "").toLowerCase();
+      return name.includes(needle) || set.id.toLowerCase().includes(needle);
     });
-  }, [drawingFilter, snapshot?.drawings]);
+  }, [activeDrawingSets, drawingFilter]);
 
   const invalidate = async () => {
     await Promise.all([
@@ -257,18 +265,24 @@ export default function PieceRelationshipManager({
     },
   });
   const linkMutation = useMutation({
-    mutationFn: () => linkPieceDrawing(projectId, selectedDrawingPieceId, drawingId),
+    mutationFn: () =>
+      linkPieceDrawingSet(projectId, selectedDrawingPieceId, drawingSetId),
     ...mutationOptions,
     onSuccess: async (summary) => {
-      setDrawingId("");
+      setDrawingSetId("");
       await mutationOptions.onSuccess();
-      toast.success(summary.linked ? "Drawing linked" : "Drawing was already linked");
+      toast.success(
+        summary.linked ? "Drawing set linked" : "Drawing set was already linked",
+      );
     },
   });
   const bulkLinkMutation = useMutation({
     mutationFn: () =>
-      linkPiecesToDrawing([...selectedPieceIds], drawingId, (pieceId, targetDrawingId) =>
-        linkPieceDrawing(projectId, pieceId, targetDrawingId),
+      linkPiecesToDrawingSet(
+        [...selectedPieceIds],
+        drawingSetId,
+        (pieceId, targetSetId) =>
+          linkPieceDrawingSet(projectId, pieceId, targetSetId),
       ),
     ...mutationOptions,
     onSuccess: async (result) => {
@@ -279,16 +293,25 @@ export default function PieceRelationshipManager({
         );
         return;
       }
-      toast.success(`Linked drawing to ${result.linked} piece(s)`);
+      toast.success(`Linked drawing set to ${result.linked} piece(s)`);
     },
   });
   const unlinkMutation = useMutation({
-    mutationFn: ({ pieceId, targetDrawingId }: { pieceId: string; targetDrawingId: string }) =>
-      unlinkPieceDrawing(projectId, pieceId, targetDrawingId),
+    mutationFn: ({
+      pieceId,
+      targetDrawingSetId,
+    }: {
+      pieceId: string;
+      targetDrawingSetId: string;
+    }) => unlinkPieceDrawingSet(projectId, pieceId, targetDrawingSetId),
     ...mutationOptions,
     onSuccess: async (summary) => {
       await mutationOptions.onSuccess();
-      toast.success(summary.unlinked ? "Drawing unlinked" : "Drawing link was already absent");
+      toast.success(
+        summary.unlinked
+          ? "Drawing set unlinked"
+          : "Drawing set link was already absent",
+      );
     },
   });
 
@@ -632,38 +655,40 @@ export default function PieceRelationshipManager({
         )}
       </DecisionPanel>
 
-      <DecisionPanel title="Piece and drawing links">
+      <DecisionPanel title="Piece and drawing set links">
         <div className="piece-command-intro">
           <span className="piece-command-intro__icon" aria-hidden="true">
             <Link2 size={18} />
           </span>
           <p>
-            Select pieces above, pick a drawing, then link in bulk — or link one piece at a time.
+            Select pieces above, pick a drawing set, then link in bulk — or link one
+            piece at a time. Fab readiness still checks IFC/Released sheets inside
+            each linked set.
           </p>
         </div>
-        {drawingPieces.length === 0 || snapshot.drawings.length === 0 ? (
+        {drawingPieces.length === 0 || activeDrawingSets.length === 0 ? (
           <div className="piece-command-empty piece-command-empty--detail">
             {drawingPieces.length === 0 && (
               <p>
                 {focusedWorkPackageId
-                  ? "Assign active pieces to this work package before linking drawings."
-                  : "Import or add active pieces to the Piece Register before linking drawings."}
+                  ? "Assign active pieces to this work package before linking drawing sets."
+                  : "Import or add active pieces to the Piece Register before linking drawing sets."}
               </p>
             )}
-            {snapshot.drawings.length === 0 && (
-              <p>Add active project drawings before creating piece links.</p>
+            {activeDrawingSets.length === 0 && (
+              <p>Add active project drawing sets before creating piece links.</p>
             )}
           </div>
         ) : (
           <>
-            <label className="piece-command-field" htmlFor="piece-drawing-sheet-filter">
-              Drawing search
+            <label className="piece-command-field" htmlFor="piece-drawing-set-filter">
+              Drawing set search
               <input
-                id="piece-drawing-sheet-filter"
+                id="piece-drawing-set-filter"
                 className="piece-command-control"
                 value={drawingFilter}
                 onChange={(event) => setDrawingFilter(event.target.value)}
-                placeholder="Filter by sheet or title…"
+                placeholder="Filter by set name…"
               />
             </label>
             <div className="piece-link-controls">
@@ -682,18 +707,18 @@ export default function PieceRelationshipManager({
                   ))}
                 </select>
               </label>
-              <label className="piece-command-field" htmlFor="piece-drawing-link-drawing">
-                Drawing
+              <label className="piece-command-field" htmlFor="piece-drawing-link-set">
+                Drawing set
                 <select
-                  id="piece-drawing-link-drawing"
-                  value={drawingId}
-                  onChange={(event) => setDrawingId(event.target.value)}
+                  id="piece-drawing-link-set"
+                  value={drawingSetId}
+                  onChange={(event) => setDrawingSetId(event.target.value)}
                   className="piece-command-control"
                 >
-                  <option value="">Select drawing</option>
-                  {filteredDrawings.map((drawing) => (
-                    <option key={drawing.id} value={drawing.id}>
-                      {drawing.sheet_number || drawing.id} · {drawing.title || "Untitled"}
+                  <option value="">Select drawing set</option>
+                  {filteredDrawingSets.map((set) => (
+                    <option key={set.id} value={set.id}>
+                      {set.set_name || set.id}
                     </option>
                   ))}
                 </select>
@@ -704,19 +729,21 @@ export default function PieceRelationshipManager({
                 type="button"
                 disabled={
                   selectedPieceIds.size === 0 ||
-                  !drawingId ||
+                  !drawingSetId ||
                   bulkLinkMutation.isPending
                 }
                 onClick={() => bulkLinkMutation.mutate()}
                 className="cmd-btn cmd-btn--primary piece-link-action"
               >
                 {selectedPieceIds.size > 0
-                  ? `Link drawing to ${selectedPieceIds.size} selected`
-                  : "Link drawing to selected"}
+                  ? `Link set to ${selectedPieceIds.size} selected`
+                  : "Link set to selected"}
               </button>
               <button
                 type="button"
-                disabled={!selectedDrawingPieceId || !drawingId || linkMutation.isPending}
+                disabled={
+                  !selectedDrawingPieceId || !drawingSetId || linkMutation.isPending
+                }
                 onClick={() => linkMutation.mutate()}
                 className="cmd-btn cmd-btn--ghost piece-link-action"
               >
@@ -727,15 +754,20 @@ export default function PieceRelationshipManager({
         )}
         <div className="piece-link-list">
           {linksForPiece.map((link) => {
-            const drawing = drawingMap.get(link.drawing_id);
+            const set = drawingSetMap.get(link.drawing_set_id);
             return (
-              <div key={link.drawing_id} className="piece-link-row">
-                <strong>{drawing?.sheet_number || link.drawing_id}</strong>
-                <span>{drawing?.title || "Inactive drawing"}</span>
+              <div key={link.drawing_set_id} className="piece-link-row">
+                <strong>{set?.set_name || link.drawing_set_id}</strong>
+                <span>Drawing set</span>
                 <button
                   type="button"
-                  aria-label="Unlink drawing"
-                  onClick={() => unlinkMutation.mutate({ pieceId: link.piece_id, targetDrawingId: link.drawing_id })}
+                  aria-label="Unlink drawing set"
+                  onClick={() =>
+                    unlinkMutation.mutate({
+                      pieceId: link.piece_id,
+                      targetDrawingSetId: link.drawing_set_id,
+                    })
+                  }
                   className="piece-link-row__unlink"
                 >
                   <Unlink2 size={16} />
@@ -744,7 +776,7 @@ export default function PieceRelationshipManager({
             );
           })}
           {selectedDrawingPieceId && linksForPiece.length === 0 && (
-            <p className="piece-command-empty">No drawings linked to this piece.</p>
+            <p className="piece-command-empty">No drawing sets linked to this piece.</p>
           )}
         </div>
       </DecisionPanel>
