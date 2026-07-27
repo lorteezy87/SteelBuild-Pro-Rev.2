@@ -35,6 +35,7 @@ export const TABS = [
 ];
 
 // ── Status colors for matrix ───────────────────────────────────────────────
+// semantic submittal workflow hues — allowlisted for status identity in matrix chips.
 export const STATUS_COLORS: Record<string, string> = {
   Draft:                 "#64748b",
   Submitted:             "#3b82f6",
@@ -687,6 +688,7 @@ export function getStatusColor(status: string): string {
 
 // Colors for the coalesced OPERATIONAL state vocabulary (drafting + release
 // states; the submittal stages IFA..Released reuse the canonical STAGE_MAP).
+// semantic detailing/release workflow hues — allowlisted for operational-state identity.
 const OPERATIONAL_STATE_COLORS: Record<string, string> = {
   "Not Started":          "#64748b", // slate
   "In Detailing":         "#64748b", // slate

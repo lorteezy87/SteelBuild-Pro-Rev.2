@@ -40,7 +40,7 @@ export default function ZonesFloatingToolbar({
         gap: 6,
         padding: 4,
         borderRadius: 6,
-        background: "rgba(15,17,24,0.72)",
+        background: "color-mix(in srgb, var(--bg-surface-lowest) 72%, transparent)",
         border: "1px solid var(--border-default)",
         backdropFilter: "blur(6px)",
         fontFamily: "var(--font-mono)",
@@ -60,11 +60,11 @@ export default function ZonesFloatingToolbar({
             title={btn.desc}
             style={{
               padding: "5px 10px",
-              border: `1px solid ${isActive ? "#00E5FF" : "transparent"}`,
+              border: `1px solid ${isActive ? "var(--status-info)" : "transparent"}`,
               background: isActive
-                ? "rgba(0,229,255,0.14)"
+                ? "color-mix(in srgb, var(--status-info) 14%, transparent)"
                 : "transparent",
-              color: isActive ? "#00E5FF" : "var(--text-muted)",
+              color: isActive ? "var(--status-info)" : "var(--text-muted)",
               borderRadius: 3,
               fontSize: 10,
               fontWeight: 700,
@@ -90,11 +90,11 @@ export default function ZonesFloatingToolbar({
             : "Heatmap: recolor zones by weighted issue density (overdue RFIs, failed inspections, blocked WPs, late deliveries)"}
           style={{
             padding: "5px 10px",
-            border: `1px solid ${zoneOverlay === "heatmap" ? "#EF4444" : "transparent"}`,
+            border: `1px solid ${zoneOverlay === "heatmap" ? "var(--status-error)" : "transparent"}`,
             background: zoneOverlay === "heatmap"
-              ? "rgba(239,68,68,0.14)"
+              ? "color-mix(in srgb, var(--status-error) 14%, transparent)"
               : "transparent",
-            color: zoneOverlay === "heatmap" ? "#EF4444" : "var(--text-muted)",
+            color: zoneOverlay === "heatmap" ? "var(--status-error)" : "var(--text-muted)",
             borderRadius: 3,
             fontSize: 10,
             fontWeight: 700,
@@ -122,11 +122,11 @@ export default function ZonesFloatingToolbar({
             : "Show directed dependency arrows between zones (V3.1)"}
           style={{
             padding: "5px 10px",
-            border: `1px solid ${showDeps ? "#F59E0B" : "transparent"}`,
+            border: `1px solid ${showDeps ? "var(--status-warning)" : "transparent"}`,
             background: showDeps
-              ? "rgba(245,158,11,0.14)"
+              ? "color-mix(in srgb, var(--status-warning) 14%, transparent)"
               : "transparent",
-            color: showDeps ? "#F59E0B" : "var(--text-muted)",
+            color: showDeps ? "var(--status-warning)" : "var(--text-muted)",
             borderRadius: 3,
             fontSize: 10,
             fontWeight: 700,
@@ -169,11 +169,11 @@ export default function ZonesFloatingToolbar({
                 title={s.desc}
                 style={{
                   padding: "5px 8px",
-                  border: `1px solid ${isActive ? "#00E5FF" : "transparent"}`,
+                  border: `1px solid ${isActive ? "var(--status-info)" : "transparent"}`,
                   background: isActive
-                    ? "rgba(0,229,255,0.14)"
+                    ? "color-mix(in srgb, var(--status-info) 14%, transparent)"
                     : "transparent",
-                  color: isActive ? "#00E5FF" : "var(--text-muted)",
+                  color: isActive ? "var(--status-info)" : "var(--text-muted)",
                   borderRadius: 3,
                   fontSize: 12,
                   lineHeight: 1,
@@ -197,11 +197,11 @@ export default function ZonesFloatingToolbar({
           title="Open the AI proposals drawer — zones suggested by clustering analyzer findings"
           style={{
             padding: "5px 10px",
-            border: `1px solid ${proposalPanelOpen ? "#00E5FF" : "transparent"}`,
+            border: `1px solid ${proposalPanelOpen ? "var(--status-info)" : "transparent"}`,
             background: proposalPanelOpen
-              ? "rgba(0,229,255,0.14)"
-              : pendingProposalCount > 0 ? "rgba(0,229,255,0.06)" : "transparent",
-            color: proposalPanelOpen || pendingProposalCount > 0 ? "#00E5FF" : "var(--text-muted)",
+              ? "color-mix(in srgb, var(--status-info) 14%, transparent)"
+              : pendingProposalCount > 0 ? "color-mix(in srgb, var(--status-info) 6%, transparent)" : "transparent",
+            color: proposalPanelOpen || pendingProposalCount > 0 ? "var(--status-info)" : "var(--text-muted)",
             borderRadius: 3,
             fontSize: 10,
             fontWeight: 700,

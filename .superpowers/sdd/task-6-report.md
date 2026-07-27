@@ -86,3 +86,9 @@ src/components/drawings/DrawingsTable.jsx:9
 - Re-ran `git diff 4575aea11530222e23678d9004f57e0100df8b9a..HEAD -- '*.tsx' '*.jsx' | rg 'sbd-' || true` — no Task 6 JSX/TSX `sbd-*` additions found; pre-existing classes were left intact.
 - `npm run lint` — passed.
 - `npx vitest run src/components/drawings src/pages/drawingViewer --passWithNoTests` — 20 files, 184 tests passed.
+
+## Second review fix pass — 2026-07-27
+- Tokenized `ZonesFloatingToolbar.jsx` floating toolbar background and active control border/background/text literals to `--bg-*` / `--status-*` CSS variables.
+- Added explicit `// semantic ... — allowlisted` comments for the local submittal status and operational-state color maps in `drawingSubmittalHub/format.ts`.
+- `npm run lint` — passed.
+- `npx vitest run src/components/drawings src/pages/drawingViewer --passWithNoTests` — 20 files, 184 tests passed.
