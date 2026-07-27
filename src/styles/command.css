@@ -1,8 +1,8 @@
-/* Command UI — light-default design system, matched to 06_rfis.png.
-   Scoped under [data-skin="command"] so it stays scoped to canonical control-center surfaces.
-   IMPORTANT: this light surface renders INSIDE the dark SteelBuild app, so every
-   text element sets its color EXPLICITLY — never inherit, or the dark theme's
-   light text bleeds in and goes invisible on the white cards. */
+/* Command UI — light-default design system with dark remap via --cmd-* tokens.
+   Scoped under [data-skin="command"] for canonical control-center surfaces.
+   Default palette is light (matched to 06_rfis.png); html.steelbuild-dark or
+   [data-theme="dark"] remaps onto SteelBuild Dark. Every text element sets its
+   color EXPLICITLY so parent theme colors never bleed through. */
 [data-skin="command"] {
   --cmd-bg: #f4f6f9;
   --cmd-surface: #ffffff;
@@ -35,11 +35,13 @@
   --cmd-pill-good-fg: #04331d;
   --cmd-pill-warn-fg: #422c00;
   --cmd-pill-neutral-fg: #3d4753;
+  /* Foreground on solid semantic pill fills (danger/info/review). */
+  --cmd-pill-on-solid: #fff;
   background: var(--cmd-bg);
   color: var(--cmd-text);
 }
-/* Self-contained light island: fills the content area + sets the default text
-   color for everything inside, so no dark-app color bleeds through the gaps. */
+/* Command shell wrapper: fills the content area + sets default text color from
+   active --cmd-* tokens (light default or dark remap). */
 [data-skin="command"] [class$="-cc"] { display: flex; flex-direction: column; gap: 14px; padding: 16px; background: var(--cmd-bg); color: var(--cmd-text); min-height: 100%; }
 [data-skin="command"] [class$="-cc"] * { border-color: var(--cmd-border); }
 
@@ -106,9 +108,9 @@
 [data-skin="command"] .cmd-pill--neutral { background: var(--cmd-chip-bg); color: var(--cmd-pill-neutral-fg); }
 [data-skin="command"] .cmd-pill--good { background: var(--cmd-good); color: var(--cmd-pill-good-fg); }
 [data-skin="command"] .cmd-pill--warn { background: var(--cmd-warn); color: var(--cmd-pill-warn-fg); }
-[data-skin="command"] .cmd-pill--danger { background: var(--cmd-danger); color: #fff; }
-[data-skin="command"] .cmd-pill--info { background: var(--cmd-info); color: #fff; }
-[data-skin="command"] .cmd-pill--review { background: var(--cmd-review); color: #fff; }
+[data-skin="command"] .cmd-pill--danger { background: var(--cmd-danger); color: var(--cmd-pill-on-solid); }
+[data-skin="command"] .cmd-pill--info { background: var(--cmd-info); color: var(--cmd-pill-on-solid); }
+[data-skin="command"] .cmd-pill--review { background: var(--cmd-review); color: var(--cmd-pill-on-solid); }
 
 /* Filter bar + buttons */
 [data-skin="command"] .cmd-filterbar { display: flex; gap: 10px; align-items: center; background: var(--cmd-surface); border: 1px solid var(--cmd-border); border-radius: 12px; padding: 10px 12px; }
@@ -175,13 +177,14 @@ html.steelbuild-dark[data-skin="command"],
   --cmd-pill-good-fg: #04331d;
   --cmd-pill-warn-fg: #422c00;
   --cmd-pill-neutral-fg: var(--cmd-text);
+  --cmd-pill-on-solid: #fff;
 }
 
 /* ===========================================================================
-   Detailing Control Center — panel light-palette port
+   Detailing Control Center — panel token bridge
    ---------------------------------------------------------------------------
    The Detailing hub's command shell (DetailingCommandShell.tsx) renders the
-   light kit hero/KPI/tabs, then drops the EXISTING tab panels into
+   command kit hero/KPI/tabs, then drops the EXISTING tab panels into
    `.detailing-cc`. Those panels are built on the desktop kit (`desk-*` classes,
    which are scoped to [data-skin="desktop"]) plus inline `var(--theme)` tokens.
    Under the command shell ([data-skin="command"], NOT "desktop") the desk-*
@@ -271,13 +274,13 @@ html.steelbuild-dark[data-skin="command"],
 [data-skin="command"] .detailing-cc .desk-status-pill--needsaction { background: var(--cmd-warn); color: var(--cmd-pill-warn-fg); }
 [data-skin="command"] .detailing-cc .desk-status-pill--review,
 [data-skin="command"] .detailing-cc .desk-status-pill--inreview,
-[data-skin="command"] .detailing-cc .desk-status-pill--fieldready { background: var(--cmd-info); color: #fff; }
+[data-skin="command"] .detailing-cc .desk-status-pill--fieldready { background: var(--cmd-info); color: var(--cmd-pill-on-solid); }
 [data-skin="command"] .detailing-cc .desk-status-pill--done,
 [data-skin="command"] .detailing-cc .desk-status-pill--approved,
 [data-skin="command"] .detailing-cc .desk-status-pill--fabready { background: var(--cmd-good); color: var(--cmd-pill-good-fg); }
 [data-skin="command"] .detailing-cc .desk-status-pill--danger,
 [data-skin="command"] .detailing-cc .desk-status-pill--overdue,
-[data-skin="command"] .detailing-cc .desk-status-pill--blocked { background: var(--cmd-danger); color: #fff; }
+[data-skin="command"] .detailing-cc .desk-status-pill--blocked { background: var(--cmd-danger); color: var(--cmd-pill-on-solid); }
 
 /* Tables (both the desk-table and sbd-table codepaths in the register). */
 [data-skin="command"] .detailing-cc .desk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
