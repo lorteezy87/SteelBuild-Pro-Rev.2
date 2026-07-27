@@ -30,7 +30,8 @@ describe("DesktopConnect", () => {
     expect(dependencies.getSession).not.toHaveBeenCalled();
   });
 
-  it("creates an encrypted handoff and redirects without credentials", async () => {
+  it("creates an encrypted handoff, keeps the page visible, and soft-redirects without credentials", async () => {
+    const attemptSoftRedirect = vi.fn();
     const redirect = vi.fn();
     const createHandoff = vi.fn().mockResolvedValue({
       code: "C".repeat(43),
@@ -50,6 +51,7 @@ describe("DesktopConnect", () => {
         ciphertext: "E".repeat(64),
       }),
       createHandoff,
+      attemptSoftRedirect,
       redirect,
     };
 
@@ -66,11 +68,13 @@ describe("DesktopConnect", () => {
     );
 
     expect(screen.getByText(/connecting/i)).toBeInTheDocument();
-    await waitFor(() => expect(redirect).toHaveBeenCalledTimes(1));
-    const callback = redirect.mock.calls[0]?.[0] as string;
+    await waitFor(() => expect(attemptSoftRedirect).toHaveBeenCalledTimes(1));
+    expect(redirect).not.toHaveBeenCalled();
+    const callback = attemptSoftRedirect.mock.calls[0]?.[0] as string;
     expect(callback).toContain("desktop-command-center://steelbuild/callback?");
     expect(callback).not.toContain("access-secret");
     expect(callback).not.toContain("refresh-secret");
+    expect(await screen.findByRole("link", { name: /open desktop command center/i })).toBeInTheDocument();
     expect(createHandoff).toHaveBeenCalledWith(expect.objectContaining({
       state: "A".repeat(43),
       codeChallenge: "B".repeat(43),

@@ -20,6 +20,7 @@ vi.mock("@/components/shared/OrgContext", () => ({
 }));
 vi.mock("@/boot/AppLoader", () => ({ default: () => <div>LOADER</div> }));
 vi.mock("@/pages/Landing", () => ({ default: () => <div>LANDING</div> }));
+vi.mock("@/pages/DesktopConnectSignIn", () => ({ default: () => <div>DESKTOP_CONNECT_SIGNIN</div> }));
 vi.mock("@/pages/UpdatePassword", () => ({ default: () => <div>UPDATE_PW</div> }));
 vi.mock("@/pages/MfaChallenge", () => ({ default: () => <div>MFA_CHALLENGE</div> }));
 vi.mock("@/boot/AppRoutes", () => ({ default: () => <div>APP_ROUTES</div> }));
@@ -34,6 +35,7 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
   beforeEach(() => {
     authState = { ...authed };
     orgState = { isLoadingOrgs: false, hasOrg: true };
+    window.history.pushState({}, "", "/");
   });
 
   it("shows the loader while auth is resolving", () => {
@@ -46,6 +48,14 @@ describe("AuthenticatedApp — auth + org gate precedence", () => {
     authState = { ...authed, authError: { type: "auth_required", message: "Authentication required" } };
     render(<AuthenticatedApp />);
     expect(await screen.findByText("LANDING")).toBeInTheDocument();
+  });
+
+  it("shows a focused desktop connect sign-in on /DesktopConnect when there is no session", async () => {
+    window.history.pushState({}, "", "/DesktopConnect?state=abc");
+    authState = { ...authed, authError: { type: "auth_required", message: "Authentication required" } };
+    render(<AuthenticatedApp />);
+    expect(await screen.findByText("DESKTOP_CONNECT_SIGNIN")).toBeInTheDocument();
+    expect(screen.queryByText("LANDING")).not.toBeInTheDocument();
   });
 
   it("shows the loader while the org is resolving", () => {

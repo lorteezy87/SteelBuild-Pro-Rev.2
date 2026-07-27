@@ -96,7 +96,74 @@ describe("desktop browser session handoff", () => {
       },
     })).rejects.toEqual(new DesktopSessionCryptoError("import"));
 
+    expect(importKey).toHaveBeenCalledWith(
+      "raw",
+      expect.any(ArrayBuffer),
+      { name: "ECDH", namedCurve: "P-256" },
+      false,
+      [],
+    );
     importKey.mockRestore();
+  });
+
+  it("rejects 44-character P-256 coordinates before WebCrypto import", async () => {
+    const key = await publicKeyJwk();
+    const importKey = vi.spyOn(crypto.subtle, "importKey");
+
+    await expect(encryptDesktopSession({
+      algorithm: DESKTOP_SESSION_ALGORITHM,
+      state: "A".repeat(43),
+      publicKey: {
+        kty: "EC",
+        crv: "P-256",
+        x: `${key.x}A`,
+        y: key.y,
+        ext: true,
+      },
+      session: {
+        accessToken: "access-secret-value-123",
+        refreshToken: "refresh-secret-value-123",
+        expiresAt: 1_800_000_000,
+        user: { id: "user-1", email: "pm@example.com" },
+      },
+    })).rejects.toThrow(/publicKey\.x must be bounded unpadded base64url/i);
+
+    expect(importKey).not.toHaveBeenCalled();
+    importKey.mockRestore();
+  });
+
+  it("encrypts using a Tauri-shaped P-256 public key from the connect query", async () => {
+    // Tauri URL JWK: kty/crv/x/y only (no ext), 43-char base64url coords.
+    const tauriPublicKeyJson = JSON.stringify({
+      crv: "P-256",
+      kty: "EC",
+      x: "X-TArsWbKT5Z8Ewtzi1NaSMoUC9-foUm236WRCuC_s8",
+      y: "X4LPq_lKtaS53aMcbaF5vgHPVvo5qNoUq2h33C0dsn8",
+    });
+    const encodedKey = btoa(tauriPublicKeyJson)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+    const query = parseDesktopConnectQuery(
+      `?state=${"A".repeat(43)}&challenge=${"B".repeat(43)}&publicKey=${encodedKey}`,
+    );
+
+    const envelope = await encryptDesktopSession({
+      algorithm: DESKTOP_SESSION_ALGORITHM,
+      state: query.state,
+      publicKey: query.publicKey,
+      session: {
+        accessToken: "access-secret-value-123",
+        refreshToken: "refresh-secret-value-123",
+        expiresAt: 1_800_000_000,
+        user: { id: "user-1", email: "pm@example.com" },
+      },
+      randomBytes: (length) => new Uint8Array(length).fill(3),
+    });
+
+    expect(envelope.algorithm).toBe(DESKTOP_SESSION_ALGORITHM);
+    expect(envelope.ephemeralPublicKey).toMatchObject({ kty: "EC", crv: "P-256", ext: true });
+    expect(envelope.ciphertext.length).toBeGreaterThan(20);
   });
 
   it("accepts a bounded non-empty opaque refresh token shorter than 16 characters", async () => {

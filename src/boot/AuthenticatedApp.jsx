@@ -5,6 +5,7 @@ import AppLoader from "@/boot/AppLoader";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 
 const Landing = lazyWithRetry(() => import("@/pages/Landing"));
+const DesktopConnectSignIn = lazyWithRetry(() => import("@/pages/DesktopConnectSignIn"));
 const UpdatePassword = lazyWithRetry(() => import("@/pages/UpdatePassword"));
 const MfaChallenge = lazyWithRetry(() => import("@/pages/MfaChallenge"));
 const AppRoutes = lazyWithRetry(() => import("@/boot/AppRoutes"));
@@ -12,6 +13,11 @@ const OrgOnboarding = lazyWithRetry(() => import("@/pages/OrgOnboarding"));
 const ProjectProvider = lazyWithRetry(() =>
   import("@/components/shared/ProjectContext").then((mod) => ({ default: mod.ProjectProvider }))
 );
+
+function isDesktopConnectPath() {
+  if (typeof window === "undefined") return false;
+  return /\/DesktopConnect\/?$/i.test(window.location.pathname);
+}
 
 /**
  * AuthenticatedApp — auth gate + org gate + routing.
@@ -81,6 +87,21 @@ export default function AuthenticatedApp() {
   }
 
   if (authError?.type === "auth_required") {
+    const loginError = authError?.message !== "Authentication required" ? authError?.message : null;
+    // Desktop Connect opens the system browser, which often has no session even
+    // when the user is signed in elsewhere. Show a focused gate instead of the
+    // marketing Landing page so the handoff query string stays obvious.
+    if (isDesktopConnectPath()) {
+      return (
+        <Suspense fallback={<AppLoader />}>
+          <DesktopConnectSignIn
+            onLogin={loginWithPassword}
+            isSubmitting={isLoadingAuth}
+            loginError={loginError}
+          />
+        </Suspense>
+      );
+    }
     return (
       <Suspense fallback={<AppLoader />}>
         <Landing
@@ -88,7 +109,7 @@ export default function AuthenticatedApp() {
           onSignUp={signUpWithPassword}
           onForgotPassword={sendPasswordReset}
           isSubmitting={isLoadingAuth}
-          loginError={authError?.message !== "Authentication required" ? authError?.message : null}
+          loginError={loginError}
         />
       </Suspense>
     );

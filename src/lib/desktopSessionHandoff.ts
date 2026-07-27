@@ -99,16 +99,11 @@ export async function encryptDesktopSession(input: {
 
   const state = validateBase64Url(input.state, "state", 43, 128);
   const session = validateMinimalSession(input.session);
-  const recipientKey = await runCryptoStage("import", async () => {
-    const recipientJwk = normalizeP256PublicKey(input.publicKey);
-    return crypto.subtle.importKey(
-      "jwk",
-      recipientJwk,
-      { name: "ECDH", namedCurve: "P-256" },
-      false,
-      [],
-    );
-  });
+  // Validate JWK shape outside the WebCrypto stage so coordinate/format errors
+  // are not misreported as DC-CRYPTO-IMPORT. Import the uncompressed SEC1 point
+  // via "raw" to avoid browser JWK quirks with Tauri-issued public keys.
+  const recipientJwk = normalizeP256PublicKey(input.publicKey);
+  const recipientKey = await runCryptoStage("import", () => importP256PublicKeyRaw(recipientJwk));
   const ephemeral = await runCryptoStage("generate", () => crypto.subtle.generateKey(
     { name: "ECDH", namedCurve: "P-256" },
     true,
@@ -200,12 +195,37 @@ function normalizeP256PublicKey(value: unknown): JsonWebKey {
   if (key.kty !== "EC" || key.crv !== "P-256") {
     throw new Error("Desktop public key must use P-256 ECDH");
   }
-  const x = validateBase64Url(key.x, "publicKey.x", 43, 44);
-  const y = validateBase64Url(key.y, "publicKey.y", 43, 44);
+  // P-256 coordinates are exactly 32 bytes → 43 chars unpadded base64url.
+  // Accepting 44 chars previously let invalid 33-byte values reach importKey
+  // and surface as DC-CRYPTO-IMPORT.
+  const x = validateBase64Url(key.x, "publicKey.x", 43, 43);
+  const y = validateBase64Url(key.y, "publicKey.y", 43, 43);
+  if (decodeBase64Url(x).byteLength !== 32 || decodeBase64Url(y).byteLength !== 32) {
+    throw new Error("Desktop public key coordinates must decode to 32 bytes");
+  }
   if (key.ext !== undefined && key.ext !== true) {
     throw new Error("Desktop public key must be extractable");
   }
   return { kty: "EC", crv: "P-256", x, y, ext: true };
+}
+
+async function importP256PublicKeyRaw(publicKey: JsonWebKey): Promise<CryptoKey> {
+  const x = decodeBase64Url(String(publicKey.x));
+  const y = decodeBase64Url(String(publicKey.y));
+  if (x.byteLength !== 32 || y.byteLength !== 32) {
+    throw new Error("Desktop public key coordinates must decode to 32 bytes");
+  }
+  const uncompressed = new Uint8Array(65);
+  uncompressed[0] = 0x04;
+  uncompressed.set(x, 1);
+  uncompressed.set(y, 33);
+  return crypto.subtle.importKey(
+    "raw",
+    toArrayBuffer(uncompressed),
+    { name: "ECDH", namedCurve: "P-256" },
+    false,
+    [],
+  );
 }
 
 function validateMinimalSession(session: MinimalDesktopSession): MinimalDesktopSession {
@@ -290,5 +310,7 @@ async function runCryptoStage<T>(
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.slice().buffer as ArrayBuffer;
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
 }

@@ -24,6 +24,7 @@ type BrowserSession = {
 
 export interface DesktopConnectDependencies {
   getSession(): Promise<BrowserSession | null>;
+  waitForSession?(timeoutMs?: number): Promise<BrowserSession | null>;
   encryptSession(input: {
     algorithm: typeof DESKTOP_SESSION_ALGORITHM;
     state: string;
@@ -35,6 +36,7 @@ export interface DesktopConnectDependencies {
     codeChallenge: string;
     encryptedSession: DesktopEncryptedSession;
   }): Promise<{ code: string; expiresAt: string }>;
+  attemptSoftRedirect?(url: string): void;
   redirect(url: string): void;
 }
 
@@ -54,7 +56,7 @@ type DesktopConnectFailure =
 
 const failureMessages: Record<DesktopConnectFailure, string> = {
   query: "The desktop connection request is invalid or expired. Start again from Desktop Command Center. (DC-QUERY)",
-  session: "Sign in to SteelBuild in this browser, then start again from Desktop Command Center. (DC-SESSION)",
+  session: "Sign in to SteelBuild in this browser tab, then click Retry. Being signed in on another tab or host is not enough. (DC-SESSION)",
   "session-access-token": "The browser session did not contain a usable access token. Sign in again, then restart the desktop connection. (DC-SESSION-ACCESS)",
   "session-refresh-token": "The browser session did not contain a usable refresh token. Sign in again, then restart the desktop connection. (DC-SESSION-REFRESH)",
   "session-expiry": "The browser session did not contain a usable expiry. Sign in again, then restart the desktop connection. (DC-SESSION-EXPIRY)",
@@ -71,12 +73,36 @@ const failureMessages: Record<DesktopConnectFailure, string> = {
   handoff: "SteelBuild could not create the one-time desktop handoff. Try again. (DC-HANDOFF)",
 };
 
+async function waitForBrowserSession(timeoutMs = 8_000): Promise<BrowserSession | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (!error && data.session) return data.session as BrowserSession;
+
+  return await new Promise((resolve) => {
+    let settled = false;
+    const finish = (session: BrowserSession | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      subscription.subscription.unsubscribe();
+      resolve(session);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) finish(session as BrowserSession);
+    });
+    void supabase.auth.getSession().then(({ data: latest }) => {
+      if (latest.session) finish(latest.session as BrowserSession);
+    });
+  });
+}
+
 const defaultDependencies: DesktopConnectDependencies = {
   async getSession() {
     const { data, error } = await supabase.auth.getSession();
     if (error) throw error;
     return data.session as BrowserSession | null;
   },
+  waitForSession: waitForBrowserSession,
   encryptSession: encryptDesktopSession,
   async createHandoff(input) {
     const { data, error } = await supabase.functions.invoke("command-center-session-handoff", {
@@ -92,6 +118,18 @@ const defaultDependencies: DesktopConnectDependencies = {
     }
     return { code: data.code, expiresAt: data.expiresAt };
   },
+  attemptSoftRedirect(url) {
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      window.setTimeout(() => iframe.remove(), 3_000);
+    } catch {
+      // Best-effort only; the explicit button remains the reliable path.
+    }
+  },
   redirect(url) {
     window.location.assign(url);
   },
@@ -105,18 +143,21 @@ export function DesktopConnect({
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<"connecting" | "returning" | "error">("connecting");
   const [failure, setFailure] = useState<DesktopConnectFailure | null>(null);
+  const [callbackUrl, setCallbackUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     let failureStage: DesktopConnectFailure = "query";
     setStatus("connecting");
     setFailure(null);
+    setCallbackUrl(null);
 
     void (async () => {
       try {
         const query = parseQuery(search);
         failureStage = "session";
-        const browserSession = await dependencies.getSession();
+        const browserSession = await (dependencies.waitForSession?.(8_000)
+          ?? dependencies.getSession());
         if (!browserSession?.expires_at || !browserSession.user.email) {
           throw new Error("Authenticated SteelBuild session is unavailable");
         }
@@ -140,8 +181,9 @@ export function DesktopConnect({
         });
         const callback = buildDesktopCallbackUrl({ code: handoff.code, state: query.state });
         if (!active) return;
+        setCallbackUrl(callback);
         setStatus("returning");
-        dependencies.redirect(callback);
+        dependencies.attemptSoftRedirect?.(callback);
       } catch (error) {
         if (active) {
           setFailure(
@@ -167,8 +209,32 @@ export function DesktopConnect({
         Desktop Command Center
       </p>
       <h1>Connect SteelBuild</h1>
-      {status === "connecting" && <p>Connecting securely to the desktop application…</p>}
-      {status === "returning" && <p>Connected. Returning to Desktop Command Center…</p>}
+      {status === "connecting" && (
+        <p>Connecting securely to the desktop application… Sign in in this tab if prompted.</p>
+      )}
+      {status === "returning" && (
+        <>
+          <p>Handoff ready. If Desktop Command Center is still waiting, click the button below and allow the app to open.</p>
+          {callbackUrl ? (
+            <p style={{ marginTop: 24 }}>
+              <a
+                href={callbackUrl}
+                style={{
+                  display: "inline-block",
+                  padding: "12px 18px",
+                  background: "var(--accent, #1677ff)",
+                  color: "#fff",
+                  textDecoration: "none",
+                  borderRadius: 8,
+                  fontWeight: 600,
+                }}
+              >
+                Open Desktop Command Center
+              </a>
+            </p>
+          ) : null}
+        </>
+      )}
       {status === "error" && (
         <>
           <p>{failure ? failureMessages[failure] : "The secure desktop connection could not be completed."}</p>
