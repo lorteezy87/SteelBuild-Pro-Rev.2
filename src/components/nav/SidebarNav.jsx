@@ -563,14 +563,11 @@ export default function SidebarNav({
 }
 
 function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = false }) {
-  const [collapsed, setCollapsed] = useState(forceRail);
+  const [collapsed, setCollapsed] = useState(false);
   // Per-category collapse, persisted in the shared sidebar group state
   // (localStorage "sbp-nav-groups"). A missing/falsy entry means expanded.
   const [groupCollapsed, setGroupCollapsed] = useState(loadSidebarState);
-
-  useEffect(() => {
-    setCollapsed(forceRail);
-  }, [forceRail]);
+  const effectiveCollapsed = forceRail || collapsed;
 
   const toggleGroup = useCallback((label) => {
     setGroupCollapsed((prev) => {
@@ -601,7 +598,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
   };
 
   return (
-    <aside aria-label="Dashboard navigation" className={`sb-dashboard-reference-sidebar${collapsed ? " is-collapsed" : ""}`}>
+    <aside aria-label="Dashboard navigation" className={`sb-dashboard-reference-sidebar${effectiveCollapsed ? " is-collapsed" : ""}`}>
       <button
         type="button"
         className="sb-dashboard-reference-brand"
@@ -617,7 +614,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = fa
           // sidebar which pins OVERVIEW open — so ignore group.collapsible.
           const isGroupCollapsed = !!groupCollapsed[group.label];
           // In rail (icon-only) mode show every item; headers are hidden via CSS.
-          const showItems = collapsed || !isGroupCollapsed;
+          const showItems = effectiveCollapsed || !isGroupCollapsed;
           return (
             <div key={group.label} className="sb-dashboard-reference-group">
               <button

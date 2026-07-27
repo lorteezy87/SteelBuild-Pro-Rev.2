@@ -13,7 +13,7 @@
  */
 
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -130,7 +130,9 @@ describe("Layout (smoke)", () => {
 
   it("keeps the tablet shell on a forced rail even in light theme", async () => {
     window.localStorage.setItem("sbp-theme", "light");
-    setViewport(834);
+    act(() => {
+      setViewport(834);
+    });
     const { container } = renderLayout({ currentPageName: "Projects" });
 
     expect(container.querySelector(".app-shell")).toHaveAttribute("data-viewport", "tablet");
@@ -141,5 +143,32 @@ describe("Layout (smoke)", () => {
     expect(container.querySelector(".sb-dashboard-reference-sidebar")).toHaveClass("is-collapsed");
     expect(screen.queryByRole("button", { name: /expand sidebar|collapse to icons/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /expand sidebar|collapse sidebar/i })).not.toBeInTheDocument();
+  });
+
+  it("preserves a user-collapsed dashboard sidebar across tablet rail resizing", async () => {
+    const { container } = renderLayout({ currentPageName: "Projects" });
+
+    await waitFor(() => {
+      expect(container.querySelector(".sb-dashboard-reference-sidebar")).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+    expect(container.querySelector(".sb-dashboard-reference-sidebar")).toHaveClass("is-collapsed");
+    expect(screen.getByRole("button", { name: /expand sidebar/i })).toBeInTheDocument();
+
+    setViewport(834);
+    await waitFor(() => {
+      expect(container.querySelector(".app-shell")).toHaveAttribute("data-viewport", "tablet");
+    });
+    expect(screen.queryByRole("button", { name: /expand sidebar|collapse sidebar/i })).not.toBeInTheDocument();
+
+    act(() => {
+      setViewport(1200);
+    });
+    await waitFor(() => {
+      expect(container.querySelector(".app-shell")).toHaveAttribute("data-viewport", "desktop");
+    });
+    expect(container.querySelector(".sb-dashboard-reference-sidebar")).toHaveClass("is-collapsed");
+    expect(screen.getByRole("button", { name: /expand sidebar/i })).toBeInTheDocument();
   });
 });

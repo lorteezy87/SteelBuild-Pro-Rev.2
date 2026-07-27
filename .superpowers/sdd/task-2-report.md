@@ -155,3 +155,30 @@ What GREEN covers:
 ## Concerns
 
 None blocking.
+
+## Review Fix Addendum — `DashboardReferenceSidebar` forceRail state
+
+### Fix notes
+
+- Removed the `useEffect(() => setCollapsed(forceRail), [forceRail])` sync in `DashboardReferenceSidebar`.
+- Kept the user-owned `collapsed` state local to desktop interactions.
+- Derived `effectiveCollapsed = forceRail || collapsed` for the rendered rail/collapsed class and item visibility.
+- Left the footer expand/collapse control hidden whenever `forceRail` is true, matching the default `SidebarNav` contract.
+- Added a regression test that collapses the dashboard sidebar on desktop, resizes to tablet rail, then back to desktop and verifies the sidebar is still collapsed.
+
+### Re-run command
+
+```bash
+npx vitest run src/__tests__/components/Layout.test.jsx src/components/nav/__tests__/useResponsiveBreakpoint.test.ts
+```
+
+### Re-run output
+
+```text
+RUN  v4.1.6 /workspace
+
+Test Files  2 passed (2)
+     Tests  8 passed (8)
+  Start at  01:45:17
+  Duration  1.94s (transform 373ms, setup 238ms, import 826ms, tests 625ms, environment 530ms)
+```
