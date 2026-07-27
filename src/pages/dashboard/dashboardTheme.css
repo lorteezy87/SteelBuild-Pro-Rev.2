@@ -1,4 +1,5 @@
 .dashboard-reference-shell {
+  /* Dual-theme hex allowlist: dashboard reference light palette remaps below for SteelBuild Dark. */
   --bg-base: #f5f7fb;
   --bg-surface: #ffffff;
   --bg-surface-secondary: #ffffff;

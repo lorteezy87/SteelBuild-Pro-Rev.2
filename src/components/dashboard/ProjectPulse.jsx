@@ -715,7 +715,7 @@ export default function ProjectPulse({
                   onClick={() => navigate(createPageUrl(a.page))}
                   style={{
                     fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
-                    color: "#fff", background: a.color,
+                    color: "var(--on-accent)", background: a.color,
                     border: "none", borderRadius: 4,
                     padding: "5px 10px", letterSpacing: "0.08em",
                     cursor: "pointer", transition: "opacity 0.15s",

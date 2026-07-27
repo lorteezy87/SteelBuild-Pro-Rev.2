@@ -767,7 +767,7 @@ function UpcomingEventsStrip({ scheduleTasks = [], deliveries = [], rfis = [], a
         type: "delivery",
         date: iso,
         title: d.delivery_title || d.description || `PO ${d.po_number || ""}`,
-        color: "#0d9488",
+        color: "var(--accent)",
       });
     }
     // Action items overdue OR due within the window

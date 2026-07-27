@@ -93,7 +93,7 @@ export default function UserEditModal({ open, onClose, user }) {
           <Button variant="outline" onClick={onClose} style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", color: "var(--text-secondary)" }}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={updateMut.isPending} style={{ background: "var(--accent)", color: "#fff", fontWeight: 700 }}>
+          <Button onClick={handleSave} disabled={updateMut.isPending} style={{ background: "var(--accent)", color: "var(--on-accent)", fontWeight: 700 }}>
             {updateMut.isPending ? "Saving..." : "Save Changes"}
           </Button>
         </DialogFooter>

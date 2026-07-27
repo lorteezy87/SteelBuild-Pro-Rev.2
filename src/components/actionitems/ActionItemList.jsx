@@ -62,7 +62,7 @@ function SelectCheckbox({ checked, onChange }) {
       }}
     >
       {checked && (
-        <span style={{ color: "#061018", fontSize: 11, fontWeight: 900, lineHeight: 1 }}>{"✓"}</span>
+        <span style={{ color: "var(--on-accent)", fontSize: 11, fontWeight: 900, lineHeight: 1 }}>{"✓"}</span>
       )}
     </div>
   );

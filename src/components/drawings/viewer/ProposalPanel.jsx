@@ -42,10 +42,10 @@ const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
 // semantic proposal-status marks — allowlisted; hues render as ink/borders on
 // translucent tokenized chips so they keep dark-viewer contrast.
 const PROPOSAL_STATUS_COLORS = {
-  pending:  { fg: "#00E5FF", bg: "rgba(0,229,255,0.12)",   border: "#00E5FF" },
-  accepted: { fg: "#22C55E", bg: "rgba(34,197,94,0.14)",   border: "#22C55E" },
-  rejected: { fg: "#94A3B8", bg: "rgba(148,163,184,0.12)", border: "#94A3B8" },
-  merged:   { fg: "#0d9488", bg: "rgba(13,148,136,0.14)",  border: "#0d9488" },
+  pending:  { fg: "#00E5FF", bg: "rgba(0,229,255,0.12)",   border: "var(--accent)" },
+  accepted: { fg: "#22C55E", bg: "rgba(34,197,94,0.14)",   border: "var(--status-success)" },
+  rejected: { fg: "var(--text-muted)", bg: "rgba(148,163,184,0.12)", border: "var(--text-muted)" },
+  merged:   { fg: "#0d9488", bg: "rgba(13,148,136,0.14)",  border: "var(--accent)" },
 };
 
 // semantic proposal-severity marks — allowlisted; dots are categorical viewer
@@ -292,8 +292,8 @@ export default function ProposalPanel({
               letterSpacing: "0.1em",
               textTransform: "uppercase",
               background: "rgba(0,229,255,0.10)",
-              color: "#00E5FF",
-              border: "1px solid #00E5FF",
+              color: "var(--accent)",
+              border: "1px solid var(--accent)",
               borderRadius: 3,
               cursor: "pointer",
               display: "flex",
@@ -631,7 +631,7 @@ function AcceptModal({ proposal, onClose, onSubmit, loading }) {
         <button
           disabled={loading}
           onClick={() => onSubmit({ label, zoneType })}
-          style={{ ...modalConfirmBtn, borderColor: "#22C55E", color: "#22C55E", opacity: loading ? 0.5 : 1 }}
+          style={{ ...modalConfirmBtn, borderColor: "var(--status-success)", color: "var(--status-success)", opacity: loading ? 0.5 : 1 }}
         >
           {loading ? "Accepting…" : "Accept and create zone"}
         </button>
@@ -662,7 +662,7 @@ function RejectModal({ onClose, onSubmit, loading }) {
         <button
           disabled={loading}
           onClick={() => onSubmit({ reason })}
-          style={{ ...modalConfirmBtn, borderColor: "#94A3B8", color: "#94A3B8", opacity: loading ? 0.5 : 1 }}
+          style={{ ...modalConfirmBtn, borderColor: "var(--text-muted)", color: "var(--text-muted)", opacity: loading ? 0.5 : 1 }}
         >
           {loading ? "Rejecting…" : "Reject"}
         </button>
@@ -704,7 +704,7 @@ function MergeModal({ proposal, existingZones, onClose, onSubmit, loading }) {
             <button
               disabled={loading || !targetZoneId}
               onClick={() => onSubmit(targetZoneId)}
-              style={{ ...modalConfirmBtn, borderColor: "#0d9488", color: "#0d9488", opacity: (loading || !targetZoneId) ? 0.5 : 1 }}
+              style={{ ...modalConfirmBtn, borderColor: "var(--accent)", color: "var(--accent)", opacity: (loading || !targetZoneId) ? 0.5 : 1 }}
             >
               {loading ? "Merging…" : "Merge"}
             </button>
@@ -761,8 +761,8 @@ const modalConfirmBtn = {
   textTransform: "uppercase",
   padding: "8px 10px",
   background: "transparent",
-  color: "#00E5FF",
-  border: "1px solid #00E5FF",
+  color: "var(--accent)",
+  border: "1px solid var(--accent)",
   borderRadius: 3,
   cursor: "pointer",
 };

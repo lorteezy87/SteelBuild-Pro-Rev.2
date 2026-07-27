@@ -431,7 +431,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                               </div>
                             </div>
                             <div style={{ textAlign: "right", flexShrink: 0 }}>
-                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "#0891B2" }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
                                 {member.packages}
                               </div>
                               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>

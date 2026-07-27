@@ -34,7 +34,7 @@ export default function PageHeader({ title, subtitle, onAdd, onRefresh, addLabel
             display: "flex", alignItems: "center", gap: 6,
             background: "var(--accent)",
             border: "none", borderRadius: 8, padding: "7px 14px",
-            color: "#fff",
+            color: "var(--on-accent)",
             fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,
             cursor: "pointer",
             transition: "all 0.15s",

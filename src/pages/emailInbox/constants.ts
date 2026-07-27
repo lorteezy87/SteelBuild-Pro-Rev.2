@@ -18,7 +18,7 @@ export const TYPE_STYLES: Record<string, TypeStyle> = {
   submittal:    { color: "var(--accent)",     label: "Submittal" },
   action_item:  { color: "var(--warning)",    label: "Action Item" },
   transmittal:  { color: "var(--success)",    label: "Transmittal" },
-  change_order: { color: "#F97316",          label: "Change Order" },
+  change_order: { color: "var(--status-review)",          label: "Change Order" },
   general:      { color: "var(--text-muted)", label: "General" },
   unknown:      { color: "var(--text-muted)", label: "Unknown" },
 };

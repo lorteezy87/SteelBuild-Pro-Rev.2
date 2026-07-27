@@ -62,7 +62,7 @@ export default function DangerZone() {
         </p>
         <button
           onClick={() => { setOpen(true); setConfirmText(''); }}
-          style={{ background: 'var(--danger, #b42318)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}
+          style={{ background: 'var(--danger, #b42318)', color: 'var(--on-accent)', border: 'none', borderRadius: 8, padding: '9px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}
         >
           Delete workspace…
         </button>

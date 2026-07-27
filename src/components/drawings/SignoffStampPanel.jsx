@@ -34,13 +34,13 @@ const mono = { fontFamily: "var(--font-mono)" };
 // semantic signoff-stamp marks — allowlisted; hues render as ink/borders on
 // translucent tokenized chips so they keep dark-viewer contrast.
 const STAMP_META = {
-  approved_for_fabrication: { label: "Approved for Fab",   color: "#10b981", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.35)", Icon: CheckCircle2 },
-  approved_as_noted:        { label: "Approved as Noted",  color: "#84cc16", bg: "rgba(132,204,22,0.12)", border: "rgba(132,204,22,0.35)", Icon: CheckCircle2 },
-  revise_and_resubmit:      { label: "Revise & Resubmit",  color: "#f59e0b", bg: "rgba(245,158,11,0.14)", border: "rgba(245,158,11,0.40)", Icon: FileWarning },
-  rejected:                 { label: "Rejected",           color: "#ef4444", bg: "rgba(239,68,68,0.12)",  border: "rgba(239,68,68,0.35)",  Icon: AlertCircle },
-  reviewed:                 { label: "Reviewed",           color: "#3b82f6", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.35)", Icon: Stamp },
-  for_information_only:     { label: "For Info Only",      color: "#6b7280", bg: "rgba(107,114,128,0.12)",border: "rgba(107,114,128,0.35)",Icon: Stamp },
-  void:                     { label: "Void",               color: "#71717a", bg: "rgba(113,113,122,0.12)",border: "rgba(113,113,122,0.35)",Icon: Trash2 },
+  approved_for_fabrication: { label: "Approved for Fab",   color: "var(--status-success)", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.35)", Icon: CheckCircle2 },
+  approved_as_noted:        { label: "Approved as Noted",  color: "var(--status-success-bright)", bg: "rgba(132,204,22,0.12)", border: "rgba(132,204,22,0.35)", Icon: CheckCircle2 },
+  revise_and_resubmit:      { label: "Revise & Resubmit",  color: "var(--status-warning)", bg: "rgba(245,158,11,0.14)", border: "rgba(245,158,11,0.40)", Icon: FileWarning },
+  rejected:                 { label: "Rejected",           color: "var(--status-error)", bg: "rgba(239,68,68,0.12)",  border: "rgba(239,68,68,0.35)",  Icon: AlertCircle },
+  reviewed:                 { label: "Reviewed",           color: "var(--status-info)", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.35)", Icon: Stamp },
+  for_information_only:     { label: "For Info Only",      color: "var(--text-muted)", bg: "rgba(107,114,128,0.12)",border: "rgba(107,114,128,0.35)",Icon: Stamp },
+  void:                     { label: "Void",               color: "var(--text-muted)", bg: "rgba(113,113,122,0.12)",border: "rgba(113,113,122,0.35)",Icon: Trash2 },
 };
 
 const QKEY = (drawingId, revId) => ["signoffs", drawingId, revId];

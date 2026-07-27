@@ -37,12 +37,12 @@ export default function DrawingApprovalStatusCard({ drawings = [], submittals = 
 
   const stages = [
     { label: "Not Started", count: notStarted, color: "var(--text-muted)" },
-    { label: "IFA — In For Approval", count: ifa, color: "#60A5FA" },
+    { label: "IFA — In For Approval", count: ifa, color: "var(--status-info)" },
     { label: "OFA — Out For Approval", count: ofa, color: "var(--status-warning)" },
     { label: "BFA — Back From Approval", count: bfa, color: "var(--chart-3)" },
-    { label: "R&R — Revise and Resubmit", count: rr, color: "#F59E0B" },
+    { label: "R&R — Revise and Resubmit", count: rr, color: "var(--status-warning)" },
     { label: "OFS — Out For Scrub", count: ofs, color: "var(--chart-4)" },
-    { label: "IFC — Issued For Construction", count: ifc, color: "#34D399" },
+    { label: "IFC — Issued For Construction", count: ifc, color: "var(--status-success)" },
     { label: "Released", count: released, color: "var(--status-success)" },
   ];
 

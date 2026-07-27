@@ -161,7 +161,7 @@ export default function QuickLogModal({ open, onClose, onSave, workPackages = []
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
             onClick={handleSave}
-            style={{ background: "var(--accent)", color: "#fff", fontWeight: 700, minHeight: 44 }}
+            style={{ background: "var(--accent)", color: "var(--on-accent)", fontWeight: 700, minHeight: 44 }}
           >
             <Zap style={{ width: 14, height: 14, marginRight: 6 }} />
             Quick Save

@@ -392,7 +392,7 @@ export default function DailyLogFormModal({
                       <input type="number" style={nativeSelectStyle} value={row.field_hours} onChange={e => updateWPRow(idx, "field_hours", e.target.value)} min="0" step="0.5" />
                     </div>
                     <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 2 }}>
-                      <button onClick={() => removeWPRow(idx)} style={{ background: "rgba(255,23,68,0.10)", border: "1px solid rgba(255,23,68,0.25)", borderRadius: 6, color: "#FF1744", padding: "10px", minHeight: 44, cursor: "pointer" }}>
+                      <button onClick={() => removeWPRow(idx)} style={{ background: "rgba(255,23,68,0.10)", border: "1px solid rgba(255,23,68,0.25)", borderRadius: 6, color: "var(--status-error-bright)", padding: "10px", minHeight: 44, cursor: "pointer" }}>
                         <Trash2 style={{ width: 13, height: 13 }} />
                       </button>
                     </div>
@@ -551,7 +551,7 @@ export default function DailyLogFormModal({
             }}
             style={{
               background: 'var(--accent)',
-              color: '#fff',
+              color: 'var(--on-accent)',
             }}
           >
             Submit Log

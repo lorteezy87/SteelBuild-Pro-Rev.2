@@ -304,7 +304,7 @@ export function LaborDrawer({ open, onClose, kpi, selectedProject }) {
                       background: "var(--accent)",
                       border: "none",
                       borderRadius: "var(--radius-btn)",
-                      color: "#fff",
+                      color: "var(--on-accent)",
                       fontFamily: "var(--font-mono)",
                       fontSize: 9, fontWeight: 700,
                       letterSpacing: "0.08em", textTransform: "uppercase",

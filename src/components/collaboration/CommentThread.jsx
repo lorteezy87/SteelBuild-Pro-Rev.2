@@ -305,7 +305,7 @@ function CommentRow({ c, canModify = false, onDelete, onCycleStatus }) {
     padding: "1px 7px",
     borderRadius: 8,
     background: statusColor,
-    color: "#fff",
+    color: "var(--on-accent)",
     border: "none",
     fontFamily: "var(--font-mono)",
     fontSize: 8,

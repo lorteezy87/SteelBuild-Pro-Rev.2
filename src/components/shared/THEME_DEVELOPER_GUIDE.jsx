@@ -69,7 +69,7 @@ The SteelBuild-Pro platform uses a comprehensive CSS variable-based theming syst
 
 ❌ **DON'T** hardcode colors:
 ```jsx
-<div style={{ color: "#FF3D3D", background: "rgba(255,179,0,0.10)" }} />
+<div style={{ color: "var(--status-error-bright)", background: "rgba(255,179,0,0.10)" }} />
 ```
 
 ✅ **DO** use CSS variables:

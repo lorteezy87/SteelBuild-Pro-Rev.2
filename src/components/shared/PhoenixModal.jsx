@@ -10,13 +10,14 @@ const modalBorderMuted = "var(--divider)";
 const modalText = "var(--text-primary)";
 const modalTextSecondary = "var(--text-secondary)";
 const modalTextMuted = "var(--text-muted)";
+const brightActionText = "#04111f";
 
 export const btnPrimary = {
   background: "linear-gradient(135deg, rgba(86,176,255,0.98) 0%, rgba(35,134,230,0.98) 100%)",
   border: "1px solid rgba(86,176,255,0.4)",
   borderRadius: 8,
   padding: "8px 20px",
-  color: "#04111f",
+  color: brightActionText,
   fontFamily: "var(--font-body)",
   fontSize: 12,
   fontWeight: 700,

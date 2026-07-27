@@ -374,7 +374,7 @@ export default function WpControlCenter(props: WpControlCenterProps) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{row.progress}% complete</span>
                 {row.highRisk > 0 && (
-                  <span style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>
+                  <span style={{ fontSize: 11, color: "var(--status-error)", fontWeight: 600 }}>
                     {row.highRisk} exception{row.highRisk > 1 ? "s" : ""}
                   </span>
                 )}

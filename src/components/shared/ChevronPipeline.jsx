@@ -227,7 +227,7 @@ export default function ChevronPipeline({
                     transform: "translate(-50%, -50%)",
                     fontSize: height < 28 ? 10 : 14,
                     fontWeight: 900,
-                    color: "#fff",
+                    color: "var(--on-accent)",
                     opacity: 0.7,
                     pointerEvents: "none",
                     zIndex: 2,

@@ -435,7 +435,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
                   padding: '8px 14px', borderRadius: 6,
                   background: 'var(--accent)',
                   border: 'none',
-                  color: '#07090E',
+                  color: 'var(--on-accent)',
                   fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
                   letterSpacing: '0.08em', textTransform: 'uppercase',
                   cursor: 'pointer',
@@ -609,7 +609,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
               disabled={importing || validCount === 0 || !activeProject?.id}
               style={{
                 background: 'var(--accent)', border: 'none',
-                color: '#07090E', padding: '8px 18px', borderRadius: 6,
+                color: 'var(--on-accent)', padding: '8px 18px', borderRadius: 6,
                 fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
                 letterSpacing: '0.08em', textTransform: 'uppercase',
                 cursor: importing || validCount === 0 ? 'not-allowed' : 'pointer',

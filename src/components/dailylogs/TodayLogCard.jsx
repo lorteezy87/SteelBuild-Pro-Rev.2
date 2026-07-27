@@ -57,7 +57,7 @@ export default function TodayLogCard({
         onClick={onCreateToday}
         style={{
           background: 'var(--accent)',
-          color: '#fff',
+          color: 'var(--on-accent)',
           fontFamily: 'var(--font-body)',
           fontSize: 11,
           fontWeight: 600,

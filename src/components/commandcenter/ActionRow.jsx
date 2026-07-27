@@ -42,7 +42,7 @@ const TYPE_COLORS = {
   DWG:  { color: "var(--status-info)",    bg: "var(--info-muted)",          badge: "sbd-badge-info" },
   SUB:  { color: "var(--secondary)",      bg: "rgba(68,226,205,0.12)",      badge: "sbd-badge-info" },
   CO:   { color: "var(--accent)",         bg: "var(--accent-muted)",        badge: "sbd-badge-info" },
-  DEL:  { color: "#0D9488",              bg: "rgba(13,148,136,0.12)",       badge: "sbd-badge-success" },
+  DEL:  { color: "var(--accent)",              bg: "rgba(13,148,136,0.12)",       badge: "sbd-badge-success" },
   WP:   { color: "var(--status-success)", bg: "var(--success-muted)",       badge: "sbd-badge-success" },
   PAY:  { color: "var(--tertiary)",       bg: "rgba(168,240,203,0.12)",     badge: "sbd-badge-gold" },
   NOTE: { color: "var(--text-muted)",     bg: "var(--hover-bg)",            badge: "sbd-badge" },

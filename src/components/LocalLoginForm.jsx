@@ -53,7 +53,7 @@ export default function LocalLoginForm({ onSubmit, isSubmitting, errorMessage })
           <button
             type="submit"
             disabled={isSubmitting}
-            style={{ width: "100%", padding: "10px 0", background: "var(--accent)", color: "#FFFFFF", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.6 : 1 }}
+            style={{ width: "100%", padding: "10px 0", background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.6 : 1 }}
           >
             {isSubmitting ? 'SIGNING IN...' : 'SIGN IN →'}
           </button>

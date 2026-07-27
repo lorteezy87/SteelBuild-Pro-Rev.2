@@ -334,7 +334,7 @@ export default function DailyLogsList({ logs = [] }) {
                             padding: "3px 8px",
                             borderRadius: 999,
                             background: "rgba(14,165,233,0.12)",
-                            color: "#0EA5E9",
+                            color: "var(--status-info)",
                             fontFamily: "var(--font-mono)",
                             fontSize: 10,
                             fontWeight: 700,

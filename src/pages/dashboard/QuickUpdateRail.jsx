@@ -121,7 +121,7 @@ export default function QuickUpdateRail({ suggestions = [], onSettings }) {
                     padding: "3px 8px",
                     borderRadius: 4,
                     background: "var(--accent)",
-                    color: "#0B0E11",
+                    color: "var(--on-accent)",
                     fontFamily: "var(--font-mono)",
                     fontSize: 9,
                     fontWeight: 700,

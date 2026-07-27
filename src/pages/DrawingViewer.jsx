@@ -57,6 +57,8 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
+const PDF_PAGE_BACKGROUND = "#fff";
+
 export default function DrawingViewer() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -710,7 +712,7 @@ export default function DrawingViewer() {
                 key={resolvedUrl}
                 src={resolvedUrl}
                 title={activeDrawing.title || activeDrawing.sheet_number}
-                style={{ width: "100%", height: "100%", border: "none", background: "#fff" }}
+                style={{ width: "100%", height: "100%", border: "none", background: PDF_PAGE_BACKGROUND }}
               />
             )
           ) : pdfError ? (
@@ -758,7 +760,7 @@ export default function DrawingViewer() {
                   ref={canvasRef}
                   style={{
                     display: "block",
-                    background: "#fff",
+                    background: PDF_PAGE_BACKGROUND,
                   }}
                 />
 
