@@ -382,6 +382,16 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
+[functions.command-center-session-handoff]
+# Redemption starts from the native desktop before a caller JWT is available.
+# The function performs its own strict create/redeem authorization checks.
+verify_jwt = false
+
+[functions.command-center-read]
+# Validate the bearer token inside the function through Supabase Auth, then use
+# that same caller authorization on the anon client so project RLS is authoritative.
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

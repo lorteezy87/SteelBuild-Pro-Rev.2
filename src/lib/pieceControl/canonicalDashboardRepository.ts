@@ -13,7 +13,6 @@ export interface LegacyProductionRow {
   quantity: number | null;
   weight: number | null;
   status: string | null;
-  work_package_id: string | null;
   ship_date: string | null;
 }
 
@@ -55,7 +54,7 @@ export async function fetchCanonicalDashboardSnapshot(
         .eq("project_id", projectId),
       db
         .from("piece_production")
-        .select("id,quantity,weight,status,work_package_id,ship_date")
+        .select("id,quantity,weight,status,ship_date")
         .eq("project_id", projectId)
         .eq("is_deleted", false),
     ]);

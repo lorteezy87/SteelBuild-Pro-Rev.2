@@ -52,15 +52,14 @@ export function OperationalStateChip({ state }: { state: string }) {
   );
 }
 
-// R&R loop-back badge, shown next to the stage chip when the governing submittal
-// is Revise-and-Resubmit / Rejected. The stage rolls up to IFA for counts, so
-// this keeps an R&R rejection from reading as a fresh IFA on the board (and
-// matches the register's literal "Revise and Resubmit").
+// R&R badge — shown next to displays that do NOT already read "R&R" (since
+// 2026-07-25 R&R is a first-class derived stage, so most chips render it
+// directly; callers skip this badge when the state chip is itself "R&R").
 export function RRChip() {
   const color = "#f59e0b"; // matches "Revise and Resubmit" in format.ts
   return (
     <span
-      title="Revise & Resubmit — the review sent this package back; the cycle restarts at IFA"
+      title="Revise & Resubmit — the review sent this package back; the detailer owns the rework until resubmission (→ OFA)"
       style={{
         display: "inline-block",
         padding: "2px 8px",
@@ -105,7 +104,7 @@ export function FlagToggle({ label, active, disabled, onClick }: { label: string
       title={active ? `Clear: ${label}` : `Flag: ${label}`}
       style={{
         fontFamily: mono, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase",
-        color: active ? "#0b0e14" : color, cursor: disabled ? "default" : "pointer",
+        color: active ? "var(--cmd-pill-warn-fg)" : color, cursor: disabled ? "default" : "pointer",
         padding: "4px 9px", borderRadius: 8,
         background: active ? warning : `color-mix(in srgb, ${textMuted} 10%, transparent)`,
         border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
@@ -237,15 +236,15 @@ export function ModalLoadingFallback() {
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
         display: "flex", alignItems: "center", justifyContent: "center",
-        gap: 10, background: "color-mix(in srgb, #000 55%, transparent)",
-        fontFamily: mono, fontSize: 12, color: "#fff", letterSpacing: "0.06em",
+        gap: 10, background: "color-mix(in srgb, var(--cmd-bg) 55%, transparent)",
+        fontFamily: mono, fontSize: 12, color: "var(--cmd-text)", letterSpacing: "0.06em",
       }}
     >
       <span
         aria-hidden="true"
         style={{
           width: 16, height: 16, borderRadius: "50%",
-          border: "2px solid rgba(255,255,255,0.35)", borderTopColor: "#fff",
+          border: "2px solid color-mix(in srgb, var(--cmd-text) 35%, transparent)", borderTopColor: "var(--cmd-text)",
           animation: "sbp-spin 0.7s linear infinite",
         }}
       />

@@ -137,6 +137,20 @@ select option:disabled {
   color: #94a3b8 !important;
 }
 
+html.steelbuild-dark[data-skin="command"] select,
+html.steelbuild-dark[data-skin="command"] select option,
+html.steelbuild-dark[data-skin="command"] select optgroup {
+  background: var(--cmd-surface) !important;
+  color: var(--cmd-text) !important;
+}
+html.steelbuild-dark[data-skin="command"] select option:checked {
+  background: var(--cmd-row-hover) !important;
+  color: var(--cmd-text) !important;
+}
+html.steelbuild-dark[data-skin="command"] select option:disabled {
+  color: var(--cmd-text-muted) !important;
+}
+
 [data-theme="light"] body,
 [data-theme="light"] #root {
   background: var(--bg-page) !important;

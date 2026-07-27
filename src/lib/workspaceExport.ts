@@ -40,7 +40,7 @@ export interface WorkspaceExportProject {
  * actual reason from the Edge Function's `errorResponse()` body (e.g. "No access
  * to this project", "Failed to read drawings") lives only in `error.context`,
  * the raw `Response`. Read it so failures carry the true cause instead of a
- * generic string. (Same lesson as useScheduleAssistant.js.)
+ * generic string.
  */
 async function readEdgeFunctionError(error: { message?: string; context?: unknown }): Promise<string> {
   const ctx = error?.context as { json?: () => Promise<unknown> } | undefined;

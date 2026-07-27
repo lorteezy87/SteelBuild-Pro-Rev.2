@@ -1016,7 +1016,7 @@ function PhotoThumb({ photo, onClick }) {
           left: 2,
           right: 2,
           background: "color-mix(in srgb, var(--bg-base) 80%, transparent)",
-          color: "var(--text-on-accent)",
+          color: "var(--on-accent)",
           fontFamily: "var(--font-mono)",
           fontSize: 8,
           fontWeight: 700,

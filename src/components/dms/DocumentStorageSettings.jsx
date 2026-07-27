@@ -15,6 +15,12 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 import {
   FolderOpen, Plus, Trash2, Power, PowerOff, Clock, RefreshCw,
 } from "lucide-react";
+import {
+  SYNC_UNAVAILABLE_MESSAGE,
+  buildLinkedFolderSyncDefaults,
+  buildUnavailableSyncStatusPatch,
+} from "@/lib/dms/sharepointSyncHonesty";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 // ── Provider config ───────────────────────────────────────────────────
 const PROVIDERS = [
@@ -57,6 +63,7 @@ function syncStatusLabel(status) {
     case "success": return "Synced";
     case "error":   return "Error";
     case "pending": return "Pending";
+    case "unavailable": return "Unavailable";
     default:        return "Never";
   }
 }
@@ -79,13 +86,13 @@ export default function DocumentStorageSettings({ projectId }) {
 
   // ── Mutations ───────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => entities.LinkedFolder.create(data),
+    mutationFn: (data) => entities.LinkedFolder.create(withProjectId(data, projectId)),
     onSuccess: () => {
       invalidateEntity(qc, "linked_folder", projectId);
       toast.success("Folder linked successfully");
       resetForm();
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to link folder")),
   });
 
   const updateMut = useMutation({
@@ -93,7 +100,7 @@ export default function DocumentStorageSettings({ projectId }) {
     onSuccess: () => {
       invalidateEntity(qc, "linked_folder", projectId);
     },
-    onError: (e) => toast.error("Update failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Update failed")),
   });
 
   const deleteMut = useMutation({
@@ -102,7 +109,7 @@ export default function DocumentStorageSettings({ projectId }) {
       invalidateEntity(qc, "linked_folder", projectId);
       toast.success("Folder unlinked");
     },
-    onError: (e) => toast.error("Delete failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(toUserErrorMessage(e, "Failed to unlink folder")),
   });
 
   // ── Handlers ────────────────────────────────────────────────────────
@@ -136,23 +143,19 @@ export default function DocumentStorageSettings({ projectId }) {
       folder_name: folderName.trim(),
       folder_path: folderPath.trim(),
       tenant_id: needsTenant ? tenantId.trim() : null,
-      sync_enabled: true,
-      sync_frequency: syncFrequency,
+      ...buildLinkedFolderSyncDefaults({ syncFrequency }),
       is_active: true,
       is_deleted: false,
     });
   };
 
   const handleSyncNow = (folder) => {
+    toast.message(SYNC_UNAVAILABLE_MESSAGE);
     updateMut.mutate(
       {
         id: folder.id,
-        data: {
-          last_sync_status: "pending",
-          last_sync_at: new Date().toISOString(),
-        },
+        data: buildUnavailableSyncStatusPatch(),
       },
-      { onSuccess: () => toast.success("Sync queued") }
     );
   };
 
@@ -446,11 +449,12 @@ export default function DocumentStorageSettings({ projectId }) {
               <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                 <button
                   onClick={() => handleSyncNow(folder)}
-                  title="Sync now"
+                  title="Not connected — sync is unavailable until the SharePoint connector is deployed"
                   disabled={updateMut.isPending}
+                  aria-label="Sync unavailable"
                   style={iconBtnStyle}
                 >
-                  <RefreshCw size={14} strokeWidth={2} style={{ color: "var(--accent)" }} />
+                  <RefreshCw size={14} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
                 </button>
                 <button
                   onClick={() => handleToggleActive(folder)}
@@ -540,7 +544,7 @@ const primaryBtnStyle = {
   fontFamily: "var(--font-body)",
   fontSize: 11,
   fontWeight: 600,
-  color: "var(--text-on-accent, #fff)",
+  color: "var(--on-accent)",
   cursor: "pointer",
 };
 

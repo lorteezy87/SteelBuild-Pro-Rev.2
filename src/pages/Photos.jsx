@@ -5,8 +5,10 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 import PhotoUploadModal from "@/components/photos/PhotoUploadModal";
 import PhotoGallery from "@/components/photos/PhotoGallery";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { Upload } from "lucide-react";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 export default function Photos() {
   const projectId = useProjectId();
@@ -17,7 +19,13 @@ export default function Photos() {
   // Auto-open the upload modal when QuickAddFAB navigated here with ?new=1.
   useAutoOpenCreate(() => setShowUpload(true));
 
-  const { data: rawPhotos = [] } = useQuery({
+  const {
+    data: rawPhotos = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["photos", projectId],
     queryFn: () =>
       projectId
@@ -189,8 +197,25 @@ export default function Photos() {
         <PhotoUploadModal projectId={projectId} onClose={() => setShowUpload(false)} />
       )}
 
-      {/* Photo Gallery */}
-      <PhotoGallery photos={filtered} />
+      {/* Photo Gallery — gate loading/error so empty chrome does not flash */}
+      {isLoading ? (
+        <LoadingSkeleton variant="table" rows={4} />
+      ) : isError ? (
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
+        }}>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+            Couldn’t load photos
+          </p>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+            {toUserErrorMessage(error, "Something went wrong. Try again.")}
+          </p>
+          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+        </div>
+      ) : (
+        <PhotoGallery photos={filtered} />
+      )}
     </div>
   );
 }

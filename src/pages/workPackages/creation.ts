@@ -1,3 +1,5 @@
+import { withProjectId } from "@/lib/mutations/standardMutation";
+
 type BulkWorkPackageRow = Record<string, unknown>;
 type AllocateNumber = (projectId: string, recordType: string) => Promise<number>;
 
@@ -43,12 +45,11 @@ export async function prepareBulkWorkPackageRows(
       throw new Error(`Duplicate work package number: ${wpNumber}`);
     }
     usedNumbers.add(wpNumber);
-    prepared.push({
+    prepared.push(withProjectId({
       ...row,
       wp_number: wpNumber,
-      project_id: projectId,
       project_name: row.project_name || undefined,
-    });
+    }, projectId));
   }
 
   return prepared;

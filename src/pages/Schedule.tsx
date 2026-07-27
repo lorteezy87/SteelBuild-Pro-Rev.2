@@ -8,6 +8,7 @@ import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { applyEffectiveDates, computeEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useScheduleTasks } from "@/hooks/useScheduleTasks";
 import { computePhaseWbs } from "./schedule/wbs";
 import { computeBulkParentOptions } from "./schedule/scheduleTaskHelpers";
@@ -18,6 +19,7 @@ import ScheduleBody from "./schedule/ScheduleBody";
 import { useScheduleModals } from "./schedule/useScheduleModals";
 import { useTaskSelection } from "./schedule/useTaskSelection";
 import { useScheduleMutations } from "./schedule/useScheduleMutations";
+import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
@@ -58,13 +60,33 @@ export default function Schedule() {
   const { selectedIds, setSelectedIds } = selection;
   const qc = useQueryClient();
 
+  useResetOnProjectChange(projectId, () => {
+    setShowDrawer(false);
+    setShowAddTask(false);
+    setShowBulkAdd(false);
+    setShowWbsBuilder(false);
+    setShowBulkResource(false);
+    setShowBulkDates(false);
+    setShowBulkDuration(false);
+    setShowBulkParent(false);
+    setShowBulkDeleteConfirm(false);
+    setSelectedTask(null);
+    setDeleteTarget(null);
+    setSelectedIds(new Set());
+    setExpandedTask(null);
+  });
+
   // useScheduleTasks is still .js and yields DB rows (RowWithAliases<"schedule_tasks">,
   // whose nullable columns are `string | null`). ScheduleTask is the loose view-model
   // the whole schedule layer consumes (optional fields + `[key: string]: any`); every
   // consumer here is already null-safe. Normalize once at the boundary so downstream
   // call sites stay clean. Removable once the hook is typed.
-  const { scheduleTasks: scheduleTasksRaw } = useScheduleTasks(projectId);
+  const { scheduleTasks: scheduleTasksRaw, isLoading: scheduleTasksLoading } = useScheduleTasks(projectId);
   const scheduleTasks = scheduleTasksRaw as unknown as ScheduleTask[];
+  useAutoOpenEdit(scheduleTasks, (task) => {
+    setSelectedTask(task);
+    setShowDrawer(true);
+  }, { enabled: !scheduleTasksLoading, param: "recordId" });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

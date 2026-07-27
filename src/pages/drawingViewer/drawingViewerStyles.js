@@ -2,12 +2,13 @@ export const drawingViewerStyles = `
 .drawing-viewer-redesign {
   --viewer-sidebar-width: 320px;
   --viewer-context-width: 336px;
-  --viewer-panel-bg: color-mix(in srgb, var(--bg-surface) 96%, #111827 4%);
-  --viewer-panel-bg-soft: color-mix(in srgb, var(--bg-surface-low) 92%, #0f172a 8%);
+  --viewer-panel-bg: color-mix(in srgb, var(--bg-surface) 96%, var(--bg-page) 4%);
+  --viewer-panel-bg-soft: color-mix(in srgb, var(--bg-surface-low) 92%, var(--bg-page) 8%);
   --viewer-line: color-mix(in srgb, var(--border-default) 82%, transparent);
   --viewer-paper-shadow: 0 22px 70px rgba(0,0,0,0.52), 0 4px 14px rgba(0,0,0,0.34);
   position: relative;
   display: flex;
+  flex-direction: row;
   flex: 1;
   height: calc(100dvh - 36px);
   max-height: calc(100dvh - 36px);
@@ -20,9 +21,27 @@ export const drawingViewerStyles = `
     var(--bg-page);
 }
 
+/*
+ * Layout shell uses .sb-dashboard-reference-page { flex-direction: column }.
+ * That class is also on the viewer root for chrome padding reset — but the
+ * viewer MUST stay a ROW (sidebar | canvas | context). Without this override
+ * the main pane collapses to height:0 and the empty-state/PDF canvas vanish.
+ * Specificity: two classes beats .sb-dashboard-reference-page alone.
+ */
+.sb-dashboard-reference-page.drawing-viewer-redesign {
+  flex-direction: row;
+  gap: 0;
+  padding: 0;
+  min-height: 0;
+  height: calc(100dvh - 36px);
+  max-height: calc(100dvh - 36px);
+  overflow: hidden;
+}
+
 .drawing-viewer-main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -153,9 +172,9 @@ export const drawingViewerStyles = `
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  border: 1px solid rgba(200,155,32,0.62);
+  border: 1px solid var(--accent-border);
   border-radius: 6px;
-  background: rgba(24, 20, 12, 0.92);
+  background: color-mix(in srgb, var(--bg-page) 92%, var(--accent) 8%);
   color: var(--accent);
   box-shadow: 0 10px 24px rgba(0,0,0,0.38);
   cursor: pointer;
@@ -292,8 +311,12 @@ export const drawingViewerStyles = `
    below are prefixed [data-skin="command"] (specificity 0,3,0 > the generic's
    0,2,0) so they deterministically win and restore the viewer's own layout.
    =========================================================================== */
+/*
+ * Command-skin light chrome (optional). Row layout is already forced above via
+ * .sb-dashboard-reference-page.drawing-viewer-redesign — do not gate the ROW
+ * restore on [data-skin="command"] (DrawingViewer no longer sets that attr).
+ */
 [data-skin="command"] .drawing-viewer-redesign.detailing-cc {
-  /* Restore the row shell the generic [class$="-cc"] island rule overrides. */
   display: flex;
   flex-direction: row;
   gap: 0;
@@ -319,8 +342,8 @@ export const drawingViewerStyles = `
 }
 
 [data-skin="command"] .drawing-viewer-redesign.detailing-cc .drawing-viewer-export-markups {
-  background: var(--accent-muted, #fdf3da);
-  border-color: var(--accent-border, #f0d79a);
+  background: var(--accent-muted);
+  border-color: var(--accent-border);
   color: var(--accent);
   box-shadow: 0 10px 24px rgba(15,23,42,0.16);
 }

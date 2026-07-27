@@ -18,7 +18,8 @@ export const SOFT_DELETE_TABLES = new Set<string>([
   'documents', 'drawings', 'drawing_sets', 'expenses', 'inspections',
   'punchlist_items', 'safety_incidents', 'scope_items',
   'sov_items', 'contacts', 'meetings', 'model_elements',
-  'submittals', 'submittal_rounds', 'submittal_sheet_responses', 'comments',
+  'submittals', 'submittal_rounds', 'submittal_sheet_responses',
+  'submittal_comment_dispositions', 'comments',
   'document_folders',
   // Field overhaul (migration field_overhaul_soft_delete_and_fks)
   // added is_deleted/deleted_at to these three. Once registered here
@@ -33,6 +34,8 @@ export const SOFT_DELETE_TABLES = new Set<string>([
   'email_messages',
   // Document Storage integration: linked folders and import queue.
   'linked_folders', 'document_import_queue',
+  // Launch-readiness: archive cost codes instead of hard-deleting financial history.
+  'cost_codes',
 ]);
 
 /**
@@ -49,12 +52,12 @@ export const PROJECT_SCOPED_TABLES = new Set<string>([
   'quality_control_records', 'safety_incidents', 'production_notes',
   'warranties', 'resources', 'look_ahead', 'documents', 'document_folders',
   'model_elements',
-  'activities', 'uploaded_files', 'scope_items', 'alerts',
-  'pma_assumptions', 'pma_decisions', 'pma_audit_logs', 'project_closeout',
+  'activities', 'uploaded_files', 'scope_items', 'alerts', 'project_closeout',
   'project_handoff_items', 'mitigation_logs', 'mitigation_actions',
   'drawing_activity', 'drawing_revisions', 'drawing_zones', 'drawing_links',
   'drawing_signoffs', 'task_dependencies', 'submittals', 'submittal_rounds',
-  'submittal_sheet_responses', 'submittal_activity', 'submittal_components', 'comments',
+  'submittal_sheet_responses', 'submittal_comment_dispositions',
+  'submittal_activity', 'submittal_components', 'comments',
   'budget_hour_items', 'risks',
   // Email integration: all three tables are project-scoped.
   'email_accounts', 'email_messages', 'email_attachments',
@@ -62,9 +65,16 @@ export const PROJECT_SCOPED_TABLES = new Set<string>([
   'linked_folders', 'document_import_queue',
 ]);
 
+/**
+ * PostgREST embed for live-project scoping.
+ *
+ * Always name the FK (`projects!<table>_project_id_fkey`) — ambiguous joins
+ * explode when a reverse FK also links the tables (e.g. contacts.project_id
+ * AND projects.detailer_contact_id → contacts). Sentry JAVASCRIPT-REACT-10/V.
+ */
 export const projectScopedSelect = (tableName: string): string =>
   PROJECT_SCOPED_TABLES.has(tableName)
-    ? '*, projects!inner(id)'
+    ? `*, projects!${tableName}_project_id_fkey!inner(id)`
     : '*';
 
 export const applyLiveProjectScope = (query: QueryBuilder, tableName: string): QueryBuilder =>

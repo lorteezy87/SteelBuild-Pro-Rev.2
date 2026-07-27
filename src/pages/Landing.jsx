@@ -12,6 +12,7 @@ import { PLANS } from "@/lib/billing/plans";
 import { supabase } from "@/lib/supabase";
 
 const C = {
+  // Dual-theme hex allowlist: public landing uses a fixed executive-light brand palette.
   base: "#F5F7FA",
   surface: "#FFFFFF",
   surfaceSoft: "#F8FAFC",
@@ -46,7 +47,7 @@ const NAV_LINKS = [
 ];
 
 const EXEC_METRICS = [
-  { value: "31", label: "Connected modules" },
+  { value: "8", label: "Featured modules" },
   { value: "1", label: "Source of truth" },
   { value: "24/7", label: "Project visibility" },
   { value: "0", label: "Spreadsheet handoffs" },
@@ -559,7 +560,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
         </div>
       </section>
 
-      <section ref={sectionRefs.modules} className="lp-sec" style={{ background: "#FFFFFF", borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}` }}>
+      <section ref={sectionRefs.modules} className="lp-sec" style={{ background: C.surface, borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}` }}>
         <div className="lp-wrap">
           <Reveal style={{ maxWidth: 760, marginBottom: 42 }}>
             <span className="lp-kicker">Module suite</span>
@@ -592,7 +593,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
             <div style={{ marginTop: 30, display: "grid", gap: 12 }}>
               {PROOF_POINTS.map((point) => (
                 <div key={point} style={{ display: "flex", gap: 12, alignItems: "flex-start", color: C.body, fontSize: 14.5, lineHeight: 1.45 }}>
-                  <span style={{ width: 18, height: 18, borderRadius: "50%", background: "#FFF4D5", border: `1px solid rgba(245,168,0,.45)`, flex: "0 0 18px", marginTop: 1 }} />
+                  <span style={{ width: 18, height: 18, borderRadius: "50%", background: "rgba(245,168,0,.14)", border: `1px solid rgba(245,168,0,.45)`, flex: "0 0 18px", marginTop: 1 }} />
                   {point}
                 </div>
               ))}
@@ -602,7 +603,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
             {WORKFLOW.map((item, i) => (
               <Reveal key={item.step} delay={i * 80}>
                 <div className="lp-card" style={{ display: "grid", gridTemplateColumns: "76px 1fr", gap: 18, alignItems: "center", padding: 22, borderRadius: 22 }}>
-                  <div style={{ fontFamily: F.mono, color: C.amberDark, background: "#FFF4D5", border: `1px solid rgba(245,168,0,.38)`, borderRadius: 16, height: 58, display: "grid", placeItems: "center", fontWeight: 950, fontSize: 16 }}>{item.step}</div>
+                  <div style={{ fontFamily: F.mono, color: C.amberDark, background: "rgba(245,168,0,.14)", border: `1px solid rgba(245,168,0,.38)`, borderRadius: 16, height: 58, display: "grid", placeItems: "center", fontWeight: 950, fontSize: 16 }}>{item.step}</div>
                   <div>
                     <h3 style={{ margin: "0 0 5px", color: C.ink, fontWeight: 950, fontSize: 21, letterSpacing: "-.04em" }}>{item.title}</h3>
                     <p style={{ margin: 0, color: C.body, lineHeight: 1.55, fontSize: 14.5 }}>{item.body}</p>
@@ -627,17 +628,17 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
               return (
                 <Reveal key={p.key} delay={i * 90}>
                   <div className="lp-card" style={{ height: "100%", padding: 30, borderRadius: 24, display: "flex", flexDirection: "column", borderColor: featured ? "rgba(245,168,0,.65)" : C.line, boxShadow: featured ? "0 24px 62px rgba(245,168,0,.16), 0 18px 54px rgba(15,23,42,.08)" : "0 18px 54px rgba(15,23,42,.07)", position: "relative" }}>
-                    {featured && <span style={{ position: "absolute", top: -12, left: 28, background: C.ink, color: "#FFFFFF", borderRadius: 999, padding: "6px 12px", fontSize: 11, fontWeight: 900 }}>Most popular</span>}
+                    {featured && <span style={{ position: "absolute", top: -12, left: 28, background: C.ink, color: "var(--on-accent)", borderRadius: 999, padding: "6px 12px", fontSize: 11, fontWeight: 900 }}>Most popular</span>}
                     <div style={monoLabel({ color: C.amberDark })}>{p.name}</div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, margin: "16px 0 6px" }}>
                       <span style={{ color: C.ink, fontWeight: 950, fontSize: 48, letterSpacing: "-.06em", lineHeight: 1 }}>{p.priceMonthly === 0 ? "Free" : `$${p.priceMonthly}`}</span>
-                      {p.priceMonthly > 0 && <span style={{ color: C.muted, fontSize: 14 }}>/user · mo</span>}
+                      {p.priceMonthly > 0 && <span style={{ color: C.muted, fontSize: 14 }}>/workspace · mo</span>}
                     </div>
                     <p style={{ color: C.body, fontSize: 14, lineHeight: 1.55, minHeight: 44, margin: "0 0 20px" }}>{p.blurb}</p>
                     <div style={{ display: "grid", gap: 10, marginBottom: 24, flex: 1 }}>
                       {p.features.map((feat) => (
                         <div key={feat} style={{ display: "flex", gap: 10, color: C.body, fontSize: 13.5, lineHeight: 1.45 }}>
-                          <span style={{ width: 16, height: 16, borderRadius: "50%", background: "#DCFCE7", border: "1px solid #BBF7D0", flex: "0 0 16px", marginTop: 1 }} />
+                          <span style={{ width: 16, height: 16, borderRadius: "50%", background: "rgba(5,150,105,.14)", border: "1px solid rgba(5,150,105,.30)", flex: "0 0 16px", marginTop: 1 }} />
                           {feat}
                         </div>
                       ))}
@@ -657,8 +658,8 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
             <span className="lp-kicker">Executive walkthrough</span>
             <h2 className="lp-h2">See the light-command interface on a real steel workflow.</h2>
             <p className="lp-sub">Bring the project that is hardest to control. We will show how the module layout, dashboards, filters, and evidence trail keep the team aligned.</p>
-            <div style={{ marginTop: 28, borderRadius: 24, padding: 24, backgroundImage: `linear-gradient(90deg, rgba(16,24,39,.84), rgba(16,24,39,.48)), url(${HERO_STRIP})`, backgroundSize: "cover", backgroundPosition: "center", color: "#FFFFFF" }}>
-              <div style={monoLabel({ color: "#FFD466" })}>What you will review</div>
+            <div style={{ marginTop: 28, borderRadius: 24, padding: 24, backgroundImage: `linear-gradient(90deg, rgba(16,24,39,.84), rgba(16,24,39,.48)), url(${HERO_STRIP})`, backgroundSize: "cover", backgroundPosition: "center", color: "var(--on-accent)" }}>
+              <div style={monoLabel({ color: "var(--cmd-gold, var(--accent-light))" })}>What you will review</div>
               <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
                 {["Dashboard and command center", "Module-by-module execution flow", "Project risk and commercial controls", "User onboarding and rollout plan"].map((item) => (
                   <div key={item} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 14 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: C.amber }} />{item}</div>
@@ -692,12 +693,12 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
         </div>
       </section>
 
-      <section style={{ padding: "92px 0", background: C.ink, color: "#FFFFFF", position: "relative", overflow: "hidden" }}>
+      <section style={{ padding: "92px 0", background: C.ink, color: "var(--on-accent)", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, opacity: .18, backgroundImage: `url(${HERO_STRIP})`, backgroundSize: "cover", backgroundPosition: "center" }} />
         <div className="lp-wrap" style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 860 }}>
           <Reveal>
-            <span className="lp-kicker" style={{ color: "#FFD466" }}>Boardroom polish. Jobsite utility.</span>
-            <h2 style={{ color: "#FFFFFF", fontSize: "clamp(38px, 6vw, 72px)", lineHeight: .98, letterSpacing: "-.06em", margin: "18px 0 0", fontWeight: 950 }}>Give your steel operation a page that looks as serious as the work.</h2>
+            <span className="lp-kicker" style={{ color: "var(--cmd-gold, var(--accent-light))" }}>Boardroom polish. Jobsite utility.</span>
+            <h2 style={{ color: "var(--on-accent)", fontSize: "clamp(38px, 6vw, 72px)", lineHeight: .98, letterSpacing: "-.06em", margin: "18px 0 0", fontWeight: 950 }}>Give your steel operation a page that looks as serious as the work.</h2>
             <p style={{ color: "rgba(255,255,255,.74)", fontSize: 18, lineHeight: 1.65, maxWidth: 640, margin: "22px auto 34px" }}>Start with a clean workspace, then bring the team into a platform designed around steel project delivery.</p>
             <div style={{ display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
               <button className="lp-btn lp-btn-primary" onClick={() => openAuth("signup")}>Start free</button>
@@ -707,7 +708,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
         </div>
       </section>
 
-      <footer style={{ background: "#FFFFFF", borderTop: `1px solid ${C.line}`, padding: "54px 0 34px" }}>
+      <footer style={{ background: C.surface, borderTop: `1px solid ${C.line}`, padding: "54px 0 34px" }}>
         <div className="lp-wrap lp-footer-main" style={{ display: "flex", justifyContent: "space-between", gap: 34, flexWrap: "wrap" }}>
           <div style={{ maxWidth: 330 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}><BrandMark /><span style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.04em" }}>SteelBuild Pro</span></div>
@@ -740,7 +741,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
       {showLogin && (
         <div className="lp-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowLogin(false); }}>
           <div role="dialog" aria-modal="true" aria-label={authMode === "signup" ? "Create account" : "Sign in"} className="lp-card" style={{ width: "100%", maxWidth: 438, padding: 32, borderRadius: 24, position: "relative", boxShadow: "0 34px 90px rgba(15,23,42,.28)" }}>
-            <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: "#F1F5F9", color: C.body, borderRadius: 10, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>
+            <button onClick={() => setShowLogin(false)} aria-label="Close sign in" style={{ position: "absolute", top: 16, right: 16, border: 0, background: "var(--bg-surface-low)", color: C.body, borderRadius: 10, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
               <img src={LOGO_IMG} alt="SteelBuild Pro" onError={(e) => { e.currentTarget.style.display = "none"; }} style={{ width: 54, height: 54, objectFit: "cover", borderRadius: 14, border: `1px solid ${C.line}` }} />
               <div><div style={{ color: C.ink, fontWeight: 950, fontSize: 20, letterSpacing: "-.04em" }}>SteelBuild Pro</div><div style={{ color: C.muted, fontSize: 13 }}>Project controls for steel</div></div>
@@ -761,7 +762,7 @@ export default function Landing({ onLogin, onSignUp, onForgotPassword, isSubmitt
                   <div><label htmlFor="auth-email" style={monoLabel({ display: "block", marginBottom: 6 })}>Email</label><input id="auth-email" className="lp-input" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
                   {authMode !== "forgot" && <div><label htmlFor="auth-password" style={monoLabel({ display: "block", marginBottom: 6 })}>Password</label><input id="auth-password" className="lp-input" type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder={authMode === "signup" ? "At least 8 characters" : "Password"} value={password} onChange={(e) => setPassword(e.target.value)} /></div>}
                   {authMode === "signin" && <div style={{ textAlign: "right", marginTop: -6 }}><button type="button" onClick={() => { setAuthMode("forgot"); setForgotError(null); setForgotNotice(null); }} style={{ background: "none", border: 0, padding: 0, color: C.amberDark, fontWeight: 800, cursor: "pointer", font: "inherit", fontSize: 12.5 }}>Forgot password?</button></div>}
-                  {(authMode === "signup" ? signupError : authMode === "forgot" ? forgotError : loginError) && <div style={{ padding: "10px 13px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, color: C.red, fontSize: 13 }} role="alert">{authMode === "signup" ? signupError : authMode === "forgot" ? forgotError : loginError}</div>}
+                  {(authMode === "signup" ? signupError : authMode === "forgot" ? forgotError : loginError) && <div style={{ padding: "10px 13px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 12, color: C.red, fontSize: 13 }} role="alert">{authMode === "signup" ? signupError : authMode === "forgot" ? forgotError : loginError}</div>}
                   <button type="submit" disabled={authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting} className="lp-btn lp-btn-primary" style={{ width: "100%", opacity: (authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting) ? .65 : 1, cursor: (authMode === "signup" ? signupBusy : authMode === "forgot" ? forgotBusy : isSubmitting) ? "not-allowed" : "pointer" }}>{authMode === "signup" ? (signupBusy ? "Creating account…" : "Create account") : authMode === "forgot" ? (forgotBusy ? "Sending…" : "Send reset link") : (isSubmitting ? "Signing in…" : "Sign in")}</button>
                   {authMode === "signup" && <p style={{ fontSize: 12, color: C.muted, textAlign: "center", lineHeight: 1.5, margin: 0 }}>By creating an account you agree to the <a href="/terms" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Terms</a> and <a href="/privacy" style={{ color: C.amberDark, textDecoration: "none", fontWeight: 800 }}>Privacy Policy</a>.</p>}
                 </form>

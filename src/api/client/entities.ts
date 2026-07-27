@@ -237,6 +237,7 @@ export const entities = {
   // released tracking, gated by the `submittal_drawing_types` flag at the UI.
   SubmittalComponent:    createEntityClient('submittal_components'),
   SubmittalSheetResponse: createEntityClient('submittal_sheet_responses'),
+  SubmittalCommentDisposition: createEntityClient('submittal_comment_dispositions'),
   SubmittalActivity:     createEntityClient('submittal_activity'),
   Comment:               createEntityClient('comments'),
   Expense:               createEntityClient('expenses'),
@@ -366,9 +367,6 @@ export const entities = {
   DefaultCostCode:       createEntityClient('default_cost_codes'),
   ProjectCloseout:       createEntityClient('project_closeout'),
   ProjectHandoffItem:    createEntityClient('project_handoff_items'),
-  PmaDecision:           createEntityClient('pma_decisions'),
-  PmaAssumption:         createEntityClient('pma_assumptions'),
-  PmaAuditLog:           createEntityClient('pma_audit_logs'),
   User:                  createEntityClient('user_profiles'),
   // RBAC Phase C: per-project membership rows. Roles enforced by DB CHECK
   // (owner/admin/pm/field/viewer). Writes are gated by RLS — only project

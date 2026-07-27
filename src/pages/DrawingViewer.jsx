@@ -43,6 +43,7 @@ import ViewerToolbar from "@/pages/drawingViewer/ViewerToolbar";
 import CalloutOverlay from "@/pages/drawingViewer/CalloutOverlay";
 import PdfLinkHotspotLayer from "@/pages/drawingViewer/PdfLinkHotspotLayer";
 import { useZoneData } from "@/pages/drawingViewer/useZoneData";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { drawingViewerStyles } from "@/pages/drawingViewer/drawingViewerStyles";
 import {
   createZone as createZoneSvc,
@@ -56,13 +57,16 @@ import { invalidateEntity } from "@/services/cacheRegistry";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
+const PDF_PAGE_BACKGROUND = "#fff";
+
 export default function DrawingViewer() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
 
-  const initialId = searchParams.get("id") || searchParams.get("drawingId") || searchParams.get("docId");
+  const initialId = searchParams.get("recordId") || searchParams.get("id") || searchParams.get("drawingId") || searchParams.get("docId");
+  const requestedRevisionId = searchParams.get("revisionId");
 
   const [userId, setUserId] = useState(null);
   useEffect(() => {
@@ -113,7 +117,35 @@ export default function DrawingViewer() {
   // useDrawingsList encapsulates the project drawings query, the search
   // filter, and the active-drawing lookup. activeIndex (used below by the
   // keyboard shortcuts effect) also lives in there.
-  const { drawings, filtered, activeDrawing, activeIndex } = useDrawingsList({ projectId, activeId, search });
+  const { drawings, filtered, activeDrawing, activeIndex, isLoading: drawingsLoading } = useDrawingsList({ projectId, activeId, search });
+  useAutoOpenEdit(drawings, (drawing) => setActiveId(drawing.id), {
+    enabled: !drawingsLoading,
+    param: "recordId",
+  });
+
+  const { data: requestedRevision, isFetched: requestedRevisionFetched } = useQuery({
+    queryKey: ["drawing-revision-deep-link", requestedRevisionId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("drawing_revisions")
+        .select("id,drawing_id")
+        .eq("id", requestedRevisionId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!requestedRevisionId,
+    staleTime: 5 * 60 * 1000,
+  });
+  useEffect(() => {
+    if (!requestedRevisionId || !requestedRevisionFetched || !activeDrawing) return;
+    if (!requestedRevision || requestedRevision.drawing_id !== activeDrawing.id) {
+      toast.error("The requested drawing revision is unavailable for this project.");
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("revisionId");
+    setSearchParams(next, { replace: true });
+  }, [activeDrawing, requestedRevision, requestedRevisionFetched, requestedRevisionId, searchParams, setSearchParams]);
   const markupScale = activeDrawing?.markup_scale || null;
 
   // PDF lifecycle: file_url → signed URL → pdfjs document. Owns currentPage
@@ -127,6 +159,7 @@ export default function DrawingViewer() {
     pdfError,
     currentPage,
     setCurrentPage,
+    setPdfError,
   } = usePdfLoader({ activeDrawing, renderMode });
 
   // Canvas-side renderer. Owns the <canvas> ref + the in-flight render task
@@ -140,7 +173,7 @@ export default function DrawingViewer() {
     canvasSize,
     pageSize,
     linkHotspots,
-  } = usePdfRenderer({ pdfDoc, currentPage, zoom, rotation });
+  } = usePdfRenderer({ pdfDoc, currentPage, zoom, rotation, onRenderError: setPdfError });
 
   const qc = useQueryClient();
 
@@ -324,18 +357,14 @@ export default function DrawingViewer() {
     }
   }, [currentRevision, activeDrawing, refetchZones]);
 
-  // When the active drawing changes, jump to its source PDF page so callouts
-  // overlay the correct sheet. Stored as `pdf_page` by DrawingSetUploadModal;
-  // legacy rows without it default to page 1.
-  useEffect(() => {
-    if (!activeDrawing) return;
-    const page = Number(activeDrawing.pdf_page) || 1;
-    setCurrentPage(page);
-  }, [activeDrawing, setCurrentPage]);
+  // Page jumps for the active sheet are owned by usePdfLoader (clamped to
+  // pdfDoc.numPages). Do not setCurrentPage(pdf_page) here unclamped — that
+  // raced after the loader clamp and could request an invalid page, leaving
+  // the viewer on a sticky pdfError for every sheet that shares the PDF.
 
   // Callout → navigation handler. If the targetSheetNumber resolves to a
-  // drawing in the project list, switch to it. The effect above then jumps
-  // to that drawing's pdf_page automatically.
+  // drawing in the project list, switch to it. usePdfLoader then jumps to
+  // that drawing's pdf_page (clamped).
   const onCalloutClick = useCallback((callout) => {
     if (!callout?.targetSheetNumber) return;
     const target = drawings.find(d =>
@@ -645,13 +674,10 @@ export default function DrawingViewer() {
             });
           }}
           style={{
-            flex: 1,
-            overflow: "auto",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "stretch",
-            // Neutral workspace — works in both light + dark themes.
-            background: "var(--bg-void)",
+            // Layout/background come from .drawing-viewer-canvas-scroll —
+            // do not override with var(--bg-void) (light theme turns it slate
+            // and fights the dark drawing work-surface) or alignItems:stretch
+            // (collapses empty-state visibility inside a zero-height flex fix).
             cursor: spacePan ? "grab" : "default",
           }}
         >
@@ -679,7 +705,7 @@ export default function DrawingViewer() {
                 key={resolvedUrl}
                 src={resolvedUrl}
                 title={activeDrawing.title || activeDrawing.sheet_number}
-                style={{ width: "100%", height: "100%", border: "none", background: "#fff" }}
+                style={{ width: "100%", height: "100%", border: "none", background: PDF_PAGE_BACKGROUND }}
               />
             )
           ) : pdfError ? (
@@ -706,6 +732,10 @@ export default function DrawingViewer() {
                 </button>
               )}
             </div>
+          ) : !resolvedUrl || !pdfDoc ? (
+            <div className="drawing-viewer-paper-wrap">
+              <RenderSkeleton label={!resolvedUrl ? "Resolving drawing file…" : "Loading PDF…"} />
+            </div>
           ) : (
             <div className="drawing-viewer-paper-wrap">
               {rendering && (
@@ -727,7 +757,7 @@ export default function DrawingViewer() {
                   ref={canvasRef}
                   style={{
                     display: "block",
-                    background: "#fff",
+                    background: PDF_PAGE_BACKGROUND,
                   }}
                 />
 

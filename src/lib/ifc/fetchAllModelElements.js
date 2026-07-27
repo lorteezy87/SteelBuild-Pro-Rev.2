@@ -8,14 +8,35 @@
  * It used to page SERIALLY — fetch page 1, await, fetch page 2, await … — so a
  * 17-page roster meant ~17 back-to-back round-trips, which is what made fab
  * colors visibly "pop in" a few seconds after the model rendered. Now we take one
- * lightweight COUNT, then fetch every page CONCURRENTLY (Promise.all): ~2 round
- * trips instead of ~17. Same rows, same order, much faster first paint.
+ * lightweight COUNT, then fetch pages in bounded concurrent batches: enough
+ * parallelism for first paint, without opening ~28 SELECT * queries at once
+ * (which timed out under statement_timeout on ~27k-row projects —
+ * Sentry JAVASCRIPT-REACT-X / production-model-elements).
  */
 import { supabase } from "@/lib/supabase";
 
 const PAGE = 1000;
+/** Cap concurrent page fetches to avoid statement-timeout storms. */
+const DEFAULT_CONCURRENCY = 4;
 
-export async function fetchAllModelElements(projectId, { client = supabase, page = PAGE } = {}) {
+async function mapPool(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      results[i] = await mapper(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+export async function fetchAllModelElements(
+  projectId,
+  { client = supabase, page = PAGE, concurrency = DEFAULT_CONCURRENCY, columns = "*" } = {},
+) {
   if (!projectId) return [];
 
   // One HEAD count so we know how many pages to fan out (no rows transferred).
@@ -31,7 +52,7 @@ export async function fetchAllModelElements(projectId, { client = supabase, page
     const from = i * page;
     const { data, error } = await client
       .from("model_elements")
-      .select("*")
+      .select(columns)
       .eq("project_id", projectId)
       .eq("is_deleted", false)
       .order("id", { ascending: true }) // stable order so pages don't overlap/skip
@@ -41,6 +62,10 @@ export async function fetchAllModelElements(projectId, { client = supabase, page
   };
 
   const pageCount = Math.ceil(count / page);
-  const pages = await Promise.all(Array.from({ length: pageCount }, (_, i) => fetchPage(i)));
+  const pageIndexes = Array.from({ length: pageCount }, (_, i) => i);
+  const pages = await mapPool(pageIndexes, Math.max(1, concurrency), fetchPage);
   return pages.flat();
 }
+
+/** Slim projection for Production Status piece↔drawing lookup (avoids SELECT *). */
+export const MODEL_ELEMENT_DRAWING_LINK_COLUMNS = "id,piece_mark,drawing_no,drawing_id";

@@ -44,15 +44,15 @@ import type { DeliveryMetrics, DeliveryRecord } from "./types";
 
 /**
  * View toggle strip — sits just above the body, below the FilterBar.
- * Light card surface: #fff bg, #e4e8ee border, #1b2430 text.
+ * Uses command-skin tokens so the light default and dark remap stay aligned.
  */
 const viewToggleWrapStyle: CSSProperties = {
   display: "flex",
   gap: 0,
-  border: "1px solid #e4e8ee",
+  border: "1px solid var(--cmd-border)",
   borderRadius: 6,
   overflow: "hidden",
-  background: "#fff",
+  background: "var(--cmd-surface)",
   marginBottom: 12,
   width: "fit-content",
 };
@@ -61,10 +61,10 @@ const viewToggleBtnBase: CSSProperties = {
   padding: "6px 16px",
   fontSize: 13,
   fontWeight: 500,
-  color: "#1b2430",
+  color: "var(--cmd-text)",
   background: "transparent",
   border: "none",
-  borderRight: "1px solid #e4e8ee",
+  borderRight: "1px solid var(--cmd-border)",
   cursor: "pointer",
   transition: "background 0.12s",
   whiteSpace: "nowrap",
@@ -76,8 +76,8 @@ const viewToggleBtnLast: CSSProperties = {
 };
 
 const viewToggleActiveStyle: CSSProperties = {
-  background: "#1b2430",
-  color: "#fff",
+  background: "var(--cmd-text)",
+  color: "var(--cmd-surface)",
 };
 
 // ---------------------------------------------------------------------------
@@ -159,7 +159,7 @@ const VIEW_OPTIONS = [
 
 function scheduledCell(delivery: DeliveryRecord) {
   const signals = delivery._signals;
-  if (!signals?.scheduledDate) return <span style={{ color: "#9ca3af" }}>TBD</span>;
+  if (!signals?.scheduledDate) return <span style={{ color: "var(--cmd-text-muted)" }}>TBD</span>;
   if (signals.overdue) {
     return <span style={{ color: "var(--status-error)", fontWeight: 600 }}>{formatDate(delivery.scheduled_date)} · late</span>;
   }
@@ -494,7 +494,7 @@ export default function DeliveryControlCenter(props: DeliveryControlCenterProps)
                 {chip.label}
               </button>
             ))}
-            <span style={{ display: "inline-block", width: 1, height: 18, background: "#e4e8ee", margin: "0 4px", verticalAlign: "middle" }} />
+                    <span style={{ display: "inline-block", width: 1, height: 18, background: "var(--cmd-border)", margin: "0 4px", verticalAlign: "middle" }} />
             {RISK_CHIPS.map((chip) => (
               <button
                 key={chip.id}

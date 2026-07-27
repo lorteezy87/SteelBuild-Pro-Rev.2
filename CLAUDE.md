@@ -11,10 +11,13 @@ Data layer: import `entities`/`auth`/`integrations`/`functions`/`getSignedUrl` f
 - `npm run test` — full test suite (2,454 tests as of v2.1.1 baseline)
 - `npm run build` — production build
 
-## Design system: "Iron Forge Command"
-- Colors: CSS variables only, never hardcoded hex. Primary: `var(--color-primary)` (Safety Orange #FF6B1A).
-- Fonts: Space Grotesk (headings), IBM Plex Mono (numeric/code content).
-- Border radius: 2px, no exceptions.
+## Design system: SteelBuild dual theme
+- Colors: CSS variables only (`var(--bg-*)`, `var(--text-*)`, `var(--accent)`, `var(--cmd-*)`, `var(--sbd-*)`). Never hardcode surface/text/border hex in components.
+- Dark: SteelBuild Dark (`data-theme="dark"` + `html.steelbuild-dark`); accent gold `#C89B20` / `#E0B030`.
+- Light: `[data-theme="light"]`; command Control Centers use `[data-skin="command"]` with `--cmd-*` (dark remap aliases SteelBuild Dark).
+- Fonts: Barlow Condensed (display), Inter (body), IBM Plex Mono (numeric/code).
+- Radius: use the shipped token/component radii for each kit; do not reintroduce a fake 2px-only rule.
+- Theme preference: `sbp-theme` in localStorage, else `prefers-color-scheme`.
 - Never use `<form>` tags. Never use Radix Dialog.
 
 ## Database / RLS

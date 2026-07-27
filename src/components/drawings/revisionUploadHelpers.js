@@ -21,6 +21,7 @@ export const CHANGE_STYLE = {
   revised: { color: "var(--status-warning-bright)", label: "✎ REVISED", bg: "rgba(255,176,32,0.06)" },
   added:   { color: "var(--status-success-bright)", label: "+ ADDED",   bg: "rgba(0,214,143,0.06)" },
   removed: { color: "var(--status-error-bright)", label: "— REMOVED", bg: "rgba(255,61,61,0.05)" },
+  ambiguous: { color: "var(--status-error-bright)", label: "! REVIEW", bg: "rgba(255,61,61,0.10)" },
   same:    { color: "var(--text-muted)", label: "≡ SAME", bg: "transparent" },
 };
 

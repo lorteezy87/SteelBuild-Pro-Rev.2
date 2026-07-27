@@ -1,13 +1,11 @@
 // Pure derive helpers extracted from ScheduleGantt.jsx — row layout, dependency
-// arrows, viewport windowing, and schedule stats. No React imports; safe to
-// unit-test in isolation. Bodies are byte-identical to the originals.
+// arrows, and viewport windowing. Schedule stats live in scheduleGanttStats.ts.
 import { parseDateUTC } from "./scheduleDateUtils";
-import { displayPct, isMilestoneTask } from "./scheduleTaskUtils";
+import { isMilestoneTask } from "./scheduleTaskUtils";
 import { parseDeps } from "./scheduleDependencies";
 import {
   findFirstRowAtOrAfter,
   findFirstRowAfter,
-  isActionableScheduleTask,
   isCriticalTask,
   isLookaheadTask,
   isStalledTask,
@@ -20,60 +18,6 @@ import {
 export const GANTT_ROW_H = 40;
 export const GANTT_SUM_H = 36;
 export const GANTT_VIRTUAL_OVERSCAN = 320;
-
-/** One pass over tasks for toolbar stats + quick-filter counts. */
-export function computeScheduleStats({
-  allTasks,
-  effectiveDates,
-  today,
-  weatherRiskByTask,
-  isOverdue,
-  effStart,
-  effEnd,
-}) {
-  const stats = {
-    totalTasks: allTasks.length,
-    completeTasks: 0,
-    overdueTasks: 0,
-    inProgressTasks: 0,
-    unscheduledTasks: 0,
-    lookaheadTasks: 0,
-    stalledTasks: 0,
-    criticalTasks: 0,
-    milestoneTasks: 0,
-    shiftedTasks: 0,
-    totalShiftDays: 0,
-    unassignedTasks: 0,
-    weatherRiskTasks: 0,
-    dependencyLinks: 0,
-    progressTotal: 0,
-    progressCount: 0,
-  };
-  for (const task of allTasks) {
-    const actionable = isActionableScheduleTask(task);
-    if (task.status === "Complete") stats.completeTasks += 1;
-    if (task.status === "In Progress") stats.inProgressTasks += 1;
-    if (actionable && isOverdue(task)) stats.overdueTasks += 1;
-    if (actionable && (!effStart(task) || !effEnd(task))) stats.unscheduledTasks += 1;
-    if (actionable && isLookaheadTask(task, today, effStart, effEnd)) stats.lookaheadTasks += 1;
-    if (actionable && isStalledTask(task, today, (item) => parseDateUTC(effStart(item)))) stats.stalledTasks += 1;
-    if (actionable && isCriticalTask(task)) stats.criticalTasks += 1;
-    if (actionable && isMilestoneTask(task)) stats.milestoneTasks += 1;
-    if (actionable && effectiveDates[task.id]?.shifted) stats.shiftedTasks += 1;
-    if (actionable) stats.totalShiftDays += Number(effectiveDates[task.id]?.shiftedBy) || 0;
-    if (actionable && isUnassignedTask(task)) stats.unassignedTasks += 1;
-    if (actionable && weatherRiskByTask[task.id]) stats.weatherRiskTasks += 1;
-    if (actionable) stats.dependencyLinks += parseDeps(task.dependencies).length;
-    if (actionable) {
-      stats.progressTotal += displayPct(task);
-      stats.progressCount += 1;
-    }
-  }
-  return {
-    ...stats,
-    avgProgress: stats.progressCount > 0 ? Math.round(stats.progressTotal / stats.progressCount) : 0,
-  };
-}
 
 export function computeSuccessorCountById(allTasks) {
   const out = {};

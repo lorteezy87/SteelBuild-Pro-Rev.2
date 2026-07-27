@@ -37,6 +37,7 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
   ResponsiveContainer, Cell, BarChart, Bar,
 } from "recharts";
+import { getChartTheme } from "@/components/shared/RechartsThemeConfig";
 
 /* ─── Helpers ─────────────────────────────────────────────────────── */
 
@@ -114,6 +115,15 @@ function latestCertifiedPerLineItem(sovItems) {
 export default function FinancialKPIs() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const chartTheme = getChartTheme();
+  const chartAxisTick = { ...mono, fontSize: 9, fill: chartTheme.axis.fill };
+  const chartTooltipStyle = {
+    background: chartTheme.tooltip.background,
+    border: chartTheme.tooltip.border,
+    borderRadius: chartTheme.tooltip.borderRadius,
+    boxShadow: "var(--shadow-card)",
+    color: chartTheme.tooltip.color,
+  };
 
   /* ── Queries ── */
   const { data: projects = [] } = useQuery({
@@ -348,12 +358,12 @@ export default function FinancialKPIs() {
   );
 
   const cashFlowData = useMemo(() => [
-    { name: "Contract Value", value: agg.totalRevised, fill: "var(--accent)" },
-    { name: "Billed", value: agg.totalBilled, fill: "var(--status-info)" },
-    { name: "Collected", value: agg.totalCollected, fill: "var(--status-success)" },
-    { name: "AR Outstanding", value: agg.totalAR, fill: "var(--status-warning)" },
-    { name: "Retention Held", value: agg.totalRetention, fill: "var(--text-muted)" },
-  ], [agg]);
+    { name: "Contract Value", value: agg.totalRevised, fill: chartTheme.colors.primary },
+    { name: "Billed", value: agg.totalBilled, fill: chartTheme.colors.info },
+    { name: "Collected", value: agg.totalCollected, fill: chartTheme.colors.success },
+    { name: "AR Outstanding", value: agg.totalAR, fill: chartTheme.colors.warning },
+    { name: "Retention Held", value: agg.totalRetention, fill: chartTheme.text.muted },
+  ], [agg, chartTheme]);
 
   const marginData = useMemo(
     () => filtered
@@ -386,16 +396,16 @@ export default function FinancialKPIs() {
   }, [sovItems]);
 
   const SCATTER_COLORS = {
-    good: "var(--status-success)",
-    watch: "var(--status-warning)",
-    risk: "var(--status-error)",
-    neutral: "var(--text-muted)",
+    good: chartTheme.colors.success,
+    watch: chartTheme.colors.warning,
+    risk: chartTheme.colors.error,
+    neutral: chartTheme.text.muted,
   };
 
   const BAR_COLORS = {
-    good: "var(--status-success)",
-    watch: "var(--status-warning)",
-    risk: "var(--status-error)",
+    good: chartTheme.colors.success,
+    watch: chartTheme.colors.warning,
+    risk: chartTheme.colors.error,
   };
 
   return (
@@ -496,8 +506,12 @@ export default function FinancialKPIs() {
                 onClick={() => navigate(createPageUrl("Projects") + `?id=${a.project.id}`)}
                 style={{
                   display: "flex", alignItems: "center", gap: 10, padding: "8px 10px",
-                  background: a.severity === "risk" ? "rgba(239,68,68,0.06)" : "rgba(245,158,11,0.06)",
-                  border: `1px solid ${a.severity === "risk" ? "rgba(239,68,68,0.2)" : "rgba(245,158,11,0.2)"}`,
+                  background: a.severity === "risk"
+                    ? "color-mix(in srgb, var(--status-error) 6%, transparent)"
+                    : "color-mix(in srgb, var(--status-warning) 6%, transparent)",
+                  border: `1px solid ${a.severity === "risk"
+                    ? "color-mix(in srgb, var(--status-error) 20%, transparent)"
+                    : "color-mix(in srgb, var(--status-warning) 20%, transparent)"}`,
                   borderRadius: 6, cursor: "pointer",
                 }}
               >
@@ -610,18 +624,18 @@ export default function FinancialKPIs() {
           {scatterData.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.text.muted} opacity={0.35} />
                 <XAxis
                   dataKey="spi" type="number" name="SPI"
                   domain={[0.5, 1.5]}
-                  tick={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}
-                  label={{ value: "SPI", position: "insideBottom", offset: -5, style: { ...mono, fontSize: 9, fill: "var(--text-muted)" } }}
+                  tick={chartAxisTick}
+                  label={{ value: "SPI", position: "insideBottom", offset: -5, style: chartAxisTick }}
                 />
                 <YAxis
                   dataKey="cpi" type="number" name="CPI"
                   domain={[0.5, 1.5]}
-                  tick={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}
-                  label={{ value: "CPI", angle: -90, position: "insideLeft", style: { ...mono, fontSize: 9, fill: "var(--text-muted)" } }}
+                  tick={chartAxisTick}
+                  label={{ value: "CPI", angle: -90, position: "insideLeft", style: chartAxisTick }}
                 />
                 {/* Reference lines at 1.0 */}
                 <RTooltip
@@ -629,14 +643,14 @@ export default function FinancialKPIs() {
                     if (!payload?.[0]) return null;
                     const d = payload[0].payload;
                     return (
-                      <div style={{ ...CARD, padding: "8px 12px", fontSize: 10 }}>
+                      <div style={{ ...chartTooltipStyle, padding: "8px 12px", fontSize: 10 }}>
                         <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name} — {d.fullName}</div>
                         <div>CPI: {d.cpi} · SPI: {d.spi}</div>
                       </div>
                     );
                   }}
                 />
-                <Scatter data={scatterData} fill="var(--accent)">
+                <Scatter data={scatterData} fill={chartTheme.colors.primary}>
                   {scatterData.map((d, i) => (
                     <Cell key={i} fill={SCATTER_COLORS[d.health] || "var(--text-muted)"} />
                   ))}
@@ -658,10 +672,10 @@ export default function FinancialKPIs() {
           <div style={CARD_TITLE}>Cash Flow Overview</div>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={cashFlowData} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-              <XAxis dataKey="name" tick={{ ...mono, fontSize: 8, fill: "var(--text-muted)" }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.text.muted} opacity={0.35} />
+              <XAxis dataKey="name" tick={{ ...chartAxisTick, fontSize: 8 }} />
               <YAxis
-                tick={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}
+                tick={chartAxisTick}
                 tickFormatter={(v) => formatCurrency(v)}
               />
               <RTooltip
@@ -669,7 +683,7 @@ export default function FinancialKPIs() {
                   if (!payload?.[0]) return null;
                   const d = payload[0].payload;
                   return (
-                    <div style={{ ...CARD, padding: "8px 12px", fontSize: 10 }}>
+                    <div style={{ ...chartTooltipStyle, padding: "8px 12px", fontSize: 10 }}>
                       <div style={{ fontWeight: 700 }}>{d.name}</div>
                       <div>{formatCurrencyFull(d.value)}</div>
                     </div>
@@ -693,15 +707,15 @@ export default function FinancialKPIs() {
           {marginData.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={marginData} layout="vertical" margin={{ top: 5, right: 40, bottom: 5, left: 50 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.text.muted} opacity={0.35} />
                 <XAxis
                   type="number"
-                  tick={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}
+                  tick={chartAxisTick}
                   tickFormatter={(v) => `${v}%`}
                 />
                 <YAxis
                   dataKey="name" type="category"
-                  tick={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}
+                  tick={chartAxisTick}
                   width={50}
                 />
                 <RTooltip
@@ -709,7 +723,7 @@ export default function FinancialKPIs() {
                     if (!payload?.[0]) return null;
                     const d = payload[0].payload;
                     return (
-                      <div style={{ ...CARD, padding: "8px 12px", fontSize: 10 }}>
+                      <div style={{ ...chartTooltipStyle, padding: "8px 12px", fontSize: 10 }}>
                         <div style={{ fontWeight: 700 }}>{d.name} — {d.fullName}</div>
                         <div>Margin: {d.margin}%</div>
                       </div>
@@ -735,10 +749,10 @@ export default function FinancialKPIs() {
           <div style={CARD_TITLE}>Accounts Receivable Aging</div>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={arAging} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-              <XAxis dataKey="name" tick={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.text.muted} opacity={0.35} />
+              <XAxis dataKey="name" tick={chartAxisTick} />
               <YAxis
-                tick={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}
+                tick={chartAxisTick}
                 tickFormatter={(v) => formatCurrency(v)}
               />
               <RTooltip
@@ -746,7 +760,7 @@ export default function FinancialKPIs() {
                   if (!payload?.[0]) return null;
                   const d = payload[0].payload;
                   return (
-                    <div style={{ ...CARD, padding: "8px 12px", fontSize: 10 }}>
+                    <div style={{ ...chartTooltipStyle, padding: "8px 12px", fontSize: 10 }}>
                       <div style={{ fontWeight: 700 }}>{d.name} days</div>
                       <div>{formatCurrencyFull(d.value)}</div>
                     </div>
@@ -758,10 +772,10 @@ export default function FinancialKPIs() {
                   <Cell
                     key={i}
                     fill={
-                      d.name === "0-30" ? "var(--status-success)" :
-                      d.name === "31-60" ? "var(--status-info)" :
-                      d.name === "61-90" ? "var(--status-warning)" :
-                      "var(--status-error)"
+                      d.name === "0-30" ? chartTheme.colors.success :
+                      d.name === "31-60" ? chartTheme.colors.info :
+                      d.name === "61-90" ? chartTheme.colors.warning :
+                      chartTheme.colors.error
                     }
                   />
                 ))}

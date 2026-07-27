@@ -47,7 +47,7 @@ export default function ListView({
           top: 0,
           background: "var(--bg-surface-low)",
           zIndex: 2,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+          boxShadow: "var(--shadow-sm)",
         }}
       >
         <div
@@ -150,7 +150,7 @@ function Row({ doc, isSelected, onToggleSelect, onOpen }) {
         padding: "8px 12px",
         cursor: "pointer",
         borderBottom: "1px solid var(--divider)",
-        background: isSelected ? "rgba(16,185,129,0.06)" : "transparent",
+        background: isSelected ? "var(--success-muted)" : "transparent",
         transition: "background 0.1s",
       }}
       onMouseEnter={(e) => {

@@ -235,7 +235,7 @@ export default function ResourceRow({
             position: "absolute",
             top: -1, left: "50%", transform: "translateX(-50%)",
             fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-            color: "#fff", background: TODAY_COLOR,
+            color: "var(--on-accent)", background: TODAY_COLOR,
             borderRadius: 3, padding: "1px 5px", letterSpacing: "0.08em",
             whiteSpace: "nowrap", lineHeight: 1.4,
           }}>

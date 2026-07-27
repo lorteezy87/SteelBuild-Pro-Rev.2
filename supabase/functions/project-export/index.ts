@@ -38,6 +38,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { reportError } from "../_shared/reportError.ts";
 
 // ── Pure export shaping (mirror of src/services/projectExportService.ts) ──────
 
@@ -107,8 +108,6 @@ const PROJECT_EXPORT_TABLES: readonly string[] = [
   "pay_applications",
   "photos",
   "piece_production",
-  "pma_assumptions",
-  "pma_decisions",
   "production_notes",
   "project_closeout",
   "project_handoff_items",
@@ -243,8 +242,8 @@ interface AuthedUser {
 }
 
 /**
- * Verify the caller's JWT by hitting Supabase Auth's /user endpoint directly
- * (immune to library-side ES256 verification lag — see schedule-assistant).
+ * Verify the caller's JWT by hitting Supabase Auth's /user endpoint directly,
+ * avoiding library-side ES256 verification lag.
  */
 async function verifyJwt(
   token: string,
@@ -479,7 +478,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return await handle(req);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[project-export] Unhandled: ${message}`);
+    await reportError(err, "project-export", { unhandled: true });
     return errorResponse(500, `Internal error: ${message}`, req);
   }
 });

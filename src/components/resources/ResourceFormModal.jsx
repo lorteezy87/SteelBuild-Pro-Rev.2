@@ -3,6 +3,7 @@ import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button, Modal } from "@/components/design-system";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 // Map between UI field names and the actual DB columns on the `resources` table.
 // DB schema: name, resource_type, role, capacity, unit, cost_rate, availability, notes, metadata (JSONB)
@@ -87,13 +88,14 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
   );
 
   const mutation = useMutation({
-    mutationFn: (data) => entities.Resource.create(toEntity(data, projectId)),
+    mutationFn: (data) =>
+      entities.Resource.create(withProjectId(toEntity(data, projectId), projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["resources"] });
       toast.success("Resource added");
       onClose();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Create failed")),
   });
 
   const handleSubmit = (e) => {

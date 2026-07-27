@@ -135,7 +135,9 @@ export default function ControlBoardPanel(props: ControlBoardPanelProps) {
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
               <span className="cmd-row__meta">{focus.group} · {focus.status}</span>
               {focus.detailingState && <OperationalStateChip state={focus.detailingState} />}
-              {focus.isRR && <RRChip />}
+              {/* R&R is a first-class stage (2026-07-25): skip the extra badge
+                  when the state chip itself already reads R&R. */}
+              {focus.isRR && focus.detailingState !== "R&R" && <RRChip />}
             </div>
 
             {/* Inline owner + due-date editors (reused as-is). */}

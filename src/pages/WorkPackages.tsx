@@ -30,6 +30,7 @@ import WorkPackageDetailModalRaw from "@/components/workpackages/WorkPackageDeta
 import WPFormModalRaw from "@/components/workpackages/WPFormModal";
 import WPBulkAddModalRaw from "@/components/workpackages/WPBulkAddModal";
 import { getNextNumber } from "@/components/shared/numberSequencing";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { batchProcess } from "@/utils/batchProcess";
 import { BulkActionBar as BulkActionBarRaw } from "@/components/design-system";
 import SequenceFilterRaw, { matchesSequenceFilter } from "@/components/shared/SequenceFilter";
@@ -148,7 +149,9 @@ export default function WorkPackages() {
   });
 
   const createWPMut = useMutation({
-    mutationFn: (data: any) => entities.WorkPackage.create(data),
+    mutationFn: (data: any) => entities.WorkPackage.create(
+      withProjectId(data as Record<string, unknown>, effectiveProjectId),
+    ),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, wpQueryKeys, created, ((record, key) => !key[1] || record.project_id === key[1]) as any);
       invalidateWps();

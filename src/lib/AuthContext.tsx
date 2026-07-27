@@ -403,7 +403,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const navigateToLogin = () => {
-    // In Supabase apps login is handled locally — AuthenticatedApp renders LocalLoginForm
+    // Auth UI is owned by AuthenticatedApp (Landing / MFA / OrgOnboarding).
     // Nothing to do here; the auth state change will trigger the UI update.
   };
 

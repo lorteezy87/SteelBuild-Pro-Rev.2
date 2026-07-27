@@ -36,7 +36,7 @@ export default function ReleaseGateOverrideModal({
       role="dialog"
       aria-modal="true"
       style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+        position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 70%, transparent)",
         display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000,
       }}
       onClick={onClose}
@@ -46,7 +46,7 @@ export default function ReleaseGateOverrideModal({
         style={{
           background: "var(--bg-surface-secondary)", border: "1px solid var(--status-error)",
           borderRadius: "var(--radius-card, 4px)", width: 480, maxWidth: "92vw", padding: 24,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+          boxShadow: "0 20px 60px color-mix(in srgb, var(--bg-base) 40%, transparent)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -93,7 +93,7 @@ export default function ReleaseGateOverrideModal({
             title={ready ? undefined : "Enter a reason to override"}
             style={{
               ...btnBase,
-              background: ready ? "rgba(248,81,73,0.18)" : "var(--bg-page)",
+              background: ready ? "var(--danger-muted)" : "var(--bg-page)",
               borderColor: ready ? "var(--status-error)" : "var(--border-default)",
               color: ready ? "var(--status-error)" : "var(--text-muted)",
               opacity: busy ? 0.6 : 1,

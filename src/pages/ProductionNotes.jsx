@@ -21,6 +21,8 @@ import { toast } from "sonner";
 import { entities } from "@/api/supabaseClient";
 import { CommandBar, Button } from "@/components/design-system";
 import { logActivity } from "@/services/auditLogger";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 // ─── Date helpers ──────────────────────────────────────────────────────────
 const toISODate = (d) => {
@@ -77,7 +79,13 @@ export default function ProductionNotes() {
   });
 
   // All notes for the selected meeting date.
-  const { data: notes = [], isLoading: notesLoading } = useQuery({
+  const {
+    data: notes = [],
+    isLoading: notesLoading,
+    isError: notesError,
+    error: notesErrorValue,
+    refetch: refetchNotes,
+  } = useQuery({
     queryKey: ["production-notes", meetingDate],
     queryFn: () => entities.ProductionNote.filter({ note_date: meetingDate }, "created_at"),
     staleTime: 30 * 1000,
@@ -85,7 +93,8 @@ export default function ProductionNotes() {
 
   // ─── Mutations ──────────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => entities.ProductionNote.create(data),
+    // Multi-project workspace: stamp the row's selected project, not nav project.
+    mutationFn: (data) => entities.ProductionNote.create(withProjectId(data, data.project_id)),
     onMutate: async (data) => {
       await qc.cancelQueries({ queryKey: ["production-notes", meetingDate] });
       const previous = qc.getQueryData(["production-notes", meetingDate]);
@@ -95,7 +104,7 @@ export default function ProductionNotes() {
     },
     onError: (err, _data, ctx) => {
       if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error(err.message || "Failed to add bullet");
+      toast.error(toUserErrorMessage(err, "Failed to add bullet"));
     },
     onSuccess: (record, vars) => {
       qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] });
@@ -119,7 +128,7 @@ export default function ProductionNotes() {
     },
     onError: (err, _data, ctx) => {
       if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error(err.message || "Update failed");
+      toast.error(toUserErrorMessage(err, "Update failed"));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] }),
   });
@@ -134,7 +143,7 @@ export default function ProductionNotes() {
     },
     onError: (err, _id, ctx) => {
       if (ctx?.previous) qc.setQueryData(["production-notes", meetingDate], ctx.previous);
-      toast.error("Delete failed");
+      toast.error(toUserErrorMessage(err, "Delete failed"));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["production-notes", meetingDate] }),
   });
@@ -357,7 +366,30 @@ export default function ProductionNotes() {
           </div>
 
           {/* Rows */}
-          {projectRows.length === 0 && !notesLoading && (
+          {notesLoading && projectRows.length === 0 ? (
+            <div style={{ padding: "24px" }}>
+              <LoadingSkeleton variant="table" rows={5} />
+            </div>
+          ) : notesError && projectRows.length === 0 ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "48px 24px",
+                gap: 16,
+              }}
+            >
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+                Couldn’t load production notes
+              </p>
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+                {toUserErrorMessage(notesErrorValue, "Something went wrong. Try again.")}
+              </p>
+              <Button variant="outline" onClick={() => refetchNotes()}>Retry</Button>
+            </div>
+          ) : projectRows.length === 0 ? (
             <div
               style={{
                 padding: "60px 24px",
@@ -374,33 +406,18 @@ export default function ProductionNotes() {
                 Add a project to get started
               </Button>
             </div>
+          ) : (
+            projectRows.map((row) => (
+              <ProjectRow
+                key={row.projectId}
+                row={row}
+                onUpdateBulletText={updateBulletText}
+                onToggleHighlight={toggleHighlight}
+                onDeleteBullet={deleteBullet}
+                onAddBullet={addBullet}
+              />
+            ))
           )}
-
-          {notesLoading && projectRows.length === 0 && (
-            <div
-              style={{
-                padding: "60px 24px",
-                textAlign: "center",
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                letterSpacing: "0.1em",
-              }}
-            >
-              LOADING…
-            </div>
-          )}
-
-          {projectRows.map((row) => (
-            <ProjectRow
-              key={row.projectId}
-              row={row}
-              onUpdateBulletText={updateBulletText}
-              onToggleHighlight={toggleHighlight}
-              onDeleteBullet={deleteBullet}
-              onAddBullet={addBullet}
-            />
-          ))}
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { differenceInDays } from 'date-fns';
 import { formatDate, formatDateShort, parseUTCDate } from '@/components/shared/formatters';
-import { X, BarChart2, CheckSquare, Calendar, FileText, AlertTriangle, Package, DollarSign, ClipboardCheck, PauseCircle, PlayCircle } from 'lucide-react';
+import { X, BarChart2, CheckSquare, Calendar, FileText, AlertTriangle, Package, DollarSign, ClipboardCheck, PauseCircle, PlayCircle, Archive } from 'lucide-react';
 import { formatCurrency } from '@/components/shared/formatters';
 import ProjectHandoffChecklist from '@/components/projects/ProjectHandoffChecklist';
 import { useProjectContext } from '@/components/shared/ProjectContext';
@@ -23,11 +23,11 @@ const TABS = [
 ];
 
 const PHASE_CONFIG = {
-  Detailing:   { color: '#0D9488' },
+  Detailing:   { color: 'var(--accent)' },
   Fabrication: { color: 'var(--accent)' },
-  Delivery:    { color: '#06B6D4' },
-  Erection:    { color: '#22C55E' },
-  Closeout:    { color: '#9CA3AF' },
+  Delivery:    { color: 'var(--status-info)' },
+  Erection:    { color: 'var(--status-success)' },
+  Closeout:    { color: 'var(--text-muted)' },
 };
 
 const HEALTH_CONFIG = {
@@ -484,7 +484,7 @@ function CommercialTab({ project, changeOrders, costCodes }) {
 }
 
 // ── MAIN ──
-export default function ProjectDetailView({ project, onClose }) {
+export default function ProjectDetailView({ project, onClose, onArchive }) {
   const [activeTab, setActiveTab] = useState('overview');
   const phase = PHASE_CONFIG[project.phase] || PHASE_CONFIG.Detailing;
 
@@ -650,6 +650,24 @@ export default function ProjectDetailView({ project, onClose }) {
               ? (<><PlayCircle size={12} /> Resume</>)
               : (<><PauseCircle size={12} /> On Hold</>)}
           </button>
+          {onArchive && (
+            <button
+              onClick={onArchive}
+              title="Archive this project and remove it from active project lists"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: 'var(--danger-muted)',
+                border: '1px solid var(--danger-border)',
+                borderRadius: 4, padding: '6px 12px',
+                color: 'var(--status-error)',
+                ...mono, fontSize: 9, fontWeight: 700,
+                letterSpacing: '0.08em', textTransform: 'uppercase',
+                cursor: 'pointer', flexShrink: 0,
+              }}
+            >
+              <Archive size={12} /> Archive Project
+            </button>
+          )}
           <button
             onClick={onClose}
             style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 6, display: 'flex', borderRadius: 4, flexShrink: 0, transition: 'all 0.1s' }}

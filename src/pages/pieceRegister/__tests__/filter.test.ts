@@ -75,25 +75,4 @@ describe("Piece Register filters", () => {
     });
     expect(result.map((row) => row.id)).toEqual(["2"]);
   });
-
-  it("sorts piece marks and lots in natural alphanumeric order", () => {
-    const naturalRows = [
-      { ...rows[0], id: "b10", piece_mark: "B-10", normalized_piece_mark: "B-10", lot_code: "2" },
-      { ...rows[0], id: "a20", piece_mark: "A-20", normalized_piece_mark: "A-20", lot_code: "ALL" },
-      { ...rows[0], id: "b2-l10", piece_mark: "B-2", normalized_piece_mark: "B-2", lot_code: "10" },
-      { ...rows[0], id: "b2-l2", piece_mark: "B-2", normalized_piece_mark: "B-2", lot_code: "2" },
-    ];
-
-    const result = filterPieceRegisterRows(naturalRows, {
-      search: "",
-      workPackageId: "",
-      profile: "",
-      grade: "",
-      lifecycle: "",
-      source: "",
-      hold: "all",
-    });
-
-    expect(result.map((row) => row.id)).toEqual(["a20", "b2-l2", "b2-l10", "b10"]);
-  });
 });

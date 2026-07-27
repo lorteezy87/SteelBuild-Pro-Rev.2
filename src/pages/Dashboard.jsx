@@ -61,7 +61,7 @@ export default function Dashboard() {
   // Portfolio rollups must exclude on-hold projects (and their child entity
   // contributions); on-hold projects are visible only on the /Projects page.
   // `liveProjectIds` is the active (non-on-hold) id set used by every
-  // portfolio aggregation downstream (scopePortfolioRows + PortfolioView).
+  // portfolio aggregation downstream (scopePortfolioRows + PortfolioControlCenter).
   const portfolioProjects = useMemo(() => projects.filter((p) => !p.on_hold), [projects]);
   const liveProjectIds = useMemo(() => new Set(portfolioProjects.map((p) => p.id).filter(Boolean)), [portfolioProjects]);
   const activeProjectIsLive = !pid || projectsLoading || liveProjectIds.has(pid);
@@ -272,13 +272,29 @@ export default function Dashboard() {
   if (pid) {
     const onNavigateDash = (target, opts = {}) => {
       const paths = {
-        rfis: "/RFIs", submittals: "/Submittals", "work-packages": "/WorkPackages",
-        deliveries: "/Deliveries", "change-orders": "/ChangeOrders",
-        "field-reports": "/DailyLogs", schedule: "/Schedule",
-        "fab-release": "/FabRelease", "budget-hours": "/BudgetHours",
-        procurement: "/Procurement", field: "/Field", "daily-logs": "/DailyLogs",
-        photos: "/Photos", punchlist: "/Punchlist", inspections: "/Inspections",
-        safety: "/Safety", "quality-control": "/QualityControl",
+        rfis: "/RFIs",
+        submittals: "/Submittals",
+        detailing: "/DrawingSubmittalHub",
+        "work-packages": "/WorkPackages",
+        deliveries: "/Deliveries",
+        "change-orders": "/ChangeOrders",
+        "field-reports": "/DailyLogs",
+        schedule: "/Schedule",
+        "fab-release": "/FabRelease",
+        "budget-hours": "/BudgetHours",
+        "cost-hub": "/CostHub",
+        documents: "/Documents",
+        reports: "/ReportsHub",
+        procurement: "/Procurement",
+        field: "/FieldHub",
+        "daily-logs": "/DailyLogs",
+        photos: "/Photos",
+        punchlist: "/Punchlist",
+        inspections: "/Inspections",
+        safety: "/Safety",
+        "quality-control": "/QualityControl",
+        "piece-register": "/PieceRegister",
+        contracts: "/ContractManagement",
       };
       const path = paths[target];
       if (!path) return;
@@ -286,6 +302,7 @@ export default function Dashboard() {
       if (opts.create) params.push("new=1");
       if (opts.stage) params.push(`stage=${encodeURIComponent(opts.stage)}`);
       if (opts.status) params.push(`status=${encodeURIComponent(opts.status)}`);
+      if (opts.id) params.push(`id=${encodeURIComponent(String(opts.id))}`);
       navigate(params.length ? `${path}?${params.join("&")}` : path);
     };
     return (

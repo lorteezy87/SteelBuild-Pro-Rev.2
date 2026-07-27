@@ -4,14 +4,19 @@ import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ProjectFormModal from "@/components/projects/ProjectFormModal";
 import ProjectDetailView from "@/components/projects/ProjectDetailView";
+import SecureDeleteDialog from "@/components/shared/SecureDeleteDialog";
 import { toast } from "sonner";
 import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { usePlan } from "@/hooks/usePlan";
 import { withinLimit } from "@/lib/billing/plans";
+import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProjectsControlCenter from "./projects/ProjectsControlCenter";
 
 export default function Projects() {
   const qc         = useQueryClient();
+  const { removeProject } = useProjectContext();
   const [search,        setSearch]        = useState("");
   const [phaseFilter,   setPhaseFilter]   = useState("all");
   const [healthFilter,  setHealthFilter]  = useState("all");
@@ -19,6 +24,9 @@ export default function Projects() {
   const [modalOpen,     setModalOpen]     = useState(false);
   const [editing,       setEditing]       = useState(null);
   const [detailProject, setDetailProject] = useState(null);
+  const [deleteTarget,  setDeleteTarget]  = useState(null);
+  const { role: detailProjectRole, isLoading: detailRoleLoading } = useProjectRole(detailProject?.id);
+  const canArchiveProject = !detailRoleLoading && roleAtLeast(detailProjectRole, "admin");
 
   /* ── Data fetching ──
      The /Projects page is the ONE place that sees on-hold projects. We
@@ -44,18 +52,18 @@ export default function Projects() {
   const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => entities.ChangeOrder.list() });
 
   const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
-  useAutoOpenEdit(projects, setDetailProject, { enabled: !projectsLoading });
+  useAutoOpenEdit(projects, setDetailProject, { enabled: !projectsLoading, param: "recordId" });
   const workPackages = useMemo(
     () => rawWorkPackages.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
-    [liveProjectIds, rawWorkPackages]
+    [liveProjectIds, rawWorkPackages],
   );
   const rfis = useMemo(
     () => rawRfis.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
-    [liveProjectIds, rawRfis]
+    [liveProjectIds, rawRfis],
   );
   const changeOrders = useMemo(
     () => rawChangeOrders.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
-    [liveProjectIds, rawChangeOrders]
+    [liveProjectIds, rawChangeOrders],
   );
   const { plan } = usePlan();
   const projectLimit = plan.limits.projects;
@@ -65,16 +73,31 @@ export default function Projects() {
   const createMut = useMutation({
     mutationFn: (d) => entities.Project.create(d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project created"); },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to create project")),
   });
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.Project.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project updated"); },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to update project")),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id) => entities.Project.delete(id),
+    onSuccess: (_result, id) => {
+      removeProject(id);
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects", "all-including-on-hold"] });
+      if (detailProject?.id === id) setDetailProject(null);
+      setDeleteTarget(null);
+      toast.success("Project archived");
+    },
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to archive project")),
   });
   const handleSave = (d) => {
     if (editing) updateMut.mutate({ id: editing.id, data: d });
     else createMut.mutate(d);
+  };
+  const handleDelete = (project) => {
+    setDeleteTarget(project);
   };
 
   /* ── Filtered list ── */
@@ -118,8 +141,24 @@ export default function Projects() {
         <ProjectDetailView
           project={detailProject}
           onClose={() => setDetailProject(null)}
+          onArchive={canArchiveProject ? () => handleDelete(detailProject) : null}
         />
       )}
+      <SecureDeleteDialog
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (!deleteTarget || deleteMut.isPending) return;
+          await deleteMut.mutateAsync(deleteTarget.id);
+        }}
+        title="Archive Project"
+        description={`Archive "${deleteTarget?.name || "this project"}"? It will be removed from active project lists, while its data and audit history are retained.`}
+        record={deleteTarget}
+        requireTyped
+        typedValue={deleteTarget?.name || ""}
+        allowedOverride={canArchiveProject}
+        confirmLabel="ARCHIVE PROJECT"
+      />
     </>
   );
 }

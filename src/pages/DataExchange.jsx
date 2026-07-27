@@ -274,20 +274,28 @@ export default function DataExchange() {
       });
 
       if (!recordsToCreate.length) {
-        return { rows: [], skippedDuplicates };
+        return { rows: [], skippedDuplicates, skippedCreates: 0 };
       }
 
-      const rows = await bulkCreateWithFallback(selectedEntity, recordsToCreate);
-      return { rows, skippedDuplicates };
+      const { created, skipped } = await bulkCreateWithFallback(selectedEntity, recordsToCreate);
+      return { rows: created, skippedDuplicates, skippedCreates: skipped };
     },
-    onSuccess: ({ rows, skippedDuplicates }) => {
+    onSuccess: ({ rows, skippedDuplicates, skippedCreates = 0 }) => {
       queryClient.invalidateQueries({ queryKey: ["data-exchange", selectedTarget.entityKey, selectedProjectId] });
       queryClient.invalidateQueries({ queryKey: [selectedTarget.entityKey] });
       setImportApproved(false);
-      if (rows.length > 0) {
-        toast.success(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skippedDuplicates ? `, ${skippedDuplicates} duplicate skipped` : ""}`);
-      } else if (skippedDuplicates) {
-        toast.warning(`${skippedDuplicates} duplicate ${selectedTarget.label.toLowerCase()} skipped; no new rows imported`);
+      const skipBits = [];
+      if (skippedDuplicates) skipBits.push(`${skippedDuplicates} duplicate skipped`);
+      if (skippedCreates) skipBits.push(`${skippedCreates} row create failed`);
+      const skipSuffix = skipBits.length ? `, ${skipBits.join(", ")}` : "";
+      if (rows.length > 0 && skippedCreates > 0) {
+        toast.warning(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skipSuffix}`);
+      } else if (rows.length > 0) {
+        toast.success(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skipSuffix}`);
+      } else if (skippedDuplicates || skippedCreates) {
+        toast.warning(
+          `${skipBits.join(", ") || "rows skipped"}; no new rows imported`,
+        );
       } else {
         toast.info("No rows were imported");
       }

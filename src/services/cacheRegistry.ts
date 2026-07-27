@@ -362,22 +362,6 @@ const REGISTRY: Record<string, EntityRegistration> = {
     ],
   },
 
-  decision: {
-    primary:  (pid) => ["decisions", pid],
-    families: (pid) => [
-      ["decisions", pid],
-      ["decisions"],
-    ],
-  },
-
-  assumption: {
-    primary:  (pid) => ["assumptions", pid],
-    families: (pid) => [
-      ["assumptions", pid],
-      ["assumptions"],
-    ],
-  },
-
   activity: {
     primary:  (pid) => ["activities"],
     families: (pid) => [

@@ -187,7 +187,8 @@ The detailing/submittal workflow is the heart of the app. Stages
 └─ Released for Fab             (S&H internal release to fab shop)
 ```
 
-R&R (Revise and Resubmit / Rejected) outcomes loop back to IFA.
+R&R (Revise and Resubmit / Rejected) is a first-class derived workflow stage
+(after BFA); it is never written to `drawings.stage`.
 
 ### Workflow source of truth
 
@@ -206,15 +207,12 @@ Approver-class  (EOR / Architect / AOR)                        → OFA / BFA
 Downstream-class (GC / Owner)                                  → IFC
 ```
 
-### Auto-lock on approval
+### Drawing-set edit locks
 
-When a submittal transitions to a terminal-approved status (`Approved`,
-`Approved as Noted`, `Released for Fabrication`), every linked drawing
-set is auto-locked from edits. This is implemented in
-`useSubmittals.ts` `lockLinkedSetsIfApproved` — the lock primitive
-(`drawingHub/setLock.lockSet`) is unchanged; only the trigger path
-moved from `set_approval_status='approved'` (legacy, document-side) to
-submittal terminal status (workflow-side).
+Drawing sets retain `is_locked` / admin unlock (`drawingHub/setLock`) for
+manual override and DB write barriers, but **submittal approval no longer
+auto-locks** linked sets. Terminal status (`Approved` / `Approved as Noted` /
+`Released for Fabrication`) updates workflow state only.
 
 ---
 
@@ -351,7 +349,6 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
 
 - `llm-proxy` — the LLM gateway. Holds the only provider API key; all model
   calls route here. Does its own JWT verification (deploy `--no-verify-jwt`).
-- `schedule-assistant` — schedule chat/tooling; routes model turns through `llm-proxy`.
 - `email-ingest` — inbound email → staged project records (Power Automate path).
 - `email-send` — outbound email compose/reply pipeline.
 - `project-export` — RLS-scoped, audited per-project data export (powers the
@@ -363,8 +360,12 @@ statement. See `docs/db-baseline-cutover.md` + memory `supabase-migration-replay
   (owner/CLI):** `sharepoint-proxy`, `bluebeam-proxy` (removed integrations) and
   the Stripe Sync Engine orphans `stripe-setup` / `stripe-webhook` /
   `stripe-worker` (these are NOT the real webhook — that lives inside
-  `stripe-billing`). As of 2026-07-01 there are **11 functions live** (6 real + 5
-  orphan/deprecated); the `pg_cron` job that pinged `stripe-worker` every 60s was
+  `stripe-billing`). As of 2026-07-24 the application inventory is **5 real**
+  (`llm-proxy`, `email-ingest`, `email-send`, `project-export`, `stripe-billing`)
+  **+ 5 orphan/deprecated** (`sharepoint-proxy`, `bluebeam-proxy`, `stripe-setup`,
+  `stripe-webhook`, `stripe-worker`). A previously shipped schedule chat Edge
+  Function may still exist remotely pending `supabase functions delete`
+  (owner/CLI). The `pg_cron` job that pinged `stripe-worker` every 60s was
   unscheduled 2026-07-01. See `docs/runbooks/owner-checklist.md`.
 
 ### Storage
@@ -423,7 +424,6 @@ work unchanged.
 | `shipping-ticket-import`  | openai    | gpt-4o-mini        | `src/lib/importShippingTicket.js`                 |
 | `rfi-log-import`          | openai    | gpt-4o-mini        | `src/lib/importRfiLog.js`                         |
 | `photo-ocr`               | openai    | gpt-4o-mini        | `src/components/ocr/FileUploadWithOCR.jsx`        |
-| `schedule-assist`         | anthropic | claude-sonnet-4-5  | (NOT WIRED IN PHASE 1 — see TECH_DEBT.md)         |
 
 The Phase 1 routing intentionally **mirrors current production
 defaults**. We did not silently switch any caller to a new provider;
@@ -695,6 +695,87 @@ public/             Static assets including web-ifc wasm (public/wasm/) + pdf wo
 ---
 
 ## Decision log (recent material decisions)
+
+### 2026-07-25 — R&R is a first-class derived workflow stage (drawing approval lifecycle, Slice 1)
+
+R&R (Revise & Resubmit) / Rejected submittal outcomes previously derived to the
+**IFA** stage plus a separate badge (`isRRStatus` / `isPackageRR`), which let a
+failed approval cycle read as a fresh internal-prep package in boards, KPIs and
+rollups. `submittalStatusToStage` now derives those outcomes to a dedicated
+**"R&R"** stage, placed after BFA in the display order
+(`Not Started → IFA → OFA → BFA → R&R → OFS → IFC → Released`,
+`WORKFLOW_STAGE_ORDER` in `drawingsConfig.js`). This is a **display-derivation
+change only**: `submittals.status` + `ball_in_court` remain the workflow source
+of truth (§20), the 7-value `drawings.stage` CHECK is untouched, and "R&R" is
+never written to a sheet row — the 7-stage `STAGE_ORDER` still governs every
+sheet-stage write path. Later slices (approval-cycle history, the
+R&R→OFA transmission-evidence gate, OFS completion checklist, comment
+dispositions, release-gate unification) are specced in
+`docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-rr-stage.md`
+and `docs/superpowers/plans/2026-07-25-drawing-approval-lifecycle-ofs-slice4.md`.
+
+### 2026-07-25 — Returned-comment dispositions gate OFS/IFC and R&R/OFA (Slice 5)
+
+Structured `submittal_comment_dispositions` rows track comments returned with
+AAN / R&R. Required unresolved statuses block OFS→IFC and R&R→OFA unless an
+audited override is recorded (`commentDispositionGate`). Sheet-level
+`submittal_sheet_responses` remain the per-sheet disposition SoT.
+`drawing_revisions` gains nullable `revision_source` / `revision_reason`.
+
+### 2026-07-25 — Package fab-release requires IFC/Released (Slice 8)
+
+`isApprovedForFab` / `computeFabReleaseGate` / SQL `evaluate_fab_release_package`
+align with piece-control Slice 6 readiness. Bare `set_approval_status` /
+`ifc_status` / OFS no longer pass package export. New blocker kind
+`not_ifc_ready`. Playwright fab-release E2E (RFI gate) unchanged.
+
+### 2026-07-25 — Dashboard SoT includes R&R; Approval = IFC/Released (Slice 9)
+
+Document Hub stage maps include R&R. `DrawingApprovalStatusCard` prefers
+`submittalPipelineRollupFromSubmittals`. `SteelExecutionStatusCard` Approval
+metric counts IFC/Released only (not OFS).
+
+### 2026-07-25 — Legacy cleanup + dual-source docs (Slice 10)
+
+Removed unreachable `DrawingKanban`. Documented remaining dual-source in
+`docs/architecture/drawing-workflow-dual-source.md`. Scrubbed stale
+“R&R → IFA” product copy. Sheet-stage recovery path kept for sets without
+submittals.
+
+### 2026-07-25 — R&R/OFS/BFA risk aging + Critical ActionItems (Slice 7)
+
+Time-sensitive stages (**R&R**, **OFS**, **BFA**) get Normal / Attention /
+Urgent / Critical tiers from working-day countdown (or days-stuck when no
+due). Surfaced on Process Board (critical filter + pills), Submittal detail,
+and Piece Impact flags. Critical packages draft deduped ActionItems via
+`ensureCriticalAgingActionItems` — Alerts Center Refresh stays reload-only
+(no `generate-alerts` Edge Function). Package fab-release gate unify remains
+Slice 8; dashboard SoT remains Slice 9.
+
+### 2026-07-25 — Piece release requires IFC/Released governing drawings (Slice 6)
+
+Canonical piece / work-package fabrication readiness no longer treats bare
+Approved / AAN (or sheet-response / review-only evidence) as release-ready.
+`piece_control_drawing_is_approved` and client `isDrawingApproved` /
+`isGoverningDrawingReleaseReady` agree: ready = most-recent linked submittal
+derives **IFC** (Approved/AAN + GC/Owner) or **Released for Fabrication**, or
+`drawings.stage` is IFC/Released, or current-revision
+`approved_for_fabrication` signoff. OFS, R&R, BFA, OFA, and IFA fail closed.
+Piece Register surfaces a Piece Impact panel (governing sheet/rev/stage +
+exposure flags) when a single piece is selected. Package-level
+`fabReleaseGate` / `isApprovedForFab` unification remains Slice 8.
+
+### 2026-07-25 — OFS is mandatory scrub before IFC (drawing approval lifecycle, Slice 4)
+
+Approved packages must pass through **OFS — Out for Scrub** before IFC /
+Released for Fabrication. `submittal_approved_to_scrub` defaults ON and
+`nextSubmittalAction` defaults `approvedRoutesToScrub: true` so BFA
+`Approved` follows the same OFS → IFC → Released path as `Approved as Noted`.
+OFS remains a derived stage (Approved/AAN + Detailer-class BIC); scrub is
+**not** a resubmittal — Approved/AAN → Under Review is removed from the
+status graph, OFS→OFA and skip-OFS releases are blocked without an audited
+override, and OFS→IFC requires the scrub checklist (`ofsCompletionGate` +
+`IfcIssueDialog`) stamped into `submittals.metadata.ofs_checklist`.
 
 ### 2026-06-20 — DB migration baseline squash (P0 #2)
 

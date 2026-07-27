@@ -144,9 +144,12 @@ export function calculateDrawingHealthScore(pkg: any, context: HealthContext = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const subs = (pkg?.submittals || []).filter((s: any) => s && !s.is_deleted);
   const recent = pickMostRecentSubmittal(subs);
-  const recentStatus: string | undefined = recent?.status;
+  const recentStatus: string | undefined = recent?.status ?? undefined;
   const stage = derivedSetStage(subs, sheets);
-  const stageIndex = Math.max(0, STAGE_ORDER.indexOf(stage));
+  // Scoring parity: R&R is a first-class derived stage (2026-07-25) but for
+  // the approval deduction it scores like IFA — the approval progress reset
+  // to internal prep. The dedicated R&R churn deduction below still applies.
+  const stageIndex = Math.max(0, STAGE_ORDER.indexOf(stage === "R&R" ? "IFA" : stage));
   const maxIndex = STAGE_ORDER.length - 1; // 6
   const isApprovedOutcome = TERMINAL_APPROVED.has(recentStatus || "");
 

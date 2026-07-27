@@ -144,7 +144,7 @@ const btnGhost = {
 
 const btnPrimary = {
   padding: "8px 20px", borderRadius: 6, border: "none",
-  background: "var(--accent)", color: "#07090E",
+  background: "var(--accent)", color: "var(--on-accent)",
   fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800,
   letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
 };

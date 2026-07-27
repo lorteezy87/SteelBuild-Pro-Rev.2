@@ -135,6 +135,22 @@ doesn't break when the sign-in UI changes. With nothing configured, the run
 fails fast with a clear message; `npx playwright test --list` works with no
 secrets (handy for verifying the config parses).
 
+## Staging post-deploy CI
+
+The staging pipeline has a separate `staging-e2e-readonly` job, enabled by the
+`STAGING_E2E_ENABLED` variable and the four `STAGING_E2E_*` credentials. It
+runs `smoke.spec.ts` and `daily-workflow.spec.ts` first, then runs
+`staging-auth-boundary.spec.ts` in a separate Playwright invocation. The second
+invocation verifies unauthenticated protected-route rejection and signs out
+only after the normal smoke is complete, so session revocation cannot interrupt
+the navigation checks. Production mutation specs are not selected. Target
+guards reject the production hostname and a non-staging Supabase ref.
+Provisioning is in `docs/runbooks/staging-e2e-automation.md`.
+
+The fab-release and Piece Control files now require the separate staging-only
+mutation opt-in plus an explicit disposable-fixture declaration. Leaving that
+opt-in unset skips both files, including in the production post-deploy job.
+
 ## Enable in CI
 
 The job is **already wired** — `e2e-smoke` in `.github/workflows/ci.yml`. It

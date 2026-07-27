@@ -3,6 +3,8 @@ import type { PieceRegisterRow } from "./repository";
 import type { LogisticsAction } from "./lifecycle";
 import { unwrapPieceControlRpc } from "./rpcResult";
 
+const LOGISTICS_EVENT_PIECE_BATCH_SIZE = 100;
+
 export interface PieceLogisticsEvent {
   id: string;
   project_id: string;
@@ -45,18 +47,23 @@ export async function fetchLogisticsSnapshot(
   const pieceIds = pieces.map((piece) => piece.id);
   if (pieceIds.length === 0) return { pieces, events: [] };
 
-  const eventsResult = await db
-    .from("piece_events")
-    .select("*")
-    .eq("project_id", projectId)
-    .in("piece_id", pieceIds)
-    .in("event_type", ["shipped", "delivered", "erected"])
-    .order("created_at", { ascending: false });
-  if (eventsResult.error) throw eventsResult.error;
+  const events: PieceLogisticsEvent[] = [];
+  for (let start = 0; start < pieceIds.length; start += LOGISTICS_EVENT_PIECE_BATCH_SIZE) {
+    const eventsResult = await db
+      .from("piece_events")
+      .select("*")
+      .eq("project_id", projectId)
+      .in("piece_id", pieceIds.slice(start, start + LOGISTICS_EVENT_PIECE_BATCH_SIZE))
+      .in("event_type", ["shipped", "delivered", "erected"])
+      .order("created_at", { ascending: false });
+    if (eventsResult.error) throw eventsResult.error;
+    events.push(...((eventsResult.data ?? []) as PieceLogisticsEvent[]));
+  }
+  events.sort((left, right) => right.created_at.localeCompare(left.created_at));
 
   return {
     pieces,
-    events: (eventsResult.data ?? []) as PieceLogisticsEvent[],
+    events,
   };
 }
 

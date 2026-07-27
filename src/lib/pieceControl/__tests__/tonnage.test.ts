@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import { pieceTotalWeightLbs, pieceTons, sumPieceTons } from "../tonnage";
 
 describe("piece weight and tonnage helpers", () => {
-  it("prefers verified total weight", () => {
-    expect(pieceTotalWeightLbs({ weight_each_lbs: 5, weight_total_lbs: 80, quantity: 20 })).toBe(80);
-    expect(pieceTons({ weight_each_lbs: 5, weight_total_lbs: 80, quantity: 20 })).toBe(0.04);
+  it("uses total weight when it agrees with each × quantity", () => {
+    expect(pieceTotalWeightLbs({ weight_each_lbs: 4, weight_total_lbs: 80, quantity: 20 })).toBe(80);
+    expect(pieceTons({ weight_each_lbs: 4, weight_total_lbs: 80, quantity: 20 })).toBe(0.04);
+  });
+
+  it("prefers each × quantity when total weight conflicts", () => {
+    expect(pieceTotalWeightLbs({ weight_each_lbs: 5, weight_total_lbs: 80, quantity: 20 })).toBe(100);
   });
 
   it("falls back to each-weight × quantity", () => {
@@ -28,4 +32,3 @@ describe("piece weight and tonnage helpers", () => {
     ).toBe(1.11);
   });
 });
-

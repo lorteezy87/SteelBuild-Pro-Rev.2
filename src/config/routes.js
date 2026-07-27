@@ -158,7 +158,6 @@ const ROUTE_DOMAINS = {
   // ── Risk & Compliance ──
   risk: {
     ChangeRequests:  r(lazyWithRetry(() => import("@/pages/ChangeRequests")),  "Change Requests",     { projectScoped: true }),
-    DecisionLog:     r(lazyWithRetry(() => import("@/pages/DecisionLog")),     "Decision Log"),
     AlertsCenter:    r(lazyWithRetry(() => import("@/pages/AlertsCenter")),    "Alerts Center"),
   },
 
@@ -181,6 +180,7 @@ const ROUTE_DOMAINS = {
     UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management",       { lifecycle: "internal" }),
     ProjectMembers:   r(lazyWithRetry(() => import("@/pages/ProjectMembers")),   "Project Members",       { lifecycle: "internal" }),
     FeatureFlagsAdmin: r(lazyWithRetry(() => import("@/pages/FeatureFlagsAdmin")), "Feature Flags",       { lifecycle: "internal" }),
+    DesktopConnect:    r(lazyWithRetry(() => import("@/pages/DesktopConnect")),    "Connect Desktop",     { lifecycle: "internal" }),
     Tutorial:         r(lazyWithRetry(() => import("@/pages/Tutorial")),         "Tutorial / Help"),
   },
 
@@ -341,7 +341,4 @@ export const pagesConfig = {
   Pages: PAGES,
   // Layout is imported directly by App.jsx (no longer bundled here)
 };
-
-
-
 

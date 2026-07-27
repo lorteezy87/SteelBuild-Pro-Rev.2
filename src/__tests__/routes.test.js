@@ -2,7 +2,7 @@
  * routes.test.js — smoke tests for the route metadata source-of-truth.
  *
  * These don't render React; they just verify the data shape so that an
- * accidental rename in pages.config.js or routes.js trips CI before it
+ * accidental rename in src/config/routes.js trips CI before it
  * reaches production.
  */
 

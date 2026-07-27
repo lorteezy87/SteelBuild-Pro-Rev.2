@@ -82,7 +82,7 @@ export default function FileDropStep({ files, setFiles, onBack, onUpload, setNam
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
         <Button onClick={onUpload} disabled={files.length === 0}
-          style={{ background: "var(--accent)", color: "#fff", border: "none", opacity: files.length === 0 ? 0.5 : 1 }}>
+          style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none", opacity: files.length === 0 ? 0.5 : 1 }}>
           Upload &amp; Extract <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
         </Button>
       </div>

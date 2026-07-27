@@ -9,6 +9,7 @@ import { BulkActionBar } from "@/components/design-system";
 import { exportToCSV } from "@/lib/csv";
 import { batchProcess } from "@/utils/batchProcess";
 import VendorControlCenter from "./vendors/VendorControlCenter";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 export default function Vendors() {
   const qc = useQueryClient();
@@ -127,7 +128,7 @@ export default function Vendors() {
       setEditing(null);
       toast.success("Vendor created");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to create vendor")),
   });
 
   const updateMut = useMutation({
@@ -138,7 +139,7 @@ export default function Vendors() {
       setEditing(null);
       toast.success("Vendor updated");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to update vendor")),
   });
 
   const deleteMut = useMutation({
@@ -148,7 +149,7 @@ export default function Vendors() {
       setDeleteTarget(null);
       toast.success("Vendor deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Failed to delete vendor")),
   });
 
   // Bulk mutations (new — mirrors RFIs.jsx pattern)
@@ -169,7 +170,7 @@ export default function Vendors() {
         toast.success("Vendors updated");
       }
     },
-    onError: (err) => toast.error(`Bulk update failed: ${err?.message || "unknown error"}`),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk update failed")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -191,7 +192,7 @@ export default function Vendors() {
         toast.success(`${count} vendor${count === 1 ? "" : "s"} deleted`);
       }
     },
-    onError: (err) => toast.error(`Bulk delete failed: ${err?.message || "unknown error"}`),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   const handleSave = (data) => {

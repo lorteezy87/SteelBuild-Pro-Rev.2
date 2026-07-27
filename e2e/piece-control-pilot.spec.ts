@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { signInAsTestUser } from "./fixtures/supabaseUser";
+import { assertDisposableMutationEnvironment } from "./environment";
 
 const PROJECT_ID = process.env.E2E_PIECE_PROJECT_ID || "";
 const OTHER_TENANT_PROJECT_ID =
@@ -20,6 +21,11 @@ function expectRpcSuccess(data: any, error: any, command: string) {
 }
 
 test.describe("Piece Control pilot hardening", () => {
+  test.skip(
+    process.env.E2E_MUTATIONS_ENABLED !== "true",
+    "Mutation E2E is explicitly opt-in and staging-only.",
+  );
+  test.beforeAll(() => assertDisposableMutationEnvironment());
   test.skip(
     !PROJECT_ID,
     "Set E2E_PIECE_PROJECT_ID to run Piece Control security checks.",

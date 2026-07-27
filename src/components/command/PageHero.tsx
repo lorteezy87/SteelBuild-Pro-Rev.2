@@ -3,11 +3,10 @@ import type { ComponentType, ReactNode } from "react";
 export interface HeroChip { label: string; tone?: "neutral" | "good" | "warn" | "danger" | "info" }
 export interface HeroStat { value: ReactNode; label: string }
 
-// Default hero background for every Control Center banner — one image across all
-// modules. The left-side gradient in `.cmd-hero--photo` (command.css) mutes the
-// baked-in logo/tagline so the page title stays legible and the steel scene shows
-// on the right. Swap this single file to re-skin every module hero at once.
-const DEFAULT_HERO_PHOTO = "/photos/command-hero.webp";
+// Shared hero background for every Control Center banner. The artwork contains
+// the SteelBuild Pro brand lockup while the command CSS preserves a readable
+// space for the page-specific title, status, and actions.
+const DEFAULT_HERO_PHOTO = "/photos/steelbuildpro-hero.svg";
 
 export function PageHero({
   Icon,

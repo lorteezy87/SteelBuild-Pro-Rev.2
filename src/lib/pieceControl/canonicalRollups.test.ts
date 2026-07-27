@@ -75,8 +75,14 @@ const completion = (
 describe("canonical piece rollups", () => {
   it("weights fabrication progress by known tons", () => {
     const pieces = [
-      piece("light", "in_fabrication", { weight_total_lbs: 1000 }),
-      piece("heavy", "in_fabrication", { weight_total_lbs: 3000 }),
+      piece("light", "in_fabrication", {
+        weight_each_lbs: null,
+        weight_total_lbs: 1000,
+      }),
+      piece("heavy", "in_fabrication", {
+        weight_each_lbs: null,
+        weight_total_lbs: 3000,
+      }),
     ];
     const completions = [
       completion("light", "cut"),
@@ -92,11 +98,13 @@ describe("canonical piece rollups", () => {
     const container = piece("parent", "fabricated", {
       quantity: 10,
       is_container: true,
+      weight_each_lbs: null,
       weight_total_lbs: 10000,
     });
     const child = piece("child", "fabricated", {
       parent_piece_id: "parent",
       quantity: 6,
+      weight_each_lbs: null,
       weight_total_lbs: 6000,
     });
     const unknown = piece("unknown", "not_started", {
@@ -117,6 +125,7 @@ describe("canonical piece rollups", () => {
   it.each([
     [[], "No Canonical Scope"],
     [[piece("a", "not_started")], "Ready for Release"],
+    [[piece("a", "released")], "Released"],
     [[piece("a", "in_fabrication")], "In Fabrication"],
     [[piece("a", "fabricated")], "Fabrication Complete"],
     [[piece("a", "shipped")], "Shipping"],

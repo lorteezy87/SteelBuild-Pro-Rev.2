@@ -87,6 +87,7 @@ function transmittalRow(over: Partial<TransmittalRow> = {}): TransmittalRow {
     date_received: "2026-07-02",
     notes: null,
     created_at: "2026-07-02T00:00:00Z",
+    items: [],
     item_count: 3,
     ...over,
   };

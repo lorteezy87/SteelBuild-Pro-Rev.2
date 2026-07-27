@@ -38,8 +38,8 @@ export default function ListTruncationNotice({ count, cap = DEFAULT_LIST_CAP, la
         gap: 10,
         padding: "10px 14px",
         borderRadius: 2,
-        background: "var(--warning-muted, rgba(245,158,11,0.12))",
-        border: "1px solid var(--status-warning, #f59e0b)",
+        background: "var(--warning-muted)",
+        border: "1px solid var(--status-warning)",
         marginBottom: 8,
       }}
     >
@@ -52,7 +52,7 @@ export default function ListTruncationNotice({ count, cap = DEFAULT_LIST_CAP, la
             fontFamily: "var(--font-mono)",
             fontSize: 11,
             fontWeight: 700,
-            color: "var(--status-warning, #f59e0b)",
+            color: "var(--status-warning)",
             letterSpacing: "0.04em",
             marginBottom: 2,
           }}

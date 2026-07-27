@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 
+// QR scanner matte must remain literal white so the Supabase SVG data URL scans reliably.
+const QR_CODE_BACKGROUND = '#fff';
+
 /**
  * MfaSection — TOTP enrollment/management for the signed-in user (H23).
  * Lives in Settings → Profile → Security. Flow:
@@ -80,7 +83,7 @@ export default function MfaSection() {
           Scan this QR code in your authenticator app (Google Authenticator, 1Password, Authy…), then enter the 6-digit code to confirm.
         </div>
         {enroll.qrCode && (
-          <img src={enroll.qrCode} alt="Two-factor QR code" width={180} height={180} style={{ background: '#fff', borderRadius: 8, padding: 8, alignSelf: 'start' }} />
+          <img src={enroll.qrCode} alt="Two-factor QR code" width={180} height={180} style={{ background: QR_CODE_BACKGROUND, borderRadius: 8, padding: 8, alignSelf: 'start' }} />
         )}
         {enroll.secret && (
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>
@@ -130,5 +133,5 @@ export default function MfaSection() {
 
 const LBL = { fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: 5 };
 const INP = { width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none', boxSizing: 'border-box' };
-const BTN_PRIMARY = (busy) => ({ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: busy ? 0.6 : 1 });
+const BTN_PRIMARY = (busy) => ({ background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 8, padding: '9px 18px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: busy ? 0.6 : 1 });
 const BTN_GHOST = { background: 'var(--bg-surface-low)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' };

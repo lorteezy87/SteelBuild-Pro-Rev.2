@@ -15,10 +15,9 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
   const [notes, setNotes] = useState("");
 
   const handleConfirm = () => {
-    // Locking is no longer triggered by the document-side approval.
-    // Drawing sets are locked automatically when a submittal linked to
-    // them reaches a terminal-approved status (Approved / Approved as
-    // Noted / Released for Fabrication). See useSubmittals.ts.
+    // Document-side approval records paper-trail metadata only. Submittal
+    // workflow status lives on Submittals; linked drawing sets are not
+    // auto-locked on approval.
     onConfirm({ status, revision, approvedBy, approvalDate, applyToSheets, notes });
   };
 
@@ -107,7 +106,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
               }}
             >
               <span style={{
-                position: "absolute", top: 3, width: 16, height: 16, borderRadius: "50%", background: "#fff",
+                position: "absolute", top: 3, width: 16, height: 16, borderRadius: "50%", background: "var(--bg-surface)",
                 left: applyToSheets ? "calc(100% - 19px)" : 3, transition: "left 0.2s"
               }} />
             </button>
@@ -134,7 +133,7 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
           <button onClick={handleConfirm} disabled={saving} style={{
             padding: "8px 18px", borderRadius: 8, cursor: saving ? "not-allowed" : "pointer",
             background: "var(--accent)", border: "none",
-            color: "#fff", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            color: "var(--on-accent)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
             letterSpacing: "0.08em",
             opacity: saving ? 0.7 : 1
           }}>

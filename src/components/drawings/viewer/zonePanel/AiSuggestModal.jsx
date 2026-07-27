@@ -129,7 +129,7 @@ export function AiSuggestModal({ zone, sheet, existingItems, onClose, onAccept }
           top: "50%", left: "50%",
           transform: "translate(-50%, -50%)",
           width: 580, maxWidth: "92vw", maxHeight: "82vh",
-          border: "1px solid #00E5FF",
+          border: "1px solid var(--accent)",
           zIndex: 1201,
           display: "flex", flexDirection: "column",
           overflow: "hidden",
@@ -138,7 +138,7 @@ export function AiSuggestModal({ zone, sheet, existingItems, onClose, onAccept }
       >
         <header style={{ padding: "14px 18px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#00E5FF" }}>
+            <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--accent)" }}>
               AI Suggestions · {zone.zone_key}
             </div>
             <div style={{ ...display, fontSize: 15, fontWeight: 700, color: "var(--text-primary)", marginTop: 2 }}>
@@ -169,7 +169,7 @@ export function AiSuggestModal({ zone, sheet, existingItems, onClose, onAccept }
             </div>
           )}
           {suggestMut.isPending && (
-            <div style={{ ...mono, fontSize: 10, color: "#00E5FF", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            <div style={{ ...mono, fontSize: 10, color: "var(--accent)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
               ● Analysing {candidates.length} open records…
             </div>
           )}
@@ -178,7 +178,7 @@ export function AiSuggestModal({ zone, sheet, existingItems, onClose, onAccept }
               AI call failed: {suggestMut.error?.message || "unknown"}
               <button
                 onClick={() => suggestMut.mutate()}
-                style={{ ...mono, fontSize: 10, marginLeft: 8, padding: "2px 8px", background: "transparent", color: "#00E5FF", border: "1px solid #00E5FF", borderRadius: 2, cursor: "pointer" }}
+                style={{ ...mono, fontSize: 10, marginLeft: 8, padding: "2px 8px", background: "transparent", color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 2, cursor: "pointer" }}
               >
                 Retry
               </button>
@@ -192,7 +192,7 @@ export function AiSuggestModal({ zone, sheet, existingItems, onClose, onAccept }
               <div style={{ marginTop: 10 }}>
                 <button
                   onClick={() => { setHidden(new Set()); suggestMut.mutate(); }}
-                  style={{ ...mono, fontSize: 10, padding: "3px 10px", background: "transparent", color: "#00E5FF", border: "1px solid #00E5FF", borderRadius: 2, cursor: "pointer" }}
+                  style={{ ...mono, fontSize: 10, padding: "3px 10px", background: "transparent", color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 2, cursor: "pointer" }}
                 >
                   Re-run
                 </button>
@@ -252,9 +252,9 @@ export function AiSuggestModal({ zone, sheet, existingItems, onClose, onAccept }
                       style={{
                         ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
                         padding: "4px 10px",
-                        background: chipColor,
-                        color: "#000",
-                        border: "none",
+                        background: `color-mix(in srgb, ${chipColor} 16%, transparent)`,
+                        color: chipColor,
+                        border: `1px solid ${chipColor}`,
                         borderRadius: 2,
                         cursor: "pointer",
                         display: "inline-flex", alignItems: "center", gap: 4,

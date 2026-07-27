@@ -12,6 +12,8 @@ import {
   fetchLogisticsSnapshot,
   transitionPieceLots,
 } from "@/lib/pieceControl/logisticsRepository";
+import { DecisionPanel } from "@/components/command";
+import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 
 const Button = ({ variant: _variant, size: _size, ...props }: any) => (
   <button type="button" {...props} />
@@ -26,6 +28,7 @@ interface PieceLogisticsControlProps {
 
 const actionDefinitions = {
   ship: {
+    heading: "Ship",
     label: "Ship selected lots",
     pastLabel: "Shipped",
     icon: Truck,
@@ -36,6 +39,7 @@ const actionDefinitions = {
     ],
   },
   deliver: {
+    heading: "Deliver",
     label: "Deliver selected lots",
     pastLabel: "Delivered",
     icon: PackageCheck,
@@ -46,6 +50,7 @@ const actionDefinitions = {
     ],
   },
   erect: {
+    heading: "Erect",
     label: "Erect selected lots",
     pastLabel: "Erected",
     icon: Construction,
@@ -78,7 +83,10 @@ export function PieceLogisticsControl({
     queryFn: () => fetchLogisticsSnapshot(projectId, workPackageId),
     enabled,
   });
-  const pieces = snapshotQuery.data?.pieces ?? [];
+  const pieces = useMemo(
+    () => snapshotQuery.data?.pieces ?? [],
+    [snapshotQuery.data?.pieces],
+  );
   const events = snapshotQuery.data?.events ?? [];
   const leafPieces = useMemo(
     () => pieces.filter((piece) => !piece.is_container),
@@ -92,9 +100,9 @@ export function PieceLogisticsControl({
         projectId,
         selectedByAction[action],
         referenceByAction[action],
-      ),
+    ),
     onSuccess: async (_, variables) => {
-      toast.success(`${actionDefinitions[variables.action].pastLabel} canonical piece lots.`);
+      toast.success(`${actionDefinitions[variables.action].pastLabel} selected piece lots.`);
       setSelectedByAction((current) => ({ ...current, [variables.action]: [] }));
       setReferenceByAction((current) => ({ ...current, [variables.action]: {} }));
       await Promise.all([
@@ -104,15 +112,24 @@ export function PieceLogisticsControl({
         queryClient.invalidateQueries({ queryKey: ["canonical-reporting", projectId] }),
       ]);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(
+          error,
+          "The logistics update could not be recorded.",
+        ),
+      ),
   });
 
   if (!enabled) {
     return (
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-        <div className="font-semibold text-slate-700">Canonical logistics</div>
-        <p className="mt-2 text-sm text-slate-500">
-          Shipment, delivery, and erection actions are disabled while Piece Control is off.
+      <section className="piece-operation-state">
+        <h2 className="piece-operation-state__title">
+          <MapPin size={16} />
+          Logistics
+        </h2>
+        <p>
+          Shipment, delivery, and erection actions are unavailable until the Piece Register is set up.
         </p>
       </section>
     );
@@ -120,16 +137,28 @@ export function PieceLogisticsControl({
 
   if (snapshotQuery.isLoading) {
     return (
-      <section className="flex min-h-28 items-center justify-center rounded-xl border border-slate-200">
-        <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+      <section className="piece-operation-state is-loading" aria-label="Loading logistics">
+        <Loader2 size={20} className="piece-operation-spinner" />
       </section>
     );
   }
 
   if (snapshotQuery.error) {
     return (
-      <section className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        Unable to load canonical logistics: {(snapshotQuery.error as Error).message}
+      <section className="piece-operation-state is-error">
+        <span>
+          {presentPieceControlError(
+            snapshotQuery.error,
+            "Logistics data could not be loaded.",
+          )}
+        </span>
+        <button
+          type="button"
+          className="cmd-btn cmd-btn--secondary"
+          onClick={() => void snapshotQuery.refetch()}
+        >
+          Try again
+        </button>
       </section>
     );
   }
@@ -138,18 +167,23 @@ export function PieceLogisticsControl({
   const history = events.filter((event) => event.piece_id === historyPieceId);
 
   return (
-    <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div>
-        <div className="flex items-center gap-2 font-semibold text-slate-900">
-          <MapPin className="h-4 w-4 text-sky-700" />
-          Immutable downstream logistics
+    <section className="piece-operations">
+      <header className="piece-operations__head">
+        <div className="piece-operations__intro">
+          <span className="piece-operations__icon" aria-hidden="true">
+            <MapPin size={17} />
+          </span>
+          <div>
+            <h2>Logistics</h2>
+            <p>Record shipment, delivery, and erection as controlled physical events.</p>
+            <p className="piece-operations__safety">
+              Each batch is atomic. Physical transitions cannot be overridden or reversed.
+            </p>
+          </div>
         </div>
-        <p className="mt-1 text-sm text-slate-500">
-          Each batch is atomic. Physical transitions cannot be overridden or reversed.
-        </p>
-      </div>
+      </header>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="piece-logistics-grid">
         {(Object.keys(actionDefinitions) as LogisticsAction[]).map((action) => {
           const definition = actionDefinitions[action];
           const Icon = definition.icon;
@@ -159,77 +193,89 @@ export function PieceLogisticsControl({
           );
           const selected = selectedByAction[action];
           return (
-            <div key={action} className="space-y-3 rounded-lg border border-slate-200 p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 font-semibold text-slate-900">
-                  <Icon className="h-4 w-4" />
-                  {definition.label}
+            <section key={action} className="piece-operation-card piece-logistics-panel">
+              <header className="piece-operation-card__head piece-logistics-panel__head">
+                <div>
+                  <span className="piece-operation-card__eyebrow">
+                    Requires {pieceLifecycleLabel(requiredStatus)}
+                  </span>
+                  <h3 className="piece-operation-card__title-with-icon">
+                    <Icon size={16} />
+                    {definition.heading}
+                  </h3>
                 </div>
-                <span className="text-xs text-slate-500">{candidates.length} ready</span>
-              </div>
+                <span className="piece-logistics-panel__count">
+                  <strong>{candidates.length}</strong>
+                  ready
+                </span>
+              </header>
 
-              <div className="max-h-52 space-y-2 overflow-y-auto">
+              <div className="piece-logistics-candidates">
                 {candidates.length === 0 ? (
-                  <p className="rounded-md bg-slate-50 p-3 text-xs text-slate-500">
-                    No leaf lots currently have {pieceLifecycleLabel(requiredStatus)} status.
+                  <p className="piece-operation-empty is-compact">
+                    No piece lots currently have {pieceLifecycleLabel(requiredStatus)} status.
                   </p>
                 ) : (
                   candidates.map((piece) => {
                     const reason = logisticsDisabledReason(piece, action);
                     const checked = selected.includes(piece.id);
                     return (
-                      <div key={piece.id} className="rounded-md bg-slate-50 p-2">
-                        <label className="flex min-w-0 items-start gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5"
-                            checked={checked}
-                            disabled={Boolean(reason)}
-                            onChange={() =>
-                              setSelectedByAction((current) => ({
-                                ...current,
-                                [action]: checked
-                                  ? current[action].filter((id) => id !== piece.id)
-                                  : [...current[action], piece.id],
-                              }))
-                            }
-                          />
-                          <span>
-                            <button
-                              type="button"
-                              className="font-semibold text-slate-900 hover:underline"
-                              onClick={() => setHistoryPieceId(piece.id)}
-                            >
-                              {piece.piece_mark} / {piece.lot_code}
-                            </button>
-                            <span className="block text-slate-500">
-                              Qty {Number(piece.quantity).toLocaleString()}
+                      <div key={piece.id} className="piece-logistics-candidate">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${piece.piece_mark} / ${piece.lot_code} to ${action}`}
+                          checked={checked}
+                          disabled={Boolean(reason)}
+                          onChange={() =>
+                            setSelectedByAction((current) => ({
+                              ...current,
+                              [action]: checked
+                                ? current[action].filter((id) => id !== piece.id)
+                                : [...current[action], piece.id],
+                            }))
+                          }
+                        />
+                        <div>
+                          <button
+                            type="button"
+                            className="piece-logistics-candidate__mark"
+                            onClick={() => setHistoryPieceId(piece.id)}
+                          >
+                            {piece.piece_mark} / {piece.lot_code}
+                          </button>
+                          <span>Qty {Number(piece.quantity).toLocaleString()}</span>
+                          {reason ? (
+                            <span className="piece-logistics-candidate__reason">
+                              {reason}
                             </span>
-                            {reason && <span className="block text-rose-700">{reason}</span>}
-                          </span>
-                        </label>
+                          ) : null}
+                        </div>
                       </div>
                     );
                   })
                 )}
               </div>
 
-              {definition.fields.map(([key, placeholder]) => (
-                <Input
-                  key={key}
-                  value={referenceByAction[action][key] ?? ""}
-                  placeholder={placeholder}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    setReferenceByAction((current) => ({
-                      ...current,
-                      [action]: { ...current[action], [key]: event.target.value },
-                    }))
-                  }
-                />
-              ))}
+              <div className="piece-logistics-references">
+                {definition.fields.map(([key, placeholder]) => (
+                  <Input
+                    key={key}
+                    className="piece-command-control"
+                    value={referenceByAction[action][key] ?? ""}
+                    placeholder={placeholder}
+                    aria-label={`${definition.heading}: ${placeholder}`}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setReferenceByAction((current) => ({
+                        ...current,
+                        [action]: { ...current[action], [key]: event.target.value },
+                      }))
+                    }
+                  />
+                ))}
+              </div>
 
               <Button
-                className="w-full"
+                className="cmd-btn cmd-btn--primary piece-logistics-panel__submit"
                 disabled={selected.length === 0 || transitionMutation.isPending}
                 onClick={() => {
                   const confirmed = window.confirm(
@@ -238,57 +284,72 @@ export function PieceLogisticsControl({
                   if (confirmed) transitionMutation.mutate({ action });
                 }}
               >
-                {transitionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {transitionMutation.isPending ? (
+                  <Loader2 size={16} className="piece-operation-spinner" />
+                ) : null}
                 Confirm {selected.length || ""} {definition.pastLabel.toLowerCase()}
               </Button>
-            </div>
+            </section>
           );
         })}
       </div>
 
-      <div className="rounded-lg bg-slate-50 p-4">
-        <div className="flex items-center gap-2 font-semibold text-slate-900">
-          <CheckCircle2 className="h-4 w-4" />
-          Piece logistics history
-        </div>
+      <DecisionPanel title="Immutable logistics history">
         {!historyPiece ? (
-          <p className="mt-2 text-sm text-slate-500">
-            Select a piece mark above to inspect its immutable logistics history.
+          <p className="piece-operation-empty">
+            Select a piece mark above to inspect recorded logistics events.
           </p>
         ) : (
-          <div className="mt-3 space-y-2">
-            <div className="text-sm font-semibold">
-              {historyPiece.piece_mark} / {historyPiece.lot_code}
+          <div className="piece-operation-history">
+            <div className="piece-operation-history__intro">
+              <div>
+                <strong>
+                  {historyPiece.piece_mark} / {historyPiece.lot_code}
+                </strong>
+                <span>{history.length} logistics events</span>
+              </div>
+              <p>
+                <CheckCircle2 size={15} />
+                Recorded physical events are read-only.
+              </p>
             </div>
             {history.length === 0 ? (
-              <p className="text-xs text-slate-500">No logistics events recorded.</p>
+              <p className="piece-operation-empty is-compact">
+                No logistics events recorded.
+              </p>
             ) : (
-              history.map((event) => {
-                const referenceData = event.next_state.reference_data ?? {};
-                return (
-                  <div key={event.id} className="rounded-md border border-slate-200 bg-white p-3">
-                    <div className="flex justify-between gap-3 text-xs">
-                      <span className="font-semibold text-slate-900">
-                        {pieceLifecycleLabel(event.event_type)}
+              <div className="piece-operation-history__list">
+                {history.map((event) => {
+                  const referenceData = event.next_state.reference_data ?? {};
+                  return (
+                    <div key={event.id} className="piece-operation-history__row">
+                      <span className="piece-operation-history__status">
+                        <CheckCircle2 size={14} />
                       </span>
-                      <span className="text-slate-500">
+                      <span>
+                        <strong>{pieceLifecycleLabel(event.event_type)}</strong>
+                        {Object.keys(referenceData).length > 0 ? (
+                          <small>
+                            {Object.entries(referenceData)
+                              .map(
+                                ([key, value]) =>
+                                  `${key.replaceAll("_", " ")}: ${String(value)}`,
+                              )
+                              .join(" · ")}
+                          </small>
+                        ) : null}
+                      </span>
+                      <time dateTime={event.created_at}>
                         {new Date(event.created_at).toLocaleString()}
-                      </span>
+                      </time>
                     </div>
-                    {Object.keys(referenceData).length > 0 && (
-                      <div className="mt-2 text-xs text-slate-600">
-                        {Object.entries(referenceData)
-                          .map(([key, value]) => `${key.replaceAll("_", " ")}: ${String(value)}`)
-                          .join(" · ")}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
-      </div>
+      </DecisionPanel>
     </section>
   );
 }

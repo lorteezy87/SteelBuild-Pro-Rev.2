@@ -166,12 +166,20 @@ describe("buildSubmittalsBySetId", () => {
 });
 
 describe("drawing workflow authority helpers", () => {
-  it("blocks direct stage writes for sets linked to a submittal", () => {
+  it("blocks direct stage writes while a linked submittal is still open", () => {
     expect(classifyDrawingStageMutation(
       { drawing_set_id: "set-1" },
       "IFC",
-      { "set-1": { total: 1, latestStatus: "Under Review" } },
-    )).toMatchObject({ kind: "submittal", allowed: false });
+      { "set-1": { total: 1, open: 1, latestStatus: "Under Review", latestId: "sub-1" } },
+    )).toMatchObject({ kind: "submittal", allowed: false, latestId: "sub-1" });
+  });
+
+  it("allows sheet-stage sync after all linked submittals are closed", () => {
+    expect(classifyDrawingStageMutation(
+      { drawing_set_id: "set-1" },
+      "IFC",
+      { "set-1": { total: 2, open: 0, latestStatus: "Approved as Noted", latestId: "sub-9" } },
+    )).toMatchObject({ kind: "closed-set-sync", allowed: true });
   });
 
   it("allows constrained legacy recovery when no submittal is linked", () => {
@@ -258,10 +266,20 @@ describe("computeSelectedSetName", () => {
 });
 
 describe("computeStagePipeline", () => {
-  it("builds the 7 canonical stages and picks activeIdx from an explicit real-stage filter", () => {
+  it("builds the 8 workflow stages (R&R first-class, 2026-07-25) and picks activeIdx from an explicit real-stage filter", () => {
     const r = computeStagePipeline({ submittals: [], drawingSetRecords: [], drawings: [], stageFilter: "OFA" });
-    expect(r.pipeStages.map(s => s.id)).toEqual(["Not Started", "IFA", "OFA", "BFA", "OFS", "IFC", "Released"]);
+    expect(r.pipeStages.map(s => s.id)).toEqual(["Not Started", "IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released"]);
     expect(r.activeIdx).toBe(2); // OFA
+  });
+  it("buckets R&R submittals into the R&R chevron, not IFA", () => {
+    const r = computeStagePipeline({
+      submittals: [{ id: "s1", status: "Revise and Resubmit", ball_in_court: "Detailer", drawing_set_ids: ["set-1"] }],
+      drawingSetRecords: [{ id: "set-1" }],
+      drawings: [],
+      stageFilter: "ALL",
+    });
+    expect(r.pipeStages.find(s => s.id === "R&R").count).toBe(1);
+    expect(r.pipeStages.find(s => s.id === "IFA").count).toBe(0);
   });
   it("counts a package with no submittal (and no released sheet) in the Not Started bucket", () => {
     const r = computeStagePipeline({

@@ -49,7 +49,7 @@ export default function RfiRow({ rfi, selected, onToggle, onOpen }) {
   const submitted = [rfi.submitted_by, rfi.submitted_date].filter(Boolean).join(" / ");
   const assigned = rfi.assigned_to || rfi.project_name || "";
   const priorityColor =
-    rfi.priority === "Critical" ? "#FF6B35" :
+    rfi.priority === "Critical" ? "var(--status-review)" :
     rfi.priority === "High" ? "var(--status-warning)" :
     rfi.priority === "Medium" ? "var(--status-info)" :
     "var(--text-muted)";

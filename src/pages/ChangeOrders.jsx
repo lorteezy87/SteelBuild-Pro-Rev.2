@@ -17,6 +17,7 @@ import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { useAutoOpenEdit } from "@/hooks/useAutoOpenEdit";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -24,6 +25,7 @@ import COFormModal from "@/components/changeorders/COFormModal";
 import ChangeOrderImportModal from "@/components/changeorders/ChangeOrderImportModal";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import { toast } from "sonner";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -82,6 +84,11 @@ export default function ChangeOrders() {
         : [],
     enabled: !!projectId,
   });
+  useAutoOpenEdit(cos, (changeOrder) => {
+    setPrefill(null);
+    setEditing(changeOrder);
+    setModalOpen(true);
+  }, { enabled: !isLoading, param: "recordId" });
 
   useRealtimeInvalidation("change_orders", projectId, [["change-orders", projectId]]);
 
@@ -152,16 +159,13 @@ export default function ChangeOrders() {
   /* -- Mutations -- */
   const createMut = useMutation({
     mutationFn: async (d) => {
-      const userTyped = (d.co_number || "").trim();
+      const scoped = withProjectId(d, projectId);
+      const userTyped = (scoped.co_number || "").trim();
       let coNumber = userTyped;
-      const targetProjectId = d.project_id || projectId || null;
-      if (!targetProjectId) {
-        throw new Error("Select a project before creating a change order.");
-      }
-      if (!coNumber && targetProjectId) {
+      if (!coNumber) {
         try {
           coNumber = await getNextFormattedNumber({
-            projectId: targetProjectId,
+            projectId: scoped.project_id,
             recordType: "CO",
             entityName: "ChangeOrder",
             fieldName: "co_number",
@@ -176,15 +180,13 @@ export default function ChangeOrders() {
       }
       if (!coNumber) throw new Error("Unable to reserve a change order number. Please retry.");
       return entities.ChangeOrder.create({
-        ...d,
+        ...scoped,
         co_number: coNumber,
-        project_id: targetProjectId,
       });
     },
-    onSuccess: (created) => {
+    onSuccess: async (created) => {
       appendRecordToCaches(qc, coQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
-      qc.invalidateQueries({ queryKey: ["change-orders"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      await invalidateEntity(qc, "change_order", created.project_id || projectId);
       setModalOpen(false);
       setEditing(null);
       toast.success("Change order created");
@@ -194,10 +196,9 @@ export default function ChangeOrders() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => entities.ChangeOrder.update(id, data),
-    onSuccess: (updated) => {
+    onSuccess: async (updated) => {
       replaceRecordInCaches(qc, coQueryKeys, updated);
-      qc.invalidateQueries({ queryKey: ["change-orders"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      await invalidateEntity(qc, "change_order", updated.project_id || projectId);
       setModalOpen(false);
       setEditing(null);
       toast.success("Change order updated");
@@ -207,9 +208,14 @@ export default function ChangeOrders() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => entities.ChangeOrder.delete(id),
-    onSuccess: (_result, deletedId) => {
+    onSuccess: async (_result, deletedId) => {
       removeRecordFromCaches(qc, coQueryKeys, deletedId);
-      qc.invalidateQueries({ queryKey: ["change-orders"] });
+      await invalidateEntity(qc, "change_order", projectId);
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(deletedId);
+        return next;
+      });
       setDeleteTarget(null);
       toast.success("Change order deleted");
     },
@@ -405,11 +411,6 @@ export default function ChangeOrders() {
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); setPrefill(null); }}
         onSave={handleSave}
-        onDelete={can("delete", "change_order") && editing ? (co) => {
-          setModalOpen(false);
-          setEditing(null);
-          setDeleteTarget(co);
-        } : null}
         isSaving={createMut.isPending || updateMut.isPending}
         co={editing}
         prefill={prefill}
@@ -428,14 +429,10 @@ export default function ChangeOrders() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (!deleteMut.isPending && deleteTarget?.id) {
-            deleteMut.mutate(deleteTarget.id);
-          }
-        }}
-        title="Delete Change Order"
-        description={`Delete ${deleteTarget?.co_number}?`}
-        busy={deleteMut.isPending}
+        onConfirm={() => deleteTarget?.id && deleteMut.mutate(deleteTarget.id)}
+        isDeleting={deleteMut.isPending}
+        title="Archive Change Order"
+        description={`Archive ${deleteTarget?.co_number || "this change order"}? It is soft-deleted and can be restored by an administrator. Historical financial links are preserved.`}
       />
     </>
   );
@@ -451,7 +448,8 @@ export default function ChangeOrders() {
         onSearch={setSearch}
         statusFilter={filter}
         onFilterChange={setFilter}
-        onOpenCo={(co) => { setEditing(co); setModalOpen(true); }}
+        onOpenCo={(co) => { setPrefill(null); setEditing(co); setModalOpen(true); }}
+        onDeleteCo={can("delete", "change_order") ? (co) => setDeleteTarget(co) : null}
         onExport={exportCsv}
         onCreate={can("create", "change_order") ? () => {
           setEditing(null);

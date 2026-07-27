@@ -70,6 +70,7 @@ import { computeCostUsd, isModelPriced } from "./providers/cost.ts";
 import { getProviderForUseCase } from "./router.ts";
 import { checkUserQuota } from "./quota.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import { reportError } from "../_shared/reportError.ts";
 
 // Protocol versions:
 //   v3 = verify_jwt disabled
@@ -437,10 +438,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch (err) {
     const name = err instanceof Error ? err.name : "Error";
     const message = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error && err.stack ? err.stack : null;
-    // Log the stack server-side only — do NOT return it to the client (it can
-    // disclose internal file paths / structure). Surface a generic message.
-    console.error(`[llm-proxy] Unhandled ${name}: ${message}`, stack || "");
+    // Log (+ Sentry when EDGE_SENTRY_DSN is set). Do NOT return the stack to
+    // the client — it can disclose internal file paths / structure.
+    await reportError(err, "llm-proxy", { unhandled: true });
     return json(
       {
         error: `Unhandled ${name}: ${message}`,

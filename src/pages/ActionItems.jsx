@@ -2,15 +2,23 @@ import React, { useState, useMemo, useCallback } from "react";
 import { entities } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useResetOnProjectChange } from "@/hooks/useResetOnProjectChange";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import ActionItemFormModal from "@/components/actionitems/ActionItemFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import ListTruncationNotice from "@/components/shared/ListTruncationNotice";
 import { toast } from "sonner";
-import { BulkActionBar } from "@/components/design-system";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import { BulkActionBar, Button } from "@/components/design-system";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 import { daysUntil } from "@/lib/dateMath";
 import { calcWpProgress } from "@/utils/projectKpis";
 import ActionItemsControlCenter from "./actionItems/ActionItemsControlCenter";
+import {
+  buildActionItemAssignPatch,
+  buildActionItemCreatePayload,
+} from "./actionItems/actionItemMutationHelpers";
 
 /** Lightweight CSV export for the canonical presentation path. */
 function exportActionItemsToCSV(items) {
@@ -83,6 +91,14 @@ export default function ActionItems() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showAssignDropdown, setShowAssignDropdown] = useState(false);
 
+  useResetOnProjectChange(projectId, () => {
+    setShowForm(false);
+    setEditingItem(null);
+    setDeleteTarget(null);
+    setSelectedIds(new Set());
+    setShowAssignDropdown(false);
+  });
+
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
     setShowAssignDropdown(false);
@@ -107,14 +123,14 @@ export default function ActionItems() {
 
   // ─── Mutations ───────────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: (data) => entities.ActionItem.create(data),
+    mutationFn: (data) => entities.ActionItem.create(buildActionItemCreatePayload(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
       qc.invalidateQueries({ queryKey: ["action-items-all"] });
       toast.success("Action item created");
       setShowForm(false);
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e)}`),
   });
 
   const updateMut = useMutation({
@@ -126,7 +142,7 @@ export default function ActionItems() {
       setEditingItem(null);
       setShowForm(false);
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e)}`),
   });
 
   const deleteMut = useMutation({
@@ -137,7 +153,7 @@ export default function ActionItems() {
       setDeleteTarget(null);
       toast.success("Action item deleted");
     },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Delete failed")),
+    onError: (e) => toast.error(`Failed: ${toUserErrorMessage(e, "Delete failed")}`),
   });
 
   // ─── Bulk mutation — per-row heterogeneous updates ───────────────────────
@@ -165,7 +181,7 @@ export default function ActionItems() {
     },
     onError: (e) => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
-      toast.error(e?.message || "Bulk update failed");
+      toast.error(toUserErrorMessage(e, "Bulk update failed"));
     },
   });
 
@@ -185,12 +201,18 @@ export default function ActionItems() {
     },
     onError: (e) => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
-      toast.error(e?.message || "Bulk update failed");
+      toast.error(toUserErrorMessage(e, "Bulk update failed"));
     },
   });
 
   // ─── Queries ─────────────────────────────────────────────────────────────
-  const { data: allItems = [], isLoading } = useQuery({
+  const {
+    data: allItems = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["action-items", projectId],
     queryFn: () =>
       projectId
@@ -314,7 +336,10 @@ export default function ActionItems() {
 
   const handleBulkAssign = (assignee) => {
     // Identical { assigned_to } patch for every selected id.
-    bulkPatchMut.mutate({ ids: Array.from(selectedIds), data: { assigned_to: assignee } });
+    bulkPatchMut.mutate({
+      ids: Array.from(selectedIds),
+      data: buildActionItemAssignPatch(assignee),
+    });
     setShowAssignDropdown(false);
   };
 
@@ -345,6 +370,34 @@ export default function ActionItems() {
     </>
   );
 
+  // Gate fetch states at the page shell — ActionItemsControlCenter does not
+  // accept isLoading (same pattern as RFIs / ChangeOrders / Backcharges).
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", gap: 16,
+        margin: 24,
+      }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load action items
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(error, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+      </div>
+    );
+  }
+
   // Canonical Action Items control center ─────────────────────────────────
     const activeProject = projects.find((p) => p.id === projectId);
     const projectHealth = activeProject?.health_status || null;
@@ -364,6 +417,9 @@ export default function ActionItems() {
 
     return (
       <div>
+        <div style={{ padding: "0 24px" }}>
+          <ListTruncationNotice count={allItems.length} label="action items" />
+        </div>
         <ActionItemsControlCenter
           projectName={activeProject?.name || "All Projects"}
           actionItems={allItems}

@@ -15,6 +15,7 @@ export const SEQ_PALETTE = ["#3b82f6", "#f97316", "#22c55e", "#a855f7", "#eab308
 export const CANONICAL_PIECE_COLORS = {
   hold: "#dc2626",
   not_started: "#64748b",
+  released: "#7c3aed",
   in_fabrication: "#2563eb",
   fabricated: "#16a34a",
   shipped: "#f59e0b",

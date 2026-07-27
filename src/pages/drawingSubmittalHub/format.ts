@@ -11,18 +11,18 @@ import type { CurrentRevisionInfo, Drawing, DrawingRevision, DrawingSet, DueInfo
 // ── Design-system tokens ──────────────────────────────────────────────────
 // Use the SAME CSS custom-property names as the rest of the app (Submittals,
 // Drawings, RFIs, etc.).
-export const accent = "var(--accent)";
-export const surface1 = "var(--bg-surface-low)";
-export const surface2 = "var(--bg-surface-high)";
-export const border = "var(--border-default)";
-export const textPrimary = "var(--text-primary)";
-export const textMuted = "var(--text-muted)";
+export const accent = "var(--cmd-gold)";
+export const surface1 = "var(--cmd-surface)";
+export const surface2 = "var(--cmd-row-hover)";
+export const border = "var(--cmd-border)";
+export const textPrimary = "var(--cmd-text)";
+export const textMuted = "var(--cmd-text-muted)";
 export const mono = "var(--font-mono)";
-export const success = "var(--status-success)";
-export const warning = "var(--status-warning)";
-export const error = "var(--status-error)";
-export const info = "var(--status-info)";
-export const review = "var(--status-review)";
+export const success = "var(--cmd-good)";
+export const warning = "var(--cmd-warn)";
+export const error = "var(--cmd-danger)";
+export const info = "var(--cmd-info)";
+export const review = "var(--cmd-review)";
 
 export const TABS = [
   { key: "overview", label: "Control Board", icon: Gauge },
@@ -35,6 +35,7 @@ export const TABS = [
 ];
 
 // ── Status colors for matrix ───────────────────────────────────────────────
+// semantic submittal workflow hues — allowlisted for status identity in matrix chips.
 export const STATUS_COLORS: Record<string, string> = {
   Draft:                 "#64748b",
   Submitted:             "#3b82f6",
@@ -57,8 +58,7 @@ export const STATUS_COLORS: Record<string, string> = {
 // set in the canonical process board.
 //
 // NOT the same as useSubmittals' TERMINAL_APPROVED_STATUSES (which DOES include
-// Approved/AAN) — that set governs auto-LOCKING the linked drawing set from
-// edits, a separate concern from "closed" for due/triage. Don't merge the two.
+// Approved/AAN for document/register rollups). Don't merge the two.
 export const CLOSED_SUBMITTAL_STATUSES = new Set([
   "Released for Fabrication",
   "Void",
@@ -231,7 +231,7 @@ export function validateDueDateWrite(
   return null;
 }
 
-const WORKFLOW_STAGE_STATES = new Set(["IFA", "OFA", "BFA", "OFS", "IFC", "Released", "Partially Released", "Released for Erection"]);
+const WORKFLOW_STAGE_STATES = new Set(["IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released", "Partially Released", "Released for Erection"]);
 
 /** Manual detailing state is a pre-submittal recovery action only. */
 export function validateDetailingStateWrite(
@@ -497,9 +497,11 @@ export function buildSequenceReadiness(readinessByKey: Map<string, any>) {
 export function buildDrawingKpis(drawings: any[], setPackages: SetPackage[]) {
   const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted);
   const released = setPackages.filter(isClosedPackage).length;
-  // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
+  // "In review" = active workflow stages: IFA / OFA / BFA / R&R / OFS / IFC.
+  // R&R counts as in-review — the package is mid-cycle (detailer rework), the
+  // same bucket it occupied when R&R still derived to IFA.
   const inReview = setPackages.filter((pkg) =>
-    ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets))
+    ["IFA", "OFA", "BFA", "R&R", "OFS", "IFC"].includes(effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets))
   ).length;
   const overdueDrawings = setPackages.filter((pkg) =>
     pkg.sheets.some((d) => dueInfo(getDrawingDueDate(d), isClosedDrawing(d)).overdue)
@@ -540,8 +542,8 @@ export function buildTriage(
       // alongside `status` (additive) so the existing pipeline/row display is
       // unchanged; surfaced as its own chip + drives the drafting control.
       const detailingState = effectiveDetailingState(pkg.parent, pkg.submittals, pkg.sheets);
-      // R&R loops back to the IFA stage for counts; surface it as its own flag so
-      // the board doesn't read an R&R rejection as a fresh IFA (matches register).
+      // R&R is a first-class derived stage (2026-07-25); the flag is kept for
+      // surfaces that badge R&R alongside a non-stage display (e.g. status rows).
       const isRR = isPackageRR(pkg.submittals);
       // CLOSED is satisfied by ANY terminal signal — not only a closed
       // submittal status. Previous logic prioritised `latestSubmittal` and
@@ -686,6 +688,7 @@ export function getStatusColor(status: string): string {
 
 // Colors for the coalesced OPERATIONAL state vocabulary (drafting + release
 // states; the submittal stages IFA..Released reuse the canonical STAGE_MAP).
+// semantic detailing/release workflow hues — allowlisted for operational-state identity.
 const OPERATIONAL_STATE_COLORS: Record<string, string> = {
   "Not Started":          "#64748b", // slate
   "In Detailing":         "#64748b", // slate

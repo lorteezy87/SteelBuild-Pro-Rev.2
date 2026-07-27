@@ -115,7 +115,7 @@ export default function AdvanceStageDialog({
             style={{
               padding: "10px 14px",
               background: "var(--accent)",
-              color: "#fff",
+              color: "var(--on-accent)",
               border: "none",
               borderRadius: 4,
               fontFamily: "var(--font-mono)",

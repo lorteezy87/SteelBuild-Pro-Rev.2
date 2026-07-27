@@ -3,6 +3,7 @@ import { entities, integrations } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Upload, Camera, Trash2, Check, AlertCircle } from "lucide-react";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 
 const CATEGORIES = ["Progress", "Safety", "Issue", "Delivery", "Punchlist", "Other"];
 const MAX_DIMENSION = 2400;
@@ -240,8 +241,7 @@ export default function PhotoUploadModal({ projectId, onClose }) {
         try {
           const compressed = await compressImage(item.file);
           const fileData = await integrations.Core.UploadFile({ file: compressed, workflow: "photo" });
-          await entities.Photo.create({
-            project_id: globalProjectId,
+          await entities.Photo.create(withProjectId({
             category: item.category,
             title: item.title,
             description: item.description,
@@ -249,11 +249,12 @@ export default function PhotoUploadModal({ projectId, onClose }) {
             taken_date: item.taken_date,
             file_url: fileData.file_url,
             file_name: compressed.name,
-          });
+          }, globalProjectId));
           updateItem(item.id, { status: "done" });
         } catch (err) {
-          errors.push({ name: item.file.name, error: err.message });
-          updateItem(item.id, { status: "error", error: err.message });
+          const msg = toUserErrorMessage(err);
+          errors.push({ name: item.file.name, error: msg });
+          updateItem(item.id, { status: "error", error: msg });
         }
         done++;
         setUploadProgress({ done, total: items.length });
@@ -273,7 +274,7 @@ export default function PhotoUploadModal({ projectId, onClose }) {
         toast.warning(`Uploaded ${items.length - errors.length} of ${items.length}; ${errors.length} failed`);
       }
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, "Upload failed")),
   });
 
   const isUploading = uploadMutation.isPending;

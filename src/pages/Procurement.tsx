@@ -37,11 +37,14 @@ import type { RowWithAliases } from '@/api/supabaseClient';
 import type { Json } from '@/types/supabase';
 import { useProjectId } from '@/hooks/useProjectId';
 import { useAutoOpenCreate } from '@/hooks/useAutoOpenCreate';
+import { toUserErrorMessage, withProjectId } from '@/lib/mutations/standardMutation';
 import { exportToCSV } from '@/lib/csv';
 import { PROCUREMENT_CATEGORIES, ALL_STATUSES, addWeeks } from './procurement/format';
 import ProcurementControlCenter from './procurement/ProcurementControlCenter';
 import { ProcurementFormModal } from './procurement/components';
 import DeleteDialog from '@/components/shared/DeleteDialog';
+import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
+import { Button } from '@/components/design-system';
 import type { ProcurementItem } from './procurement/procurementControlCenter.derive';
 
 
@@ -70,7 +73,13 @@ export default function Procurement() {
     setShowForm(true);
   }, { enabled: !!projectId });
 
-  const { data: rawItems = [] } = useQuery({
+  const {
+    data: rawItems = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['procurement', projectId],
     queryFn: () => projectId
       ? entities.Delivery.filter({ project_id: projectId })
@@ -105,11 +114,9 @@ export default function Procurement() {
   );
 
   const createMut = useMutation({
-    mutationFn: (data: any) => entities.Delivery.create({
-      ...data,
-      delivery_type: 'PROCUREMENT',
-      project_id: projectId,
-    }),
+    mutationFn: (data: any) => entities.Delivery.create(
+      withProjectId({ ...data, delivery_type: 'PROCUREMENT' }, projectId),
+    ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement'] });
       qc.invalidateQueries({ queryKey: ['deliveries-all'] });
@@ -117,7 +124,7 @@ export default function Procurement() {
       setEditing(null);
       toast.success('Item added');
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, 'Failed to add item')),
   });
 
   const updateMut = useMutation({
@@ -129,7 +136,7 @@ export default function Procurement() {
       setEditing(null);
       toast.success('Item updated');
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(toUserErrorMessage(err, 'Failed to update item')),
   });
 
   // Soft-delete mirrors the Budget Hours pattern. Hard delete was
@@ -150,6 +157,7 @@ export default function Procurement() {
       setDeleteTarget(null);
       toast.success('Item removed');
     },
+    onError: (err) => toast.error(toUserErrorMessage(err, 'Failed to remove item')),
   });
 
   const today = useMemo(() => new Date(), []);
@@ -293,7 +301,37 @@ export default function Procurement() {
     );
   }
 
-  // Canonical Procurement control center. Page-owned mutations and modals remain here.
+  // Gate fetch states at the page shell — ProcurementControlCenter has no loading props
+  // (same pattern as ActionItems / RFIs / ChangeOrders / Backcharges).
+  if (isLoading) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sb-dashboard-reference-page" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '48px 24px',
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', margin: 0 }}>
+          Couldn’t load procurement items
+        </p>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', margin: 0, textAlign: 'center', maxWidth: 320 }}>
+          {toUserErrorMessage(error, 'Something went wrong. Try again.')}
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+      </div>
+    );
+  }
+
   // Canonical Procurement control center. Page-owned mutations and modals remain below.
     return (
       <>

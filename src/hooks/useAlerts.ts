@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { entities, functions } from "@/api/supabaseClient";
+import { entities } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
@@ -7,6 +7,7 @@ import { useProjectId } from "@/hooks/useProjectId";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { batchProcess } from "@/utils/batchProcess";
 import { toast } from "sonner";
+import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 // Loose Alert shape — the entity client is still untyped (Phase 3). Once the entity
 // boundary is typed, this will be replaced with the generated Database row type.
@@ -25,7 +26,13 @@ export function useAlerts() {
   const projectId = useProjectId();
   const [generating, setGenerating] = useState(false);
 
-  const { data: alerts = [], isLoading, refetch } = useQuery<Alert[]>({
+  const {
+    data: alerts = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<Alert[]>({
     queryKey: ["alerts", projectId],
     queryFn: () =>
       projectId
@@ -92,12 +99,14 @@ export function useAlerts() {
   const generateAlerts = async () => {
     setGenerating(true);
     try {
-      await functions.invoke("generateAlerts", {});
+      // Cross-module generate-alerts Edge Function is not deployed. Refresh the
+      // existing alert feed instead of pretending a scan succeeded.
       await refetch();
-      toast.success("Alerts refreshed");
+      toast.message(
+        "Alerts refreshed. Overdue RFIs and deliveries create alerts from their modules; a cross-module scanner is not deployed.",
+      );
     } catch (err: unknown) {
-      const msg = (err as { message?: string } | undefined)?.message || "Unknown error";
-      toast.error("Failed to generate alerts: " + msg);
+      toast.error(`Failed to refresh alerts: ${toUserErrorMessage(err, "Unknown error")}`);
     } finally {
       setGenerating(false);
     }
@@ -108,6 +117,8 @@ export function useAlerts() {
   return {
     alerts,
     isLoading,
+    isError,
+    error,
     refetch,
     generating,
     unreadCount,

@@ -6,7 +6,7 @@
  *  - Desktop sidebar navigation
  *  - Mobile hamburger drawer
  *  - Content area with error banner
- *  - Global search modal, quick-add FAB, toast notifications
+ *  - Global search modal and toast notifications
  *
  * All data definitions live in src/config/moduleRegistry.js.
  * All sub-components live in src/components/nav/.
@@ -43,17 +43,6 @@ const GlobalSearchModal = lazyWithRetry(() => import("./components/search/Global
 const MobileDrawer = lazyWithRetry(() => import("./components/nav/MobileDrawer"));
 const Toaster = lazyWithRetry(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
 const SidebarNav = lazyWithRetry(() => import("./components/nav/SidebarNav"));
-// QuickAddFAB intentionally not imported — the floating "+" shortcut at
-// bottom-right was hidden per user request. Component file is preserved
-// in src/components/shared/QuickAddFAB.jsx; uncomment this import + its
-// render below to re-enable.
-// import QuickAddFAB from "./components/shared/QuickAddFAB";
-// AiAssistantLauncher intentionally not imported — the floating "Ask AI"
-// launcher and its Cmd/Ctrl+K shortcut were hidden site-wide because the
-// schedule-assistant edge function isn't reliably returning answers yet.
-// The component, drawer, hook, and edge-function call site are all still
-// in the repo — uncomment this import + its render below to re-enable.
-// import AiAssistantLauncher from "./components/ai-assistant/AiAssistantLauncher";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 
 // Context
@@ -312,7 +301,7 @@ export default function Layout({ children, currentPageName }) {
 
           {/* RIGHT: Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            {/* Search trigger \u2014 see TopBarSearchButton for context. */}
+            {/* Search trigger — see TopBarSearchButton for context. */}
             <TopBarSearchButton onClick={() => setSearchOpen(true)} compact={isMobile} />
 
             {/* Density toggle + Modules grid — desktop only */}
@@ -406,13 +395,6 @@ export default function Layout({ children, currentPageName }) {
             <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
           </Suspense>
         )}
-        {/* QuickAddFAB removed per user request — the bottom-right "+"
-            shortcut was hidden site-wide. Re-enable by restoring the
-            import at the top of this file and the <QuickAddFAB /> render
-            here. The component file itself is preserved unchanged. */}
-        {/* <AiAssistantLauncher /> — hidden until the schedule-assistant
-            edge function returns reliable answers. Underlying code kept
-            in src/components/ai-assistant/* for re-enable. */}
         <Suspense fallback={null}>
           <Toaster
             theme={isDarkTheme ? "dark" : "light"}
@@ -421,9 +403,9 @@ export default function Layout({ children, currentPageName }) {
             position="bottom-right"
             toastOptions={{
               style: {
-                background: "var(--bg-elevated, var(--sbd-bg-elevated, rgba(15,22,38,0.95)))",
-                border: "1px solid var(--border-strong, var(--sbd-border, rgba(255,255,255,0.08)))",
-                color: "var(--text-primary, var(--sbd-text, rgba(255,255,255,0.95)))",
+                background: "var(--bg-elevated, var(--sbd-bg-elevated))",
+                border: "1px solid var(--border-strong, var(--sbd-border))",
+                color: "var(--text-primary, var(--sbd-text))",
                 fontFamily: "'Inter', sans-serif",
                 fontSize: 13, borderRadius: 10,
                 boxShadow: "var(--shadow-lg)",

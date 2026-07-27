@@ -10,10 +10,15 @@ import { Pencil, Trash2, CheckSquare, Square } from "lucide-react";
 import { formatCurrency, formatDate } from "@/components/shared/formatters";
 import { thStyle, PAYMENT_STATUS_COLOR } from "./constants";
 import { PaymentCircle } from "./charts";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { Button } from "@/components/design-system";
 
 export default function ExpenseTable({
   filtered,
   isLoading,
+  isError = false,
+  errorMessage,
+  onRetry,
   selected,
   onToggleSelect,
   onToggleAll,
@@ -22,6 +27,35 @@ export default function ExpenseTable({
   onOpen,
 }) {
   const [hoveredRow, setHoveredRow] = useState(null);
+
+  if (isLoading) {
+    return (
+      <div className="sbd-card" style={{ padding: 16 }}>
+        <LoadingSkeleton variant="table" rows={6} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sbd-card" style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px",
+        gap: 12,
+      }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load expenses
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {errorMessage || "Something went wrong. Try again."}
+        </p>
+        {onRetry ? <Button variant="outline" onClick={onRetry}>Retry</Button> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
@@ -47,9 +81,7 @@ export default function ExpenseTable({
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr><td colSpan={11} style={{ padding: 24, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>Loading...</td></tr>
-            ) : filtered.length === 0 ? (
+            {filtered.length === 0 ? (
               <tr><td colSpan={11} style={{ padding: 32, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>No expenses found</td></tr>
             ) : (
               filtered.map((e, idx) => {

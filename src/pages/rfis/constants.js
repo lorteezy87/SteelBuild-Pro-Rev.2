@@ -9,11 +9,11 @@
 export const mono = { fontFamily: "var(--font-mono)" };
 
 export const BIC_COLORS = {
-  Contractor: { bg: "rgba(0,229,255,0.15)",   text: "var(--accent)" },
-  GC:         { bg: "rgba(68,226,205,0.18)",  text: "var(--secondary)" },
-  Engineer:   { bg: "rgba(255,185,95,0.15)",  text: "var(--status-warning)" },
-  Architect:  { bg: "rgba(168,240,203,0.18)", text: "var(--status-success)" },
-  Owner:      { bg: "rgba(255,180,171,0.18)", text: "var(--status-error)" },
+  Contractor: { bg: "var(--info-muted)",   text: "var(--accent)" },
+  GC:         { bg: "var(--accent-muted)",  text: "var(--secondary)" },
+  Engineer:   { bg: "var(--warning-muted)",  text: "var(--status-warning)" },
+  Architect:  { bg: "var(--success-muted)", text: "var(--status-success)" },
+  Owner:      { bg: "var(--danger-muted)", text: "var(--status-error)" },
 };
 
 export const PRIORITY_CFG = {
@@ -37,17 +37,17 @@ export const STATUS_CFG = {
 
 export const statusColumns = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"];
 
-// RFI numbers arrive from several paths: app-created values use "RFI #001",
+// RFI numbers arrive from several paths: app-created values use "RFI 001",
 // older imports may store "001", and vendor logs often use "RFI-001".
 // Sorting should treat all of those as the same numeric sequence.
 export const RFI_NUMBER_PATTERN = /(\d+)/;
 
 export const KPI_ACCENT_MAP = {
-  "var(--status-success)": "rgba(34,197,94,0.10)",
-  "var(--status-warning)": "rgba(245,158,11,0.10)",
-  "var(--status-error)":   "rgba(239,68,68,0.10)",
-  "var(--status-info)":    "rgba(96,165,250,0.10)",
-  "var(--accent)":         "rgba(200,155,32,0.08)",
+  "var(--status-success)": "var(--success-muted)",
+  "var(--status-warning)": "var(--warning-muted)",
+  "var(--status-error)":   "var(--danger-muted)",
+  "var(--status-info)":    "var(--info-muted)",
+  "var(--accent)":         "var(--accent-muted)",
 };
 
 export const BIC_PARTIES = ["Contractor", "GC", "Engineer", "Architect", "Owner"];

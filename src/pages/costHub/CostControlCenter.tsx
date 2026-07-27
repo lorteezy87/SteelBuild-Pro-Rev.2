@@ -45,6 +45,7 @@ import {
   costStatusTone,
 } from "./costControlCenter.derive";
 import CostChartRow from "./CostChartRow";
+import { persistCostCode } from "./costCodeSave";
 
 // CostCodeFormModal is untyped JS; its default-`[]` props infer as never[]. Cast so it accepts our data.
 const CostCodeForm = CostCodeFormModal as unknown as React.ComponentType<Record<string, unknown>>;
@@ -226,6 +227,27 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
       key: "status",
       header: "Status",
       render: (r) => <Pill tone={costStatusTone(r)}>{r.is_over ? "Over Budget" : r.used_pct > 85 ? "Watch" : "On Track"}</Pill>,
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (r) => can("delete", "cost_code") ? (
+        <button
+          type="button"
+          className="cmd-btn cmd-btn--secondary"
+          style={{ fontSize: 10, padding: "4px 8px" }}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (!window.confirm(`Archive cost code ${r.cost_code_number}? Historical expenses remain; the code is hidden from active budgets.`)) {
+              return;
+            }
+            costCodeCrud.delete.mutate(r.id);
+          }}
+        >
+          Archive
+        </button>
+      ) : null,
     },
   ];
 
@@ -430,11 +452,13 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
         projects={project ? [project] : []}
         existingCodes={costCodes}
         onSave={async (data: Record<string, unknown>) => {
-          if (editingCode) {
-            await costCodeCrud.update.mutateAsync({ id: editingCode.id as string, ...data });
-          } else {
-            await costCodeCrud.create.mutateAsync({ ...data, project_id: projectId });
-          }
+          await persistCostCode({
+            editingId: editingCode?.id as string | null,
+            data,
+            projectId,
+            createMutation: costCodeCrud.create,
+            updateMutation: costCodeCrud.update,
+          });
           setModalOpen(false);
           setEditingCode(null);
         }}

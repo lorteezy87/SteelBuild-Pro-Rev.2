@@ -5,6 +5,7 @@ import CanonicalFabReleasePanel from "@/components/pieceControl/CanonicalFabRele
 import { PieceProductionControl } from "@/components/pieceControl/PieceProductionControl";
 import { PieceLogisticsControl } from "@/components/pieceControl/PieceLogisticsControl";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import "@/styles/piece-control-command.css";
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -50,12 +51,16 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
 
   return (
     <>
-      <div
+      <button
+        type="button"
+        aria-label="Close work package details"
         onClick={onClose}
         style={{
           position: "fixed",
           inset: 0,
           background: "rgba(0,0,0,0.35)",
+          border: 0,
+          padding: 0,
           zIndex: 999,
         }}
       />
@@ -150,9 +155,12 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-          {tab === "overview" && <OverviewTab wp={wp} phaseColor={phaseColor} statusColor={statusColorVal} percent={percent} />}
+          {tab === "overview" && <OverviewTab wp={wp} phaseColor={phaseColor} percent={percent} />}
           {tab === "piece control" && (
-            <>
+            <div
+              className="work-package-piece-control-drawer"
+              data-skin="command"
+            >
               <PieceRelationshipManager
                 projectId={wp.project_id}
                 focusedWorkPackageId={wp.id}
@@ -182,10 +190,10 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
                 pieceControlMode={
                   activeProject?.id === wp.project_id
                     ? String(activeProject?.piece_control_mode ?? "off")
-                    : "off"
+                  : "off"
                 }
               />
-            </>
+            </div>
           )}
           {tab === "drawings" && <DrawingsTab wp={wp} drawingMap={drawingMap} />}
           {tab === "hours" && <HoursTab wp={wp} />}
@@ -196,7 +204,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
   );
 }
 
-function OverviewTab({ wp, phaseColor, statusColor, percent }) {
+function OverviewTab({ wp, phaseColor, percent }) {
   const formatDate = (d) =>
     d
       ? formatLocalDate(`${d}T00:00:00Z`, "en-US", { month: "short", day: "numeric", year: "numeric" })

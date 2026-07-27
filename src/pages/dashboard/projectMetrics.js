@@ -515,7 +515,7 @@ export function rfiStatusRollup(rfis = []) {
  * source of truth; drawings columns (stage / set_approval_status)
  * are deprecated and only used for display.
  *
- * Maps each non-deleted submittal to one of the 6 display stages
+ * Maps each non-deleted submittal to one of the 7 display stages
  * via (status, ball_in_court, approved_date). One submittal = one
  * bucket count, regardless of how many drawing_set_ids it links.
  *
@@ -524,12 +524,12 @@ export function rfiStatusRollup(rfis = []) {
  * and not part of the active pipeline).
  */
 export function submittalPipelineRollupFromSubmittals(submittals = []) {
-  // Canonical 7-stage flow (corrected May 2026). Mapping is kept in
-  // sync with src/lib/submittalStageMapping.js — submittalStatusToStage
-  // is the single source of truth; this function reproduces it inline
-  // to avoid an import cycle (projectMetrics.js is consumed at module
-  // init by dashboard rollups).
-  const stages = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
+  // Canonical workflow flow (R&R first-class since 2026-07-25). Mapping
+  // is kept in sync with src/lib/submittalStageMapping.ts —
+  // submittalStatusToStage is the single source of truth; this function
+  // reproduces it inline to avoid an import cycle (projectMetrics.js is
+  // consumed at module init by dashboard rollups).
+  const stages = ["IFA", "OFA", "BFA", "R&R", "OFS", "IFC", "Released"];
   const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
   for (const r of submittals) {
     if (!r || r.is_deleted) continue;
@@ -547,7 +547,7 @@ export function submittalPipelineRollupFromSubmittals(submittals = []) {
       else if (isDownstreamClass) counts["IFC"]++;
       else                        counts["BFA"]++; // unknown bic
     }
-    else if (status === "Revise and Resubmit" || status === "Rejected") counts["IFA"]++; // R&R loop
+    else if (status === "Revise and Resubmit" || status === "Rejected") counts["R&R"]++; // first-class R&R stage
     else if (status === "Submitted" || status === "Under Review") {
       if (isDetailerClass) counts["IFA"]++;
       else                 counts["OFA"]++;

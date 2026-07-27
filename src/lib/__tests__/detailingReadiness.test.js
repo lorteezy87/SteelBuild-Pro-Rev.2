@@ -101,8 +101,8 @@ describe("computeSequenceReadiness", () => {
     expect(s1.erectionReadyCount).toBe(1);
     expect(s1.atRiskCount).toBe(1);
 
-    expect(rows[1].detailingPct).toBe(82);   // "Released" = index 9 of 11
-    expect(rows[2].detailingPct).toBe(36);   // "IFA" = index 4 of 11
+    expect(rows[1].detailingPct).toBe(83);   // "Released" = index 10 of 12 (R&R spliced after BFA, 2026-07-25)
+    expect(rows[2].detailingPct).toBe(33);   // "IFA" = index 4 of 12
   });
 
   it("returns [] for no entries", () => {

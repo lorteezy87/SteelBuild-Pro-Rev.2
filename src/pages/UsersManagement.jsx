@@ -227,7 +227,7 @@ function UsersManagementContent() {
                             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
                             background: getUserAvatarColor(user),
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            color: "#fff", fontSize: 11, fontWeight: 700,
+                            color: "var(--on-accent)", fontSize: 11, fontWeight: 700,
                             lineHeight: 1, userSelect: "none",
                           }}
                         >

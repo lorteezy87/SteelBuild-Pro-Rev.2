@@ -26,7 +26,7 @@ export default function RfiBulkEditModal({ open, count, onCancel, onSubmit }) {
   const [dateRequired, setDateRequired] = useState("");
   const [clearDateRequired, setClearDateRequired] = useState(false);
 
-  const apply = () => {
+  const apply = async () => {
     const data = {};
     if (priority) data.priority = priority;
     if (status) data.status = status;
@@ -37,7 +37,11 @@ export default function RfiBulkEditModal({ open, count, onCancel, onSubmit }) {
       onCancel();
       return;
     }
-    onSubmit(data);
+    try {
+      await Promise.resolve(onSubmit(data));
+    } catch {
+      // Keep open; parent mutation toasts onError.
+    }
   };
 
   const reset = () => {
@@ -53,7 +57,7 @@ export default function RfiBulkEditModal({ open, count, onCancel, onSubmit }) {
       aria-modal="true"
       aria-label={`Bulk edit ${count} RFIs`}
       style={{
-        position: "fixed", inset: 0, background: "rgba(2,6,23,0.55)", backdropFilter: "blur(4px)",
+        position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 55%, transparent)", backdropFilter: "blur(4px)",
         zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
       }}
       onClick={reset}
@@ -137,7 +141,7 @@ export default function RfiBulkEditModal({ open, count, onCancel, onSubmit }) {
           <button
             onClick={apply}
             style={{
-              padding: "8px 14px", background: "var(--accent)", color: "#fff",
+              padding: "8px 14px", background: "var(--accent)", color: "var(--on-accent)",
               border: "none", borderRadius: 4, cursor: "pointer",
               fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
             }}

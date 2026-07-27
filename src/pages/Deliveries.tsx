@@ -20,6 +20,7 @@ import {
   removeRecordFromCaches,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { withProjectId } from "@/lib/mutations/standardMutation";
 import { usePermissions } from "@/services/permissions";
 import DeliveryFormModalRaw from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModalRaw from "@/components/deliveries/ShippingTicketImportModal";
@@ -293,15 +294,14 @@ export default function Deliveries() {
           const daysLate = delivery._signals.flags.find((flag: { key?: string; label?: string }) => flag.key === "overdue")?.label || "late";
           const alertTitle = `Delivery from ${delivery.vendor || "Unknown"} is ${daysLate}`;
           if (existingTitles.has(alertTitle)) continue;
-          await entities.Alert.create({
+          await entities.Alert.create(withProjectId({
             alert_type: "Delivery_Overdue",
             severity: delivery._signals.risk === "high" ? "High" : "Medium",
             title: alertTitle,
             description: `${desc} from ${delivery.vendor || "Unknown"} - PO: ${delivery.po_number || "TBD"} - Scheduled: ${delivery.scheduled_date || "TBD"} - Status: ${delivery.status || "Scheduled"} - Project: ${projectName}`,
             related_record_id: delivery.id,
-            project_id: delivery.project_id,
             project_name: projectName,
-          });
+          }, delivery.project_id));
           alertsCreatedRef.current.add(delivery.id);
         }
       } catch (error) {

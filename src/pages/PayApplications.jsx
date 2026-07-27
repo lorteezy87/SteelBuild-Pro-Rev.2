@@ -27,6 +27,9 @@ import { computeG702, lineFigures } from "@/lib/payapp/g702";
 import { PAY_APP_STATUSES, PAY_APP_STATUS_LABELS } from "@/lib/payapp/types";
 import { buildPayAppPdf, suggestPayAppFilename } from "@/lib/payapp/payAppPdf";
 import PayApplicationsControlCenter from "./payApplications/PayApplicationsControlCenter";
+import { assertProjectId, toUserErrorMessage } from "@/lib/mutations/standardMutation";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { Button } from "@/components/design-system";
 
 const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
 const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: 16 };
@@ -69,7 +72,13 @@ export default function PayApplications() {
   const [ccSearch, setCcSearch] = useState("");
   const [ccStatusFilter, setCcStatusFilter] = useState("all");
 
-  const { data: payApps = [] } = useQuery({ queryKey: ["pay_applications", projectId], queryFn: () => listPayApplications(projectId), enabled: !!projectId });
+  const {
+    data: payApps = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({ queryKey: ["pay_applications", projectId], queryFn: () => listPayApplications(projectId), enabled: !!projectId });
   const { data: sovItems = [] } = useQuery({
     queryKey: ["sov_items_payapp", projectId],
     queryFn: async () => {
@@ -106,9 +115,15 @@ export default function PayApplications() {
   };
 
   const createMut = useMutation({
-    mutationFn: (input) => createPayApplication({ projectId, ...input }, { sovItems, contract }),
+    mutationFn: (input) => {
+      assertProjectId(projectId);
+      return createPayApplication({ projectId, ...input }, { sovItems, contract });
+    },
     onSuccess: (app) => { logActivity("pay_application", "created", app, { projectId }); refresh(); setNewOpen(false); setSelectedId(app.id); toast.success(`Pay Application #${app.application_number} created`); },
-    onError: (e) => toast.error(e?.message?.includes("row-level security") ? "Only PM+ can create pay applications." : `Create failed: ${e?.message}`),
+    onError: (e) => {
+      const msg = toUserErrorMessage(e);
+      toast.error(msg.includes("row-level security") ? "Only PM+ can create pay applications." : `Create failed: ${msg}`);
+    },
   });
   const lineMut = useMutation({
     mutationFn: ({ line, edit }) => updateLine(line, edit, num(selectedApp?.retainage_percent)),
@@ -120,19 +135,57 @@ export default function PayApplications() {
       logActivity("pay_application", "updated", { id: selectedApp?.id, project_id: projectId, application_number: selectedApp?.application_number }, { projectId, description: desc });
       refresh();
     },
-    onError: (e) => toast.error(`Update failed: ${e?.message}`),
+    onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e)}`),
   });
-  const statusMut = useMutation({ mutationFn: ({ id, status }) => updatePayApplication(id, { status }), onSuccess: (data, { status }) => { logActivity("pay_application", "status_changed", data, { projectId, description: `→ ${status}` }); refresh(); toast.success("Updated"); }, onError: (e) => toast.error(`Update failed: ${e?.message}`) });
-  const delMut = useMutation({ mutationFn: (id) => softDeletePayApplication(id), onSuccess: (_r, id) => { logActivity("pay_application", "deleted", { id, project_id: projectId }, { projectId }); refresh(); setSelectedId(null); toast.success("Deleted"); }, onError: (e) => toast.error(`Delete failed: ${e?.message}`) });
+  const statusMut = useMutation({
+    mutationFn: ({ id, status }) => updatePayApplication(id, { status }),
+    onSuccess: (data, { status }) => { logActivity("pay_application", "status_changed", data, { projectId, description: `→ ${status}` }); refresh(); toast.success("Updated"); },
+    onError: (e) => toast.error(`Update failed: ${toUserErrorMessage(e)}`),
+  });
+  const delMut = useMutation({
+    mutationFn: (id) => softDeletePayApplication(id),
+    onSuccess: (_r, id) => { logActivity("pay_application", "deleted", { id, project_id: projectId }, { projectId }); refresh(); setSelectedId(null); toast.success("Deleted"); },
+    onError: (e) => toast.error(`Delete failed: ${toUserErrorMessage(e)}`),
+  });
 
   const exportPdf = () => {
     try {
       buildPayAppPdf({ app: selectedApp, lines, project: activeProject }).save(`${suggestPayAppFilename(selectedApp, activeProject)}.pdf`);
       toast.success("Pay application PDF exported");
-    } catch (e) { toast.error(`Export failed: ${e?.message}`); }
+    } catch (e) { toast.error(`Export failed: ${toUserErrorMessage(e)}`); }
   };
 
   if (!projectId) return <div style={{ ...mono, padding: 24, color: "var(--text-muted)" }}>Select a project to manage pay applications.</div>;
+
+  // Gate fetch states at the page shell — PayApplicationsControlCenter has no loading props.
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 24px",
+        gap: 16,
+      }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+          Couldn’t load pay applications
+        </p>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "center", maxWidth: 320 }}>
+          {toUserErrorMessage(error, "Something went wrong. Try again.")}
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+      </div>
+    );
+  }
 
   // G702 summary rows used by the canonical control-center editor.
   const summary = g702 && [

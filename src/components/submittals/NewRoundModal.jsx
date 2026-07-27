@@ -133,8 +133,8 @@ export default function NewRoundModal({
           <div style={{
             marginBottom: 10,
             padding: "8px 10px",
-            background: "rgba(249,115,22,0.10)",
-            border: "1px solid rgba(249,115,22,0.45)",
+            background: "var(--status-review-muted)",
+            border: "1px solid var(--status-review-border)",
             borderRadius: 6,
           }}>
             <div style={{
@@ -143,7 +143,7 @@ export default function NewRoundModal({
               fontWeight: 800,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "#F97316",
+              color: "var(--status-review)",
               marginBottom: 6,
             }}>
               {openItems.length} comment{openItems.length === 1 ? "" : "s"} to address
@@ -168,8 +168,8 @@ export default function NewRoundModal({
                     fontWeight: 700,
                     padding: "1px 5px",
                     borderRadius: 3,
-                    color: "#F97316",
-                    background: "rgba(249,115,22,0.16)",
+                    color: "var(--status-review)",
+                    background: "var(--status-review-muted)",
                     whiteSpace: "nowrap",
                   }}>
                     {it.response_status}
@@ -354,7 +354,7 @@ export default function NewRoundModal({
             style={{
               padding: "8px 14px",
               background: "var(--accent)",
-              color: "#fff",
+              color: "var(--on-accent)",
               border: "none",
               borderRadius: 4,
               fontFamily: "var(--font-mono)",

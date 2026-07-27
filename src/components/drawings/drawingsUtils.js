@@ -5,7 +5,7 @@
  * overdue detection, CSV export, and filter/stat computation.
  */
 
-import { IN_REVIEW_STAGES, STAGE_ORDER, STAGES } from "./drawingsConfig";
+import { IN_REVIEW_STAGES, STAGE_ORDER, WORKFLOW_STAGES } from "./drawingsConfig";
 import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
 import { compareDrawingSetPackages, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
@@ -14,8 +14,9 @@ import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/project
  * Decide whether a stage transition is legal.
  *
  * The corrected submittal state machine (migration 077) is linear:
- *   Not Started → IFA → OFA → BFA → OFS → IFC → Released
- * with R&R outcomes that loop any post-prep stage back to IFA.
+ *   Not Started → IFA → OFA → BFA → R&R → OFS → IFC → Released
+ * R&R is a first-class *derived* stage (submittal status); sheet writes
+ * still use the 7-value drawings.stage enum (never store "R&R").
  * We allow:
  *   • Moving forward any number of steps (fast-track from IFA straight
  *     to Released is legitimate for small revisions)
@@ -48,23 +49,35 @@ export function validateStageTransition(from, to) {
 
 /**
  * Classify a direct sheet-stage write before it reaches the entity client.
- * Linked sets belong to the Submittal workflow; only rows without a linked
- * submittal may use the legacy sheet-stage recovery path.
+ *
+ * Open linked submittals own the workflow — block Drawings-page stage writes
+ * and send the user to Submittals. Once every linked submittal is terminal
+ * (open === 0), allow sheet-stage recovery so operators can sync the legacy
+ * `drawings.stage` column after the workflow already moved elsewhere.
  */
 export function classifyDrawingStageMutation(drawing, targetStage, submittalsBySetId = {}) {
   const setId = drawing?.drawing_set_id || null;
-  const linked = !!setId && Number(submittalsBySetId[setId]?.total || 0) > 0;
-  if (linked) {
+  const link = setId ? submittalsBySetId[setId] : null;
+  const openLinked = !!setId && Number(link?.open || 0) > 0;
+  if (openLinked) {
     return {
       kind: "submittal",
       allowed: false,
-      reason: `Set has a linked submittal (${submittalsBySetId[setId]?.latestStatus || "workflow"}).`,
+      setId,
+      latestStatus: link?.latestStatus || null,
+      latestId: link?.latestId || null,
+      open: Number(link?.open || 0),
+      reason: `Set has ${link.open} open linked submittal(s) (${link.latestStatus || "workflow"}).`,
     };
   }
+  const closedLinked = !!setId && Number(link?.total || 0) > 0;
   return {
-    kind: "legacy-recovery",
+    kind: closedLinked ? "closed-set-sync" : "legacy-recovery",
     allowed: true,
-    reason: `Sheet-stage recovery to ${targetStage} for a set without a linked submittal.`,
+    setId,
+    reason: closedLinked
+      ? `Sheet-stage sync to ${targetStage} after linked submittal(s) closed.`
+      : `Sheet-stage recovery to ${targetStage} for a set without a linked submittal.`,
   };
 }
 
@@ -709,14 +722,18 @@ export function computeStagePipeline({ submittals, drawingSetRecords, drawings, 
     (ds) => ds?.id && !packagesWithSubmittal.has(ds.id) &&
       derivedSetStage([], (drawings || []).filter((d) => d.drawing_set_id === ds.id)) === "Not Started"
   ).length;
-  const counts = STAGES.reduce((acc, s) => {
+  // WORKFLOW_STAGES (not STAGES): the pipeline shows submittal-DERIVED
+  // stages, so the first-class R&R bucket (2026-07-25) gets its own
+  // chevron instead of silently dropping R&R rows. Display only — the
+  // sheet stage filter still operates over the 7-value sheet enum.
+  const counts = WORKFLOW_STAGES.reduce((acc, s) => {
     acc[s.key] = s.key === "Not Started"
       ? notStartedCount
       : (rollup.counts[s.key] || 0);
     return acc;
   }, {});
   // Pipeline stages (use only the forward-flow stages; Released is the terminal)
-  const pipeStages = STAGES.map((s) => ({
+  const pipeStages = WORKFLOW_STAGES.map((s) => ({
     id: s.key,
     label: s.label,
     color: s.color,
@@ -726,13 +743,13 @@ export function computeStagePipeline({ submittals, drawingSetRecords, drawings, 
   // non-empty non-terminal stage (the bottleneck).
   let activeIdx = 0;
   const filteredActive = stageFilter !== "ALL" && !stageFilter.startsWith("_")
-    ? STAGES.findIndex((s) => s.key === stageFilter)
+    ? WORKFLOW_STAGES.findIndex((s) => s.key === stageFilter)
     : -1;
   if (filteredActive >= 0) {
     activeIdx = filteredActive;
   } else {
-    for (let i = STAGES.length - 2; i >= 1; i--) {
-      if (counts[STAGES[i].key] > 0) { activeIdx = i; break; }
+    for (let i = WORKFLOW_STAGES.length - 2; i >= 1; i--) {
+      if (counts[WORKFLOW_STAGES[i].key] > 0) { activeIdx = i; break; }
     }
   }
   return { pipeStages, activeIdx };

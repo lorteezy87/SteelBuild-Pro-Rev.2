@@ -13,7 +13,10 @@ import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { listPieceProduction } from "@/lib/production/repository";
-import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
+import {
+  fetchAllModelElements,
+  MODEL_ELEMENT_DRAWING_LINK_COLUMNS,
+} from "@/lib/ifc/fetchAllModelElements";
 import { buildPieceDrawingMap } from "@/lib/production/pieceDrawingLinks";
 import { normalizePieceMark } from "@/services/modelElementStatus";
 import ProductionStatusImportModal from "@/components/production/ProductionStatusImportModal";
@@ -67,7 +70,10 @@ export default function ProductionStatus() {
   // lives in model_elements and is reduced to a project-scoped lookup map.
   const { data: modelElements = [] } = useQuery({
     queryKey: ["production-model-elements", projectId],
-    queryFn: () => fetchAllModelElements(projectId),
+    // Slim columns + bounded concurrency — full SELECT * pages were timing out
+    // on ~27k-row projects (Sentry JAVASCRIPT-REACT-X).
+    queryFn: () =>
+      fetchAllModelElements(projectId, { columns: MODEL_ELEMENT_DRAWING_LINK_COLUMNS }),
     enabled: !!projectId,
     staleTime: 5 * 60_000,
   });
