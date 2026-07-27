@@ -14,7 +14,7 @@ export function presentPieceControlError(
 ): string {
   const message = errorMessage(error);
   if (!message) return fallback;
-  if (/^PGRST\d+/i.test(message)) return fallback;
+  if (/^PGRST\d+$/i.test(message)) return fallback;
 
   if (/CANONICAL_RELEASE_NO_SCOPE/i.test(message)) {
     return "Fabrication release requires active pieces assigned to this work package.";
@@ -51,6 +51,32 @@ export function presentPieceControlError(
   }
   if (/Not authorized|permission denied|42501/i.test(message)) {
     return "You do not have permission to complete this Piece Register action.";
+  }
+
+  // Schema / migration lag — keep the table tag so operators can act.
+  if (/does not exist|schema cache|Could not find the table|column .* does not exist/i.test(message)) {
+    const tableMatch = message.match(/\[([a-z0-9_]+)\]/i);
+    const table = tableMatch?.[1];
+    if (table === "pieces" || table === "work_packages") {
+      return table === "pieces"
+        ? "Piece data is unavailable. Confirm Piece Control migrations are applied for this project."
+        : "Work packages could not be loaded. Confirm you still have access to this project.";
+    }
+    return table
+      ? `Piece relationships partially blocked (${table} unavailable). Refresh after migrations, or continue if pieces still list.`
+      : "Piece relationships could not be loaded because a required database object is missing. Apply pending Piece Control migrations.";
+  }
+
+  // Tagged repository errors: prefer a short operator-facing form.
+  const tagged = message.match(/^\[([a-z0-9_]+)\]\s*(.*)$/i);
+  if (tagged) {
+    const [, table, detail] = tagged;
+    if (/JWT|session|not authenticated|login/i.test(detail)) {
+      return "Your session expired. Sign in again and reopen Piece Register.";
+    }
+    if (table === "pieces" || table === "work_packages") {
+      return `${fallback} (${table}: ${detail.slice(0, 120)})`;
+    }
   }
 
   return fallback;
