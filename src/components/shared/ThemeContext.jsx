@@ -14,9 +14,11 @@
  *   motion       "auto" | "reduced"  ("reduced" disables all CSS
  *                transitions/animations regardless of OS pref)
  *
- * State persists to localStorage so the chosen look is restored on
- * the next page load before React mounts. The values are applied to
- * `document.documentElement` via:
+ * Theme initializes from the saved `sbp-theme` user choice when present;
+ * otherwise it follows the OS color-scheme preference until the user chooses
+ * a theme. User-selected preferences persist to localStorage so the chosen
+ * look is restored on the next page load before React mounts. The values are
+ * applied to `document.documentElement` via:
  *   - data-theme attribute       (theme)
  *   - data-accent attribute      (accent)
  *   - data-contrast attribute    (contrast)
@@ -28,9 +30,14 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import {
+  resolveInitialTheme,
+  shouldPersistTheme,
+  THEME_STORAGE_KEY,
+} from "@/lib/themeResolution";
 
 const KEY = {
-  theme:     "sbp-theme",
+  theme:     THEME_STORAGE_KEY,
   accent:    "sbp-accent",
   fontScale: "sbp-font-scale",
   contrast:  "sbp-contrast",
@@ -88,7 +95,12 @@ function name(key) {
 }
 
 export function ThemeProvider({ children }) {
-  const [theme,     setThemeState]     = useState(() => readPersisted(KEY.theme,     DEFAULTS.theme));
+  const [initial] = useState(() => resolveInitialTheme({
+    storage: typeof localStorage !== "undefined" ? localStorage : { getItem: () => null },
+    matchMedia: typeof window !== "undefined" ? window.matchMedia.bind(window) : undefined,
+  }));
+  const [theme,     setThemeState]     = useState(initial.theme);
+  const [themeSource, setThemeSource]  = useState(initial.source);
   const [accent,    setAccentState]    = useState(() => readPersisted(KEY.accent,    DEFAULTS.accent));
   const [fontScale, setFontScaleState] = useState(() => readPersisted(KEY.fontScale, DEFAULTS.fontScale));
   const [contrast,  setContrastState]  = useState(() => readPersisted(KEY.contrast,  DEFAULTS.contrast));
@@ -109,24 +121,42 @@ export function ThemeProvider({ children }) {
     if (theme === "dark") root.classList.add("steelbuild-dark");
     else root.classList.remove("steelbuild-dark");
     try {
-      localStorage.setItem(KEY.theme,     theme);
+      if (shouldPersistTheme(themeSource)) {
+        localStorage.setItem(KEY.theme, theme);
+      }
       localStorage.setItem(KEY.accent,    accent);
       localStorage.setItem(KEY.fontScale, fontScale);
       localStorage.setItem(KEY.contrast,  contrast);
       localStorage.setItem(KEY.motion,    motion);
     } catch {}
-  }, [theme, accent, fontScale, contrast, motion]);
+  }, [theme, themeSource, accent, fontScale, contrast, motion]);
+
+  // Follow OS color-scheme changes only while no user theme is stored.
+  useEffect(() => {
+    if (themeSource !== "system" || typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (event) => setThemeState(event.matches ? "dark" : "light");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [themeSource]);
 
   const guarded = (kind, setter) => (next) => {
     if (!ALLOWED[kind].has(next)) return;
     setter(next);
   };
-  const setTheme     = useCallback(guarded("theme",     setThemeState),     []);
+  const setTheme     = useCallback((next) => {
+    if (!ALLOWED.theme.has(next)) return;
+    setThemeSource("user");
+    setThemeState(next);
+  }, []);
   const setAccent    = useCallback(guarded("accent",    setAccentState),    []);
   const setFontScale = useCallback(guarded("fontScale", setFontScaleState), []);
   const setContrast  = useCallback(guarded("contrast",  setContrastState),  []);
   const setMotion    = useCallback(guarded("motion",    setMotionState),    []);
-  const toggleTheme  = useCallback(() => setThemeState((t) => (t === "dark" ? "light" : "dark")), []);
+  const toggleTheme  = useCallback(() => {
+    setThemeSource("user");
+    setThemeState((t) => (t === "dark" ? "light" : "dark"));
+  }, []);
 
   /**
    * Bulk-apply a `{ theme, accent, font_scale, contrast, motion }`
@@ -135,7 +165,10 @@ export function ThemeProvider({ children }) {
    */
   const applyPreferences = useCallback((p) => {
     if (!p || typeof p !== "object") return;
-    if (p.theme && ALLOWED.theme.has(p.theme))                setThemeState(p.theme);
+    if (p.theme && ALLOWED.theme.has(p.theme)) {
+      setThemeSource("user");
+      setThemeState(p.theme);
+    }
     if (p.accent_color && ALLOWED.accent.has(p.accent_color)) setAccentState(p.accent_color);
     if (p.font_scale && ALLOWED.fontScale.has(p.font_scale))  setFontScaleState(p.font_scale);
     if (p.contrast_mode && ALLOWED.contrast.has(p.contrast_mode)) setContrastState(p.contrast_mode);
