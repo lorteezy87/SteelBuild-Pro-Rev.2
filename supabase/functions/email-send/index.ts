@@ -26,6 +26,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { reportError } from "../_shared/reportError.ts";
 import {
   isDangerousAttachment,
   MAX_ATTACHMENT_BYTES,
@@ -691,7 +692,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return await handle(req);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[email-send] Unhandled: ${message}`);
+    await reportError(err, "email-send", { unhandled: true });
     return errorResponse(500, `Internal error: ${message}`, req);
   }
 });
