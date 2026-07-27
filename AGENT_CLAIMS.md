@@ -32,7 +32,6 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-07-27T17:35:00Z | cursor-wp-title-desc-d3a1 | Piece WP assignment labels | src/lib/workPackages/**, src/components/pieceControl/PieceRelationshipManager.tsx, src/pages/PieceRegister.tsx | Show WP number + description (WP-004 - ladder) when assigning piece marks. |
 | 2026-07-26T21:20:00Z | cursor-drawing-viewer-page-clamp-3d17 | DrawingViewer blank/error after PR #96 | src/pages/DrawingViewer.jsx, src/pages/drawingViewer/usePdfLoader.js, src/pages/drawingViewer/usePdfRenderer.js, src/pages/drawingViewer/__tests__/** | Fix unclamped pdf_page race + sticky pdfError on shared file_url; loading skeleton while resolving. |
 | 2026-07-27T01:15:00Z | cursor-page-refactor-2696 | Large-page thinning — PieceRegister / Onboarding / ResourceScheduling | src/pages/PieceRegister.tsx, src/pages/pieceRegister/**, src/pages/Onboarding.jsx, src/pages/onboarding/**, src/pages/ResourceScheduling.tsx, src/pages/resourceScheduling/resourceSchedulingHelpers.ts | Behavior-preserving helper/presentational extracts for largest pages |
 | 2026-07-26T04:00:00Z | cursor-ap-contacts-dms-d3a1 | Contacts + DocumentStorageSettings hygiene | src/pages/Contacts.jsx, src/components/contacts/ContactFormModal.jsx, src/components/dms/DocumentStorageSettings.jsx, src/pages/Vendors.jsx | RegisterFetchBody + Contact create withProjectId/toasts; LinkedFolder.create fail-closed; Vendors toast hygiene (IDs 18/48/50). |
