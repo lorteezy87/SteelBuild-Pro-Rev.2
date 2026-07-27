@@ -5,6 +5,9 @@ export interface ReadinessWorkPackage {
   project_id: string;
   wp_number?: string | null;
   name?: string | null;
+  description?: string | null;
+  sequence_number?: string | null;
+  area?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
 }

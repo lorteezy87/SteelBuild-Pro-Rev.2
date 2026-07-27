@@ -15,6 +15,10 @@ export interface PieceRegisterRow {
   weight_each_lbs: number | null;
   weight_total_lbs: number | null;
   work_package_id: string | null;
+  /** Lot / WP sequence from import (used by auto-assign). */
+  sequence_number?: string | null;
+  /** Erection area from import (used by auto-assign). */
+  erection_area?: string | null;
   lifecycle_status: string;
   current_station?: string | null;
   on_hold: boolean;

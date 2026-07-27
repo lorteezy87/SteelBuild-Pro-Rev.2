@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Link2, PackageCheck, Unlink2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Link2, PackageCheck, Sparkles, Unlink2 } from "lucide-react";
 import { toast } from "sonner";
 import "@/styles/piece-control-command.css";
 import { DecisionPanel, Pill } from "@/components/command";
@@ -14,6 +14,11 @@ import {
   unlinkPieceDrawing,
 } from "@/lib/pieceControl/relationshipsRepository";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import {
+  applyWorkPackageAutoAssign,
+  planWorkPackageAutoAssign,
+  type AutoAssignPlan,
+} from "@/lib/pieceControl/wpAutoAssign";
 import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 
 interface PieceRelationshipManagerProps {
@@ -52,6 +57,8 @@ export default function PieceRelationshipManager({
   const [scopeFilter, setScopeFilter] = useState<"unassigned" | "package" | "all">(
     focusedWorkPackageId ? "unassigned" : "all",
   );
+  const [autoAssignPlan, setAutoAssignPlan] = useState<AutoAssignPlan | null>(null);
+  const [autoAssignReassign, setAutoAssignReassign] = useState(false);
 
   const snapshotQuery = useQuery({
     queryKey: ["piece-relationships", projectId],
@@ -221,6 +228,56 @@ export default function PieceRelationshipManager({
       toast.success(summary.unlinked ? "Drawing unlinked" : "Drawing link was already absent");
     },
   });
+
+  const buildAutoAssignPlan = (reassignExisting: boolean) => {
+    const pieces = packageScopedLeaves.map((piece) => ({
+      id: piece.id,
+      mark: piece.piece_mark,
+      work_package_id: piece.work_package_id,
+      sequence_number: piece.sequence_number,
+      erection_area: piece.erection_area,
+      is_deleted: Boolean(piece.is_deleted || piece.deleted_at),
+    }));
+    let workPackages = snapshot?.workPackages ?? [];
+    if (focusedWorkPackageId) {
+      workPackages = workPackages.filter((wp) => wp.id === focusedWorkPackageId);
+    }
+    return planWorkPackageAutoAssign(pieces, workPackages, { reassignExisting });
+  };
+
+  const autoAssignMutation = useMutation({
+    mutationFn: async (plan: AutoAssignPlan) =>
+      applyWorkPackageAutoAssign(plan, (workPackageId, pieceIds) =>
+        assignPiecesToWorkPackage(projectId, pieceIds, workPackageId),
+      ),
+    onSuccess: async (result) => {
+      setAutoAssignPlan(null);
+      setSelectedPieceIds(new Set());
+      await invalidate();
+      if (result.errors.length > 0) {
+        toast.error(
+          `Auto-assign partially failed: ${result.assignedCount} assigned, ${result.errors.length} package error(s).`,
+        );
+        return;
+      }
+      toast.success(
+        `Auto-assigned ${result.assignedCount} piece(s) across ${result.workPackageCount} work package(s)`,
+      );
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "Auto-assign could not be applied."),
+      ),
+  });
+
+  const autoAssignSkipSummary = useMemo(() => {
+    if (!autoAssignPlan) return null;
+    const counts: Record<string, number> = {};
+    for (const row of autoAssignPlan.skipped) {
+      counts[row.reason] = (counts[row.reason] ?? 0) + 1;
+    }
+    return counts;
+  }, [autoAssignPlan]);
 
   if (!enabled) {
     return (
@@ -396,7 +453,98 @@ export default function PieceRelationshipManager({
           >
             {focusedWorkPackageId ? "Remove from WP" : "Unassign selected"}
           </button>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            disabled={packageScopedLeaves.length === 0 || autoAssignMutation.isPending}
+            onClick={() => {
+              const plan = buildAutoAssignPlan(autoAssignReassign);
+              setAutoAssignPlan(plan);
+            }}
+          >
+            <Sparkles size={14} aria-hidden="true" />
+            {" "}Auto-assign by sequence / area
+          </button>
         </div>
+
+        {autoAssignPlan && (
+          <div className="piece-command-empty piece-command-empty--detail" style={{ marginTop: 12 }}>
+            <p>
+              <strong>Auto-assign preview</strong>
+              {" — "}
+              matches sequence number first, then erection area. Ambiguous matches are skipped.
+            </p>
+            <p>
+              <Pill tone="info">{autoAssignPlan.assignments.length} to assign</Pill>
+              {" "}
+              <Pill tone="neutral">{autoAssignPlan.skipped.length} skipped</Pill>
+            </p>
+            {autoAssignSkipSummary && Object.keys(autoAssignSkipSummary).length > 0 && (
+              <ul className="piece-readiness-card__blockers">
+                {Object.entries(autoAssignSkipSummary).map(([reason, count]) => (
+                  <li key={reason}>{reason.replace(/_/g, " ")}: {count}</li>
+                ))}
+              </ul>
+            )}
+            {autoAssignPlan.assignments.length > 0 && (
+              <ul className="piece-readiness-card__blockers">
+                {autoAssignPlan.assignments.slice(0, 12).map((row) => (
+                  <li key={row.pieceId}>
+                    {row.mark} → {workPackageMap.get(row.workPackageId) ?? row.wpNumber ?? row.workPackageId}
+                    {" "}({row.matchReason.replace(/_/g, " ")})
+                  </li>
+                ))}
+                {autoAssignPlan.assignments.length > 12 && (
+                  <li>…and {autoAssignPlan.assignments.length - 12} more</li>
+                )}
+              </ul>
+            )}
+            <label className="piece-command-field" htmlFor="auto-assign-reassign" style={{ marginTop: 8 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <input
+                  id="auto-assign-reassign"
+                  type="checkbox"
+                  checked={autoAssignReassign}
+                  onChange={(event) => {
+                    const next = event.target.checked;
+                    setAutoAssignReassign(next);
+                    setAutoAssignPlan(buildAutoAssignPlan(next));
+                  }}
+                />
+                Include pieces already assigned to another work package
+              </span>
+            </label>
+            <div className="piece-command-actions" style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                className="cmd-btn cmd-btn--primary"
+                disabled={
+                  autoAssignPlan.assignments.length === 0 || autoAssignMutation.isPending
+                }
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      `Assign ${autoAssignPlan.assignments.length} piece(s) to matched work packages?`,
+                    )
+                  ) {
+                    return;
+                  }
+                  autoAssignMutation.mutate(autoAssignPlan);
+                }}
+              >
+                Confirm auto-assign
+              </button>
+              <button
+                type="button"
+                className="cmd-btn cmd-btn--ghost"
+                disabled={autoAssignMutation.isPending}
+                onClick={() => setAutoAssignPlan(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </DecisionPanel>
 
       <DecisionPanel title="Piece and drawing links">
