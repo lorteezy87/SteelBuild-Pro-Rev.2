@@ -1,0 +1,101 @@
+/* ═══════════════════════════════════════════════════════════════
+   TABLET KIT — Phase 0 layout utilities for tablet PM surfaces
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --tablet-touch-min: 44px;
+  --tablet-page-pad: 16px;
+  --tablet-sheet-z: 1200;
+}
+
+.tablet-page {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--tablet-page-pad);
+}
+
+.tablet-action-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--density-gap, 8px);
+  min-height: var(--tablet-touch-min);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.tablet-action-bar--top {
+  top: 0;
+  bottom: auto;
+}
+
+.tablet-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--density-gap, 8px);
+  max-height: calc(var(--tablet-touch-min) * 2 + var(--density-gap, 8px));
+  overflow: hidden;
+}
+
+.tablet-filter-bar--expanded {
+  max-height: none;
+  overflow: visible;
+}
+
+.tablet-form-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--tablet-sheet-z);
+  background: color-mix(in srgb, var(--bg-page) 55%, transparent);
+}
+
+.tablet-form-sheet {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-surface);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tablet-form-sheet__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tablet-form-sheet__footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--density-gap, 8px);
+  min-height: var(--tablet-touch-min);
+  padding: var(--tablet-page-pad);
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-surface);
+}
+
+.tablet-list-detail {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-width: 0;
+  gap: var(--density-gap, 8px);
+}
+
+.tablet-list-detail--landscape {
+  grid-template-columns: 1fr 1fr;
+}
+
+.tablet-data-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
+}
+
+[data-viewport="tablet"] .tablet-touch-target {
+  min-width: var(--tablet-touch-min);
+  min-height: var(--tablet-touch-min);
+}
