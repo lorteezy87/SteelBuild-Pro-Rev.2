@@ -29,6 +29,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-07-27T01:43:00Z | cursor-tablet-pm-kit-design-3d17-task2 | Dashboard sidebar rail cutover review fix | src/components/nav/SidebarNav.jsx, src/__tests__/components/Layout.test.jsx, src/components/nav/__tests__/useResponsiveBreakpoint.test.ts, .superpowers/sdd/task-2-report.md | Fix dashboard `forceRail` cutover so tablet rail mode does not overwrite desktop collapse state; add regression coverage and report notes. |
 | 2026-07-27T01:32:00Z | cursor-tablet-pm-kit-design-3d17 | Tablet PM layout kit design | docs/superpowers/specs/2026-07-27-tablet-pm-layout-kit-design.md | Spec tablet-first shared layout kit + migration order for Dashboard/Projects/RFIs/Detailing. |
 | 2026-07-26T04:00:00Z | cursor-ap-contacts-dms-d3a1 | Contacts + DocumentStorageSettings hygiene | src/pages/Contacts.jsx, src/components/contacts/ContactFormModal.jsx, src/components/dms/DocumentStorageSettings.jsx, src/pages/Vendors.jsx | RegisterFetchBody + Contact create withProjectId/toasts; LinkedFolder.create fail-closed; Vendors toast hygiene (IDs 18/48/50). |
 | 2026-07-12T00:00:00Z | opus-phase1-batch1 | False-success cleanup batch 1 | src/api/client/functions.ts, src/config/routes.js, src/pages/AgentMemory.jsx, src/components/dms/DocumentStorageSettings.jsx | Fail-close unavailable backend invokes; remove AgentMemory route exposure; disable fake linked-folder Sync now action until backend implementation exists. |
