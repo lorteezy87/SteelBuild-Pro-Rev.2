@@ -5,51 +5,51 @@ import { formatLocalDate } from "@/utils/dates";
 
 /* ── More vibrant file type badges with high contrast ── */
 const FILE_TYPE_CONFIG = {
-  pdf:   { icon: "PDF",  bg: "rgba(239,68,68,0.18)",     color: "#F87171",  border: "rgba(239,68,68,0.35)" },
-  dwg:   { icon: "DWG",  bg: "rgba(56,189,248,0.18)",    color: "#38BDF8",  border: "rgba(56,189,248,0.35)" },
-  ifc:   { icon: "IFC",  bg: "rgba(8,145,178,0.18)",   color: "#0891B2",  border: "rgba(8,145,178,0.35)" },
-  gltf:  { icon: "3D",   bg: "rgba(8,145,178,0.18)",   color: "#0891B2",  border: "rgba(8,145,178,0.35)" },
-  xlsx:  { icon: "XLS",  bg: "rgba(52,211,153,0.18)",    color: "#34D399",  border: "rgba(52,211,153,0.35)" },
-  docx:  { icon: "DOC",  bg: "rgba(96,165,250,0.18)",    color: "#60A5FA",  border: "rgba(96,165,250,0.35)" },
-  img:   { icon: "IMG",  bg: "rgba(45,212,191,0.18)",    color: "#2DD4BF",  border: "rgba(45,212,191,0.35)" },
-  zip:   { icon: "ZIP",  bg: "rgba(251,191,36,0.18)",    color: "#FBBF24",  border: "rgba(251,191,36,0.35)" },
-  other: { icon: "FILE", bg: "rgba(160,175,210,0.12)",   color: "#A0AED2",  border: "rgba(160,175,210,0.25)" },
+  pdf:   { icon: "PDF",  bg: "var(--danger-muted)", color: "var(--status-error)", border: "var(--danger-border)" },
+  dwg:   { icon: "DWG",  bg: "var(--info-muted)", color: "var(--status-info)", border: "var(--info-border)" },
+  ifc:   { icon: "IFC",  bg: "var(--accent-muted)", color: "var(--accent)", border: "var(--accent-border)" },
+  gltf:  { icon: "3D",   bg: "var(--accent-muted)", color: "var(--accent)", border: "var(--accent-border)" },
+  xlsx:  { icon: "XLS",  bg: "var(--success-muted)", color: "var(--status-success)", border: "var(--success-border)" },
+  docx:  { icon: "DOC",  bg: "var(--info-muted)", color: "var(--status-info)", border: "var(--info-border)" },
+  img:   { icon: "IMG",  bg: "var(--accent-muted)", color: "var(--accent)", border: "var(--accent-border)" },
+  zip:   { icon: "ZIP",  bg: "var(--warning-muted)", color: "var(--status-warning)", border: "var(--warning-border)" },
+  other: { icon: "FILE", bg: "var(--bg-surface-high)", color: "var(--text-muted)", border: "var(--border-default)" },
 };
 
 const STATUS_COLORS = {
-  "Approved":                { bg: "rgba(52,211,153,0.18)",  color: "#34D399" },
-  "Approved as Noted":       { bg: "rgba(52,211,153,0.12)",  color: "#34D399" },
-  "Approved with Comments":  { bg: "rgba(52,211,153,0.12)",  color: "#34D399" },
-  "Under Review":            { bg: "rgba(251,191,36,0.18)",  color: "#FBBF24" },
-  "Revise & Resubmit":       { bg: "rgba(251,146,60,0.18)", color: "#FB923C" },
-  "Rejected":                { bg: "rgba(248,113,113,0.18)",color: "#F87171" },
-  "Draft":                   { bg: "rgba(160,175,210,0.12)",color: "#A0AED2" },
-  "Issued":                  { bg: "rgba(96,165,250,0.18)", color: "#60A5FA" },
-  "Superseded":              { bg: "rgba(100,116,139,0.12)",color: "#94A3B8" },
-  "Archived":                { bg: "rgba(100,116,139,0.08)",color: "#64748B" },
-  "Void":                    { bg: "rgba(248,113,113,0.10)",color: "#F87171" },
+  "Approved":                { bg: "var(--success-muted)", color: "var(--status-success)" },
+  "Approved as Noted":       { bg: "color-mix(in srgb, var(--status-success) 10%, transparent)", color: "var(--status-success)" },
+  "Approved with Comments":  { bg: "color-mix(in srgb, var(--status-success) 10%, transparent)", color: "var(--status-success)" },
+  "Under Review":            { bg: "var(--warning-muted)", color: "var(--status-warning)" },
+  "Revise & Resubmit":       { bg: "var(--warning-muted)", color: "var(--status-warning)" },
+  "Rejected":                { bg: "var(--danger-muted)", color: "var(--status-error)" },
+  "Draft":                   { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
+  "Issued":                  { bg: "var(--info-muted)", color: "var(--status-info)" },
+  "Superseded":              { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
+  "Archived":                { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
+  "Void":                    { bg: "color-mix(in srgb, var(--status-error) 10%, transparent)", color: "var(--status-error)" },
 };
 
 /* ── Category pill color map ── */
 const CATEGORY_COLORS = {
-  "Blueprint":          { bg: "rgba(96,165,250,0.15)",   color: "#60A5FA",  border: "rgba(96,165,250,0.30)" },
-  "Shop Drawing":       { bg: "rgba(56,189,248,0.15)",   color: "#38BDF8",  border: "rgba(56,189,248,0.30)" },
-  "IFC Model":          { bg: "rgba(8,145,178,0.15)",  color: "#0891B2",  border: "rgba(8,145,178,0.30)" },
-  "Specification":      { bg: "rgba(251,191,36,0.12)",   color: "#FBBF24",  border: "rgba(251,191,36,0.25)" },
-  "Submittal":          { bg: "rgba(45,212,191,0.15)",   color: "#2DD4BF",  border: "rgba(45,212,191,0.30)" },
-  "Transmittal":        { bg: "rgba(52,211,153,0.15)",   color: "#34D399",  border: "rgba(52,211,153,0.30)" },
-  "RFI Response":       { bg: "rgba(251,146,60,0.15)",   color: "#FB923C",  border: "rgba(251,146,60,0.30)" },
-  "Change Order":       { bg: "rgba(248,113,113,0.15)",  color: "#F87171",  border: "rgba(248,113,113,0.30)" },
-  "Contract":           { bg: "rgba(200,155,32,0.15)",   color: "#C89B20",  border: "rgba(200,155,32,0.30)" },
-  "Photo":              { bg: "rgba(45,212,191,0.12)",   color: "#2DD4BF",  border: "rgba(45,212,191,0.25)" },
-  "Report":             { bg: "rgba(160,175,210,0.12)",  color: "#A0AED2",  border: "rgba(160,175,210,0.25)" },
-  "Correspondence":     { bg: "rgba(160,175,210,0.10)",  color: "#94A3B8",  border: "rgba(160,175,210,0.20)" },
-  "Permit":             { bg: "rgba(52,211,153,0.12)",   color: "#34D399",  border: "rgba(52,211,153,0.25)" },
-  "Inspection Report":  { bg: "rgba(251,191,36,0.12)",   color: "#FBBF24",  border: "rgba(251,191,36,0.25)" },
-  "Other":              { bg: "rgba(160,175,210,0.08)",  color: "#94A3B8",  border: "rgba(160,175,210,0.15)" },
+  "Blueprint":          { bg: "var(--info-muted)", color: "var(--status-info)", border: "var(--info-border)" },
+  "Shop Drawing":       { bg: "var(--info-muted)", color: "var(--status-info)", border: "var(--info-border)" },
+  "IFC Model":          { bg: "var(--accent-muted)", color: "var(--accent)", border: "var(--accent-border)" },
+  "Specification":      { bg: "var(--warning-muted)", color: "var(--status-warning)", border: "var(--warning-border)" },
+  "Submittal":          { bg: "var(--accent-muted)", color: "var(--accent)", border: "var(--accent-border)" },
+  "Transmittal":        { bg: "var(--success-muted)", color: "var(--status-success)", border: "var(--success-border)" },
+  "RFI Response":       { bg: "var(--warning-muted)", color: "var(--status-warning)", border: "var(--warning-border)" },
+  "Change Order":       { bg: "var(--danger-muted)", color: "var(--status-error)", border: "var(--danger-border)" },
+  "Contract":           { bg: "var(--accent-muted)", color: "var(--accent)", border: "var(--accent-border)" },
+  "Photo":              { bg: "var(--accent-muted)", color: "var(--accent)", border: "var(--accent-border)" },
+  "Report":             { bg: "var(--bg-surface-high)", color: "var(--text-muted)", border: "var(--border-default)" },
+  "Correspondence":     { bg: "var(--bg-surface-high)", color: "var(--text-muted)", border: "var(--border-default)" },
+  "Permit":             { bg: "var(--success-muted)", color: "var(--status-success)", border: "var(--success-border)" },
+  "Inspection Report":  { bg: "var(--warning-muted)", color: "var(--status-warning)", border: "var(--warning-border)" },
+  "Other":              { bg: "var(--bg-surface-high)", color: "var(--text-muted)", border: "var(--border-default)" },
 };
 
-const DEFAULT_CATEGORY_STYLE = { bg: "rgba(160,175,210,0.10)", color: "#A0AED2", border: "rgba(160,175,210,0.20)" };
+const DEFAULT_CATEGORY_STYLE = { bg: "var(--bg-surface-high)", color: "var(--text-muted)", border: "var(--border-default)" };
 
 function btnStyle(bg, border, color) {
   return {
@@ -68,7 +68,7 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const cfg = FILE_TYPE_CONFIG[doc.fileType] || FILE_TYPE_CONFIG.other;
-  const statusStyle = STATUS_COLORS[doc.status] || { bg: "rgba(160,175,210,0.12)", color: "#A0AED2" };
+  const statusStyle = STATUS_COLORS[doc.status] || STATUS_COLORS.Draft;
   const catStyle = CATEGORY_COLORS[doc.category] || DEFAULT_CATEGORY_STYLE;
   const fileSizeKb = doc.fileSizeKb ?? doc.file_size_kb;
   const fileSizeMB = fileSizeKb ? (fileSizeKb / 1024).toFixed(1) + " MB" : "\u2014";
@@ -86,7 +86,7 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
         background: "var(--bg-surface-low)",
         border: "1px solid " + (hovered ? "var(--accent-border)" : "var(--bg-surface-high)"),
         borderRadius: 8, padding: 16, cursor: "pointer", transition: "all 0.15s",
-        boxShadow: hovered ? "0 8px 24px rgba(0,0,0,0.5)" : "0 2px 8px rgba(0,0,0,0.3)",
+        boxShadow: hovered ? "var(--shadow-lg)" : "var(--shadow-card)",
         position: "relative",
       }}
     >
@@ -147,14 +147,14 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
           {onMove && (
             <button onClick={(e) => { e.stopPropagation(); onMove(doc); }} style={btnStyle()}>MOVE</button>
           )}
-          <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }} style={btnStyle("rgba(255,61,61,0.08)", "rgba(255,61,61,0.25)", "var(--status-error-bright)")}>DEL</button>
+          <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }} style={btnStyle("var(--danger-muted)", "var(--danger-border)", "var(--status-error-bright)")}>DEL</button>
         </div>
       )}
       {confirmDelete && (
-        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 10, padding: "10px 12px", background: "rgba(255,61,61,0.10)", border: "1px solid rgba(255,61,61,0.30)", borderRadius: 6 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 10, padding: "10px 12px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 6 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-error-bright)", marginBottom: 8 }}>DELETE THIS DOCUMENT?</div>
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); onDelete?.(doc); }} style={{ flex: 1, padding: "5px 0", background: "rgba(255,61,61,0.20)", border: "1px solid rgba(255,61,61,0.40)", color: "var(--status-error-bright)", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>CONFIRM</button>
+            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); onDelete?.(doc); }} style={{ flex: 1, padding: "5px 0", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", color: "var(--status-error-bright)", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>CONFIRM</button>
             <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }} style={{ flex: 1, padding: "5px 0", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>CANCEL</button>
           </div>
         </div>

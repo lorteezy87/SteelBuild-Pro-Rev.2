@@ -482,7 +482,7 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
   };
   if (!submittal) {
     return (
-      <div style={{ width: 480, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6, color: "var(--text-muted)", background: "var(--bg-page, #0D1117)" }}>
+      <div style={{ width: 480, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6, color: "var(--text-muted)", background: "var(--bg-page, var(--bg-page))" }}>
         <div style={{ fontSize: 32 }}>◆</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase" }}>Select a submittal</div>
       </div>
@@ -520,8 +520,8 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
           : "var(--text-muted)";
 
   return (
-    <div style={{ width: 480, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--bg-page, #0D1117)", minHeight: 0 }}>
-      <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "rgba(255,255,255,0.04)" }}>
+    <div style={{ width: 480, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--bg-page, var(--bg-page))", minHeight: 0 }}>
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-hover)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.08em" }}>
@@ -812,8 +812,8 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
                   style={{
                     padding: "6px 14px",
                     borderRadius: 4,
-                    background: isResubmit ? "#F97316" : "var(--accent)",
-                    color: "#fff",
+                    background: isResubmit ? "var(--status-review)" : "var(--accent)",
+                    color: "var(--on-accent)",
                     border: "none",
                     fontFamily: "var(--font-mono)",
                     fontSize: 9,
@@ -1043,10 +1043,10 @@ export function SubmittalDetail({ submittal, allSubmittals = [], drawingSets = [
         </DetailSection>
       </div>
 
-      <div style={{ padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "rgba(255,255,255,0.04)", display: "flex", gap: 8 }}>
+      <div style={{ padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "var(--bg-hover)", display: "flex", gap: 8 }}>
         <button
           onClick={onEdit}
-          style={{ flex: 1, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}
+          style={{ flex: 1, background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 4, padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}
         >
           Edit
         </button>
@@ -1091,7 +1091,7 @@ export function SubmittalTypeChips({ components }: { components: SubmittalCompon
         const released = chip.state === "released";
         const received = chip.state === "received";
         const style: CSSProperties = released
-          ? { color: "var(--status-success, #16a34a)", background: "var(--status-success-bg, rgba(22,163,74,0.14))", borderColor: "var(--status-success, #16a34a)" }
+          ? { color: "var(--status-success, var(--status-success))", background: "var(--status-success-bg, var(--success-muted))", borderColor: "var(--status-success, var(--status-success))" }
           : received
             ? { color: "var(--text-primary)", background: "var(--bg-surface-high)", borderColor: "var(--border-strong, var(--border-default))" }
             : { color: "var(--text-muted)", background: "transparent", borderColor: "var(--border-default)" };
@@ -1158,7 +1158,7 @@ export function DrawingTypeComponents({ components, onSetReceived, onSetReleased
                 padding: "8px 10px",
                 borderRadius: 4,
                 border: "1px solid var(--border-default)",
-                background: released ? "var(--status-success-bg, rgba(22,163,74,0.08))" : "var(--bg-surface-low)",
+                background: released ? "var(--status-success-bg, var(--success-muted))" : "var(--bg-surface-low)",
               }}
             >
               {/* Type label + state chip */}
@@ -1201,9 +1201,9 @@ export function DrawingTypeComponents({ components, onSetReceived, onSetReleased
                   style={{
                     padding: "3px 10px", borderRadius: 3, cursor: "pointer",
                     fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
-                    border: released ? "1px solid var(--status-success, #16a34a)" : "1px solid var(--border-default)",
-                    background: released ? "var(--status-success, #16a34a)" : "transparent",
-                    color: released ? "#fff" : "var(--text-muted)",
+                    border: released ? "1px solid var(--status-success, var(--status-success))" : "1px solid var(--border-default)",
+                    background: released ? "var(--status-success, var(--status-success))" : "transparent",
+                    color: released ? "var(--on-accent)" : "var(--text-muted)",
                     whiteSpace: "nowrap",
                   }}
                 >

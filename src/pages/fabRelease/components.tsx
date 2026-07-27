@@ -843,7 +843,7 @@ export function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompl
                   <span style={{
                     width: 16, height: 16, borderRadius: 4, display: "flex", alignItems: "center",
                     justifyContent: "center", fontSize: 9, fontWeight: 900, flexShrink: 0,
-                    background: gate.pass ? "var(--status-success)" : "var(--status-error)", color: "#fff",
+                    background: gate.pass ? "var(--status-success)" : "var(--status-error)", color: "var(--on-accent)",
                   }}>
                     {gate.pass ? "✓" : "✗"}
                   </span>

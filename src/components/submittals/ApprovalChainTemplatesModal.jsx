@@ -150,7 +150,7 @@ export default function ApprovalChainTemplatesModal({ open, onClose }) {
 
   return (
     <div role="dialog" aria-modal="true" onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 20 }}>
+      style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 70%, transparent)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 20 }}>
       <div className="sbd-card-strong" onClick={(e) => e.stopPropagation()}
         style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 8, width: 560, maxWidth: "94vw", maxHeight: "90vh", overflowY: "auto", padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>

@@ -63,8 +63,8 @@ const fmtDate = (d) => {
 };
 
 const INLINE_INPUT = {
-  background: "rgba(200,155,32,0.08)",
-  border: "1px solid rgba(200,155,32,0.4)",
+  background: "var(--accent-muted)",
+  border: "1px solid var(--accent-border)",
   borderRadius: 4,
   color: "var(--text-primary)",
   fontFamily: "var(--font-body)",
@@ -76,8 +76,8 @@ const INLINE_INPUT = {
 };
 
 const INLINE_SELECT = {
-  background: "rgba(200,155,32,0.08)",
-  border: "1px solid rgba(200,155,32,0.4)",
+  background: "var(--accent-muted)",
+  border: "1px solid var(--accent-border)",
   borderRadius: 4,
   color: "var(--text-primary)",
   fontFamily: "var(--font-mono)",
@@ -300,9 +300,9 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                       gap: 12,
                       alignItems: "center",
                       transition: "background 0.1s",
-                      background: isEditing ? "rgba(200,155,32,0.04)" : "transparent",
+                      background: isEditing ? "var(--accent-muted)" : "transparent",
                       cursor: isEditing ? "default" : "pointer",
-                      outline: isEditing ? "1px solid rgba(200,155,32,0.25)" : "none",
+                      outline: isEditing ? "1px solid var(--accent-border)" : "none",
                     }}
                     onMouseEnter={(e) => { if (!isEditing) e.currentTarget.style.background = "var(--hover-bg)"; }}
                     onMouseLeave={(e) => { if (!isEditing) e.currentTarget.style.background = "transparent"; }}
@@ -495,7 +495,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                             disabled={saving}
                             style={{
                               background: "var(--accent)", border: "none", borderRadius: 5,
-                              padding: "4px 9px", color: "#fff",
+                              padding: "4px 9px", color: "var(--on-accent)",
                               fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
                               cursor: saving ? "not-allowed" : "pointer", letterSpacing: "0.06em",
                             }}

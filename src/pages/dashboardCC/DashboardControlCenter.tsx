@@ -112,7 +112,7 @@ function DashModuleTile({ module, onNavigate }: {
         border: "1px solid rgba(255,255,255,0.12)",
         cursor: "pointer",
         padding: 0,
-        color: "#fff",
+        color: "var(--on-accent)",
         background: "linear-gradient(150deg, #2a3548 0%, #141c26 55%, #0a0e15 100%)",
         boxShadow: "0 6px 16px rgba(0,0,0,0.40)",
         transition: "transform 0.15s ease, box-shadow 0.15s ease",
@@ -142,7 +142,7 @@ function DashModuleTile({ module, onNavigate }: {
       ) : (
         <span style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 12 }}>
           <Icon size={34} strokeWidth={1.5} color="#fff" aria-hidden="true" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.7))" }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#fff", textAlign: "center", lineHeight: 1.2, textShadow: "0 1px 3px rgba(0,0,0,0.85)" }}>{module.title}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--on-accent)", textAlign: "center", lineHeight: 1.2, textShadow: "0 1px 3px rgba(0,0,0,0.85)" }}>{module.title}</span>
         </span>
       )}
       {/* Live KPI metric badge — top-right, clear of the baked-in label + icon */}

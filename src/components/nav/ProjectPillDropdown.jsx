@@ -135,8 +135,8 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
           display: "flex",
           alignItems: "center",
           gap: isDashboardVariant ? 10 : 5,
-          background: isDashboardVariant ? "#ffffff" : "var(--accent-muted)",
-          border: isDashboardVariant ? "1px solid #dbe2ec" : "1px solid var(--accent-border)",
+          background: isDashboardVariant ? "var(--bg-surface)" : "var(--accent-muted)",
+          border: isDashboardVariant ? "1px solid var(--border-default)" : "1px solid var(--accent-border)",
           borderRadius: isDashboardVariant ? 8 : 20,
           minHeight: isDashboardVariant ? 46 : compact ? 34 : 28,
           padding: isDashboardVariant ? "0 12px" : compact ? "6px 10px" : "5px 13px",
@@ -146,7 +146,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
           // switcher. The health dot (left) still carries the status color.
           fontSize: isDashboardVariant ? 13 : 11,
           fontWeight: isDashboardVariant ? 700 : 600,
-          color: isDashboardVariant ? "#162033" : "var(--text-primary)",
+          color: "var(--text-primary)",
           letterSpacing: isDashboardVariant ? "0" : "0.04em",
           cursor: "pointer",
           whiteSpace: "nowrap",
@@ -156,7 +156,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
           maxWidth: isDashboardVariant ? 230 : compact ? "min(44vw, 190px)" : 280,
           overflow: "hidden",
           textOverflow: "ellipsis",
-          boxShadow: isDashboardVariant ? "0 1px 2px rgba(15, 23, 42, 0.03)" : undefined,
+          boxShadow: isDashboardVariant ? "var(--shadow-card)" : undefined,
         }}
         title={displayLabel}
       >
@@ -167,10 +167,10 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
               width: 26,
               height: 26,
               borderRadius: 6,
-              border: "1px solid #cfd8e5",
+              border: "1px solid var(--border-default)",
               display: "grid",
               placeItems: "center",
-              color: "#5b6678",
+              color: "var(--text-muted)",
               flexShrink: 0,
             }}
           >
@@ -206,7 +206,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {activeProject?.name || "Select project"}
               </span>
-              <span style={{ fontSize: 10, fontWeight: 500, color: "#6f7c91" }}>
+              <span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-muted)" }}>
                 Project ID: {activeProject?.project_number || "Not selected"}
               </span>
             </span>
@@ -245,8 +245,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
             background: "var(--bg-surface-secondary)",
             border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border-default))",
             borderRadius: 14,
-            boxShadow:
-              "0 24px 70px rgba(0,0,0,0.72), inset 0 1px 0 rgba(255,255,255,0.07)",
+            boxShadow: "var(--shadow-lg)",
             zIndex: 3000,
             padding: 8,
           }}
@@ -402,7 +401,7 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
         background: isActive
           ? "var(--accent-muted)"
           : hovered
-            ? "rgba(86,176,255,0.12)"
+            ? "color-mix(in srgb, var(--status-info) 16%, transparent)"
             : "transparent",
         borderLeft: isActive
           ? "3px solid var(--accent)"

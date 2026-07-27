@@ -126,7 +126,7 @@ function Tile({ icon: Icon, label, value, sub, accent, active, onClick, badge })
         {badge != null && (
           <span style={{
             ...mono, fontSize: 8, fontWeight: 700,
-            color: "#fff", background: "var(--status-error)",
+            color: "var(--accent-text)", background: "var(--status-error)",
             borderRadius: "var(--radius-badge)",
             padding: "2px 6px",
             textTransform: "uppercase", letterSpacing: "0.08em",
@@ -883,7 +883,7 @@ export default function PortfolioOverview() {
           label="Pending COs"
           value={pendingCOs.length}
           sub={`${formatCurrencyShort(pendingCOValue)} pending value`}
-          accent="#F97316"
+          accent="var(--status-review)"
           active={kpiFilter === "cos"}
           onClick={() => setKpiFilter(kpiFilter === "cos" ? null : "cos")}
         />
@@ -1050,7 +1050,7 @@ export default function PortfolioOverview() {
             label="Pending CO Value"
             value={formatCurrencyShort(pendingCOValue)}
             sub={`${pendingCOs.length} CO${pendingCOs.length === 1 ? "" : "s"} awaiting approval`}
-            accent="#F97316"
+            accent="var(--status-review)"
           />
           <Tile
             label="Budget Variance"
@@ -1210,7 +1210,7 @@ export default function PortfolioOverview() {
         }}>
           <WeekStat label="New RFIs" value={weekly.newRFIs} color="var(--status-info)" />
           <WeekStat label="Closed RFIs" value={weekly.closedRFIs} color="var(--status-success-bright)" />
-          <WeekStat label="New COs" value={weekly.newCOs} color="#F97316" />
+          <WeekStat label="New COs" value={weekly.newCOs} color="var(--status-review)" />
           <WeekStat
             label="Approved COs"
             value={weekly.approvedCOs}
@@ -1277,7 +1277,7 @@ export default function PortfolioOverview() {
                 value={(budgetVariance >= 0 ? "+" : "") + formatCurrencyShort(budgetVariance)}
                 color={budgetVariance <= 0 ? "var(--status-success-bright)" : "var(--status-error)"}
               />
-              <ExecutiveLine label="Pending COs" value={formatCurrencyShort(pendingCOValue)} color="#F97316" />
+              <ExecutiveLine label="Pending COs" value={formatCurrencyShort(pendingCOValue)} color="var(--status-review)" />
             </ExecutiveColumn>
             <ExecutiveColumn title="Action Required" accent="var(--status-error)">
               {overdueRFIs.length > 0 && (
@@ -1291,7 +1291,7 @@ export default function PortfolioOverview() {
                 </ExecutiveCallout>
               )}
               {lateDeliveries.length > 0 && (
-                <ExecutiveCallout color="#F97316">
+                <ExecutiveCallout color="var(--status-review)">
                   {lateDeliveries.length} late deliver{lateDeliveries.length !== 1 ? "ies" : "y"}
                 </ExecutiveCallout>
               )}

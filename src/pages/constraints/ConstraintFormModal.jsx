@@ -286,7 +286,7 @@ export default function ConstraintFormModal({ projectId, constraint, prefill = n
               onClick={handleSubmit}
               style={{
                 background: "var(--status-error)",
-                color: "#fff",
+                color: "var(--on-accent)",
                 border: "none",
                 borderRadius: "var(--radius-btn)",
                 padding: "8px 20px",

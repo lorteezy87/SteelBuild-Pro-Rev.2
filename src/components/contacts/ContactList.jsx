@@ -40,7 +40,7 @@ export default function ContactList({ contacts, view, onEdit, onDelete, onAdd })
             style={{
               padding: "8px 16px", borderRadius: "var(--radius-btn)",
               background: "var(--accent)", border: "none",
-              color: "#fff", fontFamily: "var(--font-mono)",
+              color: "var(--on-accent)", fontFamily: "var(--font-mono)",
               fontSize: 10, fontWeight: 700, cursor: "pointer",
               letterSpacing: "0.08em",
             }}

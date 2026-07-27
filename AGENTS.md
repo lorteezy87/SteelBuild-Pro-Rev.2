@@ -20,7 +20,7 @@ SteelBuild Pro is a Vite + React 18 + Supabase project-management app for struct
 
 ## Coding Style & Naming Conventions
 - ESLint flat config (`eslint.config.js`): `unused-imports` errors, unused vars warn (ignore `^_`); only `src/components/ui` and the Vite plugins are lint-exempt (`src/lib` and `src/api` **are** linted). Base TypeScript is non-strict (`strict: false`, `allowJs`), but strictNullChecks + noImplicitAny are enforced in CI via the two ratchets above.
-- Style with SteelBuild Dark CSS tokens (`src/styles/tokens.css`) and `.sbd-*` classes — Tailwind is compat-only, not the primary system.
+- Style with dual-theme CSS variables from `src/styles/tokens.css`; use `--cmd-*` inside `[data-skin="command"]` and `.sbd-*` only for shipped SteelBuild Dark chrome. Tailwind is compat-only, not the primary system.
 - Name domain objects by business meaning (drawing set vs sheet vs submittal vs RFI); avoid `data`/`item`/`handler`.
 
 ## Testing Guidelines
@@ -40,6 +40,7 @@ Multiple agent sessions write `main` simultaneously. Before editing, `git pull` 
 - **Single product:** Vite SPA + hosted/local Supabase. No monorepo apps. Standard commands live in this file and `package.json` (`npm run dev|lint|test|build` + typecheck gates).
 - **Local Supabase:** `.env.local` points at `http://127.0.0.1:54321` with the standard demo anon key. `supabase status` may report some optional containers stopped (imgproxy/analytics/edge runtime); API/DB/Auth are enough for app login and CRUD. Start with `supabase start` if status is empty.
 - **Piece Register:** Canonical UI is the command-deck page (`src/pages/PieceRegister.tsx` + `src/styles/piece-control-command.css`) and dashboard embed `PieceControlDashboardPanel` inside `DashboardControlCenter`. Do not reintroduce `CanonicalPieceDashboard`. KPIs and rollups must use `selectActionableLeafPieces` (exclude containers / split parents) so lot splits do not double-count. Lifecycle includes `released` between `not_started` and `in_fabrication`. Shipping-list import still writes legacy `piece_production`; in `pilot`/`live` it also advances matching fabricated canonical lots via `ship_piece_lots` (exact mark only; ambiguous lots skipped).
+- **Theme truth:** SteelBuild is dual-theme. Do not force command pages light-only or wrap them in `.sbd-*` chrome; command Control Centers use `--cmd-*` under `[data-skin="command"]`, with dark supplied by token remap.
 - **Alerts / SharePoint honesty:** Alerts Center Refresh only reloads existing rows — there is no `generate-alerts` Edge Function. SharePoint/OneDrive Linked Folder “Sync Now” does not transfer files until the connector is deployed; do not toast success for a fake queue.
 - **Retired chat assistant:** Removed from runtime (UI, Decision Log route, schedule chat Edge Function, entity clients). Historical `pma_*` / `ai_audit_log` tables remain in migrations + generated `src/types/supabase.ts` only — do not recreate app access. Remote schedule chat function may still need owner `supabase functions delete`.
 - **Auth for demos:** Seeded local users depend on migration/seed state; if login fails against local Supabase, create a user via Studio (`http://127.0.0.1:54323`) or Auth admin API. Vitest does not need live Supabase.

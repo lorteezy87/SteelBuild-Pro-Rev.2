@@ -5,6 +5,11 @@
  * empty form defaults, and shared inline-style tokens.
  */
 
+import {
+  DRAWING_RR_STAGE,
+  DRAWING_STAGES as DESIGN_DRAWING_STAGES,
+} from "@/components/design-system/tokens";
+
 // ─── Stage Definitions ──────────────────────────────────────────────────────
 //
 // Canonical detailing/submittal flow (R&R promoted to a first-class
@@ -42,22 +47,19 @@
 //   • WORKFLOW_STAGES / WORKFLOW_STAGE_ORDER (8 values) — the DISPLAY order
 //     for submittal-derived workflow stages (process boards, chips,
 //     rollups). Includes R&R after BFA.
-export const STAGES = [
-  { key: "Not Started", label: "NOT STARTED", color: "#64748B", bg: "rgba(100,116,139,0.16)" }, // slate
-  { key: "IFA",         label: "IFA",         color: "#60A5FA", bg: "rgba(96,165,250,0.16)"  }, // info-muted (sky)
-  { key: "OFA",         label: "OFA",         color: "#2563EB", bg: "rgba(37,99,235,0.18)"   }, // info (blue)
-  { key: "BFA",         label: "BFA",         color: "#FBBF24", bg: "rgba(251,191,36,0.16)"  }, // warning-muted (amber)
-  { key: "OFS",         label: "OFS — Out for Scrub", color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // warning (orange)
-  { key: "IFC",         label: "IFC",         color: "#34D399", bg: "rgba(52,211,153,0.16)"  }, // success-muted (mint)
-  { key: "Released",    label: "RELEASED",    color: "#10B981", bg: "rgba(16,185,129,0.18)"  }, // success (emerald)
-];
+export const STAGES = DESIGN_DRAWING_STAGES.map(({ key, label, color, bg }) => ({ key, label, color, bg }));
 
 /**
  * R&R — a first-class DERIVED workflow stage (never a sheet-enum value).
  * Amber, matching the pre-existing R&R badge / "Revise and Resubmit"
  * status color (#f59e0b) so the promotion doesn't change the R&R hue.
  */
-export const RR_STAGE = { key: "R&R", label: "R&R", color: "#F59E0B", bg: "rgba(245,158,11,0.16)" };
+export const RR_STAGE = {
+  key: DRAWING_RR_STAGE.key,
+  label: DRAWING_RR_STAGE.label,
+  color: DRAWING_RR_STAGE.color,
+  bg: DRAWING_RR_STAGE.bg,
+};
 
 /**
  * Display order for submittal-DERIVED workflow stages: the sheet stages
@@ -179,7 +181,7 @@ export const btnBase = {
   textTransform: "uppercase",
 };
 
-export const btnPrimary = { ...btnBase, background: "var(--accent)", color: "#000", borderRadius: "var(--radius-btn)" };
+export const btnPrimary = { ...btnBase, background: "var(--accent)", color: "var(--on-accent)", borderRadius: "var(--radius-btn)" };
 export const btnGhost = { ...btnBase, background: "none", border: "1px solid var(--border-default)", color: "var(--text-muted)", borderRadius: "var(--radius-btn)" };
 
 // ─── Drawings register table config ─────────────────────────────────────────

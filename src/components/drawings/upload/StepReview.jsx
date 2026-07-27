@@ -55,7 +55,7 @@ export default function StepReview({ sheets, setSheets, fileResults, meta, setMe
     <span title="Auto-filled by AI — edit if wrong" style={{
       fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.1em",
       padding: "1px 4px", borderRadius: 3, marginLeft: 6,
-      background: "rgba(132,204,22,0.12)", color: "#84CC16",
+      background: "var(--success-muted)", color: "var(--status-success)",
       border: "1px solid rgba(132,204,22,0.3)", verticalAlign: "middle",
     }}>✦ AI</span>
   ) : null;
@@ -188,7 +188,7 @@ export default function StepReview({ sheets, setSheets, fileResults, meta, setMe
         )}
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
           {sheets.length} sheets · <span style={{ color: "var(--status-warning)" }}>{selectedCount} selected</span>
-          {reviewCount > 0 && <> · <span style={{ color: "#D97706" }}>{reviewCount} to review</span></>}
+          {reviewCount > 0 && <> · <span style={{ color: "var(--status-warning)" }}>{reviewCount} to review</span></>}
         </span>
       </div>
 
@@ -220,13 +220,13 @@ export default function StepReview({ sheets, setSheets, fileResults, meta, setMe
                       onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
                       onBlur={e => e.target.style.borderColor = "transparent"} />
                     {s.sheetNumber && existingDrawings.some(d => d.sheet_number === s.sheetNumber) && (
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#D97706", background: "rgba(217,119,6,0.10)", border: "1px solid rgba(217,119,6,0.25)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
                         ⚠ EXISTS IN PROJECT
                       </span>
                     )}
                     {review.needsReview && (
                       <span title={`Needs review: ${review.reasons.join(", ")}`}
-                        style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#D97706", background: "rgba(217,119,6,0.10)", border: "1px solid rgba(217,119,6,0.25)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
+                        style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
                         ⚠ REVIEW
                       </span>
                     )}
@@ -270,7 +270,7 @@ export default function StepReview({ sheets, setSheets, fileResults, meta, setMe
         <Button
           onClick={() => onCreate(sheets.filter(s => s.selected))}
           disabled={selectedCount === 0}
-          style={{ background: "var(--accent)", color: "#fff", border: "none" }}
+          style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none" }}
         >
           Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
         </Button>

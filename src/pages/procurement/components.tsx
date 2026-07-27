@@ -702,7 +702,7 @@ export function ProcurementFormModal({ projectId, item, vendors, workPackages, o
               onClick={handleSave}
               disabled={isSaving || !form.description?.trim()}
               style={{
-                background: 'var(--accent)', color: '#fff',
+                background: 'var(--accent)', color: 'var(--on-accent)',
                 border: 'none', borderRadius: 8, padding: '8px 20px',
                 fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
                 cursor: isSaving || !form.description?.trim() ? 'not-allowed' : 'pointer',

@@ -42,7 +42,7 @@ describe("STAMP_TYPES", () => {
     expect(keys).toContain("REJECTED");
     for (const s of STAMP_TYPES) {
       expect(s.label).toBeTruthy();
-      expect(s.color).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(s.color).toMatch(/^(#[0-9a-f]{6}|var\(--[\w-]+\))$/i);
     }
   });
 });

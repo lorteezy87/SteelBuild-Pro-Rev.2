@@ -19,10 +19,10 @@
 .rfi-section-panel,
 .rfi-table-shell {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 94%, #000 6%) 0%, color-mix(in srgb, var(--bg-surface-low) 90%, #000 10%) 100%);
-  border: 1px solid color-mix(in srgb, var(--border-default) 88%, white 12%);
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 94%, var(--bg-base) 6%) 0%, color-mix(in srgb, var(--bg-surface-low) 90%, var(--bg-base) 10%) 100%);
+  border: 1px solid color-mix(in srgb, var(--border-default) 88%, var(--bg-surface) 12%);
   border-radius: 12px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 32px rgba(0,0,0,0.24);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-primary) 5%, transparent), 0 14px 32px color-mix(in srgb, var(--bg-base) 24%, transparent);
 }
 
 .rfi-hero-panel {
@@ -399,7 +399,7 @@
   border: 1px solid var(--border-default);
   border-radius: 12px;
   background: var(--bg-surface);
-  box-shadow: 0 10px 24px rgba(0,0,0,0.16);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--bg-base) 16%, transparent);
 }
 
 .rfi-filter-actions {
@@ -501,7 +501,7 @@
 .rfi-agenda-toggle.is-active {
   border-color: var(--accent);
   background: var(--accent);
-  color: var(--bg-base, #0d1117);
+  color: var(--bg-base, var(--bg-page));
 }
 
 .rfi-agenda-toggle__icon {
@@ -523,8 +523,8 @@
 }
 
 .rfi-agenda-toggle.is-active .rfi-agenda-toggle__count {
-  background: color-mix(in srgb, #000 20%, transparent);
-  color: var(--bg-base, #0d1117);
+  background: color-mix(in srgb, var(--bg-base) 20%, transparent);
+  color: var(--bg-base, var(--bg-page));
 }
 
 .rfi-agenda-toggle.is-urgent {
@@ -540,19 +540,19 @@
 
 .rfi-agenda-toggle.is-urgent .rfi-agenda-toggle__count {
   background: var(--danger);
-  color: #fff;
+  color: var(--on-accent);
   animation: rfi-agenda-pulse 1.8s ease-in-out infinite;
 }
 
 .rfi-agenda-toggle.is-urgent.is-active {
   border-color: var(--danger);
   background: var(--danger);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .rfi-agenda-toggle.is-urgent.is-active .rfi-agenda-toggle__count {
-  background: color-mix(in srgb, #000 22%, transparent);
-  color: #fff;
+  background: color-mix(in srgb, var(--bg-base) 22%, transparent);
+  color: var(--on-accent);
   animation: none;
 }
 
@@ -642,7 +642,7 @@
 }
 
 .rfi-record-row:nth-child(even) {
-  background: rgba(255,255,255,0.018);
+  background: var(--bg-row-hover);
 }
 
 .rfi-record-row:hover,
@@ -655,7 +655,7 @@
 }
 
 .rfi-record-row.is-critical:not(.is-overdue) {
-  box-shadow: inset 3px 0 0 #FF6B35;
+  box-shadow: inset 3px 0 0 var(--status-review);
 }
 
 .rfi-row-check {
@@ -704,8 +704,8 @@
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: #FF6B35;
-  box-shadow: 0 0 8px #FF6B35;
+  background: var(--status-review);
+  box-shadow: 0 0 8px var(--status-review);
   flex-shrink: 0;
 }
 
@@ -996,30 +996,30 @@
 
 /* Command Control Center: alias dark-theme tokens → light kit (same pattern
    as .detailing-cc). Without this, register rows keep --text-primary from the
-   dark app shell and disappear on the white table surface. */
+   dark app shell and disappear on the command table surface. */
 [data-skin="command"] .rfi-cc {
   --bg-page: var(--cmd-bg);
   --bg-app: var(--cmd-bg);
   --bg-surface: var(--cmd-surface);
-  --bg-surface-low: #f3f5f8;
+  --bg-surface-low: var(--cmd-kpi-icon-bg);
   --bg-surface-high: var(--cmd-surface);
-  --bg-surface-mid: #f1f4f8;
-  --bg-surface-secondary: #f7f9fc;
+  --bg-surface-mid: var(--cmd-kpi-icon-bg);
+  --bg-surface-secondary: var(--cmd-row-hover);
   --bg-input: var(--cmd-surface);
-  --bg-hover: #f1f4f8;
-  --hover-bg: #f7f9fc;
+  --bg-hover: var(--cmd-kpi-icon-bg);
+  --hover-bg: var(--cmd-row-hover);
 
   --text-primary: var(--cmd-text);
-  --text-secondary: #3f4a57;
+  --text-secondary: var(--cmd-text-muted);
   --text-muted: var(--cmd-text-muted);
 
   --border: var(--cmd-border);
   --border-default: var(--cmd-border);
-  --border-strong: #d3d9e1;
+  --border-strong: var(--cmd-border);
   --divider: var(--cmd-border);
 
   --accent: var(--cmd-gold);
-  --accent-border: #f0d79a;
+  --accent-border: var(--cmd-gold);
   --status-success: var(--cmd-good);
   --status-warning: var(--cmd-warn);
   --status-error: var(--cmd-danger);
@@ -1041,7 +1041,7 @@
 [data-skin="command"] .rfi-cc .rfi-filter-toolbar {
   background: var(--cmd-surface);
   border-color: var(--cmd-border);
-  box-shadow: 0 8px 18px rgba(27, 36, 48, 0.08);
+  box-shadow: var(--shadow-card);
 }
 
 [data-skin="command"] .rfi-cc .rfi-table-shell {
@@ -1052,7 +1052,7 @@
 }
 
 [data-skin="command"] .rfi-cc .rfi-table-header {
-  background: #f3f5f8;
+  background: var(--cmd-kpi-icon-bg);
   color: var(--cmd-text-muted);
   border-bottom: 1px solid var(--cmd-border);
 }
@@ -1064,12 +1064,12 @@
 }
 
 [data-skin="command"] .rfi-cc .rfi-record-row:nth-child(even) {
-  background: #fafbfc;
+  background: color-mix(in srgb, var(--cmd-row-hover) 55%, var(--cmd-surface));
 }
 
 [data-skin="command"] .rfi-cc .rfi-record-row:hover,
 [data-skin="command"] .rfi-cc .rfi-record-row.is-selected {
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
 }
 
 [data-skin="command"] .rfi-cc .rfi-row-number {

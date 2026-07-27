@@ -7,24 +7,24 @@ import { formatLocalDate } from "@/utils/dates";
 import { toUserErrorMessage } from "@/lib/mutations/standardMutation";
 
 const STATUS_COLORS = {
-  "Draft":                   { bg: "rgba(100,116,139,0.15)", color: "#94a3b8" },
-  "Under Review":            { bg: "rgba(234,179,8,0.15)",   color: "#eab308" },
-  "Approved":                { bg: "rgba(34,197,94,0.15)",   color: "#22c55e" },
-  "Approved with Comments":  { bg: "rgba(34,197,94,0.10)",   color: "#4ade80" },
-  "Revise & Resubmit":       { bg: "rgba(249,115,22,0.15)", color: "#f97316" },
-  "Rejected":                { bg: "rgba(239,68,68,0.15)",   color: "#ef4444" },
-  "Superseded":              { bg: "rgba(100,116,139,0.10)", color: "#64748b" },
-  "Issued":                  { bg: "rgba(59,130,246,0.15)",  color: "#3b82f6" },
-  "Archived":                { bg: "rgba(100,116,139,0.08)", color: "#475569" },
-  "Void":                    { bg: "rgba(239,68,68,0.08)",   color: "#dc2626" },
+  "Draft":                   { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
+  "Under Review":            { bg: "var(--warning-muted)", color: "var(--status-warning)" },
+  "Approved":                { bg: "var(--success-muted)", color: "var(--status-success)" },
+  "Approved with Comments":  { bg: "color-mix(in srgb, var(--status-success) 10%, transparent)", color: "var(--status-success)" },
+  "Revise & Resubmit":       { bg: "var(--warning-muted)", color: "var(--status-warning)" },
+  "Rejected":                { bg: "var(--danger-muted)", color: "var(--status-error)" },
+  "Superseded":              { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
+  "Issued":                  { bg: "var(--info-muted)", color: "var(--status-info)" },
+  "Archived":                { bg: "var(--bg-surface-high)", color: "var(--text-muted)" },
+  "Void":                    { bg: "color-mix(in srgb, var(--status-error) 10%, transparent)", color: "var(--status-error)" },
 };
 
 const ENTITY_LABELS = {
-  work_package_id: { label: "Work Package", color: "#0d9488", bg: "rgba(13,148,136,0.12)" },
-  rfi_id:          { label: "RFI",          color: "#f97316", bg: "rgba(249,115,22,0.12)" },
-  delivery_id:     { label: "Delivery",     color: "#0891b2", bg: "rgba(8,145,178,0.12)" },
-  change_order_id: { label: "Change Order", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
-  submittal_id:    { label: "Submittal",    color: "#eab308", bg: "rgba(234,179,8,0.12)" },
+  work_package_id: { label: "Work Package", color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
+  rfi_id:          { label: "RFI",          color: "var(--status-warning)", bg: "var(--warning-muted)", border: "var(--warning-border)" },
+  delivery_id:     { label: "Delivery",     color: "var(--status-info)", bg: "var(--info-muted)", border: "var(--info-border)" },
+  change_order_id: { label: "Change Order", color: "var(--status-error)", bg: "var(--danger-muted)", border: "var(--danger-border)" },
+  submittal_id:    { label: "Submittal",    color: "var(--status-warning)", bg: "var(--warning-muted)", border: "var(--warning-border)" },
 };
 
 export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, onEdit }) {
@@ -174,12 +174,12 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
           >
             {tab}
             {tab === "versions" && versionStack.length > 1 && (
-              <span style={{ marginLeft: 4, fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "rgba(13,148,136,0.15)", color: "#0d9488" }}>
+              <span style={{ marginLeft: 4, fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "var(--accent-muted)", color: "var(--accent)" }}>
                 {versionStack.length}
               </span>
             )}
             {tab === "linked" && linkedEntities.length > 0 && (
-              <span style={{ marginLeft: 4, fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "rgba(59,130,246,0.15)", color: "#3b82f6" }}>
+              <span style={{ marginLeft: 4, fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "var(--info-muted)", color: "var(--status-info)" }}>
                 {linkedEntities.length}
               </span>
             )}
@@ -194,7 +194,7 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
         {activeTab === "details" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12 }}>
             {[
-              { label: "DOCUMENT #", value: doc.documentNumber || doc.document_number, color: "#FF9A60" },
+              { label: "DOCUMENT #", value: doc.documentNumber || doc.document_number, color: "var(--accent)" },
               { label: "CATEGORY",   value: doc.category },
               { label: "DISCIPLINE", value: doc.discipline },
               { label: "REVISION",   value: "Rev " + (doc.revisionNumber || doc.revision_number || "0") },
@@ -245,10 +245,10 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
         {activeTab === "linked" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {linkedEntities.length > 0 ? (
-              linkedEntities.map(({ key, value, label, color, bg }) => (
+              linkedEntities.map(({ key, value, label, color, bg, border }) => (
                 <div key={key} style={{
                   padding: "12px 14px", background: bg,
-                  border: `1px solid ${color}33`, borderRadius: 8,
+                  border: `1px solid ${border}`, borderRadius: 8,
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                 }}>
                   <div>
@@ -258,7 +258,8 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
                     </div>
                   </div>
                   <div style={{
-                    width: 28, height: 28, borderRadius: 6, background: `${color}22`,
+                    width: 28, height: 28, borderRadius: 6, background: bg,
+                    border: `1px solid ${border}`,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 12, color: color,
                   }}>
@@ -307,8 +308,8 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
                       key={ver.id}
                       style={{
                         padding: "10px 14px",
-                        background: isCurrent ? "rgba(200,155,32,0.06)" : "var(--hover-bg)",
-                        border: isCurrent ? "1px solid rgba(200,155,32,0.25)" : "1px solid var(--divider)",
+                        background: isCurrent ? "var(--accent-muted)" : "var(--hover-bg)",
+                        border: isCurrent ? "1px solid var(--accent-border)" : "1px solid var(--divider)",
                         borderRadius: 6, cursor: isCurrent ? "default" : "pointer",
                         transition: "border-color 0.15s",
                       }}
@@ -329,12 +330,12 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
                         </div>
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           {isNewest && (
-                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", background: "rgba(34,197,94,0.15)", color: "#22c55e", borderRadius: 3 }}>
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", background: "var(--success-muted)", color: "var(--status-success)", borderRadius: 3 }}>
                               LATEST
                             </span>
                           )}
                           {isCurrent && (
-                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", background: "rgba(200,155,32,0.15)", color: "var(--accent)", borderRadius: 3 }}>
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", background: "var(--accent-muted)", color: "var(--accent)", borderRadius: 3 }}>
                               VIEWING
                             </span>
                           )}
@@ -362,7 +363,7 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
                         {formatDate(doc.revisionDate || doc.revision_date || doc.uploadedDate || doc.uploaded_date || doc.created_at)}
                       </div>
                     </div>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", background: "rgba(34,197,94,0.15)", color: "#22c55e", borderRadius: 3 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", background: "var(--success-muted)", color: "var(--status-success)", borderRadius: 3 }}>
                       CURRENT
                     </span>
                   </div>

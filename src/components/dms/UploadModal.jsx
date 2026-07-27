@@ -114,7 +114,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.70)",
+        background: "color-mix(in srgb, var(--bg-page) 78%, transparent)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -135,7 +135,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
           maxHeight: "90vh",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.75)"
+          boxShadow: "var(--shadow-lg)"
         }}
       >
         {/* Header */}

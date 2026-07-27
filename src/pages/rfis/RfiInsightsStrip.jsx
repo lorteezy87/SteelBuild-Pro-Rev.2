@@ -114,7 +114,7 @@ function ballInCourtSegments(openRfis) {
     Architect:  "var(--status-info)",
     Engineer:   "var(--status-warning)",
     GC:         "var(--accent)",
-    Owner:      "#0EA5E9",
+    Owner:      "var(--status-info)",
     Internal:   "var(--text-muted)",
     Contractor: "var(--accent)",
   };
@@ -280,7 +280,7 @@ export default function RfiInsightsStrip({ rfis, collapsed, onToggleCollapsed })
         <StatTile label="AVG AGE"    value={`${stats.avgAge}d`}   sub={stats.totalOpen ? "across open RFIs" : "no open RFIs"} />
         <StatTile label="OLDEST"     value={`${stats.oldest}d`}   color={stats.oldest > 14 ? "var(--status-warning)" : undefined} sub={stats.oldest > 14 ? "Over 2 weeks" : "Within 2 weeks"} />
         <StatTile label="OVERDUE"    value={stats.overdue}        color={stats.overdue > 0 ? "var(--danger)" : "var(--text-muted)"} />
-        <StatTile label="CRITICAL"   value={stats.critical}       color={stats.critical > 0 ? "#FF6B35" : "var(--text-muted)"} />
+        <StatTile label="CRITICAL"   value={stats.critical}       color={stats.critical > 0 ? "var(--status-review)" : "var(--text-muted)"} />
       </div>
 
       {/* Charts panel */}

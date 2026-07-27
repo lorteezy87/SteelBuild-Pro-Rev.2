@@ -40,7 +40,7 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
   const activeIdx = STAGE_INDEX[rfi.status] ?? 0;
   const downstream = onDownstreamAction ? recommendedDownstreamActions(rfi) : [];
   const priorityColor =
-    rfi.priority === "Critical" ? "#FF6B35" :
+    rfi.priority === "Critical" ? "var(--status-review)" :
     rfi.priority === "High" ? "var(--status-warning)" :
     rfi.priority === "Medium" ? "var(--status-info)" :
     "var(--text-muted)";
@@ -138,7 +138,7 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
                   borderRadius: 8,
                   cursor: "pointer",
                   textAlign: "left",
-                  background: action.primary ? "rgba(154,123,30,0.12)" : "var(--bg-input)",
+                  background: action.primary ? "var(--accent-muted)" : "var(--bg-input)",
                   border: `1px solid ${action.primary ? "var(--accent)" : "var(--border)"}`,
                   color: "var(--text-primary)",
                 }}
