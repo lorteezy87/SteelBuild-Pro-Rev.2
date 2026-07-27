@@ -425,7 +425,7 @@ export function EmailDetail({
                     style={{
                       height: 24, padding: "0 6px", background: "var(--accent)",
                       border: "none", borderRadius: 4, cursor: "pointer",
-                      color: "var(--text-on-accent, #fff)", fontSize: 10,
+                      color: "var(--on-accent)", fontSize: 10,
                     }}
                   >
                     <Plus size={10} />

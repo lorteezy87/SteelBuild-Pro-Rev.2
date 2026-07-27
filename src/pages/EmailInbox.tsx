@@ -297,7 +297,7 @@ export default function EmailInbox() {
               background: "var(--accent)", border: "1px solid var(--accent-border)",
               borderRadius: 8, cursor: "pointer",
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600,
-              color: "var(--text-on-accent)", flexShrink: 0,
+              color: "var(--on-accent)", flexShrink: 0,
             }}
           >
             <PenSquare size={12} strokeWidth={2} />

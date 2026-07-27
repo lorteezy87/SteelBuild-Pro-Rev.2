@@ -8,7 +8,7 @@
 
 ## 1. Goal
 
-Make the **light** theme the global default across the whole app (zero dark anywhere), with the 22 main modules on the new Control Center look and the remaining ~60 pages on a **clean, audited light fallback** (the app's existing `[data-theme="light"]` theme). Get **light mode to a consistent, readable 100%**, then progressively convert more modules to the new look. **Dark mode is explicitly deferred.**
+Make the **light** theme the global default across the whole app (zero dark anywhere), with the 22 main modules on the new Control Center look and the remaining ~60 pages on a **clean, audited light fallback** (the app's existing `[data-theme="light"]` theme). Get **light mode to a consistent, readable 100%**, then progressively convert more modules to the new look. At the time of this June design, dark mode was intentionally scheduled for Phase 4; Phase 4 was completed by `docs/superpowers/specs/2026-07-27-dual-theme-dark-completion-design.md` and `docs/superpowers/plans/2026-07-27-dual-theme-dark-completion.md`.
 
 ## 2. Context (the real inventory)
 
@@ -25,7 +25,7 @@ The app already has a complete light theme via `[data-theme="light"]` tokens in 
 
 ## 4. Decisions (locked)
 
-1. **Light-first; dark deferred.** Do not delete dark-theme code — it becomes the basis of dark mode later.
+1. **Light-first; dark completed in Phase 4.** Do not delete dark-theme code — it became the basis for the completed dual-theme work documented in `docs/superpowers/specs/2026-07-27-dual-theme-dark-completion-design.md`.
 2. **Flip global after a CODE-LEVEL light audit** (not blocking on a perfect pre-flip visual verify the agent cannot do). True 100% is reached iteratively: audit → flip → owner field-verify → fix.
 3. **Progressive conversion** of main modules to the new look after the flip.
 4. Long tail (calculators, admin, deprioritized, viewers, forms) stays on the clean light fallback — NOT force-fit into the dense Control Center template.
@@ -56,9 +56,9 @@ The app already has a complete light theme via `[data-theme="light"]` tokens in 
 
 ## 7. Out of scope / non-goals
 
-- Deleting the dark theme (needed for dark mode).
+- Deleting dual-theme support.
 - Redesigning calculators (already done) or force-fitting admin/deprioritized/viewer/form pages into the Control Center template.
-- Dark mode (Phase 4, deferred).
+- Implementing dark mode as part of the June light rollout; Phase 4 is now complete via the 2026-07-27 dual-theme spec/plan.
 - The full new sidebar shell rebuild (the existing sidebar reskins light via the theme; sufficient for now).
 
 ## 8. Risks

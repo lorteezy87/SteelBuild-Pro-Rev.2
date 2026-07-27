@@ -537,7 +537,7 @@ const primaryBtnStyle = {
   fontFamily: "var(--font-body)",
   fontSize: 11,
   fontWeight: 600,
-  color: "var(--text-on-accent, #fff)",
+  color: "var(--on-accent)",
   cursor: "pointer",
 };
 

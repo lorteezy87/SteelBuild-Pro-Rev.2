@@ -608,7 +608,7 @@ export default function Documents() {
                     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                   }}
                 >
-                  {selectedIds.has(doc.id) && <span style={{ color: "var(--text-on-accent)", fontSize: 11, lineHeight: 1 }}>{"\u2714"}</span>}
+                  {selectedIds.has(doc.id) && <span style={{ color: "var(--on-accent)", fontSize: 11, lineHeight: 1 }}>{"\u2714"}</span>}
                 </div>
                 <DocumentCard
                   doc={doc}

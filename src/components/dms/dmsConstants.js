@@ -43,18 +43,18 @@ export const DOC_DISCIPLINES = [
 ];
 
 export const FILE_TYPE_CONFIG = {
-  pdf:   { icon: "PDF", bg: "var(--status-error)", text: "var(--text-on-accent)" },
-  dwg:   { icon: "DWG", bg: "var(--status-info)", text: "var(--text-on-accent)" },
-  dxf:   { icon: "DXF", bg: "var(--accent)", text: "var(--text-on-accent)" },
-  ifc:   { icon: "3D",  bg: "var(--status-success)", text: "var(--text-on-accent)" },
+  pdf:   { icon: "PDF", bg: "var(--status-error)", text: "var(--on-accent)" },
+  dwg:   { icon: "DWG", bg: "var(--status-info)", text: "var(--on-accent)" },
+  dxf:   { icon: "DXF", bg: "var(--accent)", text: "var(--on-accent)" },
+  ifc:   { icon: "3D",  bg: "var(--status-success)", text: "var(--on-accent)" },
   rvt:   { icon: "RVT", bg: "var(--status-warning)", text: "var(--text-primary)" },
-  jpg:   { icon: "IMG", bg: "var(--accent)", text: "var(--text-on-accent)" },
-  jpeg:  { icon: "IMG", bg: "var(--accent)", text: "var(--text-on-accent)" },
-  png:   { icon: "IMG", bg: "var(--accent)", text: "var(--text-on-accent)" },
-  xlsx:  { icon: "XLS", bg: "var(--status-success)", text: "var(--text-on-accent)" },
-  xls:   { icon: "XLS", bg: "var(--status-success)", text: "var(--text-on-accent)" },
-  docx:  { icon: "DOC", bg: "var(--status-info)", text: "var(--text-on-accent)" },
-  doc:   { icon: "DOC", bg: "var(--status-info)", text: "var(--text-on-accent)" },
+  jpg:   { icon: "IMG", bg: "var(--accent)", text: "var(--on-accent)" },
+  jpeg:  { icon: "IMG", bg: "var(--accent)", text: "var(--on-accent)" },
+  png:   { icon: "IMG", bg: "var(--accent)", text: "var(--on-accent)" },
+  xlsx:  { icon: "XLS", bg: "var(--status-success)", text: "var(--on-accent)" },
+  xls:   { icon: "XLS", bg: "var(--status-success)", text: "var(--on-accent)" },
+  docx:  { icon: "DOC", bg: "var(--status-info)", text: "var(--on-accent)" },
+  doc:   { icon: "DOC", bg: "var(--status-info)", text: "var(--on-accent)" },
   other: { icon: "FILE", bg: "var(--text-muted)", text: "var(--bg-surface)" },
 };
 
