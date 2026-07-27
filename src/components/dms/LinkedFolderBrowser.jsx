@@ -55,9 +55,9 @@ function formatDate(dateStr) {
 
 // ── Status config ─────────────────────────────────────────────────────
 const STATUS_CONFIG = {
-  pending:  { label: "Pending",  color: "var(--warning)",      bg: "rgba(234,179,8,0.1)" },
-  approved: { label: "Approved", color: "var(--success)",      bg: "rgba(34,197,94,0.1)" },
-  rejected: { label: "Rejected", color: "var(--status-error)", bg: "rgba(239,68,68,0.1)" },
+  pending:  { label: "Pending",  color: "var(--status-warning)", bg: "var(--warning-muted)" },
+  approved: { label: "Approved", color: "var(--status-success)", bg: "var(--success-muted)" },
+  rejected: { label: "Rejected", color: "var(--status-error)", bg: "var(--danger-muted)" },
   imported: { label: "Imported", color: "var(--accent)",       bg: "var(--accent-muted)" },
   skipped:  { label: "Skipped",  color: "var(--text-muted)",   bg: "var(--bg-surface-low)" },
 };

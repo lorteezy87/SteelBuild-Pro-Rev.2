@@ -603,12 +603,12 @@ export default function Documents() {
                   style={{
                     position: "absolute", top: 8, left: 8, zIndex: 10, width: 18, height: 18,
                     borderRadius: 4,
-                    background: selectedIds.has(doc.id) ? "#10B981" : "rgba(0,0,0,0.5)",
-                    border: selectedIds.has(doc.id) ? "2px solid #10B981" : "2px solid var(--text-muted)",
+                    background: selectedIds.has(doc.id) ? "var(--status-success)" : "color-mix(in srgb, var(--bg-page) 60%, transparent)",
+                    border: selectedIds.has(doc.id) ? "2px solid var(--status-success)" : "2px solid var(--text-muted)",
                     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                   }}
                 >
-                  {selectedIds.has(doc.id) && <span style={{ color: "white", fontSize: 11, lineHeight: 1 }}>{"\u2714"}</span>}
+                  {selectedIds.has(doc.id) && <span style={{ color: "var(--text-on-accent)", fontSize: 11, lineHeight: 1 }}>{"\u2714"}</span>}
                 </div>
                 <DocumentCard
                   doc={doc}

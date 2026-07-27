@@ -29,7 +29,7 @@ import { X, FolderPlus } from "lucide-react";
 
 const overlay = {
   position: "fixed", inset: 0,
-  background: "rgba(0,0,0,0.6)",
+  background: "color-mix(in srgb, var(--bg-page) 70%, transparent)",
   zIndex: 2000,
   display: "flex", alignItems: "center", justifyContent: "center",
 };

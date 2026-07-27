@@ -115,7 +115,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.65)",
+        background: "color-mix(in srgb, var(--bg-page) 72%, transparent)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

@@ -351,7 +351,7 @@ export default function FolderBar({
                         background: "var(--bg-surface-high)",
                         border: "1px solid var(--border-default)",
                         borderRadius: 6,
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                        boxShadow: "var(--shadow-card)",
                         minWidth: 140,
                         zIndex: 20,
                         overflow: "hidden",

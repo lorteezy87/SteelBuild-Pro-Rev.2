@@ -8,11 +8,11 @@ import React from "react";
 import { CloudUpload, FileText, FileCode, File, FileImage, FileArchive } from "lucide-react";
 
 const ICONS = [
-  { Icon: FileText,    label: "PDF", color: "#F87171" },
-  { Icon: FileCode,    label: "DWG", color: "#38BDF8" },
-  { Icon: File,        label: "IFC", color: "#0891B2" },
-  { Icon: FileImage,   label: "IMG", color: "#2DD4BF" },
-  { Icon: FileArchive, label: "ZIP", color: "#FBBF24" },
+  { Icon: FileText,    label: "PDF", color: "var(--status-error)" },
+  { Icon: FileCode,    label: "DWG", color: "var(--status-info)" },
+  { Icon: File,        label: "IFC", color: "var(--accent)" },
+  { Icon: FileImage,   label: "IMG", color: "var(--accent)" },
+  { Icon: FileArchive, label: "ZIP", color: "var(--status-warning)" },
 ];
 
 export default function EmptyState({ onUploadOpen }) {
@@ -32,7 +32,7 @@ export default function EmptyState({ onUploadOpen }) {
         padding: "60px 24px",
         cursor: "pointer",
         transition: "border-color 0.2s, background 0.2s",
-        backgroundImage: "radial-gradient(circle at 50% 50%, rgba(200,155,32,0.03) 0%, transparent 70%)",
+        backgroundImage: "radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 70%)",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = "var(--accent-border)";

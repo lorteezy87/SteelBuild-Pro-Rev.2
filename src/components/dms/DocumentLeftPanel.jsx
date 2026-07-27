@@ -2,16 +2,16 @@ import React, { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 const STATUS_DOT_COLORS = {
-  "Draft":                   "#94a3b8",
-  "Under Review":            "#eab308",
-  "Approved":                "#22c55e",
-  "Approved with Comments":  "#4ade80",
-  "Revise & Resubmit":       "#f97316",
-  "Rejected":                "#ef4444",
-  "Issued":                  "#3b82f6",
-  "Superseded":              "#64748b",
-  "Archived":                "#475569",
-  "Void":                    "#dc2626",
+  "Draft":                   "var(--text-muted)",
+  "Under Review":            "var(--status-warning)",
+  "Approved":                "var(--status-success)",
+  "Approved with Comments":  "var(--status-success)",
+  "Revise & Resubmit":       "var(--status-warning)",
+  "Rejected":                "var(--status-error)",
+  "Issued":                  "var(--status-info)",
+  "Superseded":              "var(--text-muted)",
+  "Archived":                "var(--text-muted)",
+  "Void":                    "var(--status-error)",
 };
 
 function CollapsibleSection({ title, defaultOpen = true, children }) {
@@ -189,10 +189,10 @@ export default function DocumentLeftPanel({ documents = [], filteredCount, activ
       {/* Linked To */}
       <CollapsibleSection title="Linked To">
         {[
-          { label: "Work Packages", type: "WP",  color: "#0d9488" },
-          { label: "Deliveries",    type: "DEL", color: "#0891b2" },
-          { label: "RFIs",          type: "RFI", color: "#f97316" },
-          { label: "Submittals",    type: "SUB", color: "#eab308" },
+          { label: "Work Packages", type: "WP",  color: "var(--accent)" },
+          { label: "Deliveries",    type: "DEL", color: "var(--status-info)" },
+          { label: "RFIs",          type: "RFI", color: "var(--status-warning)" },
+          { label: "Submittals",    type: "SUB", color: "var(--status-warning)" },
         ].map(item => {
           const count = getLinkedCount(item.type);
           if (count === 0) return null;

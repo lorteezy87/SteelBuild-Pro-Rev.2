@@ -38,7 +38,7 @@ export default function TransmittalModal({
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.70)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3000 }}
+      style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-page) 78%, transparent)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3000 }}
       onClick={onClose}
     >
       <div
@@ -46,13 +46,13 @@ export default function TransmittalModal({
         style={{
           background: "var(--bg-surface-low)",
           border: "1px solid var(--bg-surface-high)",
-          borderTop: "3px solid #10B981",
+          borderTop: "3px solid var(--status-success)",
           borderRadius: 12,
           width: 520,
           maxHeight: "85vh",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.75)",
+          boxShadow: "var(--shadow-lg)",
           overflow: "hidden",
         }}
       >
@@ -132,7 +132,7 @@ export default function TransmittalModal({
           </button>
           <button
             onClick={handleGenerate}
-            style={{ padding: "8px 20px", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.40)", color: "var(--status-success)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
+            style={{ padding: "8px 20px", background: "var(--success-muted)", border: "1px solid var(--success-border)", color: "var(--status-success)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
           >
             {"\u2193"} GENERATE PDF
           </button>

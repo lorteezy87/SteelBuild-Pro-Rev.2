@@ -57,7 +57,7 @@ export default function FolderSection({
                   width: 16,
                   height: 16,
                   borderRadius: 3,
-                  background: selectedIds.has(doc.id) ? "var(--status-success)" : "rgba(0,0,0,0.5)",
+                  background: selectedIds.has(doc.id) ? "var(--status-success)" : "color-mix(in srgb, var(--bg-page) 60%, transparent)",
                   border: "2px solid " + (selectedIds.has(doc.id) ? "var(--status-success)" : "var(--text-muted)"),
                   cursor: "pointer",
                   display: "flex",

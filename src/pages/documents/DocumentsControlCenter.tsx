@@ -300,7 +300,7 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
             position: "absolute",
             inset: 0,
             zIndex: 2500,
-            background: "rgba(200,155,32,0.08)",
+            background: "color-mix(in srgb, var(--cmd-gold) 12%, transparent)",
             border: "3px dashed var(--accent)",
             borderRadius: 16,
             display: "flex",
@@ -372,7 +372,7 @@ export default function DocumentsControlCenter(props: DocumentsControlCenterProp
                   fontFamily: "var(--font-mono)",
                   fontSize: 13,
                   fontWeight: 700,
-                  color: "var(--cmd-text-primary, #1a1a1a)",
+                  color: "var(--cmd-text)",
                 }}
               >
                 {row.count}
