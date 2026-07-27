@@ -12,13 +12,32 @@ import { displayPct, isMilestoneTask } from "./scheduleTaskUtils";
 import { parseDeps } from "./scheduleDependencies";
 import { isSummaryTask as isSummaryTaskCanonical } from "@/lib/schedule/summaryTasks";
 
-export function addDaysUTC(date, days) {
+type ScheduleTaskLike = {
+  id?: string;
+  metadata?: unknown;
+  task_name?: string | null;
+  wbs_code?: string | null;
+  status?: string | null;
+  stage?: string | null;
+  task_type?: string | null;
+  resource_names?: string | null;
+  assigned_to?: string | null;
+  dependencies?: unknown;
+  is_critical?: boolean | null;
+  is_critical_path?: boolean | null;
+  critical_path?: boolean | null;
+  [key: string]: unknown;
+};
+
+type RowGeom = { top: number; height: number };
+
+export function addDaysUTC(date: Date, days: number): Date {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + days);
   return next;
 }
 
-export function shiftDateOnly(input, days) {
+export function shiftDateOnly(input: unknown, days: number): string | null {
   const date = parseDateUTC(input);
   return date ? toDateOnly(addDaysUTC(date, days)) : null;
 }
@@ -40,21 +59,23 @@ export const MIN_COL_WIDTH = 24;
 export const MIN_NAME_WIDTH = 240;
 export const COL_WIDTHS_KEY = "sbp-gantt-col-widths-v1";
 
-export function loadColWidths() {
+export function loadColWidths(): number[] {
   try {
     const raw = typeof window !== "undefined" && window.localStorage?.getItem(COL_WIDTHS_KEY);
     if (!raw) return DEFAULT_COL_WIDTHS;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length !== DEFAULT_COL_WIDTHS.length) return DEFAULT_COL_WIDTHS;
-    return parsed.map((w, i) => {
+    return parsed.map((w: unknown, i: number) => {
       if (typeof w !== "number" || !Number.isFinite(w)) return DEFAULT_COL_WIDTHS[i];
       // Don't trust stored widths smaller than our hard min (could lock users out).
       return w === 0 ? 0 : Math.max(MIN_COL_WIDTH, Math.min(400, w));
     });
-  } catch { return DEFAULT_COL_WIDTHS; }
+  } catch {
+    return DEFAULT_COL_WIDTHS;
+  }
 }
 
-export function findFirstRowAtOrAfter(items, y) {
+export function findFirstRowAtOrAfter(items: RowGeom[], y: number): number {
   let lo = 0;
   let hi = items.length;
   while (lo < hi) {
@@ -65,7 +86,7 @@ export function findFirstRowAtOrAfter(items, y) {
   return lo;
 }
 
-export function findFirstRowAfter(items, y) {
+export function findFirstRowAfter(items: RowGeom[], y: number): number {
   let lo = 0;
   let hi = items.length;
   while (lo < hi) {
@@ -76,13 +97,13 @@ export function findFirstRowAfter(items, y) {
   return lo;
 }
 
-export function getTaskMetadata(task) {
+export function getTaskMetadata(task: ScheduleTaskLike | null | undefined): Record<string, unknown> {
   if (!task?.metadata) return {};
-  if (typeof task.metadata === "object") return task.metadata;
+  if (typeof task.metadata === "object") return task.metadata as Record<string, unknown>;
   if (typeof task.metadata === "string") {
     try {
       const parsed = JSON.parse(task.metadata);
-      return parsed && typeof parsed === "object" ? parsed : {};
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
     } catch {
       return {};
     }
@@ -90,7 +111,7 @@ export function getTaskMetadata(task) {
   return {};
 }
 
-export function getTaskBaseline(task) {
+export function getTaskBaseline(task: ScheduleTaskLike | null | undefined): { start: unknown; end: unknown } | null {
   const metadata = getTaskMetadata(task);
   const bs = metadata.baseline_start || null;
   const be = metadata.baseline_end || null;
@@ -98,13 +119,17 @@ export function getTaskBaseline(task) {
   return { start: bs, end: be };
 }
 
-export function hasBaselineDrift(task, effStartDate, effEndDate) {
+export function hasBaselineDrift(
+  task: ScheduleTaskLike | null | undefined,
+  effStartDate: unknown,
+  effEndDate: unknown,
+): boolean {
   const baseline = getTaskBaseline(task);
   if (!baseline) return false;
   return baseline.start !== effStartDate || baseline.end !== effEndDate;
 }
 
-export function isCriticalTask(task) {
+export function isCriticalTask(task: ScheduleTaskLike | null | undefined): boolean {
   const metadata = getTaskMetadata(task);
   return Boolean(
     metadata.is_critical ||
@@ -115,7 +140,7 @@ export function isCriticalTask(task) {
   );
 }
 
-export function taskSearchHaystack(task, phaseLabel = "") {
+export function taskSearchHaystack(task: ScheduleTaskLike | null | undefined, phaseLabel = ""): string {
   return [
     task?.task_name,
     task?.wbs_code,
@@ -128,17 +153,21 @@ export function taskSearchHaystack(task, phaseLabel = "") {
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
-export function pluralize(value, singular, plural = `${singular}s`) {
+export function pluralize(value: number, singular: string, plural = `${singular}s`): string {
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
-export function isStalledTask(task, today, parseStart) {
+export function isStalledTask(
+  task: ScheduleTaskLike | null | undefined,
+  today: Date,
+  parseStart: (task: ScheduleTaskLike) => Date | null | undefined,
+): boolean {
   if (!task || task.status === "Complete" || String(task.status || "").toLowerCase().includes("complete")) return false;
   const start = parseStart(task);
   return Boolean(start && start < today && displayPct(task) === 0);
 }
 
-export function isOpenScheduleTask(task) {
+export function isOpenScheduleTask(task: ScheduleTaskLike | null | undefined): boolean {
   const status = String(task?.status || "").toLowerCase();
   return !["complete", "completed", "closed", "cancelled", "canceled"].some((closed) => status.includes(closed));
 }
@@ -148,28 +177,31 @@ export function isOpenScheduleTask(task) {
 // Gantt already enriches rows with _hasChildren/_isRolledUpSummary, so the
 // single-arg (flag-only) form is sufficient here; surfaces that lack that
 // enrichment pass a parentIds set to the canonical helper directly.
-export function isSummaryScheduleTask(task) {
+export function isSummaryScheduleTask(task: ScheduleTaskLike | null | undefined): boolean {
   return isSummaryTaskCanonical(task);
 }
 
-export function isActionableScheduleTask(task) {
+export function isActionableScheduleTask(task: ScheduleTaskLike | null | undefined): boolean {
   return !isSummaryScheduleTask(task);
 }
 
-export function taskOwner(task) {
+export function taskOwner(task: ScheduleTaskLike | null | undefined): string {
   return String(task?.resource_names || task?.assigned_to || "").trim();
 }
 
-export function isUnassignedTask(task) {
+export function isUnassignedTask(task: ScheduleTaskLike | null | undefined): boolean {
   return Boolean(task && isOpenScheduleTask(task) && isActionableScheduleTask(task) && !taskOwner(task));
 }
 
-export function hasLogicGapTask(task, successorCountById) {
+export function hasLogicGapTask(
+  task: ScheduleTaskLike | null | undefined,
+  successorCountById: Record<string, number | undefined>,
+): boolean {
   if (!task || !isOpenScheduleTask(task) || !isActionableScheduleTask(task)) return false;
   // Milestones are natural network endpoints — exempt from logic-gap checks.
   if (isMilestoneTask(task)) return false;
   const predecessorCount = parseDeps(task.dependencies).length;
-  const successorCount = successorCountById[task.id] || 0;
+  const successorCount = successorCountById[task.id as string] || 0;
   // A task with either a predecessor OR a successor is part of the schedule
   // network. Only flag completely unlinked tasks — those are the real logic
   // gaps. The previous `||` condition flagged start tasks (no predecessor)
@@ -180,7 +212,13 @@ export function hasLogicGapTask(task, successorCountById) {
   return predecessorCount === 0 && successorCount === 0;
 }
 
-export function isLookaheadTask(task, today, getStart, getEnd, days = 14) {
+export function isLookaheadTask(
+  task: ScheduleTaskLike | null | undefined,
+  today: Date,
+  getStart: (task: ScheduleTaskLike) => unknown,
+  getEnd: (task: ScheduleTaskLike) => unknown,
+  days = 14,
+): boolean {
   if (!task || task.status === "Complete" || String(task.status || "").toLowerCase().includes("complete")) return false;
   const start = parseDateUTC(getStart(task));
   const end = parseDateUTC(getEnd(task));
@@ -191,5 +229,5 @@ export function isLookaheadTask(task, today, getStart, getEnd, days = 14) {
 
   if (start && end) return start <= windowEnd && end >= today;
   if (start) return start >= today && start <= windowEnd;
-  return end >= today && end <= windowEnd;
+  return end! >= today && end! <= windowEnd;
 }

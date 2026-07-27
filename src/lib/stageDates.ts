@@ -203,7 +203,11 @@ export function applyStageDatesToTask(task, stageDates) {
       existingMeta.detailing_stage ||
       null,
   };
-  const patch = { metadata: mergedMeta };
+  const patch: {
+    metadata: Record<string, unknown>;
+    start_date?: string | null;
+    end_date?: string | null;
+  } = { metadata: mergedMeta };
   const { start_date, end_date } = deriveStartEndFromStages(cleanStageDates);
   if (start_date) patch.start_date = start_date;
   if (end_date)   patch.end_date   = end_date;
