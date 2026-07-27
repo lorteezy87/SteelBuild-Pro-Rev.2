@@ -29,7 +29,6 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-07-27T01:32:00Z | cursor-tablet-pm-kit-design-3d17 | Tablet PM layout kit design | docs/superpowers/specs/2026-07-27-tablet-pm-layout-kit-design.md | Spec tablet-first shared layout kit + migration order for Dashboard/Projects/RFIs/Detailing. |
 | 2026-07-26T04:00:00Z | cursor-ap-contacts-dms-d3a1 | Contacts + DocumentStorageSettings hygiene | src/pages/Contacts.jsx, src/components/contacts/ContactFormModal.jsx, src/components/dms/DocumentStorageSettings.jsx, src/pages/Vendors.jsx | RegisterFetchBody + Contact create withProjectId/toasts; LinkedFolder.create fail-closed; Vendors toast hygiene (IDs 18/48/50). |
 | 2026-07-12T00:00:00Z | opus-phase1-batch1 | False-success cleanup batch 1 | src/api/client/functions.ts, src/config/routes.js, src/pages/AgentMemory.jsx, src/components/dms/DocumentStorageSettings.jsx | Fail-close unavailable backend invokes; remove AgentMemory route exposure; disable fake linked-folder Sync now action until backend implementation exists. |
 | 2026-07-12T12:00:00Z | opus-feature-flags-batch9 | Feature-flag authority consolidation (Batch 9) | src/lib/featureFlags.jsx, src/__tests__/featureFlags.test.js, src/hooks/useFeatureFlag.ts, supabase/migrations/20260712000000_seed_feature_flag_catalog.sql, supabase/migrations/20260703180000_seed_submittal_approved_to_scrub_flag.sql, supabase/migrations/20260704000000_seed_submittal_revision_autobump_flag.sql, supabase/migrations/20260704000010_seed_submittal_splitting_flag.sql, supabase/migrations/20260704020010_seed_submittal_workday_dues_flag.sql, supabase/migrations/20260704030000_seed_submittal_drawing_types_flag.sql, src/config/featureFlags.ts, src/config/__tests__/featureFlagCatalog.test.ts, docs/FEATURE_FLAGS.md, docs/PHASE_0_BASELINE_2026-07-12.md | Remove browser/local feature-flag authority and establish canonical server-backed catalog + SQL seed + tests/docs for production flag governance. |
@@ -47,6 +46,7 @@ Notes:
 | 2026-07-09T20:00:00Z | measurement-ship1 | Drawing-viewer measurement correctness | src/components/drawings/viewer/{AnnotationLayer.jsx,detectScale.js,measureLabel.js,useMarkup.js} · src/pages/drawingViewer/{useAutoScaleOnLoad.js,ViewerToolbar.jsx,usePdfLoader.js} · src/pages/DrawingViewer.jsx · src/utils/feetInches.js · supabase/migrations/** | Fix `drawing_markups` CHECK (7 of 8 markup kinds rejected → table holds 0 rows), per-page scale detection + explicit ambiguous state, canonical ft-in 1/16" formatter, save-failure toast, badge+detection outside canvas mode. Plan: docs/superpowers/plans/2026-07-09-drawing-viewer-measurement-ship1.md |
 
 ## Recently released
+- 2026-07-27 · cursor-tablet-pm-kit-design-3d17 · Tablet PM layout kit Phase 0 (PR #160).
 - 2026-07-27 · cursor-project-archive-reappear-3d17 · Fix archived projects reappearing in switcher (PR #159); apply migration `20260727012111`.
 - 2026-07-26 · cursor-ap-batch-deploy-d3a1 · Merged #139–#149 action-plan hygiene batch + production deploy.
 - 2026-07-26 · cursor-ap-email-review-d3a1 · EmailAccount/ReviewQueue/TransmittalLog create fail-closed + loading skeletons.
