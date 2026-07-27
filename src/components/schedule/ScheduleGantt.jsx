@@ -2,7 +2,24 @@ import React, { useMemo, useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { risksForTaskWindow } from "@/lib/weatherRisk";
 import { computeEffectiveDates } from "@/services/scheduleCascade";
-import { GANTT_PHASE_HEX, GANTT_STATUS_HEX, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
+import {
+  GANTT_BASELINE_VAR,
+  GANTT_BG_VAR,
+  GANTT_DEPENDENCY_VAR,
+  GANTT_GRID_STRONG_VAR,
+  GANTT_GRID_VAR,
+  GANTT_HEADER_VAR,
+  GANTT_LEFT_VAR,
+  GANTT_PANEL_STRONG_VAR,
+  GANTT_PANEL_VAR,
+  GANTT_PHASE_HEX,
+  GANTT_ROW_ALT_VAR,
+  GANTT_ROW_HOVER_VAR,
+  GANTT_STATUS_HEX,
+  GANTT_TODAY_SOFT_VAR,
+  GANTT_TODAY_VAR,
+  GANTT_WEEKEND_VAR,
+} from "@/lib/ganttTheme";
 import {
   parseDateUTC,
   toDateOnly,
@@ -53,6 +70,7 @@ const DELIVERY_STATUS_DOT = {
 const ROW_H   = 40;
 const SUM_H   = 36;
 const HEAD_H  = 40;
+const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 
 // Valid drawing-stage values for a scheduled detailing task — matches the
 // drawings.stage CHECK constraint after migration 077 (corrected 7-stage
@@ -203,7 +221,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       if (map[ph.key]) ordered.push({ phase: ph, tasks: buildTreeOrder(map[ph.key], { rootPrefix: ph.id }) });
     });
     if (map["Uncategorized"]) {
-      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: buildTreeOrder(map["Uncategorized"], { rootPrefix: 99 }) });
+      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: GANTT_BASELINE_VAR }, tasks: buildTreeOrder(map["Uncategorized"], { rootPrefix: 99 }) });
     }
     return ordered;
   }, [rawTasks, phaseFilter]);
@@ -783,10 +801,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   }, [depArrows, bodyViewport]);
 
   return (
-    <div ref={containerRef} data-gantt-export-root style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--sbd-gantt-bg)", overflow: "hidden" }}>
+    <div ref={containerRef} data-gantt-export-root style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: GANTT_BG_VAR, overflow: "hidden" }}>
 
       {/* ── Toolbar ─────────────────────────────────────────────────── */}
-      <div data-gantt-export-exclude style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, padding: "6px 16px", borderBottom: "1px solid var(--sbd-gantt-grid-strong)", background: "var(--sbd-gantt-panel)" }}>
+      <div data-gantt-export-exclude style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, padding: "6px 16px", borderBottom: `1px solid ${GANTT_GRID_STRONG_VAR}`, background: GANTT_PANEL_VAR }}>
         {/* Stats */}
         <GanttStatsBar
           totalTasks={totalTasks} completeTasks={completeTasks} inProgressTasks={inProgressTasks}
@@ -847,8 +865,8 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 maxWidth: 220,
                 padding: "4px 8px",
                 borderRadius: 999,
-                border: `1px solid ${GANTT_STATUS_HEX.inProgress}88`,
-                background: `${GANTT_STATUS_HEX.inProgress}18`,
+                border: `1px solid ${tint(GANTT_STATUS_HEX.inProgress, 53)}`,
+                background: tint(GANTT_STATUS_HEX.inProgress, 9),
                 color: GANTT_STATUS_HEX.inProgress,
                 fontFamily: "var(--font-mono)",
                 fontSize: 8,
@@ -872,7 +890,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             style={{
               padding: "4px 10px", borderRadius: 4,
               border: showSubmittals ? `1px solid ${GANTT_STATUS_HEX.inProgress}` : "1px solid var(--divider)",
-              background: showSubmittals ? `${GANTT_STATUS_HEX.inProgress}1A` : "transparent",
+              background: showSubmittals ? tint(GANTT_STATUS_HEX.inProgress, 10) : "transparent",
               color: showSubmittals ? GANTT_STATUS_HEX.inProgress : "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
@@ -901,9 +919,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             onClick={() => setShowBaseline(v => !v)}
             style={{
               padding: "4px 10px", borderRadius: 4,
-              border: showBaseline ? "1px solid rgba(100,116,139,0.7)" : "1px solid var(--divider)",
-              background: showBaseline ? "rgba(100,116,139,0.14)" : "transparent",
-              color: showBaseline ? "#94A3B8" : "var(--text-muted)",
+              border: showBaseline ? `1px solid color-mix(in srgb, ${GANTT_BASELINE_VAR} 70%, transparent)` : "1px solid var(--divider)",
+              background: showBaseline ? `color-mix(in srgb, ${GANTT_BASELINE_VAR} 14%, transparent)` : "transparent",
+              color: showBaseline ? GANTT_BASELINE_VAR : "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
             }}
@@ -997,7 +1015,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             padding: "5px 10px",
             borderRadius: 8,
             border: "1px solid var(--divider)",
-            background: showLegend ? "rgba(86,176,255,0.12)" : "rgba(255,255,255,0.03)",
+            background: showLegend ? GANTT_ROW_HOVER_VAR : GANTT_PANEL_STRONG_VAR,
             color: showLegend ? "var(--accent)" : "var(--text-muted)",
             fontFamily: "var(--font-mono)",
             fontSize: 8,
@@ -1021,7 +1039,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             handle resizes THAT column; TASK NAME (flex) auto-rebalances.
             Double-click the handle to reset that single column to its
             default width; double-click the "% " header to reset ALL. */}
-        <div style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, background: "var(--sbd-gantt-header)", borderRight: "1px solid var(--sbd-gantt-grid-strong)", display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4 }}>
+        <div style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, background: GANTT_HEADER_VAR, borderRight: `1px solid ${GANTT_GRID_STRONG_VAR}`, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4 }}>
           {["WBS", "TASK NAME", "DUR", "START", "FINISH", "PRED", "RESOURCES", "STATUS", "STAGE", "%"].map((h, i) => (
             <div key={i} style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", overflow: "visible" }}
                  onDoubleClick={i === 9 ? resetColWidths : undefined}
@@ -1060,7 +1078,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             reads the month as a wide segment); bottom half shows
             week-of-year + start-of-week date. Current week is
             highlighted with the accent color across both tiers. */}
-        <div ref={rightHead} style={{ flex: 1, overflowX: "hidden", overflowY: "hidden", background: "var(--sbd-gantt-header)" }}>
+        <div ref={rightHead} style={{ flex: 1, overflowX: "hidden", overflowY: "hidden", background: GANTT_HEADER_VAR }}>
           <div style={{ display: "flex", width: totalW, height: HEAD_H, position: "relative" }}>
             {dateRange.weeks.map((week, i) => {
               const cur = isCurrentWeek(week);
@@ -1069,9 +1087,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               // and render a slightly stronger left-edge divider.
               const isMonthStart = week.getDate() <= 7;
               const headerBg = cur
-                ? "var(--sbd-gantt-today-soft)"
+                ? GANTT_TODAY_SOFT_VAR
                 : banded
-                  ? "rgba(255,255,255,0.018)"
+                  ? GANTT_WEEKEND_VAR
                   : "transparent";
               const monthLabel = isMonthStart
                 ? week.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).toUpperCase()
@@ -1079,8 +1097,8 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               return (
                 <div key={i} style={{
                   minWidth: WEEK_PX,
-                  borderRight: "1px solid rgba(255,255,255,0.04)",
-                  borderLeft: isMonthStart ? "1px solid rgba(255,255,255,0.10)" : "none",
+                  borderRight: `1px solid ${GANTT_GRID_VAR}`,
+                  borderLeft: isMonthStart ? `1px solid ${GANTT_GRID_STRONG_VAR}` : "none",
                   display: "flex",
                   flexDirection: "column",
                   background: headerBg,
@@ -1092,7 +1110,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                     display: "flex",
                     alignItems: "center",
                     paddingLeft: 8,
-                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    borderBottom: `1px solid ${GANTT_GRID_VAR}`,
                   }}>
                     {monthLabel && (
                       <span style={{
@@ -1146,7 +1164,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
         {/* Left panel */}
-        <div ref={leftRef} onScroll={() => syncScroll("left")} style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, overflowY: "auto", overflowX: "hidden", borderRight: "1px solid var(--sbd-gantt-grid-strong)", background: "var(--sbd-gantt-left)" }}>
+        <div ref={leftRef} onScroll={() => syncScroll("left")} style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, overflowY: "auto", overflowX: "hidden", borderRight: `1px solid ${GANTT_GRID_STRONG_VAR}`, background: GANTT_LEFT_VAR }}>
           {rows.length === 0 && (
             <div style={{ padding: 18, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>
               No tasks match the current Gantt filters.
@@ -1276,7 +1294,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             // predicate is sufficient here.
             const isSummaryRow = isSummaryScheduleTask(task);
             const leftHovered = hoveredRowId === task.id;
-            const parentRowBg = task._hasChildren ? `${GANTT_STATUS_HEX.inProgress}0A` : "transparent";
+            const parentRowBg = task._hasChildren ? tint(GANTT_STATUS_HEX.inProgress, 4) : "transparent";
             const critical = isCriticalTask(task);
             const isFocused = focusedTaskId && String(task.id) === String(focusedTaskId);
             return (
@@ -1297,7 +1315,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 onDragOver={(e) => onDragOverRow(e, task)}
                 onDrop={(e) => onDropRow(e, task)}
                 onDragEnd={onDragEnd}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: isFocused ? `${GANTT_STATUS_HEX.inProgress}24` : leftHovered ? `${GANTT_STATUS_HEX.inProgress}12` : critical ? `${GANTT_PHASE_HEX.Procurement}0C` : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: isFocused ? `3px solid ${GANTT_STATUS_HEX.inProgress}` : overdue ? `3px solid ${GANTT_STATUS_HEX.delayed}` : critical ? `3px solid ${GANTT_PHASE_HEX.Procurement}` : "3px solid transparent", boxShadow: dropTarget?.id === task.id && dropTarget.zone === "nest" ? "inset 0 0 0 2px var(--accent)" : isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none", opacity: dragId === task.id ? 0.4 : 1, borderTop: dropTarget?.id === task.id && dropTarget.zone === "before" ? "2px solid var(--accent)" : undefined, borderBottomColor: dropTarget?.id === task.id && dropTarget.zone === "after" ? "var(--accent)" : undefined, borderBottomWidth: dropTarget?.id === task.id && dropTarget.zone === "after" ? 2 : undefined }}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: isFocused ? tint(GANTT_STATUS_HEX.inProgress, 14) : leftHovered ? tint(GANTT_STATUS_HEX.inProgress, 7) : critical ? `${GANTT_PHASE_HEX.Procurement}0C` : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: isFocused ? `3px solid ${GANTT_STATUS_HEX.inProgress}` : overdue ? `3px solid ${GANTT_STATUS_HEX.delayed}` : critical ? `3px solid ${GANTT_PHASE_HEX.Procurement}` : "3px solid transparent", boxShadow: dropTarget?.id === task.id && dropTarget.zone === "nest" ? "inset 0 0 0 2px var(--accent)" : isFocused ? `inset 0 0 0 1px ${tint(GANTT_STATUS_HEX.inProgress, 33)}` : "none", opacity: dragId === task.id ? 0.4 : 1, borderTop: dropTarget?.id === task.id && dropTarget.zone === "before" ? "2px solid var(--accent)" : undefined, borderBottomColor: dropTarget?.id === task.id && dropTarget.zone === "after" ? "var(--accent)" : undefined, borderBottomWidth: dropTarget?.id === task.id && dropTarget.zone === "after" ? 2 : undefined }}
                 onClick={() => onTaskClick && onTaskClick(task)}
                 onMouseEnter={() => setHoveredRowId(task.id)}
                 onMouseLeave={() => setHoveredRowId(null)}
@@ -1379,7 +1397,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                           letterSpacing: "0.08em",
                           color: "var(--status-warning)",
                           border: "1px solid color-mix(in srgb, var(--status-warning) 50%, transparent)",
-                          background: "rgba(245,158,11,0.10)",
+                          background: "var(--warning-muted)",
                           borderRadius: 2,
                           padding: "1px 4px",
                           marginRight: 5,
@@ -1402,7 +1420,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                           letterSpacing: "0.08em",
                           color: "var(--status-error)",
                           border: "1px solid color-mix(in srgb, var(--status-error) 50%, transparent)",
-                          background: "rgba(239,68,68,0.10)",
+                          background: "var(--danger-muted)",
                           borderRadius: 2,
                           padding: "1px 4px",
                           marginRight: 5,
@@ -1535,7 +1553,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 {/* % or save/cancel */}
                 {isEditing ? (
                   <div style={{ display: "flex", gap: 3, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
-                    <button onClick={() => commitEdit(task.id)} disabled={saving} style={{ background: "var(--accent)", border: "none", borderRadius: 3, color: "#000", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, padding: "2px 6px", cursor: "pointer" }}>{saving ? "…" : "✓"}</button>
+                    <button onClick={() => commitEdit(task.id)} disabled={saving} style={{ background: "var(--accent)", border: "none", borderRadius: 3, color: "var(--on-accent)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, padding: "2px 6px", cursor: "pointer" }}>{saving ? "…" : "✓"}</button>
                     <button onClick={cancelEdit} style={{ background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", cursor: "pointer" }}>✕</button>
                   </div>
                 ) : (
@@ -1548,7 +1566,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         </div>
 
         {/* Right gantt panel */}
-        <div ref={rightBody} onScroll={() => { syncScroll("right"); syncHScroll(); }} style={{ flex: 1, overflowX: "auto", overflowY: "auto", background: "var(--sbd-gantt-bg)", position: "relative" }}>
+        <div ref={rightBody} onScroll={() => { syncScroll("right"); syncHScroll(); }} style={{ flex: 1, overflowX: "auto", overflowY: "auto", background: GANTT_BG_VAR, position: "relative" }}>
           <div style={{ width: totalW, height: totalHeight, position: "relative" }}>
 
             {/* Alternating week bands — softer than before to match the
@@ -1562,7 +1580,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                   bottom: 0,
                   left: i * WEEK_PX,
                   width: WEEK_PX,
-                  background: "rgba(255,255,255,0.018)",
+                  background: GANTT_WEEKEND_VAR,
                   pointerEvents: "none",
                   zIndex: 0,
                 }} />
@@ -1580,7 +1598,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 <div style={{
                   position: "absolute", top: 0, bottom: 0,
                   left: todayPx - 12, width: 24,
-                  background: "linear-gradient(90deg, transparent 0%, var(--sbd-gantt-today-soft) 50%, transparent 100%)",
+                  background: `linear-gradient(90deg, transparent 0%, ${GANTT_TODAY_SOFT_VAR} 50%, transparent 100%)`,
                   pointerEvents: "none",
                   zIndex: 6,
                 }} />
@@ -1589,19 +1607,19 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 <div style={{
                   position: "absolute", top: 0, bottom: 0,
                   left: todayPx - 1, width: 2,
-                  background: GANTT_TODAY_HEX,
+                  background: GANTT_TODAY_VAR,
                   zIndex: 12,
-                  boxShadow: "0 0 4px rgba(255,107,0,0.65), 0 0 12px rgba(255,107,0,0.35)",
+                  boxShadow: `0 0 4px color-mix(in srgb, ${GANTT_TODAY_VAR} 65%, transparent), 0 0 12px color-mix(in srgb, ${GANTT_TODAY_VAR} 35%, transparent)`,
                 }}>
                   <div style={{
                     position: "absolute", top: 0, left: -22,
-                    background: GANTT_TODAY_HEX,
+                    background: GANTT_TODAY_VAR,
                     borderRadius: "2px 2px 2px 0",
                     padding: "2px 6px",
                     fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800,
-                    color: "#fff", letterSpacing: "0.10em",
+                    color: "var(--on-accent)", letterSpacing: "0.10em",
                     whiteSpace: "nowrap",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.35)",
+                    boxShadow: `0 2px 6px color-mix(in srgb, ${GANTT_BG_VAR} 70%, transparent)`,
                   }}>TODAY</div>
                 </div>
               </>
@@ -1616,7 +1634,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               return (
                 <div key={i} style={{
                   position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: 1,
-                  background: isMonthStart ? "var(--sbd-gantt-grid-strong)" : "var(--sbd-gantt-grid)",
+                  background: isMonthStart ? GANTT_GRID_STRONG_VAR : GANTT_GRID_VAR,
                   zIndex: 1,
                   pointerEvents: "none",
                 }} />
@@ -1632,7 +1650,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               <svg style={{ position: "absolute", top: 0, left: 0, width: totalW, height: totalHeight, pointerEvents: "none", zIndex: 5 }}>
                 <defs>
                   <marker id="depArrowHead" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
-                    <polygon points="0 0, 10 3.5, 0 7" fill="#7DA3C7" />
+                    <polygon points="0 0, 10 3.5, 0 7" fill={GANTT_DEPENDENCY_VAR} />
                   </marker>
                 </defs>
                 {visibleDepArrows.map(({ key, fromX, fromY, toX, toY }) => {
@@ -1640,7 +1658,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                   const gap = 8;
                   const midX = fromX + gap;
                   const sameRow = Math.abs(fromY - toY) < 4;
-                  const stroke = "#7DA3C7";
+                  const stroke = GANTT_DEPENDENCY_VAR;
                   const strokeOpacity = 0.65;
                   if (sameRow) {
                     return (
@@ -1694,7 +1712,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                         <div style={{ position: "absolute", left: 0, top: 0, width: 4, height: "100%", background: dColor, borderRadius: "2px 0 0 2px" }} />
                         <div style={{ position: "absolute", right: 0, top: 0, width: 4, height: "100%", background: dColor, borderRadius: "0 2px 2px 0" }} />
                         {w2 > 40 && (
-                          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 9, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)" }}>{pct2}%</span>
+                          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 9, fontWeight: 700, color: "var(--on-accent)", fontFamily: "var(--font-mono)" }}>{pct2}%</span>
                         )}
                       </div>
                     </div>
@@ -1707,15 +1725,15 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                   const d = row.delivery;
                   const hovered = hoveredRowId === `del-${d.id}`;
                   const isLate = d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered";
-                  const baseBg2 = isLate ? "rgba(239,68,68,0.04)" : zebra2 ? "var(--hover-bg)" : "transparent";
+                  const baseBg2 = isLate ? "var(--danger-muted)" : zebra2 ? GANTT_ROW_ALT_VAR : "transparent";
                   const startIso = (d.scheduled_date || "").split("T")[0];
                   const endIso = (d.required_date || d.actual_date || d.scheduled_date || "").split("T")[0];
                   if (!startIso) {
-                    return <div key={`gd-${d.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? "rgba(245,158,11,0.07)" : baseBg2 }} />;
+                    return <div key={`gd-${d.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: `1px solid ${GANTT_GRID_VAR}`, background: hovered ? "var(--warning-muted)" : baseBg2 }} />;
                   }
                   return (
                     <div key={`gd-${d.id}`}
-                      style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? "rgba(245,158,11,0.07)" : baseBg2, transition: "background 0.08s" }}
+                      style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: `1px solid ${GANTT_GRID_VAR}`, background: hovered ? "var(--warning-muted)" : baseBg2, transition: "background 0.08s" }}
                       onMouseEnter={() => setHoveredRowId(`del-${d.id}`)}
                       onMouseLeave={() => setHoveredRowId(null)}
                     >
@@ -1730,10 +1748,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 const critical = isCriticalTask(task);
                 const hovered = hoveredRowId === task.id;
                 const isFocused = focusedTaskId && String(task.id) === String(focusedTaskId);
-                const parentBg = task._hasChildren ? `${GANTT_STATUS_HEX.inProgress}0A` : "transparent";
-                const baseBg = overdue ? "rgba(239,68,68,0.04)" : critical ? "rgba(245,158,11,0.04)" : zebra ? "var(--hover-bg)" : parentBg;
-                const hoverBg = `${GANTT_STATUS_HEX.inProgress}12`;
-                const focusedBg = `${GANTT_STATUS_HEX.inProgress}20`;
+                const parentBg = task._hasChildren ? tint(GANTT_STATUS_HEX.inProgress, 4) : "transparent";
+                const baseBg = overdue ? "var(--danger-muted)" : critical ? "var(--warning-muted)" : zebra ? GANTT_ROW_ALT_VAR : parentBg;
+                const hoverBg = tint(GANTT_STATUS_HEX.inProgress, 7);
+                const focusedBg = tint(GANTT_STATUS_HEX.inProgress, 13);
                 const handleTaskRowClick = () => {
                   if (suppressTaskClickRef.current) {
                     suppressTaskClickRef.current = false;
@@ -1745,7 +1763,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                   const tbdLeft = px(today.toISOString().slice(0, 10));
                   return (
                     <div key={`gr-${task.id}`}
-                      style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: "pointer", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
+                      style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: `1px solid ${GANTT_GRID_VAR}`, background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: "pointer", boxShadow: isFocused ? `inset 0 0 0 1px ${tint(GANTT_STATUS_HEX.inProgress, 33)}` : "none" }}
                       onClick={handleTaskRowClick}
                       onMouseEnter={() => setHoveredRowId(task.id)}
                       onMouseLeave={() => setHoveredRowId(null)}
@@ -1760,7 +1778,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                           padding: "2px 8px",
                           border: "1px dashed var(--status-warning)",
                           borderRadius: 4,
-                          background: "rgba(245,158,11,0.08)",
+                          background: "var(--warning-muted)",
                           fontFamily: "var(--font-mono)",
                           fontSize: 9,
                           fontWeight: 700,
@@ -1791,7 +1809,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 const dragTargetWidth = isMilestone ? 24 : Math.max(barWidth, 18);
                 return (
                   <div key={`gr-${task.id}`}
-                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: canDragTaskBar ? (isDraggingTask ? "grabbing" : "grab") : "pointer", transition: "background 0.08s", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
+                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: `1px solid ${GANTT_GRID_VAR}`, background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: canDragTaskBar ? (isDraggingTask ? "grabbing" : "grab") : "pointer", transition: "background 0.08s", boxShadow: isFocused ? `inset 0 0 0 1px ${tint(GANTT_STATUS_HEX.inProgress, 33)}` : "none" }}
                     onClick={handleTaskRowClick}
                     onMouseEnter={e => { setHoveredRowId(task.id); if (!taskDrag) setTooltip({ task, x: e.clientX, y: e.clientY }); }}
                     onMouseMove={e => { if (!taskDrag) setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null); }}
@@ -1836,8 +1854,8 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                               zIndex: 9,
                               touchAction: "none",
                               borderRadius: 6,
-                              background: isDraggingTask ? "rgba(255,255,255,0.08)" : "transparent",
-                              boxShadow: isDraggingTask ? "0 0 0 1px rgba(255,255,255,0.22) inset" : "none",
+                              background: isDraggingTask ? GANTT_ROW_HOVER_VAR : "transparent",
+                              boxShadow: isDraggingTask ? `0 0 0 1px ${GANTT_GRID_STRONG_VAR} inset` : "none",
                             }}
                           />
                         )}
@@ -1926,7 +1944,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             padding: "8px 10px",
             pointerEvents: "none",
             borderRadius: 7,
-            boxShadow: "0 12px 28px rgba(0,0,0,0.45)",
+            boxShadow: "var(--shadow-lg)",
             minWidth: 220,
           }}
         >
@@ -1956,7 +1974,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           padding: "10px 14px",
           pointerEvents: "none",
           minWidth: 260,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.3)",
+          boxShadow: "var(--shadow-lg)",
           borderRadius: 8,
         }}>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6, letterSpacing: "0.01em" }}>
@@ -1979,22 +1997,22 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               </span>
             )}
             {effectiveDates[tooltip.task.id]?.shifted && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: 999, padding: "2px 6px" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 999, padding: "2px 6px" }}>
                 Shifted {effectiveDates[tooltip.task.id]?.shiftedBy || 0}d
               </span>
             )}
             {hasLogicGapTask(tooltip.task, successorCountById) && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: 999, padding: "2px 6px" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 999, padding: "2px 6px" }}>
                 Logic gap
               </span>
             )}
             {isUnassignedTask(tooltip.task) && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-error)", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 999, padding: "2px 6px" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 999, padding: "2px 6px" }}>
                 No owner
               </span>
             )}
             {hasBaselineDrift(tooltip.task, effStart(tooltip.task), effEnd(tooltip.task)) && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#94A3B8", background: "rgba(100,116,139,0.14)", border: "1px solid rgba(100,116,139,0.40)", borderRadius: 999, padding: "2px 6px" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: GANTT_BASELINE_VAR, background: `color-mix(in srgb, ${GANTT_BASELINE_VAR} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${GANTT_BASELINE_VAR} 40%, transparent)`, borderRadius: 999, padding: "2px 6px" }}>
                 Baseline drift
               </span>
             )}
@@ -2024,7 +2042,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isOverdue(tooltip.task) ? GANTT_STATUS_HEX.delayed : "var(--text-secondary)" }}>
             {displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${GANTT_GRID_VAR}` }}>
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Pred</div>
               <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-primary)", fontWeight: 800 }}>
@@ -2049,11 +2067,11 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             </div>
           </div>
           {weatherRiskByTask[tooltip.task.id] && (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${GANTT_GRID_VAR}` }}>
               Weather risk: {pluralize(weatherRiskByTask[tooltip.task.id].length, "day")}
             </div>
           )}
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: taskOwner(tooltip.task) ? "var(--text-muted)" : "var(--status-error)", marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: taskOwner(tooltip.task) ? "var(--text-muted)" : "var(--status-error)", marginTop: 6, paddingTop: 6, borderTop: `1px solid ${GANTT_GRID_VAR}` }}>
             Owner: {taskOwner(tooltip.task) || "Unassigned"}
           </div>
           {onSave && (

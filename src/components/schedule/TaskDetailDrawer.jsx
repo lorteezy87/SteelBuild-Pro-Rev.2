@@ -209,7 +209,7 @@ function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search tasks..
             maxHeight: 220,
             overflowY: 'auto',
             zIndex: 100,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+            boxShadow: 'var(--shadow-lg)',
           }}
         >
           {filtered.length === 0 ? (
@@ -230,7 +230,7 @@ function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search tasks..
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '7px 12px',
                   cursor: 'pointer',
-                  background: idx === highlightIdx ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  background: idx === highlightIdx ? drawerPanelStrong : 'transparent',
                   borderBottom: idx < filtered.length - 1 ? `1px solid ${drawerMutedBorder}` : 'none',
                   transition: 'background 0.08s',
                 }}
@@ -481,7 +481,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(1,4,10,0.72)',
+          background: 'color-mix(in srgb, var(--sbd-gantt-bg) 72%, transparent)',
           backdropFilter: 'blur(3px)',
           zIndex: 1200,
         }}
@@ -497,7 +497,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
           width: 'min(620px, calc(100vw - 24px))',
           background: drawerSurface,
           borderLeft: `1px solid ${drawerBorder}`,
-          boxShadow: '-28px 0 70px rgba(0,0,0,0.66), inset 1px 0 0 rgba(255,255,255,0.04)',
+          boxShadow: 'var(--shadow-lg)',
           color: drawerText,
           zIndex: 1201,
           display: 'flex',
@@ -542,7 +542,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
               type="button"
               aria-label="Close"
               onClick={onClose}
-              style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${drawerMutedBorder}`, borderRadius: 8, cursor: 'pointer', color: drawerMutedText, fontSize: 18, width: 34, height: 34 }}
+              style={{ background: drawerPanelStrong, border: `1px solid ${drawerMutedBorder}`, borderRadius: 8, cursor: 'pointer', color: drawerMutedText, fontSize: 18, width: 34, height: 34 }}
             >
               ✕
             </button>
@@ -562,7 +562,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 fontSize: 9,
                 letterSpacing: '0.10em',
                 color: activeTab === tab.toLowerCase() ? 'var(--accent)' : drawerMutedText,
-                background: activeTab === tab.toLowerCase() ? 'rgba(86,176,255,0.12)' : 'transparent',
+                background: activeTab === tab.toLowerCase() ? 'var(--accent-muted)' : 'transparent',
                 border: 'none',
                 borderBottom: activeTab === tab.toLowerCase() ? '2px solid var(--accent)' : '1px solid transparent',
                 cursor: 'pointer',
@@ -612,8 +612,8 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                 };
                 return (
                   <div style={{
-                    background: 'rgba(59,130,246,0.10)',
-                    border: '1px solid rgba(59,130,246,0.30)',
+                    background: 'var(--accent-muted)',
+                    border: '1px solid var(--accent-border)',
                     borderRadius: 8,
                     padding: '8px 12px',
                     marginBottom: 8,
@@ -621,7 +621,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                     flexDirection: 'column',
                     gap: 2,
                   }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: 'rgba(147,197,253,0.95)', letterSpacing: '0.04em' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.04em' }}>
                       SHIFTED BY PREDECESSORS
                     </span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: drawerText }}>
@@ -692,7 +692,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                         style={{
                           ...drawerControlStyle,
                           width: '100%',
-                          ...(isSummary ? { opacity: 0.55, cursor: 'not-allowed', background: 'rgba(255,255,255,0.035)', color: drawerMutedText } : {}),
+                          ...(isSummary ? { opacity: 0.55, cursor: 'not-allowed', background: drawerPanelStrong, color: drawerMutedText } : {}),
                         }}
                       />
                     </div>
@@ -702,7 +702,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
                       fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.04em',
                       color: drawerMutedText, lineHeight: 1.4,
                       padding: '6px 8px',
-                      background: 'rgba(255,255,255,0.025)',
+                      background: drawerPanel,
                       border: `1px dashed ${drawerMutedBorder}`,
                       borderRadius: 2,
                     }}>
@@ -944,7 +944,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
             onClick={onClose}
             style={{
               flex: 1,
-              background: 'rgba(255,255,255,0.025)',
+              background: drawerPanel,
               border: `1px solid ${drawerBorder}`,
               borderRadius: 8,
               padding: '10px 12px',
@@ -960,14 +960,14 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onRepa
             onClick={handleSave}
             style={{
               flex: 1,
-              background: 'linear-gradient(135deg, rgba(86,176,255,0.98) 0%, rgba(35,134,230,0.98) 100%)',
-              border: '1px solid rgba(86,176,255,0.4)',
+              background: 'var(--accent)',
+              border: '1px solid var(--accent-border)',
               borderRadius: 8,
               padding: '10px 12px',
               fontFamily: 'var(--font-body)',
               fontSize: 12,
               fontWeight: 600,
-              color: '#04111f',
+              color: 'var(--on-accent)',
               cursor: 'pointer',
             }}
           >
@@ -1027,7 +1027,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           readOnly={readOnly}
           style={{
             ...drawerControlStyle,
-            background: readOnly ? 'rgba(255,255,255,0.035)' : drawerControlStyle.background,
+            background: readOnly ? drawerPanelStrong : drawerControlStyle.background,
             color: readOnly ? drawerMutedText : drawerText,
           }}
         />
@@ -1166,7 +1166,7 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
               borderLeft: `3px solid ${isActive ? meta.color : (filled ? meta.color : drawerBorder)}`,
               borderRadius: 8,
               boxShadow: isActive
-                ? `0 0 0 1px color-mix(in srgb, ${meta.color} 34%, transparent), 0 14px 28px rgba(0,0,0,0.25)`
+                ? `0 0 0 1px color-mix(in srgb, ${meta.color} 34%, transparent), var(--shadow-lg)`
                 : 'none',
             }}
           >
@@ -1209,7 +1209,7 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: filled ? drawerMutedText : 'rgba(135,154,180,0.3)',
+                color: filled ? drawerMutedText : 'color-mix(in srgb, var(--text-muted) 30%, transparent)',
                 cursor: filled ? 'pointer' : 'not-allowed',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10,
@@ -1231,7 +1231,7 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
         style={{
           marginTop: 2,
           padding: '6px 8px',
-          background: 'rgba(255,255,255,0.025)',
+          background: drawerPanel,
           border: `1px dashed ${drawerMutedBorder}`,
           borderRadius: 8,
           display: 'flex',

@@ -10,7 +10,7 @@ export const shellStyle = {
   border: "1px solid color-mix(in srgb, var(--border-default) 84%, white 16%)",
   borderRadius: 18,
   background: "var(--sched-band-bg)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.055), 0 18px 42px rgba(0,0,0,0.28)",
+  boxShadow: "var(--shadow-lg)",
   padding: 14,
 };
 
@@ -21,7 +21,7 @@ export const toggleButtonStyle = {
   height: 28,
   borderRadius: 8,
   border: "1px solid var(--border-default)",
-  background: "rgba(255,255,255,0.04)",
+  background: "var(--bg-surface-high)",
   color: "var(--text-muted)",
   cursor: "pointer",
   transition: "background 0.15s, border-color 0.15s, color 0.15s",
@@ -60,7 +60,7 @@ export const avatarStyle = {
   borderRadius: 12,
   display: "grid",
   placeItems: "center",
-  color: "#04111d",
+  color: "color-mix(in srgb, var(--status-info) 15%, black)",
   background: "linear-gradient(135deg, var(--status-info), color-mix(in srgb, var(--status-info) 70%, white 30%))",
   boxShadow: "0 0 18px color-mix(in srgb, var(--status-info) 40%, transparent)",
   flexShrink: 0,
@@ -117,7 +117,7 @@ export function metricStyle(tone) {
     minHeight: 104,
     border: `1px solid color-mix(in srgb, ${tone} 28%, var(--border-default))`,
     borderRadius: 14,
-    background: `linear-gradient(145deg, color-mix(in srgb, ${tone} 10%, rgba(255,255,255,0.035)), rgba(255,255,255,0.025))`,
+    background: `linear-gradient(145deg, color-mix(in srgb, ${tone} 10%, var(--bg-surface-high)), var(--bg-surface-low))`,
     padding: 12,
     display: "grid",
     alignContent: "space-between",
@@ -128,7 +128,7 @@ export const recommendationStyle = {
   gridColumn: "span 3",
   border: "1px solid var(--border-default)",
   borderRadius: 14,
-  background: "rgba(255,255,255,0.03)",
+  background: "var(--bg-surface-low)",
   padding: 12,
 };
 
@@ -136,7 +136,7 @@ export const phasePanelStyle = {
   gridColumn: "span 3",
   border: "1px solid var(--border-default)",
   borderRadius: 14,
-  background: "rgba(255,255,255,0.03)",
+  background: "var(--bg-surface-low)",
   padding: 12,
 };
 
@@ -144,7 +144,7 @@ export const nearTermStyle = {
   gridColumn: "span 3",
   border: "1px solid var(--border-default)",
   borderRadius: 14,
-  background: "rgba(255,255,255,0.025)",
+  background: "var(--bg-surface-low)",
   padding: 12,
 };
 
@@ -152,7 +152,7 @@ export const recoveryPanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-info) 24%, var(--border-default))",
   borderRadius: 14,
-  background: "linear-gradient(145deg, rgba(34,211,238,0.055), rgba(255,255,255,0.025))",
+  background: "linear-gradient(145deg, color-mix(in srgb, var(--status-info) 6%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
 
@@ -160,7 +160,7 @@ export const morningPlanStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--accent) 24%, var(--border-default))",
   borderRadius: 14,
-  background: "linear-gradient(145deg, rgba(86,176,255,0.06), rgba(255,255,255,0.025))",
+  background: "linear-gradient(145deg, color-mix(in srgb, var(--accent) 6%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
 
@@ -168,7 +168,7 @@ export const handoffPanelStyle = {
   gridColumn: "span 6",
   border: "1px solid color-mix(in srgb, var(--status-info) 30%, var(--border-default))",
   borderRadius: 14,
-  background: "linear-gradient(135deg, rgba(34,211,238,0.07), rgba(255,255,255,0.026))",
+  background: "linear-gradient(135deg, color-mix(in srgb, var(--status-info) 7%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
 
@@ -206,7 +206,7 @@ export const criticalPanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
   borderRadius: 14,
-  background: "linear-gradient(145deg, rgba(245,158,11,0.055), rgba(255,255,255,0.025))",
+  background: "linear-gradient(145deg, color-mix(in srgb, var(--status-warning) 6%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
 
@@ -214,7 +214,7 @@ export const dependencyPanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
   borderRadius: 14,
-  background: "linear-gradient(145deg, rgba(245,158,11,0.05), rgba(255,255,255,0.025))",
+  background: "linear-gradient(145deg, color-mix(in srgb, var(--status-warning) 5%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
 
@@ -222,7 +222,7 @@ export const variancePanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-warning) 28%, var(--border-default))",
   borderRadius: 14,
-  background: "linear-gradient(145deg, rgba(245,158,11,0.06), rgba(255,255,255,0.025))",
+  background: "linear-gradient(145deg, color-mix(in srgb, var(--status-warning) 6%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
 
@@ -230,7 +230,7 @@ export const ownershipPanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-error) 26%, var(--border-default))",
   borderRadius: 14,
-  background: "linear-gradient(145deg, rgba(239,68,68,0.052), rgba(255,255,255,0.025))",
+  background: "linear-gradient(145deg, color-mix(in srgb, var(--status-error) 5%, var(--bg-surface-low)), var(--bg-surface-low))",
   padding: 12,
 };
 
@@ -256,7 +256,7 @@ export function phaseRowStyle(active) {
     width: "100%",
     border: `1px solid ${active ? "var(--accent-border)" : "var(--border-default)"}`,
     borderRadius: 10,
-    background: active ? "var(--accent-muted)" : "rgba(255,255,255,0.025)",
+    background: active ? "var(--accent-muted)" : "var(--bg-surface-low)",
     color: "var(--text-muted)",
     padding: "8px 9px",
     display: "grid",
@@ -278,7 +278,7 @@ export function recoveryRowStyle(tone) {
     width: "100%",
     border: `1px solid color-mix(in srgb, ${tone} 26%, var(--border-default))`,
     borderRadius: 12,
-    background: `linear-gradient(135deg, color-mix(in srgb, ${tone} 8%, transparent), rgba(255,255,255,0.025))`,
+    background: `linear-gradient(135deg, color-mix(in srgb, ${tone} 8%, transparent), var(--bg-surface-low))`,
     color: "var(--text-muted)",
     padding: "9px 10px",
     display: "grid",
@@ -302,7 +302,7 @@ export const morningPlanRowStyle = {
   alignItems: "start",
   border: "1px solid var(--border-default)",
   borderRadius: 11,
-  background: "rgba(255,255,255,0.025)",
+  background: "var(--bg-surface-low)",
   color: "var(--text-secondary)",
   padding: "8px 10px",
   fontFamily: "var(--font-body)",
@@ -318,7 +318,7 @@ export const criticalTaskStyle = {
   alignItems: "start",
   border: "1px solid var(--border-default)",
   borderRadius: 10,
-  background: "rgba(255,255,255,0.025)",
+  background: "var(--bg-surface-low)",
   padding: "8px 9px",
   textAlign: "left",
   cursor: "pointer",
@@ -332,7 +332,7 @@ export const logicTaskStyle = {
   alignItems: "start",
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
   borderRadius: 10,
-  background: "rgba(245,158,11,0.045)",
+  background: "var(--warning-muted)",
   padding: "8px 9px",
   textAlign: "left",
   cursor: "pointer",
@@ -346,7 +346,7 @@ export const varianceTaskStyle = {
   alignItems: "start",
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
   borderRadius: 10,
-  background: "rgba(245,158,11,0.045)",
+  background: "var(--warning-muted)",
   padding: "8px 9px",
   textAlign: "left",
   cursor: "pointer",
@@ -360,7 +360,7 @@ export const ownershipTaskStyle = {
   alignItems: "start",
   border: "1px solid color-mix(in srgb, var(--status-error) 24%, var(--border-default))",
   borderRadius: 10,
-  background: "rgba(239,68,68,0.045)",
+  background: "var(--danger-muted)",
   padding: "8px 9px",
   textAlign: "left",
   cursor: "pointer",
@@ -373,7 +373,7 @@ export const varianceDaysStyle = {
   minHeight: 22,
   borderRadius: 8,
   border: "1px solid color-mix(in srgb, var(--status-warning) 38%, var(--border-default))",
-  background: "rgba(245,158,11,0.10)",
+  background: "var(--warning-muted)",
   color: "var(--status-warning)",
   fontFamily: "var(--font-mono)",
   fontSize: 8,
@@ -390,7 +390,7 @@ export const handoffTaskStyle = {
   alignItems: "start",
   border: "1px solid var(--border-default)",
   borderRadius: 10,
-  background: "rgba(255,255,255,0.026)",
+  background: "var(--bg-surface-low)",
   padding: "8px 9px",
   textAlign: "left",
   cursor: "pointer",
@@ -403,7 +403,7 @@ export const dateChipStyle = {
   minHeight: 22,
   borderRadius: 8,
   border: "1px solid color-mix(in srgb, var(--status-info) 32%, var(--border-default))",
-  background: "rgba(34,211,238,0.08)",
+  background: "var(--info-muted)",
   color: "var(--status-info)",
   fontFamily: "var(--font-mono)",
   fontSize: 8,

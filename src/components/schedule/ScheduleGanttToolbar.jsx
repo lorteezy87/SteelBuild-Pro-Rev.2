@@ -7,7 +7,7 @@
 // to the originals; the handler-entangled toggle/scroll/zoom buttons stay in
 // the container (they'd need ~40 props here, which would couple more than it
 // decouples).
-import { GANTT_STATUS_HEX } from "@/lib/ganttTheme";
+import { GANTT_BASELINE_VAR, GANTT_GRID_VAR, GANTT_PANEL_STRONG_VAR, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
 
 // Quick-filter definitions live with the chips that render them (the only
 // consumer). Moved out of ScheduleGantt verbatim.
@@ -107,7 +107,7 @@ export function GanttMetricCards({
           borderRadius: 10,
           background: "var(--bg-surface-low)",
           padding: "6px 8px",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)",
+          boxShadow: `inset 0 1px 0 ${GANTT_GRID_VAR}`,
         }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase" }}>
             {card.label}
@@ -135,7 +135,7 @@ export function GanttLegend({ baselineTaskCount }) {
       gap: 10,
       padding: "7px 16px",
       borderBottom: "1px solid var(--divider)",
-      background: "rgba(255,255,255,0.025)",
+      background: GANTT_PANEL_STRONG_VAR,
       color: "var(--text-secondary)",
       fontFamily: "var(--font-mono)",
       fontSize: 8,
@@ -149,7 +149,7 @@ export function GanttLegend({ baselineTaskCount }) {
       <span><strong style={{ color: "var(--status-warning)" }}>Variance</strong> effective dates differ from stored dates</span>
       <span><strong style={{ color: "var(--status-info)" }}>Linked</strong> predecessor or successor exists</span>
       {baselineTaskCount > 0 && (
-        <span><strong style={{ color: "#94A3B8" }}>Ghost bar</strong> baseline (original plan) position</span>
+        <span><strong style={{ color: GANTT_BASELINE_VAR }}>Ghost bar</strong> baseline (original plan) position</span>
       )}
     </div>
   );

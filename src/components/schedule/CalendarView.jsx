@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { getDaysBetween } from './scheduleUtils';
-import { GANTT_PHASE_HEX, GANTT_STATUS_HEX, GANTT_TODAY_HEX } from '@/lib/ganttTheme';
+import { GANTT_PHASE_HEX, GANTT_STATUS_HEX, GANTT_TODAY_VAR } from '@/lib/ganttTheme';
 
 const TASK_TYPE_COLORS = {
   Fabrication: GANTT_PHASE_HEX.Fabrication,
@@ -9,7 +9,7 @@ const TASK_TYPE_COLORS = {
   Submittal: GANTT_PHASE_HEX.Detailing,
   RFI: GANTT_PHASE_HEX.Procurement,
   Milestone: GANTT_STATUS_HEX.inProgress,
-  Task: 'rgba(160,175,210,0.5)',
+  Task: 'var(--text-muted)',
 };
 
 export default function CalendarView({ tasks = [], onSelectTask, selectedDate, onSelectDate }) {
@@ -111,7 +111,7 @@ export default function CalendarView({ tasks = [], onSelectTask, selectedDate, o
           style={{
             marginLeft: 'auto',
             background: 'var(--warning-muted)',
-            border: '1px solid rgba(245,158,11,0.30)',
+            border: '1px solid var(--warning-border)',
             borderRadius: 6,
             padding: '6px 12px',
             fontFamily: 'var(--font-body)',
@@ -158,7 +158,7 @@ export default function CalendarView({ tasks = [], onSelectTask, selectedDate, o
               onClick={() => onSelectDate(day.date)}
               style={{
                 background: cellIsToday ? 'var(--warning-muted)' : cellIsWeekend ? 'var(--hover-bg)' : 'transparent',
-                border: cellIsToday ? '1px solid rgba(245,158,11,0.30)' : '1px solid var(--hover-bg)',
+                border: cellIsToday ? '1px solid var(--warning-border)' : '1px solid var(--hover-bg)',
                 borderRadius: 8,
                 padding: 8,
                 minHeight: 100,
@@ -185,11 +185,11 @@ export default function CalendarView({ tasks = [], onSelectTask, selectedDate, o
                   justifyContent: 'center',
                   width: 22,
                   height: 22,
-                  background: cellIsToday ? GANTT_TODAY_HEX : 'transparent',
+                  background: cellIsToday ? GANTT_TODAY_VAR : 'transparent',
                   borderRadius: cellIsToday ? '50%' : '0',
                   color: cellIsToday
                     ? 'white'
-                    : day.isCurrentMonth ? 'var(--text-muted)' : 'rgba(160,175,210,0.25)',
+                    : day.isCurrentMonth ? 'var(--text-muted)' : 'color-mix(in srgb, var(--text-muted) 25%, transparent)',
                 }}
               >
                 {day.date.getDate()}
@@ -237,7 +237,7 @@ export default function CalendarView({ tasks = [], onSelectTask, selectedDate, o
                       onSelectDate(day.date);
                     }}
                     style={{
-                      background: 'rgba(160,175,210,0.25)',
+                      background: 'color-mix(in srgb, var(--text-muted) 25%, transparent)',
                       borderRadius: 4,
                       padding: '2px 6px',
                       fontFamily: 'var(--font-body)',

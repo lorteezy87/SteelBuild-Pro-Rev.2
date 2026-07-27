@@ -52,7 +52,7 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(1, 5, 12, 0.86)',
+          background: 'color-mix(in srgb, var(--sbd-gantt-bg) 86%, transparent)',
           backdropFilter: 'blur(10px)',
           zIndex: 998,
         }}

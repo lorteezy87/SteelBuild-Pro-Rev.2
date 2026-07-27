@@ -56,7 +56,7 @@ export default function GanttContextMenu({ x, y, items, onClose }) {
         border: "1px solid var(--accent-border)",
         borderRadius: 6,
         padding: `${PADDING_V}px 0`,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.55)",
+        boxShadow: "var(--shadow-lg)",
         zIndex: 1000,
         fontFamily: "var(--font-body)",
       }}

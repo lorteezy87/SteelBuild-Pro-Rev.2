@@ -1,5 +1,5 @@
 // Schedule utility functions for data mapping and calculations
-import { GANTT_GRADIENT, GANTT_PHASE_HEX, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
+import { GANTT_GRADIENT, GANTT_PHASE_HEX, GANTT_ROW_ALT_VAR, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
 
 export function mapWorkPackagesToTasks(workPackages) {
   return workPackages.map((wp, idx) => ({
@@ -102,7 +102,7 @@ export function getTaskTypeColor(taskType) {
     Submittal: { gradient: GANTT_GRADIENT.Detailing, solid: GANTT_PHASE_HEX.Detailing },
     RFI: { gradient: GANTT_GRADIENT.Procurement, solid: GANTT_PHASE_HEX.Procurement },
     Milestone: { gradient: 'none', solid: GANTT_STATUS_HEX.inProgress },
-    Task: { gradient: 'linear-gradient(90deg, rgba(160,175,210,0.4), rgba(130,145,180,0.4))', solid: 'rgba(160,175,210,0.5)' },
+    Task: { gradient: `linear-gradient(90deg, ${GANTT_ROW_ALT_VAR}, var(--sbd-gantt-row))`, solid: GANTT_ROW_ALT_VAR },
   };
   return colors[taskType] || colors.Task;
 }

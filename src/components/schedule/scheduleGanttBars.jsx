@@ -6,7 +6,14 @@
 // out drops the main component file by ~300 lines without altering any
 // rendered output.
 import React from "react";
-import { GANTT_PHASE_HEX, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
+import {
+  GANTT_BASELINE_VAR,
+  GANTT_BG_VAR,
+  GANTT_GRID_STRONG_VAR,
+  GANTT_GRID_VAR,
+  GANTT_PHASE_HEX,
+  GANTT_STATUS_HEX,
+} from "@/lib/ganttTheme";
 import {
   DETAILING_STAGE_GATES,
   DETAILING_STAGE_META,
@@ -21,6 +28,8 @@ import {
   sanitizeTaskName,
   statusColor,
 } from "./scheduleTaskUtils";
+
+const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 
 // Compact status chip used in the left-panel STATUS column. Replaces a
 // plain colored text label with a tinted pill so the four primary states
@@ -69,7 +78,7 @@ export function StatusChip({ status, overdue }) {
 // up exactly where the date math says it should.
 export function SummaryBar({ phase, leftPx, widthPx, pctComplete }) {
   const ph = PHASE_BY_KEY[phase.key];
-  const color = ph?.color || "#888";
+  const color = ph?.color || GANTT_BASELINE_VAR;
   const pct = Math.round(pctComplete || 0);
   const w = Math.max(widthPx, 6);
   return (
@@ -84,7 +93,7 @@ export function SummaryBar({ phase, leftPx, widthPx, pctComplete }) {
       border: `1px solid color-mix(in srgb, ${color} 55%, transparent)`,
       borderRadius: 5,
       overflow: "hidden",
-      boxShadow: `0 1px 0 rgba(255,255,255,0.04) inset, 0 0 0 1px rgba(0,0,0,0.18)`,
+      boxShadow: `0 1px 0 ${GANTT_GRID_VAR} inset, 0 0 0 1px ${GANTT_GRID_STRONG_VAR}`,
     }}>
       {/* Progress fill — vertical gradient gives the bar a glossy
           highlight without a separate overlay layer. */}
@@ -97,7 +106,7 @@ export function SummaryBar({ phase, leftPx, widthPx, pctComplete }) {
       }} />
       {/* % label — only render when the bar is wide enough. */}
       {w > 44 && (
-        <span className="sbd-num" style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", fontSize: 9, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)", textShadow: "0 1px 1px rgba(0,0,0,0.45)", letterSpacing: "0.03em" }}>
+        <span className="sbd-num" style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", fontSize: 9, fontWeight: 700, color: "var(--on-accent)", fontFamily: "var(--font-mono)", textShadow: `0 1px 1px ${GANTT_BG_VAR}`, letterSpacing: "0.03em" }}>
           {pct}%
         </span>
       )}
@@ -225,9 +234,9 @@ export function GateDiamond({ left, color, active, kind, title }) {
         height: size,
         background: kind === "end" ? (color || "var(--accent)") : "transparent",
         border: `1.5px solid ${color || "var(--accent)"}`,
-        outline: "1.5px solid #0F1118",
+        outline: `1.5px solid ${GANTT_BG_VAR}`,
         borderRadius: 2,
-        boxShadow: active ? "0 0 0 1px rgba(255,255,255,0.30)" : "0 0 0 1px rgba(255,255,255,0.12)",
+        boxShadow: active ? `0 0 0 1px ${GANTT_GRID_STRONG_VAR}` : `0 0 0 1px ${GANTT_GRID_VAR}`,
         pointerEvents: "auto",
         cursor: "default",
         zIndex: 3,
@@ -266,13 +275,13 @@ function BarLabel({ name, placement, status }) {
         zIndex: 2,
         fontSize: 9,
         fontWeight: 700,
-        color: status === "Complete" ? "#003915" : status === "Delayed" ? "#fff" : "#0F1118",
+        color: status === "Complete" ? "color-mix(in srgb, var(--status-success) 15%, black)" : status === "Delayed" ? "var(--on-accent)" : "color-mix(in srgb, var(--accent) 15%, black)",
         letterSpacing: "0.01em",
         whiteSpace: "nowrap",
         overflow: "hidden",
         textOverflow: "ellipsis",
         padding: "0 8px",
-        textShadow: status === "Delayed" ? "0 1px 1px rgba(0,0,0,0.4)" : undefined,
+        textShadow: status === "Delayed" ? `0 1px 1px ${GANTT_BG_VAR}` : undefined,
       }}>{name}</span>
     );
   }
@@ -330,7 +339,7 @@ export function TaskBar({ task, leftPx, widthPx }) {
           position: "absolute", inset: 0,
           background: `linear-gradient(180deg, color-mix(in srgb, ${c} 92%, white) 0%, ${c} 55%, color-mix(in srgb, ${c} 86%, black) 100%)`,
           borderRadius: BAR_RADIUS,
-          boxShadow: `0 1px 0 rgba(255,255,255,0.10) inset, 0 0 0 1px rgba(0,0,0,0.22)`,
+          boxShadow: `0 1px 0 ${GANTT_GRID_VAR} inset, 0 0 0 1px ${GANTT_GRID_STRONG_VAR}`,
           overflow: "hidden",
         }} />
         <BarLabel name={name} placement={placement} status="Complete" />
@@ -346,8 +355,8 @@ export function TaskBar({ task, leftPx, widthPx }) {
             glossy gradient over [0..pct]% of the track. */}
         <div style={{
           position: "absolute", inset: 0,
-          background: `${GANTT_STATUS_HEX.inProgress}18`,
-          border: `1px solid ${GANTT_STATUS_HEX.inProgress}80`,
+          background: tint(GANTT_STATUS_HEX.inProgress, 9),
+          border: `1px solid ${tint(GANTT_STATUS_HEX.inProgress, 50)}`,
           borderRadius: BAR_RADIUS,
           overflow: "hidden",
         }}>
@@ -369,7 +378,7 @@ export function TaskBar({ task, leftPx, widthPx }) {
       <div style={shellStyle}>
         <div style={{
           position: "absolute", inset: 0,
-          background: "rgba(239,68,68,0.18)",
+          background: "var(--danger-muted)",
           border: `1.5px dashed ${c}`,
           borderRadius: BAR_RADIUS,
           overflow: "hidden",
@@ -427,8 +436,8 @@ export function BaselineGhostBar({ leftPx, widthPx, direction }) {
       height: GHOST_HEIGHT,
       top: "50%",
       transform: "translateY(5px)",
-      background: "rgba(100,116,139,0.18)",
-      border: "1.5px dashed rgba(100,116,139,0.50)",
+      background: `color-mix(in srgb, ${GANTT_BASELINE_VAR} 18%, transparent)`,
+      border: `1.5px dashed color-mix(in srgb, ${GANTT_BASELINE_VAR} 50%, transparent)`,
       borderRadius: 3,
       pointerEvents: "none",
       zIndex: 0,
@@ -456,12 +465,12 @@ export function BaselineGhostBar({ leftPx, widthPx, direction }) {
 // ── Submittal bar ─────────────────────────────────────────────────────────
 export function SubmittalBar({ submittal, leftPx, widthPx }) {
   const statusColors = {
-    "Approved":             { bg: `${GANTT_STATUS_HEX.complete}26`, border: GANTT_STATUS_HEX.complete, text: GANTT_STATUS_HEX.complete },
-    "Approved as Noted":    { bg: `${GANTT_STATUS_HEX.complete}1A`, border: GANTT_STATUS_HEX.complete, text: GANTT_STATUS_HEX.complete },
-    "Rejected":             { bg: `${GANTT_STATUS_HEX.delayed}1F`,  border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
-    "Revise & Resubmit":    { bg: `${GANTT_STATUS_HEX.delayed}1A`,  border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
-    "Under Review":         { bg: `${GANTT_STATUS_HEX.inProgress}1F`, border: GANTT_STATUS_HEX.inProgress, text: GANTT_STATUS_HEX.inProgress },
-    "Draft":                { bg: "rgba(100,116,139,0.10)", border: "#64748B", text: "#94A3B8" },
+    "Approved":             { bg: tint(GANTT_STATUS_HEX.complete, 15), border: GANTT_STATUS_HEX.complete, text: GANTT_STATUS_HEX.complete },
+    "Approved as Noted":    { bg: tint(GANTT_STATUS_HEX.complete, 10), border: GANTT_STATUS_HEX.complete, text: GANTT_STATUS_HEX.complete },
+    "Rejected":             { bg: tint(GANTT_STATUS_HEX.delayed, 12), border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
+    "Revise & Resubmit":    { bg: tint(GANTT_STATUS_HEX.delayed, 10), border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
+    "Under Review":         { bg: tint(GANTT_STATUS_HEX.inProgress, 12), border: GANTT_STATUS_HEX.inProgress, text: GANTT_STATUS_HEX.inProgress },
+    "Draft":                { bg: `color-mix(in srgb, ${GANTT_BASELINE_VAR} 10%, transparent)`, border: GANTT_BASELINE_VAR, text: GANTT_BASELINE_VAR },
   };
   const c = statusColors[submittal.status] || statusColors["Draft"];
   const isLate = submittal.due_date && new Date(submittal.due_date) < new Date() && submittal.status !== "Approved" && submittal.status !== "Approved as Noted";
@@ -486,11 +495,11 @@ export function SubmittalBar({ submittal, leftPx, widthPx }) {
 export function DeliveryBar({ delivery, leftPx, widthPx }) {
   const statusColors = {
     "Scheduled":   { bg: `${GANTT_PHASE_HEX.Delivery}26`, border: GANTT_PHASE_HEX.Delivery, text: GANTT_PHASE_HEX.Delivery },
-    "In Transit":  { bg: `${GANTT_STATUS_HEX.inProgress}26`, border: GANTT_STATUS_HEX.inProgress, text: GANTT_STATUS_HEX.inProgress },
-    "Delivered":   { bg: `${GANTT_STATUS_HEX.complete}26`, border: GANTT_STATUS_HEX.complete, text: GANTT_STATUS_HEX.complete },
-    "Partial":     { bg: `${GANTT_STATUS_HEX.delayed}1F`,  border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
-    "Rejected":    { bg: `${GANTT_STATUS_HEX.delayed}26`,  border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
-    "Delayed":     { bg: `${GANTT_STATUS_HEX.delayed}1F`, border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
+    "In Transit":  { bg: tint(GANTT_STATUS_HEX.inProgress, 15), border: GANTT_STATUS_HEX.inProgress, text: GANTT_STATUS_HEX.inProgress },
+    "Delivered":   { bg: tint(GANTT_STATUS_HEX.complete, 15), border: GANTT_STATUS_HEX.complete, text: GANTT_STATUS_HEX.complete },
+    "Partial":     { bg: tint(GANTT_STATUS_HEX.delayed, 12), border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
+    "Rejected":    { bg: tint(GANTT_STATUS_HEX.delayed, 15), border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
+    "Delayed":     { bg: tint(GANTT_STATUS_HEX.delayed, 12), border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
   };
   const c = statusColors[delivery.status] || statusColors["Scheduled"];
   const isLate = delivery.scheduled_date && new Date(delivery.scheduled_date) < new Date() && delivery.status !== "Delivered";

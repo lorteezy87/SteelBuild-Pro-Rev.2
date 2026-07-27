@@ -35,7 +35,7 @@ import {
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
-const AI      = "var(--ai-accent, #22D3EE)";
+const AI      = "var(--ai-accent, var(--status-info))";
 
 // Quick-pick scope starters. The first two show the bid-style format
 // (numbered, drawing-refs preserved) — that's the richer of the two
@@ -262,7 +262,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
     <>
       <div
         onClick={() => { if (step !== "saving") onClose(); }}
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1200 }}
+        style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--sbd-gantt-bg) 65%, transparent)", zIndex: 1200 }}
       />
       <div
         style={{
@@ -671,7 +671,7 @@ function ForecastBlock({ forecast }) {
       style={{
         border: `1px solid ${AI}`,
         borderLeft: `3px solid ${AI}`,
-        background: "color-mix(in srgb, var(--ai-accent, #22D3EE) 6%, transparent)",
+        background: "color-mix(in srgb, var(--ai-accent, var(--status-info)) 6%, transparent)",
         borderRadius: 3,
         padding: "12px 14px",
         display: "flex",
@@ -770,7 +770,7 @@ function ForecastTile({ label, value, sub }) {
 const btnPrimary = {
   padding: "8px 22px",
   background: AI,
-  color: "#000",
+  color: "var(--on-accent)",
   border: "none",
   borderRadius: 2,
   fontFamily: "var(--font-mono)",

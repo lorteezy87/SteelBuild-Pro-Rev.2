@@ -232,7 +232,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
 
   return (
     <>
-      <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.74)", backdropFilter: "blur(6px)", zIndex: 998 }} />
+      <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--sbd-gantt-bg) 74%, transparent)", backdropFilter: "blur(6px)", zIndex: 998 }} />
       <div style={{
         position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
         width: "min(1720px, 97vw)", maxHeight: "88vh",
@@ -285,7 +285,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                   alignItems: "center", height: 46,
                   borderBottom: "1px solid var(--hover-bg)",
                   background: hasErr ? ROW_ERROR_BG : idx % 2 === 1 ? ROW_ALT_BG : ROW_BG,
-                  border: hasErr ? "1px solid rgba(255,59,59,0.25)" : undefined,
+                  border: hasErr ? "1px solid var(--danger-border)" : undefined,
                   padding: "0 16px",
                 }}
               >
@@ -299,7 +299,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                   <input
                     value={row.task_name}
                     onChange={(e) => updateRow(row._id, "task_name", e.target.value)}
-                    onFocus={(e) => e.target.style.background = "rgb(18,25,38)"}
+                    onFocus={(e) => e.target.style.background = "var(--bg-surface-high)"}
                     onBlur={(e) => e.target.style.background = INPUT_STYLE.background}
                     onKeyDown={handleCellKeyDown}
                     data-row={idx}
@@ -418,7 +418,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                   <button
                     onClick={() => removeRow(row._id)}
                     title="Remove row"
-                    style={{ background: "none", border: "none", color: "rgba(255,80,80,0.35)", cursor: "pointer", fontSize: 13, padding: 2, lineHeight: 1 }}
+                    style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", fontSize: 13, padding: 2, lineHeight: 1 }}
                   >✕</button>
                 </div>
               </div>
@@ -431,14 +431,14 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
             style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "8px 24px", cursor: "pointer",
-              color: "rgba(200,155,32,0.50)", fontFamily: "var(--font-mono)", fontSize: 10,
+              color: "color-mix(in srgb, var(--accent) 50%, transparent)", fontFamily: "var(--font-mono)", fontSize: 10,
               letterSpacing: "0.08em", fontWeight: 700,
               borderBottom: "1px solid var(--hover-bg)",
               background: "var(--bg-surface-low)",
               transition: "color 0.12s",
             }}
             onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
-            onMouseLeave={(e) => e.currentTarget.style.color = "rgba(200,155,32,0.50)"}
+            onMouseLeave={(e) => e.currentTarget.style.color = "color-mix(in srgb, var(--accent) 50%, transparent)"}
           >
             + ADD ROW
           </div>
@@ -470,9 +470,9 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
               onClick={handleSave}
               disabled={isSaving}
               style={{
-                background: isSaving ? "rgba(200,155,32,0.5)" : "var(--accent)",
+                background: isSaving ? "color-mix(in srgb, var(--accent) 50%, transparent)" : "var(--accent)",
                 border: "none", borderRadius: 2, padding: "7px 22px",
-                color: "#fff", fontFamily: "var(--font-mono)", fontSize: 10,
+                color: "var(--on-accent)", fontFamily: "var(--font-mono)", fontSize: 10,
                 fontWeight: 800, cursor: isSaving ? "not-allowed" : "pointer",
                 letterSpacing: "0.09em", textTransform: "uppercase",
                 transition: "background 0.15s",

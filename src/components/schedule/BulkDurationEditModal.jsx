@@ -63,7 +63,7 @@ export default function BulkDurationEditModal({ open, count = 0, isSaving = fals
         style={{
           position: "fixed",
           inset: 0,
-          background: "rgba(0,0,0,0.70)",
+          background: "color-mix(in srgb, var(--sbd-gantt-bg) 70%, transparent)",
           backdropFilter: "blur(8px)",
           WebkitBackdropFilter: "blur(8px)",
           zIndex: 998,
@@ -79,10 +79,10 @@ export default function BulkDurationEditModal({ open, count = 0, isSaving = fals
           left: "50%",
           transform: "translate(-50%, -50%)",
           width: "min(480px, 94vw)",
-          background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 96%, #000 4%) 0%, var(--bg-surface-low) 100%)",
+          background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 96%, var(--sbd-gantt-bg) 4%) 0%, var(--bg-surface-low) 100%)",
           border: "1px solid var(--accent-border)",
           borderRadius: 18,
-          boxShadow: "0 28px 80px rgba(0,0,0,0.78), inset 0 1px 0 rgba(255,255,255,0.06)",
+          boxShadow: "var(--shadow-lg)",
           color: "var(--text-primary)",
           zIndex: 999,
           overflow: "hidden",
@@ -133,7 +133,7 @@ export default function BulkDurationEditModal({ open, count = 0, isSaving = fals
               border: "1px solid var(--border-default)",
               borderRadius: 12,
               padding: "10px 12px",
-              background: "rgba(86,176,255,0.08)",
+              background: "var(--accent-muted)",
               color: "var(--text-secondary)",
               fontSize: 13,
             }}
@@ -151,7 +151,7 @@ export default function BulkDurationEditModal({ open, count = 0, isSaving = fals
                 style={{
                   borderRadius: 10,
                   border: mode === m.key ? "1px solid var(--accent)" : "1px solid var(--border-default)",
-                  background: mode === m.key ? "rgba(86,176,255,0.14)" : "var(--bg-surface)",
+                  background: mode === m.key ? "var(--accent-muted)" : "var(--bg-surface)",
                   color: mode === m.key ? "var(--accent)" : "var(--text-secondary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 10,
@@ -211,7 +211,7 @@ export default function BulkDurationEditModal({ open, count = 0, isSaving = fals
             display: "flex",
             justifyContent: "flex-end",
             gap: 10,
-            background: "rgba(0,0,0,0.20)",
+            background: "var(--sbd-gantt-panel-strong)",
           }}
         >
           <button
@@ -240,8 +240,8 @@ export default function BulkDurationEditModal({ open, count = 0, isSaving = fals
               padding: "10px 18px",
               borderRadius: 10,
               border: "1px solid var(--accent)",
-              background: validation ? "var(--bg-surface)" : "linear-gradient(135deg, var(--accent) 0%, #2f8ee8 100%)",
-              color: validation ? "var(--text-muted)" : "#06101d",
+              background: validation ? "var(--bg-surface)" : "var(--accent)",
+              color: validation ? "var(--text-muted)" : "var(--on-accent)",
               fontFamily: "var(--font-mono)",
               fontSize: 11,
               fontWeight: 900,

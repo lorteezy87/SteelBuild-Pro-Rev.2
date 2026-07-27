@@ -1,5 +1,10 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
-import { GANTT_GRADIENT, GANTT_PHASE_HEX, GANTT_STATUS_HEX, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
+import {
+  GANTT_GRADIENT,
+  GANTT_PHASE_HEX,
+  GANTT_STATUS_HEX,
+  GANTT_TODAY_VAR,
+} from "@/lib/ganttTheme";
 
 export default function ScheduleTimeline({
   tasks,
@@ -121,11 +126,11 @@ export default function ScheduleTimeline({
             width: 16,
             height: 16,
             top: 14,
-            background: isCritical ? GANTT_STATUS_HEX.delayed : GANTT_TODAY_HEX,
+            background: isCritical ? GANTT_STATUS_HEX.delayed : GANTT_TODAY_VAR,
             transform: "rotate(45deg)",
             cursor: "pointer",
             boxShadow: isCritical
-              ? "0 0 12px rgba(255,61,61,0.5)"
+              ? "0 0 12px color-mix(in srgb, var(--status-error) 50%, transparent)"
               : "0 0 8px var(--border-strong)",
             borderRadius: 1,
           }}
@@ -150,7 +155,7 @@ export default function ScheduleTimeline({
       height: 26,
       top: 9,
       background: isDelayed
-        ? `linear-gradient(135deg, ${GANTT_STATUS_HEX.delayed}, #FF6B2B)`
+        ? "linear-gradient(135deg, var(--status-error), var(--status-warning))"
         : gradientColor,
       borderRadius: 4,
       cursor: "grab",
@@ -158,16 +163,16 @@ export default function ScheduleTimeline({
       boxShadow: isSelected
         ? `0 0 0 2px var(--accent), 0 0 12px var(--warning-muted)`
         : isCritical && showCriticalPath
-          ? `0 0 0 2px var(--status-error-bright), 0 0 12px rgba(255,61,61,0.4)`
-          : "0 2px 8px rgba(0,0,0,0.3)",
-      border: isDelayed ? "1px dashed rgba(255,61,61,0.6)" : "none",
+          ? "0 0 0 2px var(--status-error-bright), 0 0 12px color-mix(in srgb, var(--status-error) 40%, transparent)"
+          : "var(--shadow-sm)",
+      border: isDelayed ? "1px dashed var(--status-error)" : "none",
       overflow: "hidden",
       display: "flex",
       alignItems: "center",
       paddingLeft: 6,
       paddingRight: 6,
       fontSize: 10,
-      color: "#fff",
+      color: "var(--on-accent)",
       fontFamily: "var(--font-mono)",
       fontWeight: 700,
       transition: "all 0.1s",
@@ -343,7 +348,7 @@ export default function ScheduleTimeline({
                 justifyContent: "center",
                 fontSize: 10,
                 fontWeight: isToday ? 700 : 600,
-                color: isToday ? GANTT_TODAY_HEX : "var(--text-muted)",
+                color: isToday ? GANTT_TODAY_VAR : "var(--text-muted)",
                 fontFamily: "var(--font-mono)",
                 borderRight: "1px solid var(--sbd-gantt-grid)",
                 background: isToday
@@ -351,7 +356,7 @@ export default function ScheduleTimeline({
                   : col.date.getDay() === 0 || col.date.getDay() === 6
                     ? "var(--hover-bg)"
                     : "transparent",
-                borderTop: isToday ? `2px solid ${GANTT_TODAY_HEX}` : "none",
+                borderTop: isToday ? `2px solid ${GANTT_TODAY_VAR}` : "none",
               }}
             >
               W{String(Math.ceil((col.date.getDate() + col.weekStart.getDay()) / 7)).padStart(2, "0")}
@@ -368,8 +373,8 @@ export default function ScheduleTimeline({
           top: 0,
           width: 2,
           height: "100%",
-          background: GANTT_TODAY_HEX,
-          boxShadow: "0 0 8px rgba(255,107,0,0.45)",
+          background: GANTT_TODAY_VAR,
+          boxShadow: `0 0 8px color-mix(in srgb, ${GANTT_TODAY_VAR} 45%, transparent)`,
           zIndex: 8,
           pointerEvents: "none",
         }}
