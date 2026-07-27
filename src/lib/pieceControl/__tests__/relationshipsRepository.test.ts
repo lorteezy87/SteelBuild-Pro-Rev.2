@@ -52,9 +52,10 @@ describe("fetchPieceRelationshipSnapshot", () => {
   });
 
   it("soft-fails optional tables so a missing dispositions table still loads core rows", async () => {
+    let workPackagesSelect = "";
     fromMock.mockImplementation((table: string) => {
       if (table === "work_packages") {
-        return chainFor({
+        const chain = chainFor({
           data: [
             {
               id: "wp-1",
@@ -67,6 +68,11 @@ describe("fetchPieceRelationshipSnapshot", () => {
           ],
           error: null,
         });
+        chain.select = vi.fn((cols: string) => {
+          workPackagesSelect = cols;
+          return chain;
+        });
+        return chain;
       }
       if (table === "submittal_comment_dispositions") {
         return chainFor({
@@ -88,6 +94,9 @@ describe("fetchPieceRelationshipSnapshot", () => {
     expect(snapshot.pieces).toHaveLength(1);
     expect(snapshot.workPackages).toHaveLength(1);
     expect(snapshot.commentDispositions).toEqual([]);
+    expect(workPackagesSelect).toContain("sequence_number");
+    expect(workPackagesSelect).toContain("area");
+    expect(workPackagesSelect).not.toMatch(/\bdescription\b/);
   });
 
   it("fails closed when work_packages cannot load", async () => {
