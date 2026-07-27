@@ -20,6 +20,7 @@ import {
 import { formatCurrencyShort, formatCurrency } from "@/components/shared/formatters";
 import { getChartTheme } from "@/components/shared/RechartsThemeConfig";
 import type { BarChartDatum, CumulativeDatum, PieDatum } from "./costControlCenter.derive";
+import { getCategoryPieColor } from "./costChartColors";
 
 // ─── Shared tooltip ──────────────────────────────────────────────────────────
 
@@ -119,7 +120,6 @@ export default function CostChartRow({
   const budgetColor = chartTheme.colors.primary;
   const actualColor = chartTheme.colors.info;
   const committedColor = chartTheme.colors.warning;
-  const categoryPalette = chartTheme.palette;
   // Don't render the whole section if there's genuinely no data
   const hasAny = barData.length > 0 || cumulativeData.length > 1 || pieData.length > 0;
   if (!hasAny) return null;
@@ -218,8 +218,8 @@ export default function CostChartRow({
               >
                 {pieData.map((d, i) => (
                   <Cell
-                    key={i}
-                    fill={categoryPalette[i % categoryPalette.length]}
+                    key={d.name}
+                    fill={getCategoryPieColor(d.name, chartTheme, i)}
                   />
                 ))}
               </Pie>

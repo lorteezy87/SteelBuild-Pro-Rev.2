@@ -36,3 +36,8 @@
 
 **Concerns**
 - Full Vitest suite is not green due to the deterministic, unrelated `ConstraintsExpenses.test.jsx` failure described above.
+
+**Review fix (pie category colors)**
+- Restored stable per-category pie coloring in `CostChartRow` via `getCategoryPieColor()` (`costChartColors.ts`): known categories map to `chartTheme.colors.*` / `text.muted` tokens; unknown names fall back to palette index.
+- Tests: `npx vitest run src/pages/costHub/__tests__/costChartColors.test.ts src/components/shared/__tests__/RechartsThemeConfig.test.ts` — 3 passed; `npm run lint` — clean.
+- Commit: `fix: restore cost hub pie category color mapping with theme tokens`
