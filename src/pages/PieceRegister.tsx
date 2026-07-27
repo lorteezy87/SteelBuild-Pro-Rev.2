@@ -34,12 +34,15 @@ import { PieceAttentionPanel } from "@/components/pieceControl/PieceAttentionPan
 import { PieceControlModeBadge } from "@/components/pieceControl/PieceControlModeBadge";
 import { PieceImpactPanel } from "@/components/pieceControl/PieceImpactPanel";
 import { PieceLifecycleStrip } from "@/components/pieceControl/PieceLifecycleStrip";
+import PieceRegisterBulkBar from "@/components/pieceControl/PieceRegisterBulkBar";
 import PieceRelationshipManager from "@/components/pieceControl/PieceRelationshipManager";
 import { PieceProductionControl } from "@/components/pieceControl/PieceProductionControl";
 import { PieceLogisticsControl } from "@/components/pieceControl/PieceLogisticsControl";
 import { PieceControlPilotReadiness } from "@/components/pieceControl/PieceControlPilotReadiness";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { photoFor } from "@/config/launcherConfig";
+import { planBulkPieceAttributeUpdate } from "@/lib/pieceControl/bulkUpdatePieces";
+import { bulkUpdatePieceAttributes } from "@/lib/pieceControl/bulkUpdateRepository";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
 import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
 import {
@@ -58,16 +61,23 @@ import {
 } from "@/lib/pieceControl/importDrawingLink";
 import { downloadPieceRegisterCsvTemplate } from "@/lib/pieceControl/pieceRegisterCsvTemplate";
 import {
+  nextPieceRegisterSort,
+  sortPieceRegisterRows,
+  type PieceRegisterSort,
+} from "@/lib/pieceControl/pieceRegisterSort";
+import {
   buildPieceControlSummary,
   modePresentation,
   type PieceAttentionItem,
   type PieceControlMode,
 } from "@/lib/pieceControl/presentation";
+import { setPieceHold } from "@/lib/pieceControl/productionRepository";
 import type { ImportPayload, PieceImportSourceType } from "@/lib/pieceControl/reconciliation";
 import {
   assignPiecesToWorkPackage,
   fetchPieceRelationshipSnapshot,
   linkPieceDrawing,
+  unassignPiecesFromWorkPackage,
 } from "@/lib/pieceControl/relationshipsRepository";
 import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
 import {
@@ -186,6 +196,10 @@ export default function PieceRegister() {
   const [applyConfirmed, setApplyConfirmed] = useState(false);
   const [importTargetWorkPackageId, setImportTargetWorkPackageId] = useState("");
   const [selectedPieceIds, setSelectedPieceIds] = useState<Set<string>>(new Set());
+  const [registerSort, setRegisterSort] = useState<PieceRegisterSort>({
+    key: "work_package",
+    direction: "asc",
+  });
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveReason, setArchiveReason] = useState("");
   const [archiveConfirmation, setArchiveConfirmation] = useState("");
@@ -309,18 +323,17 @@ export default function PieceRegister() {
     [overviewWorkPackages],
   );
   const filteredRows = useMemo(() => {
-    const rows = filterPieceRegisterRows(displayRows, filters);
+    let rows = filterPieceRegisterRows(displayRows, filters);
     if (attentionFocus === "unassigned") {
-      return rows.filter((piece) => !piece.work_package_id);
+      rows = rows.filter((piece) => !piece.work_package_id);
+    } else if (attentionFocus === "missing-weight") {
+      rows = rows.filter((piece) => pieceTons(piece) == null);
+    } else if (attentionFocus === "held") {
+      rows = rows.filter((piece) => piece.on_hold);
     }
-    if (attentionFocus === "missing-weight") {
-      return rows.filter((piece) => pieceTons(piece) == null);
-    }
-    if (attentionFocus === "held") {
-      return rows.filter((piece) => piece.on_hold);
-    }
-    return rows;
-  }, [attentionFocus, displayRows, filters]);
+    return sortPieceRegisterRows(rows, registerSort);
+  }, [attentionFocus, displayRows, filters, registerSort]);
+  const canBulkUpdate = enabled && !roleLoading && roleAtLeast(role, "field");
   const canArchive = enabled && !roleLoading && roleAtLeast(role, "admin");
   const allFilteredSelected = filteredRows.length > 0
     && filteredRows.every((piece) => selectedPieceIds.has(piece.id));
@@ -531,6 +544,90 @@ export default function PieceRegister() {
         presentPieceControlError(error, "The selected pieces could not be archived."),
       ),
   });
+  const bulkAssignMutation = useMutation({
+    mutationFn: (workPackageId: string) =>
+      assignPiecesToWorkPackage(projectId!, [...selectedPieceIds], workPackageId),
+    onSuccess: async (summary) => {
+      setSelectedPieceIds(new Set());
+      await invalidate();
+      toast.success(
+        `${summary.assigned ?? selectedPieceIds.size} piece(s) assigned to work package`,
+      );
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "Selected pieces could not be assigned."),
+      ),
+  });
+  const bulkUnassignMutation = useMutation({
+    mutationFn: () =>
+      unassignPiecesFromWorkPackage(projectId!, [...selectedPieceIds]),
+    onSuccess: async (summary) => {
+      setSelectedPieceIds(new Set());
+      await invalidate();
+      toast.success(
+        `${summary.unassigned ?? selectedPieceIds.size} piece(s) unassigned`,
+      );
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "Selected pieces could not be unassigned."),
+      ),
+  });
+  const bulkAttrsMutation = useMutation({
+    mutationFn: (values: {
+      updateSequence: boolean;
+      updateArea: boolean;
+      sequenceNumber: string;
+      erectionArea: string;
+    }) => {
+      const plan = planBulkPieceAttributeUpdate(values);
+      if (plan.fields.length === 0) {
+        throw new Error("Select at least one field to update.");
+      }
+      return bulkUpdatePieceAttributes(
+        projectId!,
+        [...selectedPieceIds],
+        plan.patch,
+      );
+    },
+    onSuccess: async (summary) => {
+      setSelectedPieceIds(new Set());
+      await invalidate();
+      toast.success(
+        `Updated ${summary.updated} piece(s)` +
+          (summary.unchanged ? ` · ${summary.unchanged} unchanged` : ""),
+      );
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "Selected pieces could not be updated."),
+      ),
+  });
+  const bulkHoldMutation = useMutation({
+    mutationFn: ({ onHold, reason }: { onHold: boolean; reason?: string }) =>
+      setPieceHold(projectId!, [...selectedPieceIds], onHold, reason),
+    onSuccess: async (_result, variables) => {
+      const count = selectedPieceIds.size;
+      setSelectedPieceIds(new Set());
+      await invalidate();
+      toast.success(
+        variables.onHold
+          ? `Hold applied to ${count} piece(s)`
+          : `Hold cleared on ${count} piece(s)`,
+      );
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(error, "Hold state could not be updated."),
+      ),
+  });
+  const bulkPending =
+    bulkAssignMutation.isPending ||
+    bulkUnassignMutation.isPending ||
+    bulkAttrsMutation.isPending ||
+    bulkHoldMutation.isPending ||
+    archiveMutation.isPending;
 
   const toggleAllFiltered = () => {
     setSelectedPieceIds((current) => {
@@ -895,28 +992,56 @@ export default function PieceRegister() {
               <h2>Piece register</h2>
               <p>{filteredRows.length} of {displayRows.length} rows shown</p>
             </div>
-            <button
-              type="button"
-              onClick={clearRegisterFilters}
-              className="cmd-btn cmd-btn--ghost"
-            >
-              Clear filters
-            </button>
-          </div>
-          {selectedPieceIds.size > 0 ? (
-            <div className="piece-selection-bar">
-              <strong>{selectedPieceIds.size} selected</strong>
+            <div className="piece-register-table__head-actions">
+              <label className="piece-register-filter" htmlFor="piece-register-sort">
+                Sort by
+                <select
+                  id="piece-register-sort"
+                  className="piece-register-filter__control"
+                  value={`${registerSort.key}:${registerSort.direction}`}
+                  onChange={(event) => {
+                    const [key, direction] = event.target.value.split(":") as [
+                      PieceRegisterSort["key"],
+                      PieceRegisterSort["direction"],
+                    ];
+                    setRegisterSort({ key, direction });
+                  }}
+                >
+                  <option value="work_package:asc">Work package (A→Z)</option>
+                  <option value="work_package:desc">Work package (Z→A)</option>
+                  <option value="mark:asc">Mark (A→Z)</option>
+                  <option value="mark:desc">Mark (Z→A)</option>
+                  <option value="updated_at:desc">Last update (newest)</option>
+                  <option value="updated_at:asc">Last update (oldest)</option>
+                </select>
+              </label>
               <button
                 type="button"
-                onClick={openArchiveDialog}
-                disabled={!canArchive}
-                title={canArchive ? "Archive selected pieces" : "Project admin access is required"}
-                className="cmd-btn piece-selection-bar__archive"
+                onClick={clearRegisterFilters}
+                className="cmd-btn cmd-btn--ghost"
               >
-                <Archive size={15} />
-                Archive selected
+                Clear filters
               </button>
             </div>
+          </div>
+          {selectedPieceIds.size > 0 ? (
+            <PieceRegisterBulkBar
+              selectedCount={selectedPieceIds.size}
+              workPackages={(workPackagesQuery.data ?? []) as Array<{
+                id: string;
+                wp_number?: string | null;
+                name?: string | null;
+              }>}
+              canBulkUpdate={canBulkUpdate}
+              canArchive={canArchive}
+              pending={bulkPending}
+              onAssign={(workPackageId) => bulkAssignMutation.mutate(workPackageId)}
+              onUnassign={() => bulkUnassignMutation.mutate()}
+              onApplyAttributes={(values) => bulkAttrsMutation.mutate(values)}
+              onHold={(reason) => bulkHoldMutation.mutate({ onHold: true, reason })}
+              onClearHold={() => bulkHoldMutation.mutate({ onHold: false })}
+              onArchive={openArchiveDialog}
+            />
           ) : null}
           {selectedPieceId ? (
             <DecisionPanel title="Piece impact">
@@ -935,13 +1060,49 @@ export default function PieceRegister() {
                       type="checkbox"
                       aria-label="Select all visible pieces"
                       checked={allFilteredSelected}
-                      disabled={!canArchive || filteredRows.length === 0}
+                      disabled={!canBulkUpdate || filteredRows.length === 0}
                       onChange={toggleAllFiltered}
                       className="cmd-check"
                     />
                   </th>
-                  {["Mark / lot", "Qty", "Profile", "Grade", "Wt each", "Wt total", "Tons", "Work package", "Lifecycle", "Hold", "Source", "Last update"].map((label) => (
-                    <th key={label}>{label}</th>
+                  {(
+                    [
+                      { label: "Mark / lot", key: "mark" as const },
+                      { label: "Qty", key: null },
+                      { label: "Profile", key: null },
+                      { label: "Grade", key: null },
+                      { label: "Wt each", key: null },
+                      { label: "Wt total", key: null },
+                      { label: "Tons", key: null },
+                      { label: "Work package", key: "work_package" as const },
+                      { label: "Lifecycle", key: null },
+                      { label: "Hold", key: null },
+                      { label: "Source", key: null },
+                      { label: "Last update", key: "updated_at" as const },
+                    ] as const
+                  ).map((column) => (
+                    <th key={column.label}>
+                      {column.key ? (
+                        <button
+                          type="button"
+                          className="piece-register-sort-th"
+                          onClick={() =>
+                            setRegisterSort((current) =>
+                              nextPieceRegisterSort(current, column.key!),
+                            )
+                          }
+                        >
+                          {column.label}
+                          {registerSort.key === column.key
+                            ? registerSort.direction === "asc"
+                              ? " ↑"
+                              : " ↓"
+                            : ""}
+                        </button>
+                      ) : (
+                        column.label
+                      )}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -970,7 +1131,7 @@ export default function PieceRegister() {
                         type="checkbox"
                         aria-label={`Select ${piece.piece_mark} lot ${piece.lot_code}`}
                         checked={selectedPieceIds.has(piece.id)}
-                        disabled={!canArchive}
+                        disabled={!canBulkUpdate}
                         onChange={() => setSelectedPieceIds((current) => {
                           const next = new Set(current);
                           if (next.has(piece.id)) next.delete(piece.id);

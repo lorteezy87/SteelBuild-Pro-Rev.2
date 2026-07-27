@@ -621,10 +621,59 @@
   font-size: 12px;
 }
 
+[data-skin="command"] .piece-selection-bar--bulk {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+[data-skin="command"] .piece-bulk-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+[data-skin="command"] .piece-bulk-group .piece-command-field {
+  min-width: 140px;
+}
+
+[data-skin="command"] .piece-bulk-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cmd-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+[data-skin="command"] .piece-register-table__head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+[data-skin="command"] .piece-register-sort-th {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+[data-skin="command"] .piece-register-sort-th:hover {
+  color: var(--cmd-text);
+}
+
 [data-skin="command"] .piece-selection-bar__archive {
   border-color: var(--cmd-chip-danger-bg);
   background: var(--cmd-chip-danger-bg);
   color: var(--cmd-danger-text);
+  margin-left: auto;
 }
 
 [data-skin="command"] .piece-register-table__wrap {

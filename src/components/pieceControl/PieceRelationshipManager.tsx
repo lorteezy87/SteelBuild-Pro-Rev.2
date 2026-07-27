@@ -19,6 +19,7 @@ import {
   addIdsToSelection,
   selectIdRange,
 } from "@/lib/pieceControl/pieceSelectionRange";
+import { sortPieceRegisterRows } from "@/lib/pieceControl/pieceRegisterSort";
 import {
   applyWorkPackageAutoAssign,
   planWorkPackageAutoAssign,
@@ -109,7 +110,7 @@ export default function PieceRelationshipManager({
 
   const selectablePieces = useMemo(() => {
     const mark = markFilter.trim().toLowerCase();
-    return packageScopedLeaves.filter((piece) => {
+    const filtered = packageScopedLeaves.filter((piece) => {
       const liveId = liveWorkPackageId(piece);
       if (scopeFilter === "unassigned" && liveId) return false;
       if (
@@ -124,6 +125,15 @@ export default function PieceRelationshipManager({
       }
       return true;
     });
+    return sortPieceRegisterRows(
+      filtered.map((piece) => ({
+        ...piece,
+        workPackageLabel: liveWorkPackageId(piece)
+          ? workPackageMap.get(liveWorkPackageId(piece)!) ?? "Unassigned"
+          : "Unassigned",
+      })),
+      { key: "work_package", direction: "asc" },
+    );
   }, [focusedWorkPackageId, markFilter, packageScopedLeaves, scopeFilter, workPackageMap]);
 
   useEffect(() => {
