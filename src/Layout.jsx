@@ -410,9 +410,9 @@ export default function Layout({ children, currentPageName }) {
             position="bottom-right"
             toastOptions={{
               style: {
-                background: "var(--bg-elevated, var(--sbd-bg-elevated, rgba(15,22,38,0.95)))",
-                border: "1px solid var(--border-strong, var(--sbd-border, rgba(255,255,255,0.08)))",
-                color: "var(--text-primary, var(--sbd-text, rgba(255,255,255,0.95)))",
+                background: "var(--bg-elevated, var(--sbd-bg-elevated))",
+                border: "1px solid var(--border-strong, var(--sbd-border))",
+                color: "var(--text-primary, var(--sbd-text))",
                 fontFamily: "'Inter', sans-serif",
                 fontSize: 13, borderRadius: 10,
                 boxShadow: "var(--shadow-lg)",

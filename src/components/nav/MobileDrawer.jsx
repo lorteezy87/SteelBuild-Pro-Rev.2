@@ -34,7 +34,7 @@ export default function MobileDrawer({ open, onClose, onNavigate, currentPageNam
       {open && <div style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.82)",
+        background: "color-mix(in srgb, var(--sbd-bg-base) 82%, transparent)",
         backdropFilter: "blur(8px)",
         WebkitBackdropFilter: "blur(8px)",
         zIndex: 900,

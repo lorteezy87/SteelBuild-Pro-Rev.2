@@ -530,7 +530,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
                   }}
                   onMouseEnter={(e) => {
                     prefetchRoute(it.page);
-                    e.currentTarget.style.background = "var(--nav-hover-bg, rgba(255,255,255,0.04))";
+                    e.currentTarget.style.background = "var(--nav-hover-bg, var(--bg-hover))";
                     e.currentTarget.style.color = "var(--text-secondary)";
                   }}
                   onFocus={() => prefetchRoute(it.page)}
@@ -803,7 +803,7 @@ function FavoriteLink({ item, active, onClick, onUnpin }) {
           gap: 10,
           background: active
             ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+            : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
           border: "none",
           borderRadius: 6,
           cursor: "pointer",
@@ -911,7 +911,7 @@ function FavoriteRailLink({ item, active, onClick }) {
           justifyContent: "center",
           background: active
             ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+            : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
           border: active
             ? "1px solid color-mix(in srgb, var(--accent) 40%, transparent)"
             : "1px solid transparent",
@@ -953,7 +953,7 @@ function FavoriteRailLink({ item, active, onClick }) {
             fontWeight: 600,
             color: "var(--text-primary)",
             whiteSpace: "nowrap",
-            boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+            boxShadow: "var(--shadow-lg)",
             zIndex: 1000,
             pointerEvents: "none",
           }}
@@ -1000,7 +1000,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
             justifyContent: "center",
             background: active
               ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-              : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+              : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
             border: active
               ? "1px solid color-mix(in srgb, var(--accent) 40%, transparent)"
               : "1px solid transparent",
@@ -1042,7 +1042,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
               fontWeight: 600,
               color: "var(--text-primary)",
               whiteSpace: "nowrap",
-              boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+              boxShadow: "var(--shadow-lg)",
               zIndex: 1000,
               pointerEvents: "none",
             }}
@@ -1076,7 +1076,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
           gap: 10,
           background: active
             ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+            : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
           border: "none",
           borderRadius: 6,
           cursor: "pointer",

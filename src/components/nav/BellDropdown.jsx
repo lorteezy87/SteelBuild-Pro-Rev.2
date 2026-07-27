@@ -84,7 +84,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
               minWidth: 14, height: 14,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
-              color: "white", padding: "0 3px",
+              color: "var(--on-accent)", padding: "0 3px",
               boxShadow: "0 0 6px var(--status-error)80", lineHeight: 1,
             }}
           >
@@ -97,7 +97,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
         <div className="sbd-card" style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0,
           width: 320,
-          background: "var(--bg-surface-secondary, #161B22)",
+          background: "var(--bg-surface-secondary, var(--sbd-bg-surface-hi))",
           backdropFilter: "blur(24px) saturate(150%)",
           WebkitBackdropFilter: "blur(24px) saturate(150%)",
           borderTop: "2px solid var(--accent)",
@@ -108,7 +108,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)", fontWeight: 700, letterSpacing: "0.08em" }}>ALERTS</span>
               {unreadCount > 0 && (
-                <span style={{ background: "var(--status-error)", color: "white", borderRadius: 10, padding: "1px 6px", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700 }}>
+                <span style={{ background: "var(--status-error)", color: "var(--on-accent)", borderRadius: 10, padding: "1px 6px", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700 }}>
                   {unreadCount}
                 </span>
               )}

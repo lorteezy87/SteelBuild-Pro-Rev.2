@@ -29,6 +29,7 @@ export function BrandLogo({ height = 96, className, style, title = "SteelBuild P
       xmlns="http://www.w3.org/2000/svg"
     >
       <title>{title}</title>
+      {/* Fixed logo gradients preserve the branded chrome asset across themes. */}
       <defs>
         <radialGradient id={`${u}-plate`} cx="0.5" cy="0.42" r="0.75">
           <stop offset="0" stopColor="#15171c" />
