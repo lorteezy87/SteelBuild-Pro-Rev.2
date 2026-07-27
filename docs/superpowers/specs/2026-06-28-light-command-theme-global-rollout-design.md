@@ -46,8 +46,8 @@ The app already has a complete light theme via `[data-theme="light"]` tokens in 
 ### Phase 3 — Progressive conversion
 - Convert remaining main modules to the new Control Center look in parallel batches (Dashboard, Reports, Field, Settings, Billing, Resources, Financials…), behavior-preserving, deploy each.
 
-### Phase 4 — Dark mode (DEFERRED)
-- Add the command kit's dark variant scoped under `[data-skin="command"][data-theme="dark"]`; reconcile with the existing dark theme.
+### Phase 4 — Dark mode
+- **Status:** Superseded by `docs/superpowers/specs/2026-07-27-dual-theme-dark-completion-design.md` (implemented via plan `docs/superpowers/plans/2026-07-27-dual-theme-dark-completion.md`).
 
 ## 6. Validation & rollout
 
