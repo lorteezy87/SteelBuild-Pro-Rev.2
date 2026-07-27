@@ -239,7 +239,7 @@ describe("PieceRelationshipManager", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Auto-assign by sequence \/ area/i }),
+      screen.getByRole("button", { name: /Auto-assign by import \/ sequence/i }),
     );
 
     expect(screen.getByText(/Auto-assign preview/i)).toBeInTheDocument();
