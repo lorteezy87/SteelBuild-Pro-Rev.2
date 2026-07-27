@@ -18,6 +18,7 @@ Closing chrome gate after Task 11: `0`.
 | `src/components/drawings/Revision*.jsx`, `src/components/drawings/Revision*.tsx` | revision severity / diff tints | Revision compare and summary colors are semantic diff encodings (removed/added/severity), not surface chrome. |
 | `src/pages/drawingSubmittalHub/**`, `src/pages/emailInbox/**`, dashboard portfolio/chart helpers | status/category palettes | Remaining hex is categorical status or chart color data that must stay visually distinct from theme chrome. |
 | `src/components/settings/DisplayTab.jsx` | accent swatches | User-selectable accent preview swatches intentionally display their literal choices. |
+| `src/components/settings/MfaSection.jsx` | `#fff` QR matte | TOTP QR SVGs need a literal white scanner matte; this is image decoding support, not app chrome. |
 | `src/pages/dashboardCC/**`, `src/pages/*ControlCenter.tsx`, `src/components/commandcenter/**` | command_ui palettes | Owner-locked command_ui/reference light surfaces retain fixed or local command tokens with dark remaps where available. |
 | `src/components/calculators/**`, `src/pages/*Calculator.jsx` | calculator shells | Verify-only per brief; no contrast regression found in the closing chrome gate. |
 | `src/components/design-system/PhaseChevron.jsx`, `src/components/design-system/Button.jsx`, phase/status helpers | phase/status literals | Semantic phase chips and button contrast constants are data encodings; `tokens.js` remains excluded by inventory. |

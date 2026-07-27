@@ -105,7 +105,7 @@ const StatusBadge = React.memo(function StatusBadge({ status, variant, glow }) {
         textTransform: isPill || isIncompleteResponse ? "uppercase" : undefined,
         whiteSpace: "nowrap",
         background: isPill || isIncompleteResponse ? s.color : s.bg,
-        color: isPill || isIncompleteResponse ? "#fff" : s.color,
+        color: isPill || isIncompleteResponse ? "var(--on-accent)" : s.color,
         border: "none",
         fontFamily: isPill || isIncompleteResponse ? "var(--font-mono)" : "var(--font-body)",
         boxShadow: glowShadow,

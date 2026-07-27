@@ -22,7 +22,7 @@ function injectKeyframes() {
 /* ── Status-to-color helpers ────────────────────────────────────────────────── */
 const STATUS_COLORS = {
   complete:  "var(--status-success)",
-  active:    "var(--accent, #3b82f6)",
+  active:    "var(--accent)",
   "at-risk": "var(--status-warning)",
   blocked:   "var(--status-error)",
   upcoming:  "var(--hover-bg)",
@@ -31,7 +31,7 @@ const STATUS_COLORS = {
 function statusBg(status, fallback) {
   if (!status) return fallback;
   if (status === "complete")  return "var(--status-success)";
-  if (status === "active")    return "var(--accent, #3b82f6)";
+  if (status === "active")    return "var(--accent)";
   if (status === "at-risk")   return "var(--status-warning)";
   if (status === "blocked")   return "var(--status-error)";
   /* upcoming */              return "var(--hover-bg)";
@@ -40,7 +40,7 @@ function statusBg(status, fallback) {
 function statusTextColor(status, fallback) {
   if (!status) return fallback;
   if (status === "upcoming") return "var(--text-muted)";
-  return "#fff";
+  return "var(--on-accent)";
 }
 
 /**
@@ -135,7 +135,7 @@ export default function ChevronPipeline({
         } else {
           /* Legacy path */
           bg = legacyActive ? stage.color : "var(--hover-bg)";
-          textColor = legacyActive ? "#fff" : "var(--text-muted)";
+          textColor = legacyActive ? "var(--on-accent)" : "var(--text-muted)";
           opacity = legacyActive ? 1 : 0.3;
           boxShadow = "none";
           animation = "none";
@@ -207,7 +207,7 @@ export default function ChevronPipeline({
                 boxShadow,
                 animation,
                 "--_pulse-color": "var(--status-error)",
-                "--_glow-color": "var(--accent, #3b82f6)",
+                "--_glow-color": "var(--accent)",
               }}
               title={
                 stage.count != null

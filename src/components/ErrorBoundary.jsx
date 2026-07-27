@@ -34,8 +34,8 @@ export default class ErrorBoundary extends React.Component {
         position: 'fixed', inset: 0,
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        background: 'var(--bg-page, #0a0f1e)',
-        color: 'var(--text-primary, #e2e8f0)',
+        background: 'var(--bg-page)',
+        color: 'var(--text-primary)',
         fontFamily: 'system-ui, sans-serif',
         gap: 16, padding: 32, textAlign: 'center',
       }}>
@@ -54,7 +54,7 @@ export default class ErrorBoundary extends React.Component {
           onClick={() => window.location.reload()}
           style={{
             marginTop: 8, padding: '8px 24px',
-            background: 'var(--accent, #c9a84c)', color: 'var(--on-accent)',
+            background: 'var(--accent)', color: 'var(--on-accent)',
             border: 'none', borderRadius: 6, cursor: 'pointer',
             fontWeight: 600, fontSize: 14,
           }}

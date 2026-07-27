@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 
+// QR scanner matte must remain literal white so the Supabase SVG data URL scans reliably.
 const QR_CODE_BACKGROUND = '#fff';
 
 /**
