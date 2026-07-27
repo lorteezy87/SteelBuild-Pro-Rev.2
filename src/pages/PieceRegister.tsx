@@ -27,7 +27,10 @@ import {
 } from "@/lib/pieceControl/repository";
 import { pieceTons } from "@/lib/pieceControl/tonnage";
 import { pieceLifecycleLabel } from "@/lib/pieceControl/lifecycle";
-import { filterPieceRegisterRows, type PieceRegisterFilters } from "./pieceRegister/filter";
+import {
+  filterPieceRegisterRows,
+  type PieceRegisterFilters,
+} from "./pieceRegister/filter";
 
 const EMPTY_FILTERS: PieceRegisterFilters = {
   search: "",
@@ -48,7 +51,12 @@ const decisionTone: Record<string, string> = {
 };
 
 function uniqueValues(values: Array<string | null | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort();
+  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort((a, b) =>
+    String(a).localeCompare(String(b), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    }),
+  );
 }
 
 function SelectFilter({
@@ -203,7 +211,7 @@ export default function PieceRegister() {
 
   if (!projectId) {
     return (
-      <div className="m-6 rounded-2xl border border-slate-200 bg-white p-12 text-center">
+      <div data-theme="light" data-skin="command" className="m-6 rounded-2xl border border-slate-200 bg-white p-12 text-center">
         <Database className="mx-auto mb-4 h-10 w-10 text-slate-400" />
         <h1 className="text-2xl font-black text-slate-900">Select a project</h1>
         <p className="mt-2 text-slate-600">The Piece Register is always scoped to one project.</p>
@@ -213,7 +221,7 @@ export default function PieceRegister() {
 
   if (mode === "off") {
     return (
-      <div className="min-h-[70vh] bg-[radial-gradient(circle_at_top_left,_#fef3c7,_transparent_36%),linear-gradient(135deg,#f8fafc,#eef2f7)] p-6">
+      <div data-theme="light" data-skin="command" className="min-h-[70vh] bg-[radial-gradient(circle_at_top_left,_#fef3c7,_transparent_36%),linear-gradient(135deg,#f8fafc,#eef2f7)] p-6">
         <div className="mx-auto max-w-3xl rounded-3xl border border-amber-200 bg-white/90 p-10 shadow-sm">
           <ShieldCheck className="mb-5 h-11 w-11 text-amber-600" />
           <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Piece control disabled</p>
@@ -228,7 +236,7 @@ export default function PieceRegister() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_0%,_#fef3c7,_transparent_25%),linear-gradient(180deg,#f8fafc,#eef2f7)] p-4 md:p-6">
+    <div data-theme="light" data-skin="command" className="min-h-screen bg-[radial-gradient(circle_at_10%_0%,_#fef3c7,_transparent_25%),linear-gradient(180deg,#f8fafc,#eef2f7)] p-4 md:p-6">
       <div className="mx-auto max-w-[1680px] space-y-5">
         <header className="overflow-hidden rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-300/40 md:px-8">
           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">

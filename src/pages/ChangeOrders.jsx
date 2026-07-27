@@ -405,6 +405,11 @@ export default function ChangeOrders() {
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); setPrefill(null); }}
         onSave={handleSave}
+        onDelete={can("delete", "change_order") && editing ? (co) => {
+          setModalOpen(false);
+          setEditing(null);
+          setDeleteTarget(co);
+        } : null}
         isSaving={createMut.isPending || updateMut.isPending}
         co={editing}
         prefill={prefill}
@@ -423,9 +428,14 @@ export default function ChangeOrders() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => {
+          if (!deleteMut.isPending && deleteTarget?.id) {
+            deleteMut.mutate(deleteTarget.id);
+          }
+        }}
         title="Delete Change Order"
         description={`Delete ${deleteTarget?.co_number}?`}
+        busy={deleteMut.isPending}
       />
     </>
   );

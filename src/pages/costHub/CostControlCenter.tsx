@@ -429,11 +429,11 @@ export default function CostControlCenter({ projectId, project }: CostControlCen
         costCode={editingCode ? (costCodes.find((c) => c.id === editingCode.id) ?? editingCode) : null}
         projects={project ? [project] : []}
         existingCodes={costCodes}
-        onSave={(data: Record<string, unknown>) => {
+        onSave={async (data: Record<string, unknown>) => {
           if (editingCode) {
-            costCodeCrud.update.mutate({ id: editingCode.id as string, ...data });
+            await costCodeCrud.update.mutateAsync({ id: editingCode.id as string, ...data });
           } else {
-            costCodeCrud.create.mutate({ ...data, project_id: projectId });
+            await costCodeCrud.create.mutateAsync({ ...data, project_id: projectId });
           }
           setModalOpen(false);
           setEditingCode(null);

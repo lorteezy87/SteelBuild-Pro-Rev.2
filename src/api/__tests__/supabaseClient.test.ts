@@ -5,6 +5,7 @@ type QueryCall =
   | { table: string; op: "eq"; column: string; value: unknown }
   | { table: string; op: "in"; column: string; value: unknown[] }
   | { table: string; op: "order"; column: string; value: unknown }
+  | { table: string; op: "delete" }
   | { table: string; op: "update"; value: Record<string, unknown> };
 
 const mocks = vi.hoisted(() => {
@@ -31,6 +32,10 @@ const mocks = vi.hoisted(() => {
       limit: vi.fn((_n: number) => chain),
       update: vi.fn((value: Record<string, unknown>) => {
         calls.push({ table, op: "update", value });
+        return chain;
+      }),
+      delete: vi.fn(() => {
+        calls.push({ table, op: "delete" });
         return chain;
       }),
       single: vi.fn().mockResolvedValue({ data: {}, error: null }),
@@ -103,6 +108,62 @@ describe("supabase entity client", () => {
       op: "eq",
       column: "projects.is_deleted",
       value: false,
+    });
+  });
+
+  it("does not apply a nonexistent soft-delete filter to cost-code reads", async () => {
+    await entities.CostCode.list();
+
+    expect(mocks.calls).toContainEqual({
+      table: "cost_codes",
+      op: "eq",
+      column: "projects.is_deleted",
+      value: false,
+    });
+    expect(mocks.calls).not.toContainEqual({
+      table: "cost_codes",
+      op: "eq",
+      column: "is_deleted",
+      value: false,
+    });
+  });
+
+  it("uses the cost-code table's hard-delete contract", async () => {
+    await entities.CostCode.delete("cost-code-1");
+
+    expect(mocks.calls).toContainEqual({
+      table: "cost_codes",
+      op: "delete",
+    });
+    expect(mocks.calls).not.toContainEqual(
+      expect.objectContaining({
+        table: "cost_codes",
+        op: "update",
+        value: expect.objectContaining({ is_deleted: true }),
+      }),
+    );
+  });
+
+  it("soft-deletes change orders so they disappear from active project reads", async () => {
+    await entities.ChangeOrder.delete("change-order-1");
+
+    expect(mocks.calls).toContainEqual({
+      table: "change_orders",
+      op: "update",
+      value: expect.objectContaining({
+        is_deleted: true,
+        deleted_at: expect.any(String),
+      }),
+    });
+    expect(mocks.calls).toContainEqual({
+      table: "change_orders",
+      op: "eq",
+      column: "id",
+      value: "change-order-1",
+    });
+    expect(mocks.calls).not.toContainEqual({
+      table: "change_orders",
+      op: "delete",
     });
   });
 

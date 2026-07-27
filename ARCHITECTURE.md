@@ -261,6 +261,10 @@ out by default. Restores are possible by toggling the flag.
 
 ## Frontend organization
 
+Folder ownership and placement rules are defined in
+[`docs/FOLDER_OWNERSHIP.md`](./docs/FOLDER_OWNERSHIP.md). Use that document when
+adding a module or consolidating duplicate implementations.
+
 ### Routing
 
 `src/config/routes.js` is the single registry. Every page is
