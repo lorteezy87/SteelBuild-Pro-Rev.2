@@ -9,6 +9,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import {
   DESKTOP_SESSION_ALGORITHM,
+  DesktopConnectQueryError,
   DesktopSessionCryptoError,
   DesktopSessionValidationError,
   buildDesktopCallbackUrl,
@@ -48,12 +49,15 @@ export interface DesktopConnectDependencies {
 
 interface DesktopConnectProps {
   dependencies?: DesktopConnectDependencies;
+  /** When omitted, each attempt reads window.location.search (supports Retry). */
   search?: string;
   parseQuery?: (search: string) => DesktopConnectQuery;
 }
 
 type DesktopConnectFailure =
   | "query"
+  | "query-empty"
+  | "query-missing"
   | "session"
   | `session-${DesktopSessionValidationField}`
   | "crypto"
@@ -61,7 +65,12 @@ type DesktopConnectFailure =
   | "handoff";
 
 const failureMessages: Record<DesktopConnectFailure, string> = {
-  query: "The desktop connection request is invalid or expired. Start again from Desktop Command Center. (DC-QUERY)",
+  "query-empty":
+    "This page needs a connection link from Desktop Command Center. In the desktop app, click Connect — do not open /DesktopConnect directly or use a bookmark. (DC-QUERY-EMPTY)",
+  "query-missing":
+    "The connection link is incomplete (state, challenge, or public key missing). Close this tab and click Connect again from Desktop Command Center. (DC-QUERY-MISSING)",
+  query:
+    "The desktop connection request is invalid or expired. Start again from Desktop Command Center. (DC-QUERY)",
   session: "Sign in to SteelBuild in this browser tab, then click Retry. Being signed in on another tab or host is not enough. (DC-SESSION)",
   "session-access-token": "The browser session did not contain a usable access token. Sign in again, then restart the desktop connection. (DC-SESSION-ACCESS)",
   "session-refresh-token": "The browser session did not contain a usable refresh token. Sign in again, then restart the desktop connection. (DC-SESSION-REFRESH)",
@@ -141,9 +150,23 @@ const defaultDependencies: DesktopConnectDependencies = {
   },
 };
 
+/** Resolve the connect query string — always fresh from the browser unless tests pin it. */
+export function resolveDesktopConnectSearch(explicit?: string): string {
+  if (explicit !== undefined) return explicit;
+  return typeof window !== "undefined" ? window.location.search : "";
+}
+
+function classifyQueryFailure(error: unknown): DesktopConnectFailure {
+  if (error instanceof DesktopConnectQueryError) {
+    if (error.kind === "empty") return "query-empty";
+    if (error.kind === "missing") return "query-missing";
+  }
+  return "query";
+}
+
 export function DesktopConnect({
   dependencies = defaultDependencies,
-  search = window.location.search,
+  search,
   parseQuery = parseDesktopConnectQuery,
 }: DesktopConnectProps) {
   const [attempt, setAttempt] = useState(0);
@@ -160,7 +183,8 @@ export function DesktopConnect({
 
     void (async () => {
       try {
-        const query = parseQuery(search);
+        const activeSearch = resolveDesktopConnectSearch(search);
+        const query = parseQuery(activeSearch);
         failureStage = "session";
         const browserSession = await (dependencies.waitForSession?.(8_000)
           ?? dependencies.getSession());
@@ -193,7 +217,9 @@ export function DesktopConnect({
       } catch (error) {
         if (active) {
           setFailure(
-            failureStage === "crypto" && error instanceof DesktopSessionValidationError
+            failureStage === "query"
+              ? classifyQueryFailure(error)
+              : failureStage === "crypto" && error instanceof DesktopSessionValidationError
               ? `session-${error.field}`
               : failureStage === "crypto" && error instanceof DesktopSessionCryptoError
                 ? `crypto-${error.stage}`

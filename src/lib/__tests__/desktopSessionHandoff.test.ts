@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   DESKTOP_SESSION_ALGORITHM,
+  DesktopConnectQueryError,
   DesktopSessionCryptoError,
   DesktopSessionValidationError,
   buildDesktopCallbackUrl,
@@ -20,7 +21,7 @@ async function publicKeyJwk(): Promise<JsonWebKey> {
 }
 
 describe("desktop browser session handoff", () => {
-  it("parses only the exact state, challenge, and P-256 public key query", async () => {
+  it("parses state, challenge, and P-256 public key from the connect query", async () => {
     const key = await publicKeyJwk();
     const search = new URLSearchParams({
       state: "A".repeat(43),
@@ -33,9 +34,49 @@ describe("desktop browser session handoff", () => {
       challenge: "B".repeat(43),
       publicKey: { kty: "EC", crv: "P-256" },
     });
+  });
 
-    search.set("unexpected", "true");
-    expect(() => parseDesktopConnectQuery(`?${search}`)).toThrow(/unsupported/i);
+  it("ignores unknown query params when the three required fields are present", async () => {
+    const key = await publicKeyJwk();
+    const search = new URLSearchParams({
+      state: "A".repeat(43),
+      challenge: "B".repeat(43),
+      publicKey: encodePublicKeyQuery(key),
+      nonce: "vercel-sso-nonce",
+      utm_source: "preview",
+    });
+
+    expect(parseDesktopConnectQuery(`?${search}`)).toMatchObject({
+      state: "A".repeat(43),
+      challenge: "B".repeat(43),
+    });
+  });
+
+  it("classifies an empty connect query separately from invalid values", () => {
+    expect(() => parseDesktopConnectQuery("")).toThrow(DesktopConnectQueryError);
+    expect(() => parseDesktopConnectQuery("")).toThrow(expect.objectContaining({ kind: "empty" }));
+    expect(() => parseDesktopConnectQuery("?")).toThrow(expect.objectContaining({ kind: "empty" }));
+  });
+
+  it("classifies a partial connect query as missing required fields", () => {
+    expect(() => parseDesktopConnectQuery(`?state=${"A".repeat(43)}`)).toThrow(DesktopConnectQueryError);
+    expect(() => parseDesktopConnectQuery(`?state=${"A".repeat(43)}`)).toThrow(
+      expect.objectContaining({ kind: "missing" }),
+    );
+  });
+
+  it("rejects malformed required field values as invalid", async () => {
+    const key = await publicKeyJwk();
+    const search = new URLSearchParams({
+      state: "A".repeat(43),
+      challenge: "B".repeat(43),
+      publicKey: encodePublicKeyQuery(key),
+    });
+    search.set("state", "not!!!valid");
+
+    expect(() => parseDesktopConnectQuery(`?${search}`)).toThrow(
+      expect.objectContaining({ kind: "invalid" }),
+    );
   });
 
   it("rejects unsupported encryption algorithms", async () => {

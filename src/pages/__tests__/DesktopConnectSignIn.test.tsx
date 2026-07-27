@@ -17,7 +17,9 @@ describe("DesktopConnectSignIn", () => {
   });
 
   it("submits trimmed credentials and surfaces login errors", async () => {
-    const onLogin = vi.fn().mockResolvedValue(undefined);
+    const onLogin = vi.fn().mockImplementation(
+      () => new Promise((resolve) => { setTimeout(resolve, 50); }),
+    );
     render(
       <DesktopConnectSignIn
         onLogin={onLogin}
@@ -28,6 +30,8 @@ describe("DesktopConnectSignIn", () => {
     fireEvent.change(screen.getByLabelText(/work email/i), { target: { value: "  pm@example.com  " } });
     fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "secret" } });
     fireEvent.click(screen.getByRole("button", { name: /sign in and continue/i }));
+
+    expect(screen.getByRole("button", { name: /signing in/i })).toBeDisabled();
 
     await waitFor(() => {
       expect(onLogin).toHaveBeenCalledWith({ email: "pm@example.com", password: "secret" });

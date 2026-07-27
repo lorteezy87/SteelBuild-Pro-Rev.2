@@ -43,6 +43,61 @@ export interface DesktopConnectQuery {
   publicKey: JsonWebKey;
 }
 
+export type DesktopConnectQueryErrorKind = "empty" | "missing" | "invalid";
+
+/** Safe, classifiable parse failure — never carries raw query values. */
+export class DesktopConnectQueryError extends Error {
+  readonly kind: DesktopConnectQueryErrorKind;
+
+  constructor(kind: DesktopConnectQueryErrorKind, message: string) {
+    super(message);
+    this.name = "DesktopConnectQueryError";
+    this.kind = kind;
+  }
+}
+
+const REQUIRED_DESKTOP_CONNECT_PARAMS = ["state", "challenge", "publicKey"] as const;
+
+export function parseDesktopConnectQuery(search: string): DesktopConnectQuery {
+  const trimmed = search.trim();
+  if (!trimmed || trimmed === "?") {
+    throw new DesktopConnectQueryError(
+      "empty",
+      "Desktop connection query is missing",
+    );
+  }
+
+  const params = new URLSearchParams(trimmed.startsWith("?") ? trimmed.slice(1) : trimmed);
+  const missing = REQUIRED_DESKTOP_CONNECT_PARAMS.filter((key) => !params.get(key));
+  if (missing.length > 0) {
+    throw new DesktopConnectQueryError(
+      "missing",
+      `Desktop connection query is missing required fields: ${missing.join(", ")}`,
+    );
+  }
+
+  try {
+    const state = validateBase64Url(params.get("state"), "state", 43, 128);
+    const challenge = validateBase64Url(params.get("challenge"), "challenge", 43, 128);
+    const encodedKey = validateBase64Url(params.get("publicKey"), "publicKey", 100, 2_048);
+
+    let parsedKey: unknown;
+    try {
+      parsedKey = JSON.parse(decodeBase64UrlUtf8(encodedKey));
+    } catch {
+      throw new DesktopConnectQueryError("invalid", "Desktop public key is not valid encoded JSON");
+    }
+
+    return { state, challenge, publicKey: normalizeP256PublicKey(parsedKey) };
+  } catch (error) {
+    if (error instanceof DesktopConnectQueryError) throw error;
+    throw new DesktopConnectQueryError(
+      "invalid",
+      error instanceof Error ? error.message : "Desktop connection query is invalid",
+    );
+  }
+}
+
 export interface MinimalDesktopSession {
   accessToken: string;
   refreshToken: string;
@@ -61,29 +116,6 @@ export interface DesktopEncryptedSession {
   };
   iv: string;
   ciphertext: string;
-}
-
-export function parseDesktopConnectQuery(search: string): DesktopConnectQuery {
-  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  const keys: string[] = [];
-  params.forEach((_value, key) => keys.push(key));
-  const expected = ["challenge", "publicKey", "state"];
-  if (keys.length !== expected.length || [...keys].sort().some((key, index) => key !== expected[index])) {
-    throw new Error("Desktop connection query contains unsupported, duplicate, or missing fields");
-  }
-
-  const state = validateBase64Url(params.get("state"), "state", 43, 128);
-  const challenge = validateBase64Url(params.get("challenge"), "challenge", 43, 128);
-  const encodedKey = validateBase64Url(params.get("publicKey"), "publicKey", 100, 2_048);
-
-  let parsedKey: unknown;
-  try {
-    parsedKey = JSON.parse(decodeBase64UrlUtf8(encodedKey));
-  } catch {
-    throw new Error("Desktop public key is not valid encoded JSON");
-  }
-
-  return { state, challenge, publicKey: normalizeP256PublicKey(parsedKey) };
 }
 
 export async function encryptDesktopSession(input: {

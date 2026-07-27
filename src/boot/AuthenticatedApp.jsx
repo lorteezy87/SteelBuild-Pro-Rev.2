@@ -14,7 +14,7 @@ const ProjectProvider = lazyWithRetry(() =>
   import("@/components/shared/ProjectContext").then((mod) => ({ default: mod.ProjectProvider }))
 );
 
-function isDesktopConnectPath() {
+export function isDesktopConnectPath() {
   if (typeof window === "undefined") return false;
   return /\/DesktopConnect\/?$/i.test(window.location.pathname);
 }
@@ -56,9 +56,16 @@ function OrgGate() {
 
 export default function AuthenticatedApp() {
   const {
-    isLoadingAuth, isLoadingPublicSettings, authError,
+    isAuthenticated,
+    isLoadingAuth, isLoadingPublicSettings, authError, isLoggingIn,
     loginWithPassword, signUpWithPassword, sendPasswordReset, isPasswordRecovery, mfaRequired,
   } = useAuth();
+
+  const onDesktopConnect = isDesktopConnectPath();
+  const loginError =
+    authError?.type === "auth_required" && authError.message !== "Authentication required"
+      ? authError.message
+      : null;
 
   // Password recovery takes precedence over every other state: a user who
   // followed the emailed reset link is technically "authenticated" with a
@@ -86,17 +93,16 @@ export default function AuthenticatedApp() {
     return <AppLoader />;
   }
 
-  if (authError?.type === "auth_required") {
-    const loginError = authError?.message !== "Authentication required" ? authError?.message : null;
+  if (!isAuthenticated) {
     // Desktop Connect opens the system browser, which often has no session even
     // when the user is signed in elsewhere. Show a focused gate instead of the
     // marketing Landing page so the handoff query string stays obvious.
-    if (isDesktopConnectPath()) {
+    if (onDesktopConnect) {
       return (
         <Suspense fallback={<AppLoader />}>
           <DesktopConnectSignIn
             onLogin={loginWithPassword}
-            isSubmitting={isLoadingAuth}
+            isSubmitting={isLoggingIn}
             loginError={loginError}
           />
         </Suspense>
@@ -108,9 +114,19 @@ export default function AuthenticatedApp() {
           onLogin={loginWithPassword}
           onSignUp={signUpWithPassword}
           onForgotPassword={sendPasswordReset}
-          isSubmitting={isLoadingAuth}
+          isSubmitting={isLoggingIn}
           loginError={loginError}
         />
+      </Suspense>
+    );
+  }
+
+  // Desktop handoff only needs a browser session — skip org/project bootstrap
+  // so a successful sign-in lands on /DesktopConnect immediately.
+  if (onDesktopConnect) {
+    return (
+      <Suspense fallback={<AppLoader />}>
+        <AppRoutes />
       </Suspense>
     );
   }

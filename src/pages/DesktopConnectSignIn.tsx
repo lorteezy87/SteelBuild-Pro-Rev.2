@@ -24,12 +24,20 @@ export default function DesktopConnectSignIn({
 }: DesktopConnectSignInProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!email.trim() || !password) return;
-    await onLogin({ email: email.trim(), password });
+    if (!email.trim() || !password || isSubmitting || submitting) return;
+    setSubmitting(true);
+    try {
+      await onLogin({ email: email.trim(), password });
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const busy = isSubmitting || submitting;
 
   return (
     <DesktopConnectShell
@@ -51,7 +59,7 @@ export default function DesktopConnectSignIn({
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
-            disabled={isSubmitting}
+            disabled={busy}
             style={{ width: "100%" }}
           />
         </div>
@@ -68,7 +76,7 @@ export default function DesktopConnectSignIn({
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
-            disabled={isSubmitting}
+            disabled={busy}
             style={{ width: "100%" }}
           />
         </div>
@@ -80,10 +88,10 @@ export default function DesktopConnectSignIn({
         <button
           type="submit"
           className="sbd-btn sbd-btn-primary"
-          disabled={isSubmitting}
+          disabled={busy}
           style={{ width: "100%", justifyContent: "center", minHeight: 44, fontSize: 14 }}
         >
-          {isSubmitting ? "Signing in…" : "Sign in and continue"}
+          {busy ? "Signing in…" : "Sign in and continue"}
         </button>
       </form>
     </DesktopConnectShell>

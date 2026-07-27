@@ -10,6 +10,7 @@ function authValue(partial: Partial<AuthContextValue>): AuthContextValue {
     user: null,
     isAuthenticated: false,
     isLoadingAuth: false,
+    isLoggingIn: false,
     isLoadingPublicSettings: false,
     authError: null,
     appPublicSettings: null,

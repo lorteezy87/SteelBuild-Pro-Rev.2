@@ -2,8 +2,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { DesktopConnect, type DesktopConnectDependencies } from "../DesktopConnect";
+import { DesktopConnect, resolveDesktopConnectSearch, type DesktopConnectDependencies } from "../DesktopConnect";
 import {
+  DesktopConnectQueryError,
   DesktopSessionCryptoError,
   DesktopSessionValidationError,
 } from "@/lib/desktopSessionHandoff";
@@ -21,13 +22,68 @@ describe("DesktopConnect", () => {
       <DesktopConnect
         dependencies={dependencies}
         search="?invalid=true"
-        parseQuery={() => { throw new Error("raw-query-detail"); }}
+        parseQuery={() => { throw new DesktopConnectQueryError("invalid", "bad"); }}
       />,
     );
 
-    expect(await screen.findByText(/DC-QUERY/)).toBeInTheDocument();
-    expect(screen.queryByText(/raw-query-detail/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/DC-QUERY\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/bad/i)).not.toBeInTheDocument();
     expect(dependencies.getSession).not.toHaveBeenCalled();
+  });
+
+  it("shows a dedicated message when the connect query string is empty", async () => {
+    const dependencies: DesktopConnectDependencies = {
+      getSession: vi.fn(),
+      encryptSession: vi.fn(),
+      createHandoff: vi.fn(),
+      redirect: vi.fn(),
+    };
+
+    render(
+      <DesktopConnect
+        dependencies={dependencies}
+        search=""
+      />,
+    );
+
+    expect(await screen.findByText(/DC-QUERY-EMPTY/)).toBeInTheDocument();
+    expect(screen.getByText(/click Connect/i)).toBeInTheDocument();
+    expect(dependencies.getSession).not.toHaveBeenCalled();
+  });
+
+  it("re-reads window.location.search on retry when search is not pinned", async () => {
+    const getSession = vi.fn().mockRejectedValue(new Error("no session"));
+    const parseQuery = vi.fn((activeSearch: string) => {
+      if (!activeSearch.trim() || activeSearch.trim() === "?") {
+        throw new DesktopConnectQueryError("empty", "missing");
+      }
+      return {
+        state: "A".repeat(43),
+        challenge: "B".repeat(43),
+        publicKey: { kty: "EC", crv: "P-256", x: "X".repeat(43), y: "Y".repeat(43), ext: true },
+      };
+    });
+    const dependencies: DesktopConnectDependencies = {
+      getSession,
+      encryptSession: vi.fn(),
+      createHandoff: vi.fn(),
+      redirect: vi.fn(),
+    };
+
+    window.history.pushState({}, "", "/DesktopConnect");
+    render(<DesktopConnect dependencies={dependencies} parseQuery={parseQuery} />);
+    expect(await screen.findByText(/DC-QUERY-EMPTY/)).toBeInTheDocument();
+    expect(getSession).not.toHaveBeenCalled();
+
+    window.history.pushState({}, "", `/DesktopConnect?state=${"A".repeat(43)}&challenge=${"B".repeat(43)}&publicKey=x`);
+    expect(resolveDesktopConnectSearch()).toContain("state=");
+
+    const { fireEvent } = await import("@testing-library/react");
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+
+    await waitFor(() => expect(getSession).toHaveBeenCalled());
+    expect(parseQuery).toHaveBeenLastCalledWith(expect.stringContaining("state="));
+    expect(await screen.findByText(/DC-SESSION/)).toBeInTheDocument();
   });
 
   it("creates an encrypted handoff, keeps the page visible, and soft-redirects without credentials", async () => {

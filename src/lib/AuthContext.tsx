@@ -53,6 +53,8 @@ export type AuthContextValue = {
   user: AppUser | null;
   isAuthenticated: boolean;
   isLoadingAuth: boolean;
+  /** True while a credential sign-in is in flight (distinct from bootstrap). */
+  isLoggingIn: boolean;
   isLoadingPublicSettings: boolean;
   authError: AuthError | null;
   appPublicSettings: unknown;
@@ -83,6 +85,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   // Kept for API compatibility with components that read this flag
   const [isLoadingPublicSettings] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
@@ -228,21 +231,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const loginWithPassword = async ({ email, password }: { email: string; password: string }): Promise<LoginResult> => {
-    setAuthError(null);
-    setIsLoadingAuth(true);
+    setIsLoggingIn(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       syncIdentity(data.user?.id ?? null);
       setUser(await mapSupabaseUser(data.user));
       setIsAuthenticated(true);
-      setIsLoadingAuth(false);
+      setAuthError(null);
       // If this account has a verified TOTP factor, the session is still aal1
       // here — flag the required step-up so the app shows the MFA screen (H23).
       void refreshMfaRequired();
       return { success: true };
     } catch (error: unknown) {
-      setIsLoadingAuth(false);
       setIsAuthenticated(false);
       // Distinguish network/config errors from auth errors
       const err = error as { message?: string; status?: number } | undefined;
@@ -255,6 +256,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const authErr: AuthError = { type: 'auth_required', message };
       setAuthError(authErr);
       return { success: false, error: authErr };
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -440,6 +443,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       user,
       isAuthenticated,
       isLoadingAuth,
+      isLoggingIn,
       isLoadingPublicSettings,
       authError,
       appPublicSettings,
