@@ -56,6 +56,14 @@ export function usePdfLoader({ activeDrawing, renderMode }) {
     return () => { cancelled = true; };
   }, [activeDrawing?.file_url]);
 
+  // Sheet changes that share a multi-sheet PDF keep the same file_url, so the
+  // resolve effect above does not re-run. Still clear a sticky render error and
+  // jump to the sheet's page — otherwise one failed page kills the whole set.
+  useEffect(() => {
+    if (!activeDrawing?.id) return;
+    setPdfError(null);
+  }, [activeDrawing?.id]);
+
   // Load the PDF once we have a signed URL (only when canvas mode is active)
   useEffect(() => {
     if (!resolvedUrl || renderMode !== "canvas") return;
@@ -83,12 +91,14 @@ export function usePdfLoader({ activeDrawing, renderMode }) {
     };
   }, [resolvedUrl, renderMode]);
 
-  // Sync currentPage when activeDrawing changes or PDF loads
+  // Sync currentPage when activeDrawing changes or PDF loads. Clamp to the
+  // real page count — DrawingViewer must not overwrite this with an unclamped
+  // pdf_page (that path produced "Invalid page request" on shared-set PDFs).
   useEffect(() => {
     if (!pdfDoc) return;
     const desired = Number(activeDrawing?.pdf_page) || 1;
     setCurrentPage(Math.max(1, Math.min(pdfDoc.numPages, desired)));
-  }, [pdfDoc, activeDrawing?.pdf_page]);
+  }, [pdfDoc, activeDrawing?.id, activeDrawing?.pdf_page]);
 
   // Destroy previous PDF document to prevent memory leaks
   useEffect(() => {
