@@ -7,11 +7,13 @@ const resolveFileUrl = vi.fn(async () => "https://signed.example/doc.pdf");
 const getDocument = vi.fn();
 
 vi.mock("@/api/supabaseClient", () => ({
-  resolveFileUrl: (...args: unknown[]) => resolveFileUrl(...args),
+  resolveFileUrl: (...args: unknown[]) =>
+    (resolveFileUrl as (...a: unknown[]) => unknown)(...args),
 }));
 
 vi.mock("pdfjs-dist", () => ({
-  getDocument: (...args: unknown[]) => getDocument(...args),
+  getDocument: (...args: unknown[]) =>
+    (getDocument as (...a: unknown[]) => unknown)(...args),
   GlobalWorkerOptions: { workerSrc: "" },
 }));
 
