@@ -14,6 +14,7 @@ import {
   unlinkPieceDrawing,
 } from "@/lib/pieceControl/relationshipsRepository";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 
 interface PieceRelationshipManagerProps {
   projectId: string;
@@ -150,7 +151,7 @@ export default function PieceRelationshipManager({
   );
   const drawingMap = new Map((snapshot?.drawings ?? []).map((drawing) => [drawing.id, drawing]));
   const workPackageMap = new Map(
-    (snapshot?.workPackages ?? []).map((wp) => [wp.id, wp.wp_number || wp.name || "Unnamed package"]),
+    (snapshot?.workPackages ?? []).map((wp) => [wp.id, formatWorkPackageTitle(wp)]),
   );
 
   const invalidate = async () => {

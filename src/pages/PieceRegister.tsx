@@ -67,6 +67,7 @@ import {
 import { roleAtLeast, useProjectRole } from "@/hooks/useProjectRole";
 import { pieceTons } from "@/lib/pieceControl/tonnage";
 import { pieceLifecycleLabel } from "@/lib/pieceControl/lifecycle";
+import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import { filterPieceRegisterRows, type PieceRegisterFilters } from "./pieceRegister/filter";
 import {
@@ -256,7 +257,7 @@ export default function PieceRegister() {
     () => new Map(
       (workPackagesQuery.data ?? []).map((wp: any) => [
         wp.id,
-        wp.wp_number || wp.name || wp.title || "Unnamed package",
+        formatWorkPackageTitle(wp),
       ]),
     ),
     [workPackagesQuery.data],
@@ -743,7 +744,7 @@ export default function PieceRegister() {
               onChange={(value) => updateRegisterFilters({ workPackageId: value })}
               options={(workPackagesQuery.data ?? []).map((wp: any) => ({
                 value: wp.id,
-                label: wp.wp_number || wp.name || wp.title || "Unnamed package",
+                label: formatWorkPackageTitle(wp),
               }))}
             />
             <SelectFilter label="Profile" value={filters.profile} onChange={(value) => updateRegisterFilters({ profile: value })} options={profiles} />

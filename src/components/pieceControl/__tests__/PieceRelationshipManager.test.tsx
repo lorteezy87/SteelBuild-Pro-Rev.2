@@ -66,6 +66,9 @@ describe("PieceRelationshipManager", () => {
     expect(
       await screen.findByRole("heading", { name: "Piece assignments" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "WP-001 - First sequence" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/pieces\.work_package_id/i)).not.toBeInTheDocument();
     expect(
       screen.getByText(/read-only readiness check/i),
