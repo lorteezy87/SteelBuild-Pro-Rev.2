@@ -623,7 +623,10 @@ export default function Projects() {
     mutationFn: (id) => entities.Project.delete(id),
     onSuccess: (_result, id) => {
       removeProject(id);
-      qc.invalidateQueries();
+      // Scope invalidation — a blanket invalidateQueries() refetches org
+      // membership and every other key; projects keys are enough here.
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects", "all-including-on-hold"] });
       if (detailProject?.id === id) setDetailProject(null);
       setDeleteTarget(null);
       toast.success("Project archived");
@@ -704,8 +707,9 @@ export default function Projects() {
         <SecureDeleteDialog
           open={Boolean(deleteTarget)}
           onClose={() => setDeleteTarget(null)}
-          onConfirm={() => {
-            if (deleteTarget && !deleteMut.isPending) deleteMut.mutate(deleteTarget.id);
+          onConfirm={async () => {
+            if (!deleteTarget || deleteMut.isPending) return;
+            await deleteMut.mutateAsync(deleteTarget.id);
           }}
           title="Archive Project"
           description={`Archive "${deleteTarget?.name || "this project"}"? It will be removed from active project lists, while its data and audit history are retained.`}

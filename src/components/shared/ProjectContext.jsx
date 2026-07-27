@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useContext, useMemo } from "react";
+import { createContext, useState, useEffect, useContext, useMemo, useRef } from "react";
 import { entities } from "@/api/supabaseClient";
 import { AuthContext } from "@/lib/AuthContext";
 import { subscribeProjectUpdated } from "@/services/projectUpdateEvents";
@@ -28,11 +28,20 @@ export const ProjectContext = createContext({
 
 const PROJECTS_CACHE_KEY = "sbp_projects_cache";
 
+/** Live (non-archived) projects only — never seed the switcher from tombstones. */
+function isLiveProject(project) {
+  return Boolean(project) && project.is_deleted !== true;
+}
+
+function sortProjects(list) {
+  return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+}
+
 function readProjectsCache() {
   try {
     const raw = localStorage.getItem(PROJECTS_CACHE_KEY);
     const list = raw ? JSON.parse(raw) : [];
-    return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    return sortProjects(list.filter(isLiveProject));
   } catch {
     return [];
   }
@@ -40,8 +49,9 @@ function readProjectsCache() {
 
 function writeProjectsCache(projects) {
   try {
-    if (projects.length > 0) {
-      localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(projects));
+    const live = projects.filter(isLiveProject);
+    if (live.length > 0) {
+      localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(live));
     } else {
       localStorage.removeItem(PROJECTS_CACHE_KEY);
     }
@@ -74,6 +84,10 @@ export function ProjectProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [projectLoadError, setProjectLoadError] = useState(null);
 
+  // Invalidate in-flight list loads when the local list mutates (archive),
+  // so a stale pre-archive response cannot resurrect a removed project.
+  const loadGenerationRef = useRef(0);
+
   // Every successful Project.update publishes the returned database row through
   // the entity client. Merge it into both ProjectContext stores and the durable
   // cache so contract values, project chrome, dashboards, and portfolio totals
@@ -81,6 +95,20 @@ export function ProjectProvider({ children }) {
   useEffect(() => subscribeProjectUpdated((updated) => {
     const id = updated?.id;
     if (!id) return;
+    if (updated.is_deleted === true) {
+      loadGenerationRef.current += 1;
+      setProjects((list) => {
+        const next = list.filter((project) => project.id !== id);
+        writeProjectsCache(next);
+        return next;
+      });
+      setActiveProject((current) => {
+        if (current?.id !== id) return current;
+        localStorage.removeItem("activeProjectId");
+        return null;
+      });
+      return;
+    }
     setProjects((list) => {
       const next = list.map((project) => (
         project.id === id ? { ...project, ...updated } : project
@@ -105,10 +133,11 @@ export function ProjectProvider({ children }) {
 
     let cancelled = false;
     let retryTimer = null;
+    const loadGeneration = ++loadGenerationRef.current;
 
     const fetchProjects = async (attempt = 1) => {
       const raw = await entities.Project.list("-created_at");
-      const data = [...raw].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      const data = sortProjects(raw.filter(isLiveProject));
       // If empty and we have retries left, wait and try again. Track the
       // backoff timer so the effect cleanup can clear it on unmount —
       // otherwise a pending setTimeout (1.5–3s) outlives the component and
@@ -116,7 +145,9 @@ export function ProjectProvider({ children }) {
       // "Timeout terminating forks worker").
       if (data.length === 0 && attempt < 3 && !cancelled) {
         await new Promise((r) => { retryTimer = setTimeout(r, attempt * 1500); });
-        if (!cancelled) return fetchProjects(attempt + 1);
+        if (!cancelled && loadGeneration === loadGenerationRef.current) {
+          return fetchProjects(attempt + 1);
+        }
         return [];
       }
       return data;
@@ -126,7 +157,7 @@ export function ProjectProvider({ children }) {
       try {
         setLoading(true);
         const data = await fetchProjects();
-        if (cancelled) return;
+        if (cancelled || loadGeneration !== loadGenerationRef.current) return;
 
         setProjects(data);
         // Persist only confirmed live projects. A successful empty response
@@ -155,7 +186,7 @@ export function ProjectProvider({ children }) {
               : null;
             if (fallback) {
               setActiveProject(fallback);
-              try { localStorage.setItem("activeProjectId", fallback.id); } catch {}
+              try { localStorage.setItem("activeProjectId", fallback.id); } catch { /* ignore */ }
             } else {
               setActiveProject(null);
             }
@@ -175,6 +206,9 @@ export function ProjectProvider({ children }) {
         if (!cancelled) setProjectLoadError(err?.message || "Failed to load projects");
         // Leave cached projects visible — don't wipe them on network error
       } finally {
+        // Always clear loading when this request finishes, even if a newer
+        // local mutation invalidated the payload — otherwise archive during
+        // the initial fetch leaves the switcher stuck on "Loading...".
         if (!cancelled) setLoading(false);
       }
     };
@@ -197,6 +231,11 @@ export function ProjectProvider({ children }) {
       localStorage.removeItem("activeProjectId");
       return;
     }
+    if (!isLiveProject(project)) {
+      setActiveProject(null);
+      localStorage.removeItem("activeProjectId");
+      return;
+    }
     setActiveProject(project);
     localStorage.setItem("activeProjectId", project.id);
   };
@@ -210,6 +249,10 @@ export function ProjectProvider({ children }) {
     if (!patch || typeof patch !== "object") return activeProject;
     const id = activeProject?.id;
     if (!id) return activeProject;
+    if (patch.is_deleted === true) {
+      removeProject(id);
+      return null;
+    }
     const merged = { ...activeProject, ...patch };
     setActiveProject(merged);
     setProjects((list) => list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -217,7 +260,7 @@ export function ProjectProvider({ children }) {
       const cache = readProjectsCache();
       const next = cache.map((p) => (p.id === id ? { ...p, ...patch } : p));
       writeProjectsCache(next);
-    } catch {}
+    } catch { /* ignore */ }
     return merged;
   };
 
@@ -228,9 +271,13 @@ export function ProjectProvider({ children }) {
   // ProjectContext refetch on page load.
   const patchProject = (projectId, patch) => {
     if (!projectId || !patch || typeof patch !== "object") return null;
+    if (patch.is_deleted === true) {
+      removeProject(projectId);
+      return null;
+    }
     setProjects((list) => {
       const next = list.map((p) => (p.id === projectId ? { ...p, ...patch } : p));
-      try { writeProjectsCache(next); } catch {}
+      try { writeProjectsCache(next); } catch { /* ignore */ }
       return next;
     });
     if (activeProject?.id === projectId) {
@@ -241,6 +288,8 @@ export function ProjectProvider({ children }) {
 
   const removeProject = (projectId) => {
     if (!projectId) return;
+    // Bump generation so any in-flight Project.list() cannot overwrite this.
+    loadGenerationRef.current += 1;
     setProjects((list) => {
       const next = list.filter((p) => p.id !== projectId);
       writeProjectsCache(next);
@@ -251,12 +300,14 @@ export function ProjectProvider({ children }) {
     }
   };
 
-  // Active (non-on-hold) projects + id set. Derived from `projects` and
-  // memoised so consumers can use them as stable React dependencies. An
-  // on-hold project is paused and must not appear in the switcher, portfolio,
-  // dashboards or any KPI rollup — only the /Projects page sees them.
+  // Active (non-on-hold, non-archived) projects + id set. Derived from
+  // `projects` and memoised so consumers can use them as stable React
+  // dependencies. An on-hold project is paused and must not appear in the
+  // switcher, portfolio, dashboards or any KPI rollup — only the /Projects
+  // page sees them. Archived rows should never be in `projects` at all;
+  // filter again as belt-and-suspenders.
   const activeProjects = useMemo(
-    () => projects.filter((p) => p && p.on_hold !== true),
+    () => projects.filter((p) => isLiveProject(p) && p.on_hold !== true),
     [projects]
   );
   const activeProjectIds = useMemo(
@@ -268,11 +319,11 @@ export function ProjectProvider({ children }) {
   // user isn't silently working in a paused project. The /Projects page
   // remains the way to drill back in.
   useEffect(() => {
-    if (activeProject?.on_hold === true) {
+    if (activeProject?.on_hold === true || activeProject?.is_deleted === true) {
       handleProjectSelect(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProject?.id, activeProject?.on_hold]);
+  }, [activeProject?.id, activeProject?.on_hold, activeProject?.is_deleted]);
 
   return (
     <ProjectContext.Provider value={{
