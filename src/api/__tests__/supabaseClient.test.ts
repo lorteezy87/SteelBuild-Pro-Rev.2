@@ -124,7 +124,7 @@ describe("supabase entity client", () => {
     });
   });
 
-  it("does not apply a nonexistent soft-delete filter to cost-code reads", async () => {
+  it("applies project scoping and soft-delete filtering to cost-code reads", async () => {
     await entities.CostCode.list();
 
     expect(mocks.calls).toContainEqual({
@@ -133,7 +133,7 @@ describe("supabase entity client", () => {
       column: "projects.is_deleted",
       value: false,
     });
-    expect(mocks.calls).not.toContainEqual({
+    expect(mocks.calls).toContainEqual({
       table: "cost_codes",
       op: "eq",
       column: "is_deleted",
@@ -141,20 +141,27 @@ describe("supabase entity client", () => {
     });
   });
 
-  it("uses the cost-code table's hard-delete contract", async () => {
+  it("uses the cost-code table's soft-delete contract", async () => {
     await entities.CostCode.delete("cost-code-1");
 
     expect(mocks.calls).toContainEqual({
       table: "cost_codes",
+      op: "update",
+      value: expect.objectContaining({
+        is_deleted: true,
+        deleted_at: expect.any(String),
+      }),
+    });
+    expect(mocks.calls).toContainEqual({
+      table: "cost_codes",
+      op: "eq",
+      column: "id",
+      value: "cost-code-1",
+    });
+    expect(mocks.calls).not.toContainEqual({
+      table: "cost_codes",
       op: "delete",
     });
-    expect(mocks.calls).not.toContainEqual(
-      expect.objectContaining({
-        table: "cost_codes",
-        op: "update",
-        value: expect.objectContaining({ is_deleted: true }),
-      }),
-    );
   });
 
   it("soft-deletes change orders so they disappear from active project reads", async () => {

@@ -8,6 +8,7 @@ import { batchProcess } from "@/utils/batchProcess";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { addDaysIso } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { reparentTasks } from "@/lib/schedule/reparentTasks";
 import { generateWBS, sanitizeScheduleTaskUpdatePayload } from "./wbs";
 import {
@@ -18,6 +19,7 @@ import {
   parseMsProjectXml,
 } from "./mppImport";
 import { filterEditableTasks } from "./scheduleTaskHelpers";
+import { buildScheduleResourceAssignPatch } from "./scheduleAssignmentHelpers";
 import type { ScheduleTask } from "./types";
 
 export interface UseScheduleMutationsParams {
@@ -89,7 +91,7 @@ export function useScheduleMutations({
       setSelectedTask(null);
       toast.success("Task updated");
     },
-    onError: (err: any) => toast.error("Update failed: " + err.message),
+    onError: (err: unknown) => toast.error(`Update failed: ${toUserErrorMessage(err)}`),
   });
 
   const reparentMut = useMutation({
@@ -105,25 +107,24 @@ export function useScheduleMutations({
       setSelectedIds(new Set());
       toast.success(vars.ids.length > 1 ? `Reparented ${vars.ids.length} tasks` : "Task moved");
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       invalidateEntity(qc, "schedule_task", projectId);
-      toast.error(err?.message || "Reparent failed");
+      toast.error(toUserErrorMessage(err, "Reparent failed"));
     },
   });
 
   const createTaskMut = useMutation({
     mutationFn: (data: ScheduleTask) => {
-      const pid = data.project_id || projectId;
-      if (!pid) throw new Error("Select a project first");
-      const wbs = data.wbs_code || generateWBS(data.phase, scheduleTasks);
-      return entities.ScheduleTask.create({ ...data, project_id: pid, wbs_code: wbs } as any);
+      const scoped = withProjectId(data as Record<string, unknown>, projectId);
+      const wbs = (scoped.wbs_code as string | undefined) || generateWBS(scoped.phase as string | undefined, scheduleTasks);
+      return entities.ScheduleTask.create({ ...scoped, wbs_code: wbs } as any);
     },
     onSuccess: () => {
       invalidateEntity(qc, "schedule_task", projectId);
       setShowAddTask(false);
       toast.success("Task created");
     },
-    onError: (err: any) => toast.error("Create failed: " + err.message),
+    onError: (err: unknown) => toast.error(`Create failed: ${toUserErrorMessage(err)}`),
   });
 
   const deleteTaskMut = useMutation({
@@ -140,7 +141,7 @@ export function useScheduleMutations({
       });
       toast.success("Task deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Delete failed")),
   });
 
   const bulkUpdateMut = useMutation({
@@ -166,7 +167,7 @@ export function useScheduleMutations({
         toast.success(`Updated ${variables.ids.length} tasks`);
       }
     },
-    onError: () => toast.error("Bulk update failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk update failed")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -190,14 +191,15 @@ export function useScheduleMutations({
         toast.success("Tasks deleted");
       }
     },
-    onError: () => toast.error("Bulk delete failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk delete failed")),
   });
 
   const bulkResourceMut = useMutation({
     mutationFn: async ({ ids, resource_names }: { ids: string[]; resource_names: string }) => {
+      const patch = buildScheduleResourceAssignPatch(resource_names);
       const results = await batchProcess(
         ids,
-        (id) => entities.ScheduleTask.update(id, { resource_names, assigned_to: resource_names }),
+        (id) => entities.ScheduleTask.update(id, patch),
       );
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
@@ -215,7 +217,7 @@ export function useScheduleMutations({
         toast.success(`Resources assigned to ${results.succeeded.length} tasks`);
       }
     },
-    onError: () => toast.error("Bulk resource assignment failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk resource assignment failed")),
   });
 
   const bulkDateMut = useMutation({
@@ -253,7 +255,7 @@ export function useScheduleMutations({
         toast.success(`${results.succeeded.length} task date${results.succeeded.length === 1 ? "" : "s"} updated.${skippedMsg}`);
       }
     },
-    onError: (err: any) => toast.error(err?.message || "Bulk date update failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk date update failed")),
   });
 
   const bulkDurationMut = useMutation({
@@ -306,7 +308,7 @@ export function useScheduleMutations({
         toast.success(`${results.succeeded.length} task duration${results.succeeded.length === 1 ? "" : "s"} updated.${skippedMsg}`);
       }
     },
-    onError: (err: any) => toast.error(err?.message || "Bulk duration update failed"),
+    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Bulk duration update failed")),
   });
 
   const handleBulkAdd = async (rows: any[]) => {
@@ -317,16 +319,17 @@ export function useScheduleMutations({
       // Build a running snapshot of tasks so each new WBS is unique
       const snapshot = [...scheduleTasks];
       for (const row of rows) {
-        const wbs = row.wbs_code || generateWBS(row.phase, snapshot);
-        const task = { ...row, project_id: pid, wbs_code: wbs };
+        const scoped = withProjectId(row as Record<string, unknown>, projectId);
+        const wbs = (scoped.wbs_code as string | undefined) || generateWBS(scoped.phase as string | undefined, snapshot);
+        const task = { ...scoped, wbs_code: wbs };
         await entities.ScheduleTask.create(task);
-        snapshot.push(task); // include in snapshot for next WBS calculation
+        snapshot.push(task as ScheduleTask);
       }
       invalidateEntity(qc, "schedule_task", projectId);
       setShowBulkAdd(false);
       toast.success(`Created ${rows.length} task${rows.length !== 1 ? "s" : ""}`);
-    } catch (err: any) {
-      toast.error("Bulk add failed: " + err.message);
+    } catch (err: unknown) {
+      toast.error(`Bulk add failed: ${toUserErrorMessage(err)}`);
     } finally {
       setBulkSaving(false);
     }
@@ -382,8 +385,7 @@ export function useScheduleMutations({
         const parentUid = uidToParentUid[t.uid];
         const parentDbId = parentUid ? uidToDbId[parentUid] : null;
 
-        const record = await entities.ScheduleTask.create({
-          project_id: pid,
+        const record = await entities.ScheduleTask.create(withProjectId({
           task_name: t.name,
           task_type: inferTaskType(t.name, t.isSummary, t.milestone),
           phase: PHASES.includes(phase) ? phase : "Fabrication",
@@ -402,7 +404,7 @@ export function useScheduleMutations({
           notes: t.notes || null,
           is_summary: t.isSummary || false,
           // Dependencies will be set in a second pass after all tasks exist
-        });
+        }, pid) as any);
         uidToDbId[t.uid] = record.id;
       }
 
@@ -424,8 +426,8 @@ export function useScheduleMutations({
 
       invalidateEntity(qc, "schedule_task", projectId);
       toast.success(`Imported ${Object.keys(uidToDbId).length} tasks from ${file.name}`);
-    } catch (e: any) {
-      toast.error(e.message || "Import failed");
+    } catch (e: unknown) {
+      toast.error(toUserErrorMessage(e, "Import failed"));
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -465,9 +467,9 @@ export function useScheduleMutations({
         `Exported ${filename}${pageCount > 1 ? ` (${pageCount} pages)` : ""}`,
         { id: t },
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Schedule] PDF export failed:", err);
-      toast.error(`PDF export failed: ${err?.message || "unknown error"}`, { id: t });
+      toast.error(`PDF export failed: ${toUserErrorMessage(err, "unknown error")}`, { id: t });
     } finally {
       setExportingPdf(false);
     }
@@ -499,15 +501,24 @@ export function useScheduleMutations({
 
   const bulkSetParent = (newParentId: string | null) => {
     const ids = Array.from(selectedIds);
-    if (!ids.length) return;
-    reparentMut.mutate({ ids, newParentId });
-    setShowBulkParent(false);
+    if (!ids.length || reparentMut.isPending) return;
+    void reparentMut.mutateAsync({ ids, newParentId }).then(
+      () => setShowBulkParent(false),
+      () => {
+        /* toast via onError; keep picker open for retry */
+      },
+    );
   };
 
   const confirmBulkDelete = () => {
     const ids = Array.from(selectedIds);
-    bulkDeleteMut.mutate(ids);
-    setShowBulkDeleteConfirm(false);
+    if (!ids.length || bulkDeleteMut.isPending) return;
+    void bulkDeleteMut.mutateAsync(ids).then(
+      () => setShowBulkDeleteConfirm(false),
+      () => {
+        /* toast via onError; keep confirm open for retry */
+      },
+    );
   };
 
   return {

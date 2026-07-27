@@ -8,7 +8,7 @@ import { parseAnnotationLink } from "../annotationLinks";
 beforeAll(() => {
   if (typeof window === "undefined" || !window.location?.origin) {
     // Minimal shim — the URL constructor only needs a valid base string.
-    // eslint-disable-next-line no-global-assign
+     
     globalThis.window = { location: { origin: "https://app.example.com" } };
   }
 });

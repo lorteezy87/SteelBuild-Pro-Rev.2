@@ -741,11 +741,11 @@ export function fmtDate(d: any): string {
  * there is no drawing-date fallback to exclude here. Defaults false so the
  * canonical read model retains calendar-day behavior.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], search = "", useWorkdays = false): any[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const activeSubmittals = (submittals || []).filter((s: any) => !s.is_deleted);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const setSubmittalMap: Record<string, any[]> = {};
   for (const sub of activeSubmittals) {
     const setIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
@@ -790,7 +790,7 @@ export interface ApprovalMatrixSummary {
  * Approved as Noted / Released for Fabrication), rejected (Rejected / Revise and
  * Resubmit), else pending; plus no-submittal and overdue/due-soon tallies.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function summarizeApprovalMatrix(matrixRows: any[]): ApprovalMatrixSummary {
   let noSubmittal = 0, pending = 0, approved = 0, rejected = 0, overdue = 0, dueSoon = 0;
   for (const row of matrixRows || []) {

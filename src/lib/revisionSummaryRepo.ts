@@ -8,7 +8,7 @@
 import { supabase } from "@/lib/supabase";
 
 const TABLE = "drawing_revision_summaries";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const from = (): any => (supabase.from as unknown as (t: string) => any)(TABLE);
 
 export interface SavedRevisionSummary {
@@ -20,7 +20,7 @@ export interface SavedRevisionSummary {
   high_risk_count: number;
   likely_rfi: boolean;
   impact_level: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   summary: any; // buildRevisionSummary() output
   generated_at: string;
   generated_by: string | null;
@@ -30,7 +30,7 @@ export interface SavedRevisionSummary {
 export async function saveRevisionSummary(args: {
   projectId: string;
   drawingSetId?: string | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   summary: any;
   generatedBy?: string | null;
 }): Promise<SavedRevisionSummary | null> {

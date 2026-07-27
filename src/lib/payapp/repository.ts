@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { applyLineProgress, buildLinesFromSov, computeG702 } from "./g702";
 import type { ContractContext, PayApplication, PayApplicationLine } from "./types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const from = (table: string): any => (supabase.from as unknown as (t: string) => any)(table);
 const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
