@@ -29,7 +29,6 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
-| 2026-07-27T03:30:00Z | cursor-prod-ready-deploy-2696 | Production merge+deploy ready PRs | main merge of ready open PRs, vercel.json | Merge ready PRs; re-enable Vercel main git deploy while Actions billing is blocked |
 | 2026-07-26T21:20:00Z | cursor-drawing-viewer-page-clamp-3d17 | DrawingViewer blank/error after PR #96 | src/pages/DrawingViewer.jsx, src/pages/drawingViewer/usePdfLoader.js, src/pages/drawingViewer/usePdfRenderer.js, src/pages/drawingViewer/__tests__/** | Fix unclamped pdf_page race + sticky pdfError on shared file_url; loading skeleton while resolving. |
 | 2026-07-27T01:15:00Z | cursor-page-refactor-2696 | Large-page thinning — PieceRegister / Onboarding / ResourceScheduling | src/pages/PieceRegister.tsx, src/pages/pieceRegister/**, src/pages/Onboarding.jsx, src/pages/onboarding/**, src/pages/ResourceScheduling.tsx, src/pages/resourceScheduling/resourceSchedulingHelpers.ts | Behavior-preserving helper/presentational extracts for largest pages |
 | 2026-07-26T04:00:00Z | cursor-ap-contacts-dms-d3a1 | Contacts + DocumentStorageSettings hygiene | src/pages/Contacts.jsx, src/components/contacts/ContactFormModal.jsx, src/components/dms/DocumentStorageSettings.jsx, src/pages/Vendors.jsx | RegisterFetchBody + Contact create withProjectId/toasts; LinkedFolder.create fail-closed; Vendors toast hygiene (IDs 18/48/50). |
