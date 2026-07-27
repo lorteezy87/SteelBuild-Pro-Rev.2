@@ -100,7 +100,8 @@ export async function fetchPieceRelationshipSnapshot(
     fetchProjectRows<ReadinessWorkPackage>(
       "work_packages",
       projectId,
-      "id, project_id, wp_number, name, description, sequence_number, area, is_deleted, deleted_at",
+      // work_packages has name/notes — not description (PGRST/42703 if selected).
+      "id, project_id, wp_number, name, sequence_number, area, is_deleted, deleted_at",
     ),
   ]);
 
