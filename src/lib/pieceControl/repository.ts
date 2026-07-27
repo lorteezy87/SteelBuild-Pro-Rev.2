@@ -50,6 +50,8 @@ export interface PieceImportStagedRow {
   id: string;
   source_row_number: number;
   normalized_payload: Record<string, unknown>;
+  /** Raw staged row (keeps wp_number / sheet_number hints for post-apply). */
+  original_payload?: Record<string, unknown> | null;
   decision: string;
   warnings: string[];
   resolution: string | null;
@@ -95,7 +97,7 @@ export async function fetchPieceImportRows(
 ): Promise<PieceImportStagedRow[]> {
   const { data, error } = await db
     .from("piece_import_rows")
-    .select("id, source_row_number, normalized_payload, decision, warnings, resolution, matched_piece_id")
+    .select("id, source_row_number, normalized_payload, original_payload, decision, warnings, resolution, matched_piece_id")
     .eq("project_id", projectId)
     .eq("batch_id", batchId)
     .order("source_row_number");

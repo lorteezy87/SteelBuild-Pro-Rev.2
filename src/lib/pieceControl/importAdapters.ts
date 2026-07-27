@@ -36,9 +36,32 @@ function parseCsv(text: string): ImportPayload[] {
   const headers = records[0].map((header) =>
     header.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""),
   );
-  return records.slice(1).map((values) =>
-    Object.fromEntries(headers.map((header, index) => [header, values[index]?.trim() ?? ""])),
-  );
+  return records.slice(1).map((values) => {
+    const row = Object.fromEntries(
+      headers.map((header, index) => [header, values[index]?.trim() ?? ""]),
+    ) as ImportPayload;
+    return normalizePieceRegisterCsvRow(row);
+  });
+}
+
+/** Map common template aliases onto Slice 1 normalize fields. */
+export function normalizePieceRegisterCsvRow(row: ImportPayload): ImportPayload {
+  const next: ImportPayload = { ...row };
+  if (
+    (next.quantity == null || String(next.quantity).trim() === "") &&
+    next.qty != null &&
+    String(next.qty).trim() !== ""
+  ) {
+    next.quantity = next.qty;
+  }
+  if (
+    (next.erection_area == null || String(next.erection_area).trim() === "") &&
+    next.area != null &&
+    String(next.area).trim() !== ""
+  ) {
+    next.erection_area = next.area;
+  }
+  return next;
 }
 
 const KISS_HEADER_ALIASES: Record<string, string[]> = {

@@ -14,6 +14,7 @@ import {
   unlinkPieceDrawing,
 } from "@/lib/pieceControl/relationshipsRepository";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { linkPiecesToDrawing } from "@/lib/pieceControl/bulkLinkDrawings";
 import {
   addIdsToSelection,
   selectIdRange,
@@ -57,6 +58,7 @@ export default function PieceRelationshipManager({
   const [targetWorkPackageId, setTargetWorkPackageId] = useState(focusedWorkPackageId ?? "");
   const [drawingPieceId, setDrawingPieceId] = useState("");
   const [drawingId, setDrawingId] = useState("");
+  const [drawingFilter, setDrawingFilter] = useState("");
   const [markFilter, setMarkFilter] = useState("");
   const [scopeFilter, setScopeFilter] = useState<"unassigned" | "package" | "all">(
     focusedWorkPackageId ? "unassigned" : "all",
@@ -184,6 +186,16 @@ export default function PieceRelationshipManager({
     (link) => link.piece_id === selectedDrawingPieceId,
   );
   const drawingMap = new Map((snapshot?.drawings ?? []).map((drawing) => [drawing.id, drawing]));
+  const filteredDrawings = useMemo(() => {
+    const needle = drawingFilter.trim().toLowerCase();
+    const drawings = snapshot?.drawings ?? [];
+    if (!needle) return drawings;
+    return drawings.filter((drawing) => {
+      const sheet = String(drawing.sheet_number ?? "").toLowerCase();
+      const title = String(drawing.title ?? "").toLowerCase();
+      return sheet.includes(needle) || title.includes(needle);
+    });
+  }, [drawingFilter, snapshot?.drawings]);
 
   const invalidate = async () => {
     await Promise.all([
@@ -241,6 +253,23 @@ export default function PieceRelationshipManager({
       setDrawingId("");
       await mutationOptions.onSuccess();
       toast.success(summary.linked ? "Drawing linked" : "Drawing was already linked");
+    },
+  });
+  const bulkLinkMutation = useMutation({
+    mutationFn: () =>
+      linkPiecesToDrawing([...selectedPieceIds], drawingId, (pieceId, targetDrawingId) =>
+        linkPieceDrawing(projectId, pieceId, targetDrawingId),
+      ),
+    ...mutationOptions,
+    onSuccess: async (result) => {
+      await mutationOptions.onSuccess();
+      if (result.errors.length > 0) {
+        toast.error(
+          `Linked ${result.linked}; ${result.errors.length} piece(s) failed.`,
+        );
+        return;
+      }
+      toast.success(`Linked drawing to ${result.linked} piece(s)`);
     },
   });
   const unlinkMutation = useMutation({
@@ -598,7 +627,9 @@ export default function PieceRelationshipManager({
           <span className="piece-command-intro__icon" aria-hidden="true">
             <Link2 size={18} />
           </span>
-          <p>Create explicit links between piece lots and drawings.</p>
+          <p>
+            Select pieces above, pick a drawing, then link in bulk — or link one piece at a time.
+          </p>
         </div>
         {drawingPieces.length === 0 || snapshot.drawings.length === 0 ? (
           <div className="piece-command-empty piece-command-empty--detail">
@@ -615,9 +646,19 @@ export default function PieceRelationshipManager({
           </div>
         ) : (
           <>
+            <label className="piece-command-field" htmlFor="piece-drawing-sheet-filter">
+              Drawing search
+              <input
+                id="piece-drawing-sheet-filter"
+                className="piece-command-control"
+                value={drawingFilter}
+                onChange={(event) => setDrawingFilter(event.target.value)}
+                placeholder="Filter by sheet or title…"
+              />
+            </label>
             <div className="piece-link-controls">
               <label className="piece-command-field" htmlFor="piece-drawing-link-piece">
-                Piece
+                Single piece
                 <select
                   id="piece-drawing-link-piece"
                   value={selectedDrawingPieceId}
@@ -640,7 +681,7 @@ export default function PieceRelationshipManager({
                   className="piece-command-control"
                 >
                   <option value="">Select drawing</option>
-                  {snapshot.drawings.map((drawing) => (
+                  {filteredDrawings.map((drawing) => (
                     <option key={drawing.id} value={drawing.id}>
                       {drawing.sheet_number || drawing.id} · {drawing.title || "Untitled"}
                     </option>
@@ -648,14 +689,30 @@ export default function PieceRelationshipManager({
                 </select>
               </label>
             </div>
-            <button
-              type="button"
-              disabled={!selectedDrawingPieceId || !drawingId || linkMutation.isPending}
-              onClick={() => linkMutation.mutate()}
-              className="cmd-btn cmd-btn--primary piece-link-action"
-            >
-              Link drawing
-            </button>
+            <div className="piece-command-actions" style={{ flexWrap: "wrap", gap: 6 }}>
+              <button
+                type="button"
+                disabled={
+                  selectedPieceIds.size === 0 ||
+                  !drawingId ||
+                  bulkLinkMutation.isPending
+                }
+                onClick={() => bulkLinkMutation.mutate()}
+                className="cmd-btn cmd-btn--primary piece-link-action"
+              >
+                {selectedPieceIds.size > 0
+                  ? `Link drawing to ${selectedPieceIds.size} selected`
+                  : "Link drawing to selected"}
+              </button>
+              <button
+                type="button"
+                disabled={!selectedDrawingPieceId || !drawingId || linkMutation.isPending}
+                onClick={() => linkMutation.mutate()}
+                className="cmd-btn cmd-btn--ghost piece-link-action"
+              >
+                Link single piece
+              </button>
+            </div>
           </>
         )}
         <div className="piece-link-list">

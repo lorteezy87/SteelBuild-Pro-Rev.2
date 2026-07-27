@@ -6,6 +6,7 @@ import {
   Boxes,
   CheckCircle2,
   Database,
+  Download,
   Factory,
   FileUp,
   GitBranch,
@@ -46,7 +47,16 @@ import {
   currentRevisionCodeForDrawing,
 } from "@/lib/pieceControl/drawingReleaseReady";
 import { PIECE_IMPORT_SOURCE_OPTIONS, readPieceImportFile } from "@/lib/pieceControl/importAdapters";
-import { collectAppliedPieceIds } from "@/lib/pieceControl/importAssign";
+import {
+  collectAppliedPieceIds,
+  collectAppliedPiecesByWpNumber,
+} from "@/lib/pieceControl/importAssign";
+import {
+  applyImportDrawingLinks,
+  collectAppliedPieceSheetHints,
+  planImportDrawingLinks,
+} from "@/lib/pieceControl/importDrawingLink";
+import { downloadPieceRegisterCsvTemplate } from "@/lib/pieceControl/pieceRegisterCsvTemplate";
 import {
   buildPieceControlSummary,
   modePresentation,
@@ -57,6 +67,7 @@ import type { ImportPayload, PieceImportSourceType } from "@/lib/pieceControl/re
 import {
   assignPiecesToWorkPackage,
   fetchPieceRelationshipSnapshot,
+  linkPieceDrawing,
 } from "@/lib/pieceControl/relationshipsRepository";
 import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
 import {
@@ -371,24 +382,54 @@ export default function PieceRegister() {
     ]);
   };
 
-  const assignImportedPiecesToWorkPackage = async (
-    batchId: string,
-    workPackageId: string,
-  ) => {
+  const finalizeImportedBatchHints = async (batchId: string) => {
     const rows = await fetchPieceImportRows(projectId!, batchId);
-    const pieceIds = collectAppliedPieceIds(rows);
-    if (pieceIds.length === 0) {
-      return { assigned: 0 };
+    let assigned = 0;
+    let linked = 0;
+
+    if (importTargetWorkPackageId) {
+      const pieceIds = collectAppliedPieceIds(rows);
+      if (pieceIds.length > 0) {
+        const summary = await assignPiecesToWorkPackage(
+          projectId!,
+          pieceIds,
+          importTargetWorkPackageId,
+        );
+        assigned += Number(summary.assigned ?? pieceIds.length);
+      }
+    } else {
+      const byWpNumber = collectAppliedPiecesByWpNumber(rows);
+      const livePackages = (workPackagesQuery.data ?? []) as Array<{
+        id: string;
+        wp_number?: string | null;
+      }>;
+      for (const [wpNumber, pieceIds] of Object.entries(byWpNumber)) {
+        const match = livePackages.find(
+          (wp) =>
+            String(wp.wp_number ?? "").trim().toLowerCase() ===
+            wpNumber.trim().toLowerCase(),
+        );
+        if (!match || pieceIds.length === 0) continue;
+        const summary = await assignPiecesToWorkPackage(
+          projectId!,
+          pieceIds,
+          match.id,
+        );
+        assigned += Number(summary.assigned ?? pieceIds.length);
+      }
     }
-    const summary = await assignPiecesToWorkPackage(
-      projectId!,
-      pieceIds,
-      workPackageId,
-    );
-    return {
-      assigned: Number(summary.assigned ?? pieceIds.length),
-      pieceCount: pieceIds.length,
-    };
+
+    const hints = collectAppliedPieceSheetHints(rows);
+    if (hints.length > 0) {
+      const snapshot = await fetchPieceRelationshipSnapshot(projectId!);
+      const plan = planImportDrawingLinks(hints, snapshot.drawings);
+      const result = await applyImportDrawingLinks(plan, (pieceId, drawingId) =>
+        linkPieceDrawing(projectId!, pieceId, drawingId),
+      );
+      linked = result.linked;
+    }
+
+    return { assigned, linked, pieceCount: collectAppliedPieceIds(rows).length };
   };
 
   const stageMutation = useMutation({
@@ -424,24 +465,18 @@ export default function PieceRegister() {
   const applyMutation = useMutation({
     mutationFn: async () => {
       const summary = await applyPieceImportBatch(selectedBatch!.id);
-      let assigned = 0;
-      if (importTargetWorkPackageId) {
-        const result = await assignImportedPiecesToWorkPackage(
-          selectedBatch!.id,
-          importTargetWorkPackageId,
-        );
-        assigned = result.assigned;
-      }
-      return { summary, assigned };
+      const hints = await finalizeImportedBatchHints(selectedBatch!.id);
+      return { summary, ...hints };
     },
-    onSuccess: async ({ summary, assigned }) => {
+    onSuccess: async ({ summary, assigned, linked }) => {
       setApplyConfirmed(false);
       await invalidate();
-      toast.success(
-        assigned > 0
-          ? `Import applied: ${summary.created ?? 0} created, ${summary.updated ?? 0} updated · ${assigned} assigned to work package`
-          : `Import applied: ${summary.created ?? 0} created, ${summary.updated ?? 0} updated`,
-      );
+      const parts = [
+        `Import applied: ${summary.created ?? 0} created, ${summary.updated ?? 0} updated`,
+      ];
+      if (assigned > 0) parts.push(`${assigned} assigned to work package`);
+      if (linked > 0) parts.push(`${linked} drawing link(s)`);
+      toast.success(parts.join(" · "));
     },
     onError: (error: Error) =>
       toast.error(
@@ -449,26 +484,29 @@ export default function PieceRegister() {
       ),
   });
   const assignImportMutation = useMutation({
-    mutationFn: () =>
-      assignImportedPiecesToWorkPackage(
-        selectedBatch!.id,
-        importTargetWorkPackageId,
-      ),
+    mutationFn: () => finalizeImportedBatchHints(selectedBatch!.id),
     onSuccess: async (result) => {
       await invalidate();
-      if (result.assigned === 0) {
-        toast.message("No applied pieces in this batch to assign.");
+      if (result.assigned === 0 && result.linked === 0) {
+        toast.message(
+          "No work package or drawing sheet hints found for applied pieces.",
+        );
         return;
       }
-      toast.success(
-        `${result.assigned} imported piece(s) assigned to work package`,
-      );
+      const parts: string[] = [];
+      if (result.assigned > 0) {
+        parts.push(`${result.assigned} piece(s) assigned`);
+      }
+      if (result.linked > 0) {
+        parts.push(`${result.linked} drawing link(s)`);
+      }
+      toast.success(parts.join(" · "));
     },
     onError: (error: Error) =>
       toast.error(
         presentPieceControlError(
           error,
-          "Imported pieces could not be assigned to the work package.",
+          "Imported pieces could not be assigned or linked.",
         ),
       ),
   });
@@ -1064,11 +1102,20 @@ export default function PieceRegister() {
                   <FileUp size={18} />
                 </span>
                 <p>
-                  Stage CSV or JSON rows for reconciliation. Staging makes no direct changes
-                  to the active register.
+                  Download the standard CSV template, fill piece marks / WP / drawing sheet
+                  in one file, then stage for review. Staging makes no direct changes to the
+                  active register.
                 </p>
               </div>
               <div className="piece-command-form">
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--ghost"
+                  onClick={() => downloadPieceRegisterCsvTemplate()}
+                >
+                  <Download size={14} aria-hidden="true" />
+                  {" "}Download CSV template
+                </button>
                 <label htmlFor="piece-import-source" className="piece-command-field">
                   Source
                   <select
@@ -1168,7 +1215,7 @@ export default function PieceRegister() {
                               className="piece-command-field"
                               htmlFor="piece-import-assign-work-package"
                             >
-                              Assign imported pieces to work package
+                              Work package override (optional — or use CSV wp_number)
                               <select
                                 id="piece-import-assign-work-package"
                                 className="piece-command-control"
@@ -1177,7 +1224,7 @@ export default function PieceRegister() {
                                   setImportTargetWorkPackageId(event.target.value)
                                 }
                               >
-                                <option value="">Leave unassigned</option>
+                                <option value="">Use CSV wp_number / leave unassigned</option>
                                 {(workPackagesQuery.data ?? []).map((wp: any) => (
                                   <option key={wp.id} value={wp.id}>
                                     {formatWorkPackageTitle(wp)}
@@ -1201,8 +1248,8 @@ export default function PieceRegister() {
                               className="cmd-btn piece-import-apply__button"
                             >
                               {importTargetWorkPackageId
-                                ? "Apply and assign to work package"
-                                : "Apply approved batch"}
+                                ? "Apply, assign WP, and link drawings"
+                                : "Apply batch (CSV WP / sheet hints)"}
                             </button>
                           </div>
                         ) : (
@@ -1235,13 +1282,12 @@ export default function PieceRegister() {
                             <button
                               type="button"
                               className="cmd-btn cmd-btn--primary"
-                              disabled={
-                                !importTargetWorkPackageId ||
-                                assignImportMutation.isPending
-                              }
+                              disabled={assignImportMutation.isPending}
                               onClick={() => assignImportMutation.mutate()}
                             >
-                              Assign all imported pieces
+                              {importTargetWorkPackageId
+                                ? "Assign + link from import"
+                                : "Apply WP / drawing hints from import"}
                             </button>
                           </div>
                         )}

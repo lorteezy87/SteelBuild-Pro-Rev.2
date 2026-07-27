@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { fetchPieceRelationshipSnapshot } from "@/lib/pieceControl/relationshipsRepository";
+import {
+  fetchPieceRelationshipSnapshot,
+  linkPieceDrawing,
+} from "@/lib/pieceControl/relationshipsRepository";
 import PieceRelationshipManager from "../PieceRelationshipManager";
 
 vi.mock("@/components/shared/ProjectContext", () => ({
@@ -330,5 +333,107 @@ describe("PieceRelationshipManager", () => {
     expect(boxC).toBeChecked();
     expect(document.getElementById("piece-assignment-piece-4")).not.toBeChecked();
     expect(screen.getByText(/3 selected/i)).toBeInTheDocument();
+  });
+
+  it("bulk-links the selected pieces to one drawing", async () => {
+    const pieces = ["A", "B"].map((mark, index) => ({
+      id: `piece-${index + 1}`,
+      project_id: "project-1",
+      piece_mark: mark,
+      normalized_piece_mark: mark.toLowerCase(),
+      lot_code: "ALL",
+      parent_piece_id: null,
+      quantity: 1,
+      profile: null,
+      material_grade: null,
+      weight_each_lbs: null,
+      weight_total_lbs: null,
+      work_package_id: null,
+      lifecycle_status: "active",
+      on_hold: false,
+      source_system: null,
+      external_ref: null,
+      metadata: null,
+      updated_at: "2026-07-01T00:00:00Z",
+      deleted_at: null,
+    }));
+    vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
+      pieces,
+      pieceDrawings: [],
+      drawings: [
+        {
+          id: "drawing-1",
+          project_id: "project-1",
+          drawing_set_id: "set-1",
+          sheet_number: "S-101",
+          title: "Embeds",
+          stage: "Released",
+          set_approval_status: null,
+          is_deleted: false,
+          deleted_at: null,
+          is_superseded: false,
+        },
+      ],
+      workPackages: [],
+      drawingSets: [],
+      submittals: [],
+      sheetResponses: [],
+      drawingRevisions: [],
+      drawingReviews: [],
+      drawingSignoffs: [],
+      commentDispositions: [],
+    });
+    vi.mocked(linkPieceDrawing).mockResolvedValue({ linked: true } as never);
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PieceRelationshipManager
+          projectId="project-1"
+          pieceControlMode="shadow"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /Link drawing to selected/i }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      document.getElementById("piece-assignment-piece-1")!.closest("label")!,
+    );
+    fireEvent.click(
+      document.getElementById("piece-assignment-piece-2")!.closest("label")!,
+    );
+
+    fireEvent.change(screen.getByLabelText("Drawing"), {
+      target: { value: "drawing-1" },
+    });
+
+    const bulkButton = screen.getByRole("button", {
+      name: /Link drawing to 2 selected/i,
+    });
+    expect(bulkButton).toBeEnabled();
+    fireEvent.click(bulkButton);
+
+    await waitFor(() => {
+      expect(linkPieceDrawing).toHaveBeenCalledTimes(2);
+    });
+    expect(linkPieceDrawing).toHaveBeenCalledWith(
+      "project-1",
+      "piece-1",
+      "drawing-1",
+    );
+    expect(linkPieceDrawing).toHaveBeenCalledWith(
+      "project-1",
+      "piece-2",
+      "drawing-1",
+    );
   });
 });
