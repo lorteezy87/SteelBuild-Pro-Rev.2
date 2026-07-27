@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Link2, PackageCheck, Sparkles, Unlink2 } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +14,10 @@ import {
   unlinkPieceDrawing,
 } from "@/lib/pieceControl/relationshipsRepository";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import {
+  addIdsToSelection,
+  selectIdRange,
+} from "@/lib/pieceControl/pieceSelectionRange";
 import {
   applyWorkPackageAutoAssign,
   planWorkPackageAutoAssign,
@@ -59,6 +63,7 @@ export default function PieceRelationshipManager({
   );
   const [autoAssignPlan, setAutoAssignPlan] = useState<AutoAssignPlan | null>(null);
   const [autoAssignReassign, setAutoAssignReassign] = useState(false);
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
 
   const snapshotQuery = useQuery({
     queryKey: ["piece-relationships", projectId],
@@ -118,6 +123,15 @@ export default function PieceRelationshipManager({
       return true;
     });
   }, [focusedWorkPackageId, markFilter, packageScopedLeaves, scopeFilter, workPackageMap]);
+
+  useEffect(() => {
+    if (
+      selectionAnchorId &&
+      !selectablePieces.some((piece) => piece.id === selectionAnchorId)
+    ) {
+      setSelectionAnchorId(null);
+    }
+  }, [selectablePieces, selectionAnchorId]);
 
   const drawingPieces = focusedWorkPackageId
     ? leafPieces.filter((piece) => liveWorkPackageId(piece) === focusedWorkPackageId)
@@ -335,8 +349,8 @@ export default function PieceRelationshipManager({
           </span>
           <p>
             {focusedWorkPackageId
-              ? "Add unassigned piece marks to this work package, or remove assigned lots."
-              : "Multi-select piece marks and assign them to a work package."}
+              ? "Add unassigned piece marks to this work package, or remove assigned lots. Shift-click to select a range."
+              : "Multi-select piece marks and assign them to a work package. Shift-click to select a range."}
           </p>
         </div>
 
@@ -403,17 +417,35 @@ export default function PieceRelationshipManager({
               key={piece.id}
               className="piece-assignment-row"
               htmlFor={`piece-assignment-${piece.id}`}
+              onClick={(event) => {
+                event.preventDefault();
+                if (event.shiftKey && selectionAnchorId) {
+                  const orderedIds = selectablePieces.map((row) => row.id);
+                  const rangeIds = selectIdRange(
+                    orderedIds,
+                    selectionAnchorId,
+                    piece.id,
+                  );
+                  setSelectedPieceIds((current) =>
+                    addIdsToSelection(current, rangeIds),
+                  );
+                  return;
+                }
+                setSelectedPieceIds((current) => {
+                  const next = new Set(current);
+                  if (next.has(piece.id)) next.delete(piece.id);
+                  else next.add(piece.id);
+                  return next;
+                });
+                setSelectionAnchorId(piece.id);
+              }}
             >
               <input
                 id={`piece-assignment-${piece.id}`}
                 type="checkbox"
                 checked={selectedPieceIds.has(piece.id)}
-                onChange={(event) => setSelectedPieceIds((current) => {
-                  const next = new Set(current);
-                  if (event.target.checked) next.add(piece.id);
-                  else next.delete(piece.id);
-                  return next;
-                })}
+                readOnly
+                tabIndex={-1}
               />
               <strong>{piece.piece_mark}</strong>
               <span className="piece-assignment-row__lot">Lot {piece.lot_code}</span>

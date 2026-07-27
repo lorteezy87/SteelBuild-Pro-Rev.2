@@ -248,4 +248,87 @@ describe("PieceRelationshipManager", () => {
       screen.getByRole("button", { name: "Confirm auto-assign" }),
     ).toBeEnabled();
   });
+
+  it("shift-clicks to select an inclusive range of piece marks", async () => {
+    const pieces = ["A", "B", "C", "D"].map((mark, index) => ({
+      id: `piece-${index + 1}`,
+      project_id: "project-1",
+      piece_mark: mark,
+      normalized_piece_mark: mark.toLowerCase(),
+      lot_code: "ALL",
+      parent_piece_id: null,
+      quantity: 1,
+      profile: null,
+      material_grade: null,
+      weight_each_lbs: null,
+      weight_total_lbs: null,
+      work_package_id: null,
+      lifecycle_status: "active",
+      on_hold: false,
+      source_system: null,
+      external_ref: null,
+      metadata: null,
+      updated_at: "2026-07-01T00:00:00Z",
+      deleted_at: null,
+    }));
+    vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
+      pieces,
+      pieceDrawings: [],
+      drawings: [],
+      workPackages: [
+        {
+          id: "wp-1",
+          project_id: "project-1",
+          wp_number: "WP-001",
+          name: "Sequence",
+          is_deleted: false,
+          deleted_at: null,
+        },
+      ],
+      drawingSets: [],
+      submittals: [],
+      sheetResponses: [],
+      drawingRevisions: [],
+      drawingReviews: [],
+      drawingSignoffs: [],
+      commentDispositions: [],
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PieceRelationshipManager
+          projectId="project-1"
+          pieceControlMode="shadow"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByText(/Shift-click to select a range/i),
+    ).toBeInTheDocument();
+
+    const boxA = document.getElementById("piece-assignment-piece-1") as HTMLInputElement;
+    const boxC = document.getElementById("piece-assignment-piece-3") as HTMLInputElement;
+    expect(boxA).toBeTruthy();
+    expect(boxC).toBeTruthy();
+
+    const rowA = boxA.closest("label") as HTMLElement;
+    const rowC = boxC.closest("label") as HTMLElement;
+
+    fireEvent.click(rowA);
+    expect(boxA).toBeChecked();
+
+    fireEvent.click(rowC, { shiftKey: true });
+    expect(boxA).toBeChecked();
+    expect(document.getElementById("piece-assignment-piece-2")).toBeChecked();
+    expect(boxC).toBeChecked();
+    expect(document.getElementById("piece-assignment-piece-4")).not.toBeChecked();
+    expect(screen.getByText(/3 selected/i)).toBeInTheDocument();
+  });
 });
