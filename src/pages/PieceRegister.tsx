@@ -40,10 +40,7 @@ import { PieceControlPilotReadiness } from "@/components/pieceControl/PieceContr
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { photoFor } from "@/config/launcherConfig";
 import { fetchCanonicalDashboardSnapshot } from "@/lib/pieceControl/canonicalDashboardRepository";
-import {
-  rollupCanonicalWorkPackages,
-  selectActionableLeafPieces,
-} from "@/lib/pieceControl/canonicalRollups";
+import { selectActionableLeafPieces } from "@/lib/pieceControl/canonicalRollups";
 import {
   buildPieceImpact,
   currentRevisionCodeForDrawing,
@@ -72,6 +69,11 @@ import { pieceTons } from "@/lib/pieceControl/tonnage";
 import { pieceLifecycleLabel } from "@/lib/pieceControl/lifecycle";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import { filterPieceRegisterRows, type PieceRegisterFilters } from "./pieceRegister/filter";
+import {
+  deriveOverviewWorkPackages,
+  selectUpcomingShipments,
+} from "./pieceRegister/overviewDerive";
+import PieceRegisterOverview from "./pieceRegister/PieceRegisterOverview";
 
 const EMPTY_FILTERS: PieceRegisterFilters = {
   search: "",
@@ -111,22 +113,6 @@ const naturalSortCollator = new Intl.Collator("en-US", {
 function uniqueValues(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))]
     .sort(naturalSortCollator.compare);
-}
-
-function formatPlannedShipDate(value: string): string {
-  return new Date(`${value.slice(0, 10)}T00:00:00.000Z`).toLocaleDateString(
-    "en-US",
-    {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      timeZone: "UTC",
-    },
-  );
-}
-
-function workPackageStatusLabel(status: string): string {
-  return status === "No Canonical Scope" ? "No active pieces" : status;
 }
 
 function presentImportReconciliationText(value: string): string {
@@ -294,32 +280,12 @@ export default function PieceRegister() {
       displayRows.length > 0,
     staleTime: 30_000,
   });
-  const overviewWorkPackages = useMemo(() => {
-    const snapshot = overviewSnapshotQuery.data;
-    if (!snapshot) return [];
-    const sourceById = new Map(
-      snapshot.workPackages.map((workPackage) => [workPackage.id, workPackage]),
-    );
-    return rollupCanonicalWorkPackages(
-      snapshot.workPackages,
-      snapshot.pieces,
-      snapshot.stations,
-      snapshot.completions,
-    ).map((rollup) => ({
-      ...rollup,
-      source: sourceById.get(rollup.workPackageId),
-    }));
-  }, [overviewSnapshotQuery.data]);
+  const overviewWorkPackages = useMemo(
+    () => deriveOverviewWorkPackages(overviewSnapshotQuery.data),
+    [overviewSnapshotQuery.data],
+  );
   const upcomingShipments = useMemo(
-    () =>
-      overviewWorkPackages
-        .filter((workPackage) => Boolean(workPackage.plannedShipDate))
-        .sort((left, right) =>
-          String(left.plannedShipDate).localeCompare(
-            String(right.plannedShipDate),
-          ),
-        )
-        .slice(0, 8),
+    () => selectUpcomingShipments(overviewWorkPackages),
     [overviewWorkPackages],
   );
   const filteredRows = useMemo(() => {
@@ -740,130 +706,19 @@ export default function PieceRegister() {
         )}
 
         {activeView === "overview" && !piecesQuery.isLoading && !piecesQuery.error && (
-          <section className="piece-register-overview">
-            <div className="piece-register-overview__head">
-              <div>
-                <h2>{displayRows.length === 0 ? "Build the project piece record" : "Piece Register workspace"}</h2>
-                <p>
-                  {displayRows.length === 0
-                    ? "A controlled path from source file to erection history."
-                    : `${displayRows.length.toLocaleString()} active piece rows are available for assignment, production, and logistics control.`}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveView(displayRows.length === 0 ? "import" : "register")}
-                className="cmd-btn cmd-btn--primary"
-              >
-                {displayRows.length === 0 ? "Import the first pieces" : "Open the register"}
-              </button>
-            </div>
-
-            {displayRows.length === 0 ? (
-              <div className="piece-register-workflow">
-                {[
-                  ["01", "Import & reconcile", "Stage source data and resolve conflicts before anything is written."],
-                  ["02", "Organize lots", "Assign work packages and split quantities while preserving traceability."],
-                  ["03", "Track production", "Advance released lots through controlled shop stations."],
-                  ["04", "Move to the field", "Record shipping, delivery, and erection with an immutable history."],
-                ].map(([step, title, description]) => (
-                  <div key={step} className="piece-register-workflow__step">
-                    <div className="piece-register-workflow__number">{step}</div>
-                    <div>
-                      <strong>{title}</strong>
-                      <p>{description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <>
-                <div className="piece-register-overview__status">
-                  <CheckCircle2 size={18} />
-                  <div>
-                    <strong>Register loaded</strong>
-                    <p>Use the lifecycle and exception controls above to move directly into focused piece work.</p>
-                  </div>
-                </div>
-                <div className="piece-register-summary">
-                  <DecisionPanel title="Work-package readiness">
-                    {overviewSnapshotQuery.isLoading ? (
-                      <p className="cmd-row__meta">Loading work-package readiness…</p>
-                    ) : overviewSnapshotQuery.error ? (
-                      <div className="piece-operation-state is-error">
-                        <span>Work-package readiness could not be loaded.</span>
-                        <button
-                          type="button"
-                          className="cmd-btn cmd-btn--secondary"
-                          onClick={() => void overviewSnapshotQuery.refetch()}
-                        >
-                          Try again
-                        </button>
-                      </div>
-                    ) : overviewWorkPackages.length === 0 ? (
-                      <p className="piece-command-empty">No work packages are in this project.</p>
-                    ) : (
-                      overviewWorkPackages.map((workPackage) => (
-                        <div key={workPackage.workPackageId} className="cmd-row">
-                          <div>
-                            <strong>
-                              {workPackage.source?.wp_number ||
-                                workPackage.source?.name ||
-                                workPackage.workPackageId}
-                            </strong>
-                            <div className="cmd-row__meta">
-                              {workPackageStatusLabel(workPackage.derivedStatus)}
-                              {" · "}
-                              {workPackage.pieceCount.toLocaleString()} pieces
-                              {" · "}
-                              {workPackage.knownTons.toFixed(2)} known tons
-                            </div>
-                          </div>
-                          <span className="cmd-row__num">
-                            {workPackage.earnedFabricationPercent == null
-                              ? "Weights needed"
-                              : `${workPackage.earnedFabricationPercent.toFixed(1)}% shop earned`}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </DecisionPanel>
-
-                  <DecisionPanel title="Upcoming shipments">
-                    {overviewSnapshotQuery.isLoading ? (
-                      <p className="cmd-row__meta">Loading planned shipments…</p>
-                    ) : overviewSnapshotQuery.error ? (
-                      <p className="piece-command-empty">Planned shipments are unavailable.</p>
-                    ) : upcomingShipments.length === 0 ? (
-                      <div className="piece-command-empty piece-register-overview__empty-action">
-                        <p>No planned ship dates recorded.</p>
-                        <button
-                          type="button"
-                          className="cmd-btn cmd-btn--secondary"
-                          onClick={() => setActiveView("logistics")}
-                        >
-                          Open Logistics
-                        </button>
-                      </div>
-                    ) : (
-                      upcomingShipments.map((workPackage) => (
-                        <div key={workPackage.workPackageId} className="cmd-row">
-                          <strong>
-                            {workPackage.source?.wp_number ||
-                              workPackage.source?.name ||
-                              workPackage.workPackageId}
-                          </strong>
-                          <span className="cmd-row__num">
-                            {formatPlannedShipDate(workPackage.plannedShipDate!)}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </DecisionPanel>
-                </div>
-              </>
-            )}
-          </section>
+          <PieceRegisterOverview
+            displayRowCount={displayRows.length}
+            overviewQueryState={{
+              isLoading: overviewSnapshotQuery.isLoading,
+              error: overviewSnapshotQuery.error,
+              refetch: () => overviewSnapshotQuery.refetch(),
+            }}
+            overviewWorkPackages={overviewWorkPackages}
+            upcomingShipments={upcomingShipments}
+            onOpenImport={() => setActiveView("import")}
+            onOpenRegister={() => setActiveView("register")}
+            onOpenLogistics={() => setActiveView("logistics")}
+          />
         )}
 
         {activeView === "register" && (

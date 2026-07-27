@@ -4,7 +4,7 @@ import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../components/shared/ProjectContext";
 import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { toast } from "sonner";
-import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
+import { wpBudgetHoursForResource } from "@/lib/wpHoursForResource";
 import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
 import {
   addDays, snapToMonday, fmt,
@@ -30,6 +30,8 @@ import {
   computeTodayOffset,
   isShopWorkPackage,
   toIsoDate,
+  buildScheduleSummaryCards,
+  buildResourceSidebarGroups,
 } from "./resourceScheduling/resourceSchedulingHelpers";
 import CapacityView from "./resourceScheduling/CapacityView";
 import NewResourceDialog from "./resourceScheduling/NewResourceDialog";
@@ -851,51 +853,25 @@ export default function ResourceScheduling() {
         padding: "8px 16px", borderBottom: "1px solid var(--divider)",
         background: "var(--bg-page)", flexShrink: 0,
       }}>
-        {(() => {
-          // Phase-aware totals: each WP contributes only its phase-relevant
-          // hours bucket, so shop + field WPs don't double-count at the
-          // portfolio stat.
-          const totalBudgetHrs = filteredWorkPackages.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-          const totalActualHrs = filteredWorkPackages.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
-          const totalShopBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0), 0);
-          const totalShopActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0), 0);
-          const totalFieldBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_budget) || 0), 0);
-          const totalFieldActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_actual) || 0), 0);
-          const assignedWPCount = scheduledWps.filter(wp => wp.crew).length;
-          const unassignedCount = filteredWorkPackages.filter(wp => !wp.crew).length;
-          // Count how many top-level resources are over-allocated. Over-
-          // alloc = assigned WP budget > effective capacity (rollup from
-          // crew members when applicable). Uses phase-aware hour bucketing
-          // so a field crew isn't charged for a WP's shop hours and vice
-          // versa.
-          const overAllocatedResources = topLevelResources.filter(res => {
-            const resWPs = scheduledWps.filter(wp => wp.crew === res.name);
-            const resBudget = resWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-            const effCap = effectiveCapacityById[res.id] || 0;
-            return effCap > 0 && resBudget > effCap;
-          }).length;
-          return [
-            { label: "TOTAL ESTIMATED", value: totalBudgetHrs.toLocaleString() + "h", color: "var(--accent)" },
-            { label: "TOTAL ACTUAL", value: totalActualHrs.toLocaleString() + "h", color: totalActualHrs > totalBudgetHrs ? "var(--status-error)" : "var(--status-success)" },
-            { label: "SHOP HRS", value: `${totalShopActual.toLocaleString()} / ${totalShopBudget.toLocaleString()}`, color: totalShopActual > totalShopBudget ? "var(--status-error)" : "var(--text-secondary)" },
-            { label: "FIELD HRS", value: `${totalFieldActual.toLocaleString()} / ${totalFieldBudget.toLocaleString()}`, color: totalFieldActual > totalFieldBudget ? "var(--status-error)" : "var(--text-secondary)" },
-            { label: "ASSIGNED / TOTAL", value: `${assignedWPCount} / ${filteredWorkPackages.length} WPs`, color: unassignedCount > 0 ? "var(--status-warning)" : "var(--status-success)" },
-            { label: "OVER-ALLOCATED", value: overAllocatedResources, color: overAllocatedResources > 0 ? "var(--status-error)" : "var(--status-success)" },
-          ].map(({ label, value, color }) => {
-            const isOverAlloc = label === "OVER-ALLOCATED" && (value as number) > 0;
-            return (
-              <div key={label} style={{
-                padding: "6px 10px", background: "var(--hover-bg)", borderRadius: 6,
-                border: isOverAlloc ? "1px solid rgba(239,68,68,0.35)" : "1px solid var(--hover-bg)",
-                animation: isOverAlloc ? "rsOverAllocPulse 2s ease-in-out infinite" : undefined,
-                transition: "border-color 0.2s",
-              }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color }}>{value}</div>
-              </div>
-            );
-          });
-        })()}
+        {buildScheduleSummaryCards({
+          filteredWorkPackages,
+          scheduledWps,
+          topLevelResources,
+          effectiveCapacityById,
+        }).map(({ label, value, color }) => {
+          const isOverAlloc = label === "OVER-ALLOCATED" && (value as number) > 0;
+          return (
+            <div key={label} style={{
+              padding: "6px 10px", background: "var(--hover-bg)", borderRadius: 6,
+              border: isOverAlloc ? "1px solid rgba(239,68,68,0.35)" : "1px solid var(--hover-bg)",
+              animation: isOverAlloc ? "rsOverAllocPulse 2s ease-in-out infinite" : undefined,
+              transition: "border-color 0.2s",
+            }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color }}>{value}</div>
+            </div>
+          );
+        })}
       </div>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
@@ -926,12 +902,14 @@ export default function ResourceScheduling() {
             RESOURCES
           </div>
 
-          {["Person", "Crew", "Labor", "Equipment", "Subcontractor", "Material", "Bay"].map(type => {
-            // Only show top-level resources in the capacity stack - members
-            // are rolled up into their crew's effective capacity.
-            const typeResources = topLevelResources.filter(r => (r.resource_type || "Person") === type);
-            if (typeResources.length === 0) return null;
-            return (
+          {buildResourceSidebarGroups({
+            topLevelResources,
+            scheduledWps,
+            membersByParentId,
+            effectiveCapacityById,
+            extractSkills: extractSkillsRS,
+            getRowCapacityBg,
+          }).map(({ type, resources: typeResources }) => (
               <div key={type}>
                 <div style={{
                   fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
@@ -940,40 +918,28 @@ export default function ResourceScheduling() {
                 }}>
                   {type} ({typeResources.length})
                 </div>
-                {typeResources.map(res => {
-                  const assignedWPs = scheduledWps.filter(wp => wp.crew === res.name);
-                  const resBudgetHrs = assignedWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-                  const resActualHrs = assignedWPs.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
-                  const resBurnPct = resBudgetHrs > 0 ? Math.round((resActualHrs / resBudgetHrs) * 100) : 0;
-                  const isOverBudget = resActualHrs > resBudgetHrs && resBudgetHrs > 0;
-                  // Effective capacity = own + sum of direct members' capacities
-                  const resBudgetFromEntity = effectiveCapacityById[res.id] || 0;
-                  const isOverAllocated = resBudgetFromEntity > 0 && resBudgetHrs > resBudgetFromEntity;
-                  const resSkills = extractSkillsRS(res);
-                  const memberCount = (membersByParentId[res.id] || []).length;
-                  const heatBg = getRowCapacityBg(resBurnPct, isOverAllocated);
-                  return (
+                {typeResources.map((res) => (
                     <div key={res.id} style={{
-                      background: isOverAllocated ? "rgba(239,68,68,0.06)" : heatBg !== "transparent" ? heatBg : "var(--bg-surface-low)",
-                      border: isOverAllocated ? "1px solid rgba(239,68,68,0.20)" : "1px solid var(--divider)",
+                      background: res.isOverAllocated ? "rgba(239,68,68,0.06)" : res.heatBg !== "transparent" ? res.heatBg : "var(--bg-surface-low)",
+                      border: res.isOverAllocated ? "1px solid rgba(239,68,68,0.20)" : "1px solid var(--divider)",
                       borderRadius: 8, padding: 8, marginBottom: 8,
                       transition: "background 0.2s, border-color 0.2s",
                     }}>
                       <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 600, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
                         {res.name}
-                        {memberCount > 0 && (
+                        {res.memberCount > 0 && (
                           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em" }}>
-                            · {memberCount} MEMBER{memberCount === 1 ? "" : "S"}
+                            · {res.memberCount} MEMBER{res.memberCount === 1 ? "" : "S"}
                           </span>
                         )}
                       </div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-                        {res.role || "\u2014"}
+                        {res.role}
                       </div>
                       {/* Skill tag badges */}
-                      {resSkills.length > 0 && (
+                      {res.skills.length > 0 && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
-                          {resSkills.map((sk, si) => (
+                          {res.skills.map((sk, si) => (
                             <span key={si} style={{
                               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
                               color: "var(--text-secondary)", background: "var(--hover-bg)",
@@ -983,26 +949,24 @@ export default function ResourceScheduling() {
                           ))}
                         </div>
                       )}
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, marginTop: 4, color: isOverBudget ? "var(--status-error)" : "var(--text-muted)", letterSpacing: "0.06em" }}>
-                        {resBudgetHrs}h bud {"\u00B7"} {resActualHrs}h act {"\u00B7"} {resBurnPct}%
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, marginTop: 4, color: res.isOverBudget ? "var(--status-error)" : "var(--text-muted)", letterSpacing: "0.06em" }}>
+                        {res.budgetHours}h bud {"\u00B7"} {res.actualHours}h act {"\u00B7"} {res.burnPct}%
                       </div>
                       <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--border-default)", marginTop: 3 }}>
-                        <div style={{ width: `${Math.min(100, resBurnPct)}%`, height: "100%", borderRadius: 2, background: resBurnPct > 100 ? "var(--status-error)" : resBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
+                        <div style={{ width: `${Math.min(100, res.burnPct)}%`, height: "100%", borderRadius: 2, background: res.burnPct > 100 ? "var(--status-error)" : res.burnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
                       </div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
-                        {assignedWPs.length} WPs {"\u00B7"} {assignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0)}T
+                        {res.assignedWpCount} WPs {"\u00B7"} {res.tonnage}T
                       </div>
-                      {isOverAllocated && (
+                      {res.isOverAllocated && (
                         <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "2px 6px", marginTop: 4, letterSpacing: "0.08em" }}>
-                        {"\u26A0"} OVER-ALLOC ({resBudgetHrs}h / {resBudgetFromEntity}h cap)
+                        {"\u26A0"} OVER-ALLOC ({res.budgetHours}h / {res.capacityHours}h cap)
                         </div>
                       )}
                     </div>
-                  );
-                })}
+                  ))}
               </div>
-            );
-          })}
+            ))}
 
           <UnscheduledTray
             unscheduledWps={unscheduledWps}
