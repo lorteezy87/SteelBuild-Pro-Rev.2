@@ -403,7 +403,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
 
   const statusBtnStyle = (s) => ({
     background: formData.status === s ? "var(--accent)" : "var(--bg-surface)",
-    color: formData.status === s ? "white" : "var(--text-muted)",
+    color: formData.status === s ? "var(--on-accent)" : "var(--text-muted)",
     border: `1px solid ${formData.status === s ? "var(--accent)" : "var(--border-default)"}`,
     borderRadius: 6, padding: "4px 10px", fontFamily: "var(--font-mono)",
     fontSize: 8, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
@@ -418,8 +418,8 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   const duplicateMatches = findDuplicateRfis(formData, existingRfis);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={trapRef} className="sbd-card-strong" style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", maxWidth: 780, width: "96%", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.8)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 65%, transparent)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={trapRef} className="sbd-card-strong" style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", maxWidth: 780, width: "96%", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px color-mix(in srgb, var(--bg-base) 80%, transparent)" }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 24px 12px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", flexShrink: 0 }}>
           <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.10em" }}>{title}</h2>
@@ -469,7 +469,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                   style={iStyle}
                   value={formData.rfi_number || ""}
                   onChange={(e) => set("rfi_number", e.target.value)}
-                  placeholder="RFI #001"
+                  placeholder="RFI 001"
                 />
               ) : (
                 <input
@@ -774,7 +774,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
           <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Cancel
           </button>
-          <button type="submit" form="rfi-form" disabled={isSaving} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.6 : 1 }}>
+          <button type="submit" form="rfi-form" disabled={isSaving} style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.6 : 1 }}>
             {isSaving ? "Saving..." : rfi ? "Update RFI" : "Submit RFI"}
           </button>
         </div>
@@ -880,7 +880,7 @@ const darkSelectMenuStyle = {
   background: "var(--bg-surface-secondary)",
   border: "1px solid color-mix(in srgb, var(--accent) 32%, var(--border-default))",
   borderRadius: 10,
-  boxShadow: "0 18px 46px rgba(0,0,0,0.74), inset 0 1px 0 rgba(255,255,255,0.06)",
+  boxShadow: "0 18px 46px color-mix(in srgb, var(--bg-base) 74%, transparent), inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent)",
 };
 
 const darkSelectOptionStyle = (active) => ({
@@ -905,7 +905,7 @@ const attachmentDropStyle = {
   padding: 14,
   border: "1px dashed color-mix(in srgb, var(--accent) 45%, var(--border-default))",
   borderRadius: 12,
-  background: "linear-gradient(135deg, rgba(86,176,255,0.08), rgba(255,255,255,0.025))",
+  background: "linear-gradient(135deg, var(--info-muted), var(--bg-surface-low))",
 };
 
 const uploadButtonStyle = {
@@ -931,13 +931,13 @@ const attachmentRowStyle = {
   padding: "9px 10px",
   border: "1px solid var(--border-default)",
   borderRadius: 9,
-  background: "rgba(255,255,255,0.035)",
+  background: "var(--hover-bg)",
 };
 
 const attachmentActionStyle = {
   border: "1px solid var(--border-default)",
   borderRadius: 7,
-  background: "rgba(255,255,255,0.04)",
+  background: "var(--bg-hover)",
   color: "var(--accent)",
   padding: "5px 8px",
   fontFamily: "var(--font-mono)",

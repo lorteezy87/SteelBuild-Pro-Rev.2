@@ -3,16 +3,16 @@ import { BicPill } from "@/components/design-system";
 import { AGENDA_GROUPS } from "@/lib/commandCenter/rfiAgenda";
 
 const GROUP_ACCENT = {
-  Overdue: "rgb(239,68,68)",
-  Blocking: "rgb(245,158,11)",
-  "Due Soon": "rgb(234,179,8)",
-  "Awaiting Response": "rgb(96,165,250)",
+  Overdue: "var(--status-error)",
+  Blocking: "var(--status-warning)",
+  "Due Soon": "var(--status-warning)",
+  "Awaiting Response": "var(--status-info)",
 };
 
 const PRIORITY_COLOR = {
-  Critical: "rgb(239,68,68)",
-  High: "rgb(245,158,11)",
-  Medium: "rgb(96,165,250)",
+  Critical: "var(--status-error)",
+  High: "var(--status-warning)",
+  Medium: "var(--status-info)",
   Low: "var(--text-muted)",
 };
 

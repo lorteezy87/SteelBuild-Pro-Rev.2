@@ -25,17 +25,17 @@ import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 // Status → color palette matching STATUS_CFG in Submittals.jsx so the
 // timeline chips feel like siblings of the table badges.
 const ROUND_STATUS_COLORS = {
-  "Draft":               { color: "#64748B", bg: "rgba(100,116,139,0.16)" },
-  "Submitted":           { color: "#2563EB", bg: "rgba(37,99,235,0.18)"   },
-  "Under Review":        { color: "#0D9488", bg: "rgba(13,148,136,0.18)"  },
-  "Approved":            { color: "#10B981", bg: "rgba(16,185,129,0.18)"  },
-  "Approved as Noted":   { color: "#84CC16", bg: "rgba(132,204,22,0.18)"  },
-  "Revise and Resubmit": { color: "#F97316", bg: "rgba(249,115,22,0.18)"  },
-  "Rejected":            { color: "#DC2626", bg: "rgba(220,38,38,0.18)"   },
-  "Released for Fabrication": { color: "#0EA5E9", bg: "rgba(14,165,233,0.18)" },
-  "Void":                { color: "#94A3B8", bg: "rgba(148,163,184,0.14)" },
+  "Draft":               { color: "var(--text-muted)", bg: "color-mix(in srgb, var(--text-muted) 16%, transparent)" },
+  "Submitted":           { color: "var(--status-info)", bg: "var(--info-muted)"   },
+  "Under Review":        { color: "var(--accent)", bg: "var(--accent-muted)"  },
+  "Approved":            { color: "var(--status-success)", bg: "var(--success-muted)"  },
+  "Approved as Noted":   { color: "var(--status-success-bright)", bg: "color-mix(in srgb, var(--status-success-bright) 18%, transparent)"  },
+  "Revise and Resubmit": { color: "var(--status-review)", bg: "var(--status-review-muted)"  },
+  "Rejected":            { color: "var(--status-error)", bg: "var(--danger-muted)"   },
+  "Released for Fabrication": { color: "var(--status-info)", bg: "var(--info-muted)" },
+  "Void":                { color: "var(--text-muted)", bg: "color-mix(in srgb, var(--text-muted) 14%, transparent)" },
 };
-const DEFAULT_COLOR = { color: "#64748B", bg: "rgba(100,116,139,0.16)" };
+const DEFAULT_COLOR = { color: "var(--text-muted)", bg: "color-mix(in srgb, var(--text-muted) 16%, transparent)" };
 
 function daysBetween(isoA, isoB) {
   if (!isoA || !isoB) return null;

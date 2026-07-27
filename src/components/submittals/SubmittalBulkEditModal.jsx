@@ -27,23 +27,23 @@ const BIC_CHOICES = [
 const TYPES = ["Shop Drawing", "Product Data", "Sample", "Mock-up", "Calculation", "Other"];
 
 const modalSurfaceStyle = {
-  background: "linear-gradient(180deg, rgba(11,16,24,0.98) 0%, rgba(7,10,16,0.99) 100%)",
-  border: "1px solid rgba(120, 138, 162, 0.22)",
+  background: "linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-surface-low) 100%)",
+  border: "1px solid var(--border-default)",
   borderRadius: 16,
-  boxShadow: "0 32px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04) inset",
-  color: "rgba(235,241,250,0.96)",
+  boxShadow: "0 32px 80px color-mix(in srgb, var(--bg-base) 55%, transparent), 0 0 0 1px var(--bg-hover) inset",
+  color: "var(--text-primary)",
 };
 
 const controlSurfaceStyle = {
   width: "100%",
   padding: "9px 12px",
   fontSize: 12,
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(120, 138, 162, 0.22)",
+  background: "var(--bg-hover)",
+  border: "1px solid var(--border-default)",
   borderRadius: 8,
-  color: "rgba(235,241,250,0.96)",
+  color: "var(--text-primary)",
   fontFamily: "var(--font-body)",
-  boxShadow: "0 1px 0 rgba(255,255,255,0.03) inset",
+  boxShadow: "0 1px 0 var(--hover-bg) inset",
   colorScheme: "dark",
 };
 
@@ -99,7 +99,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(2,6,23,0.72)",
+        background: "color-mix(in srgb, var(--bg-base) 72%, transparent)",
         backdropFilter: "blur(10px)",
         zIndex: 1000,
         display: "flex",
@@ -119,7 +119,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
           ...modalSurfaceStyle,
         }}
       >
-        <div style={{ padding: "18px 20px 16px", borderBottom: "1px solid rgba(120, 138, 162, 0.18)" }}>
+        <div style={{ padding: "18px 20px 16px", borderBottom: "1px solid var(--divider)" }}>
           <div
             style={{
               fontFamily: "var(--font-mono)",
@@ -137,7 +137,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
               fontFamily: "var(--font-display)",
               fontSize: 17,
               fontWeight: 800,
-              color: "rgba(245,248,252,0.98)",
+              color: "var(--text-primary)",
               marginTop: 4,
             }}
           >
@@ -147,7 +147,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 11,
-              color: "rgba(176,190,210,0.82)",
+              color: "var(--text-secondary)",
               marginTop: 6,
             }}
           >
@@ -197,7 +197,7 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
                   gap: 6,
                   fontFamily: "var(--font-mono)",
                   fontSize: 9,
-                  color: "rgba(176,190,210,0.82)",
+                  color: "var(--text-secondary)",
                   cursor: "pointer",
                   letterSpacing: "0.08em",
                 }}
@@ -229,11 +229,11 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
         <div
           style={{
             padding: "14px 20px",
-            borderTop: "1px solid rgba(120, 138, 162, 0.18)",
+            borderTop: "1px solid var(--divider)",
             display: "flex",
             justifyContent: "flex-end",
             gap: 10,
-            background: "rgba(255,255,255,0.03)",
+            background: "var(--hover-bg)",
           }}
         >
           <button
@@ -241,10 +241,10 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
             disabled={busy}
             style={{
               padding: "9px 14px",
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid rgba(120, 138, 162, 0.22)",
+              background: "var(--bg-surface-low)",
+              border: "1px solid var(--border-default)",
               borderRadius: 8,
-              color: "rgba(214,223,235,0.9)",
+              color: "var(--text-primary)",
               cursor: "pointer",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
@@ -259,12 +259,12 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
             disabled={busy}
             style={{
               padding: "9px 16px",
-              background: "linear-gradient(135deg, rgba(86,176,255,0.98) 0%, rgba(38,134,233,0.98) 100%)",
-              color: "#04111f",
-              border: "1px solid rgba(86,176,255,0.38)",
+              background: "linear-gradient(135deg, var(--status-info) 0%, var(--status-info) 100%)",
+              color: "var(--on-accent)",
+              border: "1px solid var(--info-border)",
               borderRadius: 8,
               cursor: "pointer",
-              boxShadow: "0 10px 24px rgba(17,113,190,0.28)",
+              boxShadow: "0 10px 24px color-mix(in srgb, var(--status-info) 28%, transparent)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               fontWeight: 700,
@@ -287,7 +287,7 @@ function Field({ label, children }) {
           fontFamily: "var(--font-mono)",
           fontSize: 8,
           fontWeight: 700,
-          color: "rgba(176,190,210,0.76)",
+          color: "var(--text-muted)",
           letterSpacing: "0.12em",
           textTransform: "uppercase",
           marginBottom: 8,
@@ -314,9 +314,9 @@ function Pills({ options, value, onChange }) {
             style={{
               padding: "5px 10px",
               borderRadius: 999,
-              border: active ? "1px solid rgba(86,176,255,0.45)" : "1px solid rgba(120, 138, 162, 0.2)",
-              background: active ? "rgba(86,176,255,0.16)" : "rgba(255,255,255,0.02)",
-              color: active ? "rgba(144,205,255,0.98)" : "rgba(214,223,235,0.86)",
+              border: active ? "1px solid var(--info-border)" : "1px solid var(--border-default)",
+              background: active ? "var(--info-muted)" : "var(--bg-surface-low)",
+              color: active ? "var(--status-info)" : "var(--text-secondary)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               fontWeight: 700,

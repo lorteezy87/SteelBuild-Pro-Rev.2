@@ -25,7 +25,7 @@ export default function BulkImportModal({
   const lines = text.trim() ? text.trim().split("\n").filter(Boolean).length : 0;
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}
+      style={{ position: "fixed", inset: 0, background: "color-mix(in srgb, var(--bg-base) 70%, transparent)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{ width: 560, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-strong)", borderRadius: 4, overflow: "hidden" }}>

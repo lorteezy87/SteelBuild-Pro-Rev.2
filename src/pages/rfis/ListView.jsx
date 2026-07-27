@@ -108,10 +108,10 @@ function Row({ r, isSelected, isChecked, onSelect, onToggleSelect, onToggleStatu
   const due = r.date_required ? new Date(r.date_required + "T00:00:00") : null;
   const diff = due ? Math.ceil((due - new Date()) / 86400000) : null;
   const overdueDays = overdue && diff != null ? Math.abs(diff) : 0;
-  const rowBg = overdue ? "rgba(255,61,61,0.12)" : "transparent";
+  const rowBg = overdue ? "var(--danger-muted)" : "transparent";
   const leftBorder =
     overdue && r.priority === "Critical" ? "3px solid var(--status-error)"
-    : overdue ? "3px solid rgba(255,61,61,0.7)"
+    : overdue ? "3px solid color-mix(in srgb, var(--status-error) 70%, transparent)"
     : r.priority === "Critical" ? "3px solid var(--status-warning)"
     : "3px solid transparent";
   const urgencyClass = overdue && overdueDays >= 7 ? "urgency-danger" : overdue && overdueDays >= 1 ? "urgency-warn" : "";
@@ -190,8 +190,8 @@ function Row({ r, isSelected, isChecked, onSelect, onToggleSelect, onToggleStatu
           onClick={(e) => { e.stopPropagation(); onDelete(r); }}
           style={{
             ...actionBtn,
-            border: "1px solid rgba(255,61,61,0.25)",
-            background: "rgba(255,61,61,0.08)",
+            border: "1px solid var(--danger-border)",
+            background: "var(--danger-muted)",
             color: "var(--status-error)",
           }}
         >

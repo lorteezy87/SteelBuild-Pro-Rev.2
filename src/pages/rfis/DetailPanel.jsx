@@ -232,7 +232,7 @@ export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdi
             </button>
             <button
               onClick={onDelete}
-              style={{ background: "var(--bg-surface)", border: "1px solid rgba(255,61,61,0.25)", color: "var(--status-error)", borderRadius: 4, padding: "10px 12px", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer" }}
+              style={{ background: "var(--bg-surface)", border: "1px solid var(--danger-border)", color: "var(--status-error)", borderRadius: 4, padding: "10px 12px", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer" }}
             >
               Delete
             </button>

@@ -477,7 +477,7 @@ function ProcessCard({ item, onOpenTab }) {
           : surfaceLow,
         color: textPrimary,
         cursor: "pointer",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.10)",
+        boxShadow: "var(--shadow-card)",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>

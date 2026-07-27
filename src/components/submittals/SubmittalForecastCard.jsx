@@ -13,9 +13,9 @@ import { formatDate } from "../shared/formatters";
  */
 
 const RISK_CFG = {
-  low:    { color: "#10B981", bg: "rgba(16,185,129,0.10)", border: "rgba(16,185,129,0.45)" },
-  medium: { color: "#F59E0B", bg: "rgba(245,158,11,0.10)", border: "rgba(245,158,11,0.45)" },
-  high:   { color: "#DC2626", bg: "rgba(220,38,38,0.10)", border: "rgba(220,38,38,0.45)" },
+  low:    { color: "var(--status-success)", bg: "var(--success-muted)", border: "var(--success-border)" },
+  medium: { color: "var(--status-warning)", bg: "var(--warning-muted)", border: "var(--warning-border)" },
+  high:   { color: "var(--status-error)", bg: "var(--danger-muted)", border: "var(--danger-border)" },
 };
 
 function Metric({ label, value, accent }) {

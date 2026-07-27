@@ -15,11 +15,11 @@ const STATUS_COLORS = {
 };
 
 const BIC_COLORS = {
-  Contractor: { bg: "rgba(0,229,255,0.06)", text: "var(--accent)" },
-  GC: { bg: "rgba(13,148,136,0.12)", text: "#0D9488" },
-  Engineer: { bg: "rgba(245,158,11,0.12)", text: "var(--status-warning)" },
-  Architect: { bg: "rgba(34,197,94,0.12)", text: "var(--status-success)" },
-  Owner: { bg: "rgba(239,68,68,0.12)", text: "var(--status-error)" },
+  Contractor: { bg: "var(--info-muted)", text: "var(--accent)" },
+  GC: { bg: "var(--accent-muted)", text: "var(--accent)" },
+  Engineer: { bg: "var(--warning-muted)", text: "var(--status-warning)" },
+  Architect: { bg: "var(--success-muted)", text: "var(--status-success)" },
+  Owner: { bg: "var(--danger-muted)", text: "var(--status-error)" },
 };
 
 const daysOpen = (rfi) => {
@@ -208,7 +208,7 @@ export default function RFIList({
               background: isSelected
                 ? "var(--accent-muted)"
                 : isCritical
-                ? "rgba(239,68,68,0.03)"
+                ? "color-mix(in srgb, var(--status-error) 3%, transparent)"
                 : "transparent",
               opacity: isClosed ? 0.6 : 1,
               cursor: "pointer",
@@ -223,7 +223,7 @@ export default function RFIList({
               e.currentTarget.style.background = isSelected
                 ? "var(--accent-muted)"
                 : isCritical
-                ? "rgba(239,68,68,0.03)"
+                ? "color-mix(in srgb, var(--status-error) 3%, transparent)"
                 : "transparent";
             }}
           >

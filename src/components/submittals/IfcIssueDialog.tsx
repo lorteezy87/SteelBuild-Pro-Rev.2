@@ -115,7 +115,7 @@ export default function IfcIssueDialog({
               padding: "8px 10px",
               border: "1px solid var(--status-warning)",
               borderRadius: 2,
-              background: "rgba(245,158,11,0.08)",
+              background: "var(--warning-muted)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               color: "var(--status-warning)",
@@ -140,7 +140,7 @@ export default function IfcIssueDialog({
                   padding: "10px 12px",
                   border: "1px solid var(--divider)",
                   borderRadius: 2,
-                  background: checked ? "rgba(255,107,26,0.08)" : "var(--bg-surface, transparent)",
+                  background: checked ? "var(--status-review-muted)" : "var(--bg-surface, transparent)",
                   cursor: "pointer",
                 }}
               >

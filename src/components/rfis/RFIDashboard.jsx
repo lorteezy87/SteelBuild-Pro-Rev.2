@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 
 const BIC_COLORS_MAP = {
   Contractor: "var(--accent)",
-  GC: "#0D9488",
+  GC: "var(--accent)",
   Engineer: "var(--status-warning)",
   Architect: "var(--status-success)",
   Owner: "var(--status-error)",
@@ -16,9 +16,9 @@ const CLOSED_STATUSES = ["Answered", "Closed"];
 const StatCard = ({ label, value, color, sublabel }) => {
   const colors = {
     teal:   { bg: "var(--info-muted)",       border: "var(--info-border)",       text: "var(--accent)" },
-    red:    { bg: "var(--danger-muted)",     border: "rgba(255,23,68,0.25)",     text: "var(--status-error)" },
-    amber:  { bg: "var(--warning-muted)",    border: "rgba(255,179,0,0.25)",     text: "var(--status-warning)" },
-    green:  { bg: "var(--success-muted)",    border: "rgba(0,230,118,0.25)",     text: "#00E676" },
+    red:    { bg: "var(--danger-muted)",     border: "var(--danger-border)",     text: "var(--status-error)" },
+    amber:  { bg: "var(--warning-muted)",    border: "var(--warning-border)",     text: "var(--status-warning)" },
+    green:  { bg: "var(--success-muted)",    border: "var(--success-border)",     text: "var(--status-success-bright)" },
     slate:  { bg: "var(--hover-bg)", border: "var(--bg-surface-high)", text: "var(--text-secondary)" },
   };
   const c = colors[color] || colors.slate;
@@ -65,12 +65,12 @@ const MiniRow = ({ rfi, onClick }) => {
           : "3px solid var(--accent)",
         background: overdue
           ? (days > 14 ? "var(--danger-muted)" : "var(--warning-muted)")
-          : "rgba(0,229,255,0.06)",
+          : "var(--info-muted)",
         cursor: "pointer",
         transition: "background 0.15s",
       }}
       onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
-      onMouseLeave={(e) => e.currentTarget.style.background = overdue ? (days > 14 ? "var(--danger-muted)" : "var(--warning-muted)") : "rgba(0,229,255,0.06)"}
+      onMouseLeave={(e) => e.currentTarget.style.background = overdue ? (days > 14 ? "var(--danger-muted)" : "var(--warning-muted)") : "var(--info-muted)"}
     >
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 600, minWidth: 70, flexShrink: 0 }}>{rfi.rfi_number || "—"}</div>
       <div style={{ flex: 1, fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rfi.title}</div>
@@ -144,7 +144,7 @@ export default function RFIDashboard({ rfis = [], onEditRFI }) {
           <span style={{ fontSize: 14 }}>⚑</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: "var(--accent)", textTransform: "uppercase" }}>RFI Summary Dashboard</span>
           {stats.overdueItems.length > 0 && (
-            <span style={{ background: "var(--danger-muted)", border: "1px solid rgba(255,23,68,0.35)", color: "var(--status-error)", borderRadius: 8, padding: "1px 8px", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700 }}>
+            <span style={{ background: "var(--danger-muted)", border: "1px solid var(--danger-border)", color: "var(--status-error)", borderRadius: 8, padding: "1px 8px", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700 }}>
               {stats.overdueItems.length} OVERDUE
             </span>
           )}

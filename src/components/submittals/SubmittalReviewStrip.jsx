@@ -121,7 +121,7 @@ export default function SubmittalReviewStrip({
                   }}
                   title={stage.label}
                 >
-                  <Icon size={13} color="#fff" />
+                  <Icon size={13} color="var(--on-accent)" />
                 </div>
               </React.Fragment>
             );
@@ -398,7 +398,7 @@ export default function SubmittalReviewStrip({
                   gap: 4,
                   padding: "4px 10px",
                   background: "var(--accent)",
-                  color: "#fff",
+                  color: "var(--on-accent)",
                   border: "none",
                   borderRadius: "var(--radius-btn)",
                   fontFamily: "var(--font-mono)",
