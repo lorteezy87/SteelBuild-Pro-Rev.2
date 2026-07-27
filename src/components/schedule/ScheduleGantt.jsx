@@ -12,7 +12,7 @@ import {
   GANTT_LEFT_VAR,
   GANTT_PANEL_STRONG_VAR,
   GANTT_PANEL_VAR,
-  GANTT_PHASE_HEX,
+  GANTT_PHASE_VAR,
   GANTT_ROW_ALT_VAR,
   GANTT_ROW_HOVER_VAR,
   GANTT_STATUS_HEX,
@@ -59,7 +59,7 @@ import { useTaskBarDrag } from "./useTaskBarDrag";
 import { useTaskRowDnD } from "./useTaskRowDnD";
 
 const DELIVERY_STATUS_DOT = {
-  "Scheduled":  GANTT_PHASE_HEX.Procurement,
+  "Scheduled":  GANTT_PHASE_VAR.Procurement,
   "In Transit": GANTT_STATUS_HEX.inProgress,
   "Delivered":  GANTT_STATUS_HEX.complete,
   "Partial":    GANTT_STATUS_HEX.delayed,
@@ -904,9 +904,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             onClick={() => setShowDeliveries(v => !v)}
             style={{
               padding: "4px 10px", borderRadius: 4,
-              border: showDeliveries ? `1px solid ${GANTT_PHASE_HEX.Delivery}` : "1px solid var(--divider)",
-              background: showDeliveries ? `${GANTT_PHASE_HEX.Delivery}1A` : "transparent",
-              color: showDeliveries ? GANTT_PHASE_HEX.Delivery : "var(--text-muted)",
+              border: showDeliveries ? `1px solid ${GANTT_PHASE_VAR.Delivery}` : "1px solid var(--divider)",
+              background: showDeliveries ? `color-mix(in srgb, ${GANTT_PHASE_VAR.Delivery} 12%, transparent)` : "transparent",
+              color: showDeliveries ? GANTT_PHASE_VAR.Delivery : "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
             }}
@@ -1207,7 +1207,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: phase.color, letterSpacing: "0.10em", background: `${phase.color}20`, border: `1px solid ${phase.color}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>{phase.id}.0</span>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: phase.color, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{phase.label.toUpperCase()}</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: phaseOverdue ? GANTT_STATUS_HEX.delayed : phaseCritical ? GANTT_PHASE_HEX.Procurement : "var(--text-muted)", flexShrink: 0 }}>{phaseMeta}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: phaseOverdue ? GANTT_STATUS_HEX.delayed : phaseCritical ? GANTT_PHASE_VAR.Procurement : "var(--text-muted)", flexShrink: 0 }}>{phaseMeta}</span>
                   </div>
                   <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: phase.color }}>{Math.round(pctComplete)}%</span>
                 </div>
@@ -1216,12 +1216,12 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             // ── Delivery summary row ──
             if (row.type === "delivery-summary") {
               const isOpen = !collapsedDeliveries;
-              const dColor = GANTT_PHASE_HEX.Delivery;
+              const dColor = GANTT_PHASE_VAR.Delivery;
               return (
-                <div key="delivery-summary" onClick={() => setCollapsedDeliveries(v => !v)} style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: "1px solid var(--divider)", background: `${dColor}12`, cursor: "pointer", userSelect: "none" }}>
+                <div key="delivery-summary" onClick={() => setCollapsedDeliveries(v => !v)} style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: "1px solid var(--divider)", background: `color-mix(in srgb, ${dColor} 7%, transparent)`, cursor: "pointer", userSelect: "none" }}>
                   <span style={{ color: dColor, fontSize: 10, transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s", display: "inline-block", lineHeight: 1 }}>▾</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: dColor, letterSpacing: "0.10em", background: `${dColor}20`, border: `1px solid ${dColor}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>🚛</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: dColor, letterSpacing: "0.10em", background: `color-mix(in srgb, ${dColor} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${dColor} 35%, transparent)`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>🚛</span>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: dColor, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>DELIVERIES</span>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0 }}>{row.deliveryCount} items</span>
                   </div>
@@ -1232,7 +1232,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             // ── Delivery item row ──
             if (row.type === "delivery") {
               const d = row.delivery;
-              const dotColor = DELIVERY_STATUS_DOT[d.status] || GANTT_PHASE_HEX.Delivery;
+              const dotColor = DELIVERY_STATUS_DOT[d.status] || GANTT_PHASE_VAR.Delivery;
               const isLate = d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered";
               const label = d.description || d.vendor || "Delivery";
               return (
@@ -1315,7 +1315,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 onDragOver={(e) => onDragOverRow(e, task)}
                 onDrop={(e) => onDropRow(e, task)}
                 onDragEnd={onDragEnd}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: isFocused ? tint(GANTT_STATUS_HEX.inProgress, 14) : leftHovered ? tint(GANTT_STATUS_HEX.inProgress, 7) : critical ? `${GANTT_PHASE_HEX.Procurement}0C` : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: isFocused ? `3px solid ${GANTT_STATUS_HEX.inProgress}` : overdue ? `3px solid ${GANTT_STATUS_HEX.delayed}` : critical ? `3px solid ${GANTT_PHASE_HEX.Procurement}` : "3px solid transparent", boxShadow: dropTarget?.id === task.id && dropTarget.zone === "nest" ? "inset 0 0 0 2px var(--accent)" : isFocused ? `inset 0 0 0 1px ${tint(GANTT_STATUS_HEX.inProgress, 33)}` : "none", opacity: dragId === task.id ? 0.4 : 1, borderTop: dropTarget?.id === task.id && dropTarget.zone === "before" ? "2px solid var(--accent)" : undefined, borderBottomColor: dropTarget?.id === task.id && dropTarget.zone === "after" ? "var(--accent)" : undefined, borderBottomWidth: dropTarget?.id === task.id && dropTarget.zone === "after" ? 2 : undefined }}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: isFocused ? tint(GANTT_STATUS_HEX.inProgress, 14) : leftHovered ? tint(GANTT_STATUS_HEX.inProgress, 7) : critical ? `color-mix(in srgb, ${GANTT_PHASE_VAR.Procurement} 5%, transparent)` : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: isFocused ? `3px solid ${GANTT_STATUS_HEX.inProgress}` : overdue ? `3px solid ${GANTT_STATUS_HEX.delayed}` : critical ? `3px solid ${GANTT_PHASE_VAR.Procurement}` : "3px solid transparent", boxShadow: dropTarget?.id === task.id && dropTarget.zone === "nest" ? "inset 0 0 0 2px var(--accent)" : isFocused ? `inset 0 0 0 1px ${tint(GANTT_STATUS_HEX.inProgress, 33)}` : "none", opacity: dragId === task.id ? 0.4 : 1, borderTop: dropTarget?.id === task.id && dropTarget.zone === "before" ? "2px solid var(--accent)" : undefined, borderBottomColor: dropTarget?.id === task.id && dropTarget.zone === "after" ? "var(--accent)" : undefined, borderBottomWidth: dropTarget?.id === task.id && dropTarget.zone === "after" ? 2 : undefined }}
                 onClick={() => onTaskClick && onTaskClick(task)}
                 onMouseEnter={() => setHoveredRowId(task.id)}
                 onMouseLeave={() => setHoveredRowId(null)}
@@ -1357,7 +1357,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                     {weatherRiskByTask[task.id] && (() => {
                       const hits = weatherRiskByTask[task.id];
                       const worst = hits.reduce((m, h) => (h.severity > m ? h.severity : m), 0);
-                      const color = worst >= 3 ? GANTT_STATUS_HEX.delayed : GANTT_PHASE_HEX.Procurement;
+                      const color = worst >= 3 ? GANTT_STATUS_HEX.delayed : GANTT_PHASE_VAR.Procurement;
                       const label = hits.length === 1 ? hits[0].date.slice(5) : `${hits.length} days`;
                       const tipLines = hits.slice(0, 5).map((h) => `${h.date}: ${h.summary}`);
                       if (hits.length > 5) tipLines.push(`…${hits.length - 5} more`);
@@ -1484,7 +1484,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                   <span
                     className="sbd-num"
                     title={isShifted ? `Stored: ${fmtDate(task.end_date)}\nShifted by predecessors` : undefined}
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: !dispEnd ? GANTT_PHASE_HEX.Procurement : overdue ? GANTT_STATUS_HEX.delayed : isShifted ? GANTT_STATUS_HEX.inProgress : "var(--text-secondary)", fontWeight: !dispEnd ? 700 : 400, textAlign: "center", whiteSpace: "nowrap" }}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: !dispEnd ? GANTT_PHASE_VAR.Procurement : overdue ? GANTT_STATUS_HEX.delayed : isShifted ? GANTT_STATUS_HEX.inProgress : "var(--text-secondary)", fontWeight: !dispEnd ? 700 : 400, textAlign: "center", whiteSpace: "nowrap" }}
                   >
                     {fmtDate(dispEnd)}{isShifted ? "*" : ""}
                   </span>
@@ -1699,14 +1699,14 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                   top += SUM_H;
                   const startPx2 = px(row.start);
                   const w2 = spanPx(row.start, row.end);
-                  const dColor = GANTT_PHASE_HEX.Delivery;
+                  const dColor = GANTT_PHASE_VAR.Delivery;
                   const pct2 = row.pctComplete || 0;
                   return (
-                    <div key="gs-deliveries" style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: SUM_H, background: `${dColor}08`, borderBottom: "1px solid var(--divider)" }}>
+                    <div key="gs-deliveries" style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: SUM_H, background: `color-mix(in srgb, ${dColor} 4%, transparent)`, borderBottom: "1px solid var(--divider)" }}>
                       {/* Summary bar spanning all deliveries */}
                       <div style={{
                         position: "absolute", left: startPx2, width: Math.max(w2, 6), height: 14, top: "50%", transform: "translateY(-50%)",
-                        background: `${dColor}40`, borderRadius: 2, overflow: "hidden",
+                        background: `color-mix(in srgb, ${dColor} 25%, transparent)`, borderRadius: 2, overflow: "hidden",
                       }}>
                         <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(pct2, 100)}%`, background: dColor, borderRadius: 2, transition: "width 0.3s" }} />
                         <div style={{ position: "absolute", left: 0, top: 0, width: 4, height: "100%", background: dColor, borderRadius: "2px 0 0 2px" }} />

@@ -60,7 +60,7 @@ export const avatarStyle = {
   borderRadius: 12,
   display: "grid",
   placeItems: "center",
-  color: "color-mix(in srgb, var(--status-info) 15%, black)",
+  color: "color-mix(in srgb, var(--status-info) 15%, var(--text-primary))",
   background: "linear-gradient(135deg, var(--status-info), color-mix(in srgb, var(--status-info) 70%, white 30%))",
   boxShadow: "0 0 18px color-mix(in srgb, var(--status-info) 40%, transparent)",
   flexShrink: 0,

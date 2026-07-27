@@ -11,7 +11,7 @@ import {
   GANTT_BG_VAR,
   GANTT_GRID_STRONG_VAR,
   GANTT_GRID_VAR,
-  GANTT_PHASE_HEX,
+  GANTT_PHASE_VAR,
   GANTT_STATUS_HEX,
 } from "@/lib/ganttTheme";
 import {
@@ -100,7 +100,7 @@ export function SummaryBar({ phase, leftPx, widthPx, pctComplete }) {
       <div style={{
         position: "absolute", left: 0, top: 0, height: "100%",
         width: `${Math.min(pct, 100)}%`,
-        background: `linear-gradient(180deg, color-mix(in srgb, ${color} 92%, white) 0%, ${color} 60%, color-mix(in srgb, ${color} 88%, black) 100%)`,
+        background: `linear-gradient(180deg, color-mix(in srgb, ${color} 92%, white) 0%, ${color} 60%, color-mix(in srgb, ${color} 88%, var(--bg-void)) 100%)`,
         borderRadius: 4,
         transition: "width 0.3s",
       }} />
@@ -275,7 +275,7 @@ function BarLabel({ name, placement, status }) {
         zIndex: 2,
         fontSize: 9,
         fontWeight: 700,
-        color: status === "Complete" ? "color-mix(in srgb, var(--status-success) 15%, black)" : status === "Delayed" ? "var(--on-accent)" : "color-mix(in srgb, var(--accent) 15%, black)",
+        color: status === "Complete" ? "color-mix(in srgb, var(--status-success) 15%, var(--text-primary))" : status === "Delayed" ? "var(--on-accent)" : "color-mix(in srgb, var(--accent) 15%, var(--text-primary))",
         letterSpacing: "0.01em",
         whiteSpace: "nowrap",
         overflow: "hidden",
@@ -337,7 +337,7 @@ export function TaskBar({ task, leftPx, widthPx }) {
       <div style={shellStyle}>
         <div style={{
           position: "absolute", inset: 0,
-          background: `linear-gradient(180deg, color-mix(in srgb, ${c} 92%, white) 0%, ${c} 55%, color-mix(in srgb, ${c} 86%, black) 100%)`,
+          background: `linear-gradient(180deg, color-mix(in srgb, ${c} 92%, white) 0%, ${c} 55%, color-mix(in srgb, ${c} 86%, var(--bg-void)) 100%)`,
           borderRadius: BAR_RADIUS,
           boxShadow: `0 1px 0 ${GANTT_GRID_VAR} inset, 0 0 0 1px ${GANTT_GRID_STRONG_VAR}`,
           overflow: "hidden",
@@ -363,7 +363,7 @@ export function TaskBar({ task, leftPx, widthPx }) {
           <div style={{
             position: "absolute", left: 0, top: 0, height: "100%",
             width: `${Math.max(0, Math.min(100, pct))}%`,
-            background: `linear-gradient(180deg, color-mix(in srgb, ${GANTT_STATUS_HEX.inProgress} 92%, white) 0%, ${GANTT_STATUS_HEX.inProgress} 55%, color-mix(in srgb, ${GANTT_STATUS_HEX.inProgress} 86%, black) 100%)`,
+            background: `linear-gradient(180deg, color-mix(in srgb, ${GANTT_STATUS_HEX.inProgress} 92%, white) 0%, ${GANTT_STATUS_HEX.inProgress} 55%, color-mix(in srgb, ${GANTT_STATUS_HEX.inProgress} 86%, var(--bg-void)) 100%)`,
             transition: "width 0.3s",
           }} />
         </div>
@@ -494,7 +494,7 @@ export function SubmittalBar({ submittal, leftPx, widthPx }) {
 // ── Delivery bar ─────────────────────────────────────────────────────────
 export function DeliveryBar({ delivery, leftPx, widthPx }) {
   const statusColors = {
-    "Scheduled":   { bg: `${GANTT_PHASE_HEX.Delivery}26`, border: GANTT_PHASE_HEX.Delivery, text: GANTT_PHASE_HEX.Delivery },
+    "Scheduled":   { bg: tint(GANTT_PHASE_VAR.Delivery, 15), border: GANTT_PHASE_VAR.Delivery, text: GANTT_PHASE_VAR.Delivery },
     "In Transit":  { bg: tint(GANTT_STATUS_HEX.inProgress, 15), border: GANTT_STATUS_HEX.inProgress, text: GANTT_STATUS_HEX.inProgress },
     "Delivered":   { bg: tint(GANTT_STATUS_HEX.complete, 15), border: GANTT_STATUS_HEX.complete, text: GANTT_STATUS_HEX.complete },
     "Partial":     { bg: tint(GANTT_STATUS_HEX.delayed, 12), border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },

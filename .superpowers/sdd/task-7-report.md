@@ -23,3 +23,10 @@
 ## Concerns
 - No functional concerns found.
 - Status color constants keep the historical `GANTT_STATUS_HEX` export name for compatibility, but now resolve to token vars.
+
+## Review fix addendum — 2026-07-27
+- Added light-theme `--sbd-gantt-*` counterparts in both `[data-theme="light"]` and `.steelbuild-light`.
+- Replaced `ScheduleGantt.jsx` delivery/critical chrome `GANTT_PHASE_HEX` usage with `GANTT_PHASE_VAR` + `color-mix()`.
+- Replaced `color-mix(... black ...)` in `rivetBriefStyles.js` and `scheduleGanttBars.jsx` with theme-token mixes.
+- Added `ganttThemeReviewFixes.test.ts` to guard the review findings.
+- Verification: `npx vitest run src/components/schedule/__tests__/ganttThemeReviewFixes.test.ts`; `npx vitest run src/components/schedule/__tests__/ganttThemeReviewFixes.test.ts src/components/schedule/__tests__/scheduleGanttHelpers.test.js src/components/schedule/__tests__/rivetBriefHelpers.test.js src/components/schedule/__tests__/rivetBriefEngine.test.js src/lib/__tests__/detailingSchedule.test.js`; `npm run lint`.
