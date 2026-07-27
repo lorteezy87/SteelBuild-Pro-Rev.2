@@ -70,7 +70,7 @@ describe("overviewDerive", () => {
       workPackageId: `wp-${index}`,
       plannedShipDate: `2026-08-${String(10 - index).padStart(2, "0")}`,
       source: undefined,
-      derivedStatus: "Ready" as const,
+      derivedStatus: "Ready for Release" as const,
       earnedFabricationPercent: null,
       lotCount: 0,
       pieceCount: 0,

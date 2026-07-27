@@ -7,17 +7,17 @@ const resolveFileUrl = vi.fn(async () => "https://signed.example/doc.pdf");
 const getDocument = vi.fn();
 
 vi.mock("@/api/supabaseClient", () => ({
-  resolveFileUrl: (...args) => resolveFileUrl(...args),
+  resolveFileUrl: (...args: unknown[]) => resolveFileUrl(...args),
 }));
 
 vi.mock("pdfjs-dist", () => ({
-  getDocument: (...args) => getDocument(...args),
+  getDocument: (...args: unknown[]) => getDocument(...args),
   GlobalWorkerOptions: { workerSrc: "" },
 }));
 
 import { usePdfLoader } from "../usePdfLoader";
 
-function mockDoc(numPages) {
+function mockDoc(numPages: number) {
   return {
     numPages,
     destroy: vi.fn(async () => {}),

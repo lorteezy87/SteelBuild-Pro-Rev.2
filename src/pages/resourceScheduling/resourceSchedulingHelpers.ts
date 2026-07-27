@@ -593,11 +593,6 @@ export type ResourceSidebarRow = {
   heatBg: string;
 };
 
-export type ResourceSidebarGroup = {
-  type: string;
-  resources: ResourceSidebarRow[];
-};
-
 const RESOURCE_SIDEBAR_TYPES = [
   "Person",
   "Crew",
@@ -607,6 +602,11 @@ const RESOURCE_SIDEBAR_TYPES = [
   "Material",
   "Bay",
 ] as const;
+
+export type ResourceSidebarGroup = {
+  type: (typeof RESOURCE_SIDEBAR_TYPES)[number];
+  resources: ResourceSidebarRow[];
+};
 
 /** Capacity-stack rows for the left Resource Scheduling sidebar. */
 export function buildResourceSidebarGroups(opts: {
