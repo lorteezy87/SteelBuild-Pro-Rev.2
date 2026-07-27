@@ -28,9 +28,9 @@
 [data-skin="command"] .piece-register-hero-actions .piece-mode {
   max-width: 360px;
   padding: 9px 12px;
-  border: 1px solid rgba(228, 232, 238, 0.9);
+  border: 1px solid var(--cmd-border);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--cmd-surface);
 }
 
 [data-skin="command"] .piece-mode {
@@ -70,7 +70,7 @@
   overflow: hidden;
   border: 1px solid var(--cmd-border);
   border-radius: 9px;
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
 }
 
 [data-skin="command"] .piece-dashboard-panel__metrics > div {
@@ -181,7 +181,7 @@
   height: 4px;
   overflow: hidden;
   border-radius: 999px;
-  background: #e9edf2;
+  background: var(--cmd-chip-bg);
 }
 
 [data-skin="command"] .piece-lifecycle__track > span {
@@ -386,7 +386,7 @@
 }
 
 [data-skin="command"] .piece-register-nav__item:hover {
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
   color: var(--cmd-text);
 }
 
@@ -426,8 +426,8 @@
   grid-row: 1 / span 2;
   place-items: center;
   border-radius: 8px;
-  background: #fdf3da;
-  color: #7a4e00;
+  background: var(--cmd-icon-wash);
+  color: var(--cmd-warn-text);
   font-family: "IBM Plex Mono", monospace;
   font-size: 12px;
   font-weight: 700;
@@ -570,8 +570,8 @@
 [data-skin="command"] .piece-register-filter .cmd-search:focus-within,
 [data-skin="command"] .piece-control-command input:focus,
 [data-skin="command"] .piece-control-command textarea:focus {
-  border-color: #d69a18;
-  box-shadow: 0 0 0 2px rgba(242, 167, 6, 0.16);
+  border-color: var(--cmd-gold);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cmd-gold) 16%, transparent);
 }
 
 [data-skin="command"] .piece-register-attention-filter {
@@ -616,14 +616,14 @@
 }
 
 [data-skin="command"] .piece-selection-bar {
-  background: #fff9eb;
+  background: var(--cmd-icon-wash);
   color: var(--cmd-text);
   font-size: 12px;
 }
 
 [data-skin="command"] .piece-selection-bar__archive {
-  border-color: #f3c6c2;
-  background: #f9d2ce;
+  border-color: var(--cmd-chip-danger-bg);
+  background: var(--cmd-chip-danger-bg);
   color: var(--cmd-danger-text);
 }
 
@@ -642,7 +642,7 @@
 
 [data-skin="command"] .piece-register-table__table th {
   padding: 8px 10px;
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
   font-size: 10px;
   letter-spacing: 0.045em;
   text-transform: uppercase;
@@ -654,7 +654,7 @@
 }
 
 [data-skin="command"] .piece-register-table__table tbody tr:hover td {
-  background: #fffaf0;
+  background: var(--cmd-icon-wash);
 }
 
 [data-skin="command"] .piece-register-mark,
@@ -697,7 +697,7 @@
 [data-skin="command"] .piece-register-table .cmd-table__empty > svg {
   display: block;
   margin: 0 auto 8px;
-  color: #aeb6c2;
+  color: var(--cmd-text-muted);
 }
 
 [data-skin="command"] .piece-register-table .cmd-table__empty > strong {
@@ -740,11 +740,11 @@
   color: var(--cmd-text);
   --bg-page: var(--cmd-bg);
   --bg-surface: var(--cmd-surface);
-  --bg-surface-low: #f7f9fc;
+  --bg-surface-low: var(--cmd-row-hover);
   --bg-surface-high: var(--cmd-surface);
   --bg-input: var(--cmd-surface);
   --text-primary: var(--cmd-text);
-  --text-secondary: #3f4a57;
+  --text-secondary: var(--cmd-text-muted);
   --text-muted: var(--cmd-text-muted);
   --border: var(--cmd-border);
   --border-default: var(--cmd-border);
@@ -773,8 +773,8 @@
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: #fdf3da;
-  color: #9a6700;
+  background: var(--cmd-icon-wash);
+  color: var(--cmd-warn-text);
 }
 
 [data-skin="command"] .piece-command-form {
@@ -887,7 +887,7 @@
   margin: 0;
   padding: 10px 12px;
   border-left: 3px solid var(--cmd-info);
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
   color: var(--cmd-text);
   font-size: 12px;
 }
@@ -914,7 +914,7 @@
   max-height: 400px;
   overflow-y: auto;
   border-right: 1px solid var(--cmd-border);
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
 }
 
 [data-skin="command"] .piece-import-batch {
@@ -936,7 +936,7 @@
 
 [data-skin="command"] .piece-import-batch.is-selected {
   box-shadow: inset 3px 0 0 var(--cmd-gold);
-  background: #fff8e8;
+  background: var(--cmd-icon-wash);
 }
 
 [data-skin="command"] .piece-import-batch__head {
@@ -1014,7 +1014,7 @@
   justify-content: center;
   border-color: var(--cmd-good);
   background: var(--cmd-good);
-  color: #04331d;
+  color: var(--cmd-pill-good-fg);
 }
 
 [data-skin="command"] .piece-import-results {
@@ -1080,15 +1080,15 @@
 
 .piece-relationship-state[data-skin="command"].is-warning,
 [data-skin="command"] .piece-relationship-state.is-warning {
-  border-color: #f5dca6;
-  background: #fff8e8;
+  border-color: var(--cmd-chip-warn-bg);
+  background: var(--cmd-icon-wash);
   color: var(--cmd-warn-text);
 }
 
 .piece-relationship-state[data-skin="command"].is-error,
 [data-skin="command"] .piece-relationship-state.is-error {
-  border-color: #f3c6c2;
-  background: #fff4f2;
+  border-color: var(--cmd-chip-danger-bg);
+  background: var(--cmd-chip-danger-bg);
   color: var(--cmd-danger-text);
 }
 
@@ -1129,7 +1129,7 @@
 }
 
 [data-skin="command"] .piece-assignment-row:hover {
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
 }
 
 [data-skin="command"] .piece-assignment-row input {
@@ -1202,14 +1202,14 @@
 }
 
 [data-skin="command"] .piece-link-row__unlink:hover {
-  background: #fff4f2;
+  background: var(--cmd-chip-danger-bg);
 }
 
 [data-skin="command"] .piece-readiness-notice {
   margin: 8px 0 14px;
   padding: 9px 11px;
   border-left: 3px solid var(--cmd-info);
-  background: #f4f8fd;
+  background: var(--cmd-chip-info-bg);
   color: var(--cmd-text-muted);
   font-size: 12px;
 }
@@ -1324,8 +1324,8 @@
 }
 
 [data-skin="command"] .piece-operation-state.is-error {
-  border-color: #f3c6c2;
-  background: #fff4f2;
+  border-color: var(--cmd-chip-danger-bg);
+  background: var(--cmd-chip-danger-bg);
   color: var(--cmd-danger-text);
 }
 
@@ -1358,10 +1358,10 @@
   height: 34px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid #f5dca6;
+  border: 1px solid var(--cmd-chip-warn-bg);
   border-radius: 8px;
-  background: #fff8e8;
-  color: #9a6700;
+  background: var(--cmd-icon-wash);
+  color: var(--cmd-warn-text);
 }
 
 [data-skin="command"] .piece-operations__head h2 {
@@ -1391,7 +1391,7 @@
   overflow: hidden;
   border: 1px solid var(--cmd-border);
   border-radius: 8px;
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
 }
 
 [data-skin="command"] .piece-operations__summary > span {
@@ -1435,7 +1435,7 @@
 [data-skin="command"] .piece-operation-empty.is-compact {
   padding: 15px 10px;
   border: 0;
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
 }
 
 [data-skin="command"] .piece-production-board {
@@ -1458,7 +1458,7 @@
   overflow: hidden;
   border: 1px solid var(--cmd-border);
   border-radius: 8px;
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
 }
 
 [data-skin="command"] .piece-production-column__head {
@@ -1513,13 +1513,13 @@
 }
 
 [data-skin="command"] .piece-production-lot:hover {
-  border-color: #b8c0cb;
+  border-color: var(--cmd-border);
 }
 
 [data-skin="command"] .piece-production-lot.is-selected {
-  border-color: #d69a18;
+  border-color: var(--cmd-gold);
   box-shadow: inset 3px 0 0 var(--cmd-gold);
-  background: #fff8e8;
+  background: var(--cmd-icon-wash);
 }
 
 [data-skin="command"] .piece-production-lot strong,
@@ -1587,7 +1587,7 @@
   gap: 7px;
   padding: 8px 10px;
   border-left: 3px solid var(--cmd-warn);
-  background: #fff8e8;
+  background: var(--cmd-icon-wash);
   color: var(--cmd-warn-text);
   font-size: 11px;
   font-weight: 600;
@@ -1648,7 +1648,7 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 50%;
-  background: #eef1f5;
+  background: var(--cmd-chip-bg);
   color: var(--cmd-text-muted);
   font-family: "IBM Plex Mono", monospace;
   font-size: 10px;
@@ -1657,7 +1657,7 @@
 
 [data-skin="command"] .piece-production-station.is-complete .piece-production-station__number,
 [data-skin="command"] .piece-operation-history__status {
-  background: #e5f5ec;
+  background: var(--cmd-chip-good-bg);
   color: var(--cmd-good-text);
 }
 
@@ -1668,9 +1668,9 @@
 [data-skin="command"] .piece-operation-warning {
   margin-top: 12px;
   padding: 12px;
-  border: 1px solid #f5dca6;
+  border: 1px solid var(--cmd-chip-warn-bg);
   border-radius: 8px;
-  background: #fff8e8;
+  background: var(--cmd-icon-wash);
 }
 
 [data-skin="command"] .piece-operation-warning__title {
@@ -1775,7 +1775,7 @@
   padding: 8px 9px;
   border: 1px solid var(--cmd-border);
   border-radius: 7px;
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
 }
 
 [data-skin="command"] .piece-logistics-candidate > input {
@@ -1969,7 +1969,7 @@
   overflow: hidden;
   border: 1px solid var(--cmd-border);
   border-radius: 8px;
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
 }
 
 [data-skin="command"] .piece-rollout-metric {
@@ -2015,18 +2015,18 @@
   border: 1px solid var(--cmd-border);
   border-left: 3px solid var(--cmd-warn);
   border-radius: 8px;
-  background: #fff8e8;
+  background: var(--cmd-icon-wash);
 }
 
 [data-skin="command"] .piece-rollout-report.is-blocker,
 [data-skin="command"] .piece-rollout-readiness.is-blocked {
   border-left-color: var(--cmd-danger);
-  background: #fff4f2;
+  background: var(--cmd-chip-danger-bg);
 }
 
 [data-skin="command"] .piece-rollout-readiness.is-ready {
   border-left-color: var(--cmd-good);
-  background: #eef9f2;
+  background: var(--cmd-chip-good-bg);
 }
 
 [data-skin="command"] .piece-rollout-report__title,
@@ -2120,7 +2120,7 @@
   margin: 0;
   padding: 10px 12px;
   border-left: 3px solid var(--cmd-info);
-  background: #f4f8fd;
+  background: var(--cmd-chip-info-bg);
   color: var(--cmd-text-muted);
   font-size: 12px;
 }
@@ -2180,12 +2180,12 @@
 [data-skin="command"] .piece-rollout-setup__assurances > div {
   padding: 10px 11px;
   border-left: 3px solid var(--cmd-border);
-  background: #f7f9fc;
+  background: var(--cmd-row-hover);
 }
 
 [data-skin="command"] .piece-rollout-setup__assurances > .is-safe {
   border-left-color: var(--cmd-good);
-  background: #eef9f2;
+  background: var(--cmd-chip-good-bg);
 }
 
 [data-skin="command"] .piece-rollout-setup__assurances strong {
@@ -2223,8 +2223,8 @@
 }
 
 [data-skin="command"] .piece-rollout-state.is-error {
-  border-color: #f3c6c2;
-  background: #fff4f2;
+  border-color: var(--cmd-chip-danger-bg);
+  background: var(--cmd-chip-danger-bg);
   color: var(--cmd-danger-text);
 }
 
@@ -2237,7 +2237,7 @@
   width: 96px;
   height: 10px;
   border-radius: 4px;
-  background: linear-gradient(90deg, #e9edf2, #f7f9fc, #e9edf2);
+  background: linear-gradient(90deg, var(--cmd-chip-bg), var(--cmd-row-hover), var(--cmd-chip-bg));
   background-size: 200% 100%;
   animation: piece-rollout-shimmer 1.25s ease-in-out infinite;
 }
