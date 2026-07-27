@@ -11,6 +11,17 @@ describe("presentPieceControlError", () => {
     ).toBe("Set up the Piece Register before using this action.");
   });
 
+  it("surfaces missing link_model_elements_to_pieces RPC clearly", () => {
+    expect(
+      presentPieceControlError(
+        new Error(
+          "Could not find the function public.link_model_elements_to_pieces(p_project_id) in the schema cache",
+        ),
+        "Could not link marks to pieces.",
+      ),
+    ).toMatch(/link_model_elements_to_pieces/i);
+  });
+
   it("surfaces missing-table failures with the table tag", () => {
     expect(
       presentPieceControlError(

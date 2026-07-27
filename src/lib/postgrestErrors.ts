@@ -37,12 +37,13 @@ export function postgrestErrorCode(error: unknown): string {
   return fromMessage ? fromMessage[1].toUpperCase() : "";
 }
 
-/** Missing table/view/column in schema cache (migration lag). */
+/** Missing table/view/column/function in schema cache (migration lag). */
 export function isMissingSchemaObjectError(error: unknown): boolean {
   const code = postgrestErrorCode(error);
-  if (code === "PGRST205" || code === "PGRST204") return true;
+  // PGRST202 = missing function; PGRST204 = missing column; PGRST205 = missing table/view.
+  if (code === "PGRST202" || code === "PGRST205" || code === "PGRST204") return true;
   const message = postgrestErrorMessage(error);
-  return /schema cache|Could not find the table|does not exist|column .* does not exist/i.test(
+  return /schema cache|Could not find the (table|function)|does not exist|column .* does not exist/i.test(
     message,
   );
 }

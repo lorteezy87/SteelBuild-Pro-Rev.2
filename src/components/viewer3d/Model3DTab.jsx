@@ -21,6 +21,7 @@ import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
+import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
 import { useCanonicalReportingRealtime } from "@/hooks/useCanonicalReportingRealtime";
 
@@ -345,7 +346,9 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
       );
     },
     onError: (error) =>
-      toast.error(error?.message || "Could not link marks to pieces."),
+      toast.error(
+        presentPieceControlError(error, "Could not link marks to pieces."),
+      ),
   });
 
   // Canonical-linked selections may initiate only the immutable logistics

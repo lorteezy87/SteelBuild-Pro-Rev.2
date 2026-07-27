@@ -6,6 +6,16 @@ import {
 } from "../postgrestErrors";
 
 describe("postgrestErrors", () => {
+  it("detects PGRST202 missing-function failures", () => {
+    expect(
+      isMissingSchemaObjectError({
+        code: "PGRST202",
+        message:
+          "Could not find the function public.link_model_elements_to_pieces(p_project_id) in the schema cache",
+      }),
+    ).toBe(true);
+  });
+
   it("detects PGRST205 missing-table failures", () => {
     expect(
       isMissingSchemaObjectError({
