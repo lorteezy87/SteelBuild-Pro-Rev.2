@@ -77,3 +77,12 @@ src/components/drawings/DrawingsTable.jsx:9
 - `git diff --check` — clean.
 - `npm run lint` — passed.
 - `npx vitest run src/components/drawings src/pages/drawingViewer --passWithNoTests` — 20 files, 184 tests passed.
+
+## Review fix pass — 2026-07-27
+- Replaced semantic `--on-accent` misuse on zone AI suggestion/apply buttons with tinted outlined status-color controls, preserving cyan/green/amber encodings without white text on light fills.
+- Tokenized remaining `DrawingsTable.jsx` badge/link/row chrome surface, text, and border literals to status/accent/text CSS variables.
+- Tokenized the `ZonesFloatingToolbar.jsx` pending proposal count badge surface/text to accent tokens while leaving canvas/tool ink unchanged.
+- Added explicit `// semantic ... — allowlisted` comments for local signoff/proposal/zone mark palettes and centralized `OverviewTab.jsx` status color lookup on the allowlisted zone constants.
+- Re-ran `git diff 4575aea11530222e23678d9004f57e0100df8b9a..HEAD -- '*.tsx' '*.jsx' | rg 'sbd-' || true` — no Task 6 JSX/TSX `sbd-*` additions found; pre-existing classes were left intact.
+- `npm run lint` — passed.
+- `npx vitest run src/components/drawings src/pages/drawingViewer --passWithNoTests` — 20 files, 184 tests passed.

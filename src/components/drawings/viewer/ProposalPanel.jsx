@@ -39,6 +39,8 @@ const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
 
 // Status pill palette — distinct from zone-status colors so the user
 // doesn't confuse a 'pending' proposal with a 'green' real zone.
+// semantic proposal-status marks — allowlisted; hues render as ink/borders on
+// translucent tokenized chips so they keep dark-viewer contrast.
 const PROPOSAL_STATUS_COLORS = {
   pending:  { fg: "#00E5FF", bg: "rgba(0,229,255,0.12)",   border: "#00E5FF" },
   accepted: { fg: "#22C55E", bg: "rgba(34,197,94,0.14)",   border: "#22C55E" },
@@ -46,6 +48,8 @@ const PROPOSAL_STATUS_COLORS = {
   merged:   { fg: "#0d9488", bg: "rgba(13,148,136,0.14)",  border: "#0d9488" },
 };
 
+// semantic proposal-severity marks — allowlisted; dots are categorical viewer
+// marks, not surface chrome.
 const SEVERITY_DOT = {
   critical: "#EF4444",
   high:     "#F97316",

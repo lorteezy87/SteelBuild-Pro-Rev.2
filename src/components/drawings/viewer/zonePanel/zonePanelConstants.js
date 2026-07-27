@@ -12,6 +12,8 @@
 export const mono    = { fontFamily: "var(--font-mono)" };
 export const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
 
+// semantic zone-status marks — allowlisted; used as drawing/viewer ink and
+// translucent fills, not page chrome.
 export const STATUS_COLOR = {
   green:   "#22C55E",
   blue:    "#3B82F6",
@@ -34,6 +36,7 @@ export const TABS = [
 
 // Color mapping for dependency relationship pills, mirroring the
 // ZoneLayer arrow palette so the visual language stays consistent.
+// semantic zone-dependency marks — allowlisted; matches canvas arrow encodings.
 export const RELATIONSHIP_COLOR = {
   blocks:     "#EF4444",
   depends_on: "#F59E0B",
@@ -55,6 +58,7 @@ export const PICKER_TYPES = [
   { key: "document",     label: "Document",     entity: "Document",     numberField: "document_number", titleField: "title" },
 ];
 
+// semantic zone-activity marks — allowlisted; timeline dots encode event type.
 export const ACTIVITY_COLOR = {
   zone_created:       "#3B82F6",
   zone_renamed:       "#0d9488",
@@ -69,6 +73,8 @@ export const ACTIVITY_COLOR = {
   dependency_removed: "#94A3B8",
 };
 
+// semantic zone-status marks — allowlisted; compact duplicate for dot-only
+// consumers that need the original categorical keys.
 export const STATUS_DOT = {
   red: "#EF4444", amber: "#F59E0B", purple: "#0d9488",
   blue: "#3B82F6", green: "#22C55E", neutral: "#94A3B8",

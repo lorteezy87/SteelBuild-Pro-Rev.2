@@ -221,8 +221,8 @@ export default function ZonesFloatingToolbar({
               fontSize: 9,
               padding: "1px 5px",
               borderRadius: 8,
-              background: "#00E5FF",
-              color: "#0F1118",
+              background: "var(--accent)",
+              color: "var(--on-accent)",
             }}>
               {pendingProposalCount}
             </span>

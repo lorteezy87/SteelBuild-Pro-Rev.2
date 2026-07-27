@@ -252,9 +252,9 @@ export function AiSuggestModal({ zone, sheet, existingItems, onClose, onAccept }
                       style={{
                         ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
                         padding: "4px 10px",
-                        background: chipColor,
-                        color: "var(--on-accent)",
-                        border: "none",
+                        background: `color-mix(in srgb, ${chipColor} 16%, transparent)`,
+                        color: chipColor,
+                        border: `1px solid ${chipColor}`,
                         borderRadius: 2,
                         cursor: "pointer",
                         display: "inline-flex", alignItems: "center", gap: 4,

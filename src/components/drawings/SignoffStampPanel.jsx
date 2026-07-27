@@ -31,6 +31,8 @@ const mono = { fontFamily: "var(--font-mono)" };
 
 // Display config per stamp type. Keep colors close to the existing chip
 // palette so the panel reads as part of the viewer rather than a bolt-on.
+// semantic signoff-stamp marks — allowlisted; hues render as ink/borders on
+// translucent tokenized chips so they keep dark-viewer contrast.
 const STAMP_META = {
   approved_for_fabrication: { label: "Approved for Fab",   color: "#10b981", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.35)", Icon: CheckCircle2 },
   approved_as_noted:        { label: "Approved as Noted",  color: "#84cc16", bg: "rgba(132,204,22,0.12)", border: "rgba(132,204,22,0.35)", Icon: CheckCircle2 },

@@ -12,7 +12,7 @@
  */
 
 import React from "react";
-import { mono } from "./zonePanelConstants";
+import { mono, STATUS_COLOR } from "./zonePanelConstants";
 import { ReadinessRing } from "./ReadinessRing";
 
 export function OverviewTab({ zone, items, counts, computed, readiness, dependencyImpact, onApplyComputed }) {
@@ -33,10 +33,7 @@ export function OverviewTab({ zone, items, counts, computed, readiness, dependen
   // stored on the zone (manual override, stale cache, etc.), the
   // user can one-click adopt the rule-engine value.
   const suggestion = computed?.status && computed.status !== zone.status;
-  const suggestionColor = {
-    red: "#EF4444", amber: "#F59E0B", purple: "#0d9488",
-    blue: "#3B82F6", green: "#22C55E", neutral: "#94A3B8",
-  }[computed?.status] || "#94A3B8";
+  const suggestionColor = STATUS_COLOR[computed?.status] || STATUS_COLOR.neutral;
 
   // Show the readiness block only when at least one of the three scores
   // has an actual value — if every gauge would be a dash, the block is
@@ -122,9 +119,9 @@ export function OverviewTab({ zone, items, counts, computed, readiness, dependen
                   ...mono,
                   fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
                   padding: "3px 8px",
-                  background: suggestionColor,
-                  color: "var(--on-accent)",
-                  border: "none",
+                  background: `color-mix(in srgb, ${suggestionColor} 16%, transparent)`,
+                  color: suggestionColor,
+                  border: `1px solid ${suggestionColor}`,
                   borderRadius: 2,
                   cursor: "pointer",
                 }}
