@@ -46,6 +46,7 @@ import {
   currentRevisionCodeForDrawing,
 } from "@/lib/pieceControl/drawingReleaseReady";
 import { PIECE_IMPORT_SOURCE_OPTIONS, readPieceImportFile } from "@/lib/pieceControl/importAdapters";
+import { collectAppliedPieceIds } from "@/lib/pieceControl/importAssign";
 import {
   buildPieceControlSummary,
   modePresentation,
@@ -53,7 +54,10 @@ import {
   type PieceControlMode,
 } from "@/lib/pieceControl/presentation";
 import type { ImportPayload, PieceImportSourceType } from "@/lib/pieceControl/reconciliation";
-import { fetchPieceRelationshipSnapshot } from "@/lib/pieceControl/relationshipsRepository";
+import {
+  assignPiecesToWorkPackage,
+  fetchPieceRelationshipSnapshot,
+} from "@/lib/pieceControl/relationshipsRepository";
 import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
 import {
   applyPieceImportBatch,
@@ -169,6 +173,7 @@ export default function PieceRegister() {
   const [importRows, setImportRows] = useState<ImportPayload[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [applyConfirmed, setApplyConfirmed] = useState(false);
+  const [importTargetWorkPackageId, setImportTargetWorkPackageId] = useState("");
   const [selectedPieceIds, setSelectedPieceIds] = useState<Set<string>>(new Set());
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveReason, setArchiveReason] = useState("");
@@ -181,6 +186,8 @@ export default function PieceRegister() {
     setArchiveReason("");
     setArchiveConfirmation("");
     setAttentionFocus(null);
+    setImportTargetWorkPackageId("");
+    setApplyConfirmed(false);
   }, [projectId]);
 
   const piecesQuery = useQuery({
@@ -357,7 +364,31 @@ export default function PieceRegister() {
       queryClient.invalidateQueries({ queryKey: ["piece-register", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["piece-import-batches", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["piece-import-rows", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["piece-relationships", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["piece-register-work-packages", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["work-packages", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["workPackages", projectId] }),
     ]);
+  };
+
+  const assignImportedPiecesToWorkPackage = async (
+    batchId: string,
+    workPackageId: string,
+  ) => {
+    const rows = await fetchPieceImportRows(projectId!, batchId);
+    const pieceIds = collectAppliedPieceIds(rows);
+    if (pieceIds.length === 0) {
+      return { assigned: 0 };
+    }
+    const summary = await assignPiecesToWorkPackage(
+      projectId!,
+      pieceIds,
+      workPackageId,
+    );
+    return {
+      assigned: Number(summary.assigned ?? pieceIds.length),
+      pieceCount: pieceIds.length,
+    };
   };
 
   const stageMutation = useMutation({
@@ -391,15 +422,54 @@ export default function PieceRegister() {
       ),
   });
   const applyMutation = useMutation({
-    mutationFn: () => applyPieceImportBatch(selectedBatch!.id),
-    onSuccess: async (summary) => {
+    mutationFn: async () => {
+      const summary = await applyPieceImportBatch(selectedBatch!.id);
+      let assigned = 0;
+      if (importTargetWorkPackageId) {
+        const result = await assignImportedPiecesToWorkPackage(
+          selectedBatch!.id,
+          importTargetWorkPackageId,
+        );
+        assigned = result.assigned;
+      }
+      return { summary, assigned };
+    },
+    onSuccess: async ({ summary, assigned }) => {
       setApplyConfirmed(false);
       await invalidate();
-      toast.success(`Import applied: ${summary.created ?? 0} created, ${summary.updated ?? 0} updated`);
+      toast.success(
+        assigned > 0
+          ? `Import applied: ${summary.created ?? 0} created, ${summary.updated ?? 0} updated · ${assigned} assigned to work package`
+          : `Import applied: ${summary.created ?? 0} created, ${summary.updated ?? 0} updated`,
+      );
     },
     onError: (error: Error) =>
       toast.error(
         presentPieceControlError(error, "The import batch could not be applied."),
+      ),
+  });
+  const assignImportMutation = useMutation({
+    mutationFn: () =>
+      assignImportedPiecesToWorkPackage(
+        selectedBatch!.id,
+        importTargetWorkPackageId,
+      ),
+    onSuccess: async (result) => {
+      await invalidate();
+      if (result.assigned === 0) {
+        toast.message("No applied pieces in this batch to assign.");
+        return;
+      }
+      toast.success(
+        `${result.assigned} imported piece(s) assigned to work package`,
+      );
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(
+          error,
+          "Imported pieces could not be assigned to the work package.",
+        ),
       ),
   });
   const archiveMutation = useMutation({
@@ -1047,7 +1117,10 @@ export default function PieceRegister() {
                       type="button"
                       key={batch.id}
                       aria-pressed={selectedBatch?.id === batch.id}
-                      onClick={() => { setSelectedBatchId(batch.id); setApplyConfirmed(false); }}
+                      onClick={() => {
+                        setSelectedBatchId(batch.id);
+                        setApplyConfirmed(false);
+                      }}
                       className={`piece-import-batch${selectedBatch?.id === batch.id ? " is-selected" : ""}`}
                     >
                       <span className="piece-import-batch__head">
@@ -1091,6 +1164,27 @@ export default function PieceRegister() {
                           </button>
                         ) : selectedBatch.status === "approved" ? (
                           <div className="piece-import-apply">
+                            <label
+                              className="piece-command-field"
+                              htmlFor="piece-import-assign-work-package"
+                            >
+                              Assign imported pieces to work package
+                              <select
+                                id="piece-import-assign-work-package"
+                                className="piece-command-control"
+                                value={importTargetWorkPackageId}
+                                onChange={(event) =>
+                                  setImportTargetWorkPackageId(event.target.value)
+                                }
+                              >
+                                <option value="">Leave unassigned</option>
+                                {(workPackagesQuery.data ?? []).map((wp: any) => (
+                                  <option key={wp.id} value={wp.id}>
+                                    {formatWorkPackageTitle(wp)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
                             <label htmlFor="piece-import-apply-confirmation">
                               <input
                                 id="piece-import-apply-confirmation"
@@ -1106,14 +1200,50 @@ export default function PieceRegister() {
                               onClick={() => applyMutation.mutate()}
                               className="cmd-btn piece-import-apply__button"
                             >
-                              Apply approved batch
+                              {importTargetWorkPackageId
+                                ? "Apply and assign to work package"
+                                : "Apply approved batch"}
                             </button>
                           </div>
                         ) : (
-                          <Pill tone="good">
-                            <CheckCircle2 size={13} />
-                            Applied
-                          </Pill>
+                          <div className="piece-import-apply">
+                            <Pill tone="good">
+                              <CheckCircle2 size={13} />
+                              Applied
+                            </Pill>
+                            <label
+                              className="piece-command-field"
+                              htmlFor="piece-import-assign-work-package-applied"
+                            >
+                              Assign imported pieces to work package
+                              <select
+                                id="piece-import-assign-work-package-applied"
+                                className="piece-command-control"
+                                value={importTargetWorkPackageId}
+                                onChange={(event) =>
+                                  setImportTargetWorkPackageId(event.target.value)
+                                }
+                              >
+                                <option value="">Select package</option>
+                                {(workPackagesQuery.data ?? []).map((wp: any) => (
+                                  <option key={wp.id} value={wp.id}>
+                                    {formatWorkPackageTitle(wp)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button
+                              type="button"
+                              className="cmd-btn cmd-btn--primary"
+                              disabled={
+                                !importTargetWorkPackageId ||
+                                assignImportMutation.isPending
+                              }
+                              onClick={() => assignImportMutation.mutate()}
+                            >
+                              Assign all imported pieces
+                            </button>
+                          </div>
                         )}
                       </div>
                       <div className="cmd-table-wrap piece-import-results">
