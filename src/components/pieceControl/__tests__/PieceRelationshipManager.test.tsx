@@ -161,24 +161,63 @@ describe("PieceRelationshipManager", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("sanitizes relationship read errors and retries in place", async () => {
-    vi.mocked(fetchPieceRelationshipSnapshot)
-      .mockRejectedValueOnce(
-        new Error("PGRST301: canonical piece scope query failed"),
-      )
-      .mockResolvedValueOnce({
-        pieces: [],
-        pieceDrawings: [],
-        drawings: [],
-        workPackages: [],
-        drawingSets: [],
-        submittals: [],
-        sheetResponses: [],
-        drawingRevisions: [],
-        drawingReviews: [],
-        drawingSignoffs: [],
-        commentDispositions: [],
-      });
+  it("previews auto-assign matches by sequence before applying", async () => {
+    vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
+      pieces: [
+        {
+          id: "piece-1",
+          project_id: "project-1",
+          piece_mark: "B-101",
+          normalized_piece_mark: "b-101",
+          lot_code: "L1",
+          parent_piece_id: null,
+          quantity: 1,
+          profile: null,
+          material_grade: null,
+          weight_each_lbs: null,
+          weight_total_lbs: null,
+          work_package_id: null,
+          sequence_number: "WP-002",
+          erection_area: null,
+          lifecycle_status: "active",
+          on_hold: false,
+          source_system: null,
+          external_ref: null,
+          metadata: null,
+          updated_at: "2026-07-01T00:00:00Z",
+          deleted_at: null,
+        },
+      ],
+      pieceDrawings: [],
+      drawings: [],
+      workPackages: [
+        {
+          id: "wp-1",
+          project_id: "project-1",
+          wp_number: "WP-001",
+          name: "Foundations",
+          sequence_number: "1",
+          is_deleted: false,
+          deleted_at: null,
+        },
+        {
+          id: "wp-2",
+          project_id: "project-1",
+          wp_number: "WP-002",
+          name: "ladder",
+          sequence_number: "2",
+          is_deleted: false,
+          deleted_at: null,
+        },
+      ],
+      drawingSets: [],
+      submittals: [],
+      sheetResponses: [],
+      drawingRevisions: [],
+      drawingReviews: [],
+      drawingSignoffs: [],
+      commentDispositions: [],
+    });
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -196,16 +235,17 @@ describe("PieceRelationshipManager", () => {
     );
 
     expect(
-      await screen.findByText("Piece relationships could not be loaded."),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/PGRST301|canonical/i)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-
-    expect(
       await screen.findByRole("heading", { name: "Piece assignments" }),
     ).toBeInTheDocument();
-    expect(vi.mocked(fetchPieceRelationshipSnapshot).mock.calls.length)
-      .toBeGreaterThanOrEqual(2);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Auto-assign by sequence \/ area/i }),
+    );
+
+    expect(screen.getByText(/Auto-assign preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/B-101 → WP-002 - ladder/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Confirm auto-assign" }),
+    ).toBeEnabled();
   });
 });

@@ -100,7 +100,7 @@ export async function fetchPieceRelationshipSnapshot(
     fetchProjectRows<ReadinessWorkPackage>(
       "work_packages",
       projectId,
-      "id, project_id, wp_number, name, is_deleted, deleted_at",
+      "id, project_id, wp_number, name, description, sequence_number, area, is_deleted, deleted_at",
     ),
   ]);
 
