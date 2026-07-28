@@ -22,6 +22,17 @@ vi.mock("@/lib/pieceControl/productionRepository", () => ({
   splitPieceLot: vi.fn(),
 }));
 
+vi.mock("@/api/supabaseClient", () => ({
+  entities: {
+    WorkPackage: {
+      filter: vi.fn(async () => [
+        { id: "wp-1", wp_number: "WP-001", name: "Columns" },
+        { id: "wp-2", wp_number: "WP-002", name: "Beams" },
+      ]),
+    },
+  },
+}));
+
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
@@ -167,6 +178,55 @@ describe("PieceProductionControl", () => {
       ),
     );
     expect(toast.success).toHaveBeenCalledWith("Advanced 2 lots.");
+  });
+
+  it("filters the production board by work package", async () => {
+    renderControl();
+
+    const filter = await screen.findByRole("combobox", { name: "Work package" });
+    expect(
+      await screen.findByRole("option", { name: "WP-001 - Columns" }),
+    ).toBeInTheDocument();
+    expect(fetchProductionSnapshot).toHaveBeenCalledWith("project-1", undefined);
+
+    fireEvent.change(filter, { target: { value: "wp-2" } });
+    await waitFor(() =>
+      expect(fetchProductionSnapshot).toHaveBeenCalledWith("project-1", "wp-2"),
+    );
+
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Work package" }),
+      { target: { value: "__unassigned__" } },
+    );
+    await waitFor(() =>
+      expect(fetchProductionSnapshot).toHaveBeenLastCalledWith(
+        "project-1",
+        null,
+      ),
+    );
+  });
+
+  it("hides the work-package filter when locked to a package", async () => {
+    vi.mocked(fetchProductionSnapshot).mockResolvedValue(snapshot);
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <PieceProductionControl
+          projectId="project-1"
+          pieceControlMode="shadow"
+          workPackageId="wp-1"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText(/physical station transitions/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Work package")).not.toBeInTheDocument();
+    expect(fetchProductionSnapshot).toHaveBeenCalledWith("project-1", "wp-1");
   });
 
   it("keeps override confirmation disabled until its reason is provided", async () => {

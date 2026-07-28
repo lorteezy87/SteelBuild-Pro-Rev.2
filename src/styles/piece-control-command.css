@@ -1547,6 +1547,37 @@
   padding: 8px;
 }
 
+[data-skin="command"] .piece-production-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--cmd-border);
+  border-radius: 12px;
+  background: var(--cmd-surface);
+}
+
+[data-skin="command"] .piece-production-filters__field {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 280px);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cmd-text-muted);
+}
+
+[data-skin="command"] .piece-production-filters__field select {
+  min-height: 36px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 600;
+  font-size: 13px;
+}
+
 [data-skin="command"] .piece-production-bulkbar {
   display: grid;
   gap: 10px;
