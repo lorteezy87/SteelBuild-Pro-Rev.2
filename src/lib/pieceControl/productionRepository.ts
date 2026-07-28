@@ -18,9 +18,15 @@ export interface LotAllocation {
   quantity: number;
 }
 
+/**
+ * @param workPackageId
+ *   - `undefined` / omit: all lots in the project
+ *   - `null`: unassigned lots only
+ *   - uuid: lots for that work package
+ */
 export async function fetchProductionSnapshot(
   projectId: string,
-  workPackageId?: string,
+  workPackageId?: string | null,
 ): Promise<ProductionSnapshot> {
   const db = supabase as any;
   let piecesQuery = db
@@ -31,7 +37,9 @@ export async function fetchProductionSnapshot(
     .is('deleted_at', null)
     .order('normalized_piece_mark')
     .order('lot_code');
-  if (workPackageId) {
+  if (workPackageId === null) {
+    piecesQuery = piecesQuery.is('work_package_id', null);
+  } else if (workPackageId) {
     piecesQuery = piecesQuery.eq('work_package_id', workPackageId);
   }
 

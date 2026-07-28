@@ -1,5 +1,10 @@
-import { useMemo, useState, type ChangeEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import {
   AlertTriangle,
   Check,
@@ -29,6 +34,14 @@ import {
 import { toast } from 'sonner';
 import { DecisionPanel } from '@/components/command';
 import { presentPieceControlError } from '@/lib/pieceControl/errorPresentation';
+import { entities } from '@/api/supabaseClient';
+import { formatWorkPackageTitle } from '@/lib/workPackages/formatWorkPackageTitle';
+import {
+  productionScopeFetchArg,
+  productionScopeQueryKey,
+  resolveProductionWorkPackageScope,
+  UNASSIGNED_WP_FILTER,
+} from '@/lib/pieceControl/productionScope';
 
 const Button = ({ variant: _variant, size: _size, ...props }: any) => (
   <button type="button" {...props} />
@@ -52,6 +65,10 @@ export function PieceProductionControl({
 }: PieceProductionControlProps) {
   const queryClient = useQueryClient();
   const enabled = pieceControlMode !== 'off';
+  const lockedToWorkPackage = Boolean(workPackageId);
+  const [boardWorkPackageFilter, setBoardWorkPackageFilter] = useState<string>(
+    workPackageId ?? '',
+  );
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([]);
   const [bulkStationKey, setBulkStationKey] = useState<string>('');
@@ -64,10 +81,34 @@ export function PieceProductionControl({
   const [overrideReason, setOverrideReason] = useState('');
   const [holdReason, setHoldReason] = useState('');
 
+  useEffect(() => {
+    if (workPackageId) setBoardWorkPackageFilter(workPackageId);
+  }, [workPackageId]);
+
+  const scopedWorkPackageId = useMemo(
+    () =>
+      resolveProductionWorkPackageScope(workPackageId, boardWorkPackageFilter),
+    [workPackageId, boardWorkPackageFilter],
+  );
+  const productionScopeKey = productionScopeQueryKey(scopedWorkPackageId);
+
+  const workPackagesQuery = useQuery({
+    queryKey: ['piece-production-work-packages', projectId],
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
+    enabled: enabled && !lockedToWorkPackage,
+    staleTime: 30_000,
+  });
+
   const snapshotQuery = useQuery({
-    queryKey: ['piece-production', projectId, workPackageId ?? 'all'],
-    queryFn: () => fetchProductionSnapshot(projectId, workPackageId),
+    queryKey: ['piece-production', projectId, productionScopeKey] as const,
+    queryFn: ({ queryKey }) =>
+      fetchProductionSnapshot(
+        queryKey[1],
+        productionScopeFetchArg(queryKey[2]),
+      ),
     enabled,
+    // Keep the filter bar mounted while the scoped snapshot refetches.
+    placeholderData: keepPreviousData,
   });
   const snapshot = snapshotQuery.data;
   const pieces = useMemo(
@@ -211,7 +252,7 @@ export function PieceProductionControl({
     );
   }
 
-  if (snapshotQuery.isLoading) {
+  if (snapshotQuery.isLoading && !snapshotQuery.data) {
     return (
       <section className="piece-operation-state is-loading" aria-label="Loading production">
         <Loader2 size={20} className="piece-operation-spinner" />
@@ -317,6 +358,14 @@ export function PieceProductionControl({
     );
   };
 
+  const onBoardWorkPackageFilterChange = (value: string) => {
+    setBoardWorkPackageFilter(value);
+    setBulkSelectedIds([]);
+    setSelectedPieceId(null);
+    setOverrideStationKey(null);
+    setOverrideReason('');
+  };
+
   return (
     <section className="piece-operations">
       <header className="piece-operations__head">
@@ -343,6 +392,30 @@ export function PieceProductionControl({
           </span>
         </div>
       </header>
+
+      {!lockedToWorkPackage ? (
+        <div className="piece-production-filters" aria-label="Production filters">
+          <label className="piece-production-filters__field" htmlFor="piece-production-wp-filter">
+            Work package
+            <select
+              id="piece-production-wp-filter"
+              className="piece-command-control"
+              value={boardWorkPackageFilter}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                onBoardWorkPackageFilterChange(event.target.value)
+              }
+            >
+              <option value="">All work packages</option>
+              <option value={UNASSIGNED_WP_FILTER}>Unassigned</option>
+              {(workPackagesQuery.data ?? []).map((wp: { id: string }) => (
+                <option key={wp.id} value={wp.id}>
+                  {formatWorkPackageTitle(wp)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
 
       {leafPieces.length === 0 ? (
         <p className="piece-operation-empty">
