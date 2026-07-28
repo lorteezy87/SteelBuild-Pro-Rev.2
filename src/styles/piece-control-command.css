@@ -1547,6 +1547,7 @@
   padding: 8px;
 }
 
+[data-skin="command"] .piece-board-filters,
 [data-skin="command"] .piece-production-filters {
   display: flex;
   flex-wrap: wrap;
@@ -1559,6 +1560,7 @@
   background: var(--cmd-surface);
 }
 
+[data-skin="command"] .piece-board-filters__field,
 [data-skin="command"] .piece-production-filters__field {
   display: grid;
   gap: 6px;
@@ -1570,12 +1572,31 @@
   color: var(--cmd-text-muted);
 }
 
+[data-skin="command"] .piece-board-filters__field select,
 [data-skin="command"] .piece-production-filters__field select {
   min-height: 36px;
   text-transform: none;
   letter-spacing: normal;
   font-weight: 600;
   font-size: 13px;
+}
+
+[data-skin="command"] .piece-logistics-panel__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+[data-skin="command"] .piece-logistics-panel__select-all {
+  border: 0;
+  background: transparent;
+  color: var(--cmd-info, var(--cmd-gold));
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
 }
 
 [data-skin="command"] .piece-production-bulkbar {
