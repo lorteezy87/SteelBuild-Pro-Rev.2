@@ -32,6 +32,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| 2026-07-28T05:10:00Z | cursor-fix-link-min-uuid-0b3b | link_model_elements_to_pieces min(uuid) | supabase/migrations/20260725210000_piece_wp_fab_3d_glue.sql, supabase/migrations/20260728051000_fix_link_model_elements_min_uuid.sql | Replace illegal min(uuid) with array_agg so Link marks to pieces works. |
 | ~~2026-07-28T04:47:00Z~~ released | cursor-logistics-wp-filter-bulk-0b3b | Logistics WP filter + bulk select-all | src/components/pieceControl/PieceLogisticsControl.tsx, src/lib/pieceControl/logisticsRepository.ts, src/styles/piece-control-command.css | Mirror Production: work-package filter + select-all on Ship/Deliver/Erect panels. |
 | ~~2026-07-28T04:40:00Z~~ released | cursor-production-wp-filter-0b3b | Production board work-package filter | src/components/pieceControl/PieceProductionControl.tsx, src/lib/pieceControl/productionRepository.ts, src/styles/piece-control-command.css | Add WP filter (all / unassigned / package) on Production board for bulk station work. |
 | ~~2026-07-28T03:55:00Z~~ released | cursor-bulk-production-0b3b | Bulk production station advance | supabase/migrations/20260728040000_advance_piece_stations_bulk.sql, src/lib/pieceControl/productionRepository.ts, src/lib/pieceControl/bulkStationAdvance.ts, src/components/pieceControl/PieceProductionControl.tsx, src/styles/piece-control-command.css | Set-based advance_piece_stations RPC + multi-select Complete next/station on Production board. — PR #179 |
