@@ -85,8 +85,9 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
   const [loadErr, setLoadErr] = useState(null);
   // Persisted so the view (e.g. "Fab") survives leaving + returning to the tab —
   // otherwise it resets to native colors and looks like the statuses "erased".
+  // Default to Fab so linked Piece Control lifecycle colors show on first visit.
   const [colorMode, setColorMode] = useState(() => {
-    try { return localStorage.getItem("sbp:viewer-colormode") || "model"; } catch { return "model"; }
+    try { return localStorage.getItem("sbp:viewer-colormode") || "fab"; } catch { return "fab"; }
   });
   useEffect(() => {
     try { localStorage.setItem("sbp:viewer-colormode", colorMode); } catch { /* ignore */ }
@@ -537,6 +538,11 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
               );
             })}
           </div>
+          {colorMode === "model" && canonicalPieceByGuid.size > 0 && (
+            <div style={{ ...hintStyle, marginTop: 8 }}>
+              Switch to Fab to paint linked lots by Piece Control lifecycle.
+            </div>
+          )}
           {projectId && hasRoster && (
             <button
               type="button"
@@ -720,7 +726,10 @@ function Legend({ mode, statusLegend, sequences }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {FAB_STATUS_ORDER.map((s) => <Swatch key={s} color={FAB_STATUS_META[s].color} label={FAB_STATUS_META[s].label} />)}
-        <div style={hintStyle}>Click a piece, then set its status. Unassigned pieces keep their model color.</div>
+        <div style={hintStyle}>
+          Linked Piece Control lots use lifecycle colors (Production / Logistics).
+          Unlinked members keep model color until you link marks or set status here.
+        </div>
       </div>
     );
   }

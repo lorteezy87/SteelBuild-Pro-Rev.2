@@ -36,6 +36,7 @@ import { DecisionPanel } from '@/components/command';
 import { presentPieceControlError } from '@/lib/pieceControl/errorPresentation';
 import { entities } from '@/api/supabaseClient';
 import { formatWorkPackageTitle } from '@/lib/workPackages/formatWorkPackageTitle';
+import { invalidateCanonicalPieceCaches } from '@/hooks/useCanonicalReportingRealtime';
 import {
   productionScopeFetchArg,
   productionScopeQueryKey,
@@ -133,11 +134,8 @@ export function PieceProductionControl({
 
   const invalidateProduction = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['piece-production', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['piece-register', projectId] }),
+      invalidateCanonicalPieceCaches(queryClient, projectId),
       queryClient.invalidateQueries({ queryKey: ['piece-relationships', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['canonical-release-gate'] }),
-      queryClient.invalidateQueries({ queryKey: ['canonical-reporting', projectId] }),
     ]);
   };
 

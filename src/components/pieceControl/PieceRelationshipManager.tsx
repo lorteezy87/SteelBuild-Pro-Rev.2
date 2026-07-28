@@ -223,6 +223,7 @@ export default function PieceRelationshipManager({
       queryClient.invalidateQueries({ queryKey: ["workPackages", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["model-elements", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["modelElements", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["canonical-pieces-3d", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["ifc", projectId] }),
     ]);
   };

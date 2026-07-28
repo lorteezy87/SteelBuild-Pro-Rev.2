@@ -8,6 +8,7 @@ import {
   type CanonicalReleaseGate,
 } from "@/lib/pieceControl/releaseRepository";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { invalidateCanonicalPieceCaches } from "@/hooks/useCanonicalReportingRealtime";
 
 interface CanonicalFabReleasePanelProps {
   projectId: string;
@@ -56,9 +57,9 @@ export default function CanonicalFabReleasePanel({
       setExceptionOpen(false);
       setExceptionReason("");
       await Promise.all([
+        invalidateCanonicalPieceCaches(queryClient, projectId),
         queryClient.invalidateQueries({ queryKey: ["canonical-release-gate", workPackageId] }),
         queryClient.invalidateQueries({ queryKey: ["piece-relationships", projectId] }),
-        queryClient.invalidateQueries({ queryKey: ["piece-register", projectId] }),
       ]);
       if (result.is_exception) {
         toast.warning(`Exception release recorded. Schedule risk ${result.risk_id ?? ""} created.`);

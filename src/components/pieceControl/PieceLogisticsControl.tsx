@@ -25,6 +25,7 @@ import {
 } from "@/lib/pieceControl/productionScope";
 import { DecisionPanel } from "@/components/command";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { invalidateCanonicalPieceCaches } from "@/hooks/useCanonicalReportingRealtime";
 import { entities } from "@/api/supabaseClient";
 import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 
@@ -149,12 +150,7 @@ export function PieceLogisticsControl({
       toast.success(`${actionDefinitions[variables.action].pastLabel} selected piece lots.`);
       setSelectedByAction((current) => ({ ...current, [variables.action]: [] }));
       setReferenceByAction((current) => ({ ...current, [variables.action]: {} }));
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["piece-logistics", projectId] }),
-        queryClient.invalidateQueries({ queryKey: ["piece-production", projectId] }),
-        queryClient.invalidateQueries({ queryKey: ["piece-register", projectId] }),
-        queryClient.invalidateQueries({ queryKey: ["canonical-reporting", projectId] }),
-      ]);
+      await invalidateCanonicalPieceCaches(queryClient, projectId);
     },
     onError: (error: Error) =>
       toast.error(
