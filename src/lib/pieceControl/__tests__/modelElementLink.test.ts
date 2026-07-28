@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { matchElementToPiece, type LinkCandidatePiece } from "../modelElementLink";
+import {
+  accumulateLinkPage,
+  matchElementToPiece,
+  type LinkCandidatePiece,
+} from "../modelElementLink";
 
 const leaves: LinkCandidatePiece[] = [
   {
@@ -54,5 +58,27 @@ describe("matchElementToPiece", () => {
         leaves,
       ),
     ).toEqual({ kind: "unchanged", pieceId: "p1" });
+  });
+});
+
+describe("accumulateLinkPage", () => {
+  it("sums page counters across chunks", () => {
+    const totals = accumulateLinkPage(
+      {
+        project_id: "proj",
+        linked: 2,
+        unchanged: 1,
+        unmatched: 0,
+        ambiguous: 3,
+      },
+      { linked: 4, unchanged: 0, unmatched: 5, ambiguous: 1 },
+    );
+    expect(totals).toEqual({
+      project_id: "proj",
+      linked: 6,
+      unchanged: 1,
+      unmatched: 5,
+      ambiguous: 4,
+    });
   });
 });

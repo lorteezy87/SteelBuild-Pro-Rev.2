@@ -11,6 +11,7 @@
  */
 import { supabase } from "@/lib/supabase";
 import { entities } from "@/api/supabaseClient";
+import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
 
 const CHUNK = 500;
 
@@ -87,13 +88,10 @@ export async function importIfcRoster({ projectId, fileName, schema, fileUrl, ro
     created += chunk.length;
   }
 
-  // Lot-aware mark → canonical piece link (no-op / error if piece control off).
+  // Lot-aware mark → canonical piece link (paged; best-effort if piece control off).
   let linkSummary = null;
   try {
-    const { data, error } = await supabase.rpc("link_model_elements_to_pieces", {
-      p_project_id: projectId,
-    });
-    if (!error) linkSummary = data;
+    linkSummary = await linkModelElementsToPieces(projectId);
   } catch {
     /* link is best-effort after import */
   }

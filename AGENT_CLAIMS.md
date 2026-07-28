@@ -32,6 +32,7 @@ Notes:
 
 | Claimed (UTC) | Session | Area | Files / globs | Intent |
 |---|---|---|---|---|
+| ~~2026-07-28T05:25:00Z~~ released | cursor-fix-link-min-uuid-0b3b | link marks timeout / chunked RPC | supabase/migrations/20260728053000_link_model_elements_chunked.sql, src/lib/pieceControl/modelElementLink.ts | Unique-key join + chunked page RPC so Link marks does not statement-timeout. |
 | ~~2026-07-28T05:20:00Z~~ released | cursor-fix-link-min-uuid-0b3b | link_model_elements_to_pieces set-based | supabase/migrations/20260728052000_link_model_elements_set_based.sql, 20260728051000_*, 20260725210000_* | Rewrite link RPC as set-based join — row loop times out on large IFC rosters. |
 | ~~2026-07-28T05:10:00Z~~ released | cursor-fix-link-min-uuid-0b3b | link_model_elements_to_pieces min(uuid) | supabase/migrations/20260725210000_piece_wp_fab_3d_glue.sql, supabase/migrations/20260728051000_fix_link_model_elements_min_uuid.sql | Replace illegal min(uuid) with array_agg so Link marks to pieces works. |
 | ~~2026-07-28T04:47:00Z~~ released | cursor-logistics-wp-filter-bulk-0b3b | Logistics WP filter + bulk select-all | src/components/pieceControl/PieceLogisticsControl.tsx, src/lib/pieceControl/logisticsRepository.ts, src/styles/piece-control-command.css | Mirror Production: work-package filter + select-all on Ship/Deliver/Erect panels. |
