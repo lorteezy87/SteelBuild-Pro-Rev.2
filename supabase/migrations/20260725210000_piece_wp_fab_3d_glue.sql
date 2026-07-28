@@ -310,8 +310,9 @@ BEGIN
     v_mark := upper(trim(el.piece_mark));
     v_lot := NULLIF(trim(COALESCE(el.metadata->>'lot_code', '')), '');
 
+    -- Postgres has no min(uuid); pick a deterministic id via array_agg.
     IF v_lot IS NOT NULL THEN
-      SELECT count(*), min(p.id)
+      SELECT count(*)::integer, (array_agg(p.id ORDER BY p.id))[1]
         INTO v_match_count, v_piece_id
       FROM public.pieces p
       WHERE p.project_id = p_project_id
@@ -327,7 +328,7 @@ BEGIN
         AND p.normalized_piece_mark = v_mark
         AND p.lot_code = v_lot;
     ELSE
-      SELECT count(*), min(p.id)
+      SELECT count(*)::integer, (array_agg(p.id ORDER BY p.id))[1]
         INTO v_match_count, v_piece_id
       FROM public.pieces p
       WHERE p.project_id = p_project_id
