@@ -6,7 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import {
   advancePieceStation,
+  advancePieceStations,
   fetchProductionSnapshot,
+  setPieceHold,
   splitPieceLot,
   type ProductionSnapshot,
 } from "@/lib/pieceControl/productionRepository";
@@ -14,7 +16,9 @@ import { PieceProductionControl } from "../PieceProductionControl";
 
 vi.mock("@/lib/pieceControl/productionRepository", () => ({
   advancePieceStation: vi.fn(),
+  advancePieceStations: vi.fn(),
   fetchProductionSnapshot: vi.fn(),
+  setPieceHold: vi.fn(),
   splitPieceLot: vi.fn(),
 }));
 
@@ -106,6 +110,19 @@ describe("PieceProductionControl", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(advancePieceStation).mockResolvedValue(undefined);
+    vi.mocked(advancePieceStations).mockImplementation(
+      async (_projectId, pieceIds) => ({
+        project_id: "project-1",
+        station_key: null,
+        mode: "next" as const,
+        requested: pieceIds.length,
+        advanced: pieceIds.length,
+        unchanged: 0,
+        piece_ids: pieceIds,
+        atomic: true,
+      }),
+    );
+    vi.mocked(setPieceHold).mockResolvedValue(undefined);
     vi.mocked(splitPieceLot).mockResolvedValue(undefined);
   });
 
@@ -118,6 +135,38 @@ describe("PieceProductionControl", () => {
     expect(
       screen.getByText(/completed events cannot be overridden or reversed/i),
     ).toBeInTheDocument();
+  });
+
+  it("bulk-advances the next station for selected lots", async () => {
+    renderControl({
+      ...snapshot,
+      pieces: [
+        piece,
+        {
+          ...piece,
+          id: "piece-2",
+          piece_mark: "B2",
+          normalized_piece_mark: "B2",
+        },
+      ],
+    });
+
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: "Select B1 / A" }),
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select B2 / A" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Complete next station \(2\)/i }),
+    );
+
+    await waitFor(() =>
+      expect(advancePieceStations).toHaveBeenCalledWith(
+        "project-1",
+        ["piece-1", "piece-2"],
+        { stationKey: null, override: undefined, overrideReason: undefined },
+      ),
+    );
+    expect(toast.success).toHaveBeenCalledWith("Advanced 2 lots.");
   });
 
   it("keeps override confirmation disabled until its reason is provided", async () => {
