@@ -21,7 +21,9 @@ describe("link_model_elements_to_pieces uuid aggregate fix", () => {
   });
 
   it("uses array_agg to pick a deterministic match id", () => {
-    expect(glueSql).toContain("(array_agg(p.id ORDER BY p.id))[1]");
+    // Glue may ship the later set-based body (array_agg on leaves.id);
+    // the min(uuid) hotfix keeps the original array_agg(p.id) form.
+    expect(glueSql).toMatch(/\(array_agg\((?:p|l)\.id ORDER BY (?:p|l)\.id\)\)\[1\]/);
     expect(fixSql).toContain("(array_agg(p.id ORDER BY p.id))[1]");
     expect(fixSql).toContain(
       "CREATE OR REPLACE FUNCTION public.link_model_elements_to_pieces",
