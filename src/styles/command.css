@@ -30,6 +30,8 @@
   --cmd-icon-wash: #fdf3da;
   --cmd-kpi-icon-bg: #f1f4f8;
   --cmd-row-hover: #f7f9fc;
+  --cmd-menu: #ffffff;
+  --cmd-menu-hover: #e8edf3;
   --cmd-hero-fade: rgba(255, 255, 255, 0.42);
   --cmd-on-gold: #20160a;
   --cmd-pill-good-fg: #04331d;
@@ -149,11 +151,13 @@
 /* Dual theme — command dark maps onto SteelBuild Dark (Phase 4). */
 html.steelbuild-dark[data-skin="command"],
 [data-skin="command"][data-theme="dark"] {
-  --cmd-bg: var(--sbd-bg-base, var(--bg-page));
-  --cmd-surface: var(--sbd-bg-surface, var(--bg-surface));
-  --cmd-border: var(--sbd-border, var(--border-default));
-  --cmd-text: var(--sbd-text, var(--text-primary));
-  --cmd-text-muted: var(--sbd-text-muted, var(--text-muted));
+  /* Opaque solids — frosted rgba surfaces make native <select> menus and
+     Piece Register sheets read as washed-out / black-on-hover in dark mode. */
+  --cmd-bg: var(--sbd-bg-page, #0B0E11);
+  --cmd-surface: var(--sbd-bg-panel, #161B22);
+  --cmd-border: var(--sbd-border-strong, rgba(255, 255, 255, 0.18));
+  --cmd-text: var(--sbd-text, rgba(255, 255, 255, 0.95));
+  --cmd-text-muted: var(--sbd-text-secondary, rgba(255, 255, 255, 0.72));
   --cmd-gold: var(--sbd-gold, var(--accent-light));
   --cmd-good: var(--sbd-success, var(--status-success));
   --cmd-warn: var(--sbd-warning, var(--status-warning));
@@ -164,20 +168,22 @@ html.steelbuild-dark[data-skin="command"],
   --cmd-good-text: #6ee7b7;
   --cmd-warn-text: #fcd34d;
   --cmd-danger-text: #fca5a5;
-  --cmd-chip-bg: rgba(255, 255, 255, 0.08);
+  --cmd-chip-bg: var(--sbd-bg-panel-hi, #21262D);
   --cmd-chip-good-bg: rgba(52, 211, 153, 0.16);
   --cmd-chip-warn-bg: rgba(224, 176, 48, 0.16);
   --cmd-chip-danger-bg: rgba(248, 113, 113, 0.16);
   --cmd-chip-info-bg: rgba(96, 165, 250, 0.16);
   --cmd-icon-wash: rgba(224, 176, 48, 0.18);
-  --cmd-kpi-icon-bg: rgba(255, 255, 255, 0.06);
-  --cmd-row-hover: rgba(255, 255, 255, 0.04);
-  --cmd-hero-fade: rgba(5, 8, 16, 0.55);
+  --cmd-kpi-icon-bg: var(--sbd-bg-panel-hi, #21262D);
+  --cmd-row-hover: var(--sbd-bg-panel-hover, #2D333B);
+  --cmd-hero-fade: rgba(11, 14, 17, 0.72);
   --cmd-on-gold: #20160a;
   --cmd-pill-good-fg: #04331d;
   --cmd-pill-warn-fg: #422c00;
   --cmd-pill-neutral-fg: var(--cmd-text);
   --cmd-pill-on-solid: #fff;
+  --cmd-menu: var(--sbd-bg-panel-hi, #21262D);
+  --cmd-menu-hover: var(--sbd-bg-panel-hover, #2D333B);
 }
 
 /* ===========================================================================
@@ -205,9 +211,11 @@ html.steelbuild-dark[data-skin="command"],
   --bg-surface-low: var(--cmd-row-hover);
   --bg-surface-high: var(--cmd-surface);
   --bg-surface-mid: var(--cmd-kpi-icon-bg);
-  --bg-surface-secondary: var(--cmd-row-hover);
-  --bg-input: var(--cmd-surface);
-  --bg-hover: var(--cmd-kpi-icon-bg);
+  --bg-surface-secondary: var(--cmd-menu, var(--cmd-surface));
+  --bg-elevated: var(--cmd-menu, var(--cmd-surface));
+  --bg-input: var(--cmd-menu, var(--cmd-surface));
+  --bg-hover: var(--cmd-menu-hover, var(--cmd-row-hover));
+  --hover-bg: var(--cmd-menu-hover, var(--cmd-row-hover));
   --nav-hover-bg: var(--cmd-kpi-icon-bg);
 
   --text-primary: var(--cmd-text);

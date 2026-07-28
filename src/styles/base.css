@@ -107,48 +107,62 @@ select option:disabled {
   color: #7b8798 !important;
 }
 
-.steelbuild-dark select,
-.steelbuild-dark select option,
-.steelbuild-dark select optgroup {
-  background-color: #07111f !important;
-  color: #f3f7ff !important;
-}
-
-/* LIGHT surfaces (light theme + the canonical light presentation): option panels must
-   be LIGHT too. The global `select option { background:#07111f }` rule above is
-   for dark dropdowns, but on Chrome/Windows that dark <option> background leaks
-   into the closed control when it's hovered — on a light page that paints the
-   select black-on-black (unreadable, doesn't revert). These higher-specificity
-   rules keep options light wherever the surface is light. */
+/* LIGHT theme: option panels must be LIGHT too. Do NOT key off bare
+   [data-skin="command"] — command pages also run in dark mode, and a
+   white option rule there made hovered rows paint black/unreadable. */
 [data-theme="light"] select option,
 [data-theme="light"] select optgroup,
-[data-skin="command"] select option,
-[data-skin="command"] select optgroup {
+[data-theme="light"][data-skin="command"] select option,
+[data-theme="light"][data-skin="command"] select optgroup {
   background: #ffffff !important;
   color: #16203a !important;
 }
 [data-theme="light"] select option:checked,
-[data-skin="command"] select option:checked {
+[data-theme="light"] select option:hover,
+[data-theme="light"][data-skin="command"] select option:checked,
+[data-theme="light"][data-skin="command"] select option:hover {
   background: #e8edf3 !important;
   color: #16203a !important;
 }
 [data-theme="light"] select option:disabled,
-[data-skin="command"] select option:disabled {
+[data-theme="light"][data-skin="command"] select option:disabled {
   color: #94a3b8 !important;
 }
 
-html.steelbuild-dark[data-skin="command"] select,
-html.steelbuild-dark[data-skin="command"] select option,
-html.steelbuild-dark[data-skin="command"] select optgroup {
-  background: var(--cmd-surface) !important;
-  color: var(--cmd-text) !important;
+/* Dark (incl. command dark): opaque menu solids + readable hover. */
+html.steelbuild-dark select,
+html.steelbuild-dark select option,
+html.steelbuild-dark select optgroup,
+[data-theme="dark"] select,
+[data-theme="dark"] select option,
+[data-theme="dark"] select optgroup {
+  background: var(--cmd-menu, var(--sbd-bg-panel-hi, #21262D)) !important;
+  color: var(--cmd-text, #f3f7ff) !important;
 }
-html.steelbuild-dark[data-skin="command"] select option:checked {
-  background: var(--cmd-row-hover) !important;
-  color: var(--cmd-text) !important;
+html.steelbuild-dark select option:checked,
+html.steelbuild-dark select option:hover,
+html.steelbuild-dark select option:focus,
+[data-theme="dark"] select option:checked,
+[data-theme="dark"] select option:hover,
+[data-theme="dark"] select option:focus {
+  background: var(--cmd-menu-hover, var(--sbd-bg-panel-hover, #2D333B)) !important;
+  color: #ffffff !important;
 }
-html.steelbuild-dark[data-skin="command"] select option:disabled {
-  color: var(--cmd-text-muted) !important;
+html.steelbuild-dark select option:disabled,
+[data-theme="dark"] select option:disabled {
+  color: var(--cmd-text-muted, #A8B4C8) !important;
+}
+
+/* Floating menus / Radix popouts — never use frosted rgba fills. */
+.sbp-opaque-popout {
+  background-color: var(--bg-elevated, var(--sbd-bg-panel-hi, #21262D)) !important;
+  color: var(--text-primary, #f3f7ff);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+[data-theme="light"] .sbp-opaque-popout {
+  background-color: var(--bg-elevated, #ffffff) !important;
+  color: var(--text-primary, #16203a);
 }
 
 [data-theme="light"] body,

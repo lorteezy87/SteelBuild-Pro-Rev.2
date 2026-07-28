@@ -761,9 +761,22 @@
 
 [data-skin="command"] .piece-control-command input,
 [data-skin="command"] .piece-control-command select,
-[data-skin="command"] .piece-control-command textarea,
-[data-skin="command"] .piece-control-command select option {
+[data-skin="command"] .piece-control-command textarea {
   background-color: var(--cmd-surface);
+  color: var(--cmd-text);
+  border-color: var(--cmd-border);
+}
+
+/* Native option lists need an opaque menu fill — translucent --cmd-surface
+   (or frosted sbd tokens) paint black when the OS highlights the hovered row. */
+[data-skin="command"] .piece-control-command select option,
+[data-skin="command"] .piece-control-command select optgroup {
+  background-color: var(--cmd-menu, var(--cmd-surface));
+  color: var(--cmd-text);
+}
+[data-skin="command"] .piece-control-command select option:checked,
+[data-skin="command"] .piece-control-command select option:hover {
+  background-color: var(--cmd-menu-hover, var(--cmd-row-hover));
   color: var(--cmd-text);
 }
 
@@ -791,7 +804,10 @@
   --bg-surface: var(--cmd-surface);
   --bg-surface-low: var(--cmd-row-hover);
   --bg-surface-high: var(--cmd-surface);
-  --bg-input: var(--cmd-surface);
+  --bg-surface-secondary: var(--cmd-menu, var(--cmd-surface));
+  --bg-elevated: var(--cmd-menu, var(--cmd-surface));
+  --bg-input: var(--cmd-menu, var(--cmd-surface));
+  --hover-bg: var(--cmd-menu-hover, var(--cmd-row-hover));
   --text-primary: var(--cmd-text);
   --text-secondary: var(--cmd-text-muted);
   --text-muted: var(--cmd-text-muted);
@@ -2657,4 +2673,340 @@
   [data-skin="command"] .piece-rollout-audit__row time {
     text-align: left;
   }
+}
+
+/* ── Archive confirm dialog (theme tokens; dual light/dark) ── */
+[data-skin="command"] .piece-register-archive-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(6, 8, 16, 0.72);
+}
+
+[data-skin="command"] .piece-register-archive-dialog {
+  width: 100%;
+  max-width: 32rem;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--cmd-danger) 45%, var(--cmd-border));
+  background: var(--cmd-menu, var(--cmd-surface));
+  color: var(--cmd-text);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+[data-skin="command"] .piece-register-archive-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+[data-skin="command"] .piece-register-archive-dialog__icon {
+  border-radius: 12px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--cmd-danger) 18%, transparent);
+  color: var(--cmd-danger);
+}
+
+[data-skin="command"] .piece-register-archive-dialog__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--cmd-text);
+}
+
+[data-skin="command"] .piece-register-archive-dialog__body {
+  margin: 8px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--cmd-text-muted);
+}
+
+[data-skin="command"] .piece-register-archive-dialog__label {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cmd-text-muted);
+}
+
+[data-skin="command"] .piece-register-archive-dialog__control {
+  width: 100%;
+  min-height: 2.75rem;
+  resize: none;
+  border-radius: 8px;
+  border: 1px solid var(--cmd-border);
+  background: var(--cmd-bg) !important;
+  color: var(--cmd-text) !important;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+[data-skin="command"] .piece-register-archive-dialog__control--mono {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-weight: 700;
+}
+
+[data-skin="command"] .piece-register-archive-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+[data-skin="command"] .piece-register-archive-dialog__confirm {
+  background: var(--cmd-danger) !important;
+  border-color: var(--cmd-danger) !important;
+  color: #fff !important;
+}
+
+[data-skin="command"] .piece-register-archive-dialog__confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Fabrication release panel (replaces hard-coded light slate sheets) ── */
+.piece-fab-release {
+  border-radius: 16px;
+  border: 1px solid var(--cmd-border, var(--border-default));
+  background: var(--cmd-surface, var(--bg-surface));
+  color: var(--cmd-text, var(--text-primary));
+  padding: 16px;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.2));
+}
+
+.piece-fab-release--unavailable {
+  border-color: color-mix(in srgb, var(--cmd-warn, var(--status-warning)) 45%, var(--cmd-border, var(--border-default)));
+  background: color-mix(in srgb, var(--cmd-warn, var(--status-warning)) 12%, var(--cmd-surface, var(--bg-surface)));
+  color: var(--cmd-warn-text, var(--text-primary));
+  font-size: 0.875rem;
+}
+
+.piece-fab-release__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.piece-fab-release__title-row {
+  display: flex;
+  gap: 12px;
+}
+
+.piece-fab-release__shield {
+  border-radius: 12px;
+  padding: 8px;
+  background: var(--cmd-bg, #0B0E11);
+  color: var(--cmd-gold, var(--accent));
+}
+
+.piece-fab-release__title {
+  margin: 0;
+  font-weight: 800;
+  color: var(--cmd-text, var(--text-primary));
+}
+
+.piece-fab-release__subtitle,
+.piece-fab-release__muted {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: var(--cmd-text-muted, var(--text-muted));
+}
+
+.piece-fab-release__muted {
+  margin-top: 16px;
+  font-size: 0.875rem;
+}
+
+.piece-fab-release__refresh {
+  border-radius: 8px;
+  border: 1px solid var(--cmd-border, var(--border-default));
+  background: transparent;
+  color: var(--cmd-text-muted, var(--text-muted));
+  padding: 8px;
+}
+
+.piece-fab-release__refresh:disabled {
+  opacity: 0.4;
+}
+
+.piece-fab-release__error {
+  margin-top: 16px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cmd-danger, var(--status-error));
+}
+
+.piece-fab-release__checks {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.piece-fab-release__check {
+  border-radius: 12px;
+  border: 1px solid var(--cmd-border, var(--border-default));
+  padding: 12px;
+}
+
+.piece-fab-release__check.is-pass {
+  border-color: color-mix(in srgb, var(--cmd-good, var(--status-success)) 40%, var(--cmd-border, var(--border-default)));
+  background: color-mix(in srgb, var(--cmd-good, var(--status-success)) 12%, transparent);
+  color: var(--cmd-good-text, var(--cmd-good, var(--status-success)));
+}
+
+.piece-fab-release__check.is-fail {
+  border-color: color-mix(in srgb, var(--cmd-danger, var(--status-error)) 40%, var(--cmd-border, var(--border-default)));
+  background: color-mix(in srgb, var(--cmd-danger, var(--status-error)) 12%, transparent);
+  color: var(--cmd-danger-text, var(--cmd-danger, var(--status-error)));
+}
+
+.piece-fab-release__check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.piece-fab-release__check-label {
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.piece-fab-release__blockers {
+  margin-top: 8px;
+  padding-left: 24px;
+  font-size: 0.75rem;
+  display: grid;
+  gap: 4px;
+}
+
+.piece-fab-release__status {
+  margin-top: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--cmd-border, var(--border-default));
+  background: var(--cmd-row-hover, var(--hover-bg));
+  padding: 12px;
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--cmd-text, var(--text-primary));
+}
+
+.piece-fab-release__btn {
+  margin-top: 16px;
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  padding: 12px 16px;
+  font-size: 0.875rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.piece-fab-release__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.piece-fab-release__btn--good {
+  background: var(--cmd-good, var(--status-success));
+  color: #fff;
+}
+
+.piece-fab-release__btn--warn {
+  background: var(--cmd-warn, var(--status-warning));
+  color: var(--cmd-on-gold, #20160a);
+}
+
+.piece-fab-release__btn--danger {
+  width: auto;
+  margin-top: 0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  background: var(--cmd-danger, var(--status-error));
+  color: #fff;
+}
+
+.piece-fab-release__btn--ghost {
+  width: auto;
+  margin-top: 0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  border-color: color-mix(in srgb, var(--cmd-warn, var(--status-warning)) 50%, var(--cmd-border, var(--border-default)));
+  background: transparent;
+  color: var(--cmd-text, var(--text-primary));
+}
+
+.piece-fab-release__hard-block {
+  margin-top: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--cmd-danger, var(--status-error)) 40%, var(--cmd-border, var(--border-default)));
+  background: color-mix(in srgb, var(--cmd-danger, var(--status-error)) 12%, transparent);
+  padding: 12px;
+  font-size: 0.875rem;
+  color: var(--cmd-danger-text, var(--cmd-danger, var(--status-error)));
+}
+
+.piece-fab-release__exception {
+  margin-top: 16px;
+  border-radius: 12px;
+  border: 2px solid color-mix(in srgb, var(--cmd-warn, var(--status-warning)) 55%, var(--cmd-border, var(--border-default)));
+  background: color-mix(in srgb, var(--cmd-warn, var(--status-warning)) 12%, var(--cmd-surface, var(--bg-surface)));
+  padding: 16px;
+}
+
+.piece-fab-release__exception-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  color: var(--cmd-warn-text, var(--cmd-warn, var(--status-warning)));
+}
+
+.piece-fab-release__exception-copy,
+.piece-fab-release__exception-blockers {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: var(--cmd-text, var(--text-primary));
+}
+
+.piece-fab-release__exception-label {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cmd-warn-text, var(--cmd-warn, var(--status-warning)));
+}
+
+.piece-fab-release__exception-input {
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--cmd-warn, var(--status-warning)) 45%, var(--cmd-border, var(--border-default)));
+  background: var(--cmd-bg, var(--bg-input)) !important;
+  color: var(--cmd-text, var(--text-primary)) !important;
+  padding: 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.piece-fab-release__exception-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
 }

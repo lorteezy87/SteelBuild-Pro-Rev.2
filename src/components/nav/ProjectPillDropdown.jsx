@@ -228,7 +228,7 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
       {/* Dropdown panel */}
       {open && (
         <div
-          className="project-pill-dropdown-panel sbd-card"
+          className="project-pill-dropdown-panel"
           style={{
             position: compact ? "fixed" : "absolute",
             top: compact ? 58 : "calc(100% + 6px)",
@@ -240,14 +240,16 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
             width: compact ? "auto" : 400,
             maxHeight: compact ? "min(70dvh, 420px)" : 300,
             overflowY: "auto",
-            // Theme-aware opaque surface — a hardcoded dark gradient here left
-            // dark var(--text-primary) text unreadable on a dark panel in light mode.
-            background: "var(--bg-surface-secondary)",
+            // Opaque elevated panel — frosted .sbd-card / translucent surface
+            // tokens made this unreadable in dark mode over the page chrome.
+            background: "var(--sbd-bg-panel-hi, var(--bg-elevated, #21262D))",
             border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border-default))",
             borderRadius: 14,
-            boxShadow: "var(--shadow-lg)",
+            boxShadow: "var(--shadow-lg, 0 16px 40px rgba(0,0,0,0.45))",
             zIndex: 3000,
             padding: 8,
+            backdropFilter: "none",
+            WebkitBackdropFilter: "none",
           }}
         >
           {/* Search filter */}
