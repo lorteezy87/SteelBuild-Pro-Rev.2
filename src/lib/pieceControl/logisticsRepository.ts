@@ -25,9 +25,15 @@ export interface LogisticsSnapshot {
   events: PieceLogisticsEvent[];
 }
 
+/**
+ * @param workPackageId
+ *   - `undefined` / omit: all lots in the project
+ *   - `null`: unassigned lots only
+ *   - uuid: lots for that work package
+ */
 export async function fetchLogisticsSnapshot(
   projectId: string,
-  workPackageId?: string,
+  workPackageId?: string | null,
 ): Promise<LogisticsSnapshot> {
   const db = supabase as any;
   let piecesQuery = db
@@ -38,7 +44,11 @@ export async function fetchLogisticsSnapshot(
     .is("deleted_at", null)
     .order("normalized_piece_mark")
     .order("lot_code");
-  if (workPackageId) piecesQuery = piecesQuery.eq("work_package_id", workPackageId);
+  if (workPackageId === null) {
+    piecesQuery = piecesQuery.is("work_package_id", null);
+  } else if (workPackageId) {
+    piecesQuery = piecesQuery.eq("work_package_id", workPackageId);
+  }
 
   const piecesResult = await piecesQuery;
   if (piecesResult.error) throw piecesResult.error;
