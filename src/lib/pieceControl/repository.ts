@@ -15,6 +15,10 @@ export interface PieceRegisterRow {
   weight_each_lbs: number | null;
   weight_total_lbs: number | null;
   work_package_id: string | null;
+  /** Lot / WP sequence from import (used by auto-assign). */
+  sequence_number?: string | null;
+  /** Erection area from import (used by auto-assign). */
+  erection_area?: string | null;
   lifecycle_status: string;
   current_station?: string | null;
   on_hold: boolean;
@@ -46,6 +50,8 @@ export interface PieceImportStagedRow {
   id: string;
   source_row_number: number;
   normalized_payload: Record<string, unknown>;
+  /** Raw staged row (keeps wp_number / sheet_number hints for post-apply). */
+  original_payload?: Record<string, unknown> | null;
   decision: string;
   warnings: string[];
   resolution: string | null;
@@ -91,7 +97,7 @@ export async function fetchPieceImportRows(
 ): Promise<PieceImportStagedRow[]> {
   const { data, error } = await db
     .from("piece_import_rows")
-    .select("id, source_row_number, normalized_payload, decision, warnings, resolution, matched_piece_id")
+    .select("id, source_row_number, normalized_payload, original_payload, decision, warnings, resolution, matched_piece_id")
     .eq("project_id", projectId)
     .eq("batch_id", batchId)
     .order("source_row_number");

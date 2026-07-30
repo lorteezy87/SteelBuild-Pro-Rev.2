@@ -18,9 +18,15 @@ export interface LotAllocation {
   quantity: number;
 }
 
+/**
+ * @param workPackageId
+ *   - `undefined` / omit: all lots in the project
+ *   - `null`: unassigned lots only
+ *   - uuid: lots for that work package
+ */
 export async function fetchProductionSnapshot(
   projectId: string,
-  workPackageId?: string,
+  workPackageId?: string | null,
 ): Promise<ProductionSnapshot> {
   const db = supabase as any;
   let piecesQuery = db
@@ -31,7 +37,9 @@ export async function fetchProductionSnapshot(
     .is('deleted_at', null)
     .order('normalized_piece_mark')
     .order('lot_code');
-  if (workPackageId) {
+  if (workPackageId === null) {
+    piecesQuery = piecesQuery.is('work_package_id', null);
+  } else if (workPackageId) {
     piecesQuery = piecesQuery.eq('work_package_id', workPackageId);
   }
 
@@ -112,6 +120,37 @@ export async function advancePieceStation(
   });
   if (error) throw error;
   unwrapPieceControlRpc(data);
+}
+
+export interface AdvancePieceStationsResult {
+  project_id: string;
+  station_key: string | null;
+  mode: 'next' | 'station';
+  requested: number;
+  advanced: number;
+  unchanged: number;
+  piece_ids: string[];
+  atomic: boolean;
+}
+
+export async function advancePieceStations(
+  projectId: string,
+  pieceIds: string[],
+  options: {
+    stationKey?: string | null;
+    override?: boolean;
+    overrideReason?: string;
+  } = {},
+): Promise<AdvancePieceStationsResult> {
+  const { data, error } = await (supabase as any).rpc('advance_piece_stations', {
+    p_project_id: projectId,
+    p_piece_ids: pieceIds,
+    p_station_key: options.stationKey ?? null,
+    p_override: options.override ?? false,
+    p_override_reason: options.overrideReason ?? null,
+  });
+  if (error) throw error;
+  return unwrapPieceControlRpc(data) as AdvancePieceStationsResult;
 }
 
 export async function setPieceHold(

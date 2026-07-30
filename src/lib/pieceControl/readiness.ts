@@ -1,10 +1,16 @@
 import { isGoverningDrawingReleaseReady } from "./drawingReleaseReady";
+import {
+  expandLinkedDrawingIdsForPieces,
+  pieceHasDrawingLink,
+} from "./pieceDrawingLinks";
 
 export interface ReadinessWorkPackage {
   id: string;
   project_id: string;
   wp_number?: string | null;
   name?: string | null;
+  sequence_number?: string | null;
+  area?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
 }
@@ -27,6 +33,12 @@ export interface ReadinessPieceDrawing {
   project_id: string;
 }
 
+export interface ReadinessPieceDrawingSet {
+  piece_id: string;
+  drawing_set_id: string;
+  project_id: string;
+}
+
 export interface ReadinessDrawing {
   id: string;
   project_id: string;
@@ -43,6 +55,7 @@ export interface ReadinessDrawing {
 
 export interface DrawingSetEvidence {
   id: string;
+  set_name?: string | null;
   set_approval_status?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
@@ -131,6 +144,7 @@ export function evaluateWorkPackageReadiness(
   pieceDrawings: ReadinessPieceDrawing[],
   drawings: ReadinessDrawing[],
   evidence: ReadinessEvidence = {},
+  pieceDrawingSets: ReadinessPieceDrawingSet[] = [],
 ): WorkPackageReadiness[] {
   const activePieces = pieces.filter((piece) => !piece.deleted_at);
   const containerIds = new Set(
@@ -151,8 +165,12 @@ export function evaluateWorkPackageReadiness(
         !containerIds.has(piece.id)
       );
       const scopeIds = new Set(scope.map((piece) => piece.id));
-      const relations = pieceDrawings.filter((relation) => scopeIds.has(relation.piece_id));
-      const linkedDrawingIds = new Set(relations.map((relation) => relation.drawing_id));
+      const linkedDrawingIds = expandLinkedDrawingIdsForPieces(
+        scopeIds,
+        pieceDrawingSets,
+        pieceDrawings,
+        drawings,
+      );
       const linkedDrawings = [...linkedDrawingIds]
         .map((drawingId) => activeDrawings.get(drawingId))
         .filter((drawing): drawing is ReadinessDrawing => Boolean(drawing));
@@ -164,12 +182,20 @@ export function evaluateWorkPackageReadiness(
         .length;
       const unapprovedDrawingCount = linkedDrawings.length - approvedDrawingCount;
       const heldPieceCount = scope.filter((piece) => piece.on_hold).length;
+      const unmappedPieceCount = scope.filter(
+        (piece) => !pieceHasDrawingLink(piece.id, pieceDrawingSets, pieceDrawings),
+      ).length;
       const blockers: string[] = [];
 
       if (scope.length === 0) {
         blockers.push("No canonical pieces assigned to this work package.");
       } else if (linkedDrawingIds.size === 0) {
         blockers.push("No shop drawings linked.");
+      }
+      if (unmappedPieceCount > 0) {
+        blockers.push(
+          `${unmappedPieceCount} scoped ${unmappedPieceCount === 1 ? "piece has" : "pieces have"} no linked drawing set.`,
+        );
       }
       if (missingDrawingCount > 0) {
         blockers.push(`${missingDrawingCount} linked drawing ${missingDrawingCount === 1 ? "record is" : "records are"} missing or inactive.`);

@@ -156,6 +156,7 @@ follow-ups._
   organization, and fixture project are provisioned against staging.
 - **A11y audit + mobile/iPad polish** on core workflows; **large-project
   performance** (virtualization, server-side filtering, narrow invalidation).
+  Phase 0 tablet kit is landed; Phases 1-4 domain migrations remain pending.
 - **Dependency vulnerabilities — CLEARED (`npm audit` = 0 advisories, verified
   2026-06-17).** The 2 remaining `esbuild`-via-`vite` highs were patched within the
   vite-6 line (`esbuild@0.25.12`), so **`vite@8` is no longer required** to clear
