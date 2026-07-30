@@ -24,7 +24,7 @@ import { getCategoryPieColor } from "./costChartColors";
 
 // ─── Shared tooltip ──────────────────────────────────────────────────────────
 
-function CustomTooltip({ active, payload, label }: {
+function CustomTooltip({ active, payload, label, chartTheme }: {
   active?: boolean;
   payload?: Array<{ color: string; name: string; value: number }>;
   label?: string;

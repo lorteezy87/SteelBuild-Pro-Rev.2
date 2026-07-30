@@ -41,11 +41,11 @@ vi.mock("@/components/shared/ProjectContext", () => ({
 }));
 
 vi.mock("@/hooks/useRealtimeInvalidation", () => ({
-  useRealtimeInvalidation: () => undefined,
+  useRealtimeInvalidation: (): undefined => undefined,
 }));
 
 vi.mock("@/hooks/useAutoOpenCreate", () => ({
-  useAutoOpenCreate: () => undefined,
+  useAutoOpenCreate: (): undefined => undefined,
 }));
 
 vi.mock("@/services/permissions", () => ({
@@ -53,7 +53,7 @@ vi.mock("@/services/permissions", () => ({
 }));
 
 vi.mock("@/components/changeorders/COFormModal", () => ({
-  default: ({ open, onSave, onDelete, co, isSaving }) => (
+  default: ({ open, onSave, onDelete, co, isSaving }: any) => (
     open ? (
       <div data-testid="co-form">
         <span>{co?.title}</span>
@@ -74,11 +74,11 @@ vi.mock("@/components/changeorders/COFormModal", () => ({
 }));
 
 vi.mock("@/components/changeorders/ChangeOrderImportModal", () => ({
-  default: () => null,
+  default: (): null => null,
 }));
 
 vi.mock("@/components/shared/DeleteDialog", () => ({
-  default: ({ open, onConfirm, busy }) => (
+  default: ({ open, onConfirm, busy }: any) => (
     open ? (
       <div data-testid="delete-dialog">
         <button disabled={busy} onClick={onConfirm}>
@@ -90,19 +90,19 @@ vi.mock("@/components/shared/DeleteDialog", () => ({
 }));
 
 vi.mock("@/components/shared/LoadingSkeleton", () => ({
-  default: () => null,
+  default: (): null => null,
 }));
 
 vi.mock("@/components/shared/ListTruncationNotice", () => ({
-  default: () => null,
+  default: (): null => null,
 }));
 
 vi.mock("@/components/design-system", () => ({
-  BulkActionBar: () => null,
+  BulkActionBar: (): null => null,
 }));
 
 vi.mock("@/pages/changeOrders/CoControlCenter", () => ({
-  default: ({ cos, onOpenCo }) => (
+  default: ({ cos, onOpenCo }: any) => (
     <button onClick={() => onOpenCo(cos[0])}>Open change order</button>
   ),
 }));
@@ -133,7 +133,7 @@ describe("ChangeOrders edit", () => {
     };
     mocks.changeOrderFilter.mockResolvedValue([existing]);
 
-    let resolveUpdate;
+    let resolveUpdate: (value: unknown) => void;
     mocks.changeOrderUpdate.mockReturnValue(
       new Promise((resolve) => {
         resolveUpdate = resolve;
@@ -168,7 +168,7 @@ describe("ChangeOrders edit", () => {
     expect(screen.getByTestId("co-form")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
 
-    resolveUpdate({
+    resolveUpdate!({
       ...existing,
       title: "Updated title",
       co_amount: 25000,
@@ -191,7 +191,7 @@ describe("ChangeOrders edit", () => {
     };
     mocks.changeOrderFilter.mockResolvedValue([existing]);
 
-    let resolveDelete;
+    let resolveDelete: (value: unknown) => void;
     mocks.changeOrderDelete.mockReturnValue(
       new Promise((resolve) => {
         resolveDelete = resolve;
@@ -222,7 +222,7 @@ describe("ChangeOrders edit", () => {
     expect(screen.getByTestId("delete-dialog")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Deleting..." })).toBeDisabled();
 
-    resolveDelete({ success: true });
+    resolveDelete!({ success: true });
 
     await waitFor(() => {
       expect(screen.queryByTestId("delete-dialog")).not.toBeInTheDocument();

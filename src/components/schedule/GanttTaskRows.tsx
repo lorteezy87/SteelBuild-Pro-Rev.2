@@ -36,7 +36,7 @@ import {
 } from "./scheduleGanttHelpers";
 import { GANTT_ROW_H, GANTT_SUM_H } from "./scheduleGanttDerive";
 
-const DELIVERY_STATUS_DOT = {
+const DELIVERY_STATUS_DOT: Record<string, string> = {
   "Scheduled":  GANTT_PHASE_VAR.Procurement,
   "In Transit": GANTT_STATUS_HEX.inProgress,
   "Delivered":  GANTT_STATUS_HEX.complete,
@@ -47,12 +47,13 @@ const DELIVERY_STATUS_DOT = {
 
 const ROW_H   = GANTT_ROW_H;
 const SUM_H   = GANTT_SUM_H;
-const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
+const tint = (color: any, percent: any) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 
 const DETAILING_STAGES = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
-const STAGE_DISPLAY = {};
+const STAGE_DISPLAY: Record<string, any> = {};
 
-export function GanttLeftPanelRows({
+export function GanttLeftPanelRows(props: any) {
+  const {
   virtualRows,
   collapsed,
   togglePhase,
@@ -88,8 +89,8 @@ export function GanttLeftPanelRows({
   effStart,
   effEnd,
   isOverdue,
-}) {
-  return virtualRows.map(({ row, index: i }) => {
+  } = props;
+  return virtualRows.map(({ row, index: i }: any) => {
     if (row.type === "summary") {
       const { phase, tasks, pctComplete } = row;
       const isOpen = !collapsed[phase.key];
@@ -97,9 +98,9 @@ export function GanttLeftPanelRows({
       // window merely spans their children, so a late child already
       // shows up on its own row. Counting the parent too would
       // double-count and inflate the phase's overdue badge.
-      const phaseOverdue = tasks.filter((t) => !isSummaryScheduleTask(t) && isOverdue(t)).length;
+      const phaseOverdue = tasks.filter((t: any) => !isSummaryScheduleTask(t) && isOverdue(t)).length;
       const phaseCritical = tasks.filter(isCriticalTask).length;
-      const phaseTbd = tasks.filter(t => !effStart(t) || !effEnd(t)).length;
+      const phaseTbd = tasks.filter((t: any) => !effStart(t) || !effEnd(t)).length;
       const phaseMeta = [
         `${pluralize(tasks.length, "task")}`,
         phaseCritical ? `${phaseCritical} critical` : null,
@@ -136,7 +137,7 @@ export function GanttLeftPanelRows({
       const isOpen = !collapsedDeliveries;
       const dColor = GANTT_PHASE_VAR.Delivery;
       return (
-        <div key="delivery-summary" onClick={() => setCollapsedDeliveries(v => !v)} style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: "1px solid var(--divider)", background: `color-mix(in srgb, ${dColor} 7%, transparent)`, cursor: "pointer", userSelect: "none" }}>
+        <div key="delivery-summary" onClick={() => setCollapsedDeliveries((v: any) => !v)} style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: "1px solid var(--divider)", background: `color-mix(in srgb, ${dColor} 7%, transparent)`, cursor: "pointer", userSelect: "none" }}>
           <span style={{ color: dColor, fontSize: 10, transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s", display: "inline-block", lineHeight: 1 }}>▾</span>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: dColor, letterSpacing: "0.10em", background: `color-mix(in srgb, ${dColor} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${dColor} 35%, transparent)`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>🚛</span>
@@ -245,7 +246,7 @@ export function GanttLeftPanelRows({
           <input
             autoFocus
             value={editDraft.task_name}
-            onChange={e => setEditDraft(d => ({ ...d, task_name: e.target.value }))}
+            onChange={e => setEditDraft((d: any) => ({ ...d, task_name: e.target.value }))}
             onClick={e => e.stopPropagation()}
             onKeyDown={e => { if (e.key === "Enter") commitEdit(task.id); if (e.key === "Escape") cancelEdit(); }}
             style={{ fontFamily: "var(--font-body)", fontSize: 11, background: "var(--bg-input)", border: "1px solid var(--accent)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 6px", width: "100%" }}
@@ -274,10 +275,10 @@ export function GanttLeftPanelRows({
                 super can plan around them. */}
             {weatherRiskByTask[task.id] && (() => {
               const hits = weatherRiskByTask[task.id];
-              const worst = hits.reduce((m, h) => (h.severity > m ? h.severity : m), 0);
+              const worst = hits.reduce((m: any, h: any) => (h.severity > m ? h.severity : m), 0);
               const color = worst >= 3 ? GANTT_STATUS_HEX.delayed : GANTT_PHASE_VAR.Procurement;
               const label = hits.length === 1 ? hits[0].date.slice(5) : `${hits.length} days`;
-              const tipLines = hits.slice(0, 5).map((h) => `${h.date}: ${h.summary}`);
+              const tipLines = hits.slice(0, 5).map((h: any) => `${h.date}: ${h.summary}`);
               if (hits.length > 5) tipLines.push(`…${hits.length - 5} more`);
               return (
                 <span
@@ -385,7 +386,7 @@ export function GanttLeftPanelRows({
         </span>
         {/* Start */}
         {isEditing ? (
-          <input type="date" value={editDraft.start_date} disabled={isSummaryRow} title={isSummaryRow ? "Derived from children — not editable" : undefined} onChange={e => setEditDraft(d => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%", ...(isSummaryRow ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} />
+          <input type="date" value={editDraft.start_date} disabled={isSummaryRow} title={isSummaryRow ? "Derived from children — not editable" : undefined} onChange={e => setEditDraft((d: any) => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%", ...(isSummaryRow ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} />
         ) : (
           <span
             className="sbd-num"
@@ -397,7 +398,7 @@ export function GanttLeftPanelRows({
         )}
         {/* Finish */}
         {isEditing ? (
-          <input type="date" value={editDraft.end_date} disabled={isSummaryRow} title={isSummaryRow ? "Derived from children — not editable" : undefined} onChange={e => setEditDraft(d => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%", ...(isSummaryRow ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} />
+          <input type="date" value={editDraft.end_date} disabled={isSummaryRow} title={isSummaryRow ? "Derived from children — not editable" : undefined} onChange={e => setEditDraft((d: any) => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%", ...(isSummaryRow ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} />
         ) : (
           <span
             className="sbd-num"
@@ -416,7 +417,7 @@ export function GanttLeftPanelRows({
             Delayed palette so an "Overdue" row visually
             matches its red border-left strip. */}
         {isEditing ? (
-          <select value={editDraft.status} onChange={e => setEditDraft(d => ({ ...d, status: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px" }}>
+          <select value={editDraft.status} onChange={e => setEditDraft((d: any) => ({ ...d, status: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px" }}>
             {["Not Started","In Progress","Complete","Delayed","On Hold"].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         ) : (
@@ -482,7 +483,8 @@ export function GanttLeftPanelRows({
   });
 }
 
-export function GanttTimelineRows({
+export function GanttTimelineRows(props: any) {
+  const {
   virtualRows,
   effStart,
   effEnd,
@@ -503,15 +505,15 @@ export function GanttTimelineRows({
   submittals,
   setTooltip,
   isOverdue,
-}) {
+  } = props;
   let top = 0;
   let taskIdx = 0;
-  return virtualRows.map(({ row, top: rowTop, index: i }) => {
+  return virtualRows.map(({ row, top: rowTop, index: i }: any) => {
     if (row.type === "summary") {
       top += SUM_H;
       // Use effective dates for the summary span as well
-      const phaseEffStarts = row.tasks.map(t => effStart(t)).filter(Boolean).sort();
-      const phaseEffEnds   = row.tasks.map(t => effEnd(t)).filter(Boolean).sort();
+      const phaseEffStarts = row.tasks.map((t: any) => effStart(t)).filter(Boolean).sort();
+      const phaseEffEnds   = row.tasks.map((t: any) => effEnd(t)).filter(Boolean).sort();
       const sumStart = phaseEffStarts[0] || row.start;
       const sumEnd   = phaseEffEnds[phaseEffEnds.length - 1] || row.end;
       const startPx = px(sumStart);
@@ -640,7 +642,7 @@ export function GanttTimelineRows({
         style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: `1px solid ${GANTT_GRID_VAR}`, background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: canDragTaskBar ? (isDraggingTask ? "grabbing" : "grab") : "pointer", transition: "background 0.08s", boxShadow: isFocused ? `inset 0 0 0 1px ${tint(GANTT_STATUS_HEX.inProgress, 33)}` : "none" }}
         onClick={handleTaskRowClick}
         onMouseEnter={e => { setHoveredRowId(task.id); if (!taskDrag) setTooltip({ task, x: e.clientX, y: e.clientY }); }}
-        onMouseMove={e => { if (!taskDrag) setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null); }}
+        onMouseMove={e => { if (!taskDrag) setTooltip((t: any) => t ? { ...t, x: e.clientX, y: e.clientY } : null); }}
         onMouseLeave={() => { setHoveredRowId(null); setTooltip(null); }}
       >
         {/* Baseline ghost bar — rendered behind the current bar */}
@@ -738,8 +740,8 @@ export function GanttTimelineRows({
 
         {/* Submittal review bars linked to this WP */}
         {showSubmittals && submittals
-          .filter(s => s.is_submittal && s.linked_wp_id === task.id && s.due_date)
-          .map(s => {
+          .filter((s: any) => s.is_submittal && s.linked_wp_id === task.id && s.due_date)
+          .map((s: any) => {
             const uploadIso = (s.uploaded_date || s.revision_date || task.start_date || "").split("T")[0];
             const dueIso = s.due_date;
             if (!uploadIso || !dueIso) return null;

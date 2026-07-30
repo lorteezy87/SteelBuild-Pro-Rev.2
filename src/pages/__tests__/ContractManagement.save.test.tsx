@@ -28,7 +28,7 @@ vi.mock("@/components/shared/ProjectContext", () => ({
 }));
 
 vi.mock("@/hooks/useRealtimeInvalidation", () => ({
-  useRealtimeInvalidation: () => undefined,
+  useRealtimeInvalidation: (): undefined => undefined,
 }));
 
 vi.mock("@/services/permissions", () => ({
@@ -36,15 +36,15 @@ vi.mock("@/services/permissions", () => ({
 }));
 
 vi.mock("@/components/design-system", () => ({
-  CommandBar: () => null,
+  CommandBar: (): null => null,
 }));
 
 vi.mock("@/components/shared/DeleteDialog", () => ({
-  default: () => null,
+  default: (): null => null,
 }));
 
 vi.mock("@/components/sov/SOVFormModal", () => ({
-  default: () => null,
+  default: (): null => null,
 }));
 
 vi.mock("sonner", () => ({
@@ -86,7 +86,7 @@ describe("ContractManagement contract save", () => {
 
   it("keeps contract edit mode open until the project update succeeds", async () => {
     const user = userEvent.setup();
-    let resolveSave;
+    let resolveSave: (value: unknown) => void;
     mocks.projectUpdate.mockReturnValue(
       new Promise((resolve) => {
         resolveSave = resolve;
@@ -109,7 +109,7 @@ describe("ContractManagement contract save", () => {
     expect(screen.getByRole("spinbutton")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Saving..." })).toBeDisabled();
 
-    resolveSave({
+    resolveSave!({
       id: "project-1",
       original_contract_value: 125000,
       contract_type: "GMP",

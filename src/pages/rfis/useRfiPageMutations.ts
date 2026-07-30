@@ -122,7 +122,7 @@ export function useRfiPageMutations(args: {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, data }: { ids: string[]; data: Record<string, unknown> }) => {
-      const results = await batchProcess(ids, (id) => entities.RFI.update(id, data));
+      const results = await batchProcess(ids, (id: any) => entities.RFI.update(id, data));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
       }
@@ -140,7 +140,7 @@ export function useRfiPageMutations(args: {
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids: string[]) => {
-      const results = await batchProcess(ids, (id) => entities.RFI.delete(id));
+      const results = await batchProcess(ids, (id: any) => entities.RFI.delete(id));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }

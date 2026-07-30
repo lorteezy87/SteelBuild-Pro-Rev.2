@@ -69,7 +69,7 @@ describe("usePdfLoader", () => {
     await waitFor(() => expect(result.current.pdfDoc).toBeTruthy());
 
     act(() => {
-      result.current.setPdfError("PDF render failed: Invalid page request.");
+      (result.current.setPdfError as unknown as (msg: string) => void)("PDF render failed: Invalid page request.");
     });
     expect(result.current.pdfError).toMatch(/Invalid page request/);
 

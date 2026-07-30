@@ -3,6 +3,7 @@
  * matrix wrapper, and shared tile/section micro-components.
  */
 import React from "react";
+import type { LucideIcon } from "lucide-react";
 import {
   Activity, AlertTriangle, Building2, CircleDot, DollarSign,
   Layers, ShieldAlert, TrendingUp,
@@ -22,7 +23,7 @@ export function Tile({
   onClick,
   badge,
 }: {
-  icon?: React.ComponentType<{ size?: number }>;
+  icon?: LucideIcon;
   label: string;
   value: React.ReactNode;
   sub?: React.ReactNode;

@@ -1,7 +1,8 @@
 import React from "react";
 import { Check } from "lucide-react";
 // ── Success screen ─────────────────────────────────────────────────
-export default function StepSuccess({ selectedSet, revMeta, stats, onClose }) {
+export default function StepSuccess(props: any) {
+  const { selectedSet, revMeta, stats, onClose } = props;
   return (
     <div style={{ textAlign: "center", padding: "30px 0" }}>
       <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(0,214,143,0.12)", border: "2px solid rgba(0,214,143,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>

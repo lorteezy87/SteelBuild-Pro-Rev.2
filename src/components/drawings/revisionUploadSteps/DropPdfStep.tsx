@@ -4,12 +4,13 @@ import { isPdfFile } from "@/lib/drawingUploadUtils";
 import { formatBytes } from "../revisionUploadHelpers";
 import { MAX_PDF_SIZE_MB } from "./constants";
 // ── Step C: Drop PDF ───────────────────────────────────────────────
-export default function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract }) {
+export default function StepDropPDF(props: any) {
+  const { selectedSet, revMeta, file, setFile, onBack, onExtract } = props;
   const [dragOver, setDragOver] = useState(false);
   const [localError, setLocalError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = (f) => {
+  const handleFile = (f: any) => {
     if (!f) return;
     if (!isPdfFile(f)) {
       setLocalError("Please upload a PDF file (.pdf).");
@@ -59,7 +60,7 @@ export default function StepDropPDF({ selectedSet, revMeta, file, setFile, onBac
         )}
       </div>
       <input ref={fileInputRef} type="file" accept=".pdf" style={{ display: "none" }}
-        onChange={e => { handleFile(e.target.files[0]); e.target.value = ""; }} />
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
       {localError && (
         <div style={{ marginBottom: 12, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--status-error)" }}>
           {localError}

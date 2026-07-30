@@ -211,7 +211,7 @@ export function ProjectCard({ project, workPackages, rfis, changeOrders, onClick
           }}>
             {(project.project_number as string) || "—"}
           </span>
-          {project.on_hold && (
+          {Boolean(project.on_hold) && (
             <span
               title={(project.on_hold_reason as string) || "Paused — excluded from every KPI rollup"}
               style={{

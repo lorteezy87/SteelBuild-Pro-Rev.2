@@ -45,7 +45,10 @@ export function computeSovTotals(
   lines: Record<string, unknown>[],
   calc: (s: Record<string, unknown>) => SovLineCalc,
 ): SovTotals {
-  return lines.reduce((a, s) => {
+  const empty: SovTotals = {
+    scheduled: 0, thisPeriod: 0, toDate: 0, balance: 0, retainage: 0, net: 0,
+  };
+  return lines.reduce((a: SovTotals, s) => {
     const c = calc(s);
     a.scheduled  = roundCurrency(a.scheduled  + roundCurrency(s.scheduled_value));
     a.thisPeriod = roundCurrency(a.thisPeriod + c.thisPeriod);
@@ -54,7 +57,7 @@ export function computeSovTotals(
     a.retainage  = roundCurrency(a.retainage  + c.retAmt);
     a.net        = roundCurrency(a.net        + c.netToDate);
     return a;
-  }, { scheduled: 0, thisPeriod: 0, toDate: 0, balance: 0, retainage: 0, net: 0 });
+  }, empty);
 }
 
 export function mismatchTolerance(projectBudget: number): number {

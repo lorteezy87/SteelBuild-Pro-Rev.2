@@ -22,6 +22,7 @@ import {
   formatPortfolioDate,
   filterLateDeliveries,
   filterOverdueRFIs,
+  type ProjectRow,
 } from "./format";
 
 describe("formatPortfolioDate", () => {
@@ -90,7 +91,7 @@ describe("portfolio totals", () => {
     const rows = [
       { revisedContract: 100, variance: -5 },
       { revisedContract: 200, variance: 10 },
-    ];
+    ] as ProjectRow[];
     expect(computePortfolioRevised(rows)).toBe(300);
     expect(computeBudgetVariance(rows)).toBe(5);
   });
@@ -140,7 +141,7 @@ describe("computeHealthRollup", () => {
       { health: "good" },
       { health: "good" },
       { health: "risk" },
-    ])).toEqual({ good: 2, watch: 0, risk: 1, neutral: 0 });
+    ] as ProjectRow[])).toEqual({ good: 2, watch: 0, risk: 1, neutral: 0 });
   });
 });
 
@@ -148,7 +149,7 @@ describe("filterAndSortProjectRows", () => {
   const baseRows = [
     { id: "a", name: "Bravo", number: "002", phase: "Fab", revisedContract: 0, openRFIs: 2, openCOs: 0, variance: 0 },
     { id: "b", name: "Alpha", number: "001", phase: "Closeout", revisedContract: 500, openRFIs: 0, openCOs: 1, variance: 100 },
-  ];
+  ] as ProjectRow[];
 
   it("filters by KPI key", () => {
     const rfis = [{ project_id: "a", priority: "Critical" }];
@@ -188,7 +189,7 @@ describe("buildBarChartData", () => {
     const data = buildBarChartData([
       { number: "P1", budget: 100, actual: 50 },
       { number: "P2", budget: 0, actual: 0 },
-    ]);
+    ] as ProjectRow[]);
     expect(data).toHaveLength(1);
     expect(data[0].name).toBe("P1");
   });
@@ -210,7 +211,7 @@ describe("buildDriftRows", () => {
     const rows = buildDriftRows([
       { id: "1", phase: "Fab", elapsedPct: 80, wpPct: 20, name: "A", number: "1" },
       { id: "2", phase: "Closeout", elapsedPct: 90, wpPct: 10, name: "B", number: "2" },
-    ]);
+    ] as ProjectRow[]);
     expect(rows).toHaveLength(1);
     expect(rows[0].drift).toBe(60);
   });

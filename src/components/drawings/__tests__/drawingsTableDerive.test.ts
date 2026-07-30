@@ -16,7 +16,7 @@ import {
   TABLE_COLUMNS,
 } from "../drawingsTableDerive";
 
-function makeGroup(key, sheets = []) {
+function makeGroup(key: any, sheets: any[] = []) {
   return { key, name: key, sheets, setOnly: false, isUngrouped: false, aggregates: { total: sheets.length } };
 }
 
@@ -57,7 +57,7 @@ describe("buildFlatDrawingRows", () => {
     const rows = buildFlatDrawingRows(groups, new Set());
     expect(rows).toHaveLength(1);
     expect(rows[0].type).toBe("group");
-    expect(rows[0].isExpanded).toBe(false);
+    expect((rows[0] as any).isExpanded).toBe(false);
   });
 
   it("includes sheet rows when expanded", () => {
@@ -75,9 +75,9 @@ describe("buildFlatDrawingRows", () => {
 
 describe("estimateFlatRowHeight", () => {
   it("returns height by row type", () => {
-    expect(estimateFlatRowHeight({ type: "group" })).toBe(62);
-    expect(estimateFlatRowHeight({ type: "setOnlyInfo" })).toBe(120);
-    expect(estimateFlatRowHeight({ type: "sheet" })).toBe(48);
+    expect(estimateFlatRowHeight({ type: "group" } as any)).toBe(62);
+    expect(estimateFlatRowHeight({ type: "setOnlyInfo" } as any)).toBe(120);
+    expect(estimateFlatRowHeight({ type: "sheet" } as any)).toBe(48);
   });
 });
 
@@ -118,7 +118,7 @@ describe("expand persistence", () => {
   it("saveExpandedSets and loadExpandedSets round-trip", () => {
     saveExpandedSets(new Set(["a", "b"]));
     expect(localStorage.getItem(EXPAND_LS_KEY)).toBeTruthy();
-    expect([...loadExpandedSets()]).toEqual(["a", "b"]);
+    expect([...(loadExpandedSets() ?? [])]).toEqual(["a", "b"]);
   });
 });
 

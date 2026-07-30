@@ -1,6 +1,7 @@
 import React from "react";
 // ── Processing screen ──────────────────────────────────────────────
-export default function StepProcessing({ message, progress }) {
+export default function StepProcessing(props: any) {
+  const { message, progress } = props;
   return (
     <div style={{ padding: "40px 0", textAlign: "center" }}>
       <div style={{ fontSize: 32, marginBottom: 12 }}>✦</div>

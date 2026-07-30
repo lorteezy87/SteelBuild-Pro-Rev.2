@@ -44,7 +44,8 @@ import ProcurementControlCenter from './procurement/ProcurementControlCenter';
 import { ProcurementFormModal } from './procurement/components';
 import DeleteDialog from '@/components/shared/DeleteDialog';
 import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
-import { Button } from '@/components/design-system';
+import { Button as ButtonBase } from '@/components/design-system';
+const Button = ButtonBase as any;
 import type { ProcurementItem } from './procurement/procurementControlCenter.derive';
 
 

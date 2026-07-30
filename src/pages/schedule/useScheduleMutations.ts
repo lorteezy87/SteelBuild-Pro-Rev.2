@@ -148,7 +148,7 @@ export function useScheduleMutations({
     mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
       const results = await batchProcess(
         ids,
-        (id) => entities.ScheduleTask.update(id, {
+        (id: any) => entities.ScheduleTask.update(id, {
           status,
           percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
         }),
@@ -172,7 +172,7 @@ export function useScheduleMutations({
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids: string[]) => {
-      const results = await batchProcess(ids, (id) => entities.ScheduleTask.delete(id));
+      const results = await batchProcess(ids, (id: any) => entities.ScheduleTask.delete(id));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }
@@ -199,7 +199,7 @@ export function useScheduleMutations({
       const patch = buildScheduleResourceAssignPatch(resource_names);
       const results = await batchProcess(
         ids,
-        (id) => entities.ScheduleTask.update(id, patch),
+        (id: any) => entities.ScheduleTask.update(id, patch),
       );
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
@@ -222,7 +222,7 @@ export function useScheduleMutations({
 
   const bulkDateMut = useMutation({
     mutationFn: async ({ ids, fields }: { ids: string[]; fields: Record<string, any> }) => {
-      const selected = tasksWithEffective.filter((task) => ids.includes(task.id));
+      const selected = tasksWithEffective.filter((task) => task.id && ids.includes(task.id));
       const editable = filterEditableTasks(selected);
       const skipped = selected.length - editable.length;
 
@@ -231,8 +231,8 @@ export function useScheduleMutations({
       }
 
       const results = await batchProcess(
-        editable.map((task) => task.id),
-        (id) => entities.ScheduleTask.update(id, fields),
+        editable.map((task) => task.id as string),
+        (id: any) => entities.ScheduleTask.update(id, fields),
       );
 
       if (results.failed.length > 0 && results.succeeded.length === 0) {
@@ -260,7 +260,7 @@ export function useScheduleMutations({
 
   const bulkDurationMut = useMutation({
     mutationFn: async ({ ids, mode, days }: { ids: string[]; mode: string; days: number }) => {
-      const selected = tasksWithEffective.filter((task) => ids.includes(task.id));
+      const selected = tasksWithEffective.filter((task) => task.id && ids.includes(task.id));
       const editable = filterEditableTasks(selected);
       const skipped = selected.length - editable.length;
 
@@ -270,7 +270,7 @@ export function useScheduleMutations({
 
       const results = await batchProcess(
         editable,
-        (task) => {
+        (task: any) => {
           const current = parseInt(task.duration, 10) || 0;
           let newDur;
           if (mode === "set") newDur = days;
@@ -418,7 +418,7 @@ export function useScheduleMutations({
       if (depItems.length > 0) {
         await batchProcess(
           depItems,
-          ({ dbId, predLinks }) => entities.ScheduleTask.update(dbId, {
+          ({ dbId, predLinks }: any) => entities.ScheduleTask.update(dbId, {
             dependencies: JSON.stringify(predLinks),
           }),
         );

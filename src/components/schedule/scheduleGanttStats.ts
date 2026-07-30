@@ -54,7 +54,7 @@ export function buildWeatherRiskByTask(
   for (const t of allTasks) {
     if (!sensitivePhases.has(String(t.phase || ""))) continue;
     const hits = risksForTaskWindow(weatherRisk.risks, effStart(t), effEnd(t));
-    if (hits.length > 0) out[t.id] = hits;
+    if (hits.length > 0 && t.id) out[t.id] = hits;
   }
   return out;
 }
@@ -122,10 +122,11 @@ export function computeScheduleStats(
     }
     if (actionable && isCriticalTask(task)) stats.criticalTasks += 1;
     if (actionable && isMilestoneTask(task)) stats.milestoneTasks += 1;
-    if (actionable && effectiveDates[task.id]?.shifted) stats.shiftedTasks += 1;
-    if (actionable) stats.totalShiftDays += Number(effectiveDates[task.id]?.shiftedBy) || 0;
+    const taskId = task.id;
+    if (actionable && taskId && effectiveDates[taskId]?.shifted) stats.shiftedTasks += 1;
+    if (actionable && taskId) stats.totalShiftDays += Number(effectiveDates[taskId]?.shiftedBy) || 0;
     if (actionable && isUnassignedTask(task)) stats.unassignedTasks += 1;
-    if (actionable && weatherRiskByTask[task.id]) stats.weatherRiskTasks += 1;
+    if (actionable && taskId && weatherRiskByTask[taskId]) stats.weatherRiskTasks += 1;
     if (actionable) stats.dependencyLinks += parseDeps(task.dependencies).length;
     if (actionable) {
       stats.progressTotal += displayPct(task);

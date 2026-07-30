@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 import { getRevisionSuggestions } from "@/lib/drawingUploadUtils";
 // ── Step B: Revision Metadata ──────────────────────────────────────
-export default function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
+export default function StepRevMeta(props: any) {
+  const { selectedSet, revMeta, setRevMeta, onBack, onNext } = props;
   const suggestions = getRevisionSuggestions(selectedSet.revision);
-  const set = (k, v) => setRevMeta(p => ({ ...p, [k]: v }));
+  const set = (k: any, v: any) => setRevMeta((p: any) => ({ ...p, [k]: v }));
   const [autoFilled, setAutoFilled] = useState(false);
 
   useEffect(() => {

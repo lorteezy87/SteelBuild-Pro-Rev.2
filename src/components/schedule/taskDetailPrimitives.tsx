@@ -33,18 +33,19 @@ export const drawerControlStyle = {
  * predecessors / successors. Filters tasks by name or WBS code as
  * the user types. Keyboard-navigable (↑ ↓ Enter Escape).
  */
-export function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search tasks...' }) {
+export function SearchableTaskPicker(props: any) {
+  const { tasks, onSelect, placeholder = '+ Search tasks...' } = props;
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(0);
-  const wrapperRef = useRef(null);
-  const inputRef = useRef(null);
-  const listRef = useRef(null);
+  const wrapperRef = useRef<any>(null);
+  const inputRef = useRef<any>(null);
+  const listRef = useRef<any>(null);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return tasks.slice(0, 50); // show first 50 when empty
     const q = query.toLowerCase();
-    return tasks.filter(t => {
+    return tasks.filter((t: any) => {
       const name = (t.task_name || '').toLowerCase();
       const wbs = (t.wbs_code || '').toLowerCase();
       const phase = (t.phase || '').toLowerCase();
@@ -65,21 +66,21 @@ export function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search 
   // Close on outside click
   useEffect(() => {
     if (!isOpen) return;
-    const handler = (e) => {
+    const handler = (e: any) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setIsOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen]);
 
-  const handleSelect = useCallback((t) => {
+  const handleSelect = useCallback((t: any) => {
     onSelect(t.id);
     setQuery('');
     setIsOpen(false);
     setHighlightIdx(0);
   }, [onSelect]);
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: any) => {
     if (!isOpen && (e.key === 'ArrowDown' || e.key === 'Enter')) {
       setIsOpen(true);
       e.preventDefault();
@@ -165,7 +166,7 @@ export function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search 
               No matching tasks
             </div>
           ) : (
-            filtered.map((t, idx) => (
+            filtered.map((t: any, idx: any) => (
               <div
                 key={t.id}
                 onClick={() => handleSelect(t)}
@@ -211,7 +212,8 @@ export function SearchableTaskPicker({ tasks, onSelect, placeholder = '+ Search 
   );
 }
 
-export function FormField({ label, type = 'text', value, onChange, readOnly = false, options = [] }) {
+export function FormField(props: any) {
+  const { label, type = 'text', value, onChange, readOnly = false, options = [] } = props;
   return (
     <div>
       <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 5 }}>
@@ -226,7 +228,7 @@ export function FormField({ label, type = 'text', value, onChange, readOnly = fa
           }}
         >
           <option value="">—</option>
-          {options.map(opt => (
+          {options.map((opt: any) => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
         </select>
@@ -269,7 +271,8 @@ export function FormField({ label, type = 'text', value, onChange, readOnly = fa
 }
 
 // ── Schedule flag toggle (Milestone / Critical Path) ─────────────────
-export function ScheduleFlag({ label, checked, onChange, hint }) {
+export function ScheduleFlag(props: any) {
+  const { label, checked, onChange, hint } = props;
   return (
     <label
       title={hint}
@@ -308,8 +311,9 @@ export function ScheduleFlag({ label, checked, onChange, hint }) {
 // schedule "follows" for due-date tracking) gets a left rail in its
 // gate colour. A "Clear" affordance per row wipes that single gate
 // without disturbing the others.
-export function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
-  const setGateField = (gate, field, iso) => {
+export function StageGateDates(props: any) {
+  const { stageDates, onChange, derivedStart, derivedEnd } = props;
+  const setGateField = (gate: any, field: any, iso: any) => {
     const next = { ...stageDates };
     const prev = next[gate] || { start: null, end: null };
     next[gate] = { ...prev, [field]: iso || null };
@@ -317,7 +321,7 @@ export function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd 
     // the apply helper drops it on save so we don't write `{}`.
     onChange(next);
   };
-  const clearGate = (gate) => {
+  const clearGate = (gate: any) => {
     const next = { ...stageDates };
     next[gate] = { start: null, end: null };
     onChange(next);
@@ -326,7 +330,7 @@ export function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd 
   // Derived preview: earliest filled start → latest filled end.
   // Mirrors deriveStartEndFromStages on save so the user doesn't have
   // to save-and-look to understand the effect.
-  const allDates = [];
+  const allDates: string[] = [];
   for (const g of DETAILING_STAGE_GATES) {
     const v = stageDates?.[g];
     if (v?.start) allDates.push(v.start);
@@ -366,7 +370,7 @@ export function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd 
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: '0.10em',
-              color: DETAILING_STAGE_META[activeGate]?.color || 'var(--accent)',
+              color: (DETAILING_STAGE_META as Record<string, any>)[activeGate]?.color || 'var(--accent)',
             }}
           >
             ACTIVE · {activeGate}
@@ -376,7 +380,7 @@ export function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd 
       </div>
 
       {DETAILING_STAGE_GATES.map((gate) => {
-        const meta  = DETAILING_STAGE_META[gate];
+        const meta  = (DETAILING_STAGE_META as Record<string, any>)[gate];
         const v     = stageDates?.[gate] || { start: null, end: null };
         const start = v.start || '';
         const end   = v.end || '';
@@ -425,13 +429,13 @@ export function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd 
               ariaLabel={`${gate} start date`}
               placeholder="start"
               value={start}
-              onChange={(iso) => setGateField(gate, 'start', iso)}
+              onChange={(iso: any) => setGateField(gate, 'start', iso)}
             />
             <DateInput
               ariaLabel={`${gate} end date`}
               placeholder="end"
               value={end}
-              onChange={(iso) => setGateField(gate, 'end', iso)}
+              onChange={(iso: any) => setGateField(gate, 'end', iso)}
             />
             <button
               type="button"
@@ -485,7 +489,8 @@ export function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd 
 // sits full-width below the 2-col grid in the drawer, so each input
 // has plenty of room — no need to compress font size or padding the
 // way the cramped half-column layout once required.
-export function DateInput({ value, onChange, ariaLabel, placeholder }) {
+export function DateInput(props: any) {
+  const { value, onChange, ariaLabel, placeholder } = props;
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
       <span style={{

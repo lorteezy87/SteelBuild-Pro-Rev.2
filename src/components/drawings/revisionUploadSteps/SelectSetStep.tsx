@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { ChevronRight } from "lucide-react";
 // ── Step A: Select existing drawing set ────────────────────────────
-export default function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading = false, error = null }) {
+export default function StepSelectSet(props: any) {
+  const { drawingSets, preSelectedSet, onSelect, onClose, loading = false, error = null } = props;
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(preSelectedSet || null);
-  const getSetIdentity = (drawingSet) => drawingSet?.id ?? drawingSet?.set_name ?? "";
+  const getSetIdentity = (drawingSet: any) => drawingSet?.id ?? drawingSet?.set_name ?? "";
 
-  const filtered = drawingSets.filter(ds =>
+  const filtered = drawingSets.filter((ds: any) =>
     !search || (ds.set_name || "").toLowerCase().includes(search.toLowerCase())
   );
 
@@ -59,7 +60,7 @@ export default function StepSelectSet({ drawingSets, preSelectedSet, onSelect, o
         </div>
       ) : (
         <div style={{ maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
-          {filtered.map(ds => {
+          {filtered.map((ds: any) => {
             const isSelected = getSetIdentity(selected) === getSetIdentity(ds);
             return (
               <div key={getSetIdentity(ds)} onClick={() => setSelected(ds)} style={{

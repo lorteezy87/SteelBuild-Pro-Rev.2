@@ -2,21 +2,22 @@ import React from "react";
 import { ChevronRight, ChevronLeft, AlertTriangle } from "lucide-react";
 import { CHANGE_STYLE } from "../revisionUploadHelpers";
 // ── Step D: Sheet Comparison ───────────────────────────────────────
-export default function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSheets, supersedeUnlisted, setSupersedeUnlisted, onBack, onConfirm }) {
+export default function StepSheetComparison(props: any) {
+  const { selectedSet, revMeta, matchedSheets, setMatchedSheets, supersedeUnlisted, setSupersedeUnlisted, onBack, onConfirm } = props;
   const counts = {
-    same: matchedSheets.filter(m => m.change === "revised" && m.oldSheet?.sheetTitle === m.newSheet?.sheetTitle).length,
-    revised: matchedSheets.filter(m => m.change === "revised").length,
-    added: matchedSheets.filter(m => m.change === "added").length,
-    removed: matchedSheets.filter(m => m.change === "removed").length,
-    ambiguous: matchedSheets.filter(m => m.change === "ambiguous").length,
+    same: matchedSheets.filter((m: any) => m.change === "revised" && m.oldSheet?.sheetTitle === m.newSheet?.sheetTitle).length,
+    revised: matchedSheets.filter((m: any) => m.change === "revised").length,
+    added: matchedSheets.filter((m: any) => m.change === "added").length,
+    removed: matchedSheets.filter((m: any) => m.change === "removed").length,
+    ambiguous: matchedSheets.filter((m: any) => m.change === "ambiguous").length,
   };
-  const totalOld = matchedSheets.filter(m => m.oldSheet).length;
-  const totalNew = matchedSheets.filter(m => m.newSheet).length;
-  const removedSheets = matchedSheets.filter(m => m.change === "removed");
-  const ambiguousSheets = matchedSheets.filter(m => m.change === "ambiguous");
+  const totalOld = matchedSheets.filter((m: any) => m.oldSheet).length;
+  const totalNew = matchedSheets.filter((m: any) => m.newSheet).length;
+  const removedSheets = matchedSheets.filter((m: any) => m.change === "removed");
+  const ambiguousSheets = matchedSheets.filter((m: any) => m.change === "ambiguous");
 
-  const updateTitle = (idx, val) => {
-    setMatchedSheets(prev => prev.map((m, i) => i === idx ? { ...m, newSheet: { ...m.newSheet, sheetTitle: val } } : m));
+  const updateTitle = (idx: any, val: any) => {
+    setMatchedSheets((prev: any) => prev.map((m: any, i: any) => i === idx ? { ...m, newSheet: { ...m.newSheet, sheetTitle: val } } : m));
   };
 
   return (
@@ -45,7 +46,7 @@ export default function StepSheetComparison({ selectedSet, revMeta, matchedSheet
           </div>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
             Resolve duplicate or blank sheet numbers before applying.{" "}
-            {ambiguousSheets.map((m) => m.ambiguousReason || `Sheet "${m.sheetNumber || "(blank)"}"`).join(" · ")}
+            {ambiguousSheets.map((m: any) => m.ambiguousReason || `Sheet "${m.sheetNumber || "(blank)"}"`).join(" · ")}
           </div>
         </div>
       )}
@@ -69,8 +70,8 @@ export default function StepSheetComparison({ selectedSet, revMeta, matchedSheet
                 {supersedeUnlisted && <AlertTriangle style={{ width: 13, height: 13, color: "var(--status-error-bright)", flexShrink: 0, marginTop: 1 }} />}
                 <span>
                   {supersedeUnlisted
-                    ? <>Will be marked superseded and leave the current set: {removedSheets.map(m => m.sheetNumber).join(", ")}.</>
-                    : <>Partial revision (default) — these stay current and untouched: {removedSheets.map(m => m.sheetNumber).join(", ")}. Only tick this if the upload is the complete new set.</>}
+                    ? <>Will be marked superseded and leave the current set: {removedSheets.map((m: any) => m.sheetNumber).join(", ")}.</>
+                    : <>Partial revision (default) — these stay current and untouched: {removedSheets.map((m: any) => m.sheetNumber).join(", ")}. Only tick this if the upload is the complete new set.</>}
                 </span>
               </div>
             </div>
@@ -87,9 +88,9 @@ export default function StepSheetComparison({ selectedSet, revMeta, matchedSheet
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>CHANGE</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", letterSpacing: "0.12em" }}>NEW ({revMeta.revisionLabel})</div>
         </div>
-        {matchedSheets.map((m, i) => {
+        {matchedSheets.map((m: any, i: any) => {
           const keptNotRemoved = m.change === "removed" && !supersedeUnlisted;
-          const cs = CHANGE_STYLE[m.change] || CHANGE_STYLE.same;
+          const cs = (CHANGE_STYLE as Record<string, any>)[m.change] || CHANGE_STYLE.same;
           const changeLabel = keptNotRemoved ? "KEPT" : cs.label;
           const changeColor = keptNotRemoved ? "var(--text-muted)" : cs.color;
           return (

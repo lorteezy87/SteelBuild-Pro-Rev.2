@@ -32,7 +32,7 @@ afterEach(() => {
 describe("useScheduleTasks persistence refresh", () => {
   it("keeps a newly persisted task visible after the schedule cache refetches", async () => {
     const projectId = "project-1";
-    let persistedRows = [];
+    let persistedRows: Array<{ id: string; project_id: string; task_name: string; status: string }> = [];
     mocks.filter.mockImplementation(async () => [...persistedRows]);
 
     const queryClient = new QueryClient({
@@ -40,7 +40,7 @@ describe("useScheduleTasks persistence refresh", () => {
         queries: { retry: false },
       },
     });
-    const wrapper = ({ children }) => (
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 

@@ -3,7 +3,8 @@ import {
   AlertTriangle, Check, CheckCircle, ChevronDown, ChevronRight,
   ClipboardList, Download, Lock, Pencil, Square, Trash2, Upload, CheckSquare,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button as ButtonBase } from "@/components/ui/button";
+const Button = ButtonBase as any;
 import { PTD } from "@/components/shared/PhoenixTable";
 import { formatCurrency, formatPercent } from "@/components/shared/formatters";
 import {
@@ -137,9 +138,9 @@ export function SovRow({
           ? <CheckSquare size={12} color="var(--accent)" />
           : <Square size={12} color="var(--text-muted)" />}
       </td>
-      <PTD mono accent>{s.line_item_number}</PTD>
-      <PTD style={{ maxWidth: 160 }}>{s.description}</PTD>
-      <PTD muted>{s.project_name}</PTD>
+      <PTD mono accent>{String(s.line_item_number ?? "")}</PTD>
+      <PTD style={{ maxWidth: 160 }}>{String(s.description ?? "")}</PTD>
+      <PTD muted>{String(s.project_name ?? "")}</PTD>
       <PTD right mono>{formatCurrency(s.scheduled_value)}</PTD>
       <PTD right mono>{formatPercent(s.previous_percent_complete)}</PTD>
       <PTD right mono>

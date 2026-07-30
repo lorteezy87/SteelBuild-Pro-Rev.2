@@ -13,22 +13,22 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/components/command", () => ({
-  PageHero: () => null,
-  KpiStrip: () => null,
+  PageHero: (): null => null,
+  KpiStrip: (): null => null,
   DecisionPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   FilterBar: ({ primaryLabel, onPrimary }: { primaryLabel?: string; onPrimary?: () => void }) => (
     onPrimary ? <button onClick={onPrimary}>{primaryLabel}</button> : null
   ),
-  DataTable: () => null,
-  useCommandSkin: () => undefined,
+  DataTable: (): null => null,
+  useCommandSkin: (): undefined => undefined,
 }));
 
 vi.mock("@/components/financials/CostCodeFormModal", () => ({
   default: ({ open, onSave }: { open: boolean; onSave: (data: Record<string, unknown>) => Promise<void> }) => (
     open ? (
       <div data-testid="cost-code-modal">
-        <button onClick={() => void onSave({ cost_code_number: "01" }).catch(() => undefined)}>
+        <button onClick={() => void onSave({ cost_code_number: "01" }).catch((): undefined => undefined)}>
           Save cost code
         </button>
       </div>
@@ -36,8 +36,8 @@ vi.mock("@/components/financials/CostCodeFormModal", () => ({
   ),
 }));
 
-vi.mock("@/pages/costHub/CostChartRow", () => ({ default: () => null }));
-vi.mock("@/config/launcherConfig", () => ({ photoFor: () => null }));
+vi.mock("@/pages/costHub/CostChartRow", () => ({ default: (): null => null }));
+vi.mock("@/config/launcherConfig", () => ({ photoFor: (): null => null }));
 vi.mock("@/components/shared/formatters", () => ({
   formatCurrency: (value: number) => String(value),
   formatCurrencyShort: (value: number) => String(value),
@@ -49,20 +49,20 @@ vi.mock("@/services/costRollup", () => ({
   computeRevisedContractValue: () => 0,
 }));
 vi.mock("@/pages/costHub/costControlCenter.derive", () => ({
-  buildBarChartData: () => [],
-  buildCumulativeData: () => [],
-  buildCategoryPieData: () => [],
-  buildVarianceAlerts: () => [],
-  buildCoAging: () => [],
-  costStatusTone: () => "neutral",
+  buildBarChartData: (): any[] => [],
+  buildCumulativeData: (): any[] => [],
+  buildCategoryPieData: (): any[] => [],
+  buildVarianceAlerts: (): any[] => [],
+  buildCoAging: (): any[] => [],
+  costStatusTone: (): string => "neutral",
 }));
 vi.mock("@/hooks/useFinancials", () => ({
   useFinancials: () => ({
-    costCodeRows: [],
-    costCodes: [],
-    changeOrders: [],
+    costCodeRows: [] as any[],
+    costCodes: [] as any[],
+    changeOrders: [] as any[],
     summary: { actual: 0, committed: 0, marginAtRisk: 0 },
-    reviewFlags: [],
+    reviewFlags: [] as any[],
     isLoading: false,
     costCodeCrud: {
       create: {

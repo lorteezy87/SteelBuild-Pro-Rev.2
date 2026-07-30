@@ -56,7 +56,7 @@ describe("scheduleGanttDerive", () => {
       { key: "a", fromY: 10, toY: 20 },
       { key: "b", fromY: 5000, toY: 5010 },
     ];
-    const visible = filterVisibleDepArrows(arrows, 0, 100, 0);
+    const visible = filterVisibleDepArrows(arrows as any, 0, 100, 0);
     expect(visible).toHaveLength(1);
     expect(visible[0].key).toBe("a");
   });
