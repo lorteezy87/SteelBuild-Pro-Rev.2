@@ -11,9 +11,9 @@ const baseSubmittal = {
   project_id: "p1",
   status: "Under Review",
   ball_in_court: "EOR",
-  approved_date: null,
+  approved_date: null as string | null,
   submitted_date: "2026-07-01",
-  required_date: null,
+  required_date: null as string | null,
   revision: "0",
 };
 

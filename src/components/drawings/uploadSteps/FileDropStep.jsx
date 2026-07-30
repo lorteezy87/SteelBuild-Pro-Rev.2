@@ -4,10 +4,8 @@ import { X, ChevronRight, ChevronLeft } from "lucide-react";
 import { isPdfFile } from "@/lib/drawingUploadUtils";
 import { MAX_PDF_SIZE_MB, formatBytes } from "../drawingSetUploadHelpers";
 
-// ─── Step 2: File Queue ───────────────────────────────────────────────
-// Kicking "Upload & Extract" starts AI processing immediately — no extra
-// click required per the new flow.
-export default function StepFiles({ files, setFiles, onBack, onUpload, setName }) {
+// ─── File drop: multi-file picker ─────────────────────────────────────
+export default function FileDropStep({ files, setFiles, onBack, onUpload, setName }) {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef();
 

@@ -27,7 +27,7 @@ describe("DeleteDialog", () => {
   });
 
   it("closes only after onConfirm resolves", async () => {
-    let resolveConfirm;
+    let resolveConfirm: ((value: unknown) => void) | undefined;
     const onClose = vi.fn();
     const onConfirm = vi.fn(
       () =>
@@ -50,7 +50,7 @@ describe("DeleteDialog", () => {
     expect(screen.getByRole("button", { name: /Deleting/i })).toBeTruthy();
     expect(onClose).not.toHaveBeenCalled();
 
-    resolveConfirm();
+    resolveConfirm!(undefined);
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 });

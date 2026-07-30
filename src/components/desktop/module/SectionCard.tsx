@@ -6,7 +6,7 @@ import React from "react";
 
 interface Props {
   title?: React.ReactNode;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   icon?: React.ComponentType<any>;
   headerAction?: React.ReactNode;
   className?: string;

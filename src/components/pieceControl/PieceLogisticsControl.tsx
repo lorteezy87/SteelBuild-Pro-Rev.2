@@ -276,7 +276,7 @@ export function PieceLogisticsControl({
               <option value={UNASSIGNED_WP_FILTER}>Unassigned</option>
               {(workPackagesQuery.data ?? []).map((wp: { id: string }) => (
                 <option key={wp.id} value={wp.id}>
-                  {formatWorkPackageTitle(wp)}
+                  {formatWorkPackageTitle(wp as any)}
                 </option>
               ))}
             </select>

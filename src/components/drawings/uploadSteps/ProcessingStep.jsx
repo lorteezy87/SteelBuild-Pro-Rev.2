@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 
 // ─── Step 3: Processing UI ────────────────────────────────────────────
-export default function StepProcessing({ processingStatus, onCancel, error }) {
+export default function ProcessingStep({ processingStatus, onCancel, error }) {
   const { steps = [], currentStepId, progress = 0, message = "" } = processingStatus;
 
   if (error) {

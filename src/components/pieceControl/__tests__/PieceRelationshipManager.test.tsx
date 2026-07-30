@@ -191,7 +191,7 @@ describe("PieceRelationshipManager", () => {
           metadata: null,
           updated_at: "2026-07-01T00:00:00Z",
           deleted_at: null,
-        },
+        } as any,
       ],
       pieceDrawings: [],
       pieceDrawingSets: [],
@@ -276,7 +276,7 @@ describe("PieceRelationshipManager", () => {
       metadata: null,
       updated_at: "2026-07-01T00:00:00Z",
       deleted_at: null,
-    }));
+    } as any));
     vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
       pieces,
       pieceDrawings: [],
@@ -360,7 +360,7 @@ describe("PieceRelationshipManager", () => {
       metadata: null,
       updated_at: "2026-07-01T00:00:00Z",
       deleted_at: null,
-    }));
+    } as any));
     vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
       pieces,
       pieceDrawings: [],

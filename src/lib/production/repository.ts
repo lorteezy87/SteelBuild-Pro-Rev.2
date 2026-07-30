@@ -14,7 +14,7 @@ const TABLE = "piece_production";
 // piece_production isn't in the generated Database types — own the cast here.
 // The optional client arg lets listPieceProduction page against an injected
 // mock in tests; every other caller uses the real client by default.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const from = (table: string, client: typeof supabase = supabase): any =>
   (client.from as unknown as (t: string) => any)(table);
 
@@ -86,7 +86,7 @@ export async function listPieceProduction(
     if (batch.length < page) return all;
   }
   // Hit the safety ceiling — surface it rather than silently returning partial.
-  // eslint-disable-next-line no-console
+   
   console.warn(`[piece_production] listPieceProduction stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
   return all;
 }

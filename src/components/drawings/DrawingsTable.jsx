@@ -1,7 +1,20 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { mono } from "./drawingsConfig";
-import { STAGE_MAP, STAGE_ORDER, SORTABLE_FIELDS, COMPACT_WIDTH_PX } from "./drawingsConfig";
+import { STAGE_MAP, STAGE_ORDER, COMPACT_WIDTH_PX } from "./drawingsConfig";
+import {
+  TABLE_HEADER_STYLE,
+  TABLE_COLUMNS,
+  loadExpandedSets,
+  saveExpandedSets,
+  nextSortState,
+  sortDrawingGroups,
+  buildFlatDrawingRows,
+  estimateFlatRowHeight,
+  sortArrow,
+  compactHideStyle,
+  findBrandNewGroupKeys,
+} from "./drawingsTableDerive";
 import StageChip from "./StageChip";
 import PriorityDot from "./PriorityDot";
 import { OverdueBadge, RFILinkBadge, SupersededBadge } from "./DrawingBadges";
@@ -128,29 +141,6 @@ export function ContextMenuItem({ label, onClick, danger }) {
       {label}
     </button>
   );
-}
-
-// v2: the default is now all-collapsed (rolled up). Bumping the key discards
-// the old persisted "everything expanded" state so the new default takes effect
-// for existing users; their future expand/collapse choices persist under v2.
-const EXPAND_LS_KEY = "sbp-drawings-expanded-sets-v2";
-
-// ─── Persistence for expand/collapse ────────────────────────────────────────
-
-function loadExpanded() {
-  try {
-    const raw = localStorage.getItem(EXPAND_LS_KEY);
-    if (!raw) return null;
-    return new Set(JSON.parse(raw));
-  } catch {
-    return null;
-  }
-}
-
-function saveExpanded(set) {
-  try {
-    localStorage.setItem(EXPAND_LS_KEY, JSON.stringify([...set]));
-  } catch { /* noop */ }
 }
 
 // ─── Row renderers ──────────────────────────────────────────────────────────
@@ -870,31 +860,20 @@ export default function DrawingsTable({
   // in alphabetical order; sheets within a group reorder. We apply sorting
   // after grouping (instead of to the flat input) so the group rollups keep
   // using the full child list.
-  const sortedGroups = useMemo(() => {
-    if (!sort) return groups;
-    const { field, dir } = sort;
-    const cmp = SORTABLE_FIELDS[field]?.cmp;
-    if (!cmp) return groups;
-    const sign = dir === "desc" ? -1 : 1;
-    return groups.map((g) => ({
-      ...g,
-      sheets: [...g.sheets].sort((a, b) => sign * cmp(a, b)),
-    }));
-  }, [groups, sort]);
+  const sortedGroups = useMemo(
+    () => sortDrawingGroups(groups, sort),
+    [groups, sort],
+  );
 
   const handleSort = (field) => {
-    setSort((prev) => {
-      if (!prev || prev.field !== field) return { field, dir: "asc" };
-      if (prev.dir === "asc") return { field, dir: "desc" };
-      return null;
-    });
+    setSort((prev) => nextSortState(prev, field));
   };
 
   // Initialize expand state — default all sets COLLAPSED (rolled up) on first
   // load. The rolled-up view is the scannable set-level list; the user expands
   // only the sets they care about, and that choice persists (under the v2 key).
   const [expanded, setExpanded] = useState(() => {
-    const persisted = loadExpanded();
+    const persisted = loadExpandedSets();
     if (persisted) return persisted;
     return new Set();
   });
@@ -912,12 +891,12 @@ export default function DrawingsTable({
   // before — keys the user explicitly collapsed stay collapsed.
   useEffect(() => {
     const seen = seenKeysRef.current;
-    const brandNew = groups.filter((g) => !seen.has(g.key));
+    const brandNew = findBrandNewGroupKeys(groups, seen);
     if (brandNew.length === 0) return;
     setExpanded((prev) => {
       const next = new Set(prev);
       brandNew.forEach((g) => next.add(g.key));
-      saveExpanded(next);
+      saveExpandedSets(next);
       return next;
     });
     brandNew.forEach((g) => seen.add(g.key));
@@ -927,7 +906,7 @@ export default function DrawingsTable({
     setExpanded((prev) => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
-      saveExpanded(next);
+      saveExpandedSets(next);
       return next;
     });
   };
@@ -949,19 +928,11 @@ export default function DrawingsTable({
   const allSelected = visibleSelectedCount === drawings.length && drawings.length > 0;
   const someSelected = visibleSelectedCount > 0 && !allSelected;
 
-  const thStyle = {
-    ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em",
-    color: "var(--text-muted)", textTransform: "uppercase", padding: "10px 12px",
-    textAlign: "left", borderBottom: "1px solid var(--border-default)",
-    whiteSpace: "nowrap", background: "var(--bg-surface)",
-  };
+  const thStyle = { ...mono, ...TABLE_HEADER_STYLE };
 
-  // F20: sortable header renderer. Falls through to a plain static TH when
-  // no field is passed (e.g. APPROVAL / ACTIONS columns).
   const SortableTh = ({ field, label, extraStyle }) => {
     if (!field) return <th style={{ ...thStyle, ...extraStyle }}>{label}</th>;
     const isActive = sort?.field === field;
-    const arrow = !isActive ? "" : sort.dir === "asc" ? " ▲" : " ▼";
     return (
       <th
         style={{
@@ -974,39 +945,23 @@ export default function DrawingsTable({
         onClick={() => handleSort(field)}
         title={`Sort by ${label.toLowerCase()}`}
       >
-        {label}{arrow}
+        {label}{sortArrow(sort, field)}
       </th>
     );
   };
 
-  // F23: style builder for columns that collapse out of view on narrow
-  // screens. Returning display:none keeps the column count stable so we
-  // don't have to juggle colSpan — every row just silently hides the cell.
-  const hideOnCompact = compact ? { display: "none" } : undefined;
+  const hideOnCompact = compactHideStyle(compact);
 
-  // ── Flatten groups into a virtual row list ───────────────────────────
-  const flatRows = useMemo(() => {
-    const rows = [];
-    for (const group of sortedGroups) {
-      const isExpanded = expanded.has(group.key);
-      rows.push({ type: "group", group, isExpanded });
-      if (isExpanded && group.setOnly) {
-        rows.push({ type: "setOnlyInfo", group });
-      }
-      if (isExpanded && !group.setOnly) {
-        for (const d of group.sheets) {
-          rows.push({ type: "sheet", drawing: d, group });
-        }
-      }
-    }
-    return rows;
-  }, [sortedGroups, expanded]);
+  const flatRows = useMemo(
+    () => buildFlatDrawingRows(sortedGroups, expanded),
+    [sortedGroups, expanded],
+  );
 
   const scrollRef = useRef(null);
   const virtualizer = useVirtualizer({
     count: flatRows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (i) => flatRows[i].type === "group" ? 62 : flatRows[i].type === "setOnlyInfo" ? 120 : 48,
+    estimateSize: (i) => estimateFlatRowHeight(flatRows[i]),
     overscan: 12,
   });
 
@@ -1028,25 +983,33 @@ export default function DrawingsTable({
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--bg-surface)" }}>
             <tr>
-              <th style={{ ...thStyle, width: 36 }}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
-                  onChange={onToggleAll}
-                  style={{ cursor: "pointer" }}
-                />
-              </th>
-              <SortableTh field="sheet_number"    label="SET / SHEET #" />
-              <SortableTh field="title"           label="TITLE" />
-              <SortableTh field="discipline"      label="DISCIPLINE" extraStyle={{ display: "none" }} />
-              <SortableTh field="revision_number" label="REV" />
-              <SortableTh field="stage"           label="STAGE" />
-              <SortableTh field="submitted_date"  label="SUBMITTED" extraStyle={hideOnCompact} />
-              <SortableTh field="due_date"        label="DUE DATE" />
-              <SortableTh field="reviewer"        label="REVIEWER" extraStyle={{ display: "none" }} />
-              <SortableTh field={null}            label="APPROVAL" />
-              <SortableTh field={null}            label="" />
+              {TABLE_COLUMNS.map((col) => {
+                if (col.key === "checkbox") {
+                  return (
+                    <th key={col.key} style={{ ...thStyle, width: col.width }}>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                        onChange={onToggleAll}
+                        style={{ cursor: "pointer" }}
+                      />
+                    </th>
+                  );
+                }
+                const extraStyle = {
+                  ...(col.hidden ? { display: "none" } : {}),
+                  ...(col.compactHide ? hideOnCompact : {}),
+                };
+                return (
+                  <SortableTh
+                    key={col.key}
+                    field={col.field}
+                    label={col.label}
+                    extraStyle={Object.keys(extraStyle).length ? extraStyle : undefined}
+                  />
+                );
+              })}
             </tr>
           </thead>
           <tbody>

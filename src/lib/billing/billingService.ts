@@ -6,7 +6,7 @@
 
 import { supabase } from "@/lib/supabase";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 async function invokeBilling(action: string, payload: Record<string, unknown>): Promise<any> {
   const { data, error } = await supabase.functions.invoke("stripe-billing", { body: { action, ...payload } });
   if (error) {

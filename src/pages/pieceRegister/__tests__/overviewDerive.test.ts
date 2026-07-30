@@ -69,9 +69,9 @@ describe("overviewDerive", () => {
     const packages = Array.from({ length: 10 }, (_, index) => ({
       workPackageId: `wp-${index}`,
       plannedShipDate: `2026-08-${String(10 - index).padStart(2, "0")}`,
-      source: undefined,
+      source: undefined as string | undefined,
       derivedStatus: "Ready for Release" as const,
-      earnedFabricationPercent: null,
+      earnedFabricationPercent: null as number | null,
       lotCount: 0,
       pieceCount: 0,
       knownTons: 0,
@@ -81,7 +81,7 @@ describe("overviewDerive", () => {
       unknownWeightLotsByLifecycle: {},
     }));
 
-    const upcoming = selectUpcomingShipments(packages);
+    const upcoming = selectUpcomingShipments(packages as any);
     expect(upcoming).toHaveLength(8);
     expect(upcoming[0].plannedShipDate).toBe("2026-08-01");
     expect(upcoming[7].plannedShipDate).toBe("2026-08-08");

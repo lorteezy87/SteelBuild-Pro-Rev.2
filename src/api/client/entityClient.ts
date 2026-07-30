@@ -61,7 +61,7 @@ const warnIfTruncated = (tableName: string, op: string, count: number, cap: numb
   // fills its window floods Sentry (JAVASCRIPT-REACT-E / -D).
   if (cap < DEFAULT_LIST_LIMIT) return;
   if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       `[supabaseClient] ${tableName}.${op}() returned ${count} rows at the ${cap}-row cap — results may be TRUNCATED. Add server-side filtering or pagination.`,
     );
@@ -126,7 +126,7 @@ export const createEntityClient = <T extends TableName>(tableName: T): EntityCli
       if (!data || data.length < PAGE) return all;
     }
     // Hit the safety ceiling — surface in PROD too (unlike list()'s dev-only warn).
-    // eslint-disable-next-line no-console
+     
     console.warn(`[supabaseClient] ${tableName}.listAll() stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
     return all;
   },
