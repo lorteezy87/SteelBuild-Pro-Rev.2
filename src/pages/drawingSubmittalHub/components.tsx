@@ -9,6 +9,11 @@ export { RevisionImpactBoard } from "./revisionImpactBoard";
 export { DrawingRegisterTable } from "./drawingRegisterTable";
 export { FleetHealthStrip } from "./fleetHealthStrip";
 export { TriageBoard } from "./triageBoard";
+export {
+  InlineOwnerControl,
+  InlineDateControl,
+  InlineDetailingControl,
+} from "./inlineControls";
 
 type IconType = ComponentType<{ size?: number | string; color?: string }>;
 

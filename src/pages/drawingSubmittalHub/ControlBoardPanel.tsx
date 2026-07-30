@@ -29,6 +29,8 @@ import {
   InlineOwnerControl,
   InlineDateControl,
   InlineDetailingControl,
+} from "./inlineControls";
+import {
   ReadinessPanel,
   SequenceReadinessSection,
   ModelMappingSection,
