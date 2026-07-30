@@ -23,7 +23,7 @@ export const drawerControlStyle = {
   fontFamily: 'var(--font-body)',
   fontSize: 12,
   color: drawerText,
-  boxSizing: 'border-box',
+  boxSizing: 'border-box' as const,
   colorScheme: 'dark',
   outline: 'none',
 };

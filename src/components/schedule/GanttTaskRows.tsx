@@ -222,7 +222,7 @@ export function GanttLeftPanelRows({
           // Don't start a row drag when the gesture begins on an
           // interactive control (inline-edit input, expand caret,
           // status menu) — let those keep their native behaviour.
-          const t = e.target;
+          const t = e.target as HTMLElement | null;
           const tag = t && t.tagName;
           if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || tag === "BUTTON" || (t && t.isContentEditable)) {
             e.preventDefault();

@@ -45,13 +45,15 @@ export function computeVisibleTaskIds({
 }) {
   if (!hasActiveRowFilter) return null;
 
-  const allById = new Map(allTasks.map((task) => [task.id, task]));
+  const allById = new Map<string, { parent_task_id?: string }>(
+    allTasks.map((task: { id: string; parent_task_id?: string }) => [task.id, task]),
+  );
   const phaseById = new Map();
   grouped.forEach(({ phase, tasks }) => {
     tasks.forEach((task) => phaseById.set(task.id, phase));
   });
 
-  const directMatches = new Set();
+  const directMatches = new Set<string>();
   allTasks.forEach((task) => {
     const phase = phaseById.get(task.id);
     const matchesText = !normalizedSearch || taskSearchHaystack(task, phase?.label || phase?.key || "").includes(normalizedSearch);
@@ -76,7 +78,7 @@ export function computeVisibleTaskIds({
     if (matchesText && matchesQuick) directMatches.add(task.id);
   });
 
-  const withAncestors = new Set(directMatches);
+  const withAncestors = new Set<string>(directMatches);
   directMatches.forEach((taskId) => {
     let parentId = allById.get(taskId)?.parent_task_id;
     const guard = new Set();
@@ -91,7 +93,7 @@ export function computeVisibleTaskIds({
 }
 
 export function buildTaskPositions(rows, rowH = GANTT_ROW_H, sumH = GANTT_SUM_H) {
-  const posMap = {};
+  const posMap: Record<string, { y: number }> = {};
   let y = 0;
   rows.forEach((row) => {
     if (row.type === "summary" || row.type === "delivery-summary") {

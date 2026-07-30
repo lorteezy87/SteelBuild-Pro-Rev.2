@@ -71,7 +71,7 @@ describe("dual-theme Gantt review fixes", () => {
 
   it("uses theme variables for ScheduleGantt delivery and critical-row chrome", () => {
     const scheduleGantt = readRepoFile("src", "components", "schedule", "ScheduleGantt.jsx");
-    const ganttTaskRows = readRepoFile("src", "components", "schedule", "GanttTaskRows.jsx");
+    const ganttTaskRows = readRepoFile("src", "components", "schedule", "GanttTaskRows.tsx");
     const ganttSources = scheduleGantt + ganttTaskRows;
 
     expect(ganttSources).not.toContain("GANTT_PHASE_HEX");

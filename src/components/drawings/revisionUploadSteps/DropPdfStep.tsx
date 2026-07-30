@@ -7,7 +7,7 @@ import { MAX_PDF_SIZE_MB } from "./constants";
 export default function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract }) {
   const [dragOver, setDragOver] = useState(false);
   const [localError, setLocalError] = useState("");
-  const fileInputRef = useRef();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (f) => {
     if (!f) return;

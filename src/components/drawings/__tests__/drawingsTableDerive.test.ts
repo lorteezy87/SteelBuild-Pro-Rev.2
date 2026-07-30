@@ -1,5 +1,5 @@
 /**
- * Unit tests for drawingsTableDerive.js — pure sort/row helpers only.
+ * Unit tests for drawingsTableDerive.ts — pure sort/row helpers only.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import {
