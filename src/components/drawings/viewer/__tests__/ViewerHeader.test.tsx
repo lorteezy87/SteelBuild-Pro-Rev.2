@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/services/permissions", () => ({
-  usePermissions: () => ({ role: "admin", isAdmin: false }),
+  usePermissions: () => ({ role: "admin", isAdmin: true }),
 }));
 
 import ViewerHeader from "../ViewerHeader";

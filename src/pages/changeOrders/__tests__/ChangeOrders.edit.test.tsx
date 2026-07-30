@@ -78,15 +78,16 @@ vi.mock("@/components/changeorders/ChangeOrderImportModal", () => ({
 }));
 
 vi.mock("@/components/shared/DeleteDialog", () => ({
-  default: ({ open, onConfirm, busy }: any) => (
-    open ? (
+  default: ({ open, onConfirm, busy, isDeleting }: any) => {
+    const pending = busy || isDeleting;
+    return open ? (
       <div data-testid="delete-dialog">
-        <button disabled={busy} onClick={onConfirm}>
-          {busy ? "Deleting..." : "Confirm delete"}
+        <button disabled={pending} onClick={onConfirm}>
+          {pending ? "Deleting..." : "Confirm delete"}
         </button>
       </div>
-    ) : null
-  ),
+    ) : null;
+  },
 }));
 
 vi.mock("@/components/shared/LoadingSkeleton", () => ({
@@ -102,8 +103,18 @@ vi.mock("@/components/design-system", () => ({
 }));
 
 vi.mock("@/pages/changeOrders/CoControlCenter", () => ({
-  default: ({ cos, onOpenCo }: any) => (
-    <button onClick={() => onOpenCo(cos[0])}>Open change order</button>
+  default: ({ cos, onOpenCo, onDeleteCo }: any) => (
+    <>
+      <button onClick={() => onOpenCo(cos[0])}>Open change order</button>
+      {onDeleteCo ? (
+        <button
+          aria-label={`Delete ${cos[0]?.co_number || "change order"}`}
+          onClick={() => onDeleteCo(cos[0])}
+        >
+          Delete change order
+        </button>
+      ) : null}
+    </>
   ),
 }));
 
@@ -179,7 +190,7 @@ describe("ChangeOrders edit", () => {
     });
   });
 
-  it("opens confirmation from the edit form and keeps it open until delete succeeds", async () => {
+  it("opens archive confirmation from the control center and clears it after delete succeeds", async () => {
     const user = userEvent.setup();
     const existing = {
       id: "co-1",
@@ -213,8 +224,7 @@ describe("ChangeOrders edit", () => {
       </QueryClientProvider>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Open change order" }));
-    await user.click(screen.getByRole("button", { name: "Delete change order" }));
+    await user.click(await screen.findByRole("button", { name: "Delete CO #001" }));
     expect(screen.getByTestId("delete-dialog")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Confirm delete" }));
