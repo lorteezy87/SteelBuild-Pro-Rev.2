@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  createSupabaseQueryMock,
-  expectIsoTimestamp,
-} from "./helpers/supabaseQueryMock";
+import type { createSupabaseQueryMock as CreateMock } from "./helpers/supabaseQueryMock";
+import { expectIsoTimestamp } from "./helpers/supabaseQueryMock";
 
-const mocks = vi.hoisted(() => createSupabaseQueryMock());
+// vi.hoisted runs before ESM imports are initialized — use require inside
+// the factory so createSupabaseQueryMock is available without TDZ.
+const mocks = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { createSupabaseQueryMock } = require("./helpers/supabaseQueryMock") as {
+    createSupabaseQueryMock: typeof CreateMock;
+  };
+  return createSupabaseQueryMock();
+});
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {
