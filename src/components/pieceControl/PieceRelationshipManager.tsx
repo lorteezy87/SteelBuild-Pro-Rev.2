@@ -61,6 +61,7 @@ export default function PieceRelationshipManager({
   const [drawingSetId, setDrawingSetId] = useState("");
   const [drawingFilter, setDrawingFilter] = useState("");
   const [markFilter, setMarkFilter] = useState("");
+  const [needsDrawingOnly, setNeedsDrawingOnly] = useState(false);
   const [scopeFilter, setScopeFilter] = useState<"unassigned" | "package" | "all">(
     focusedWorkPackageId ? "unassigned" : "all",
   );
@@ -96,6 +97,14 @@ export default function PieceRelationshipManager({
     ),
     [snapshot?.workPackages],
   );
+  const drawingLinkCountByPiece = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const link of snapshot?.pieceDrawingSets ?? []) {
+      map.set(link.piece_id, (map.get(link.piece_id) ?? 0) + 1);
+    }
+    return map;
+  }, [snapshot?.pieceDrawingSets]);
+
   const liveWorkPackageId = (piece: { work_package_id?: string | null }) =>
     piece.work_package_id && workPackageMap.has(piece.work_package_id)
       ? piece.work_package_id
@@ -123,6 +132,9 @@ export default function PieceRelationshipManager({
       if (mark && !String(piece.piece_mark || "").toLowerCase().includes(mark)) {
         return false;
       }
+      if (needsDrawingOnly && (drawingLinkCountByPiece.get(piece.id) ?? 0) > 0) {
+        return false;
+      }
       return true;
     });
     return sortPieceRegisterRows(
@@ -134,7 +146,15 @@ export default function PieceRelationshipManager({
       })),
       { key: "work_package", direction: "asc" },
     );
-  }, [focusedWorkPackageId, markFilter, packageScopedLeaves, scopeFilter, workPackageMap]);
+  }, [
+    drawingLinkCountByPiece,
+    focusedWorkPackageId,
+    markFilter,
+    needsDrawingOnly,
+    packageScopedLeaves,
+    scopeFilter,
+    workPackageMap,
+  ]);
 
   useEffect(() => {
     if (
@@ -214,6 +234,20 @@ export default function PieceRelationshipManager({
       return name.includes(needle) || set.id.toLowerCase().includes(needle);
     });
   }, [activeDrawingSets, drawingFilter]);
+
+  const allVisibleSelected =
+    selectablePieces.length > 0 &&
+    selectablePieces.every((piece) => selectedPieceIds.has(piece.id));
+
+  const selectAllVisible = () => {
+    setSelectedPieceIds(new Set(selectablePieces.map((piece) => piece.id)));
+    setSelectionAnchorId(selectablePieces[0]?.id ?? null);
+  };
+
+  const clearSelection = () => {
+    setSelectedPieceIds(new Set());
+    setSelectionAnchorId(null);
+  };
 
   const invalidate = async () => {
     await Promise.all([
@@ -366,6 +400,23 @@ export default function PieceRelationshipManager({
     return counts;
   }, [autoAssignPlan]);
 
+  const runAssign = () => {
+    const target = focusedWorkPackageId || targetWorkPackageId;
+    const reassigning = [...selectedPieceIds].some((id) => {
+      const piece = leafPieces.find((row) => row.id === id);
+      return piece?.work_package_id && piece.work_package_id !== target;
+    });
+    if (
+      reassigning &&
+      !window.confirm(
+        "Some selected pieces are already on another work package. Reassign them?",
+      )
+    ) {
+      return;
+    }
+    assignMutation.mutate();
+  };
+
   if (!enabled) {
     return (
       <div className="piece-relationship-state is-warning" data-skin="command">
@@ -410,9 +461,8 @@ export default function PieceRelationshipManager({
             <PackageCheck size={18} />
           </span>
           <p>
-            {focusedWorkPackageId
-              ? "Add unassigned piece marks to this work package, or remove assigned lots. Shift-click to select a range."
-              : "Multi-select piece marks and assign them to a work package. Shift-click to select a range."}
+            Filter → <strong>Select all</strong> → Assign to WP → Link drawing set.
+           {" "}Shift-click to select a range.
           </p>
         </div>
 
@@ -450,6 +500,14 @@ export default function PieceRelationshipManager({
               {label}
             </button>
           ))}
+          <button
+            type="button"
+            className={`cmd-btn ${needsDrawingOnly ? "cmd-btn--primary" : "cmd-btn--ghost"}`}
+            onClick={() => setNeedsDrawingOnly((v) => !v)}
+            title="Only pieces with no drawing set linked"
+          >
+            Needs drawing
+          </button>
           <label className="piece-command-field" htmlFor="piece-mark-filter" style={{ flex: 1, minWidth: 140 }}>
             Mark search
             <input
@@ -462,104 +520,151 @@ export default function PieceRelationshipManager({
           </label>
         </div>
 
+        <div className="piece-command-actions" style={{ marginTop: 0, marginBottom: 8 }}>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            disabled={selectablePieces.length === 0 || allVisibleSelected}
+            onClick={selectAllVisible}
+          >
+            Select all visible ({selectablePieces.length})
+          </button>
+          <button
+            type="button"
+            className="cmd-btn cmd-btn--ghost"
+            disabled={selectedPieceIds.size === 0}
+            onClick={clearSelection}
+          >
+            Clear
+          </button>
+        </div>
+
         {selectedPieceIds.size > 0 && (
-          <p className="piece-command-intro" style={{ marginBottom: 8 }}>
-            <Pill tone="info">
-              {selectedTons.selected} selected
-              {selectedTons.known > 0
-                ? ` · ${selectedTons.tons.toFixed(2)} t (${selectedTons.known} weighed)`
-                : ""}
-            </Pill>
-          </p>
+          <div className="piece-selection-bar piece-selection-bar--bulk" style={{ marginBottom: 8 }}>
+            <div className="piece-production-bulkbar__meta">
+              <Pill tone="info">
+                {selectedTons.selected} selected
+                {selectedTons.known > 0
+                  ? ` · ${selectedTons.tons.toFixed(2)} t`
+                  : ""}
+              </Pill>
+            </div>
+            <div className="piece-bulk-group">
+              <button
+                type="button"
+                disabled={
+                  !(focusedWorkPackageId || targetWorkPackageId) || assignMutation.isPending
+                }
+                onClick={runAssign}
+                className="cmd-btn cmd-btn--primary"
+              >
+                {focusedWorkPackageId ? "Add to this WP" : "Assign to WP"}
+              </button>
+              <button
+                type="button"
+                disabled={unassignMutation.isPending}
+                onClick={() => unassignMutation.mutate()}
+                className="cmd-btn cmd-btn--ghost"
+              >
+                Unassign
+              </button>
+              {activeDrawingSets.length > 0 && (
+                <>
+                  <label className="piece-command-field" htmlFor="piece-bulk-drawing-set" style={{ marginTop: 0 }}>
+                    Set for selection
+                    <select
+                      id="piece-bulk-drawing-set"
+                      value={drawingSetId}
+                      onChange={(event) => setDrawingSetId(event.target.value)}
+                      className="piece-command-control"
+                    >
+                      <option value="">Select set…</option>
+                      {filteredDrawingSets.map((set) => (
+                        <option key={set.id} value={set.id}>
+                          {set.set_name || set.id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!drawingSetId || bulkLinkMutation.isPending}
+                    onClick={() => bulkLinkMutation.mutate()}
+                    className="cmd-btn cmd-btn--primary"
+                  >
+                    Link set to {selectedPieceIds.size} selected
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         )}
 
         <div className="piece-assignment-list">
-          {selectablePieces.map((piece) => (
-            <label
-              key={piece.id}
-              className="piece-assignment-row"
-              htmlFor={`piece-assignment-${piece.id}`}
-              onClick={(event) => {
-                event.preventDefault();
-                if (event.shiftKey && selectionAnchorId) {
-                  const orderedIds = selectablePieces.map((row) => row.id);
-                  const rangeIds = selectIdRange(
-                    orderedIds,
-                    selectionAnchorId,
-                    piece.id,
-                  );
-                  setSelectedPieceIds((current) =>
-                    addIdsToSelection(current, rangeIds),
-                  );
-                  return;
-                }
-                setSelectedPieceIds((current) => {
-                  const next = new Set(current);
-                  if (next.has(piece.id)) next.delete(piece.id);
-                  else next.add(piece.id);
-                  return next;
-                });
-                setSelectionAnchorId(piece.id);
-              }}
-            >
-              <input
-                id={`piece-assignment-${piece.id}`}
-                type="checkbox"
-                checked={selectedPieceIds.has(piece.id)}
-                readOnly
-                tabIndex={-1}
-              />
-              <strong>{piece.piece_mark}</strong>
-              <span className="piece-assignment-row__lot">Lot {piece.lot_code}</span>
-              <span className="piece-assignment-row__package">
-                {liveWorkPackageId(piece)
-                  ? workPackageMap.get(liveWorkPackageId(piece)!) ?? "Assigned"
-                  : "Unassigned"}
-              </span>
-            </label>
-          ))}
+          {selectablePieces.map((piece) => {
+            const linkCount = drawingLinkCountByPiece.get(piece.id) ?? 0;
+            return (
+              <label
+                key={piece.id}
+                className="piece-assignment-row"
+                htmlFor={`piece-assignment-${piece.id}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (event.shiftKey && selectionAnchorId) {
+                    const orderedIds = selectablePieces.map((row) => row.id);
+                    const rangeIds = selectIdRange(
+                      orderedIds,
+                      selectionAnchorId,
+                      piece.id,
+                    );
+                    setSelectedPieceIds((current) =>
+                      addIdsToSelection(current, rangeIds),
+                    );
+                    return;
+                  }
+                  setSelectedPieceIds((current) => {
+                    const next = new Set(current);
+                    if (next.has(piece.id)) next.delete(piece.id);
+                    else next.add(piece.id);
+                    return next;
+                  });
+                  setSelectionAnchorId(piece.id);
+                }}
+              >
+                <input
+                  id={`piece-assignment-${piece.id}`}
+                  type="checkbox"
+                  checked={selectedPieceIds.has(piece.id)}
+                  readOnly
+                  tabIndex={-1}
+                />
+                <strong>{piece.piece_mark}</strong>
+                <span className="piece-assignment-row__lot">
+                  Lot {piece.lot_code}
+                  {" · "}
+                  {linkCount > 0 ? `${linkCount} drawing set${linkCount === 1 ? "" : "s"}` : "No drawings"}
+                </span>
+                <span className="piece-assignment-row__package">
+                  {liveWorkPackageId(piece)
+                    ? workPackageMap.get(liveWorkPackageId(piece)!) ?? "Assigned"
+                    : "Unassigned"}
+                </span>
+              </label>
+            );
+          })}
           {selectablePieces.length === 0 && (
             <p className="piece-command-empty">
               {focusedWorkPackageId && scopeFilter === "unassigned"
-                ? "No unassigned pieces — switch to “This package” or clear the mark filter."
-                : focusedWorkPackageId
-                  ? "No pieces assigned — add from unassigned marks."
-                  : "No active pieces match this filter."}
+                ? "No unassigned pieces — switch to “This package” or clear filters."
+                : needsDrawingOnly
+                  ? "Every visible piece already has a drawing set."
+                  : focusedWorkPackageId
+                    ? "No pieces assigned — add from unassigned marks."
+                    : "No active pieces match this filter."}
             </p>
           )}
         </div>
         <div className="piece-command-actions">
-          <button
-            type="button"
-            disabled={selectedPieceIds.size === 0 || !(focusedWorkPackageId || targetWorkPackageId) || assignMutation.isPending}
-            onClick={() => {
-              const target = focusedWorkPackageId || targetWorkPackageId;
-              const reassigning = [...selectedPieceIds].some((id) => {
-                const piece = leafPieces.find((row) => row.id === id);
-                return piece?.work_package_id && piece.work_package_id !== target;
-              });
-              if (
-                reassigning &&
-                !window.confirm(
-                  "Some selected pieces are already on another work package. Reassign them?",
-                )
-              ) {
-                return;
-              }
-              assignMutation.mutate();
-            }}
-            className="cmd-btn cmd-btn--primary"
-          >
-            {focusedWorkPackageId ? "Add to this WP" : "Assign selected"}
-          </button>
-          <button
-            type="button"
-            disabled={selectedPieceIds.size === 0 || unassignMutation.isPending}
-            onClick={() => unassignMutation.mutate()}
-            className="cmd-btn cmd-btn--ghost"
-          >
-            {focusedWorkPackageId ? "Remove from WP" : "Unassign selected"}
-          </button>
           <button
             type="button"
             className="cmd-btn cmd-btn--ghost"
@@ -661,9 +766,8 @@ export default function PieceRelationshipManager({
             <Link2 size={18} />
           </span>
           <p>
-            Select pieces above, pick a drawing set, then link in bulk — or link one
-            piece at a time. Fab readiness still checks IFC/Released sheets inside
-            each linked set.
+            Select pieces on the left (or use <strong>Needs drawing</strong>), pick a set,
+            then link in bulk from the selection bar. Review links for one piece below.
           </p>
         </div>
         {drawingPieces.length === 0 || activeDrawingSets.length === 0 ? (
@@ -693,7 +797,7 @@ export default function PieceRelationshipManager({
             </label>
             <div className="piece-link-controls">
               <label className="piece-command-field" htmlFor="piece-drawing-link-piece">
-                Single piece
+                Inspect piece
                 <select
                   id="piece-drawing-link-piece"
                   value={selectedDrawingPieceId}
@@ -703,6 +807,9 @@ export default function PieceRelationshipManager({
                   {drawingPieces.map((piece) => (
                     <option key={piece.id} value={piece.id}>
                       {piece.piece_mark} · {piece.lot_code}
+                      {(drawingLinkCountByPiece.get(piece.id) ?? 0) > 0
+                        ? ` (${drawingLinkCountByPiece.get(piece.id)} sets)`
+                        : ""}
                     </option>
                   ))}
                 </select>
@@ -747,7 +854,7 @@ export default function PieceRelationshipManager({
                 onClick={() => linkMutation.mutate()}
                 className="cmd-btn cmd-btn--ghost piece-link-action"
               >
-                Link single piece
+                Link inspect piece only
               </button>
             </div>
           </>

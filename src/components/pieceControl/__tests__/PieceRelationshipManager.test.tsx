@@ -412,15 +412,16 @@ describe("PieceRelationshipManager", () => {
       document.getElementById("piece-assignment-piece-2")!.closest("label")!,
     );
 
-    fireEvent.change(screen.getByLabelText("Drawing set"), {
+    fireEvent.change(screen.getByLabelText("Set for selection"), {
       target: { value: "set-1" },
     });
 
-    const bulkButton = screen.getByRole("button", {
+    const bulkButtons = screen.getAllByRole("button", {
       name: /Link set to 2 selected/i,
     });
-    expect(bulkButton).toBeEnabled();
-    fireEvent.click(bulkButton);
+    expect(bulkButtons.length).toBeGreaterThan(0);
+    expect(bulkButtons[0]).toBeEnabled();
+    fireEvent.click(bulkButtons[0]);
 
     await waitFor(() => {
       expect(linkPieceDrawingSet).toHaveBeenCalledTimes(2);
@@ -435,5 +436,68 @@ describe("PieceRelationshipManager", () => {
       "piece-2",
       "set-1",
     );
+  });
+
+  it("selects all visible piece marks", async () => {
+    const pieces = ["A", "B"].map((mark, index) => ({
+      id: `piece-${index + 1}`,
+      project_id: "project-1",
+      piece_mark: mark,
+      normalized_piece_mark: mark.toLowerCase(),
+      lot_code: "ALL",
+      parent_piece_id: null,
+      quantity: 1,
+      profile: null,
+      material_grade: null,
+      weight_each_lbs: null,
+      weight_total_lbs: null,
+      work_package_id: null,
+      lifecycle_status: "active",
+      on_hold: false,
+      source_system: null,
+      external_ref: null,
+      metadata: null,
+      updated_at: "2026-07-01T00:00:00Z",
+      deleted_at: null,
+    } as any));
+    vi.mocked(fetchPieceRelationshipSnapshot).mockResolvedValue({
+      pieces,
+      pieceDrawings: [],
+      pieceDrawingSets: [],
+      drawings: [],
+      workPackages: [],
+      drawingSets: [],
+      submittals: [],
+      sheetResponses: [],
+      drawingRevisions: [],
+      drawingReviews: [],
+      drawingSignoffs: [],
+      commentDispositions: [],
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PieceRelationshipManager
+          projectId="project-1"
+          pieceControlMode="shadow"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /Select all visible \(2\)/i }),
+    ).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Select all visible \(2\)/i }));
+
+    expect(document.getElementById("piece-assignment-piece-1")).toBeChecked();
+    expect(document.getElementById("piece-assignment-piece-2")).toBeChecked();
+    expect(screen.getByText(/2 selected/i)).toBeInTheDocument();
   });
 });
