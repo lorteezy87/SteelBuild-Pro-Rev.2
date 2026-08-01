@@ -462,7 +462,7 @@ export default function PieceRelationshipManager({
           </span>
           <p>
             Filter → <strong>Select all</strong> → Assign to WP → Link drawing set.
-            Shift-click for ranges.
+           {" "}Shift-click to select a range.
           </p>
         </div>
 
@@ -571,7 +571,7 @@ export default function PieceRelationshipManager({
               {activeDrawingSets.length > 0 && (
                 <>
                   <label className="piece-command-field" htmlFor="piece-bulk-drawing-set" style={{ marginTop: 0 }}>
-                    Drawing set
+                    Set for selection
                     <select
                       id="piece-bulk-drawing-set"
                       value={drawingSetId}
@@ -592,7 +592,7 @@ export default function PieceRelationshipManager({
                     onClick={() => bulkLinkMutation.mutate()}
                     className="cmd-btn cmd-btn--primary"
                   >
-                    Link set to {selectedPieceIds.size}
+                    Link set to {selectedPieceIds.size} selected
                   </button>
                 </>
               )}
