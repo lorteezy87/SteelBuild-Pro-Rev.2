@@ -60,7 +60,7 @@ async function buildAuthMeResult(user: {
   return {
     ...stripPrivilegeMeta(meta),
     id: user.id,
-    email: user.email,
+    email: user.email ?? undefined,
     full_name: resolveFullName(meta, user.email),
     role,
   };
