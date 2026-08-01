@@ -111,21 +111,28 @@ export default function ProductionStatus() {
     return { total, linked, pct: Math.round((linked / total) * 100) };
   }, [filtered, pieceDrawingMap]);
 
-  /** After CSV import: bridge already wrote fab_status/lifecycle; refresh caches. */
+  /** After CSV production-status import: bridge already wrote fab_status/lifecycle; refresh caches. */
   const handleProductionImported = async () => {
     await Promise.all([
-      // Shared helper: production board + logistics + model-elements +
-      // canonical-pieces-3d + reporting (Fab-mode colors).
+      // Shared helper: production board + logistics + legacyProduction + model-elements +
+      // canonical-pieces-3d + reporting (Fab-mode colors). legacyProduction is included
+      // in the production scope after #193 — no separate invalidate needed.
       invalidatePieceControlQueries(queryClient, projectId, "production"),
-      // This page's legacy EPM table key (not covered by the production scope).
-      queryClient.invalidateQueries({
-        queryKey: pieceControlKeys.legacyProduction(projectId),
-      }),
-      // Drawing-link map used by this page only.
+      // Drawing-link map used by this page only (also covered when model_element
+      // is invalidated via cacheRegistry, but keep explicit for CSV path clarity).
       queryClient.invalidateQueries({
         queryKey: ["production-model-elements", projectId],
       }),
     ]);
+  };
+
+  /** After Tekla EPM XML (BOM → model_elements): refresh drawing-link map on this page.
+   *  invalidateEntity inside the modal already covers model-elements + production-model-elements
+   *  via cacheRegistry; this is a focused page-local refresh so Shop Dwg updates immediately. */
+  const handleTeklaEpmImported = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ["production-model-elements", projectId],
+    });
   };
 
   if (!projectId) {
@@ -151,6 +158,7 @@ export default function ProductionStatus() {
         projectId={projectId}
         projectName={activeProject?.name}
         onClose={() => setShowEpmImport(false)}
+        onImported={handleTeklaEpmImported}
       />
     </>
   );

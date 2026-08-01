@@ -137,6 +137,9 @@ const REGISTRY: Record<string, EntityRegistration> = {
     families: (pid) => [
       ["model-elements", pid],
       ["model-elements"],
+      // Production Status drawing-link map (slim projection — separate key so it
+      // does not thrash the full-row model-elements cache used by Hub/3D).
+      ["production-model-elements", pid],
     ],
   },
 
