@@ -120,35 +120,70 @@ select option:disabled {
    into the closed control when it's hovered — on a light page that paints the
    select black-on-black (unreadable, doesn't revert). These higher-specificity
    rules keep options light wherever the surface is light. */
+/* Light surfaces only — do NOT force white options under SteelBuild Dark.
+   Dark command skins are handled below (incl. nested data-skin descendants). */
 [data-theme="light"] select option,
 [data-theme="light"] select optgroup,
-[data-skin="command"] select option,
-[data-skin="command"] select optgroup {
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select option,
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select optgroup,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select option,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select optgroup {
   background: #ffffff !important;
   color: #16203a !important;
 }
 [data-theme="light"] select option:checked,
-[data-skin="command"] select option:checked {
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select option:checked,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select option:checked {
   background: #e8edf3 !important;
   color: #16203a !important;
 }
 [data-theme="light"] select option:disabled,
-[data-skin="command"] select option:disabled {
+html:not(.steelbuild-dark)[data-theme="light"] [data-skin="command"] select option:disabled,
+html:not(.steelbuild-dark):not([data-theme="dark"]) [data-skin="command"] select option:disabled {
   color: #94a3b8 !important;
 }
 
+/* Dark command skins — cover nested data-skin="command" (Piece Register, etc.)
+   as well as the html-level skin from useCommandSkin(). Without the descendant
+   forms, the light `[data-skin="command"] select option { background:#fff }`
+   rule wins inside nested skins under SteelBuild Dark. */
 html.steelbuild-dark[data-skin="command"] select,
 html.steelbuild-dark[data-skin="command"] select option,
-html.steelbuild-dark[data-skin="command"] select optgroup {
-  background: var(--cmd-surface) !important;
-  color: var(--cmd-text) !important;
+html.steelbuild-dark[data-skin="command"] select optgroup,
+html.steelbuild-dark [data-skin="command"] select,
+html.steelbuild-dark [data-skin="command"] select option,
+html.steelbuild-dark [data-skin="command"] select optgroup,
+.steelbuild-dark[data-skin="command"] select,
+.steelbuild-dark[data-skin="command"] select option,
+.steelbuild-dark[data-skin="command"] select optgroup,
+.steelbuild-dark [data-skin="command"] select,
+.steelbuild-dark [data-skin="command"] select option,
+.steelbuild-dark [data-skin="command"] select optgroup,
+[data-theme="dark"][data-skin="command"] select,
+[data-theme="dark"][data-skin="command"] select option,
+[data-theme="dark"][data-skin="command"] select optgroup,
+[data-theme="dark"] [data-skin="command"] select,
+[data-theme="dark"] [data-skin="command"] select option,
+[data-theme="dark"] [data-skin="command"] select optgroup {
+  background: var(--cmd-surface, #121820) !important;
+  color: var(--cmd-text, #f3f7ff) !important;
 }
-html.steelbuild-dark[data-skin="command"] select option:checked {
-  background: var(--cmd-row-hover) !important;
-  color: var(--cmd-text) !important;
+html.steelbuild-dark[data-skin="command"] select option:checked,
+html.steelbuild-dark [data-skin="command"] select option:checked,
+.steelbuild-dark[data-skin="command"] select option:checked,
+.steelbuild-dark [data-skin="command"] select option:checked,
+[data-theme="dark"][data-skin="command"] select option:checked,
+[data-theme="dark"] [data-skin="command"] select option:checked {
+  background: var(--cmd-row-hover, rgba(255,255,255,0.08)) !important;
+  color: var(--cmd-text, #f3f7ff) !important;
 }
-html.steelbuild-dark[data-skin="command"] select option:disabled {
-  color: var(--cmd-text-muted) !important;
+html.steelbuild-dark[data-skin="command"] select option:disabled,
+html.steelbuild-dark [data-skin="command"] select option:disabled,
+.steelbuild-dark[data-skin="command"] select option:disabled,
+.steelbuild-dark [data-skin="command"] select option:disabled,
+[data-theme="dark"][data-skin="command"] select option:disabled,
+[data-theme="dark"] [data-skin="command"] select option:disabled {
+  color: var(--cmd-text-muted, rgba(255,255,255,0.45)) !important;
 }
 
 [data-theme="light"] body,
