@@ -23,10 +23,7 @@ import {
   resolveProductionWorkPackageScope,
   UNASSIGNED_WP_FILTER,
 } from "@/lib/pieceControl/productionScope";
-import {
-  invalidatePieceControlQueries,
-  pieceControlKeys,
-} from "@/lib/pieceControl/queryKeys";
+import { invalidatePieceControlQueries } from "@/lib/pieceControl/queryKeys";
 import { DecisionPanel } from "@/components/command";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import { entities } from "@/api/supabaseClient";
