@@ -176,6 +176,7 @@ export async function softDeletePieceProduction(id: string): Promise<void> {
  * Bulk-set stage (and STAGE_PERCENT baseline) for existing piece_production rows.
  * Loads marks for the fab bridge, updates status/percent in chunks, then runs
  * syncProductionRowsToModelAndPieces so 3D / Piece Control colors stay in sync.
+ * Returns the number of rows actually found and written (not the request size).
  */
 export async function bulkUpdateProductionStage(
   projectId: string,
@@ -201,16 +202,17 @@ export async function bulkUpdateProductionStage(
     selected.push(...((data || []) as PieceProductionRow[]));
   }
 
-  let updated = 0;
-  for (let i = 0; i < uniqueIds.length; i += CHUNK) {
-    const slice = uniqueIds.slice(i, i + CHUNK);
+  if (selected.length === 0) return { updated: 0 };
+
+  const selectedIds = selected.map((r) => r.id);
+  for (let i = 0; i < selectedIds.length; i += CHUNK) {
+    const slice = selectedIds.slice(i, i + CHUNK);
     const { error } = await from(TABLE)
       .update({ status: stage, percent_complete: percent })
       .eq("project_id", projectId)
       .eq("is_deleted", false)
       .in("id", slice);
     if (error) throw error;
-    updated += slice.length;
   }
 
   const staged: StagedProductionRow[] = selected.map((row) => ({
@@ -230,10 +232,14 @@ export async function bulkUpdateProductionStage(
   }));
 
   try {
-    await syncProductionRowsToModelAndPieces(projectId, staged);
+    // Explicit operator bulk may correct backward (Shipped → Cut). Import path
+    // leaves allowLifecycleRegress unset so EPM never regresses lifecycle.
+    await syncProductionRowsToModelAndPieces(projectId, staged, {
+      allowLifecycleRegress: true,
+    });
   } catch (bridgeError) {
     console.warn("[piece_production] bulk stage → fab bridge failed:", bridgeError);
   }
 
-  return { updated };
+  return { updated: selected.length };
 }
