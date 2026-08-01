@@ -8,6 +8,10 @@
  *   2) model_elements.fab_status (when unlinked)
  * Neither of those was updated by commitProductionRows, so EPM imports never
  * recolored the model. This bridge closes that gap.
+ *
+ * Efficiency: one paged roster fetch for model_elements + one pieces fetch,
+ * then in-memory mark grouping and batched updates by target fab_status.
+ * Avoids the previous N+1 ilike-per-mark pattern on large imports.
  */
 
 import { supabase } from "@/lib/supabase";
@@ -15,6 +19,7 @@ import type { ProductionStage } from "@/lib/importProductionStatus";
 import type { FabStatus } from "@/lib/fabStatus";
 import { FAB_STATUS_ORDER } from "@/lib/fabStatus";
 import type { StagedProductionRow } from "./repository";
+import { fetchAllModelElements } from "@/lib/ifc/fetchAllModelElements";
 
 const from = (table: string): any =>
   (supabase.from as unknown as (t: string) => any)(table);
@@ -53,16 +58,28 @@ function normalizeMark(mark: string | null | undefined): string {
     .toUpperCase();
 }
 
-/** Escape % and _ so ilike behaves as exact case-insensitive equality. */
-function escapeIlikeExact(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-}
-
 export interface ProductionBridgeSummary {
   modelElementsUpdated: number;
   piecesAdvanced: number;
   piecesSkipped: number;
   mode: string;
+}
+
+const UPDATE_CHUNK = 200;
+
+async function batchUpdateByIds(
+  table: string,
+  ids: string[],
+  patch: Record<string, unknown>,
+): Promise<number> {
+  let updated = 0;
+  for (let i = 0; i < ids.length; i += UPDATE_CHUNK) {
+    const slice = ids.slice(i, i + UPDATE_CHUNK);
+    const { error } = await from(table).update(patch).in("id", slice);
+    if (error) throw error;
+    updated += slice.length;
+  }
+  return updated;
 }
 
 /**
@@ -94,32 +111,37 @@ export async function syncProductionRowsToModelAndPieces(
   }
   if (fabByMark.size === 0) return summary;
 
-  // ── Always: model_elements.fab_status by mark ─────────────────────────────
+  // ── Always: model_elements.fab_status by mark (one roster fetch) ───────────
+  // Slim projection + concurrent paging — avoids N+1 ilike selects and the
+  // silent 1000-row PostgREST cap on large projects.
+  const roster = (await fetchAllModelElements(projectId, {
+    columns: "id,piece_mark",
+  })) as Array<{ id: string; piece_mark?: string | null }>;
+
+  const idsByMark = new Map<string, string[]>();
+  for (const el of roster) {
+    const mark = normalizeMark(el.piece_mark);
+    if (!mark) continue;
+    const list = idsByMark.get(mark);
+    if (list) list.push(el.id);
+    else idsByMark.set(mark, [el.id]);
+  }
+
+  // Group target marks by desired fab_status so identical patches share one
+  // (chunked) .in() update instead of one round-trip per mark.
+  const idsByFab = new Map<FabStatus, string[]>();
   for (const [mark, fab] of fabByMark) {
-    const { data: candidates, error: selErr } = await from("model_elements")
-      .select("id, piece_mark")
-      .eq("project_id", projectId)
-      .eq("is_deleted", false)
-      .ilike("piece_mark", escapeIlikeExact(mark));
-    if (selErr) throw selErr;
+    const ids = idsByMark.get(mark);
+    if (!ids?.length) continue;
+    const bucket = idsByFab.get(fab);
+    if (bucket) bucket.push(...ids);
+    else idsByFab.set(fab, [...ids]);
+  }
 
-    const ids = (candidates || [])
-      .filter(
-        (el: { piece_mark?: string | null }) =>
-          normalizeMark(el.piece_mark) === mark,
-      )
-      .map((el: { id: string }) => el.id);
-    if (ids.length === 0) continue;
-
-    const CHUNK = 200;
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      const slice = ids.slice(i, i + CHUNK);
-      const { error: updErr } = await from("model_elements")
-        .update({ fab_status: fab })
-        .in("id", slice);
-      if (updErr) throw updErr;
-      summary.modelElementsUpdated += slice.length;
-    }
+  for (const [fab, ids] of idsByFab) {
+    summary.modelElementsUpdated += await batchUpdateByIds("model_elements", ids, {
+      fab_status: fab,
+    });
   }
 
   // ── Pilot/live: advance unique leaf pieces ────────────────────────────────
@@ -166,6 +188,8 @@ export async function syncProductionRowsToModelAndPieces(
     leavesByMark.set(mk, list);
   }
 
+  // Collect advances grouped by target fab so we can batch .in() updates.
+  const advanceIdsByFab = new Map<FabStatus, string[]>();
   for (const [mark, fab] of fabByMark) {
     const candidates = leavesByMark.get(mark) ?? [];
     if (candidates.length !== 1) {
@@ -180,11 +204,15 @@ export async function syncProductionRowsToModelAndPieces(
       summary.piecesSkipped += 1;
       continue;
     }
-    const { error: updErr } = await from("pieces")
-      .update({ lifecycle_status: fab })
-      .eq("id", leaf.id);
-    if (updErr) throw updErr;
-    summary.piecesAdvanced += 1;
+    const bucket = advanceIdsByFab.get(fab);
+    if (bucket) bucket.push(leaf.id);
+    else advanceIdsByFab.set(fab, [leaf.id]);
+  }
+
+  for (const [fab, ids] of advanceIdsByFab) {
+    summary.piecesAdvanced += await batchUpdateByIds("pieces", ids, {
+      lifecycle_status: fab,
+    });
   }
 
   return summary;

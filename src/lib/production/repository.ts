@@ -112,10 +112,12 @@ function toFields(row: StagedProductionRow, projectId: string, importedAt: strin
 }
 
 const CHUNK = 200;
+/** Parallelism for per-row updates (each row has a distinct payload). */
+const UPDATE_CONCURRENCY = 25;
 
 /**
  * Commit staged rows: bulk-insert the creates (chunked), update the existing
- * pieces by id. Returns the applied counts.
+ * pieces by id in parallel batches. Returns the applied counts.
  * After a successful write, best-effort sync into model_elements.fab_status and
  * (when pilot/live) unique leaf pieces.lifecycle_status so Fab-mode colors update.
  */
@@ -136,10 +138,20 @@ export async function commitProductionRows(
   }
 
   let updated = 0;
-  for (const row of updates) {
-    const { error } = await from(TABLE).update(toFields(row, projectId, importedAt)).eq("id", row.existing_id);
-    if (error) throw error;
-    updated += 1;
+  for (let i = 0; i < updates.length; i += UPDATE_CONCURRENCY) {
+    const slice = updates.slice(i, i + UPDATE_CONCURRENCY);
+    const results = await Promise.all(
+      slice.map((row) =>
+        from(TABLE)
+          .update(toFields(row, projectId, importedAt))
+          .eq("id", row.existing_id)
+          .then(({ error }: { error: unknown }) => {
+            if (error) throw error;
+            return 1;
+          }),
+      ),
+    );
+    updated += results.length;
   }
 
   try {
