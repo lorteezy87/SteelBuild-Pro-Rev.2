@@ -22,6 +22,10 @@ import { normalizePieceMark } from "@/services/modelElementStatus";
 import ProductionStatusImportModal from "@/components/production/ProductionStatusImportModal";
 import TeklaEpmImportModal from "@/components/production/TeklaEpmImportModal";
 import ProductionStatusControlCenter from "./productionStatus/ProductionStatusControlCenter";
+import {
+  invalidatePieceControlQueries,
+  pieceControlKeys,
+} from "@/lib/pieceControl/queryKeys";
 
 /** CSV export — reuses the same field order as the control-center columns. */
 function exportProductionCSV(rows) {
@@ -60,7 +64,7 @@ export default function ProductionStatus() {
   const [stageFilter, setStageFilter] = useState("All");
 
   const { data: pieces = [], isLoading } = useQuery({
-    queryKey: ["piece-production", projectId],
+    queryKey: pieceControlKeys.legacyProduction(projectId),
     queryFn: () => listPieceProduction(projectId),
     enabled: !!projectId,
     staleTime: 30_000,
@@ -107,6 +111,23 @@ export default function ProductionStatus() {
     return { total, linked, pct: Math.round((linked / total) * 100) };
   }, [filtered, pieceDrawingMap]);
 
+  /** After CSV import: bridge already wrote fab_status/lifecycle; refresh caches. */
+  const handleProductionImported = async () => {
+    await Promise.all([
+      // Shared helper: production board + logistics + model-elements +
+      // canonical-pieces-3d + reporting (Fab-mode colors).
+      invalidatePieceControlQueries(queryClient, projectId, "production"),
+      // This page's legacy EPM table key (not covered by the production scope).
+      queryClient.invalidateQueries({
+        queryKey: pieceControlKeys.legacyProduction(projectId),
+      }),
+      // Drawing-link map used by this page only.
+      queryClient.invalidateQueries({
+        queryKey: ["production-model-elements", projectId],
+      }),
+    ]);
+  };
+
   if (!projectId) {
     return (
       <div style={{ padding: 24, color: "var(--text-muted)" }}>
@@ -123,7 +144,7 @@ export default function ProductionStatus() {
         projectName={activeProject?.name}
         existing={pieces}
         onClose={() => setShowImport(false)}
-        onImported={() => queryClient.invalidateQueries({ queryKey: ["piece-production", projectId] })}
+        onImported={handleProductionImported}
       />
       <TeklaEpmImportModal
         open={showEpmImport}
