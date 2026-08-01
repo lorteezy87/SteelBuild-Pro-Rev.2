@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 
 // ─── Step 0: New Set vs New Revision choice ───────────────────────────
-export default function StepChoice({ onNewSet, onNewRevision, onClose }) {
+export default function ChoiceStep({ onNewSet, onNewRevision, onClose }) {
   const [hovered, setHovered] = useState(null);
   const options = [
     { id: "new", icon: "📐", title: "New Drawing Set", desc: "First time uploading this drawing package — creates a new entry in the Drawing Log.", action: onNewSet },

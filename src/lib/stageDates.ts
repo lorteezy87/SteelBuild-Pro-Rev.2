@@ -45,11 +45,11 @@ export const DETAILING_STAGE_META = {
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-function isISO(v) {
+function isISO(v: any) {
   return typeof v === "string" && ISO_DATE_RE.test(v);
 }
 
-function emptyGate() {
+function emptyGate(): { start: string | null; end: string | null } {
   return { start: null, end: null };
 }
 
@@ -60,8 +60,8 @@ function emptyGate() {
  * canonical gates so callers can spread-edit without mutating the
  * underlying record. Each value is `{ start, end }`.
  */
-export function getStageDates(task) {
-  const out = DETAILING_STAGE_GATES.reduce((acc, g) => {
+export function getStageDates(task: any) {
+  const out = DETAILING_STAGE_GATES.reduce((acc: Record<string, { start: string | null; end: string | null }>, g) => {
     acc[g] = emptyGate();
     return acc;
   }, {});
@@ -107,7 +107,7 @@ function todayISO() {
  * `today` defaults to the local-clock today; callers can pass an
  * override for tests / fixed-clock rendering.
  */
-export function getActiveStage(stageDates, today = todayISO()) {
+export function getActiveStage(stageDates: any, today = todayISO()) {
   if (!stageDates) return null;
   // Forward sweep: first gate whose end is today-or-later, OR whose
   // start is filled but end isn't (open-ended window — the user is
@@ -132,7 +132,7 @@ export function getActiveStage(stageDates, today = todayISO()) {
  * the active gate's end_date (or start_date, if end isn't set yet).
  * Returns null when no gate has any date filled.
  */
-export function getEffectiveDueDate(stageDates, today = todayISO()) {
+export function getEffectiveDueDate(stageDates: any, today = todayISO()) {
   const gate = getActiveStage(stageDates, today);
   if (!gate) return null;
   const v = stageDates?.[gate];
@@ -144,7 +144,7 @@ export function getEffectiveDueDate(stageDates, today = todayISO()) {
  * `deriveCurrentStage` from the previous single-date model. Same
  * semantics now: walks the gates and picks the active one.
  */
-export function deriveCurrentStage(stageDates, today = todayISO()) {
+export function deriveCurrentStage(stageDates: any, today = todayISO()) {
   return getActiveStage(stageDates, today);
 }
 
@@ -154,9 +154,9 @@ export function deriveCurrentStage(stageDates, today = todayISO()) {
  * - end_date   = latest   filled gate end   (or start, if end missing)
  * Returns both null when nothing is filled.
  */
-export function deriveStartEndFromStages(stageDates) {
-  const starts = [];
-  const ends = [];
+export function deriveStartEndFromStages(stageDates: any) {
+  const starts: string[] = [];
+  const ends: string[] = [];
   for (const gate of DETAILING_STAGE_GATES) {
     const v = stageDates?.[gate];
     if (!v) continue;
@@ -183,8 +183,8 @@ export function deriveStartEndFromStages(stageDates) {
  *     one gate has any date; otherwise omitted so existing dates
  *     are preserved while the user is mid-edit)
  */
-export function applyStageDatesToTask(task, stageDates) {
-  const cleanStageDates = {};
+export function applyStageDatesToTask(task: any, stageDates: any) {
+  const cleanStageDates: Record<string, { start: string | null; end: string | null }> = {};
   for (const gate of DETAILING_STAGE_GATES) {
     const v = stageDates?.[gate];
     if (!v) continue;
@@ -221,6 +221,6 @@ export function applyStageDatesToTask(task, stageDates) {
  * (e.g. Fabrication gates) can opt in by extending this single
  * helper rather than grepping the codebase.
  */
-export function usesStageDates(task) {
+export function usesStageDates(task: any) {
   return task?.phase === "Detailing";
 }

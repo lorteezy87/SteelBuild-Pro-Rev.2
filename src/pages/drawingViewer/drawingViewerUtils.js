@@ -52,3 +52,20 @@ export function parseZonePayload(payload) {
     xMax: payload.xMax, yMax: payload.yMax,
   };
 }
+
+// Adapt a DMS document (opened via ?docId=) into the drawing record shape
+// the PDF viewer expects — sheet_number/title fields align with Drawing rows.
+export function documentToViewerDrawing(doc) {
+  return {
+    id: doc.id,
+    project_id: doc.project_id,
+    sheet_number: doc.document_number,
+    title: doc.display_name,
+    file_name: doc.file_name,
+    file_url: doc.file_url,
+    revision_number: doc.revision_number,
+    pdf_page: 1,
+    drawing_set_id: null,
+    viewer_source: "document",
+  };
+}

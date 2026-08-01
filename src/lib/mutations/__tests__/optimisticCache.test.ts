@@ -20,7 +20,7 @@ describe("applyOptimisticRowPatch", () => {
   });
 
   it("returns empty array when cache is undefined", () => {
-    expect(applyOptimisticRowPatch(undefined, "a", { stage: "X" })).toEqual([]);
+    expect(applyOptimisticRowPatch(undefined, "a", { stage: "X" } as any)).toEqual([]);
   });
 });
 

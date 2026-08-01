@@ -12,7 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { computeTmTicketTotal } from "./cost";
 import type { Backcharge, BackchargeEvent, BackchargeEventType, TmTicket } from "./types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const from = (table: string): any => (supabase.from as unknown as (t: string) => any)(table);
 
 async function logEvent(ev: {
@@ -34,7 +34,7 @@ async function logEvent(ev: {
     });
   } catch (err) {
     // Audit is best-effort — never fail the backcharge write on a log failure.
-    // eslint-disable-next-line no-console
+     
     console.warn("[backcharge] event log failed:", err);
   }
 }

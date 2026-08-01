@@ -2,6 +2,8 @@ import React from "react";
 import { PhoenixPanel } from "@/components/shared/PhoenixPanel";
 import { mono, body } from "./utils";
 
+export { FilterBar } from "@/components/command/FilterBar";
+
 export const VIEW_TABS = [
   { key: "summary", label: "Project Summary" },
   { key: "sov", label: "SOV Analysis" },
@@ -37,49 +39,6 @@ export function SectionTabs({ active, onChange }) {
           {tab.label}
         </button>
       ))}
-    </div>
-  );
-}
-
-export function FilterBar({ search, setSearch, filterPhase, setFilterPhase, phases }) {
-  return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-      <input
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search cost buckets, SOV lines, vendors, notes..."
-        style={{
-          minWidth: 280,
-          flex: 1,
-          background: "var(--bg-input)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-input)",
-          padding: "9px 12px",
-          color: "var(--text-primary)",
-          fontFamily: "var(--font-body)",
-          fontSize: 12,
-        }}
-      />
-      <select
-        value={filterPhase}
-        onChange={(event) => setFilterPhase(event.target.value)}
-        style={{
-          background: "var(--bg-input)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-input)",
-          padding: "9px 12px",
-          color: "var(--text-primary)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-        }}
-      >
-        <option value="all">ALL COST CATEGORIES</option>
-        {phases.map((phase) => (
-          <option key={phase} value={phase}>
-            {phase.toUpperCase()}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

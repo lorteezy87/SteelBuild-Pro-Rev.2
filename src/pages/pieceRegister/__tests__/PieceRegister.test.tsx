@@ -502,26 +502,26 @@ describe("Piece Register command shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Imports" }));
 
     expect(
-      await screen.findByLabelText(/Assign imported pieces to work package/i),
+      await screen.findByLabelText(/Work package override \(optional — or use CSV wp_number\)/i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("option", { name: "WP-001 - Embeds & Lintels" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Apply approved batch" }),
+      screen.getByRole("button", { name: "Apply batch (CSV WP / sheet hints)" }),
     ).toBeDisabled();
 
     fireEvent.change(
-      screen.getByLabelText(/Assign imported pieces to work package/i),
+      screen.getByLabelText(/Work package override \(optional — or use CSV wp_number\)/i),
       { target: { value: "wp-1" } },
     );
     expect(
-      screen.getByRole("button", { name: "Apply and assign to work package" }),
+      screen.getByRole("button", { name: "Apply, assign WP, and link drawings" }),
     ).toBeDisabled();
 
     fireEvent.click(screen.getByLabelText(/Confirm eligible creates and updates/i));
     expect(
-      screen.getByRole("button", { name: "Apply and assign to work package" }),
+      screen.getByRole("button", { name: "Apply, assign WP, and link drawings" }),
     ).toBeEnabled();
   });
 });

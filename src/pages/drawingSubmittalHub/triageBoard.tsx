@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Boxes,
   CalendarClock,
-  CalendarDays,
   CheckCircle2,
   CircleDollarSign,
   ClipboardList,
@@ -14,22 +13,18 @@ import {
   FileQuestion,
   GitCompareArrows,
   ShieldCheck,
-  User,
 } from "lucide-react";
 import LoadingSkeletonRaw from "@/components/shared/LoadingSkeleton";
-import { DRAFTING_STATES } from "@/lib/detailingPackageState";
 import { ELEMENT_STATUS_META } from "@/services/modelElementStatus";
 import type { ElementStatusKey, ElementStatusSummary } from "@/services/modelElementStatus";
 import { FAB_STATUS_META, FAB_STATUS_ORDER, summarizeFabStatus } from "@/lib/fabStatus";
 import {
-  BIC_CHOICES,
   accent,
   border,
   dueInfo,
   error,
   fmtDate,
   getActionTone,
-  getOperationalStateColor,
   info,
   itemUrgency,
   mono,
@@ -40,7 +35,6 @@ import {
   surface2,
   textMuted,
   textPrimary,
-  toDateInputValue,
   warning,
 } from "./format";
 import {
@@ -56,6 +50,11 @@ import {
   SeqMetric,
   TriageMetric,
 } from "./primitives";
+import {
+  InlineDateControl,
+  InlineDetailingControl,
+  InlineOwnerControl,
+} from "./inlineControls";
 
 // These shared screens are still .jsx; cast at the boundary (removable
 // once they are typed).
@@ -634,242 +633,6 @@ export function RevisionImpactSection({ rows, onCompare }: { rows: any[]; onComp
         </div>
       )}
     </SectionCard>
-  );
-}
-
-// ── Inline Quick-Action Controls ────────────────────────────────────────────
-// Compact controls shown directly on the "Next Decision" card so users can
-// assign an owner or set a due date without navigating away.
-
-interface InlineOwnerControlProps {
-  currentOwner: string;
-  onAssign: (owner: string) => void;
-  disabled: boolean;
-  label?: string;
-}
-
-export function InlineOwnerControl({ currentOwner, onAssign, disabled, label = "Owner" }: InlineOwnerControlProps) {
-  const [open, setOpen] = useState(false);
-  const isUnassigned = !currentOwner || currentOwner === "Unassigned";
-
-  return (
-    <div style={{
-      padding: "10px 12px",
-      borderRadius: 10,
-      background: surface1,
-      border: `1px solid ${isUnassigned ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
-      position: "relative",
-    }}>
-      <div style={{
-        fontFamily: mono, fontSize: 8, color: textMuted,
-        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4,
-        display: "flex", alignItems: "center", gap: 5,
-      }}>
-        <User size={10} />
-        {label}
-      </div>
-      {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          disabled={disabled}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            width: "100%",
-            background: "transparent",
-            border: "none",
-            padding: 0,
-            cursor: disabled ? "not-allowed" : "pointer",
-            color: isUnassigned ? warning : textPrimary,
-            fontSize: 12,
-            fontWeight: 700,
-            fontFamily: "inherit",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            textAlign: "left",
-          }}
-          title={`Click to assign ${label.toLowerCase()}`}
-        >
-          {isUnassigned ? "Assign..." : currentOwner}
-        </button>
-      ) : (
-        <select
-          autoFocus
-          value=""
-          disabled={disabled}
-          onChange={(e) => {
-            if (e.target.value) {
-              onAssign(e.target.value);
-              setOpen(false);
-            }
-          }}
-          onBlur={() => setOpen(false)}
-          style={{
-            width: "100%",
-            background: surface2,
-            border: `1px solid ${accent}`,
-            borderRadius: 6,
-            padding: "3px 6px",
-            color: textPrimary,
-            fontFamily: mono,
-            fontSize: 11,
-            fontWeight: 700,
-            outline: "none",
-            cursor: "pointer",
-          }}
-        >
-          <option value="" disabled>Select owner...</option>
-          {BIC_CHOICES.map((choice) => (
-            <option key={choice} value={choice}>{choice}</option>
-          ))}
-        </select>
-      )}
-    </div>
-  );
-}
-
-interface InlineDateControlProps {
-  currentDate: string | null;
-  isOverdue: boolean;
-  onSetDate: (date: string) => void;
-  disabled: boolean;
-}
-
-export function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: InlineDateControlProps) {
-  const [open, setOpen] = useState(false);
-  const hasDate = !!currentDate;
-
-  return (
-    <div style={{
-      padding: "10px 12px",
-      borderRadius: 10,
-      background: surface1,
-      border: `1px solid ${isOverdue ? "color-mix(in srgb, var(--status-error) 46%, transparent)" : !hasDate ? "color-mix(in srgb, var(--status-warning) 46%, transparent)" : border}`,
-      position: "relative",
-    }}>
-      <div style={{
-        fontFamily: mono, fontSize: 8, color: textMuted,
-        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4,
-        display: "flex", alignItems: "center", gap: 5,
-      }}>
-        <CalendarDays size={10} />
-        Required
-      </div>
-      {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          disabled={disabled}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            width: "100%",
-            background: "transparent",
-            border: "none",
-            padding: 0,
-            cursor: disabled ? "not-allowed" : "pointer",
-            color: isOverdue ? error : !hasDate ? warning : textPrimary,
-            fontSize: 12,
-            fontWeight: 700,
-            fontFamily: "inherit",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            textAlign: "left",
-          }}
-          title="Click to set due date"
-        >
-          {hasDate ? fmtDate(currentDate) : "Set date..."}
-        </button>
-      ) : (
-        <input
-          type="date"
-          autoFocus
-          disabled={disabled}
-          defaultValue={toDateInputValue(currentDate)}
-          onChange={(e) => {
-            if (e.target.value) {
-              onSetDate(e.target.value);
-              setOpen(false);
-            }
-          }}
-          onBlur={() => setOpen(false)}
-          style={{
-            width: "100%",
-            background: surface2,
-            border: `1px solid ${accent}`,
-            borderRadius: 6,
-            padding: "3px 6px",
-            color: textPrimary,
-            fontFamily: mono,
-            fontSize: 11,
-            fontWeight: 700,
-            outline: "none",
-            cursor: "pointer",
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Operational-state chip + drafting-state advance control ─────────────────
-
-interface InlineDetailingControlProps {
-  current: string | null | undefined;
-  onAdvance: (next: string) => void;
-  disabled: boolean;
-}
-
-// Manual drafting-state advance (In Detailing → Internal Review → Ready to
-// Submit). Only rendered for drawing-set packages with NO governing submittal —
-// once a submittal exists, the submittal machine owns the state (§20).
-export function InlineDetailingControl({ current, onAdvance, disabled }: InlineDetailingControlProps) {
-  return (
-    <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: surface1, border: `1px solid ${border}` }}>
-      <div style={{
-        fontFamily: mono, fontSize: 8, color: textMuted,
-        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8,
-        display: "flex", alignItems: "center", gap: 5,
-      }}>
-        <ClipboardList size={10} />
-        Detailing state
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {DRAFTING_STATES.map((s) => {
-          const isCurrent = current === s;
-          const color = getOperationalStateColor(s);
-          return (
-            <button
-              key={s}
-              type="button"
-              disabled={disabled || isCurrent}
-              onClick={() => onAdvance(s)}
-              title={isCurrent ? `Already ${s}` : `Set to ${s}`}
-              style={{
-                padding: "5px 9px",
-                borderRadius: 8,
-                fontFamily: mono,
-                fontSize: 10,
-                fontWeight: 800,
-                letterSpacing: "0.04em",
-                cursor: disabled || isCurrent ? "default" : "pointer",
-                color: isCurrent ? "#0b0e14" : color,
-                background: isCurrent ? color : `color-mix(in srgb, ${color} 12%, transparent)`,
-                border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`,
-                opacity: disabled && !isCurrent ? 0.6 : 1,
-              }}
-            >
-              {s}
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 

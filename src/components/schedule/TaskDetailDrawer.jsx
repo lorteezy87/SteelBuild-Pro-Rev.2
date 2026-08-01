@@ -10,7 +10,6 @@ import {
 } from '../../lib/stageDates';
 import {
   addDaysIso,
-  parseDependencies,
   serializeDependencies,
   LINK_TYPES,
 } from '../../services/scheduleCascade';
@@ -19,30 +18,21 @@ import { logActivity } from '@/services/auditLogger';
 import DateOrTbdInput from './DateOrTbdInput';
 import { validReparentTargets } from '@/lib/schedule/hierarchy';
 import { isSummaryTask, buildParentIdSet } from '@/lib/schedule/summaryTasks';
-import { asIdArray, sameIdSet } from './taskDetailHelpers';
-import SearchableTaskPicker from './SearchableTaskPicker';
-import { FormField, ScheduleFlag, StageGateDates } from './taskDetailFields';
+import { asIdArray, sameIdSet, parseDeps } from './taskDetailDerive';
 import {
-  drawerSurface,
-  drawerPanel,
-  drawerPanelStrong,
-  drawerBorder,
-  drawerMutedBorder,
+  SearchableTaskPicker,
+  FormField,
+  ScheduleFlag,
+  StageGateDates,
+  drawerControlStyle,
   drawerText,
   drawerMutedText,
-  drawerControlStyle,
-} from './taskDetailTokens';
-
-/**
- * Parse the upgraded `dependencies` TEXT column. Each element is now a
- * link object — `{ id, type: 'FS'|'SS'|'FF'|'SF', lag_days: int }`. The
- * shared parseDependencies utility also handles the legacy id-string
- * shape so a row that hasn't been migrated yet still loads cleanly,
- * defaulting to FS + 1 day.
- */
-function parseDeps(raw) {
-  return parseDependencies(raw);
-}
+  drawerBorder,
+  drawerMutedBorder,
+  drawerPanel,
+  drawerPanelStrong,
+  drawerSurface,
+} from './taskDetailPrimitives';
 
 export default function TaskDetailDrawer({ task, open, onClose, onUpdate, onReparent, allTasks = [], onDelete, effectiveDates = {} }) {
   const [formData, setFormData] = useState(task || {});

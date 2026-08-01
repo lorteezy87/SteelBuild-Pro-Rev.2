@@ -74,7 +74,7 @@ export function useSubmittalsPageMutations(args: {
 
   const createMut = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      entities.Submittal.create(withProjectId(data, projectId)),
+      entities.Submittal.create(withProjectId(data, projectId) as any),
     onSuccess: async (row) => {
       await invalidate();
       await logActivity("submittal", "created", row, { projectId });
@@ -171,7 +171,7 @@ export function useSubmittalsPageMutations(args: {
       // Snapshot the current cache once — avoids N reads per row.
       const cached = (qc.getQueryData(["submittals", projectId]) || []) as SubmittalRow[];
       const byId = new Map(cached.map((r) => [r.id, r]));
-      return batchProcess(ids, async (id) => {
+      return batchProcess(ids, async (id: any) => {
         const existing = byId.get(id);
         const rowPatch = buildBulkUpdateRowPatch(
           existing,
@@ -211,7 +211,7 @@ export function useSubmittalsPageMutations(args: {
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids: string[]) => {
-      const results = await batchProcess(ids, (id) => entities.Submittal.delete(id));
+      const results = await batchProcess(ids, (id: any) => entities.Submittal.delete(id));
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }
@@ -243,7 +243,7 @@ export function useSubmittalsPageMutations(args: {
 
   const bulkCreateMut = useMutation({
     mutationFn: async (newRows: Record<string, unknown>[]) =>
-      batchProcess(newRows, (row) =>
+      batchProcess(newRows, (row: any) =>
         entities.Submittal.create(
           buildBulkSubmittalCreatePayload(
             row,
@@ -272,14 +272,14 @@ export function useSubmittalsPageMutations(args: {
     mutationFn: async (data: Record<string, unknown>) => {
       let round: { id?: string } | null = null;
       try {
-        round = await entities.SubmittalRound.create(withProjectId(data, projectId));
+        round = await entities.SubmittalRound.create(withProjectId(data, projectId) as any);
         if (round?.id && data.submittal_id) {
           await entities.Submittal.update(data.submittal_id as string, {
             current_round_id: round.id,
-            total_rounds: data.round_number || 1,
+            total_rounds: Number(data.round_number) || 1,
             status: "Submitted",
-            ball_in_court: data.ball_in_court || "EOR",
-            submitted_date: data.submitted_date || new Date().toISOString().split("T")[0],
+            ball_in_court: String(data.ball_in_court || "EOR"),
+            submitted_date: String(data.submitted_date || new Date().toISOString().split("T")[0]),
           });
           await logActivity(
             "submittal",
@@ -319,22 +319,22 @@ export function useSubmittalsPageMutations(args: {
         try {
           if (resp.id) {
             await entities.SubmittalSheetResponse.update(resp.id as string, {
-              response_status: resp.response_status,
-              reviewer_comment: resp.reviewer_comment || null,
+              response_status: resp.response_status as string | undefined,
+              reviewer_comment: (resp.reviewer_comment as string | null) || null,
             });
           } else {
             await entities.SubmittalSheetResponse.create(
               withProjectId(
                 {
                   submittal_round_id: roundId,
-                  drawing_id: resp.drawing_id || null,
-                  drawing_set_id: resp.drawing_set_id || null,
-                  sheet_number: resp.sheet_number || null,
-                  response_status: resp.response_status,
-                  reviewer_comment: resp.reviewer_comment || null,
+                  drawing_id: (resp.drawing_id as string | null) || null,
+                  drawing_set_id: (resp.drawing_set_id as string | null) || null,
+                  sheet_number: (resp.sheet_number as string | null) || null,
+                  response_status: resp.response_status as string | undefined,
+                  reviewer_comment: (resp.reviewer_comment as string | null) || null,
                 },
                 projectId,
-              ),
+              ) as any,
             );
           }
           results.succeeded++;

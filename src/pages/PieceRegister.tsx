@@ -392,7 +392,21 @@ export default function PieceRegister() {
       queryClient.invalidateQueries({ queryKey: ["piece-register-work-packages", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["work-packages", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["workPackages", projectId] }),
+      // Piece-mark / lifecycle edits must refresh the 3D link map (fab mode).
+      queryClient.invalidateQueries({ queryKey: ["model-elements", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["canonical-pieces-3d", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["canonical-reporting", projectId] }),
     ]);
+  };
+
+  /** Best-effort re-link after register writes that can change piece_mark. */
+  const relinkModelElements = async () => {
+    if (!projectId || !enabled) return null;
+    try {
+      return await linkModelElementsToPieces(projectId);
+    } catch {
+      return null;
+    }
   };
 
   const finalizeImportedBatchHints = async (batchId: string) => {
@@ -483,12 +497,17 @@ export default function PieceRegister() {
     },
     onSuccess: async ({ summary, assigned, linked }) => {
       setApplyConfirmed(false);
+      // Re-link before invalidate so the refetch sees fresh piece_id rows.
+      const linkSummary = await relinkModelElements();
       await invalidate();
       const parts = [
         `Import applied: ${summary.created ?? 0} created, ${summary.updated ?? 0} updated`,
       ];
       if (assigned > 0) parts.push(`${assigned} assigned to work package`);
       if (linked > 0) parts.push(`${linked} drawing link(s)`);
+      if (linkSummary && Number(linkSummary.linked ?? 0) > 0) {
+        parts.push(`${linkSummary.linked} model mark(s) linked`);
+      }
       toast.success(parts.join(" · "));
     },
     onError: (error: Error) =>

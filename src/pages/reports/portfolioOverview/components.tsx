@@ -1,80 +1,37 @@
-import type { ComponentType, ReactNode } from "react";
-import { mono, body } from "./constants";
+/**
+ * Presentational sections for Portfolio Overview — hero KPI strip, project
+ * matrix wrapper, and shared tile/section micro-components.
+ */
+import React from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Activity, AlertTriangle, Building2, CircleDot, DollarSign,
+  Layers, ShieldAlert, TrendingUp,
+} from "lucide-react";
+import { formatCurrencyShort } from "@/components/shared/formatters";
+import { mono, body } from "../constants";
+import ProjectStatusMatrix from "../ProjectStatusMatrix";
 
-interface TileProps {
-  icon?: ComponentType<{ size?: number }> | null;
-  label: ReactNode;
-  value: ReactNode;
-  sub?: ReactNode;
+/* ── shared Tile (project-dashboard vocabulary) ── */
+export function Tile({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  accent,
+  active,
+  onClick,
+  badge,
+}: {
+  icon?: LucideIcon;
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
   accent?: string;
   active?: boolean;
   onClick?: () => void;
-  badge?: ReactNode;
-}
-
-interface DriftRowProps {
-  row: {
-    elapsedPct?: number | null;
-    wpPct?: number | null;
-    name?: ReactNode;
-    phase?: ReactNode;
-  };
-  onClick?: () => void;
-}
-
-interface UrgentTileProps {
-  item: {
-    kind: ReactNode;
-    title: ReactNode;
-    subtitle: ReactNode;
-    severity?: string | null;
-    meta?: ReactNode;
-  };
-  onClick?: () => void;
-}
-
-interface WeekStatProps {
-  label: ReactNode;
-  value: ReactNode;
-  color?: string;
-  sub?: ReactNode;
-}
-
-interface HealthBucketProps {
-  label: ReactNode;
-  count: ReactNode;
-  color: string;
-  description: ReactNode;
-}
-
-interface ChartPanelProps {
-  title: ReactNode;
-  subtitle?: ReactNode;
-  children: ReactNode;
-}
-
-interface EmptyMicroProps {
-  label: ReactNode;
-}
-
-interface ExecutiveColumnProps {
-  title: string;
-  accent: string;
-  children: ReactNode;
-}
-
-interface ExecutiveLineProps {
-  label: ReactNode;
-  value: ReactNode;
-  color?: string;
-}
-
-interface ExecutiveCalloutProps {
-  color: string;
-  children: ReactNode;
-}
-
-export function Tile({ icon: Icon, label, value, sub, accent, active, onClick, badge }: TileProps) {
+  badge?: string | null;
+}) {
   const interactive = typeof onClick === "function";
   return (
     <div
@@ -90,7 +47,7 @@ export function Tile({ icon: Icon, label, value, sub, accent, active, onClick, b
         outline: active ? `1px solid ${accent}` : "none",
       }}
       onMouseEnter={(e) => {
-        if (interactive && accent) e.currentTarget.style.borderColor = accent;
+        if (interactive) e.currentTarget.style.borderColor = accent || "";
       }}
       onMouseLeave={(e) => {
         if (interactive && !active) e.currentTarget.style.borderColor = "var(--border-default)";
@@ -104,7 +61,7 @@ export function Tile({ icon: Icon, label, value, sub, accent, active, onClick, b
           {Icon && (
             <div style={{
               width: 24, height: 24, borderRadius: 6,
-              background: `${accent || "var(--accent)"}1A`,
+              background: (accent || "") + "1A",
               color: accent,
               display: "flex", alignItems: "center", justifyContent: "center",
               flexShrink: 0,
@@ -123,7 +80,7 @@ export function Tile({ icon: Icon, label, value, sub, accent, active, onClick, b
         {badge != null && (
           <span style={{
             ...mono, fontSize: 8, fontWeight: 700,
-            color: "var(--accent-text)", background: "var(--status-error)",
+            color: "#fff", background: "var(--status-error)",
             borderRadius: "var(--radius-badge)",
             padding: "2px 6px",
             textTransform: "uppercase", letterSpacing: "0.08em",
@@ -151,7 +108,182 @@ export function Tile({ icon: Icon, label, value, sub, accent, active, onClick, b
   );
 }
 
-export function DriftRow({ row, onClick }: DriftRowProps) {
+export type HeroKpiStripProps = {
+  projectsCount: number;
+  activeProjectsCount: number;
+  portfolioRevised: number;
+  portfolioContract: number;
+  openRFIsCount: number;
+  overdueRFIsCount: number;
+  rfisTotal: number;
+  pendingCOsCount: number;
+  pendingCOValue: number;
+  criticalAlertCount: number;
+  critRfisCount: number;
+  criticalRisksCount: number;
+  lateDeliveriesCount: number;
+  overdueActionsCount: number;
+  openActionsCount: number;
+  tonsProduced: number;
+  tonsPlanned: number;
+  kpiFilter: string | null;
+  onKpiFilter: (key: string | null) => void;
+};
+
+/** Eight-tile hero strip — click toggles matrix KPI filters. */
+export function HeroKpiStrip({
+  projectsCount,
+  activeProjectsCount,
+  portfolioRevised,
+  portfolioContract,
+  openRFIsCount,
+  overdueRFIsCount,
+  rfisTotal,
+  pendingCOsCount,
+  pendingCOValue,
+  criticalAlertCount,
+  critRfisCount,
+  criticalRisksCount,
+  lateDeliveriesCount,
+  overdueActionsCount,
+  openActionsCount,
+  tonsProduced,
+  tonsPlanned,
+  kpiFilter,
+  onKpiFilter,
+}: HeroKpiStripProps) {
+  const toggle = (key: string) => onKpiFilter(kpiFilter === key ? null : key);
+
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+      gap: 10,
+    }}>
+      <Tile
+        icon={Building2}
+        label="Total Projects"
+        value={projectsCount}
+        sub={`${activeProjectsCount} active · ${projectsCount - activeProjectsCount} closed`}
+        accent="var(--accent)"
+      />
+      <Tile
+        icon={Activity}
+        label="Active Projects"
+        value={activeProjectsCount}
+        sub={`${projectsCount - activeProjectsCount} in Closeout`}
+        accent="var(--status-info)"
+        active={kpiFilter === "active"}
+        onClick={() => toggle("active")}
+      />
+      <Tile
+        icon={DollarSign}
+        label="Contract Value"
+        value={formatCurrencyShort(portfolioRevised)}
+        sub={`Original ${formatCurrencyShort(portfolioContract)} · revised ${formatCurrencyShort(portfolioRevised - portfolioContract)}`}
+        accent="var(--status-success-bright)"
+        active={kpiFilter === "value"}
+        onClick={() => toggle("value")}
+      />
+      <Tile
+        icon={CircleDot}
+        label="Open RFIs"
+        value={openRFIsCount}
+        sub={`${overdueRFIsCount} overdue · ${rfisTotal} total`}
+        accent="var(--status-warning)"
+        badge={overdueRFIsCount > 0 ? `${overdueRFIsCount} overdue` : null}
+        active={kpiFilter === "rfis"}
+        onClick={() => toggle("rfis")}
+      />
+      <Tile
+        icon={Layers}
+        label="Pending COs"
+        value={pendingCOsCount}
+        sub={`${formatCurrencyShort(pendingCOValue)} pending value`}
+        accent="#F97316"
+        active={kpiFilter === "cos"}
+        onClick={() => toggle("cos")}
+      />
+      <Tile
+        icon={ShieldAlert}
+        label="Critical Alerts"
+        value={criticalAlertCount}
+        sub={`${critRfisCount} crit RFIs · ${criticalRisksCount} crit risks · ${lateDeliveriesCount} late deliv.`}
+        accent="var(--status-error)"
+        active={kpiFilter === "alerts"}
+        onClick={() => toggle("alerts")}
+      />
+      <Tile
+        icon={AlertTriangle}
+        label="Overdue Actions"
+        value={overdueActionsCount}
+        sub={`${openActionsCount} open total`}
+        accent="var(--status-error)"
+        badge={overdueActionsCount > 0 ? "past due" : null}
+        active={kpiFilter === "overdue"}
+        onClick={() => toggle("overdue")}
+      />
+      <Tile
+        icon={TrendingUp}
+        label="Tons Produced"
+        value={tonsProduced.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+        sub={
+          tonsPlanned > 0
+            ? `${((tonsProduced / tonsPlanned) * 100).toFixed(0)}% of ${tonsPlanned.toLocaleString("en-US", { maximumFractionDigits: 0 })}t planned`
+            : "no WP tonnage"
+        }
+        accent="var(--phase-fab)"
+      />
+    </div>
+  );
+}
+
+export type ProjectMatrixSectionProps = {
+  viewMode: string;
+  filteredRows: unknown[];
+  sortField: string;
+  sortDir: string;
+  onSort: (field: string) => void;
+  kpiFilter: string | null;
+  onClearFilter: () => void;
+  search: string;
+  navigate: (path: string) => void;
+};
+
+/** Sortable project status matrix with KPI filter chrome. */
+export function ProjectMatrixSection({
+  viewMode,
+  filteredRows,
+  sortField,
+  sortDir,
+  onSort,
+  kpiFilter,
+  onClearFilter,
+  search,
+  navigate,
+}: ProjectMatrixSectionProps) {
+  return (
+    <ProjectStatusMatrix
+      title={viewMode === "executive" ? "Project Overview" : "Project Status Matrix"}
+      filteredRows={filteredRows}
+      sortField={sortField}
+      sortDir={sortDir}
+      onSort={onSort}
+      kpiFilter={kpiFilter}
+      onClearFilter={onClearFilter}
+      search={search}
+      navigate={navigate}
+    />
+  );
+}
+
+export function DriftRow({
+  row,
+  onClick,
+}: {
+  row: { name: string; phase: string; elapsedPct?: number; wpPct?: number };
+  onClick?: () => void;
+}) {
   const elapsed = Math.max(0, Math.min(100, row.elapsedPct || 0));
   const complete = Math.max(0, Math.min(100, row.wpPct || 0));
   const drift = elapsed - complete;
@@ -224,14 +356,26 @@ export function DriftRow({ row, onClick }: DriftRowProps) {
   );
 }
 
-export function UrgentTile({ item, onClick }: UrgentTileProps) {
-  const SEV = {
+export function UrgentTile({
+  item,
+  onClick,
+}: {
+  item: {
+    kind: string;
+    title: string;
+    subtitle: string;
+    severity: string;
+    meta?: string;
+  };
+  onClick?: () => void;
+}) {
+  const SEV: Record<string, string> = {
     critical: "var(--status-error)",
     high: "var(--status-warning)",
     medium: "var(--status-info)",
     low: "var(--text-muted)",
   };
-  const color = SEV[item.severity as keyof typeof SEV] || SEV.medium;
+  const color = SEV[item.severity] || SEV.medium;
   return (
     <div
       onClick={onClick}
@@ -291,7 +435,17 @@ export function UrgentTile({ item, onClick }: UrgentTileProps) {
   );
 }
 
-export function WeekStat({ label, value, color = "var(--text-primary)", sub }: WeekStatProps) {
+export function WeekStat({
+  label,
+  value,
+  color = "var(--text-primary)",
+  sub,
+}: {
+  label: string;
+  value: React.ReactNode;
+  color?: string;
+  sub?: React.ReactNode;
+}) {
   return (
     <div style={{
       padding: "12px 14px",
@@ -323,7 +477,17 @@ export function WeekStat({ label, value, color = "var(--text-primary)", sub }: W
   );
 }
 
-export function HealthBucket({ label, count, color, description }: HealthBucketProps) {
+export function HealthBucket({
+  label,
+  count,
+  color,
+  description,
+}: {
+  label: string;
+  count: number;
+  color: string;
+  description: string;
+}) {
   return (
     <div style={{
       padding: "12px 14px",
@@ -354,7 +518,15 @@ export function HealthBucket({ label, count, color, description }: HealthBucketP
   );
 }
 
-export function ChartPanel({ title, subtitle, children }: ChartPanelProps) {
+export function ChartPanel({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div style={{
       background: "var(--bg-surface-low)",
@@ -381,7 +553,7 @@ export function ChartPanel({ title, subtitle, children }: ChartPanelProps) {
   );
 }
 
-export function EmptyMicro({ label }: EmptyMicroProps) {
+export function EmptyMicro({ label }: { label: string }) {
   return (
     <div style={{
       padding: "32px 16px", textAlign: "center",
@@ -394,7 +566,15 @@ export function EmptyMicro({ label }: EmptyMicroProps) {
   );
 }
 
-export function ExecutiveColumn({ title, accent, children }: ExecutiveColumnProps) {
+export function ExecutiveColumn({
+  title,
+  accent,
+  children,
+}: {
+  title: string;
+  accent: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <div style={{
@@ -410,7 +590,15 @@ export function ExecutiveColumn({ title, accent, children }: ExecutiveColumnProp
   );
 }
 
-export function ExecutiveLine({ label, value, color }: ExecutiveLineProps) {
+export function ExecutiveLine({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: React.ReactNode;
+  color: string;
+}) {
   return (
     <div style={{
       display: "flex", justifyContent: "space-between",
@@ -427,7 +615,13 @@ export function ExecutiveLine({ label, value, color }: ExecutiveLineProps) {
   );
 }
 
-export function ExecutiveCallout({ color, children }: ExecutiveCalloutProps) {
+export function ExecutiveCallout({
+  color,
+  children,
+}: {
+  color: string;
+  children: React.ReactNode;
+}) {
   return (
     <div style={{
       ...body, fontSize: 12, color,
