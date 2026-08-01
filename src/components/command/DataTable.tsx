@@ -28,54 +28,50 @@ export function DataTable<Row extends { id?: string }>({
   getRowId?: (row: Row, index: number) => string;
 }) {
   const selectable = Boolean(selectedIds && onToggleRow);
-  const rowIds = selectable ? rows.map((r, i) => getRowId(r, i)) : [];
+  const rowIds = rows.map((row, i) => getRowId(row, i));
   const selectedCount = selectable
     ? rowIds.filter((id) => selectedIds!.has(id)).length
     : 0;
   const allSelected = selectable && rows.length > 0 && selectedCount === rows.length;
-  const someSelected = selectable && selectedCount > 0 && !allSelected;
-
-  const headerCells = (
-    <>
-      {selectable ? (
-        <th style={{ width: 36, textAlign: "center" }}>
-          <input
-            type="checkbox"
-            aria-label="Select all visible"
-            checked={allSelected}
-            ref={(el) => {
-              if (el) el.indeterminate = someSelected;
-            }}
-            onChange={() => onToggleAll?.(!allSelected)}
-            onClick={(e) => e.stopPropagation()}
-          />
-        </th>
-      ) : null}
-      {columns.map((c) => (
-        <th key={c.key} style={{ textAlign: c.align || "left" }}>
-          {c.header}
-        </th>
-      ))}
-    </>
-  );
+  const someSelected = selectedCount > 0 && !allSelected;
+  const colSpan = columns.length + (selectable ? 1 : 0);
 
   return (
     <div className="cmd-table-wrap">
       <table className="cmd-table">
         <thead>
-          <tr>{headerCells}</tr>
+          <tr>
+            {selectable ? (
+              <th style={{ width: 36 }}>
+                <input
+                  type="checkbox"
+                  aria-label="Select all rows"
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someSelected;
+                  }}
+                  onChange={() => onToggleAll?.(!allSelected)}
+                />
+              </th>
+            ) : null}
+            {columns.map((c) => (
+              <th key={c.key} style={{ textAlign: c.align || "left" }}>
+                {c.header}
+              </th>
+            ))}
+          </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td className="cmd-table__empty" colSpan={columns.length + (selectable ? 1 : 0)}>
+              <td className="cmd-table__empty" colSpan={colSpan}>
                 {emptyMessage}
               </td>
             </tr>
           ) : (
             rows.map((row, i) => {
-              const id = getRowId(row, i);
-              const isSelected = selectable && selectedIds!.has(id);
+              const id = rowIds[i];
+              const checked = selectable ? selectedIds!.has(id) : false;
               return (
                 <tr
                   key={id}
@@ -86,6 +82,8 @@ export function DataTable<Row extends { id?: string }>({
                   onKeyDown={
                     onRowClick
                       ? (e) => {
+                          // Keyboard parity with onClick: Enter/Space activate the row
+                          // (preventDefault on Space so it doesn't scroll the page).
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
                             onRowClick(row);
@@ -95,11 +93,11 @@ export function DataTable<Row extends { id?: string }>({
                   }
                 >
                   {selectable ? (
-                    <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
-                        aria-label={`Select ${id}`}
-                        checked={Boolean(isSelected)}
+                        aria-label={`Select row ${id}`}
+                        checked={checked}
                         onChange={(e) => onToggleRow?.(id, e.target.checked)}
                       />
                     </td>
