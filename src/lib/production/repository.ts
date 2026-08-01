@@ -8,6 +8,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { syncProductionRowsToModelAndPieces } from "./productionToFabBridge";
 
 const TABLE = "piece_production";
 
@@ -115,6 +116,8 @@ const CHUNK = 200;
 /**
  * Commit staged rows: bulk-insert the creates (chunked), update the existing
  * pieces by id. Returns the applied counts.
+ * After a successful write, best-effort sync into model_elements.fab_status and
+ * (when pilot/live) unique leaf pieces.lifecycle_status so Fab-mode colors update.
  */
 export async function commitProductionRows(
   projectId: string,
@@ -137,6 +140,15 @@ export async function commitProductionRows(
     const { error } = await from(TABLE).update(toFields(row, projectId, importedAt)).eq("id", row.existing_id);
     if (error) throw error;
     updated += 1;
+  }
+
+  try {
+    await syncProductionRowsToModelAndPieces(projectId, rows);
+  } catch (bridgeError) {
+    console.warn(
+      "[piece_production] production→fab bridge failed after commit:",
+      bridgeError,
+    );
   }
 
   return { created, updated };
