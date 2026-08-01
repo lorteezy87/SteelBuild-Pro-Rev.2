@@ -24,7 +24,9 @@ import type { Column, KpiCellDef } from "@/components/command";
 import type { PieceProductionRow } from "@/lib/production/repository";
 import type { PieceDrawingLink } from "@/lib/production/pieceDrawingLinks";
 import { normalizePieceMark } from "@/services/modelElementStatus";
+import type { ProductionStage } from "@/lib/importProductionStatus";
 import { buildProductionSummary, stageTone, PRODUCTION_STAGES } from "./productionStatusControlCenter.derive";
+import ProductionStatusBulkBar from "./ProductionStatusBulkBar";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -107,6 +109,13 @@ export interface ProductionStatusControlCenterProps {
   projectHealth?: string | null;
   percentComplete?: number | null;
   photoSrc?: string;
+  /** Selection (owned by shell). */
+  selectedIds?: ReadonlySet<string>;
+  onToggleRow?: (id: string, next: boolean) => void;
+  onToggleAll?: (selectAll: boolean) => void;
+  onClearSelection?: () => void;
+  onBulkSetStage?: (stage: ProductionStage) => void;
+  bulkPending?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -128,6 +137,12 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
     projectHealth,
     percentComplete,
     photoSrc,
+    selectedIds,
+    onToggleRow,
+    onToggleAll,
+    onClearSelection,
+    onBulkSetStage,
+    bulkPending,
   } = props;
 
   useCommandSkin();
@@ -250,6 +265,8 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
     },
   ];
 
+  const selectedCount = selectedIds?.size ?? 0;
+
   return (
     <div className="prod-cc">
       <PageHero
@@ -369,9 +386,21 @@ export default function ProductionStatusControlCenter(props: ProductionStatusCon
         </div>
       ) : null}
 
+      {selectedIds && onBulkSetStage && onClearSelection ? (
+        <ProductionStatusBulkBar
+          selectedCount={selectedCount}
+          pending={bulkPending}
+          onApplyStage={onBulkSetStage}
+          onClear={onClearSelection}
+        />
+      ) : null}
+
       <DataTable
         columns={columns}
         rows={filtered}
+        selectedIds={selectedIds}
+        onToggleRow={onToggleRow}
+        onToggleAll={onToggleAll}
         emptyMessage={
           pieces.length === 0
             ? "No production data yet — import a CSV from Tekla EPM or FabSuite."
