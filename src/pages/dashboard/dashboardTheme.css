@@ -166,8 +166,50 @@
   --dash-shadow: var(--shadow-card);
 }
 
+
+/* Dark theme: dashboard chrome tokens apply on any page under steelbuild-dark,
+   not only when nested under .dashboard-reference-shell (every route uses the
+   shell class on desktop, but tablet/phone layouts and isolated mounts need
+   the same remap). */
+html.steelbuild-dark .sb-dashboard-theme,
+.steelbuild-dark .sb-dashboard-theme {
+  --dash-bg: var(--bg-base);
+  --dash-surface: var(--bg-surface);
+  --dash-border: var(--border-default);
+  --dash-border-strong: var(--border-strong);
+  --dash-text: var(--text-primary);
+  --dash-text-strong: var(--text-primary);
+  --dash-text-emphasis: var(--text-primary);
+  --dash-text-soft: var(--text-secondary);
+  --dash-muted: var(--text-muted);
+  --dash-soft: var(--bg-surface-low, var(--hover-bg));
+  --dash-gold: var(--accent);
+  --dash-green: var(--status-success);
+  --dash-blue: var(--status-info);
+  --dash-red: var(--status-error);
+  --dash-warn: var(--status-warning);
+  --dash-card-bg: var(--bg-surface);
+  --dash-card-bg-translucent: var(--bg-surface);
+  --dash-hero-overlay: linear-gradient(90deg, color-mix(in srgb, var(--sbd-bg-page, var(--bg-page)) 96%, transparent) 0%, color-mix(in srgb, var(--sbd-bg-page, var(--bg-page)) 86%, transparent) 42%, color-mix(in srgb, var(--sbd-bg-page, var(--bg-page)) 30%, transparent) 76%, color-mix(in srgb, var(--sbd-bg-page, var(--bg-page)) 92%, transparent) 100%);
+  --dash-hero-overlay-mobile: linear-gradient(180deg, color-mix(in srgb, var(--sbd-bg-page, var(--bg-page)) 96%, transparent) 0%, color-mix(in srgb, var(--sbd-bg-page, var(--bg-page)) 84%, transparent) 58%, color-mix(in srgb, var(--sbd-bg-page, var(--bg-page)) 92%, transparent) 100%);
+  --dash-hero-rule: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-primary) 12%, transparent), transparent);
+  --dash-ring-center: var(--bg-surface);
+  --dash-ring-track: var(--bg-surface-secondary);
+  --dash-meter-track: var(--bg-surface-secondary);
+  --dash-icon: var(--text-secondary);
+  --dash-danger-soft: color-mix(in srgb, var(--status-error) 18%, transparent);
+  --dash-warn-soft: color-mix(in srgb, var(--status-warning) 18%, transparent);
+  --dash-info-soft: color-mix(in srgb, var(--status-info) 18%, transparent);
+  --dash-success-soft: color-mix(in srgb, var(--status-success) 18%, transparent);
+  --dash-neutral-soft: var(--bg-surface-secondary);
+  --dash-neutral-text: var(--text-muted);
+  --dash-avatar-bg: linear-gradient(145deg, var(--bg-surface-secondary), var(--bg-surface));
+  --dash-module-card-bg: var(--sbd-bg-base, var(--bg-page));
+  --dash-shadow: var(--shadow-card);
+}
+
 .sb-dashboard-shell-body {
-  background: var(--bg-base, #f5f7fb);
+  background: var(--bg-base, var(--bg-page));
 }
 
 .sb-dashboard-shell-content {
@@ -175,7 +217,14 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--bg-base, #f5f7fb);
+  background: var(--bg-base, var(--bg-page));
+}
+
+html.steelbuild-dark .sb-dashboard-shell-body,
+html.steelbuild-dark .sb-dashboard-shell-content,
+.steelbuild-dark .sb-dashboard-shell-body,
+.steelbuild-dark .sb-dashboard-shell-content {
+  background: var(--sbd-bg-page, var(--bg-page)) !important;
 }
 
 .sb-dashboard-reference-page {
