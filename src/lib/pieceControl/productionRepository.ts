@@ -18,6 +18,51 @@ export interface LotAllocation {
   quantity: number;
 }
 
+const PAGE = 1000;
+const SAFETY_MAX_ROWS = 200_000;
+
+/**
+ * Page active pieces for a project (and optional WP scope).
+ * PostgREST silently caps a single select at ~1000 rows — same trap as
+ * listPieceProduction / fetchAllModelElements — so we range until exhausted.
+ */
+async function fetchActivePiecesPaged(
+  projectId: string,
+  workPackageId?: string | null,
+): Promise<PieceRegisterRow[]> {
+  const db = supabase as any;
+  const all: PieceRegisterRow[] = [];
+
+  for (let offset = 0; offset < SAFETY_MAX_ROWS; offset += PAGE) {
+    let query = db
+      .from('pieces')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('is_deleted', false)
+      .is('deleted_at', null)
+      .order('normalized_piece_mark')
+      .order('lot_code')
+      .range(offset, offset + PAGE - 1);
+
+    if (workPackageId === null) {
+      query = query.is('work_package_id', null);
+    } else if (workPackageId) {
+      query = query.eq('work_package_id', workPackageId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    const batch = (data ?? []) as PieceRegisterRow[];
+    all.push(...batch);
+    if (batch.length < PAGE) return all;
+  }
+
+  console.warn(
+    `[piece-control-production] stopped at ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`,
+  );
+  return all;
+}
+
 /**
  * @param workPackageId
  *   - `undefined` / omit: all lots in the project
@@ -29,23 +74,10 @@ export async function fetchProductionSnapshot(
   workPackageId?: string | null,
 ): Promise<ProductionSnapshot> {
   const db = supabase as any;
-  let piecesQuery = db
-    .from('pieces')
-    .select('*')
-    .eq('project_id', projectId)
-    .eq('is_deleted', false)
-    .is('deleted_at', null)
-    .order('normalized_piece_mark')
-    .order('lot_code');
-  if (workPackageId === null) {
-    piecesQuery = piecesQuery.is('work_package_id', null);
-  } else if (workPackageId) {
-    piecesQuery = piecesQuery.eq('work_package_id', workPackageId);
-  }
 
-  const [piecesResult, stationsResult, completionsResult, releasesResult] =
+  const [pieces, stationsResult, completionsResult, releasesResult] =
     await Promise.all([
-      piecesQuery,
+      fetchActivePiecesPaged(projectId, workPackageId),
       db
         .from('piece_station_configurations')
         .select('*')
@@ -66,12 +98,10 @@ export async function fetchProductionSnapshot(
         .eq('is_deleted', false),
     ]);
 
-  if (piecesResult.error) throw piecesResult.error;
   if (stationsResult.error) throw stationsResult.error;
   if (completionsResult.error) throw completionsResult.error;
   if (releasesResult.error) throw releasesResult.error;
 
-  const pieces = (piecesResult.data ?? []) as PieceRegisterRow[];
   const completions = (completionsResult.data ?? []) as StationCompletion[];
   const pieceIds = new Set(pieces.map((piece) => piece.id));
   return {

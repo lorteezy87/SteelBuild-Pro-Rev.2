@@ -34,6 +34,10 @@ import {
 import { toast } from 'sonner';
 import { DecisionPanel } from '@/components/command';
 import { presentPieceControlError } from '@/lib/pieceControl/errorPresentation';
+import {
+  invalidatePieceControlQueries,
+  pieceControlKeys,
+} from '@/lib/pieceControl/queryKeys';
 import { entities } from '@/api/supabaseClient';
 import { formatWorkPackageTitle } from '@/lib/workPackages/formatWorkPackageTitle';
 import {
@@ -93,18 +97,19 @@ export function PieceProductionControl({
   const productionScopeKey = productionScopeQueryKey(scopedWorkPackageId);
 
   const workPackagesQuery = useQuery({
-    queryKey: ['piece-production-work-packages', projectId],
+    queryKey: pieceControlKeys.productionWorkPackages(projectId),
     queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
     enabled: enabled && !lockedToWorkPackage,
     staleTime: 30_000,
   });
 
   const snapshotQuery = useQuery({
-    queryKey: ['piece-production', projectId, productionScopeKey] as const,
-    queryFn: ({ queryKey }) =>
+    // Distinct from legacy EPM key ['piece-production', projectId].
+    queryKey: pieceControlKeys.productionBoard(projectId, productionScopeKey),
+    queryFn: () =>
       fetchProductionSnapshot(
-        queryKey[1],
-        productionScopeFetchArg(queryKey[2]),
+        projectId,
+        productionScopeFetchArg(productionScopeKey),
       ),
     enabled,
     // Keep the filter bar mounted while the scoped snapshot refetches.
@@ -132,13 +137,7 @@ export function PieceProductionControl({
   );
 
   const invalidateProduction = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['piece-production', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['piece-register', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['piece-relationships', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['canonical-release-gate'] }),
-      queryClient.invalidateQueries({ queryKey: ['canonical-reporting', projectId] }),
-    ]);
+    await invalidatePieceControlQueries(queryClient, projectId, 'production');
   };
 
   const splitMutation = useMutation({

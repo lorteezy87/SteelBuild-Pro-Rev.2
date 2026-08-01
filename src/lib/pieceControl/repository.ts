@@ -60,6 +60,13 @@ export interface PieceImportStagedRow {
 
 const db = supabase as any;
 
+function isActivePieceRow(row: {
+  is_deleted?: boolean | null;
+  deleted_at?: string | null;
+}): boolean {
+  return !row.is_deleted && !row.deleted_at;
+}
+
 async function fetchAllProjectRows<T>(table: string, projectId: string): Promise<T[]> {
   const rows: T[] = [];
   const pageSize = 1000;
@@ -77,7 +84,8 @@ async function fetchAllProjectRows<T>(table: string, projectId: string): Promise
 
 export async function fetchPieceRegister(projectId: string): Promise<PieceRegisterRow[]> {
   const rows = await fetchAllProjectRows<PieceRegisterRow>("pieces", projectId);
-  return rows.filter((row) => !row.deleted_at);
+  // pieces uses both is_deleted and deleted_at in different write paths — require both clear.
+  return rows.filter(isActivePieceRow);
 }
 
 export async function fetchPieceImportBatches(projectId: string): Promise<PieceImportBatch[]> {
