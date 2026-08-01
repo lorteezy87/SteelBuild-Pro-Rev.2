@@ -1,15 +1,217 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { createSupabaseQueryMock as CreateMock } from "./helpers/supabaseQueryMock";
-import { expectIsoTimestamp } from "./helpers/supabaseQueryMock";
 
-// vi.hoisted runs before ESM imports are initialized — use require inside
-// the factory so createSupabaseQueryMock is available without TDZ.
+type QueryOp =
+  | "select"
+  | "eq"
+  | "in"
+  | "order"
+  | "limit"
+  | "range"
+  | "update"
+  | "delete"
+  | "insert"
+  | "single"
+  | "maybeSingle";
+
+type QueryCall =
+  | { table: string; op: "select"; value: string }
+  | { table: string; op: "eq"; column: string; value: unknown }
+  | { table: string; op: "in"; column: string; value: unknown[] }
+  | { table: string; op: "order"; column: string; value: unknown }
+  | { table: string; op: "limit"; value: number }
+  | { table: string; op: "range"; from: number; to: number }
+  | { table: string; op: "update"; value: Record<string, unknown> }
+  | { table: string; op: "delete" }
+  | { table: string; op: "insert"; value: unknown }
+  | { table: string; op: "single" }
+  | { table: string; op: "maybeSingle" };
+
+const expectIsoTimestamp = expect.stringMatching(
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/,
+);
+
+// Full factory lives inside vi.hoisted so there is no ESM TDZ / require(.ts) issue.
 const mocks = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { createSupabaseQueryMock } = require("./helpers/supabaseQueryMock") as {
-    createSupabaseQueryMock: typeof CreateMock;
+  const calls: QueryCall[] = [];
+  let listResult: { data: unknown; error: unknown } = { data: [], error: null };
+  let rpcResult: { data: unknown; error: unknown } = { data: {}, error: null };
+  let listError: unknown = null;
+
+  const makeChain = (table: string) => {
+    const chain: Record<string, unknown> = {};
+    const self = chain as {
+      select: (value?: string) => typeof chain;
+      eq: (column: string, value: unknown) => typeof chain;
+      in: (column: string, value: unknown[]) => typeof chain;
+      order: (column: string, value?: unknown) => typeof chain;
+      limit: (n: number) => typeof chain;
+      range: (from: number, to: number) => typeof chain;
+      update: (value: Record<string, unknown>) => typeof chain;
+      delete: () => typeof chain;
+      insert: (value: unknown) => typeof chain;
+      single: () => Promise<{ data: unknown; error: unknown }>;
+      maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+      then: (
+        onfulfilled?: (value: { data: unknown; error: unknown }) => unknown,
+        onrejected?: (reason: unknown) => unknown,
+      ) => Promise<unknown>;
+    };
+
+    self.select = (value = "*") => {
+      calls.push({ table, op: "select", value });
+      return chain;
+    };
+    self.eq = (column, value) => {
+      calls.push({ table, op: "eq", column, value });
+      return chain;
+    };
+    self.in = (column, value) => {
+      calls.push({ table, op: "in", column, value });
+      return chain;
+    };
+    self.order = (column, value) => {
+      calls.push({ table, op: "order", column, value });
+      return chain;
+    };
+    self.limit = (n) => {
+      calls.push({ table, op: "limit", value: n });
+      return chain;
+    };
+    self.range = (from, to) => {
+      calls.push({ table, op: "range", from, to });
+      return chain;
+    };
+    self.update = (value) => {
+      calls.push({ table, op: "update", value });
+      return chain;
+    };
+    self.delete = () => {
+      calls.push({ table, op: "delete" });
+      return chain;
+    };
+    self.insert = (value) => {
+      calls.push({ table, op: "insert", value });
+      return chain;
+    };
+    self.single = () =>
+      Promise.resolve(
+        listError
+          ? { data: null, error: listError }
+          : {
+              data: (listResult as { data: unknown[] }).data?.[0] ?? {},
+              error: null,
+            },
+      );
+    self.maybeSingle = () =>
+      Promise.resolve(
+        listError
+          ? { data: null, error: listError }
+          : {
+              data: (listResult as { data: unknown[] }).data?.[0] ?? null,
+              error: null,
+            },
+      );
+    self.then = (onfulfilled, onrejected) => {
+      const result = listError ? { data: null, error: listError } : listResult;
+      return Promise.resolve(result).then(onfulfilled, onrejected);
+    };
+
+    return self;
   };
-  return createSupabaseQueryMock();
+
+  const fromMock = vi.fn((table: string) => makeChain(table));
+  const rpcMock = vi.fn(() => Promise.resolve(rpcResult));
+
+  const reset = () => {
+    calls.length = 0;
+    listResult = { data: [], error: null };
+    rpcResult = { data: {}, error: null };
+    listError = null;
+    fromMock.mockReset();
+    fromMock.mockImplementation((table: string) => makeChain(table));
+    rpcMock.mockReset();
+    rpcMock.mockImplementation(() => Promise.resolve(rpcResult));
+  };
+
+  const expectSoftDelete = (table: string, id: string | string[]) => {
+    const updateIdx = calls.findIndex(
+      (c) => c.table === table && c.op === "update",
+    );
+    expect(updateIdx).toBeGreaterThanOrEqual(0);
+    const updateCall = calls[updateIdx] as Extract<QueryCall, { op: "update" }>;
+    expect(updateCall.value).toMatchObject({
+      is_deleted: true,
+      deleted_at: expectIsoTimestamp,
+    });
+
+    const filterCall = calls.slice(updateIdx + 1).find(
+      (c) =>
+        c.table === table &&
+        ((c.op === "eq" && c.column === "id") ||
+          (c.op === "in" && c.column === "id")),
+    );
+    expect(filterCall).toBeDefined();
+    if (filterCall?.op === "eq") {
+      expect(filterCall.value).toBe(id);
+    } else if (filterCall?.op === "in") {
+      expect(filterCall.value).toEqual(Array.isArray(id) ? id : [id]);
+    }
+
+    expect(calls.some((c) => c.table === table && c.op === "delete")).toBe(
+      false,
+    );
+  };
+
+  const expectProjectScopedSelect = (table: string, fkEmbed?: string) => {
+    const embed =
+      fkEmbed ??
+      (table === "projects"
+        ? "*"
+        : `*, projects!${table}_project_id_fkey!inner(id)`);
+
+    expect(calls).toContainEqual({
+      table,
+      op: "select",
+      value: embed,
+    });
+
+    if (table !== "projects") {
+      expect(calls).toContainEqual({
+        table,
+        op: "eq",
+        column: "projects.is_deleted",
+        value: false,
+      });
+    }
+
+    expect(calls).toContainEqual({
+      table,
+      op: "eq",
+      column: "is_deleted",
+      value: false,
+    });
+  };
+
+  const expectCallOrder = (table: string, ops: QueryOp[]) => {
+    const tableCalls = calls.filter((c) => c.table === table);
+    const observed = tableCalls.map((c) => c.op);
+    let idx = 0;
+    for (const wanted of ops) {
+      const found = observed.indexOf(wanted, idx);
+      expect(found).toBeGreaterThanOrEqual(0);
+      idx = found + 1;
+    }
+  };
+
+  return {
+    calls,
+    fromMock,
+    rpcMock,
+    reset,
+    expectSoftDelete,
+    expectProjectScopedSelect,
+    expectCallOrder,
+  };
 });
 
 vi.mock("@/lib/supabase", () => ({
@@ -26,7 +228,6 @@ vi.mock("@/lib/supabase", () => ({
 
 import { entities } from "@/api/supabaseClient";
 
-// Tables that receive live-project scoping + soft-delete on list()
 const PROJECT_SCOPED_ENTITIES = [
   {
     name: "WorkPackage" as const,
@@ -57,7 +258,7 @@ const PROJECT_SCOPED_ENTITIES = [
 
 describe("supabase entity client", () => {
   beforeEach(() => {
-    mocks.reset(); // mockReset + explicit defaults — avoids leakage
+    mocks.reset();
   });
 
   describe("project-scoped list reads", () => {
@@ -71,7 +272,6 @@ describe("supabase entity client", () => {
           `*, projects!${fk}!inner(id)`,
         );
 
-        // Pagination defaults applied by production client
         expect(mocks.calls).toContainEqual({
           table,
           op: "order",
@@ -100,7 +300,6 @@ describe("supabase entity client", () => {
         column: "projects.is_deleted",
         value: false,
       });
-      // projects still soft-delete filter themselves + on_hold
       expect(mocks.calls).toContainEqual({
         table: "projects",
         op: "eq",
@@ -170,8 +369,8 @@ describe("supabase entity client", () => {
         value: ["a", "b", "c"],
       });
 
-      // Sequence: update then in
-      mocks.expectCallOrder("sov_items", ["update", "in"]);
+      // Production: .update().in().select()
+      mocks.expectCallOrder("sov_items", ["update", "in", "select"]);
     });
 
     it("chunks large id lists into ≤500-id .in filters sequentially", async () => {
@@ -189,17 +388,20 @@ describe("supabase entity client", () => {
       );
       expect(updates).toHaveLength(3);
 
-      // Sequential: three update→in pairs in order (no parallel interleaving)
+      // Sequential for-await: update → in → select per chunk
       const sovOps = mocks.calls
         .filter((c) => c.table === "sov_items")
         .map((c) => c.op);
       expect(sovOps).toEqual([
         "update",
         "in",
+        "select",
         "update",
         "in",
+        "select",
         "update",
         "in",
+        "select",
       ]);
     });
 
