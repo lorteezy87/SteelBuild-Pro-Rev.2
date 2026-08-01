@@ -8,6 +8,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { PRODUCTION_STAGES, STAGE_PERCENT, type ProductionStage } from "@/lib/importProductionStatus";
 import { syncProductionRowsToModelAndPieces } from "./productionToFabBridge";
 
 const TABLE = "piece_production";
@@ -15,7 +16,7 @@ const TABLE = "piece_production";
 // piece_production isn't in the generated Database types — own the cast here.
 // The optional client arg lets listPieceProduction page against an injected
 // mock in tests; every other caller uses the real client by default.
- 
+
 const from = (table: string, client: typeof supabase = supabase): any =>
   (client.from as unknown as (t: string) => any)(table);
 
@@ -87,7 +88,7 @@ export async function listPieceProduction(
     if (batch.length < page) return all;
   }
   // Hit the safety ceiling — surface it rather than silently returning partial.
-   
+
   console.warn(`[piece_production] listPieceProduction stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
   return all;
 }
@@ -169,4 +170,70 @@ export async function commitProductionRows(
 export async function softDeletePieceProduction(id: string): Promise<void> {
   const { error } = await from(TABLE).update({ is_deleted: true }).eq("id", id);
   if (error) throw error;
+}
+
+/**
+ * Bulk-set stage (and STAGE_PERCENT baseline) for existing piece_production rows.
+ * Loads marks for the fab bridge, updates status/percent in chunks, then runs
+ * syncProductionRowsToModelAndPieces so 3D / Piece Control colors stay in sync.
+ */
+export async function bulkUpdateProductionStage(
+  projectId: string,
+  ids: string[],
+  stage: ProductionStage,
+): Promise<{ updated: number }> {
+  if (!projectId || !ids.length) return { updated: 0 };
+  if (!(PRODUCTION_STAGES as readonly string[]).includes(stage)) {
+    throw new Error(`Invalid production stage: ${stage}`);
+  }
+  const percent = STAGE_PERCENT[stage];
+  const uniqueIds = [...new Set(ids)];
+
+  const selected: PieceProductionRow[] = [];
+  for (let i = 0; i < uniqueIds.length; i += CHUNK) {
+    const slice = uniqueIds.slice(i, i + CHUNK);
+    const { data, error } = await from(TABLE)
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("is_deleted", false)
+      .in("id", slice);
+    if (error) throw error;
+    selected.push(...((data || []) as PieceProductionRow[]));
+  }
+
+  let updated = 0;
+  for (let i = 0; i < uniqueIds.length; i += CHUNK) {
+    const slice = uniqueIds.slice(i, i + CHUNK);
+    const { error } = await from(TABLE)
+      .update({ status: stage, percent_complete: percent })
+      .eq("project_id", projectId)
+      .eq("is_deleted", false)
+      .in("id", slice);
+    if (error) throw error;
+    updated += slice.length;
+  }
+
+  const staged: StagedProductionRow[] = selected.map((row) => ({
+    action: "update",
+    existing_id: row.id,
+    piece_mark: row.piece_mark,
+    assembly_mark: row.assembly_mark,
+    status: stage,
+    percent_complete: percent,
+    ship_date: row.ship_date,
+    stage_data: row.stage_data,
+    quantity: row.quantity,
+    weight: row.weight,
+    sequence_number: row.sequence_number,
+    erection_area: row.erection_area,
+    external_ref: row.external_ref,
+  }));
+
+  try {
+    await syncProductionRowsToModelAndPieces(projectId, staged);
+  } catch (bridgeError) {
+    console.warn("[piece_production] bulk stage → fab bridge failed:", bridgeError);
+  }
+
+  return { updated };
 }
