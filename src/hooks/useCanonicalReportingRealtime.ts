@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { pieceControlKeys } from "@/lib/pieceControl/queryKeys";
 
 export const CANONICAL_REPORTING_REALTIME_TABLES = [
   "pieces",
@@ -15,12 +16,16 @@ export const CANONICAL_REPORTING_REALTIME_TABLES = [
 
 export function canonicalReportingQueryKeys(projectId: string) {
   return [
-    ["canonical-reporting", projectId],
-    ["canonical-pieces-3d", projectId],
-    ["piece-production", projectId],
-    ["piece-logistics", projectId],
+    pieceControlKeys.canonicalReporting(projectId),
+    pieceControlKeys.canonicalPieces3d(projectId),
+    pieceControlKeys.register(projectId),
+    // Canonical station board inside Piece Register (not the legacy EPM table).
+    pieceControlKeys.productionBoard(projectId),
+    // Legacy Production Status / EPM table — still used by shipping + Production Status page.
+    pieceControlKeys.legacyProduction(projectId),
+    pieceControlKeys.logistics(projectId),
     // Shared with Model3DTab / IFC import — must refresh when links change.
-    ["model-elements", projectId],
+    pieceControlKeys.modelElements(projectId),
   ];
 }
 
@@ -53,4 +58,3 @@ export function useCanonicalReportingRealtime(projectId?: string) {
     };
   }, [projectId, queryClient]);
 }
-
