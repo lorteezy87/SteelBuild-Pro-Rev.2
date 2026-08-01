@@ -4,8 +4,6 @@ import {
   stageTone,
   stageBaselinePercent,
   localTodayISO,
-  shouldVirtualizeProductionRows,
-  PRODUCTION_VIRTUALIZE_THRESHOLD,
 } from "../productionStatusControlCenter.derive";
 import type { PieceProductionRow } from "@/lib/production/repository";
 
@@ -233,7 +231,7 @@ describe("stageBaselinePercent", () => {
 });
 
 
-// ── localTodayISO / virtualize threshold ─────────────────────────────────────
+// ── localTodayISO ─────────────────────────────────────
 
 describe("localTodayISO", () => {
   it("formats local calendar date as YYYY-MM-DD (not UTC)", () => {
@@ -248,15 +246,6 @@ describe("localTodayISO", () => {
   });
 });
 
-describe("shouldVirtualizeProductionRows", () => {
-  it("is false at or below the threshold", () => {
-    expect(shouldVirtualizeProductionRows(0)).toBe(false);
-    expect(shouldVirtualizeProductionRows(PRODUCTION_VIRTUALIZE_THRESHOLD)).toBe(false);
-  });
-  it("is true above the threshold", () => {
-    expect(shouldVirtualizeProductionRows(PRODUCTION_VIRTUALIZE_THRESHOLD + 1)).toBe(true);
-  });
-});
 
 describe("buildProductionSummary — today hoist / injectable clock", () => {
   it("uses the injected now for past-due instead of wall clock", () => {
