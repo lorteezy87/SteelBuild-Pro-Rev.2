@@ -3,6 +3,9 @@ import {
   buildProductionSummary,
   stageTone,
   stageBaselinePercent,
+  localTodayISO,
+  shouldVirtualizeProductionRows,
+  PRODUCTION_VIRTUALIZE_THRESHOLD,
 } from "../productionStatusControlCenter.derive";
 import type { PieceProductionRow } from "@/lib/production/repository";
 
@@ -226,5 +229,44 @@ describe("stageBaselinePercent", () => {
     expect(stageBaselinePercent(null)).toBe(0);
     expect(stageBaselinePercent(undefined)).toBe(0);
     expect(stageBaselinePercent("GalvPlus")).toBe(0);
+  });
+});
+
+
+// ── localTodayISO / virtualize threshold ─────────────────────────────────────
+
+describe("localTodayISO", () => {
+  it("formats local calendar date as YYYY-MM-DD (not UTC)", () => {
+    // Fixed local components — avoids toISOString UTC day-shift near midnight.
+    const d = new Date(2026, 7, 1, 23, 30, 0); // Aug 1 2026 local evening
+    expect(localTodayISO(d)).toBe("2026-08-01");
+  });
+
+  it("pads month and day to two digits", () => {
+    const d = new Date(2026, 0, 5, 12, 0, 0); // Jan 5
+    expect(localTodayISO(d)).toBe("2026-01-05");
+  });
+});
+
+describe("shouldVirtualizeProductionRows", () => {
+  it("is false at or below the threshold", () => {
+    expect(shouldVirtualizeProductionRows(0)).toBe(false);
+    expect(shouldVirtualizeProductionRows(PRODUCTION_VIRTUALIZE_THRESHOLD)).toBe(false);
+  });
+  it("is true above the threshold", () => {
+    expect(shouldVirtualizeProductionRows(PRODUCTION_VIRTUALIZE_THRESHOLD + 1)).toBe(true);
+  });
+});
+
+describe("buildProductionSummary — today hoist / injectable clock", () => {
+  it("uses the injected now for past-due instead of wall clock", () => {
+    const fixed = new Date(2026, 5, 15, 12, 0, 0); // Jun 15 2026 local
+    const pieces = [
+      piece({ status: "Weld", ship_date: "2026-06-14" }), // past relative to fixed
+      piece({ status: "Cut",  ship_date: "2026-06-16" }), // future relative to fixed
+    ];
+    const s = buildProductionSummary(pieces, fixed);
+    expect(s.pastDue).toBe(1);
+    expect(s.pastDueQueue[0].ship_date).toBe("2026-06-14");
   });
 });

@@ -11,6 +11,7 @@ import React, { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { listPieceProduction } from "@/lib/production/repository";
 import {
@@ -62,6 +63,13 @@ export default function ProductionStatus() {
   const [showEpmImport, setShowEpmImport] = useState(false);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("All");
+
+  // Multi-user: when another session writes piece_production (import / station
+  // update), refresh this page's list without a hard reload. Debounced 300ms
+  // inside the hook so bulk imports don't thrash.
+  useRealtimeInvalidation("piece_production", projectId, [
+    pieceControlKeys.legacyProduction(projectId),
+  ]);
 
   const { data: pieces = [], isLoading } = useQuery({
     queryKey: pieceControlKeys.legacyProduction(projectId),
