@@ -23,6 +23,10 @@ import {
   resolveProductionWorkPackageScope,
   UNASSIGNED_WP_FILTER,
 } from "@/lib/pieceControl/productionScope";
+import {
+  invalidatePieceControlQueries,
+  pieceControlKeys,
+} from "@/lib/pieceControl/queryKeys";
 import { DecisionPanel } from "@/components/command";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
 import { entities } from "@/api/supabaseClient";
@@ -149,12 +153,9 @@ export function PieceLogisticsControl({
       toast.success(`${actionDefinitions[variables.action].pastLabel} selected piece lots.`);
       setSelectedByAction((current) => ({ ...current, [variables.action]: [] }));
       setReferenceByAction((current) => ({ ...current, [variables.action]: {} }));
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["piece-logistics", projectId] }),
-        queryClient.invalidateQueries({ queryKey: ["piece-production", projectId] }),
-        queryClient.invalidateQueries({ queryKey: ["piece-register", projectId] }),
-        queryClient.invalidateQueries({ queryKey: ["canonical-reporting", projectId] }),
-      ]);
+      // Shared helper: logistics + production board + register + legacy EPM +
+      // model-elements / canonical-pieces-3d / reporting (Fab colors).
+      await invalidatePieceControlQueries(queryClient, projectId, "logistics");
     },
     onError: (error: Error) =>
       toast.error(

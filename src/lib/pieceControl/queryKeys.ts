@@ -75,17 +75,33 @@ export async function invalidatePieceControlQueries(
     push(pieceControlKeys.workPackagesAlt(projectId));
   }
 
+  // Logistics transitions advance lifecycle — register list must refresh too.
+  if (scope === "logistics") {
+    push(pieceControlKeys.register(projectId));
+  }
+
   if (scope === "all" || scope === "relationships" || scope === "register") {
     push(pieceControlKeys.relationships(projectId));
   }
 
-  if (scope === "all" || scope === "production" || scope === "register") {
+  // Production board + release gate: production writes and logistics lifecycle moves.
+  if (
+    scope === "all" ||
+    scope === "production" ||
+    scope === "register" ||
+    scope === "logistics"
+  ) {
     push(pieceControlKeys.productionBoard(projectId));
     push(pieceControlKeys.canonicalReleaseGate());
   }
 
   if (scope === "all" || scope === "logistics" || scope === "production") {
     push(pieceControlKeys.logistics(projectId));
+  }
+
+  // Legacy EPM table (Production Status) when lifecycle or station data moves.
+  if (scope === "all" || scope === "logistics" || scope === "production") {
+    push(pieceControlKeys.legacyProduction(projectId));
   }
 
   // Lifecycle / mark / WP changes must refresh Fab-mode coloring.
