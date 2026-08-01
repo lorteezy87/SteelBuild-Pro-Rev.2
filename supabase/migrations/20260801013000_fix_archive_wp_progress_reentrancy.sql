@@ -12,9 +12,6 @@
 
 BEGIN;
 
--- Guard is applied via CREATE OR REPLACE of the three functions below.
--- Full bodies preserved from prior migrations; only control flow added.
-
 CREATE OR REPLACE FUNCTION public.refresh_work_package_progress(p_work_package_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -59,6 +56,7 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'reason', 'work_package_not_found');
   END IF;
 
+  -- Only write through when piece control is active.
   IF v_mode IS NULL OR v_mode = 'off' THEN
     RETURN jsonb_build_object('ok', true, 'skipped', true, 'reason', 'piece_control_off');
   END IF;
@@ -148,35 +146,48 @@ BEGIN
     IF v_has_station_config THEN
       SELECT COALESCE(SUM(c.earned_percent), 0) INTO v_earned
       FROM public.piece_station_completions c
-      JOIN public.piece_station_configurations cfg ON cfg.id = c.station_config_id
-      WHERE c.piece_id = r.id AND cfg.is_active = true;
+      WHERE c.piece_id = r.id;
+      v_earned := LEAST(100, v_earned);
     ELSE
-      v_earned := CASE
-        WHEN r.lifecycle_status = 'erected' THEN 100
-        WHEN r.lifecycle_status = 'delivered' THEN 90
-        WHEN r.lifecycle_status = 'shipped' THEN 80
-        WHEN r.lifecycle_status = 'fabricated' THEN 70
-        WHEN r.lifecycle_status = 'in_fabrication' THEN 40
-        WHEN r.lifecycle_status = 'released' THEN 20
+      v_earned := CASE r.lifecycle_status
+        WHEN 'not_started' THEN 0
+        WHEN 'released' THEN 5
+        WHEN 'in_fabrication' THEN 40
+        WHEN 'fabricated' THEN 70
+        WHEN 'shipped' THEN 85
+        WHEN 'delivered' THEN 95
+        WHEN 'erected' THEN 100
         ELSE 0
       END;
     END IF;
     v_earned_lot_sum := v_earned_lot_sum + v_earned;
 
-    v_tons := COALESCE(
-      NULLIF(r.weight_total_lbs, 0),
-      COALESCE(r.weight_each_lbs, 0) * COALESCE(r.quantity, 1)
-    ) / 2000.0;
-    IF v_tons > 0 THEN
+    IF r.weight_each_lbs IS NOT NULL AND r.quantity IS NOT NULL THEN
+      IF r.weight_total_lbs IS NOT NULL
+         AND abs((r.weight_each_lbs * r.quantity) - r.weight_total_lbs)
+             > GREATEST(0.01, r.weight_total_lbs * 0.01) THEN
+        v_tons := (r.weight_each_lbs * r.quantity) / 2000.0;
+      ELSIF r.weight_total_lbs IS NOT NULL THEN
+        v_tons := r.weight_total_lbs / 2000.0;
+      ELSE
+        v_tons := (r.weight_each_lbs * r.quantity) / 2000.0;
+      END IF;
+    ELSIF r.weight_total_lbs IS NOT NULL THEN
+      v_tons := r.weight_total_lbs / 2000.0;
+    ELSE
+      v_tons := NULL;
+    END IF;
+
+    IF v_tons IS NOT NULL AND v_tons > 0 THEN
       v_known_tons := v_known_tons + v_tons;
-      v_earned_ton_sum := v_earned_ton_sum + (v_tons * v_earned / 100.0);
+      v_earned_ton_sum := v_earned_ton_sum + (v_tons * v_earned);
     END IF;
   END LOOP;
 
   IF v_known_tons > 0 THEN
-    v_percent := ROUND((v_earned_ton_sum / v_known_tons) * 100.0, 1);
+    v_percent := ROUND(v_earned_ton_sum / v_known_tons, 2);
   ELSIF v_lot_count > 0 THEN
-    v_percent := ROUND(v_earned_lot_sum / v_lot_count, 1);
+    v_percent := ROUND(v_earned_lot_sum / v_lot_count, 2);
   ELSE
     v_percent := 0;
   END IF;
