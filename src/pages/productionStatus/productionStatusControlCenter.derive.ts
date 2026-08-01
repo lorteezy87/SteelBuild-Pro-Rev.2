@@ -71,13 +71,6 @@ function num(v: number | null | undefined): number {
   return Number.isFinite(Number(v)) ? Number(v) : 0;
 }
 
-/** Above this many filtered rows, render the virtualized grid instead of a full table. */
-export const PRODUCTION_VIRTUALIZE_THRESHOLD = 100;
-
-export function shouldVirtualizeProductionRows(rowCount: number): boolean {
-  return rowCount > PRODUCTION_VIRTUALIZE_THRESHOLD;
-}
-
 // ── Main derivation ───────────────────────────────────────────────────────────
 
 /**
