@@ -80,6 +80,39 @@ input::placeholder, textarea::placeholder {
   color: var(--text-muted) !important;
 }
 
+/* Landing / marketing page inputs must stay dark-on-white regardless of app theme.
+   Global input !important rules above otherwise make typed credentials unreadable
+   on the executive-light login modal. */
+.lp-page input.lp-input,
+.lp-page textarea.lp-input {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #101827 !important;
+  -webkit-text-fill-color: #101827 !important;
+  caret-color: #101827 !important;
+  box-shadow: none !important;
+}
+.lp-page input.lp-input:focus,
+.lp-page textarea.lp-input:focus {
+  border-color: #F5A800 !important;
+  box-shadow: 0 0 0 4px rgba(245, 168, 0, 0.16) !important;
+}
+.lp-page input.lp-input::placeholder,
+.lp-page textarea.lp-input::placeholder {
+  color: #8491A6 !important;
+  -webkit-text-fill-color: #8491A6 !important;
+  opacity: 1 !important;
+}
+.lp-page input.lp-input:-webkit-autofill,
+.lp-page input.lp-input:-webkit-autofill:hover,
+.lp-page input.lp-input:-webkit-autofill:focus,
+.lp-page textarea.lp-input:-webkit-autofill {
+  -webkit-text-fill-color: #101827 !important;
+  caret-color: #101827 !important;
+  box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+  transition: background-color 99999s ease-in-out 0s;
+}
+
 /* ── Light theme element overrides ──
  *
  * HD pass (Apr 2026):
