@@ -67,6 +67,32 @@ async function fetchProjectRows<T>(
   }
 }
 
+/** Active work packages only — soft-deleted rows never appear in assign UI. */
+async function fetchActiveWorkPackages(
+  projectId: string,
+): Promise<ReadinessWorkPackage[]> {
+  const rows: ReadinessWorkPackage[] = [];
+  const pageSize = 1000;
+  // work_packages has name/notes — not description (PGRST/42703 if selected).
+  const select =
+    "id, project_id, wp_number, name, sequence_number, area, is_deleted, deleted_at";
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db
+      .from("work_packages")
+      .select(select)
+      .eq("project_id", projectId)
+      .eq("is_deleted", false)
+      .is("deleted_at", null)
+      .range(from, from + pageSize - 1);
+    if (error) throw taggedTableError("work_packages", error);
+    rows.push(...((data ?? []) as ReadinessWorkPackage[]));
+    if (!data || data.length < pageSize) {
+      // Defense in depth if a row slips past DB filters.
+      return rows.filter((wp) => wp.is_deleted !== true && !wp.deleted_at);
+    }
+  }
+}
+
 /**
  * Enrichment tables used for readiness scoring / drawing links. Missing
  * migrations (e.g. submittal_comment_dispositions) must not blank the whole
@@ -95,20 +121,12 @@ export async function fetchPieceRelationshipSnapshot(
   projectId: string,
 ): Promise<PieceRelationshipSnapshot> {
   // Core rows: fail closed — without these the assignment UI cannot run.
-  const [pieces, workPackagesRaw] = await Promise.all([
+  const [pieces, workPackages] = await Promise.all([
     fetchPieceRegister(projectId).catch((error) => {
       throw taggedTableError("pieces", error);
     }),
-    fetchProjectRows<ReadinessWorkPackage>(
-      "work_packages",
-      projectId,
-      // work_packages has name/notes — not description (PGRST/42703 if selected).
-      "id, project_id, wp_number, name, sequence_number, area, is_deleted, deleted_at",
-    ),
+    fetchActiveWorkPackages(projectId),
   ]);
-  const workPackages = workPackagesRaw.filter(
-    (wp) => !wp.is_deleted && !wp.deleted_at,
-  );
 
   // Everything else is best-effort so a single missing/denied table does not
   // strand WP assignment. Readiness panels degrade gracefully with empty sets.
