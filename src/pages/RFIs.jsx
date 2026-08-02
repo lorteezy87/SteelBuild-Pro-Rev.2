@@ -141,6 +141,7 @@ export default function RFIs() {
     bulkUpdateMut,
     bulkDeleteMut,
     notifyFieldMut,
+    releaseHoldsMut,
     saveRfi,
     isSaving,
   } = useRfiPageMutations({
@@ -229,6 +230,10 @@ export default function RFIs() {
         onDownstreamAction={(key) => {
           if (!selectedRFI) return;
           const r = selectedRFI;
+          if (key === "release_holds") {
+            releaseHoldsMut.mutate(r);
+            return;
+          }
           if (key === "notify_field") {
             notifyFieldMut.mutate(r);
             return;
