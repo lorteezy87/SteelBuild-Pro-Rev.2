@@ -326,6 +326,7 @@ export default function WorkPackages() {
 
       {(wpModalOpen || editingWP) && (
         <WPFormModal
+          key={editingWP?.id || editingWP?.wp_number || "new"}
           open={wpModalOpen || !!editingWP}
           onClose={() => { setWPModalOpen(false); setEditingWP(null); }}
           onSave={(data: unknown) => {
