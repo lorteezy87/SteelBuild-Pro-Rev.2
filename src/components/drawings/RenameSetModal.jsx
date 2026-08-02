@@ -3,33 +3,45 @@ import { X } from "lucide-react";
 import { mono, surface } from "./drawingsConfig";
 
 /**
- * Small focused modal for renaming a drawing set.
+ * Modal for editing a drawing set's display name and set number.
  *
  * Plain fixed overlay — no Radix Dialog, no <form> tag. Submits on Enter
- * via button onClick; validates the new name is non-empty and different
- * from the current name before calling onSave.
+ * via button onClick; validates the new name is non-empty before calling
+ * onSave({ name, setNumber }).
  */
-export default function RenameSetModal({ open, initialName = "", onClose, onSave, saving = false }) {
-  const ref = useRef(null);
+export default function RenameSetModal({
+  open,
+  initialName = "",
+  initialSetNumber = "",
+  onClose,
+  onSave,
+  saving = false,
+}) {
+  const nameRef = useRef(null);
   const [name, setName] = useState(initialName);
+  const [setNumber, setSetNumber] = useState(initialSetNumber);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
     if (open) {
       setName(initialName);
+      setSetNumber(initialSetNumber || "");
       setErr(null);
-      setTimeout(() => ref.current?.focus(), 0);
+      setTimeout(() => nameRef.current?.focus(), 0);
     }
-  }, [open, initialName]);
+  }, [open, initialName, initialSetNumber]);
 
   if (!open) return null;
 
   const submit = () => {
-    const trimmed = (name || "").trim();
-    if (!trimmed) { setErr("Set name is required."); return; }
-    if (trimmed === (initialName || "").trim()) { onClose(); return; }
+    const trimmedName = (name || "").trim();
+    if (!trimmedName) { setErr("Set name is required."); return; }
+    const trimmedNumber = (setNumber || "").trim();
+    const nameUnchanged = trimmedName === (initialName || "").trim();
+    const numberUnchanged = trimmedNumber === (initialSetNumber || "").trim();
+    if (nameUnchanged && numberUnchanged) { onClose(); return; }
     setErr(null);
-    onSave(trimmed);
+    onSave({ name: trimmedName, setNumber: trimmedNumber });
   };
 
   return (
@@ -55,7 +67,7 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
           display: "flex", alignItems: "center", gap: 10,
         }}>
           <div style={{ flex: 1, ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--accent)" }}>
-            RENAME DRAWING SET
+            EDIT DRAWING SET
           </div>
           <button onClick={onClose} aria-label="Close" style={btnIcon}>
             <X size={16} />
@@ -67,7 +79,7 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
             Set Name
           </label>
           <input
-            ref={ref}
+            ref={nameRef}
             className="sbd-input"
             style={{
               width: "100%", padding: "8px 10px",
@@ -85,6 +97,33 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
           />
           <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 6, letterSpacing: "0.08em" }}>
             All child sheets in this set will be updated to use the new name.
+          </div>
+
+          <label style={{
+            ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)",
+            letterSpacing: "0.15em", textTransform: "uppercase",
+            display: "block", marginBottom: 5, marginTop: 16,
+          }}>
+            Set #
+          </label>
+          <input
+            className="sbd-input"
+            style={{
+              width: "100%", padding: "8px 10px",
+              background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 2,
+              color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13,
+              boxSizing: "border-box",
+            }}
+            value={setNumber}
+            onChange={(e) => setSetNumber(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); submit(); }
+            }}
+            placeholder="e.g. 1 / 02 / P-03"
+            disabled={saving}
+          />
+          <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 6, letterSpacing: "0.08em" }}>
+            Used for package ordering. Leave blank to clear.
           </div>
 
           {err && (
@@ -109,7 +148,7 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
             disabled={saving}
             style={{ ...btnPrimary, opacity: saving ? 0.6 : 1, cursor: saving ? "not-allowed" : "pointer" }}
           >
-            {saving ? "SAVING…" : "RENAME"}
+            {saving ? "SAVING…" : "SAVE"}
           </button>
         </div>
       </div>

@@ -112,6 +112,7 @@ export default function DrawingsPageModals({
       <RenameSetModal
         open={!!renameSet}
         initialName={renameSet?.setName || ""}
+        initialSetNumber={renameSet?.setNumber || ""}
         onClose={onCloseRename}
         onSave={onSaveRename}
         saving={savingRename}
