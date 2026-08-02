@@ -225,10 +225,10 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
         </span>
       </div>
 
-      {/* Dropdown panel */}
+      {/* Dropdown panel — solid opaque (no sbd-card glass) so page content never bleeds through */}
       {open && (
         <div
-          className="project-pill-dropdown-panel sbd-card"
+          className="project-pill-dropdown-panel sbp-opaque-popout"
           style={{
             position: compact ? "fixed" : "absolute",
             top: compact ? 58 : "calc(100% + 6px)",
@@ -240,14 +240,18 @@ export default function ProjectPillDropdown({ compact = false, align = "right", 
             width: compact ? "auto" : 400,
             maxHeight: compact ? "min(70dvh, 420px)" : 300,
             overflowY: "auto",
-            // Theme-aware opaque surface — a hardcoded dark gradient here left
-            // dark var(--text-primary) text unreadable on a dark panel in light mode.
-            background: "var(--bg-surface-secondary)",
+            // Solid elevated surface — sbd-card glass left content readable
+            // underneath the list. Prefer elevated, then page, then hard fallback.
+            background: "var(--bg-elevated, var(--bg-page, #161B22))",
             border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border-default))",
             borderRadius: 14,
-            boxShadow: "var(--shadow-lg)",
+            boxShadow: "var(--shadow-lg, 0 16px 40px rgba(0,0,0,0.55))",
             zIndex: 3000,
             padding: 8,
+            // Kill any inherited backdrop blur / translucency
+            backdropFilter: "none",
+            WebkitBackdropFilter: "none",
+            isolation: "isolate",
           }}
         >
           {/* Search filter */}
