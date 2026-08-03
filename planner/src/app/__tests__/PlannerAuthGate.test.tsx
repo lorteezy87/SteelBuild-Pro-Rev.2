@@ -10,6 +10,7 @@ import PlannerRoutes from "../PlannerRoutes";
 import { getSteelBuildMainAppUrl, normalizeSteelBuildMainAppUrl } from "../plannerAppUrl";
 
 type AuthState = {
+  isAuthenticated: boolean;
   isLoadingAuth: boolean;
   isLoadingPublicSettings: boolean;
   isPasswordRecovery: boolean;
@@ -18,6 +19,8 @@ type AuthState = {
   loginWithPassword: () => Promise<{ success: true }>;
   signUpWithPassword: () => Promise<{ success: true; needsConfirmation: false }>;
   sendPasswordReset: () => Promise<{ success: true }>;
+  logout: () => Promise<void>;
+  user: { id: string; full_name: string } | null;
 };
 
 let authState: AuthState;
@@ -46,6 +49,7 @@ vi.mock("@/pages/UpdatePassword", () => ({
 }));
 
 const readyAuth: AuthState = {
+  isAuthenticated: true,
   isLoadingAuth: false,
   isLoadingPublicSettings: false,
   isPasswordRecovery: false,
@@ -54,6 +58,8 @@ const readyAuth: AuthState = {
   loginWithPassword: vi.fn(async () => ({ success: true } as const)),
   signUpWithPassword: vi.fn(async () => ({ success: true, needsConfirmation: false } as const)),
   sendPasswordReset: vi.fn(async () => ({ success: true } as const)),
+  logout: vi.fn(async () => undefined),
+  user: { id: "planner-user", full_name: "Planner User" },
 };
 
 describe("PlannerAuthGate", () => {
@@ -80,6 +86,15 @@ describe("PlannerAuthGate", () => {
       ...readyAuth,
       authError: { type: "auth_required", message: "Authentication required" },
     };
+
+    render(<PlannerAuthGate><div>AUTHORIZED_PLANNER</div></PlannerAuthGate>);
+
+    expect(screen.getByText("SteelBuild credential form")).toBeInTheDocument();
+    expect(screen.queryByText("AUTHORIZED_PLANNER")).not.toBeInTheDocument();
+  });
+
+  it("returns to the credential boundary after logout clears identity without an auth error", () => {
+    authState = { ...readyAuth, isAuthenticated: false, user: null, authError: null };
 
     render(<PlannerAuthGate><div>AUTHORIZED_PLANNER</div></PlannerAuthGate>);
 

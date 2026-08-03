@@ -2,7 +2,7 @@
   "buildCommand": "npm run build:planner",
   "outputDirectory": "dist-planner",
   "framework": "vite",
-  "git": { "deploymentEnabled": { "main": false, "staging": false } },
+  "git": { "deploymentEnabled": false },
   "headers": [
     {
       "source": "/assets/(.*)",

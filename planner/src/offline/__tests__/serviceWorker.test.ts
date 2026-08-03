@@ -19,4 +19,10 @@ describe("Planner service worker static cache contract", () => {
     expect(worker).toContain("HASHED_ASSET_PATH");
     expect(worker).not.toContain('url.pathname.startsWith("/assets/")');
   });
+
+  it("keeps hashed-asset cache writes inside the service-worker response lifetime", () => {
+    const assetBranch = worker.split("if (isCacheableStaticAsset(request, url)) {")[1] ?? "";
+    expect(assetBranch).toContain("await cache.put(request, response.clone())");
+    expect(assetBranch).not.toContain("void caches.open(CACHE_NAME)");
+  });
 });

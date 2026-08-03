@@ -299,12 +299,14 @@ test("Planner deployment config serves a separate hardened SPA", () => {
   const config = JSON.parse(readFileSync(path.resolve("vercel.planner.json"), "utf8")) as {
     buildCommand?: string;
     outputDirectory?: string;
+    git?: { deploymentEnabled?: boolean };
     headers?: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
     rewrites?: Array<{ source: string; destination: string }>;
   };
 
   expect(config.buildCommand).toBe("npm run build:planner");
   expect(config.outputDirectory).toBe("dist-planner");
+  expect(config.git?.deploymentEnabled).toBe(false);
   expect(config.headers?.find((entry) => entry.source === "/assets/(.*)")?.headers)
     .toContainEqual({ key: "Cache-Control", value: "public, max-age=31536000, immutable" });
   expect(config.headers?.find((entry) => entry.source === "/(.*)")?.headers.map(({ key }) => key))
@@ -329,8 +331,12 @@ test("Planner deployment config serves a separate hardened SPA", () => {
 });
 
 test("unauthenticated users stop at the existing sign-in boundary", async ({ page }) => {
+  const requestedPaths: string[] = [];
+  page.on("request", (request) => requestedPaths.push(new URL(request.url()).pathname));
   await installMockSupabase(page);
   await page.goto("/task-register");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/planner-icon.svg");
+  expect(requestedPaths).not.toContain("/favicon.ico");
   await expect(page.getByRole("button", { name: "Sign in" }).first()).toBeVisible();
   await expect(page.getByRole("main", { name: "SteelBuild Planner workspace" })).toHaveCount(0);
 });
@@ -339,7 +345,10 @@ test("authenticated Planner core workflow and PWA boundary remain deterministic"
   const state = await installMockSupabase(page);
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+    if (message.type() === "error") {
+      const source = message.location().url;
+      consoleErrors.push(source ? `${message.text()} (${source})` : message.text());
+    }
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
@@ -405,17 +414,47 @@ test("authenticated Planner core workflow and PWA boundary remain deterministic"
   // request to capture before the offline navigation assertion.
   await page.reload();
   await expect(page.getByRole("heading", { name: "Task Register" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  await page.evaluate(async () => {
+    const documentAssets = [...document.querySelectorAll<HTMLScriptElement | HTMLLinkElement>(
+      'script[src^="/assets/"], link[href^="/assets/"]',
+    )].map((element) => element instanceof HTMLScriptElement ? element.src : element.href);
+    const loadedAssets = performance.getEntriesByType("resource")
+      .map((entry) => entry.name)
+      .filter((url) => new URL(url).origin === window.location.origin && new URL(url).pathname.startsWith("/assets/"));
+    await Promise.all([...new Set([...documentAssets, ...loadedAssets])].map((url) => fetch(url, { cache: "reload" })));
+  });
+  await expect.poll(() => page.evaluate(async () => {
+    const cachedRequests = (await Promise.all(
+      (await caches.keys()).map(async (cacheName) => (await caches.open(cacheName)).keys()),
+    )).flat();
+    return cachedRequests.some((request) => new URL(request.url).pathname.startsWith("/assets/index-"));
+  })).toBe(true);
   await expect(page.getByRole("status")).toContainText(/Online|Last synced/);
   await context.setOffline(true);
   await expect(page.getByRole("status")).toContainText("Offline—cached data");
-  await page.reload();
-  await expect(page.getByRole("link", { name: "SteelBuild Planner home" })).toBeVisible();
+  const offlineCache = await page.evaluate(async () => {
+    const cachedRequests = (await Promise.all(
+      (await caches.keys()).map(async (cacheName) => (await caches.open(cacheName)).keys()),
+    )).flat();
+    const mainAsset = cachedRequests.find((request) => new URL(request.url).pathname.startsWith("/assets/index-") && new URL(request.url).pathname.endsWith(".js"));
+    const [shellResponse, assetResponse] = await Promise.all([
+      caches.match("/index.html"),
+      mainAsset ? caches.match(mainAsset) : Promise.resolve(undefined),
+    ]);
+    return {
+      shellOk: Boolean(shellResponse?.ok && (await shellResponse.text()).includes('<div id="root"></div>')),
+      assetOk: assetResponse?.ok ?? false,
+    };
+  });
+  expect(offlineCache).toEqual({ shellOk: true, assetOk: true });
   await context.setOffline(false);
 
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
   await page.setViewportSize({ width: 2_048, height: 830 });
   await page.goto("/48-hour-gate");
   await expect(page.getByRole("heading", { name: "48-Hour Gate" })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Confirm delivery sequence/ })).toBeVisible();
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, "desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 1_024, height: 768 });
   await expect(page.getByRole("navigation", { name: "Planner navigation" })).toBeVisible();
@@ -428,6 +467,7 @@ test("authenticated Planner core workflow and PWA boundary remain deterministic"
   await expect(page.getByRole("navigation", { name: "Planner navigation" })).toBeHidden();
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, "mobile.png"), fullPage: true });
 
+  await page.setViewportSize({ width: 1_024, height: 768 });
   await page.evaluate(() => localStorage.setItem("sbp:planner:e2e-probe", "must-clear"));
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: "Sign in" }).first()).toBeVisible();

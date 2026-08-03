@@ -152,6 +152,11 @@ export default defineConfig({
       '.claude/**',
       '.tmp/**',
       'steelbuild-pro/**',
+      // The independently configured Planner suite uses @planner aliases,
+      // Planner jsdom setup, and its own Vite boundary (`npm run test:planner`).
+      // Running it a second time under this root config produces import-time
+      // zero-test failures instead of validating either application.
+      'planner/**',
       // Playwright E2E specs run under `npm run test:e2e`, not Vitest — they
       // import @playwright/test, which throws under the Vitest runner. Matched
       // at any depth: a stale repo copy under .tmp/ has its own e2e/ dir that

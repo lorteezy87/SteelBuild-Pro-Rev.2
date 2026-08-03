@@ -3,7 +3,7 @@
 **Checkpoint date:** 2026-08-02
 **Repository:** `https://github.com/lorteezy87/SteelBuild-Pro-Rev.2.git`
 **Branch:** `codex/steelbuild-planner-pwa`
-**Backup commit:** `efb4745956338211c6e15ce700dc525af6f4887c`
+**Latest pushed commit:** `aedb6a04cd5998faa629cc528fe6ce8fcd9d1fa7`
 
 ## Purpose
 
@@ -125,42 +125,61 @@ Current state:
 npx vitest run supabase/migrations/__tests__/plannerActionControl.test.js supabase/migrations/__tests__/plannerOfflineIdempotency.test.js
 ```
 
-## Task 10 checkpoint — partially complete
+## Task 10 — complete locally
 
-Task 10 was interrupted so this GitHub backup could be created. Preserve its
-current work and continue from this exact boundary.
+Task 10 is complete in the local working tree and passed independent review.
+Its changes are not included in the latest pushed commit shown above.
 
-Completed Task 10 artifacts:
+Completed Task 10 artifacts and behavior:
 
-- `vercel.planner.json` exists and its deployment-contract E2E test passed.
+- `vercel.planner.json` defines the separate Planner build and globally
+  disables automatic Git deployments. Because it is a named CLI config rather
+  than root `vercel.json`, the Planner Vercel project must remain disconnected
+  from Git and be deployed explicitly with `--local-config`.
 - `playwright.planner.config.ts` builds and serves `dist-planner` on port 4174.
 - `e2e/planner-core.spec.ts` uses deterministic local Supabase request mocks;
   it contains no real credentials and no staging-account dependency.
-- The unauthenticated sign-in boundary E2E passed.
-- The authenticated workflow reached the real required-date confirmation UI.
-  A test-only locator mismatch was corrected to the production
-  `alertdialog`/`Confirm required-date change` contract.
+- The built-preview suite passes the unauthenticated and authenticated
+  boundaries, create/edit/date confirmation, filters, bulk completion,
+  48-hour gate, archive, service-worker/cache evidence, responsive navigation,
+  sign-out, local cleanup, and console/request error checks.
+- `.env.example` contains the browser-safe Planner variables.
+- `docs/runbooks/planner-pwa.md` documents local use, Supabase redirects,
+  CLI-only Vercel setup, migration order, PWA checks, cache versions, rollback,
+  and the service-role prohibition.
+- The mobile shell has an accessible drawer, Escape/link close behavior, and
+  a sign-out action supplied by a Planner-local authenticated session context.
+- Service-worker hashed-asset caching now awaits `cache.put` before completing
+  the fetch response.
+- `vite.config.js` excludes `planner/**` from the root Vitest tree; Planner
+  tests remain under `npm run test:planner`.
+- `implementation-evidence/task-10-report.md` contains the full validation and
+  visual-fidelity evidence, and `progress.md` records Task 10 completion.
 
-Task 10 work still required:
+Validation at the local Task 10 checkpoint:
 
-1. Finish the authenticated browser flow and resolve only evidence-backed
-   failures for Task Register, new task, date confirmation, filters, bulk
-   completion, 48-hour gate, archive, and logout cleanup.
-2. Complete PWA/offline, cached-shell, responsive navigation, keyboard, and
-   console-error browser verification.
-3. Add Planner variables and safe descriptions to `.env.example`.
-4. Create `docs/runbooks/planner-pwa.md` with local, Vercel, redirect URL,
-   migration, cache-version, verification, and rollback procedures.
-5. Run the full Task 10 validation matrix in
-   `docs/planner/implementation-evidence/task-10-brief.md`, recording exact
-   broad-repository failures rather than changing unrelated code.
-6. Compare the built desktop UI with the accepted reference, then verify
-   tablet and mobile behavior. The original local reference path was:
-   `C:\Users\Nicholas\AppData\Local\Temp\codex-clipboard-79db13b1-b736-4f39-86a6-9f24054a48c0.png`.
-   That temporary image is not part of Git; reattach it after restore if it is
-   unavailable.
-7. Write `implementation-evidence/task-10-report.md` and update `progress.md`
-   only after the Task 10 review is clean.
+```text
+npm run test:planner                         PASS — 21 files, 116 tests
+npm run typecheck:planner                    PASS
+npm run lint                                 PASS
+npm run typecheck                            PASS
+npm run typecheck:js                         PASS
+npm run typecheck:strict                     PASS — 0 enforced errors
+npm run typecheck:noimplicitany              PASS — 0 enforced errors
+npx playwright test --config playwright.planner.config.ts
+                                             PASS — 3/3 tests
+npm run build                                PASS
+npm run build:planner                        PASS
+git diff --check                             PASS
+```
+
+The full root `npm test` gate is not green. It reproduces two unrelated
+Resource Scheduling offset failures and then stalls after a bounded wait.
+Cold installed-browser offline relaunch is also not claimed; active worker,
+shell/bootstrap cache contents, and cached-data labeling are verified.
+
+Independent Task 10 review: PASS; code quality PASS; no Critical or Important
+issue remains. Nothing was deployed or migrated.
 
 Run the deterministic browser suite with:
 
@@ -181,17 +200,20 @@ The Planner is intended for a separate Vercel project using
 - Service worker and manifest use no-cache headers.
 - Hashed assets use immutable caching.
 - SPA rewrites exclude assets, service worker, manifest, and icons.
-- Git auto-deployment is disabled in the current config.
+- Git auto-deployment is globally disabled in the named config.
+- `vercel.planner.json` is CLI-only. Root `vercel.json` remains authoritative
+  for the main SteelBuild app and must not be used for the Planner project.
 
 Before deployment, an owner must:
 
 1. Apply and verify the two migrations in the intended Supabase environment.
-2. Create the separate Vercel project and set only browser-safe environment
-   values.
+2. Create/link the separate Vercel project without a Git connection, or
+   disconnect/disable its Git integration, and set only browser-safe values.
 3. Add the Planner callback/recovery URLs to Supabase Auth redirect URLs.
 4. Set `VITE_STEELBUILD_APP_URL` to the main SteelBuild Pro host.
 5. Set `VITE_PLANNER_PWA_HOSTNAMES` to the exact approved Planner hostnames.
-6. Complete Task 10 browser/PWA and rollback verification.
+6. Deploy explicitly with `vercel --local-config vercel.planner.json` and
+   complete the runbook's staging, rollback, and real-device offline checks.
 
 No Vercel deployment, GitHub pull request, production migration, or remote
 data mutation was performed at this checkpoint.

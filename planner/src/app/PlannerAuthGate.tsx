@@ -11,6 +11,7 @@ import UpdatePassword from "@/pages/UpdatePassword";
 import { getSteelBuildOnboardingUrl } from "@planner/app/plannerAppUrl";
 import PlannerOfflineProvider from "@planner/offline/PlannerOfflineProvider";
 import { clearPlannerTenantState } from "@planner/offline/plannerSnapshots";
+import { PlannerSessionContext } from "@planner/app/PlannerSessionContext";
 
 type PlannerAuthGateProps = {
   children: ReactNode;
@@ -63,13 +64,16 @@ function PlannerOrgGate({ children }: PlannerAuthGateProps) {
 export default function PlannerAuthGate({ children }: PlannerAuthGateProps) {
   const {
     authError,
+    isAuthenticated,
     isLoadingAuth,
     isLoadingPublicSettings,
     isPasswordRecovery,
     loginWithPassword,
+    logout,
     mfaRequired,
     sendPasswordReset,
     signUpWithPassword,
+    user,
   } = useAuth();
 
   useEffect(() => registerTenantClientStateCleanup(clearPlannerTenantStorage), []);
@@ -86,21 +90,23 @@ export default function PlannerAuthGate({ children }: PlannerAuthGateProps) {
     return <PlannerLoadingState />;
   }
 
-  if (authError?.type === "auth_required") {
+  if (!isAuthenticated || !user || authError?.type === "auth_required") {
     return (
       <Landing
         onLogin={loginWithPassword}
         onSignUp={signUpWithPassword}
         onForgotPassword={sendPasswordReset}
         isSubmitting={isLoadingAuth}
-        loginError={authError.message !== "Authentication required" ? authError.message : null}
+        loginError={authError && authError.message !== "Authentication required" ? authError.message : null}
       />
     );
   }
 
   return (
-    <OrgProvider>
-      <PlannerOrgGate>{children}</PlannerOrgGate>
-    </OrgProvider>
+    <PlannerSessionContext.Provider value={{ userLabel: user?.full_name ?? "SteelBuild user", signOut: logout }}>
+      <OrgProvider>
+        <PlannerOrgGate>{children}</PlannerOrgGate>
+      </OrgProvider>
+    </PlannerSessionContext.Provider>
   );
 }
