@@ -112,15 +112,15 @@ must never govern a Planner build or deployment.
    SteelBuild Pro project.
 2. Keep the repository root as the project root because Planner imports narrow
    shared modules from `src/`.
-3. Use `vercel.planner.json` only through the CLI's explicit `--local-config`
-   option. It specifies
+3. Treat `vercel.planner.json` as the Planner's deployment authority. It
+   specifies
    `npm run build:planner`, `dist-planner`, no-cache service-worker/manifest
    headers, immutable hashed assets, main-app-aligned security headers, and SPA
    rewrites that exclude assets, service worker, manifest, and icons.
 4. Set only the four browser-safe variables above for the correct Preview and
    Production scopes. Keep staging and production Supabase targets explicit.
-5. From the repository root, verify `.vercel/project.json` identifies the
-   dedicated Planner project, then deploy only with the named config:
+5. From a clean detached deployment worktree, verify `.vercel/project.json`
+   identifies the dedicated Planner project. First try the named config:
 
    ```powershell
    npx vercel deploy --local-config vercel.planner.json
@@ -128,11 +128,18 @@ must never govern a Planner build or deployment.
    ```
 
    The first command creates a preview candidate; run the staging checks before
-   the explicitly authorized production command. Never run a bare `vercel` or
-   `vercel --prod` command for Planner because it can read the main app's root
-   `vercel.json`. The boolean `git.deploymentEnabled: false` is a defense in the
-   named config, not a substitute for disconnecting/disabling the project's Git
-   integration.
+   the explicitly authorized production command. Confirm the Vercel build log
+   runs `npm run build:planner` and publishes `dist-planner`.
+
+   Vercel CLI 58.4.0 gave the committed root `vercel.json` precedence over
+   `--local-config` in the remote builder on 2026-08-03. If the log runs
+   `npm run build`, stop the deployment. Only inside the clean detached
+   deployment worktree, replace its root `vercel.json` with a byte-identical
+   copy of `vercel.planner.json`, verify that this is the only tracked change,
+   and deploy from that worktree without `--local-config`. Never make or commit
+   that temporary override in the substantive SteelBuild worktree. The boolean
+   `git.deploymentEnabled: false` is a defense in the Planner config, not a
+   substitute for disconnecting/disabling the project's Git integration.
 6. Add the approved Planner hostname/alias. Configure
    `planner.steelbuild-pro.com` DNS only through the owner-approved Vercel/DNS
    process.
@@ -188,10 +195,9 @@ to cache indefinitely.
    deployment from that project's deployment history. Promotion of an existing
    artifact does not rebuild from Git. If the known-good SHA must be rebuilt,
    check it out in a clean recovery worktree, verify the linked Planner project,
-   and deploy it only with
-   `npx vercel deploy --prod --local-config vercel.planner.json`. Never use the
-   root `vercel.json`, a bare Vercel deploy command, or the main SteelBuild Pro
-   project for Planner rollback.
+   and follow the same verified Planner-config procedure above. Never use the
+   committed main-app root `vercel.json`, deploy from the substantive worktree,
+   or target the main SteelBuild Pro project for Planner rollback.
 3. Ensure the restored deployment serves its matching `sw.js`. If asset/shell
    compatibility changed, publish a new cache version rather than reusing an
    old name; verify activation and removal of the failed cache.

@@ -1,9 +1,10 @@
 # SteelBuild Planner PWA — Restore and Continuation Handoff
 
-**Checkpoint date:** 2026-08-02
+**Checkpoint date:** 2026-08-03
 **Repository:** `https://github.com/lorteezy87/SteelBuild-Pro-Rev.2.git`
 **Branch:** `codex/steelbuild-planner-pwa`
-**Latest pushed commit:** `aedb6a04cd5998faa629cc528fe6ce8fcd9d1fa7`
+**Production deployment source:** `83274bf3de5e24f2a7ff70c94086bfa221902aec`
+**Production URL:** `https://steelbuild-planner.vercel.app`
 
 ## Purpose
 
@@ -12,9 +13,11 @@ SteelBuild Pro repository. It is a separate Vite/PWA entry point and is
 intended to use SteelBuild Pro's existing Supabase authentication, MFA,
 organization membership, project access, data, and RLS authority.
 
-The branch is a safe GitHub checkpoint. It has not been merged, deployed, or
-connected to a production Vercel project. Its Supabase migrations have not
-been applied remotely.
+The branch is a safe GitHub checkpoint. The Planner is deployed from the
+separate `steelbuild-planner` Vercel project, which has no Git connection, and
+uses the existing production SteelBuild Pro Supabase project. The two Planner
+migrations are applied in staging and production with their committed ledger
+versions.
 
 ## Restore on a new computer
 
@@ -85,11 +88,11 @@ The following commands passed immediately before commit `efb47459`:
 
 ```text
 npm run test:planner -- --maxWorkers=1 --no-file-parallelism
-  21 test files passed; 114 tests passed
+  21 test files passed; 116 tests passed
 npm run typecheck:planner
 npm run lint
 npm run build:planner
-git diff --cached --check
+git diff --check
 ```
 
 The Planner build retains two non-blocking Vite warnings:
@@ -104,7 +107,7 @@ Do not describe the entire repository test gate as green. A bounded baseline
 and was stopped after it ceased producing output. Planner-focused validation
 is green; the broad repository gate still requires a fresh bounded run.
 
-## Database migrations — local files only
+## Database migrations — applied in staging and production
 
 Apply these in timestamp order only through the approved Supabase migration
 workflow and only after confirming the target SteelBuild environment:
@@ -114,21 +117,25 @@ workflow and only after confirming the target SteelBuild environment:
 
 Current state:
 
-- Both migrations are committed to the branch.
-- Neither migration was applied by this work session.
-- Offline replay depends on the second migration's RPC and receipt table.
-- Until migrations are applied, failed replay operations remain queued rather
-  than being reported as successful.
-- Re-run the migration contract tests before applying:
+- Both migrations are committed and recorded remotely with their exact source
+  versions in staging `abbeavtbifuddtrifvae` and production
+  `kjrwqagyeswwoxpjkcko`.
+- Production verification confirmed both tables, RLS, the authenticated-only
+  replay RPC, restricted direct grants, the event select policy, and all four
+  required triggers.
+- The receipt table intentionally has no direct authenticated policy; replay
+  access is only through the role-checked RPC.
+- The migration contract tests passed before application. Re-run them before
+  any future modification:
 
 ```powershell
 npx vitest run supabase/migrations/__tests__/plannerActionControl.test.js supabase/migrations/__tests__/plannerOfflineIdempotency.test.js
 ```
 
-## Task 10 — complete locally
+## Task 10 — complete and deployed
 
-Task 10 is complete in the local working tree and passed independent review.
-Its changes are not included in the latest pushed commit shown above.
+Task 10 is complete, pushed, independently reviewed, and deployed from source
+commit `83274bf3de5e24f2a7ff70c94086bfa221902aec`.
 
 Completed Task 10 artifacts and behavior:
 
@@ -179,7 +186,7 @@ Cold installed-browser offline relaunch is also not claimed; active worker,
 shell/bootstrap cache contents, and cached-data labeling are verified.
 
 Independent Task 10 review: PASS; code quality PASS; no Critical or Important
-issue remains. Nothing was deployed or migrated.
+issue remains.
 
 Run the deterministic browser suite with:
 
@@ -189,6 +196,30 @@ npx playwright test --config playwright.planner.config.ts
 
 The Playwright configuration's placeholder anon value is used only with local
 request mocks. It is not a Supabase credential.
+
+## Production deployment
+
+Current production state as of 2026-08-03:
+
+- Public URL: `https://steelbuild-planner.vercel.app`
+- Vercel project: `steelbuild-planner`
+- Production deployment: `dpl_8fMjDzfceWH9MZDwHm8m7QwDN87Y` (READY)
+- Source commit: `83274bf3de5e24f2a7ff70c94086bfa221902aec`
+- Supabase project: `kjrwqagyeswwoxpjkcko` (SteelBuild Pro production)
+- Applied migration versions: `20260802090000` and `20260802090500`
+
+Live verification passed for the public root, Task Register and Meetings deep
+links, manifest, service worker, production Supabase target, SPA routing,
+security/cache headers, active service-worker registration, and the
+unauthenticated sign-in modal. The smoke test produced no browser console or
+page errors. Authenticated production data mutations were intentionally not
+performed.
+
+The exact Planner production/recovery redirect entries in Supabase Auth could
+not be inspected with the available deployment tooling. Email/password sign-in
+renders and is connected to production, but password recovery and any OAuth
+provider callback should be verified in the Supabase Auth redirect allow-list
+before inviting users who depend on those flows.
 
 ## Deployment boundary
 
@@ -204,7 +235,7 @@ The Planner is intended for a separate Vercel project using
 - `vercel.planner.json` is CLI-only. Root `vercel.json` remains authoritative
   for the main SteelBuild app and must not be used for the Planner project.
 
-Before deployment, an owner must:
+For a future deployment, an owner must:
 
 1. Apply and verify the two migrations in the intended Supabase environment.
 2. Create/link the separate Vercel project without a Git connection, or
@@ -212,11 +243,13 @@ Before deployment, an owner must:
 3. Add the Planner callback/recovery URLs to Supabase Auth redirect URLs.
 4. Set `VITE_STEELBUILD_APP_URL` to the main SteelBuild Pro host.
 5. Set `VITE_PLANNER_PWA_HOSTNAMES` to the exact approved Planner hostnames.
-6. Deploy explicitly with `vercel --local-config vercel.planner.json` and
-   complete the runbook's staging, rollback, and real-device offline checks.
-
-No Vercel deployment, GitHub pull request, production migration, or remote
-data mutation was performed at this checkpoint.
+6. Deploy from a clean worktree with the Planner configuration and complete
+   the runbook's staging, rollback, and real-device offline checks. Vercel's
+   remote builder gave the committed root `vercel.json` precedence over the
+   named `--local-config` during this deployment; the clean deployment
+   worktree therefore used a temporary root `vercel.json` byte-equivalent to
+   committed `vercel.planner.json`. Do not commit that temporary override to
+   the main branch.
 
 ## Readiness expansion — not started
 
