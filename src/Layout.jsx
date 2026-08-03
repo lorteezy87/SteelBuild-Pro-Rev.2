@@ -6,7 +6,7 @@
  *  - Desktop sidebar navigation
  *  - Mobile hamburger drawer
  *  - Content area with error banner
- *  - Global search modal, quick-add FAB, toast notifications
+ *  - Global search modal and toast notifications
  *
  * All data definitions live in src/config/moduleRegistry.js.
  * All sub-components live in src/components/nav/.
@@ -43,11 +43,6 @@ const GlobalSearchModal = lazyWithRetry(() => import("./components/search/Global
 const MobileDrawer = lazyWithRetry(() => import("./components/nav/MobileDrawer"));
 const Toaster = lazyWithRetry(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
 const SidebarNav = lazyWithRetry(() => import("./components/nav/SidebarNav"));
-// QuickAddFAB intentionally not imported — the floating "+" shortcut at
-// bottom-right was hidden per user request. Component file is preserved
-// in src/components/shared/QuickAddFAB.jsx; uncomment this import + its
-// render below to re-enable.
-// import QuickAddFAB from "./components/shared/QuickAddFAB";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 
 // Context
@@ -94,8 +89,8 @@ export default function Layout({ children, currentPageName }) {
   const [gridOpen, setGridOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const isMobile = useResponsiveBreakpoint();
-  const useDashboardChrome = isDashboardPage && !isMobile;
+  const { band, isPhone, isTablet } = useResponsiveBreakpoint();
+  const useDashboardChrome = isDashboardPage && !isPhone;
 
   // Density preference
   useDensityRestore();
@@ -143,17 +138,22 @@ export default function Layout({ children, currentPageName }) {
   // The theme class is scoped here so light mode can use the reference
   // grid-and-panel styling without inheriting dark overlay tokens.
   return (
-    <div className={appShellClassName} data-mobile-shell={isMobile ? "true" : "false"} style={{
+    <div
+      className={appShellClassName}
+      data-viewport={band}
+      data-mobile-shell={isPhone ? "true" : "false"}
+      style={{
       minHeight: "100vh", width: "100%",
       display: "flex", alignItems: "flex-start", justifyContent: "center",
       padding: 0, background: "var(--bg-base)",
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-    }}>
+    }}
+    >
       {/* Skip-to-main-content link — first focusable element on the page */}
       <SkipToMainContentLink />
 
       {/* Mobile Drawer */}
-      {isMobile && (
+      {isPhone && (
         <Suspense fallback={null}>
           <MobileDrawer
             open={mobileOpen}
@@ -185,6 +185,7 @@ export default function Layout({ children, currentPageName }) {
                 onNavigate={handleNavigate}
                 visible
                 variant="dashboard"
+                forceRail={isTablet}
               />
             </Suspense>
 
@@ -276,28 +277,28 @@ export default function Layout({ children, currentPageName }) {
           <>
         {/* ── TOP UTILITY BAR ─────────────────────────────────────── */}
         <nav aria-label="Primary" className="app-topbar nav-glass sbd-topbar" style={{
-          height: isMobile ? 52 : 36,
-          minHeight: isMobile ? 52 : 36,
-          padding: isMobile
+          height: isPhone ? 52 : 36,
+          minHeight: isPhone ? 52 : 36,
+          padding: isPhone
             ? "0 max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left))"
             : "0 12px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          flexShrink: 0, position: "relative", zIndex: 100, gap: isMobile ? 6 : 8,
+          flexShrink: 0, position: "relative", zIndex: 100, gap: isPhone ? 6 : 8,
         }}>
           {/* LEFT: Brand + Hamburger */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
+            {isPhone && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
             {/* Brand lives in the sidebar on desktop (SidebarNav) and in the
                 drawer on mobile. The top bar only carries the logo on mobile —
                 where the sidebar is off-canvas — so desktop shows it once, not
                 twice. The leading divider went with it. */}
-            {isMobile && (
+            {isPhone && (
               <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
                 <BrandLogo height={30} title="SteelBuild Pro" style={{ display: "block" }} />
               </div>
             )}
-            {!isMobile && <ProjectPillDropdown align="left" />}
-            {!isMobile && (
+            {!isPhone && <ProjectPillDropdown align="left" />}
+            {!isPhone && (
               <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 {currentPageName?.replace(/([A-Z])/g, " $1").trim() || "Dashboard"}
               </span>
@@ -307,10 +308,10 @@ export default function Layout({ children, currentPageName }) {
           {/* RIGHT: Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             {/* Search trigger — see TopBarSearchButton for context. */}
-            <TopBarSearchButton onClick={() => setSearchOpen(true)} compact={isMobile} />
+            <TopBarSearchButton onClick={() => setSearchOpen(true)} compact={isPhone} />
 
             {/* Density toggle + Modules grid — desktop only */}
-            {!isMobile && (
+            {!isPhone && (
               <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
                 <DensityToggle />
 
@@ -348,8 +349,8 @@ export default function Layout({ children, currentPageName }) {
             )}
 
             {/* Theme + Contrast Toggles */}
-            {!isMobile && <ThemeToggleButton />}
-            {!isMobile && <HighContrastToggleButton />}
+            {!isPhone && <ThemeToggleButton />}
+            {!isPhone && <HighContrastToggleButton />}
 
             {/* Bell */}
             <BellDropdown
@@ -360,22 +361,23 @@ export default function Layout({ children, currentPageName }) {
             />
 
             {/* User + Sign Out */}
-            {!isMobile && <UserSignOutBlock user={user} onLogout={logout} />}
+            {!isPhone && <UserSignOutBlock user={user} onLogout={logout} />}
 
             {/* Project pill dropdown — mobile keeps it on the right (compact);
                 desktop renders it on the left in both themes (see above). */}
-            {isMobile && <ProjectPillDropdown compact />}
+            {isPhone && <ProjectPillDropdown compact />}
           </div>
         </nav>
 
         {/* ── SIDEBAR + CONTENT ───────────────────────────────────── */}
         <div className="app-body" style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
-          {!isMobile && (
+          {!isPhone && (
             <Suspense fallback={<SidebarNavFallback />}>
               <SidebarNav
                 currentPageName={currentPageName}
                 onNavigate={handleNavigate}
-                visible={!isMobile}
+                visible={!isPhone}
+                forceRail={isTablet}
               />
             </Suspense>
           )}
@@ -400,8 +402,6 @@ export default function Layout({ children, currentPageName }) {
             <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
           </Suspense>
         )}
-        {/* QuickAddFAB removed per user request — the bottom-right "+"
-            shortcut remains hidden site-wide. */}
         <Suspense fallback={null}>
           <Toaster
             theme={isDarkTheme ? "dark" : "light"}
@@ -410,9 +410,9 @@ export default function Layout({ children, currentPageName }) {
             position="bottom-right"
             toastOptions={{
               style: {
-                background: "var(--bg-elevated, var(--sbd-bg-elevated, rgba(15,22,38,0.95)))",
-                border: "1px solid var(--border-strong, var(--sbd-border, rgba(255,255,255,0.08)))",
-                color: "var(--text-primary, var(--sbd-text, rgba(255,255,255,0.95)))",
+                background: "var(--bg-elevated, var(--sbd-bg-elevated))",
+                border: "1px solid var(--border-strong, var(--sbd-border))",
+                color: "var(--text-primary, var(--sbd-text))",
                 fontFamily: "'Inter', sans-serif",
                 fontSize: 13, borderRadius: 10,
                 boxShadow: "var(--shadow-lg)",

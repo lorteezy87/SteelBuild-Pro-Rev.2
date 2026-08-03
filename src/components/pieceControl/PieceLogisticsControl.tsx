@@ -1,5 +1,10 @@
-import { useMemo, useState, type ChangeEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { CheckCircle2, Construction, Loader2, MapPin, PackageCheck, Truck } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -12,8 +17,17 @@ import {
   fetchLogisticsSnapshot,
   transitionPieceLots,
 } from "@/lib/pieceControl/logisticsRepository";
+import {
+  productionScopeFetchArg,
+  productionScopeQueryKey,
+  resolveProductionWorkPackageScope,
+  UNASSIGNED_WP_FILTER,
+} from "@/lib/pieceControl/productionScope";
+import { invalidatePieceControlQueries } from "@/lib/pieceControl/queryKeys";
 import { DecisionPanel } from "@/components/command";
 import { presentPieceControlError } from "@/lib/pieceControl/errorPresentation";
+import { entities } from "@/api/supabaseClient";
+import { formatWorkPackageTitle } from "@/lib/workPackages/formatWorkPackageTitle";
 
 const Button = ({ variant: _variant, size: _size, ...props }: any) => (
   <button type="button" {...props} />
@@ -61,6 +75,12 @@ const actionDefinitions = {
   },
 } as const;
 
+const EMPTY_SELECTION: Record<LogisticsAction, string[]> = {
+  ship: [],
+  deliver: [],
+  erect: [],
+};
+
 export function PieceLogisticsControl({
   projectId,
   pieceControlMode,
@@ -68,20 +88,45 @@ export function PieceLogisticsControl({
 }: PieceLogisticsControlProps) {
   const enabled = pieceControlMode !== "off";
   const queryClient = useQueryClient();
+  const lockedToWorkPackage = Boolean(workPackageId);
+  const [boardWorkPackageFilter, setBoardWorkPackageFilter] = useState<string>(
+    workPackageId ?? "",
+  );
   const [selectedByAction, setSelectedByAction] = useState<Record<LogisticsAction, string[]>>({
-    ship: [],
-    deliver: [],
-    erect: [],
+    ...EMPTY_SELECTION,
   });
   const [referenceByAction, setReferenceByAction] = useState<
     Record<LogisticsAction, Record<string, string>>
   >({ ship: {}, deliver: {}, erect: {} });
   const [historyPieceId, setHistoryPieceId] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (workPackageId) setBoardWorkPackageFilter(workPackageId);
+  }, [workPackageId]);
+
+  const scopedWorkPackageId = useMemo(
+    () =>
+      resolveProductionWorkPackageScope(workPackageId, boardWorkPackageFilter),
+    [workPackageId, boardWorkPackageFilter],
+  );
+  const logisticsScopeKey = productionScopeQueryKey(scopedWorkPackageId);
+
+  const workPackagesQuery = useQuery({
+    queryKey: ["piece-logistics-work-packages", projectId],
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
+    enabled: enabled && !lockedToWorkPackage,
+    staleTime: 30_000,
+  });
+
   const snapshotQuery = useQuery({
-    queryKey: ["piece-logistics", projectId, workPackageId ?? "all"],
-    queryFn: () => fetchLogisticsSnapshot(projectId, workPackageId),
+    queryKey: ["piece-logistics", projectId, logisticsScopeKey] as const,
+    queryFn: ({ queryKey }) =>
+      fetchLogisticsSnapshot(
+        queryKey[1],
+        productionScopeFetchArg(queryKey[2]),
+      ),
     enabled,
+    placeholderData: keepPreviousData,
   });
   const pieces = useMemo(
     () => snapshotQuery.data?.pieces ?? [],
@@ -105,12 +150,9 @@ export function PieceLogisticsControl({
       toast.success(`${actionDefinitions[variables.action].pastLabel} selected piece lots.`);
       setSelectedByAction((current) => ({ ...current, [variables.action]: [] }));
       setReferenceByAction((current) => ({ ...current, [variables.action]: {} }));
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["piece-logistics", projectId] }),
-        queryClient.invalidateQueries({ queryKey: ["piece-production", projectId] }),
-        queryClient.invalidateQueries({ queryKey: ["piece-register", projectId] }),
-        queryClient.invalidateQueries({ queryKey: ["canonical-reporting", projectId] }),
-      ]);
+      // Shared helper: logistics + production board + register + legacy EPM +
+      // model-elements / canonical-pieces-3d / reporting (Fab colors).
+      await invalidatePieceControlQueries(queryClient, projectId, "logistics");
     },
     onError: (error: Error) =>
       toast.error(
@@ -120,6 +162,19 @@ export function PieceLogisticsControl({
         ),
       ),
   });
+
+  const onBoardWorkPackageFilterChange = (value: string) => {
+    setBoardWorkPackageFilter(value);
+    setSelectedByAction({ ...EMPTY_SELECTION });
+    setHistoryPieceId(null);
+  };
+
+  const selectAllForAction = (action: LogisticsAction, pieceIds: string[]) => {
+    setSelectedByAction((current) => ({
+      ...current,
+      [action]: pieceIds,
+    }));
+  };
 
   if (!enabled) {
     return (
@@ -135,7 +190,7 @@ export function PieceLogisticsControl({
     );
   }
 
-  if (snapshotQuery.isLoading) {
+  if (snapshotQuery.isLoading && !snapshotQuery.data) {
     return (
       <section className="piece-operation-state is-loading" aria-label="Loading logistics">
         <Loader2 size={20} className="piece-operation-spinner" />
@@ -143,7 +198,7 @@ export function PieceLogisticsControl({
     );
   }
 
-  if (snapshotQuery.error) {
+  if (snapshotQuery.error && !snapshotQuery.data) {
     return (
       <section className="piece-operation-state is-error">
         <span>
@@ -165,6 +220,11 @@ export function PieceLogisticsControl({
 
   const historyPiece = pieces.find((piece) => piece.id === historyPieceId);
   const history = events.filter((event) => event.piece_id === historyPieceId);
+  const readyCounts = {
+    ship: leafPieces.filter((piece) => piece.lifecycle_status === "fabricated").length,
+    deliver: leafPieces.filter((piece) => piece.lifecycle_status === "shipped").length,
+    erect: leafPieces.filter((piece) => piece.lifecycle_status === "delivered").length,
+  };
 
   return (
     <section className="piece-operations">
@@ -178,10 +238,49 @@ export function PieceLogisticsControl({
             <p>Record shipment, delivery, and erection as controlled physical events.</p>
             <p className="piece-operations__safety">
               Each batch is atomic. Physical transitions cannot be overridden or reversed.
+              Filter by work package, then multi-select lots to update in bulk.
             </p>
           </div>
         </div>
+        <div className="piece-operations__summary" aria-label="Logistics summary">
+          <span>
+            <small>Ready to ship</small>
+            <strong>{readyCounts.ship}</strong>
+          </span>
+          <span>
+            <small>Ready to deliver</small>
+            <strong>{readyCounts.deliver}</strong>
+          </span>
+          <span>
+            <small>Ready to erect</small>
+            <strong>{readyCounts.erect}</strong>
+          </span>
+        </div>
       </header>
+
+      {!lockedToWorkPackage ? (
+        <div className="piece-board-filters" aria-label="Logistics filters">
+          <label className="piece-board-filters__field" htmlFor="piece-logistics-wp-filter">
+            Work package
+            <select
+              id="piece-logistics-wp-filter"
+              className="piece-command-control"
+              value={boardWorkPackageFilter}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                onBoardWorkPackageFilterChange(event.target.value)
+              }
+            >
+              <option value="">All work packages</option>
+              <option value={UNASSIGNED_WP_FILTER}>Unassigned</option>
+              {(workPackagesQuery.data ?? []).map((wp: { id: string }) => (
+                <option key={wp.id} value={wp.id}>
+                  {formatWorkPackageTitle(wp as any)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
 
       <div className="piece-logistics-grid">
         {(Object.keys(actionDefinitions) as LogisticsAction[]).map((action) => {
@@ -191,6 +290,9 @@ export function PieceLogisticsControl({
           const candidates = leafPieces.filter(
             (piece) => piece.lifecycle_status === requiredStatus,
           );
+          const selectableIds = candidates
+            .filter((piece) => !logisticsDisabledReason(piece, action))
+            .map((piece) => piece.id);
           const selected = selectedByAction[action];
           return (
             <section key={action} className="piece-operation-card piece-logistics-panel">
@@ -204,10 +306,30 @@ export function PieceLogisticsControl({
                     {definition.heading}
                   </h3>
                 </div>
-                <span className="piece-logistics-panel__count">
-                  <strong>{candidates.length}</strong>
-                  ready
-                </span>
+                <div className="piece-logistics-panel__meta">
+                  <span className="piece-logistics-panel__count">
+                    <strong>{candidates.length}</strong>
+                    ready
+                  </span>
+                  {selectableIds.length > 0 ? (
+                    <button
+                      type="button"
+                      className="piece-logistics-panel__select-all"
+                      onClick={() => selectAllForAction(action, selectableIds)}
+                    >
+                      Select all ({selectableIds.length})
+                    </button>
+                  ) : null}
+                  {selected.length > 0 ? (
+                    <button
+                      type="button"
+                      className="piece-logistics-panel__select-all"
+                      onClick={() => selectAllForAction(action, [])}
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
               </header>
 
               <div className="piece-logistics-candidates">

@@ -1,9 +1,13 @@
 # Authenticated staging E2E automation
 
-`staging-e2e-readonly` runs after staging deploy and selects only
-`e2e/smoke.spec.ts` and `e2e/daily-workflow.spec.ts`. They navigate and assert;
-they do not create, update, or delete data. Environment guards reject the
-production app host and any Supabase ref other than staging
+`staging-e2e-readonly` runs after staging deploy. It first selects
+`e2e/smoke.spec.ts` and `e2e/daily-workflow.spec.ts`, then starts a second
+Playwright invocation for `e2e/staging-auth-boundary.spec.ts`. The boundary
+spec proves an unauthenticated browser cannot render a protected register and
+then signs out the synthetic staging user. Keeping sign-out in the final
+invocation prevents it from invalidating the session used by the navigation
+smoke. The suite does not create, update, or delete project data. Environment
+guards reject the production app host and any Supabase ref other than staging
 `abbeavtbifuddtrifvae`.
 
 ## One-time confirmed fixture

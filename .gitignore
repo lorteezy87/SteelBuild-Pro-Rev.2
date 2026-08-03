@@ -75,3 +75,6 @@ test-results/
 *.zip
 *.tgz
 *.tar.gz
+
+# Superpowers / SDD agent scratch
+.superpowers/

@@ -16,6 +16,17 @@ vi.mock("@/lib/pieceControl/logisticsRepository", () => ({
   transitionPieceLots: vi.fn(),
 }));
 
+vi.mock("@/api/supabaseClient", () => ({
+  entities: {
+    WorkPackage: {
+      filter: vi.fn(async () => [
+        { id: "wp-1", wp_number: "WP-001", name: "Columns" },
+        { id: "wp-2", wp_number: "WP-002", name: "Beams" },
+      ]),
+    },
+  },
+}));
+
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
@@ -181,9 +192,9 @@ describe("PieceLogisticsControl", () => {
     renderControl(null);
 
     expect(
-      await screen.findByText("Logistics data could not be loaded."),
+      await screen.findByText("The selected pieces are not ready for this logistics step."),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/PGRST301|canonical/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/PGRST301/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
@@ -211,5 +222,62 @@ describe("PieceLogisticsControl", () => {
     expect(toast.error).not.toHaveBeenCalledWith(
       expect.stringMatching(/canonical|transition sequence/i),
     );
+  });
+
+  it("filters logistics candidates by work package", async () => {
+    renderControl();
+
+    const filter = await screen.findByRole("combobox", { name: "Work package" });
+    expect(
+      await screen.findByRole("option", { name: "WP-001 - Columns" }),
+    ).toBeInTheDocument();
+    expect(fetchLogisticsSnapshot).toHaveBeenCalledWith("project-1", undefined);
+
+    fireEvent.change(filter, { target: { value: "wp-2" } });
+    await waitFor(() =>
+      expect(fetchLogisticsSnapshot).toHaveBeenCalledWith("project-1", "wp-2"),
+    );
+
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Work package" }),
+      { target: { value: "__unassigned__" } },
+    );
+    await waitFor(() =>
+      expect(fetchLogisticsSnapshot).toHaveBeenLastCalledWith(
+        "project-1",
+        null,
+      ),
+    );
+  });
+
+  it("selects all eligible lots for a logistics action", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderControl({
+      pieces: [
+        fabricatedPiece,
+        {
+          ...fabricatedPiece,
+          id: "piece-2",
+          piece_mark: "B2",
+          normalized_piece_mark: "B2",
+        },
+      ],
+      events: [],
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Select all (2)" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Confirm 2 shipped" }));
+
+    await waitFor(() =>
+      expect(transitionPieceLots).toHaveBeenCalledWith(
+        "ship",
+        "project-1",
+        ["piece-1", "piece-2"],
+        {},
+      ),
+    );
+    expect(confirm).toHaveBeenCalled();
   });
 });

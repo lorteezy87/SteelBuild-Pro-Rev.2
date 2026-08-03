@@ -70,6 +70,26 @@ passed lint, all typecheck ratchets, Vitest, the production build, dependency
 audit, Vercel production deployment, and the post-deploy health check for merge
 `91918d592effec0961560bab03a2cb216b08e8e0`.
 
+### Follow-up (2026-07-26) — invalid page + sticky error + layout collapse
+
+After #96, two client bugs still made the viewer look dead:
+
+1. **Invalid page / sticky error** — `DrawingViewer` set `currentPage` from
+   `pdf_page` **unclamped** after `usePdfLoader` had clamped it → PDF.js
+   `Invalid page request`, and `pdfError` stuck for sibling sheets sharing
+   `file_url`.
+2. **Dashboard chrome flex collapse (primary “blank viewer”)** — the root
+   also carries `.sb-dashboard-reference-page`, which sets
+   `flex-direction: column`. That overrode the viewer’s ROW shell so
+   `.drawing-viewer-pane` / `.drawing-viewer-canvas-scroll` computed
+   **height: 0**. Empty states and PDFs rendered but were clipped; the
+   pane looked blank with no console errors.
+
+Fix branch `cursor/drawing-viewer-page-clamp-3d17` / PR #155: page clamp +
+sticky-error clear, plus
+`.sb-dashboard-reference-page.drawing-viewer-redesign { flex-direction: row }`
+and removal of the inline `var(--bg-void)` canvas override.
+
 ## Staging evidence
 
 The `staging` branch was fast-forwarded to the production merge. Its separate

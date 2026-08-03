@@ -141,6 +141,7 @@ export default function RFIs() {
     bulkUpdateMut,
     bulkDeleteMut,
     notifyFieldMut,
+    releaseHoldsMut,
     saveRfi,
     isSaving,
   } = useRfiPageMutations({
@@ -229,6 +230,10 @@ export default function RFIs() {
         onDownstreamAction={(key) => {
           if (!selectedRFI) return;
           const r = selectedRFI;
+          if (key === "release_holds") {
+            releaseHoldsMut.mutate(r);
+            return;
+          }
           if (key === "notify_field") {
             notifyFieldMut.mutate(r);
             return;
@@ -275,14 +280,16 @@ export default function RFIs() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        busy={deleteMut.isPending}
+        onConfirm={() => deleteMut.mutateAsync(deleteTarget.id)}
         title="Delete RFI"
         description={`Delete "${deleteTarget?.title}"? This cannot be undone.`}
       />
       <DeleteDialog
         open={showBulkDelete}
         onClose={() => setShowBulkDelete(false)}
-        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+        busy={bulkDeleteMut.isPending}
+        onConfirm={() => bulkDeleteMut.mutateAsync([...selectedIds])}
         title={`Delete ${selectedIds.size} RFIs`}
         description={`Permanently delete ${selectedIds.size} selected RFI${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`}
       />
@@ -380,8 +387,8 @@ export default function RFIs() {
             open={showBulkEdit}
             count={selectedIds.size}
             onCancel={() => setShowBulkEdit(false)}
-            onSubmit={(data) => {
-              bulkUpdateMut.mutate({ ids: [...selectedIds], data });
+            onSubmit={async (data) => {
+              await bulkUpdateMut.mutateAsync({ ids: [...selectedIds], data });
               setShowBulkEdit(false);
             }}
           />

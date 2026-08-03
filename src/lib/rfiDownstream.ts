@@ -17,7 +17,8 @@ export type DownstreamActionKey =
   | "update_drawing"
   | "open_wp"
   | "notify_field"
-  | "add_constraint";
+  | "add_constraint"
+  | "release_holds";
 
 export interface DownstreamAction {
   key: DownstreamActionKey;
@@ -71,6 +72,18 @@ export function recommendedDownstreamActions(
         : rfi.drawing_reference
           ? `Linked to ${rfi.drawing_reference}`
           : "Linked drawing set",
+    });
+  }
+
+  // Release piece holds — when this RFI put pieces on fab hold.
+  const pieceMarks = String(m.piece_marks ?? "").trim();
+  if (m.fab_hold && pieceMarks) {
+    actions.push({
+      key: "release_holds",
+      label: "Release linked piece holds",
+      icon: "unlock",
+      primary: true,
+      hint: `Clear on_hold for: ${pieceMarks}`,
     });
   }
 

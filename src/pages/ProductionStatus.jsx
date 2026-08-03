@@ -11,6 +11,7 @@ import React, { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { listPieceProduction } from "@/lib/production/repository";
 import {
@@ -22,6 +23,10 @@ import { normalizePieceMark } from "@/services/modelElementStatus";
 import ProductionStatusImportModal from "@/components/production/ProductionStatusImportModal";
 import TeklaEpmImportModal from "@/components/production/TeklaEpmImportModal";
 import ProductionStatusControlCenter from "./productionStatus/ProductionStatusControlCenter";
+import {
+  invalidatePieceControlQueries,
+  pieceControlKeys,
+} from "@/lib/pieceControl/queryKeys";
 
 /** CSV export — reuses the same field order as the control-center columns. */
 function exportProductionCSV(rows) {
@@ -59,8 +64,15 @@ export default function ProductionStatus() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("All");
 
+  // Multi-user: when another session writes piece_production (import / station
+  // update), refresh this page's list without a hard reload. Debounced 300ms
+  // inside the hook so bulk imports don't thrash.
+  useRealtimeInvalidation("piece_production", projectId, [
+    pieceControlKeys.legacyProduction(projectId),
+  ]);
+
   const { data: pieces = [], isLoading } = useQuery({
-    queryKey: ["piece-production", projectId],
+    queryKey: pieceControlKeys.legacyProduction(projectId),
     queryFn: () => listPieceProduction(projectId),
     enabled: !!projectId,
     staleTime: 30_000,
@@ -107,6 +119,30 @@ export default function ProductionStatus() {
     return { total, linked, pct: Math.round((linked / total) * 100) };
   }, [filtered, pieceDrawingMap]);
 
+  /** After CSV production-status import: bridge already wrote fab_status/lifecycle; refresh caches. */
+  const handleProductionImported = async () => {
+    await Promise.all([
+      // Shared helper: production board + logistics + legacyProduction + model-elements +
+      // canonical-pieces-3d + reporting (Fab-mode colors). legacyProduction is included
+      // in the production scope after #193 — no separate invalidate needed.
+      invalidatePieceControlQueries(queryClient, projectId, "production"),
+      // Drawing-link map used by this page only (also covered when model_element
+      // is invalidated via cacheRegistry, but keep explicit for CSV path clarity).
+      queryClient.invalidateQueries({
+        queryKey: ["production-model-elements", projectId],
+      }),
+    ]);
+  };
+
+  /** After Tekla EPM XML (BOM → model_elements): refresh drawing-link map on this page.
+   *  invalidateEntity inside the modal already covers model-elements + production-model-elements
+   *  via cacheRegistry; this is a focused page-local refresh so Shop Dwg updates immediately. */
+  const handleTeklaEpmImported = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ["production-model-elements", projectId],
+    });
+  };
+
   if (!projectId) {
     return (
       <div style={{ padding: 24, color: "var(--text-muted)" }}>
@@ -123,13 +159,14 @@ export default function ProductionStatus() {
         projectName={activeProject?.name}
         existing={pieces}
         onClose={() => setShowImport(false)}
-        onImported={() => queryClient.invalidateQueries({ queryKey: ["piece-production", projectId] })}
+        onImported={handleProductionImported}
       />
       <TeklaEpmImportModal
         open={showEpmImport}
         projectId={projectId}
         projectName={activeProject?.name}
         onClose={() => setShowEpmImport(false)}
+        onImported={handleTeklaEpmImported}
       />
     </>
   );

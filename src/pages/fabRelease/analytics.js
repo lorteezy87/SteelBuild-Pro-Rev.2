@@ -40,7 +40,7 @@ export const FAB_STAGES = [
     id: "finish_treatment",
     label: "Paint / Galv",
     short: "FIN",
-    color: "#B45309",
+    color: "var(--status-warning)",
     description: "Paint, galvanizing, or final finish treatment.",
   },
   {

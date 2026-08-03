@@ -287,7 +287,7 @@ export default function ReportsHubControlCenter(
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <Star
                     size={11}
-                    style={{ color: "#F2A706", flexShrink: 0 }}
+                    style={{ color: "var(--cmd-gold, var(--accent))", flexShrink: 0 }}
                   />
                   <div>
                     <div className="cmd-row__num">{r.title}</div>

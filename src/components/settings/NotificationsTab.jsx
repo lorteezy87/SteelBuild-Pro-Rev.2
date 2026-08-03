@@ -14,7 +14,7 @@ const inputStyle = {
 
 const Toggle = ({ checked, onChange }) => (
   <div onClick={onChange} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: checked ? 'flex-end' : 'flex-start', width: 44, height: 24, background: checked ? 'var(--status-success)' : 'var(--bg-surface-high)', borderRadius: 12, padding: '2px 4px', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0 }}>
-    <div style={{ width: 20, height: 20, background: '#fff', borderRadius: 10 }} />
+    <div style={{ width: 20, height: 20, background: 'var(--bg-surface)', borderRadius: 10 }} />
   </div>
 );
 

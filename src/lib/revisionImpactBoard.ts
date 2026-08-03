@@ -14,39 +14,39 @@
 
 import { isRfiOpen } from "@/lib/entityPredicates";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function normRfi(x: any): string {
   return String(x ?? "").replace(/[-\s]/g, "").toLowerCase();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function wpSequenceOf(wp: any): string | null {
   const v = wp?.sequence_number ?? wp?.erection_sequence ?? wp?.sequence ?? wp?.area_sequence ?? null;
   return v != null && v !== "" ? String(v) : null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function isOpenRfi(r: any): boolean {
   return isRfiOpen(r);
 }
 
 export interface RevisionImpactSources {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   drawings?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   drawingSets?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   workPackages?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   rfis?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   modelElements?: any[];
 }
 
 export interface RevisionImpactRow {
   // ...spread from the computeRevisionImpact entry (revisionId, drawingId, sheetNumber,
   // revisionCode, issuedAt, drawingSetName, fabricated, delivered, inField, severity)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   [k: string]: any;
   setName: string;
   wpNames: string[];
@@ -60,22 +60,22 @@ export interface RevisionImpactRow {
  * @param revisionImpact computeRevisionImpact() output (one entry per change-revision)
  */
 export function buildRevisionImpactRows(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   revisionImpact: any[] = [],
   sources: RevisionImpactSources = {},
 ): RevisionImpactRow[] {
   const { drawings = [], drawingSets = [], workPackages = [], rfis = [], modelElements = [] } = sources;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const drawingsById = new Map<string, any>();
   for (const d of drawings || []) if (d?.id) drawingsById.set(String(d.id), d);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const setById = new Map<string, any>();
   for (const s of drawingSets || []) if (s?.id) setById.set(String(s.id), s);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const wpById = new Map<string, any>();
   for (const w of workPackages || []) if (w?.id && !w.is_deleted) wpById.set(String(w.id), w);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const rfiByNum = new Map<string, any>();
   for (const r of rfis || []) if (r && !r.is_deleted) rfiByNum.set(normRfi(r.rfi_number), r);
 

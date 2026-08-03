@@ -8,9 +8,9 @@
 
 import { supabase } from "@/lib/supabase";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const from = (table: string): any => (supabase.from as unknown as (t: string) => any)(table);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const callRpc = (fn: string, args: Record<string, unknown>): any =>
   (supabase.rpc as unknown as (f: string, a: Record<string, unknown>) => any)(fn, args);
 

@@ -7,7 +7,7 @@ export function StatsBar({ stats, stageFilter, setStageFilter }) {
   const items = [
     { label: "PACKAGES",       value: stats.total,    color: "var(--text-primary)", filterKey: null },
     { label: "RELEASED",       value: stats.released, color: "var(--status-success)",             filterKey: "Released" },
-    { label: "IN REVIEW",     value: stats.inReview,  color: "#3B82F6",             filterKey: "_inReview" },
+    { label: "IN REVIEW",     value: stats.inReview,  color: "var(--status-info)",  filterKey: "_inReview" },
     { label: "OVERDUE",       value: stats.overdue,   color: "var(--status-error)",  filterKey: "_overdue" },
     { label: "PRIORITY",      value: stats.priority,  color: "var(--accent)",        filterKey: "_priority" },
   ];
@@ -184,7 +184,7 @@ export function BulkActionsBar({
       <button style={btnPrimary} onClick={onApplyStage} disabled={!bulkStage}>APPLY</button>
 
       <button
-        style={{ ...btnBase, background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.3)", color: "#60A5FA" }}
+        style={{ ...btnBase, background: "var(--info-muted)", border: "1px solid var(--info-border)", color: "var(--status-info)" }}
         onClick={onBulkEdit}
       >
         BULK EDIT
@@ -192,7 +192,7 @@ export function BulkActionsBar({
 
       {selectedSetName && (
         <button
-          style={{ ...btnBase, background: "rgba(0,230,118,0.15)", border: "1px solid rgba(0,230,118,0.3)", color: "#00E676" }}
+          style={{ ...btnBase, background: "var(--success-muted)", border: "1px solid var(--success-border)", color: "var(--status-success)" }}
           onClick={() => onSetApproval(selectedSetName)}
         >
           SET APPROVAL

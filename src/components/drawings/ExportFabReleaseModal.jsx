@@ -498,7 +498,7 @@ export default function ExportFabReleaseModal({
           borderRadius: 2, padding: "10px 12px", marginBottom: 18,
           fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5,
         }}>
-          <strong style={{ color: "#60A5FA" }}>Note:</strong> Zip packaging isn't enabled in this build.
+          <strong style={{ color: "var(--status-info)" }}>Note:</strong> Zip packaging isn't enabled in this build.
           You'll receive separate <code>manifest.csv</code>, <code>README.md</code>, and <code>URLS.txt</code> files.
           Use the URLs file to download each drawing PDF directly.
         </div>

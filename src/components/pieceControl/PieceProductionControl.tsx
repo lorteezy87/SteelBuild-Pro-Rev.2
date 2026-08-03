@@ -1,5 +1,10 @@
-import { useMemo, useState, type ChangeEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import {
   AlertTriangle,
   Check,
@@ -11,11 +16,16 @@ import {
 } from 'lucide-react';
 import {
   advancePieceStation,
+  advancePieceStations,
   fetchProductionSnapshot,
   setPieceHold,
   splitPieceLot,
   type LotAllocation,
 } from '../../lib/pieceControl/productionRepository';
+import {
+  nextIncompleteStationKey,
+  planBulkStationAdvance,
+} from '../../lib/pieceControl/bulkStationAdvance';
 import {
   calculateWeightedProductionProgress,
   earnedPercentForPiece,
@@ -24,6 +34,18 @@ import {
 import { toast } from 'sonner';
 import { DecisionPanel } from '@/components/command';
 import { presentPieceControlError } from '@/lib/pieceControl/errorPresentation';
+import {
+  invalidatePieceControlQueries,
+  pieceControlKeys,
+} from '@/lib/pieceControl/queryKeys';
+import { entities } from '@/api/supabaseClient';
+import { formatWorkPackageTitle } from '@/lib/workPackages/formatWorkPackageTitle';
+import {
+  productionScopeFetchArg,
+  productionScopeQueryKey,
+  resolveProductionWorkPackageScope,
+  UNASSIGNED_WP_FILTER,
+} from '@/lib/pieceControl/productionScope';
 
 const Button = ({ variant: _variant, size: _size, ...props }: any) => (
   <button type="button" {...props} />
@@ -47,7 +69,14 @@ export function PieceProductionControl({
 }: PieceProductionControlProps) {
   const queryClient = useQueryClient();
   const enabled = pieceControlMode !== 'off';
+  const lockedToWorkPackage = Boolean(workPackageId);
+  const [boardWorkPackageFilter, setBoardWorkPackageFilter] = useState<string>(
+    workPackageId ?? '',
+  );
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([]);
+  const [bulkStationKey, setBulkStationKey] = useState<string>('');
+  const [bulkOverrideReason, setBulkOverrideReason] = useState('');
   const [splitRows, setSplitRows] = useState<LotAllocation[]>([
     { lot_code: 'A', quantity: 0 },
     { lot_code: 'B', quantity: 0 },
@@ -56,10 +85,35 @@ export function PieceProductionControl({
   const [overrideReason, setOverrideReason] = useState('');
   const [holdReason, setHoldReason] = useState('');
 
+  useEffect(() => {
+    if (workPackageId) setBoardWorkPackageFilter(workPackageId);
+  }, [workPackageId]);
+
+  const scopedWorkPackageId = useMemo(
+    () =>
+      resolveProductionWorkPackageScope(workPackageId, boardWorkPackageFilter),
+    [workPackageId, boardWorkPackageFilter],
+  );
+  const productionScopeKey = productionScopeQueryKey(scopedWorkPackageId);
+
+  const workPackagesQuery = useQuery({
+    queryKey: pieceControlKeys.productionWorkPackages(projectId),
+    queryFn: () => entities.WorkPackage.filter({ project_id: projectId }),
+    enabled: enabled && !lockedToWorkPackage,
+    staleTime: 30_000,
+  });
+
   const snapshotQuery = useQuery({
-    queryKey: ['piece-production', projectId, workPackageId ?? 'all'],
-    queryFn: () => fetchProductionSnapshot(projectId, workPackageId),
+    // Distinct from legacy EPM key ['piece-production', projectId].
+    queryKey: pieceControlKeys.productionBoard(projectId, productionScopeKey),
+    queryFn: () =>
+      fetchProductionSnapshot(
+        projectId,
+        productionScopeFetchArg(productionScopeKey),
+      ),
     enabled,
+    // Keep the filter bar mounted while the scoped snapshot refetches.
+    placeholderData: keepPreviousData,
   });
   const snapshot = snapshotQuery.data;
   const pieces = useMemo(
@@ -83,13 +137,7 @@ export function PieceProductionControl({
   );
 
   const invalidateProduction = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['piece-production', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['piece-register', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['piece-relationships', projectId] }),
-      queryClient.invalidateQueries({ queryKey: ['canonical-release-gate'] }),
-      queryClient.invalidateQueries({ queryKey: ['canonical-reporting', projectId] }),
-    ]);
+    await invalidatePieceControlQueries(queryClient, projectId, 'production');
   };
 
   const splitMutation = useMutation({
@@ -137,6 +185,44 @@ export function PieceProductionControl({
       ),
   });
 
+  const bulkAdvanceMutation = useMutation({
+    mutationFn: ({
+      pieceIds,
+      stationKey,
+      override,
+      reason,
+    }: {
+      pieceIds: string[];
+      stationKey?: string | null;
+      override?: boolean;
+      reason?: string;
+    }) =>
+      advancePieceStations(projectId, pieceIds, {
+        stationKey,
+        override,
+        overrideReason: reason,
+      }),
+    onSuccess: async (result) => {
+      const advanced = result.advanced ?? 0;
+      const unchanged = result.unchanged ?? 0;
+      toast.success(
+        unchanged > 0
+          ? `Advanced ${advanced} lot${advanced === 1 ? '' : 's'} (${unchanged} already complete).`
+          : `Advanced ${advanced} lot${advanced === 1 ? '' : 's'}.`,
+      );
+      setBulkSelectedIds([]);
+      setBulkOverrideReason('');
+      await invalidateProduction();
+    },
+    onError: (error: Error) =>
+      toast.error(
+        presentPieceControlError(
+          error,
+          'The bulk production update could not be recorded.',
+        ),
+      ),
+  });
+
   const holdMutation = useMutation({
     mutationFn: ({ onHold, reason }: { onHold: boolean; reason?: string }) =>
       setPieceHold(projectId, [selectedPiece!.id], onHold, reason),
@@ -165,7 +251,7 @@ export function PieceProductionControl({
     );
   }
 
-  if (snapshotQuery.isLoading) {
+  if (snapshotQuery.isLoading && !snapshotQuery.data) {
     return (
       <section className="piece-operation-state is-loading" aria-label="Loading production">
         <Loader2 size={20} className="piece-operation-spinner" />
@@ -228,6 +314,57 @@ export function PieceProductionControl({
         ? 'Work-package release required'
         : null;
 
+  const leafPieces = pieces.filter((piece) => !piece.is_container);
+  const bulkNextPlan = planBulkStationAdvance({
+    mode: 'next',
+    selectedPieceIds: bulkSelectedIds,
+    pieces,
+    stations,
+    completions,
+    releasedWorkPackageIds: snapshot?.canonicalReleaseWorkPackageIds ?? [],
+  });
+  const bulkStationPlan = planBulkStationAdvance({
+    mode: 'station',
+    stationKey: bulkStationKey || null,
+    selectedPieceIds: bulkSelectedIds,
+    pieces,
+    stations,
+    completions,
+    releasedWorkPackageIds: snapshot?.canonicalReleaseWorkPackageIds ?? [],
+  });
+  const bulkNeedsOverride =
+    Boolean(bulkStationKey) &&
+    bulkStationPlan.eligiblePieceIds.some((pieceId) => {
+      const nextKey = nextIncompleteStationKey(pieceId, stations, completions);
+      return Boolean(nextKey && nextKey !== bulkStationKey);
+    });
+
+  const toggleBulkSelected = (pieceId: string, checked: boolean) => {
+    setBulkSelectedIds((current) => {
+      if (checked) {
+        return current.includes(pieceId) ? current : [...current, pieceId];
+      }
+      return current.filter((id) => id !== pieceId);
+    });
+  };
+
+  const selectColumnLots = (columnKey: string) => {
+    const columnLots = (grouped[columnKey as keyof typeof grouped] ?? [])
+      .filter((piece) => !piece.is_container)
+      .map((piece) => piece.id);
+    setBulkSelectedIds((current) =>
+      Array.from(new Set([...current, ...columnLots])),
+    );
+  };
+
+  const onBoardWorkPackageFilterChange = (value: string) => {
+    setBoardWorkPackageFilter(value);
+    setBulkSelectedIds([]);
+    setSelectedPieceId(null);
+    setOverrideStationKey(null);
+    setOverrideReason('');
+  };
+
   return (
     <section className="piece-operations">
       <header className="piece-operations__head">
@@ -239,14 +376,14 @@ export function PieceProductionControl({
             <h2>Production</h2>
             <p>Record controlled physical station transitions.</p>
             <p className="piece-operations__safety">
-              Completed events cannot be overridden or reversed.
+              Completed events cannot be overridden or reversed. Select multiple lots to advance in bulk.
             </p>
           </div>
         </div>
         <div className="piece-operations__summary" aria-label="Production summary">
           <span>
             <small>Active lots</small>
-            <strong>{pieces.filter((piece) => !piece.is_container).length}</strong>
+            <strong>{leafPieces.length}</strong>
           </span>
           <span>
             <small>Earned progress</small>
@@ -255,12 +392,128 @@ export function PieceProductionControl({
         </div>
       </header>
 
-      {pieces.filter((piece) => !piece.is_container).length === 0 ? (
+      {!lockedToWorkPackage ? (
+        <div className="piece-production-filters" aria-label="Production filters">
+          <label className="piece-production-filters__field" htmlFor="piece-production-wp-filter">
+            Work package
+            <select
+              id="piece-production-wp-filter"
+              className="piece-command-control"
+              value={boardWorkPackageFilter}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                onBoardWorkPackageFilterChange(event.target.value)
+              }
+            >
+              <option value="">All work packages</option>
+              <option value={UNASSIGNED_WP_FILTER}>Unassigned</option>
+              {(workPackagesQuery.data ?? []).map((wp: { id: string }) => (
+                <option key={wp.id} value={wp.id}>
+                  {formatWorkPackageTitle(wp as any)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
+
+      {leafPieces.length === 0 ? (
         <p className="piece-operation-empty">
           No active production lots are in this scope.
         </p>
       ) : (
         <div className="piece-production-board">
+          {bulkSelectedIds.length > 0 ? (
+            <div className="piece-production-bulkbar" aria-label="Bulk production actions">
+              <div className="piece-production-bulkbar__meta">
+                <strong>{bulkSelectedIds.length}</strong>
+                <span>lot{bulkSelectedIds.length === 1 ? '' : 's'} selected</span>
+                <button
+                  type="button"
+                  className="cmd-btn cmd-btn--ghost"
+                  onClick={() => setBulkSelectedIds([])}
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="piece-production-bulkbar__actions">
+                <Button
+                  className="cmd-btn cmd-btn--primary"
+                  disabled={
+                    bulkAdvanceMutation.isPending ||
+                    bulkNextPlan.eligiblePieceIds.length === 0
+                  }
+                  onClick={() =>
+                    bulkAdvanceMutation.mutate({
+                      pieceIds: bulkNextPlan.eligiblePieceIds,
+                      stationKey: null,
+                    })
+                  }
+                >
+                  {bulkAdvanceMutation.isPending ? (
+                    <Loader2 size={16} className="piece-operation-spinner" />
+                  ) : null}
+                  Complete next station ({bulkNextPlan.eligiblePieceIds.length})
+                </Button>
+                <label className="piece-production-bulkbar__station">
+                  <span className="sr-only">Bulk station</span>
+                  <select
+                    className="piece-command-control"
+                    aria-label="Bulk station"
+                    value={bulkStationKey}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                      setBulkStationKey(event.target.value)
+                    }
+                  >
+                    <option value="">Choose station…</option>
+                    {stations.map((station) => (
+                      <option key={station.id} value={station.station_key}>
+                        {station.station_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {bulkNeedsOverride ? (
+                  <Input
+                    className="piece-command-control"
+                    aria-label="Bulk override reason"
+                    placeholder="Override reason (required)"
+                    value={bulkOverrideReason}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setBulkOverrideReason(event.target.value)
+                    }
+                  />
+                ) : null}
+                <Button
+                  className="cmd-btn"
+                  disabled={
+                    bulkAdvanceMutation.isPending ||
+                    !bulkStationKey ||
+                    bulkStationPlan.eligiblePieceIds.length === 0 ||
+                    (bulkNeedsOverride && !bulkOverrideReason.trim())
+                  }
+                  onClick={() =>
+                    bulkAdvanceMutation.mutate({
+                      pieceIds: bulkStationPlan.eligiblePieceIds,
+                      stationKey: bulkStationKey,
+                      override: bulkNeedsOverride,
+                      reason: bulkNeedsOverride
+                        ? bulkOverrideReason.trim()
+                        : undefined,
+                    })
+                  }
+                >
+                  Complete station ({bulkStationPlan.eligiblePieceIds.length})
+                </Button>
+              </div>
+              {bulkNextPlan.skipped.length > 0 || bulkStationPlan.skipped.length > 0 ? (
+                <p className="piece-production-bulkbar__hint">
+                  Ineligible lots are skipped in the count above (hold, release, containers, already complete).
+                  The server rejects the whole batch if any submitted lot fails.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="piece-operations__grid">
             {[
               { key: 'not_started', name: 'Not Started' },
@@ -268,32 +521,63 @@ export function PieceProductionControl({
                 key: station.station_key,
                 name: station.station_name,
               })),
-            ].map((column) => (
+            ].map((column) => {
+              const columnLots = grouped[column.key as keyof typeof grouped] ?? [];
+              return (
               <section key={column.key} className="piece-production-column">
                 <header className="piece-production-column__head">
                   <h3>{column.name}</h3>
-                  <span>{grouped[column.key as keyof typeof grouped]?.length ?? 0}</span>
+                  <div className="piece-production-column__meta">
+                    <span>{columnLots.length}</span>
+                    {columnLots.length > 0 ? (
+                      <button
+                        type="button"
+                        className="piece-production-column__select-all"
+                        onClick={() => selectColumnLots(column.key)}
+                      >
+                        Select all
+                      </button>
+                    ) : null}
+                  </div>
                 </header>
                 <div className="piece-production-column__lots">
-                  {(grouped[column.key as keyof typeof grouped] ?? []).map((piece) => (
-                    <button
-                      key={piece.id}
-                      type="button"
-                      aria-pressed={selectedPiece?.id === piece.id}
-                      onClick={() => setSelectedPieceId(piece.id)}
-                      className={`piece-production-lot${
-                        selectedPiece?.id === piece.id ? ' is-selected' : ''
-                      }`}
-                    >
-                      <strong>
-                        {piece.piece_mark} / {piece.lot_code}
-                      </strong>
-                      <span>Qty {compactNumber.format(Number(piece.quantity))}</span>
-                    </button>
-                  ))}
+                  {columnLots.map((piece) => {
+                    const checked = bulkSelectedIds.includes(piece.id);
+                    return (
+                      <div
+                        key={piece.id}
+                        className={`piece-production-lot${
+                          selectedPiece?.id === piece.id ? ' is-selected' : ''
+                        }${checked ? ' is-checked' : ''}`}
+                      >
+                        <label className="piece-production-lot__check">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            aria-label={`Select ${piece.piece_mark} / ${piece.lot_code}`}
+                            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                              toggleBulkSelected(piece.id, event.target.checked)
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          aria-pressed={selectedPiece?.id === piece.id}
+                          onClick={() => setSelectedPieceId(piece.id)}
+                          className="piece-production-lot__focus"
+                        >
+                          <strong>
+                            {piece.piece_mark} / {piece.lot_code}
+                          </strong>
+                          <span>Qty {compactNumber.format(Number(piece.quantity))}</span>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

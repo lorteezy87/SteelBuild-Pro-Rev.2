@@ -1,7 +1,20 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { mono } from "./drawingsConfig";
-import { STAGE_MAP, STAGE_ORDER, SORTABLE_FIELDS, COMPACT_WIDTH_PX } from "./drawingsConfig";
+import { STAGE_MAP, STAGE_ORDER, COMPACT_WIDTH_PX } from "./drawingsConfig";
+import {
+  TABLE_HEADER_STYLE,
+  TABLE_COLUMNS,
+  loadExpandedSets,
+  saveExpandedSets,
+  nextSortState,
+  sortDrawingGroups,
+  buildFlatDrawingRows,
+  estimateFlatRowHeight,
+  sortArrow,
+  compactHideStyle,
+  findBrandNewGroupKeys,
+} from "./drawingsTableDerive";
 import StageChip from "./StageChip";
 import PriorityDot from "./PriorityDot";
 import { OverdueBadge, RFILinkBadge, SupersededBadge } from "./DrawingBadges";
@@ -16,10 +29,10 @@ import { Lock } from "lucide-react";
 // whether a child row is mid-processing, needs review, or failed to extract.
 // Processed rows render nothing (no chrome) to keep the log clean.
 const AI_STATUS_META = {
-  Pending:     { label: "QUEUED",    color: "#94A3B8", bg: "rgba(148,163,184,0.10)", border: "rgba(148,163,184,0.30)", title: "Queued for AI extraction" },
-  Extracting:  { label: "✦ READING", color: "#F59E0B", bg: "rgba(245,158,11,0.12)",  border: "rgba(245,158,11,0.35)",  title: "Claude is reading this sheet" },
-  NeedsReview: { label: "REVIEW",    color: "#F97316", bg: "rgba(249,115,22,0.12)",  border: "rgba(249,115,22,0.35)",  title: "AI finished but found something to verify" },
-  Failed:      { label: "✗ FAILED",  color: "#EF4444", bg: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.35)",   title: "AI extraction failed — click to retry" },
+  Pending:     { label: "QUEUED",    color: "var(--text-muted)",     bg: "var(--bg-surface-high)",                                       border: "var(--border-default)",                                           title: "Queued for AI extraction" },
+  Extracting:  { label: "✦ READING", color: "var(--status-warning)", bg: "color-mix(in srgb, var(--status-warning) 12%, transparent)", border: "color-mix(in srgb, var(--status-warning) 35%, transparent)", title: "Claude is reading this sheet" },
+  NeedsReview: { label: "REVIEW",    color: "var(--status-review)",  bg: "color-mix(in srgb, var(--status-review) 12%, transparent)",  border: "color-mix(in srgb, var(--status-review) 35%, transparent)",  title: "AI finished but found something to verify" },
+  Failed:      { label: "✗ FAILED",  color: "var(--status-error)",   bg: "color-mix(in srgb, var(--status-error) 12%, transparent)",   border: "color-mix(in srgb, var(--status-error) 35%, transparent)",   title: "AI extraction failed — click to retry" },
 };
 
 function AIStatusBadge({ status, uploadStatus, error }) {
@@ -29,7 +42,9 @@ function AIStatusBadge({ status, uploadStatus, error }) {
       <span title={error || "File upload failed"} style={{
         ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
         padding: "1px 5px", borderRadius: 4, marginLeft: 6,
-        color: "#EF4444", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)",
+        color: "var(--status-error)",
+        background: "color-mix(in srgb, var(--status-error) 12%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--status-error) 35%, transparent)",
         verticalAlign: "middle",
       }}>
         ↑ UPLOAD FAILED
@@ -41,7 +56,9 @@ function AIStatusBadge({ status, uploadStatus, error }) {
       <span title="Uploading to storage" style={{
         ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
         padding: "1px 5px", borderRadius: 4, marginLeft: 6,
-        color: "#3B82F6", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.35)",
+        color: "var(--status-info)",
+        background: "color-mix(in srgb, var(--status-info) 12%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--status-info) 35%, transparent)",
         verticalAlign: "middle",
       }}>
         ↑ UPLOADING
@@ -67,11 +84,13 @@ function AIStatusBadge({ status, uploadStatus, error }) {
 function ActionBtn({ label, onClick, danger, disabled, title, primary }) {
   const [hovered, setHovered] = React.useState(false);
   const baseColor = primary ? "var(--accent)" : danger ? "var(--status-error)" : "var(--text-muted)";
+  const restBorder = primary ? "var(--accent-border)" : danger ? "color-mix(in srgb, var(--status-error) 55%, transparent)" : "var(--border-default)";
+  const hoverBorder = primary ? "var(--accent)" : danger ? "var(--status-error)" : "var(--border-strong)";
   // Danger buttons get a visible tinted background at rest (not just on hover)
   // so they can never be mistaken for a neutral "Next"/"Edit"/"View" button
   // sitting next to them. This is the F6 mis-click fix from the audit.
-  const baseBg = danger ? "rgba(239,68,68,0.10)" : "none";
-  const hoverBg = primary ? "rgba(200,155,32,0.18)" : danger ? "rgba(239,68,68,0.22)" : "rgba(255,255,255,0.04)";
+  const baseBg = danger ? "color-mix(in srgb, var(--status-error) 10%, transparent)" : "none";
+  const hoverBg = primary ? "var(--accent-muted)" : danger ? "color-mix(in srgb, var(--status-error) 22%, transparent)" : "var(--hover-bg)";
   return (
     <button
       onClick={onClick}
@@ -87,11 +106,7 @@ function ActionBtn({ label, onClick, danger, disabled, title, primary }) {
         padding: danger ? "4px 10px" : "4px 9px",
         borderRadius: "var(--radius-badge)",
         border: `1px solid ${
-          hovered && !disabled
-            ? baseColor + "80"
-            : danger
-              ? "rgba(239,68,68,0.55)"
-              : "var(--border-default)"
+          hovered && !disabled ? hoverBorder : restBorder
         }`,
         background: hovered && !disabled ? hoverBg : baseBg,
         color: baseColor,
@@ -116,7 +131,7 @@ export function ContextMenuItem({ label, onClick, danger }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         display: "block", width: "100%", textAlign: "left", padding: "8px 16px",
-        background: hovered ? (danger ? "rgba(239,68,68,0.08)" : "var(--hover-bg)") : "none",
+        background: hovered ? (danger ? "color-mix(in srgb, var(--status-error) 8%, transparent)" : "var(--hover-bg)") : "none",
         border: "none", cursor: "pointer", ...mono, fontSize: 10,
         fontWeight: 700, letterSpacing: "0.08em",
         color: danger ? "var(--status-error)" : "var(--text-primary)",
@@ -126,29 +141,6 @@ export function ContextMenuItem({ label, onClick, danger }) {
       {label}
     </button>
   );
-}
-
-// v2: the default is now all-collapsed (rolled up). Bumping the key discards
-// the old persisted "everything expanded" state so the new default takes effect
-// for existing users; their future expand/collapse choices persist under v2.
-const EXPAND_LS_KEY = "sbp-drawings-expanded-sets-v2";
-
-// ─── Persistence for expand/collapse ────────────────────────────────────────
-
-function loadExpanded() {
-  try {
-    const raw = localStorage.getItem(EXPAND_LS_KEY);
-    if (!raw) return null;
-    return new Set(JSON.parse(raw));
-  } catch {
-    return null;
-  }
-}
-
-function saveExpanded(set) {
-  try {
-    localStorage.setItem(EXPAND_LS_KEY, JSON.stringify([...set]));
-  } catch { /* noop */ }
 }
 
 // ─── Row renderers ──────────────────────────────────────────────────────────
@@ -227,12 +219,12 @@ function GroupRow({
   const overdueActive = a.overdueCount > 0 && !setDone;
   const isGroupOverdue = overdueActive && !group.isUngrouped;
   const rowBg = isGroupOverdue
-    ? "linear-gradient(90deg, rgba(239,68,68,0.14), rgba(239,68,68,0.04) 65%, transparent)"   // red = late
+    ? "linear-gradient(90deg, color-mix(in srgb, var(--status-error) 14%, transparent), color-mix(in srgb, var(--status-error) 4%, transparent) 65%, transparent)"   // red = late
     : group.isUngrouped
-      ? "rgba(255,255,255,0.015)"
+      ? "color-mix(in srgb, var(--text-primary) 1.5%, transparent)"
       : setDone
-        ? "linear-gradient(90deg, rgba(16,185,129,0.10), rgba(16,185,129,0.02) 65%, transparent)" // green = done
-        : "linear-gradient(90deg, rgba(200,155,32,0.08), rgba(200,155,32,0.02) 65%, transparent)"; // amber = in progress
+        ? "linear-gradient(90deg, color-mix(in srgb, var(--status-success) 10%, transparent), color-mix(in srgb, var(--status-success) 2%, transparent) 65%, transparent)" // green = done
+        : "linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, transparent), color-mix(in srgb, var(--accent) 2%, transparent) 65%, transparent)"; // amber = in progress
 
   return (
     <tr
@@ -326,9 +318,9 @@ function GroupRow({
                   style={{
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                     width: 18, height: 18, borderRadius: 3,
-                    background: "rgba(245, 158, 11, 0.15)",
-                    border: "1px solid rgba(245, 158, 11, 0.4)",
-                    color: "#f59e0b",
+                    background: "color-mix(in srgb, var(--status-warning) 15%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--status-warning) 40%, transparent)",
+                    color: "var(--status-warning)",
                   }}
                 >
                   <Lock size={10} />
@@ -343,8 +335,9 @@ function GroupRow({
                     style={{
                       ...mono, fontSize: 8, fontWeight: 800, letterSpacing: "0.10em",
                       padding: "1px 6px", borderRadius: 3,
-                      color: "#60A5FA", background: "rgba(96,165,250,0.12)",
-                      border: "1px solid rgba(96,165,250,0.35)",
+                      color: "var(--status-info)",
+                      background: "color-mix(in srgb, var(--status-info) 12%, transparent)",
+                      border: "1px solid color-mix(in srgb, var(--status-info) 35%, transparent)",
                       textTransform: "uppercase",
                     }}
                   >
@@ -379,8 +372,8 @@ function GroupRow({
                           ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
                           color: "var(--accent)", textDecoration: "none",
                           padding: "1px 6px", borderRadius: 3,
-                          border: "1px solid var(--accent-border, rgba(200,155,32,0.35))",
-                          background: "rgba(200,155,32,0.08)",
+                          border: "1px solid var(--accent-border)",
+                          background: "var(--accent-muted)",
                         }}
                       >
                         OPEN DRIVE ↗
@@ -430,7 +423,7 @@ function GroupRow({
                     title={`${submittalCounts.total} submittal${submittalCounts.total === 1 ? "" : "s"} reference this set${submittalCounts.latestStatus ? `, latest: ${submittalCounts.latestStatus}` : ""}${submittalCounts.open > 0 ? ` · ${submittalCounts.open} still open` : ""}`}
                     style={{
                       ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                      color: submittalCounts.open > 0 ? "#0D9488" : "var(--text-muted)",
+                      color: submittalCounts.open > 0 ? "var(--accent)" : "var(--text-muted)",
                     }}
                   >
                     <span className="sbd-num">{submittalCounts.total}</span> SUBMITTAL{submittalCounts.total === 1 ? "" : "S"}
@@ -443,7 +436,7 @@ function GroupRow({
               {a.percentReleased < 100 && (a.aiExtracting > 0 || a.aiNeedsReview > 0 || a.aiFailed > 0) && (
                 <>
                   <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
-                  <span style={{ ...mono, fontSize: 9, color: "#F59E0B", fontWeight: 700 }}>
+                  <span style={{ ...mono, fontSize: 9, color: "var(--status-warning)", fontWeight: 700 }}>
                     {a.aiProcessed}/{a.total} PROCESSED
                     {a.aiNeedsReview > 0 && ` · ${a.aiNeedsReview} REVIEW`}
                     {a.aiExtracting > 0 && ` · ${a.aiExtracting} RUNNING`}
@@ -491,16 +484,16 @@ function GroupRow({
             : a.aggregateStatus === "pending_review" ? "var(--status-warning)"
             :                                          "var(--text-muted)",
             background:
-              a.aggregateStatus === "approved"       ? "rgba(16,185,129,0.12)"
-            : a.aggregateStatus === "rejected"       ? "rgba(239,68,68,0.12)"
-            : a.aggregateStatus === "pending_review" ? "rgba(245,158,11,0.14)"
-            : a.aggregateStatus === "superseded"     ? "rgba(148,163,184,0.12)"
+              a.aggregateStatus === "approved"       ? "color-mix(in srgb, var(--status-success) 12%, transparent)"
+            : a.aggregateStatus === "rejected"       ? "color-mix(in srgb, var(--status-error) 12%, transparent)"
+            : a.aggregateStatus === "pending_review" ? "color-mix(in srgb, var(--status-warning) 14%, transparent)"
+            : a.aggregateStatus === "superseded"     ? "var(--bg-surface-high)"
             :                                          "var(--bg-surface-high)",
             border: `1px solid ${
-              a.aggregateStatus === "approved"       ? "rgba(16,185,129,0.25)"
-            : a.aggregateStatus === "rejected"       ? "rgba(239,68,68,0.25)"
-            : a.aggregateStatus === "pending_review" ? "rgba(245,158,11,0.40)"
-            : a.aggregateStatus === "superseded"     ? "rgba(148,163,184,0.30)"
+              a.aggregateStatus === "approved"       ? "color-mix(in srgb, var(--status-success) 25%, transparent)"
+            : a.aggregateStatus === "rejected"       ? "color-mix(in srgb, var(--status-error) 25%, transparent)"
+            : a.aggregateStatus === "pending_review" ? "color-mix(in srgb, var(--status-warning) 40%, transparent)"
+            : a.aggregateStatus === "superseded"     ? "var(--border-default)"
             :                                          "var(--border-default)"
             }`,
             textTransform: "uppercase",
@@ -584,7 +577,7 @@ function SetOnlyInfoRow({ group }) {
   const meta = parent.metadata || {};
   const stageCounts = meta.stage_counts || null;
   return (
-    <tr style={{ background: "rgba(96,165,250,0.03)" }}>
+    <tr style={{ background: "color-mix(in srgb, var(--status-info) 3%, transparent)" }}>
       <td style={tdBase}></td>
       <td colSpan={10} style={{ ...tdBase, padding: "14px 18px 14px 44px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -644,8 +637,8 @@ function SetOnlyInfoRow({ group }) {
                   ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
                   color: "var(--accent)", textDecoration: "none",
                   padding: "3px 9px", borderRadius: 4,
-                  border: "1px solid var(--accent-border, rgba(200,155,32,0.35))",
-                  background: "rgba(200,155,32,0.08)",
+                  border: "1px solid var(--accent-border)",
+                  background: "var(--accent-muted)",
                 }}
               >
                 OPEN DRIVE FOLDER ↗
@@ -688,7 +681,7 @@ function SheetRow({
         // Selection wins over overdue tint; otherwise a clearly-red wash for
         // overdue sheets so the row reads as urgent at a glance instead of
         // relying on the small red badges in cells.
-        background: isSel ? "rgba(200,155,32,0.06)" : overdue ? "rgba(239,68,68,0.10)" : "none",
+        background: isSel ? "color-mix(in srgb, var(--accent) 6%, transparent)" : overdue ? "color-mix(in srgb, var(--status-error) 10%, transparent)" : "none",
         cursor: "default",
         borderLeft: overdue ? "4px solid var(--status-error)" : "4px solid transparent",
       }}
@@ -754,9 +747,9 @@ function SheetRow({
         {d.set_approval_status ? (
           <span style={{
             ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: "var(--radius-badge)",
-            color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
-            background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "var(--bg-surface-high)",
-            border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "var(--border-default)"}`,
+            color: d.set_approval_status === "approved" ? "var(--status-success)" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
+            background: d.set_approval_status === "approved" ? "color-mix(in srgb, var(--status-success) 12%, transparent)" : d.set_approval_status === "rejected" ? "color-mix(in srgb, var(--status-error) 12%, transparent)" : "var(--bg-surface-high)",
+            border: `1px solid ${d.set_approval_status === "approved" ? "color-mix(in srgb, var(--status-success) 25%, transparent)" : d.set_approval_status === "rejected" ? "color-mix(in srgb, var(--status-error) 25%, transparent)" : "var(--border-default)"}`,
             textTransform: "uppercase",
           }}>
             {d.set_approval_status}
@@ -867,31 +860,20 @@ export default function DrawingsTable({
   // in alphabetical order; sheets within a group reorder. We apply sorting
   // after grouping (instead of to the flat input) so the group rollups keep
   // using the full child list.
-  const sortedGroups = useMemo(() => {
-    if (!sort) return groups;
-    const { field, dir } = sort;
-    const cmp = SORTABLE_FIELDS[field]?.cmp;
-    if (!cmp) return groups;
-    const sign = dir === "desc" ? -1 : 1;
-    return groups.map((g) => ({
-      ...g,
-      sheets: [...g.sheets].sort((a, b) => sign * cmp(a, b)),
-    }));
-  }, [groups, sort]);
+  const sortedGroups = useMemo(
+    () => sortDrawingGroups(groups, sort),
+    [groups, sort],
+  );
 
   const handleSort = (field) => {
-    setSort((prev) => {
-      if (!prev || prev.field !== field) return { field, dir: "asc" };
-      if (prev.dir === "asc") return { field, dir: "desc" };
-      return null;
-    });
+    setSort((prev) => nextSortState(prev, field));
   };
 
   // Initialize expand state — default all sets COLLAPSED (rolled up) on first
   // load. The rolled-up view is the scannable set-level list; the user expands
   // only the sets they care about, and that choice persists (under the v2 key).
   const [expanded, setExpanded] = useState(() => {
-    const persisted = loadExpanded();
+    const persisted = loadExpandedSets();
     if (persisted) return persisted;
     return new Set();
   });
@@ -909,12 +891,12 @@ export default function DrawingsTable({
   // before — keys the user explicitly collapsed stay collapsed.
   useEffect(() => {
     const seen = seenKeysRef.current;
-    const brandNew = groups.filter((g) => !seen.has(g.key));
+    const brandNew = findBrandNewGroupKeys(groups, seen);
     if (brandNew.length === 0) return;
     setExpanded((prev) => {
       const next = new Set(prev);
       brandNew.forEach((g) => next.add(g.key));
-      saveExpanded(next);
+      saveExpandedSets(next);
       return next;
     });
     brandNew.forEach((g) => seen.add(g.key));
@@ -924,7 +906,7 @@ export default function DrawingsTable({
     setExpanded((prev) => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
-      saveExpanded(next);
+      saveExpandedSets(next);
       return next;
     });
   };
@@ -946,19 +928,11 @@ export default function DrawingsTable({
   const allSelected = visibleSelectedCount === drawings.length && drawings.length > 0;
   const someSelected = visibleSelectedCount > 0 && !allSelected;
 
-  const thStyle = {
-    ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em",
-    color: "var(--text-muted)", textTransform: "uppercase", padding: "10px 12px",
-    textAlign: "left", borderBottom: "1px solid var(--border-default)",
-    whiteSpace: "nowrap", background: "var(--bg-surface)",
-  };
+  const thStyle = { ...mono, ...TABLE_HEADER_STYLE };
 
-  // F20: sortable header renderer. Falls through to a plain static TH when
-  // no field is passed (e.g. APPROVAL / ACTIONS columns).
   const SortableTh = ({ field, label, extraStyle }) => {
     if (!field) return <th style={{ ...thStyle, ...extraStyle }}>{label}</th>;
     const isActive = sort?.field === field;
-    const arrow = !isActive ? "" : sort.dir === "asc" ? " ▲" : " ▼";
     return (
       <th
         style={{
@@ -971,39 +945,23 @@ export default function DrawingsTable({
         onClick={() => handleSort(field)}
         title={`Sort by ${label.toLowerCase()}`}
       >
-        {label}{arrow}
+        {label}{sortArrow(sort, field)}
       </th>
     );
   };
 
-  // F23: style builder for columns that collapse out of view on narrow
-  // screens. Returning display:none keeps the column count stable so we
-  // don't have to juggle colSpan — every row just silently hides the cell.
-  const hideOnCompact = compact ? { display: "none" } : undefined;
+  const hideOnCompact = compactHideStyle(compact);
 
-  // ── Flatten groups into a virtual row list ───────────────────────────
-  const flatRows = useMemo(() => {
-    const rows = [];
-    for (const group of sortedGroups) {
-      const isExpanded = expanded.has(group.key);
-      rows.push({ type: "group", group, isExpanded });
-      if (isExpanded && group.setOnly) {
-        rows.push({ type: "setOnlyInfo", group });
-      }
-      if (isExpanded && !group.setOnly) {
-        for (const d of group.sheets) {
-          rows.push({ type: "sheet", drawing: d, group });
-        }
-      }
-    }
-    return rows;
-  }, [sortedGroups, expanded]);
+  const flatRows = useMemo(
+    () => buildFlatDrawingRows(sortedGroups, expanded),
+    [sortedGroups, expanded],
+  );
 
   const scrollRef = useRef(null);
   const virtualizer = useVirtualizer({
     count: flatRows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (i) => flatRows[i].type === "group" ? 62 : flatRows[i].type === "setOnlyInfo" ? 120 : 48,
+    estimateSize: (i) => estimateFlatRowHeight(flatRows[i]),
     overscan: 12,
   });
 
@@ -1025,25 +983,33 @@ export default function DrawingsTable({
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--bg-surface)" }}>
             <tr>
-              <th style={{ ...thStyle, width: 36 }}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
-                  onChange={onToggleAll}
-                  style={{ cursor: "pointer" }}
-                />
-              </th>
-              <SortableTh field="sheet_number"    label="SET / SHEET #" />
-              <SortableTh field="title"           label="TITLE" />
-              <SortableTh field="discipline"      label="DISCIPLINE" extraStyle={{ display: "none" }} />
-              <SortableTh field="revision_number" label="REV" />
-              <SortableTh field="stage"           label="STAGE" />
-              <SortableTh field="submitted_date"  label="SUBMITTED" extraStyle={hideOnCompact} />
-              <SortableTh field="due_date"        label="DUE DATE" />
-              <SortableTh field="reviewer"        label="REVIEWER" extraStyle={{ display: "none" }} />
-              <SortableTh field={null}            label="APPROVAL" />
-              <SortableTh field={null}            label="" />
+              {TABLE_COLUMNS.map((col) => {
+                if (col.key === "checkbox") {
+                  return (
+                    <th key={col.key} style={{ ...thStyle, width: col.width }}>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                        onChange={onToggleAll}
+                        style={{ cursor: "pointer" }}
+                      />
+                    </th>
+                  );
+                }
+                const extraStyle = {
+                  ...(col.hidden ? { display: "none" } : {}),
+                  ...(col.compactHide ? hideOnCompact : {}),
+                };
+                return (
+                  <SortableTh
+                    key={col.key}
+                    field={col.field}
+                    label={col.label}
+                    extraStyle={Object.keys(extraStyle).length ? extraStyle : undefined}
+                  />
+                );
+              })}
             </tr>
           </thead>
           <tbody>

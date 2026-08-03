@@ -39,12 +39,13 @@ const NOTE_PIN_SIZE = 22;   // canvas pixels
 // Review stamps — sheet-anchored (PDF units) so they scale with zoom like a
 // real rubber stamp on the page. Keys persist in item.stamp.
 export const STAMP_TYPES = [
-  { key: "APPROVED",          label: "APPROVED",          color: "#16a34a" },
-  { key: "APPROVED_AS_NOTED", label: "APPROVED AS NOTED", color: "#84cc16" },
-  { key: "REVISE_RESUBMIT",   label: "REVISE & RESUBMIT", color: "#f59e0b" },
-  { key: "REJECTED",          label: "REJECTED",          color: "#dc2626" },
-  { key: "FOR_REVIEW",        label: "FOR REVIEW",        color: "#3b82f6" },
+  { key: "APPROVED",          label: "APPROVED",          color: "var(--status-success)" },
+  { key: "APPROVED_AS_NOTED", label: "APPROVED AS NOTED", color: "var(--status-success-bright)" },
+  { key: "REVISE_RESUBMIT",   label: "REVISE & RESUBMIT", color: "var(--status-warning)" },
+  { key: "REJECTED",          label: "REJECTED",          color: "var(--status-error)" },
+  { key: "FOR_REVIEW",        label: "FOR REVIEW",        color: "var(--status-info)" },
 ];
+const ANNOTATION_NOTE_TEXT = "#111";
 const STAMP_BY_KEY = Object.fromEntries(STAMP_TYPES.map((s) => [s.key, s]));
 const STAMP_W_PDF = 170; // PDF points (~2.4in wide)
 const STAMP_H_PDF = 44;
@@ -875,7 +876,7 @@ function MarkupItem({
               style={{
                 fontFamily: "var(--font-body)",
                 fontSize: 11,
-                color: "#111",
+                color: ANNOTATION_NOTE_TEXT,
                 background: "rgba(255,240,180,0.95)",
                 border: "1px solid rgba(0,0,0,0.25)",
                 borderRadius: 3,

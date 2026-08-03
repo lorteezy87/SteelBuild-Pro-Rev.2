@@ -21,7 +21,7 @@ import { integrations, resolveFileUrl } from "@/api/supabaseClient";
 import { supabase } from "@/lib/supabase";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { transitionPieceLots } from "@/lib/pieceControl/logisticsRepository";
-import { linkModelElementsToPieces } from "@/lib/pieceControl/modelElementLink";
+import Model3dSyncPanel from "@/components/viewer3d/Model3dSyncPanel";
 import { useCanonicalReportingRealtime } from "@/hooks/useCanonicalReportingRealtime";
 
 const IfcModelViewer = lazy(() => import("@/components/viewer3d/IfcModelViewer"));
@@ -68,30 +68,19 @@ const loadingChip = {
 export default function Model3DTab({ modelMapping, modelElementRows, projectId, rosterLoading }) {
   const qc = useQueryClient();
   useCanonicalReportingRealtime(projectId);
-  // canonical light presentation (SP5): the Detailing hub runs under the canonical light command
-  // shell this tab is already inside `.detailing-cc`, so every var(--*) token +
-  // sbd-* class in the side panel below flips light automatically via the shipped
-  // `.detailing-cc` alias block. The ONE piece that doesn't is the outer
-  // container's hardcoded `--bg-base` fallback — swap that to the aliased surface
-  // so the frame reads light too. The canonical surface uses the light container.
-  // The 3D canvas + its floating overlays (fsBtn / saveBanner / loadingChip) sit
-  // ON the dark viewport and stay dark by design (chrome-only re-skin).
   const [buffer, setBuffer] = useState(null);
   const [fileName, setFileName] = useState(null);
-  const [modelFile, setModelFile] = useState(null); // the picked File (for upload)
-  const [source, setSource] = useState(null);        // null | "picked" | "stored"
+  const [modelFile, setModelFile] = useState(null);
+  const [source, setSource] = useState(null);
   const [picked, setPicked] = useState(null);
   const [selectedGuids, setSelectedGuids] = useState([]);
   const [loadErr, setLoadErr] = useState(null);
-  // Persisted so the view (e.g. "Fab") survives leaving + returning to the tab —
-  // otherwise it resets to native colors and looks like the statuses "erased".
   const [colorMode, setColorMode] = useState(() => {
     try { return localStorage.getItem("sbp:viewer-colormode") || "model"; } catch { return "model"; }
   });
   useEffect(() => {
     try { localStorage.setItem("sbp:viewer-colormode", colorMode); } catch { /* ignore */ }
   }, [colorMode]);
-  // Roster import: idle | extracting | confirm | importing | done
   const [roster, setRoster] = useState({ step: "idle" });
 
   const containerRef = useRef(null);
@@ -106,8 +95,6 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     else document.exitFullscreen?.();
   };
 
-  // Auto-load the project's stored model (slice 2b) so the tab opens without
-  // re-picking. A freshly-picked file takes precedence over the stored one.
   const { data: storedModel } = useQuery({
     queryKey: ["project-model", projectId],
     enabled: !!projectId,
@@ -153,8 +140,6 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         if (!url) return;
         const res = await fetch(url);
         let buf = await res.arrayBuffer();
-        // Inflate gzipped models (newer uploads are stored `<name>.gz`); older
-        // uncompressed `.ifc` models load as-is.
         if (storedModel.file_url.endsWith(".gz")) buf = await gunzipBuffer(buf);
         if (cancelled) return;
         setFileName(storedModel.file_name);
@@ -167,23 +152,11 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     return () => { cancelled = true; };
   }, [storedModel, buffer, source]);
 
-  // GlobalId → color maps from the page's data (logic + tests in viewerColoring).
   const statusByGuid = useMemo(() => buildStatusByGuid(modelMapping), [modelMapping]);
   const seqByGuid = useMemo(() => buildSeqByGuid(modelElementRows), [modelElementRows]);
-  // Optimistic fab colors: applied the instant you assign a status, so the model
-  // recolors immediately instead of waiting on a slow (12k-row) refetch. guid → status.
   const [optimisticFab, setOptimisticFab] = useState(() => new Map());
-  // Optimistic mark-wide fab assignments (whole-assembly mode only). Kept SEPARATE
-  // from optimisticFab so a per-piece assign never leaks onto the mark map and
-  // bleeds color onto same-mark siblings. mark → status.
   const [optimisticFabByMark, setOptimisticFabByMark] = useState(() => new Map());
-  // Assign scope: "piece" (per-GUID, default) flips only the clicked piece(s);
-  // "assembly" (per-mark) flips every part sharing the clicked piece's mark.
   const [fabScope, setFabScope] = useState("piece");
-  // This tab is reused (not remounted) when the active project changes — it's
-  // rendered inline by DrawingSubmittalHub from project context, not keyed on an
-  // id — so reset the scope to the per-piece default per project instead of
-  // carrying the previous project's choice over.
   useEffect(() => { setFabScope("piece"); }, [projectId]);
   const fabByGuid = useMemo(() => {
     const map = buildFabByGuid(modelElementRows);
@@ -198,20 +171,11 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     [modelElementRows, canonicalPieces],
   );
 
-  // Mark-keyed fallback maps: color a part by its piece mark when its GUID isn't
-  // directly on a roster row (CSV imports leave element_guid NULL; a CSV update
-  // touches only one part of a multi-part assembly). markByGuid bridges the
-  // rendered part's GUID → its normalized mark. (guidToMark above stays RAW —
-  // it feeds the DB `.in("piece_mark", …)` query, which needs the real marks.)
   const markByGuid = useMemo(() => buildMarkByGuid(modelElementRows), [modelElementRows]);
   const seqByMark = useMemo(() => buildSeqByMark(modelElementRows), [modelElementRows]);
   const statusByMark = useMemo(() => buildStatusByMark(modelMapping), [modelMapping]);
   const fabByMark = useMemo(() => {
     const map = buildFabByMark(modelElementRows);
-    // Mirror only WHOLE-ASSEMBLY optimistic assignments onto the mark map, so a
-    // mark-wide assign colors the whole assembly immediately. Per-piece assigns
-    // live in optimisticFab (guid-keyed) ONLY and must not touch the mark map —
-    // otherwise one piece's status would bleed onto its same-mark siblings.
     for (const [mark, status] of optimisticFabByMark) {
       const mk = normalizePieceMark(mark);
       if (!mk) continue;
@@ -220,37 +184,23 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     return map;
   }, [modelElementRows, optimisticFabByMark]);
 
-  // The mode-aware color function the viewer paints with (null → native IFC color).
   const colorFor = useMemo(
     () => colorFnFor(colorMode, {
       statusByGuid, seqByGuid, fabByGuid,
       markByGuid, statusByMark, seqByMark, fabByMark,
       canonicalPieceByGuid,
-      // Per-piece coloring: a roster GUID with no individual fab status stays
-      // neutral instead of inheriting a same-mark sibling's color. Whole-assembly
-      // mode keeps the broad mark fallback so flipping a mark paints every part.
       perPieceFab: fabScope === "piece",
     }),
     [colorMode, statusByGuid, seqByGuid, fabByGuid, markByGuid, statusByMark, seqByMark, fabByMark, canonicalPieceByGuid, fabScope],
   );
 
-  // Persist a freshly-picked model so it auto-loads next time: upload the .ifc to
-  // Storage + write model_registry (file_url) + the piece roster (model_elements).
-  // Runs automatically on load — no separate "import" step — and doesn't block the
-  // render (the viewer already has the local buffer).
   const persistModel = async (file, buf) => {
-    if (!projectId) return; // render-only outside a project
+    if (!projectId) return;
     setRoster({ step: "extracting", done: 0, total: 0 });
     try {
       const result = await extractIfcRoster(buf, (done, total) =>
         setRoster({ step: "extracting", done, total }),
       );
-      // Guard the silent zero: if the IFC has no IfcBeam/Column/Plate/Member, both
-      // the geometry render and the roster come back empty (the viewer also skips
-      // non-structural types). That happens when the model is a reference/proxy
-      // export (members as IfcBuildingElementProxy). Saving it persists an empty,
-      // uncolorable model with a success toast — confusing. Stop and tell the user
-      // the real cause instead, and let them load a corrected export.
       if (!result.rows.length) {
         setRoster({ step: "idle" });
         toast.warning(
@@ -261,10 +211,6 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
         return;
       }
       setRoster({ step: "saving" });
-      // gzip the IFC before upload so large models (50 MB+) fit under the storage
-      // bucket limit and download faster. The stored object is `<name>.gz`; the
-      // auto-loader detects that suffix and inflates. Falls back to the raw file
-      // if the browser lacks CompressionStream.
       let uploadFile = file;
       const gz = await gzipBuffer(buf).catch(() => null);
       if (gz) uploadFile = new File([gz], `${file.name}.gz`);
@@ -298,7 +244,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     try {
       const buf = await file.arrayBuffer();
       setModelFile(file);
-      setSource("picked");       // a local preview — not saved until the user clicks Save
+      setSource("picked");
       setFileName(file.name);
       setBuffer(buf);
     } catch (err) {
@@ -334,22 +280,6 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
     onError: (error) => toast.error(error?.message || "Canonical logistics action failed."),
   });
 
-  const linkMarksMutation = useMutation({
-    mutationFn: () => linkModelElementsToPieces(projectId),
-    onSuccess: (summary) => {
-      qc.invalidateQueries({ queryKey: ["model-elements", projectId] });
-      qc.invalidateQueries({ queryKey: ["canonical-pieces-3d", projectId] });
-      toast.success(
-        `Linked ${summary.linked ?? 0} · unchanged ${summary.unchanged ?? 0}` +
-          ` · unmatched ${summary.unmatched ?? 0} · ambiguous ${summary.ambiguous ?? 0}`,
-      );
-    },
-    onError: (error) =>
-      toast.error(error?.message || "Could not link marks to pieces."),
-  });
-
-  // Canonical-linked selections may initiate only the immutable logistics
-  // commands supported here. Unlinked elements retain read-only legacy colors.
   const setFab = (status) => {
     const selectedCanonical = selectedGuids
       .map((guid) => canonicalPieceByGuid.get(guid))
@@ -427,14 +357,10 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
           {isFullscreen ? "Exit full screen" : "Full screen"}
         </button>
 
-        {/* The roster (model_elements) loads alongside the geometry; until it
-            lands, a color mode that depends on it can't fully paint — say so
-            instead of letting it read as "broken". */}
         {buffer && rosterLoading && (colorMode === "fab" || colorMode === "sequence" || colorMode === "status") && (
           <div style={loadingChip}>Loading {colorMode === "fab" ? "fab" : colorMode === "sequence" ? "sequence" : "status"} colors…</div>
         )}
 
-        {/* Unmissable Save prompt while previewing an unsaved model. */}
         {source === "picked" && projectId && (
           <div style={saveBanner}>
             {(roster.step === "extracting" || roster.step === "saving") ? (
@@ -475,7 +401,6 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
                 </div>
               )}
 
-              {/* Unsaved preview → explicit Save (no accidental auto-save). */}
               {source === "picked" && roster.step === "idle" && (
                 <>
                   <button className="sbd-btn sbd-btn-primary" style={{ width: "100%", justifyContent: "center" }}
@@ -489,12 +414,11 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
               )}
               {source === "picked" && roster.step === "error" && (
                 <div style={{ ...mono, fontSize: 10, color: "var(--status-error)", lineHeight: 1.5 }}>
-                  Couldn&apos;t save: {roster.message}.{" "}
+                  Couldn't save: {roster.message}.{" "}
                   <button type="button" onClick={() => modelFile && buffer && persistModel(modelFile, buffer)} style={linkBtn}>Retry</button>
                 </div>
               )}
 
-              {/* Saved model → status + Remove. */}
               {source === "stored" && roster.step !== "extracting" && roster.step !== "saving" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ ...mono, fontSize: 10, color: "var(--status-success)" }}>✓ Saved to this project · auto-loads</div>
@@ -538,22 +462,7 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
             })}
           </div>
           {projectId && hasRoster && (
-            <button
-              type="button"
-              disabled={linkMarksMutation.isPending}
-              onClick={() => linkMarksMutation.mutate()}
-              style={{
-                marginTop: 10, width: "100%", padding: "7px 10px", borderRadius: 7, cursor: "pointer",
-                border: "1px solid var(--border-default)",
-                background: "var(--bg-surface-low)",
-                color: "var(--text-primary)",
-                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-                letterSpacing: "0.05em", textTransform: "uppercase",
-              }}
-              title="Match IFC marks to canonical piece lots (lot-aware exact match)"
-            >
-              {linkMarksMutation.isPending ? "Linking marks…" : "Link marks to pieces"}
-            </button>
+            <Model3dSyncPanel projectId={projectId} modelElementRows={modelElementRows} />
           )}
         </div>
 
@@ -584,7 +493,6 @@ export default function Model3DTab({ modelMapping, modelElementRows, projectId, 
                   <div style={{ ...mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>Set fab status</div>
                   {hasRoster ? (
                     <>
-                      {/* Scope toggle: per-piece (default) vs whole-assembly. */}
                       <div role="group" aria-label="Fab status scope" style={{ display: "flex", gap: 4, marginTop: 7 }}>
                         {[["piece", "This piece"], ["assembly", "Whole assembly"]].map(([key, label]) => {
                           const active = fabScope === key;
@@ -709,7 +617,7 @@ function Legend({ mode, statusLegend, sequences }) {
     );
   }
   if (mode === "status") {
-    if (!statusLegend.length) return <div style={hintStyle}>No detailing status yet — pieces light up once they&apos;re linked to detailing packages. (For hand-set status, use the Fab mode.)</div>;
+    if (!statusLegend.length) return <div style={hintStyle}>No detailing status yet — pieces light up once they're linked to detailing packages. (For hand-set status, use the Fab mode.)</div>;
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {statusLegend.map((b) => <Swatch key={b.key} color={b.color} label={b.label} count={b.count} />)}
@@ -724,5 +632,5 @@ function Legend({ mode, statusLegend, sequences }) {
       </div>
     );
   }
-  return <div style={hintStyle}>Showing the model&apos;s own (Tekla) member colors.</div>;
+  return <div style={hintStyle}>Showing the model's own (Tekla) member colors.</div>;
 }

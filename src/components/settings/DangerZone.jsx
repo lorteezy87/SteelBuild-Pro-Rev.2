@@ -47,10 +47,10 @@ export default function DangerZone() {
 
   return (
     <div style={{ marginTop: 28, paddingTop: 22, borderTop: '1px solid var(--divider)' }}>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, color: 'var(--danger, #b42318)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 12 }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, color: 'var(--danger)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 12 }}>
         Danger Zone
       </div>
-      <div style={{ border: '1px solid var(--danger, #b42318)', borderRadius: 10, padding: 16, background: 'color-mix(in srgb, var(--danger, #b42318) 6%, transparent)' }}>
+      <div style={{ border: '1px solid var(--danger)', borderRadius: 10, padding: 16, background: 'color-mix(in srgb, var(--danger) 6%, transparent)' }}>
         <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 14, marginBottom: 4 }}>
           Delete this workspace
         </div>
@@ -62,7 +62,7 @@ export default function DangerZone() {
         </p>
         <button
           onClick={() => { setOpen(true); setConfirmText(''); }}
-          style={{ background: 'var(--danger, #b42318)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}
+          style={{ background: 'var(--danger)', color: 'var(--on-accent)', border: 'none', borderRadius: 8, padding: '9px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}
         >
           Delete workspace…
         </button>
@@ -79,7 +79,7 @@ export default function DangerZone() {
           <div
             className="sbd-card-strong"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 460, width: '100%', padding: 24, borderRadius: 14, background: 'var(--bg-surface, #111A2B)', border: '1px solid var(--danger, #b42318)' }}
+            style={{ maxWidth: 460, width: '100%', padding: 24, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--danger)' }}
           >
             <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 18, fontWeight: 800 }}>
               This is permanent
@@ -103,7 +103,7 @@ export default function DangerZone() {
               <button onClick={() => setOpen(false)} disabled={busy} style={{ background: 'var(--bg-surface-low)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '9px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Cancel
               </button>
-              <button onClick={handleDelete} disabled={!canConfirm} style={{ background: canConfirm ? 'var(--danger, #b42318)' : 'var(--bg-surface-low)', color: canConfirm ? '#fff' : 'var(--text-muted)', border: 'none', borderRadius: 8, padding: '9px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: canConfirm ? 'pointer' : 'not-allowed', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              <button onClick={handleDelete} disabled={!canConfirm} style={{ background: canConfirm ? 'var(--danger)' : 'var(--bg-surface-low)', color: canConfirm ? 'var(--on-accent)' : 'var(--text-muted)', border: 'none', borderRadius: 8, padding: '9px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: canConfirm ? 'pointer' : 'not-allowed', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 {busy ? 'Deleting…' : 'Permanently delete'}
               </button>
             </div>

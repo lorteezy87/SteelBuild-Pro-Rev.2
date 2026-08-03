@@ -234,7 +234,7 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving} style={{ background: "var(--accent)", color: "#fff" }}>
+          <Button onClick={handleSave} disabled={saving} style={{ background: "var(--accent)", color: "var(--on-accent)" }}>
             {saving ? "Saving…" : sov ? "Update" : "Create"}
           </Button>
         </DialogFooter>

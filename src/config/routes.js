@@ -214,6 +214,7 @@ const ROUTE_REGISTRY = Object.values(ROUTE_DOMAINS).reduce(
 // Sidebar/modules hover and keyboard focus can warm these chunks, but app boot
 // no longer idle-prefetches them for users who never open the route.
 registerRoutePrefetcher("Dashboard", () => import("@/pages/Dashboard"));
+registerRoutePrefetcher("DrawingSubmittalHub", () => import("@/pages/DrawingSubmittalHub"));
 registerRoutePrefetcher("Schedule", () => import("@/pages/Schedule"));
 registerRoutePrefetcher("RFIs", () => import("@/pages/RFIs"));
 registerRoutePrefetcher("Drawings", () => import("@/pages/Drawings"));

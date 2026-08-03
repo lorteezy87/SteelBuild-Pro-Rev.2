@@ -28,13 +28,20 @@ import {
   SAMPLE_PROJECT_TEMPLATE_KEY,
   SEED_ENTITY_MAP,
   TEMPLATE_LIBRARY,
-  addDaysIso,
-  buildProjectPayload,
   buildSeedPayloads,
   stageImportText,
   summarizeSeedPayloads,
-  todayIso,
 } from "@/lib/onboardingTemplates";
+import {
+  buildDemoProjectForm,
+  buildInvitePrefill,
+  buildPayloadWithTeamPlan,
+  buildPreviewProject,
+  createDefaultProjectForm,
+  formatCountLabel,
+  isProjectFormReady,
+  nextProjectFormWithField,
+} from "./onboarding/onboardingPageHelpers";
 
 const TEMPLATE_OPTIONS = [SAMPLE_PROJECT, ...PROJECT_TEMPLATES];
 const SEED_ORDER = [
@@ -64,49 +71,6 @@ const IMPORT_EXAMPLES = {
 
 const INVALID_IMPORT_TARGET = "rfis";
 const ROLE_OPTIONS = ["owner", "admin", "pm", "field", "viewer"];
-
-function defaultProjectForm() {
-  const start = todayIso();
-  return {
-    project_number: "",
-    name: "",
-    client: "",
-    general_contractor: "",
-    engineer_of_record: "",
-    project_manager: "",
-    superintendent: "",
-    contract_type: "Lump Sum",
-    original_contract_value: "",
-    start_date: start,
-    target_completion_date: addDaysIso(start, 90),
-    retainage_percent: 10,
-    contingency_amount: "",
-    address: "",
-    notes: "",
-  };
-}
-
-function buildPayloadWithTeamPlan(projectForm, templateKey, teamRows) {
-  const payload = buildProjectPayload(projectForm, templateKey);
-  const teamPlan = teamRows
-    .map((row) => ({
-      email: row.email.trim(),
-      role: row.role,
-      discipline: row.discipline.trim(),
-    }))
-    .filter((row) => row.email || row.discipline);
-
-  return {
-    ...payload,
-    metadata: {
-      ...(payload.metadata || {}),
-      onboarding: {
-        ...(payload.metadata?.onboarding || {}),
-        team_plan: teamPlan,
-      },
-    },
-  };
-}
 
 async function bulkCreateWithFallback(entity, records) {
   if (!records.length) return [];
@@ -152,12 +116,6 @@ async function createSeedRecords(seedPayloads) {
   }
 
   return createdByKey;
-}
-
-function formatCountLabel(key) {
-  return key
-    .replace(/([A-Z])/g, " $1")
-    .replace(/^./, (char) => char.toUpperCase());
 }
 
 function TextField({ label, value, onChange, type = "text", required = false, placeholder = "", span = 1 }) {
@@ -226,7 +184,7 @@ export default function Onboarding() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [templateKey, setTemplateKey] = useState("fabrication_erection");
-  const [projectForm, setProjectForm] = useState(defaultProjectForm);
+  const [projectForm, setProjectForm] = useState(createDefaultProjectForm);
   const [teamRows, setTeamRows] = useState([{ email: "", role: "pm", discipline: "Project Management" }]);
   const [createdProject, setCreatedProject] = useState(null);
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -244,20 +202,12 @@ export default function Onboarding() {
 
   const selectedTemplate = TEMPLATE_OPTIONS.find((template) => template.key === templateKey) || TEMPLATE_OPTIONS[0];
   const isDemoTemplate = templateKey === SAMPLE_PROJECT_TEMPLATE_KEY;
-  const projectFormReady = isDemoTemplate || (
-    projectForm.project_number.trim()
-    && projectForm.name.trim()
-    && projectForm.client.trim()
-    && projectForm.start_date
-  );
+  const projectFormReady = isProjectFormReady(projectForm, templateKey);
   const selectedProject = createdProject || projects.find((project) => project.id === selectedProjectId) || null;
-  const previewProject = useMemo(() => (
-    selectedProject || {
-      id: "preview-project",
-      name: projectForm.name || (isDemoTemplate ? SAMPLE_PROJECT.name : "New project"),
-      start_date: projectForm.start_date,
-    }
-  ), [isDemoTemplate, projectForm.name, projectForm.start_date, selectedProject]);
+  const previewProject = useMemo(
+    () => buildPreviewProject(selectedProject, projectForm, isDemoTemplate),
+    [isDemoTemplate, projectForm.name, projectForm.start_date, selectedProject],
+  );
 
   const seedPreview = useMemo(() => (
     summarizeSeedPayloads(buildSeedPayloads(previewProject, templateKey))
@@ -307,30 +257,12 @@ export default function Onboarding() {
   });
 
   function updateProjectField(field, value) {
-    setProjectForm((prev) => ({
-      ...prev,
-      [field]: value,
-      ...(field === "start_date" ? { target_completion_date: addDaysIso(value, 90) } : {}),
-    }));
+    setProjectForm((prev) => nextProjectFormWithField(prev, field, value));
   }
 
   function applyDemoDefaults() {
-    const start = todayIso();
     setTemplateKey(SAMPLE_PROJECT_TEMPLATE_KEY);
-    setProjectForm({
-      ...defaultProjectForm(),
-      project_number: "DEMO-001",
-      name: SAMPLE_PROJECT.name,
-      client: "Demo Client",
-      general_contractor: "Demo GC",
-      engineer_of_record: "Demo EOR",
-      project_manager: "Sample PM",
-      superintendent: "Sample Superintendent",
-      original_contract_value: 1250000,
-      start_date: start,
-      target_completion_date: addDaysIso(start, 120),
-      notes: "Demo data created from onboarding. Safe to delete after training.",
-    });
+    setProjectForm(buildDemoProjectForm());
   }
 
   function updateTeamRow(index, field, value) {
@@ -524,9 +456,7 @@ export default function Onboarding() {
               onClick={() =>
                 navigate(createPageUrl("OrgMembers"), {
                   state: {
-                    prefillInvites: teamRows
-                      .filter((row) => row.email.trim())
-                      .map((row) => ({ email: row.email.trim(), role: row.role })),
+                    prefillInvites: buildInvitePrefill(teamRows),
                   },
                 })
               }

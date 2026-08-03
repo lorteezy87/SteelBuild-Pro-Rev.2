@@ -39,6 +39,7 @@ import {
 
 const OLD_TINT = "#FF4D4D";   // removed content
 const NEW_TINT = "#2F81F7";   // added content
+const PDF_PAGE_BACKGROUND = "#fff";
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3];
 
 const mono = "var(--font-mono)";
@@ -93,7 +94,7 @@ function RevisionAiPanel({
             display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px", borderRadius: 8,
             background: "color-mix(in srgb, #F85149 14%, transparent)", border: "1px solid color-mix(in srgb, #F85149 40%, transparent)",
           }}>
-            <AlertTriangle size={14} style={{ color: "#F85149", flexShrink: 0, marginTop: 1 }} />
+            <AlertTriangle size={14} style={{ color: "var(--status-error)", flexShrink: 0, marginTop: 1 }} />
             <span style={{ fontFamily: "var(--font-body)", fontSize: 11.5, color: "var(--text-primary)", lineHeight: 1.5 }}>
               This sheet is already <strong>{downstream}</strong> — any real change here may mean rework or a backcharge.
             </span>
@@ -623,7 +624,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
             <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 10 }}>
             <div style={{
               flex: 1, minWidth: 0, overflow: "auto", borderRadius: 10,
-              border: "1px solid var(--border-default)", background: "#3A3F46",
+              border: "1px solid var(--border-default)", background: "var(--bg-surface-highest)",
               position: "relative",
             }}>
               {(rendering || isLoading) && (
@@ -651,7 +652,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                       <div style={{ fontFamily: mono, fontSize: 9, fontWeight: 800, color: tintColor, letterSpacing: "0.08em", marginBottom: 4 }}>
                         {label || "—"}
                       </div>
-                      <canvas ref={ref} style={{ width: `${100 * zoom}%`, height: "auto", display: "block", background: "#fff", borderRadius: 4 }} />
+                      <canvas ref={ref} style={{ width: `${100 * zoom}%`, height: "auto", display: "block", background: PDF_PAGE_BACKGROUND, borderRadius: 4 }} />
                     </div>
                   ))}
                 </div>
@@ -662,7 +663,7 @@ export default function RevisionCompareModal({ open, onClose, drawing }) {
                     style={{
                       width: `${RASTER_TARGET_WIDTH * zoom}px`,
                       maxWidth: zoom === 1 ? "100%" : undefined,
-                      height: "auto", display: "block", background: "#fff", borderRadius: 4,
+                      height: "auto", display: "block", background: PDF_PAGE_BACKGROUND, borderRadius: 4,
                     }}
                   />
                 </div>

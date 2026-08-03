@@ -343,7 +343,7 @@ export default function WPGantt({ wps, updateMut }) {
               {/* Today marker in header */}
               {todayOffset >= 0 && todayOffset <= totalWidth && (
                 <div style={{ position: "absolute", left: todayOffset, top: 0, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", paddingBottom: 4, zIndex: 2 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#fff", fontWeight: 700, background: GANTT_TODAY_HEX, padding: "0 3px" }}>TODAY</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--on-accent)", fontWeight: 700, background: GANTT_TODAY_HEX, padding: "0 3px" }}>TODAY</span>
                 </div>
               )}
             </div>

@@ -18,6 +18,7 @@
 @import './styles/components.css';
 @import './styles/animations.css';
 @import './styles/responsive.css';
+@import './styles/tablet-kit.css';
 /* SteelBuild Dark — industrial dark theme. Self-contained, scoped under
  * .steelbuild-dark so it can't leak. Body wrapper class applied in
  * Layout.jsx. Token-mapping overlay below picks up new palette for

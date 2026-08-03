@@ -62,7 +62,13 @@ function saveFavorites(pages) {
 }
 
 // ── Component ───────────────────────────────────────────────────────
-export default function SidebarNav({ currentPageName, onNavigate, visible, variant = "default" }) {
+export default function SidebarNav({
+  currentPageName,
+  onNavigate,
+  visible,
+  variant = "default",
+  forceRail = false,
+}) {
   const { theme } = useTheme();
   const isLightTheme = theme === "light";
   // Settings → Dashboard → "Pinned Modules" merges into the sidebar favorites.
@@ -79,7 +85,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
   const [recents, setRecents]     = useState(loadRecents);
   const [showRecents, setShowRecents] = useState(true);
   const [favorites, setFavorites] = useState(loadFavorites);
-  const railMode = isLightTheme ? false : railModeState;
+  const railMode = forceRail ? true : (isLightTheme ? false : railModeState);
 
   // Recent-pages tracking — kept here so reloads remember the last
   // few pages you visited.
@@ -207,11 +213,12 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
       <DashboardReferenceSidebar
         currentPageName={currentPageName}
         onNavigate={onNavigate}
+        forceRail={forceRail}
       />
     );
   }
 
-  const width = isLightTheme ? 208 : (railMode ? 56 : 240);
+  const width = railMode ? 56 : (isLightTheme ? 208 : 240);
 
   return (
     <aside
@@ -236,69 +243,71 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
       )}
 
       {/* ── Top control strip (expand/collapse + rail toggle) ───────── */}
-      {<div
-        style={{
-          padding: railMode ? "12px 8px 8px" : "12px 14px 8px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: railMode ? "center" : "space-between",
-          gap: 6,
-          borderBottom: "1px solid var(--divider)",
-        }}
-      >
-        {!railMode && (
-          <button
-            onClick={toggleAll}
-            aria-label={anyExpanded ? "Collapse all groups" : "Expand all groups"}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "var(--font-mono)",
-              fontSize: 8,
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              color: "var(--text-muted)",
-              padding: "2px 4px",
-              borderRadius: 3,
-              transition: "color 140ms",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-          >
-            {anyExpanded ? "COLLAPSE" : "EXPAND"}
-          </button>
-        )}
-        <button
-          onClick={toggleRail}
-          title={railMode ? "Expand sidebar" : "Collapse to icons"}
-          aria-label={railMode ? "Expand sidebar" : "Collapse to icons"}
+      {!forceRail && (
+        <div
           style={{
-            width: 28, height: 28,
+            padding: railMode ? "12px 8px 8px" : "12px 14px 8px",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            background: "transparent",
-            border: "1px solid var(--border-default)",
-            borderRadius: 6,
-            cursor: "pointer",
-            color: "var(--text-muted)",
-            transition: "all 140ms",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "var(--accent)";
-            e.currentTarget.style.borderColor = "var(--accent-border)";
-            e.currentTarget.style.background = "var(--accent-muted)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "var(--text-muted)";
-            e.currentTarget.style.borderColor = "var(--border-default)";
-            e.currentTarget.style.background = "transparent";
+            justifyContent: railMode ? "center" : "space-between",
+            gap: 6,
+            borderBottom: "1px solid var(--divider)",
           }}
         >
-          {railMode ? <ChevronsRight size={14} strokeWidth={1.75} /> : <ChevronsLeft size={14} strokeWidth={1.75} />}
-        </button>
-      </div>}
+          {!railMode && (
+            <button
+              onClick={toggleAll}
+              aria-label={anyExpanded ? "Collapse all groups" : "Expand all groups"}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "var(--font-mono)",
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                color: "var(--text-muted)",
+                padding: "2px 4px",
+                borderRadius: 3,
+                transition: "color 140ms",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+            >
+              {anyExpanded ? "COLLAPSE" : "EXPAND"}
+            </button>
+          )}
+          <button
+            onClick={toggleRail}
+            title={railMode ? "Expand sidebar" : "Collapse to icons"}
+            aria-label={railMode ? "Expand sidebar" : "Collapse to icons"}
+            style={{
+              width: 28, height: 28,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "transparent",
+              border: "1px solid var(--border-default)",
+              borderRadius: 6,
+              cursor: "pointer",
+              color: "var(--text-muted)",
+              transition: "all 140ms",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "var(--accent)";
+              e.currentTarget.style.borderColor = "var(--accent-border)";
+              e.currentTarget.style.background = "var(--accent-muted)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "var(--text-muted)";
+              e.currentTarget.style.borderColor = "var(--border-default)";
+              e.currentTarget.style.background = "transparent";
+            }}
+          >
+            {railMode ? <ChevronsRight size={14} strokeWidth={1.75} /> : <ChevronsLeft size={14} strokeWidth={1.75} />}
+          </button>
+        </div>
+      )}
 
       {/* ── Global search trigger ──────────────────────────────── */}
       {!isLightTheme && <div style={{ padding: railMode ? "10px 8px 4px" : "10px 14px 4px" }}>
@@ -530,7 +539,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
                   }}
                   onMouseEnter={(e) => {
                     prefetchRoute(it.page);
-                    e.currentTarget.style.background = "var(--nav-hover-bg, rgba(255,255,255,0.04))";
+                    e.currentTarget.style.background = "var(--nav-hover-bg, var(--bg-hover))";
                     e.currentTarget.style.color = "var(--text-secondary)";
                   }}
                   onFocus={() => prefetchRoute(it.page)}
@@ -553,11 +562,12 @@ export default function SidebarNav({ currentPageName, onNavigate, visible, varia
   );
 }
 
-function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
+function DashboardReferenceSidebar({ currentPageName, onNavigate, forceRail = false }) {
   const [collapsed, setCollapsed] = useState(false);
   // Per-category collapse, persisted in the shared sidebar group state
   // (localStorage "sbp-nav-groups"). A missing/falsy entry means expanded.
   const [groupCollapsed, setGroupCollapsed] = useState(loadSidebarState);
+  const effectiveCollapsed = forceRail || collapsed;
 
   const toggleGroup = useCallback((label) => {
     setGroupCollapsed((prev) => {
@@ -588,7 +598,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
   };
 
   return (
-    <aside aria-label="Dashboard navigation" className={`sb-dashboard-reference-sidebar${collapsed ? " is-collapsed" : ""}`}>
+    <aside aria-label="Dashboard navigation" className={`sb-dashboard-reference-sidebar${effectiveCollapsed ? " is-collapsed" : ""}`}>
       <button
         type="button"
         className="sb-dashboard-reference-brand"
@@ -604,7 +614,7 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
           // sidebar which pins OVERVIEW open — so ignore group.collapsible.
           const isGroupCollapsed = !!groupCollapsed[group.label];
           // In rail (icon-only) mode show every item; headers are hidden via CSS.
-          const showItems = collapsed || !isGroupCollapsed;
+          const showItems = effectiveCollapsed || !isGroupCollapsed;
           return (
             <div key={group.label} className="sb-dashboard-reference-group">
               <button
@@ -631,15 +641,17 @@ function DashboardReferenceSidebar({ currentPageName, onNavigate }) {
           {React.createElement(PAGE_ICON.Settings || FallbackIcon, { size: 17, strokeWidth: 1.85 })}
           <span>Settings</span>
         </button>
-        <button
-          type="button"
-          className="sb-dashboard-reference-nav__item"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={() => setCollapsed((value) => !value)}
-        >
-          {collapsed ? <ChevronsRight size={17} strokeWidth={1.85} /> : <ChevronsLeft size={17} strokeWidth={1.85} />}
-          <span>{collapsed ? "Expand" : "Collapse"}</span>
-        </button>
+        {!forceRail && (
+          <button
+            type="button"
+            className="sb-dashboard-reference-nav__item"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={() => setCollapsed((value) => !value)}
+          >
+            {collapsed ? <ChevronsRight size={17} strokeWidth={1.85} /> : <ChevronsLeft size={17} strokeWidth={1.85} />}
+            <span>{collapsed ? "Expand" : "Collapse"}</span>
+          </button>
+        )}
         <div className="sb-dashboard-reference-copyright">
           © {new Date().getFullYear()} SteelBuild Pro, Inc.<br />
           All rights reserved.
@@ -803,7 +815,7 @@ function FavoriteLink({ item, active, onClick, onUnpin }) {
           gap: 10,
           background: active
             ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+            : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
           border: "none",
           borderRadius: 6,
           cursor: "pointer",
@@ -911,7 +923,7 @@ function FavoriteRailLink({ item, active, onClick }) {
           justifyContent: "center",
           background: active
             ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+            : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
           border: active
             ? "1px solid color-mix(in srgb, var(--accent) 40%, transparent)"
             : "1px solid transparent",
@@ -953,7 +965,7 @@ function FavoriteRailLink({ item, active, onClick }) {
             fontWeight: 600,
             color: "var(--text-primary)",
             whiteSpace: "nowrap",
-            boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+            boxShadow: "var(--shadow-lg)",
             zIndex: 1000,
             pointerEvents: "none",
           }}
@@ -1000,7 +1012,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
             justifyContent: "center",
             background: active
               ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-              : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+              : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
             border: active
               ? "1px solid color-mix(in srgb, var(--accent) 40%, transparent)"
               : "1px solid transparent",
@@ -1042,7 +1054,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
               fontWeight: 600,
               color: "var(--text-primary)",
               whiteSpace: "nowrap",
-              boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+              boxShadow: "var(--shadow-lg)",
               zIndex: 1000,
               pointerEvents: "none",
             }}
@@ -1076,7 +1088,7 @@ function SidebarLink({ item, active, railMode, onClick, isFavorite, onToggleFavo
           gap: 10,
           background: active
             ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-            : hovered ? "var(--nav-hover-bg, rgba(255,255,255,0.04))" : "transparent",
+            : hovered ? "var(--nav-hover-bg, var(--bg-hover))" : "transparent",
           border: "none",
           borderRadius: 6,
           cursor: "pointer",

@@ -140,7 +140,7 @@ function ApprovalPill({ approval }) {
   const tone =
     approval === "approved"
       ? {
-          color: "#10B981",
+          color: "var(--status-success)",
           background: "rgba(16,185,129,0.12)",
           border: "rgba(16,185,129,0.25)",
         }

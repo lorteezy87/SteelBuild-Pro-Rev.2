@@ -2,46 +2,40 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "../components/shared/ProjectContext";
-import { toUserErrorMessage, withProjectId } from "@/lib/mutations/standardMutation";
 import { toast } from "sonner";
-import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
+import { wpBudgetHoursForResource } from "@/lib/wpHoursForResource";
 import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
 import {
   addDays, snapToMonday, fmt,
   PHASE_COLORS, PX_PER_DAY,
-  GHOST_RESOURCES_SCHED,
-  extractSkillsRS, getRowCapacityBg,
   injectKeyframes,
-} from "./resourceScheduling/utils";
-import {
-  filterTopLevelResources,
-  buildMembersByParentId,
-  buildEffectiveCapacityById,
-  buildDisplayResources,
-  computeCapacitySummary,
-  computeTimelineWindow,
   getBarStyle as computeBarStyle,
   buildTimelineHeaders,
   buildMonthBanners,
-  filterWorkPackagesByPhase,
-  partitionScheduledWorkPackages,
-  filterFocusedDisplayResources,
-  computeScheduleStats,
   computeTodayOffset,
-  isShopWorkPackage,
-  toIsoDate,
-} from "./resourceScheduling/resourceSchedulingHelpers";
+  computeTimelineWindow,
+  computeCapacityFromWorkPackages,
+} from "./resourceScheduling/utils";
 import CapacityView from "./resourceScheduling/CapacityView";
 import NewResourceDialog from "./resourceScheduling/NewResourceDialog";
 import WPContextMenu from "./resourceScheduling/WPContextMenu";
 import TimelineHeaderRaw from "./resourceScheduling/TimelineHeader";
-import UnscheduledTray from "./resourceScheduling/UnscheduledTray";
 import ResourceRow from "./resourceScheduling/ResourceRow";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus } from "lucide-react";
 import { buildResourceGuruPlanning } from "@/lib/resourcePlanning";
-import { ResourceGuruCommandStrip } from "./resourceScheduling/components";
+import {
+  ResourceGuruCommandStrip,
+  SchedulingToolbar,
+  BoardEmptyState,
+  HoursSummaryStrip,
+  ResourcesSidebar,
+  DragTooltipOverlay,
+  HoverTooltipOverlay,
+  UndoToastBanner,
+} from "./resourceScheduling/components";
+import { buildScheduleStats } from "./resourceScheduling/format";
 
 // Only mounted while the edit dialog is open — keep it off the board's chunk.
 const ResourceFormModal = lazyWithRetry(() => import("@/components/resources/ResourceFormModal"));
@@ -79,17 +73,14 @@ export default function ResourceScheduling() {
   const [newRes, setNewRes] = useState(emptyNewRes);
 
   const createResMut = useMutation({
-    mutationFn: (data: any) => entities.Resource.create({
-      ...withProjectId(data as Record<string, unknown>, activeProject?.id),
-      project_name: activeProject?.name || "",
-    }),
+    mutationFn: (data: any) => entities.Resource.create({ ...data, project_id: activeProject?.id, project_name: activeProject?.name || "" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["resources"] });
       setShowNewResource(false);
       setNewRes(emptyNewRes);
       toast.success("Resource created");
     },
-    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Failed to create resource")),
+    onError: (err) => toast.error(err.message || "Failed to create resource"),
   });
 
   // The board could create resources but never edit them, so a resource added
@@ -103,7 +94,7 @@ export default function ResourceScheduling() {
       setEditingResource(null);
       toast.success("Resource updated");
     },
-    onError: (err: unknown) => toast.error(toUserErrorMessage(err, "Failed to update resource")),
+    onError: (err: any) => toast.error(err?.message || "Failed to update resource"),
   });
 
   // Data queries
@@ -134,23 +125,36 @@ export default function ResourceScheduling() {
   // members' capacities. Members can be toggled visible under the crew
   // row via the expand chevron.
   const topLevelResources = useMemo(
-    () => filterTopLevelResources(resources),
+    () => resources.filter(r => !r.parent_resource_id),
     [resources],
   );
-  const membersByParentId = useMemo(
-    () => buildMembersByParentId(resources),
-    [resources],
-  );
+  const membersByParentId = useMemo(() => {
+    const map = {};
+    for (const r of resources) {
+      if (r.parent_resource_id) {
+        (map[r.parent_resource_id] = map[r.parent_resource_id] || []).push(r);
+      }
+    }
+    return map;
+  }, [resources]);
 
   // Effective capacity = own + sum of direct children.
-  const effectiveCapacityById = useMemo(
-    () => buildEffectiveCapacityById(resources),
-    [resources],
-  );
+  const effectiveCapacityById = useMemo(() => {
+    const map = {};
+    for (const r of resources) {
+      map[r.id] = Number(r.capacity) || 0;
+    }
+    for (const r of resources) {
+      if (r.parent_resource_id && map[r.parent_resource_id] !== undefined) {
+        map[r.parent_resource_id] += Number(r.capacity) || 0;
+      }
+    }
+    return map;
+  }, [resources]);
 
   // Expand/collapse state for crew rows. Crew IDs in this set show their
   // members below the crew row.
-  const [expandedCrews, setExpandedCrews] = useState(() => new Set<string>());
+  const [expandedCrews, setExpandedCrews] = useState(() => new Set());
   const toggleCrew = useCallback((crewId) => {
     setExpandedCrews(prev => {
       const next = new Set(prev);
@@ -164,55 +168,62 @@ export default function ResourceScheduling() {
   // members indented underneath. Individual resources without a parent
   // appear as their own row, same as before. Members whose parent is
   // collapsed are hidden.
-  const displayResources = useMemo(
-    () => buildDisplayResources(topLevelResources, membersByParentId, expandedCrews),
-    [topLevelResources, membersByParentId, expandedCrews],
-  );
+  const displayResources = useMemo(() => {
+    const out = [];
+    for (const r of topLevelResources) {
+      const children = membersByParentId[r.id] || [];
+      out.push({ resource: r, isMember: false, hasMembers: children.length > 0, memberCount: children.length });
+      if (expandedCrews.has(r.id)) {
+        for (const c of children) out.push({ resource: c, isMember: true, hasMembers: false, memberCount: 0 });
+      }
+    }
+    return out;
+  }, [topLevelResources, membersByParentId, expandedCrews]);
 
   // Capacity view data (uses same workPackages query)
-  const capacity = useMemo(
-    () => computeCapacitySummary(workPackages),
-    [workPackages],
-  );
+  const capacity = useMemo(() => computeCapacityFromWorkPackages(workPackages), [workPackages]);
 
-  // Calculate timeline window from actual WP scheduling dates.
-  // scheduled_start_date / scheduled_end_date were added in migration 042.
-  // released_date is kept as a fallback start (the date the package was
-  // released to the shop) so legacy WPs without a scheduling window still
-  // anchor the timeline.
-  const { timelineStart, timelineEnd, totalDays } = useMemo(
+  const { timelineStart, timelineEnd } = useMemo(
     () => computeTimelineWindow(workPackages),
     [workPackages],
   );
 
   const pxPerDay = PX_PER_DAY[zoomMode];
 
-  // Calculate bar position
   const getBarStyle = useCallback(
     (wp: any) => computeBarStyle(wp, timelineStart, pxPerDay),
     [timelineStart, pxPerDay],
   );
 
   const headers = useMemo(
-    () => buildTimelineHeaders({ zoomMode, timelineStart, timelineEnd, pxPerDay }),
+    () => buildTimelineHeaders(zoomMode, timelineStart, timelineEnd, pxPerDay),
     [zoomMode, timelineStart, timelineEnd, pxPerDay],
   );
 
-  // Build month banners for month view
   const monthBanners = useMemo(
     () => buildMonthBanners(zoomMode, headers),
     [zoomMode, headers],
   );
 
   // Filter WPs
-  const filteredWorkPackages = useMemo(
-    () => filterWorkPackagesByPhase(workPackages, filterPhase),
-    [workPackages, filterPhase],
-  );
+  const filteredWorkPackages = useMemo(() => {
+    return workPackages.filter((wp) => {
+      const phaseMatch = filterPhase === "all" || wp.phase === filterPhase;
+      return phaseMatch;
+    });
+  }, [workPackages, filterPhase]);
 
   // Separate scheduled vs unscheduled
-  const { scheduled: scheduledWps, unscheduled: unscheduledWps } = useMemo(
-    () => partitionScheduledWorkPackages(filteredWorkPackages),
+  const scheduledWps = useMemo(
+    () => filteredWorkPackages.filter(
+      (wp) => (wp.scheduled_start_date || wp.released_date) && wp.scheduled_end_date
+    ),
+    [filteredWorkPackages],
+  );
+  const unscheduledWps = useMemo(
+    () => filteredWorkPackages.filter(
+      (wp) => !(wp.scheduled_start_date || wp.released_date) || !wp.scheduled_end_date
+    ),
     [filteredWorkPackages],
   );
 
@@ -226,22 +237,21 @@ export default function ResourceScheduling() {
     [effectiveCapacityById, filteredWorkPackages, resources, scheduledWps],
   );
 
-  const focusedDisplayResources = useMemo(
-    () => filterFocusedDisplayResources(
-      displayResources,
-      resourceFocus,
-      resourceGuruPlan.rowById,
-    ),
-    [displayResources, resourceFocus, resourceGuruPlan.rowById],
-  );
+  const focusedDisplayResources = useMemo(() => {
+    if (resourceFocus === "all") return displayResources;
+    return displayResources.filter((entry) => {
+      const row = resourceGuruPlan.rowById.get(entry.resource.id);
+      if (!row) return resourceFocus === "all";
+      if (resourceFocus === "personnel") return row.isPersonnel;
+      if (resourceFocus === "equipment") return row.isEquipment;
+      if (resourceFocus === "available") return !row.unavailable && row.remainingHours > 0;
+      if (resourceFocus === "issues") return row.overAllocated || row.unavailable || row.nearCapacity;
+      return true;
+    });
+  }, [displayResources, resourceFocus, resourceGuruPlan.rowById]);
 
   const scheduleStats = useMemo(
-    () => computeScheduleStats({
-      filteredWorkPackages,
-      scheduledWps,
-      topLevelResources,
-      effectiveCapacityById,
-    }),
+    () => buildScheduleStats(filteredWorkPackages, scheduledWps, topLevelResources, effectiveCapacityById),
     [filteredWorkPackages, scheduledWps, topLevelResources, effectiveCapacityById],
   );
 
@@ -429,7 +439,7 @@ export default function ResourceScheduling() {
       const wp = workPackages.find((w) => w.id === d.wpId);
       const totalHrs = Number(wp?.shop_hours_budget) || Number(wp?.field_hours_budget) || 0;
       const dailyLoad = totalHrs > 0 ? (totalHrs / durationDays).toFixed(1) : null;
-      const isShop = isShopWorkPackage(wp);
+      const isShop = (wp as any)?.location === "Shop" || wp?.phase === "Fabrication" || wp?.phase === "Detailing";
 
       setDragTooltip({
         x: e.clientX,
@@ -479,7 +489,7 @@ export default function ResourceScheduling() {
     // field_hours_budget, field_hours_actual. Scheduling dates are on
     // scheduled_start_date / scheduled_end_date (migration 042).
     const droppedWp = workPackages.find((w) => w.id === d.wpId);
-    const isShop = isShopWorkPackage(droppedWp);
+    const isShop = (droppedWp as any)?.location === "Shop" || droppedWp?.phase === "Fabrication" || droppedWp?.phase === "Detailing";
     const totalEstHrs = Number(droppedWp?.shop_hours_budget) || Number(droppedWp?.field_hours_budget) || 0;
     const autoHours: Record<string, any> = {};
     if (totalEstHrs > 0) {
@@ -493,8 +503,9 @@ export default function ResourceScheduling() {
     // Compute the new scheduling window. newStart comes from the drop
     // position above; newEnd was already computed on line ~551 from
     // newStart + d.durationMs. Reuse both here.
-    const newStartISO = toIsoDate(newStart);
-    const newEndISO   = toIsoDate(newEnd);
+    const iso = (dt) => dt.toISOString().split("T")[0];
+    const newStartISO = iso(newStart);
+    const newEndISO   = iso(newEnd);
 
     // Handle new assignment from unscheduled pool
     if (d.isNewAssignment) {
@@ -628,7 +639,6 @@ export default function ResourceScheduling() {
     };
   };
 
-  // Today line offset - normalize both dates to midnight to avoid DST errors
   const todayOffset = computeTodayOffset(timelineStart, pxPerDay);
 
   // Auto-scroll to today when the board mounts or timeline changes
@@ -666,79 +676,14 @@ export default function ResourceScheduling() {
     >
       {/* TOOLBAR */}
       <OpsFilterPanel>
-        {/* View toggle */}
-        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
-          {[{ id: "board", label: "Board" }, { id: "capacity", label: "Capacity" }].map(v => (
-            <button key={v.id} onClick={() => setViewMode(v.id)} style={{
-              padding: "6px 12px",
-              border: "none",
-              borderRight: v.id !== "capacity" ? "1px solid var(--border-default)" : "none",
-              background: viewMode === v.id ? "var(--accent-muted)" : "transparent",
-              color: viewMode === v.id ? "var(--accent)" : "var(--text-secondary)",
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-            }}>{v.label}</button>
-          ))}
-        </div>
-
-        {/* Zoom buttons */}
-        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
-          {["week", "month", "quarter"].map((mode, i) => (
-            <button
-              key={mode}
-              onClick={() => setZoomMode(mode)}
-              style={{
-                padding: "6px 12px",
-                border: "none",
-                borderRight: i < 2 ? "1px solid var(--border-default)" : "none",
-                background: zoomMode === mode ? "var(--accent-muted)" : "transparent",
-                color: zoomMode === mode ? "var(--accent)" : "var(--text-secondary)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                cursor: "pointer",
-                textTransform: "uppercase",
-              }}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-
-        {/* Phase filters */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          {["all", "Detailing", "Fabrication", "Delivery", "Erection"].map((p) => {
-            const phaseColor =
-              p === "Detailing"   ? "var(--phase-detailing)"   :
-              p === "Fabrication" ? "var(--phase-fabrication)" :
-              p === "Delivery"    ? "var(--phase-delivery)"    :
-              p === "Erection"    ? "var(--phase-erection)"    :
-                                    "var(--accent)";
-            const active = filterPhase === p;
-            return (
-              <button
-                key={p}
-                onClick={() => setFilterPhase(p)}
-                style={{
-                  padding: "5px 10px",
-                  borderRadius: 6,
-                  border: active ? `1px solid ${phaseColor}` : "1px solid var(--border-default)",
-                  background: active ? "color-mix(in srgb, " + phaseColor + " 14%, transparent)" : "transparent",
-                  color: active ? phaseColor : "var(--text-muted)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-              >
-                {p === "all" ? "All Phases" : p}
-              </button>
-            );
-          })}
-        </div>
+        <SchedulingToolbar
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          zoomMode={zoomMode}
+          onZoomModeChange={setZoomMode}
+          filterPhase={filterPhase}
+          onFilterPhaseChange={setFilterPhase}
+        />
       </OpsFilterPanel>
 
       <ResourceGuruCommandStrip
@@ -780,236 +725,20 @@ export default function ResourceScheduling() {
       <>
       {/* HERO EMPTY STATE ? no resources or WPs yet */}
       {resources.length === 0 && workPackages.length === 0 && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 40 }}>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            No Resources Assigned
-          </div>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-muted)", maxWidth: 380, textAlign: "center", lineHeight: 1.7 }}>
-            Add crew, equipment, and work packages to start building your resource schedule. Drag work packages onto resources to assign them.
-          </div>
-
-          {/* Ghost placeholder rows */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", maxWidth: 520, marginTop: 8 }}>
-            {GHOST_RESOURCES_SCHED.map((ghost, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "12px 16px",
-                  background: "var(--bg-surface-low)",
-                  border: "1px dashed var(--bg-surface-high)",
-                  borderRadius: "var(--radius-card)",
-                  animation: "rsGhostShimmer 2.5s ease-in-out infinite",
-                  animationDelay: `${i * 0.35}s`,
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-disabled)" }}>{ghost.name}</div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-disabled)", marginTop: 2 }}>{ghost.role}</div>
-                </div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {ghost.skills.map((s) => (
-                    <span key={s} style={{
-                      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 600,
-                      color: "var(--text-disabled)", background: "var(--hover-bg)",
-                      border: "1px solid var(--divider)", borderRadius: 10,
-                      padding: "2px 7px", textTransform: "uppercase", letterSpacing: "0.04em",
-                    }}>{s}</span>
-                  ))}
-                </div>
-                <div style={{
-                  width: 100, height: 20, borderRadius: 4,
-                  background: "var(--hover-bg)", border: "1px dashed var(--divider)",
-                }} />
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-            <button
-              onClick={() => setShowNewResource(true)}
-              style={{
-                background: "var(--accent)", color: "var(--bg-base)", border: "none",
-                borderRadius: "var(--radius-btn)", padding: "10px 24px",
-                fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700,
-                cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
-                minHeight: 44, transition: "background 0.15s, box-shadow 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-glow-gold)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.boxShadow = "none"; }}
-            >
-              + Add First Resource
-            </button>
-          </div>
-        </div>
+        <BoardEmptyState onAddResource={() => setShowNewResource(true)} />
       )}
-      {/* HOURS SUMMARY STRIP */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8,
-        padding: "8px 16px", borderBottom: "1px solid var(--divider)",
-        background: "var(--bg-page)", flexShrink: 0,
-      }}>
-        {(() => {
-          // Phase-aware totals: each WP contributes only its phase-relevant
-          // hours bucket, so shop + field WPs don't double-count at the
-          // portfolio stat.
-          const totalBudgetHrs = filteredWorkPackages.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-          const totalActualHrs = filteredWorkPackages.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
-          const totalShopBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0), 0);
-          const totalShopActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0), 0);
-          const totalFieldBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_budget) || 0), 0);
-          const totalFieldActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_actual) || 0), 0);
-          const assignedWPCount = scheduledWps.filter(wp => wp.crew).length;
-          const unassignedCount = filteredWorkPackages.filter(wp => !wp.crew).length;
-          // Count how many top-level resources are over-allocated. Over-
-          // alloc = assigned WP budget > effective capacity (rollup from
-          // crew members when applicable). Uses phase-aware hour bucketing
-          // so a field crew isn't charged for a WP's shop hours and vice
-          // versa.
-          const overAllocatedResources = topLevelResources.filter(res => {
-            const resWPs = scheduledWps.filter(wp => wp.crew === res.name);
-            const resBudget = resWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-            const effCap = effectiveCapacityById[res.id] || 0;
-            return effCap > 0 && resBudget > effCap;
-          }).length;
-          return [
-            { label: "TOTAL ESTIMATED", value: totalBudgetHrs.toLocaleString() + "h", color: "var(--accent)" },
-            { label: "TOTAL ACTUAL", value: totalActualHrs.toLocaleString() + "h", color: totalActualHrs > totalBudgetHrs ? "var(--status-error)" : "var(--status-success)" },
-            { label: "SHOP HRS", value: `${totalShopActual.toLocaleString()} / ${totalShopBudget.toLocaleString()}`, color: totalShopActual > totalShopBudget ? "var(--status-error)" : "var(--text-secondary)" },
-            { label: "FIELD HRS", value: `${totalFieldActual.toLocaleString()} / ${totalFieldBudget.toLocaleString()}`, color: totalFieldActual > totalFieldBudget ? "var(--status-error)" : "var(--text-secondary)" },
-            { label: "ASSIGNED / TOTAL", value: `${assignedWPCount} / ${filteredWorkPackages.length} WPs`, color: unassignedCount > 0 ? "var(--status-warning)" : "var(--status-success)" },
-            { label: "OVER-ALLOCATED", value: overAllocatedResources, color: overAllocatedResources > 0 ? "var(--status-error)" : "var(--status-success)" },
-          ].map(({ label, value, color }) => {
-            const isOverAlloc = label === "OVER-ALLOCATED" && (value as number) > 0;
-            return (
-              <div key={label} style={{
-                padding: "6px 10px", background: "var(--hover-bg)", borderRadius: 6,
-                border: isOverAlloc ? "1px solid rgba(239,68,68,0.35)" : "1px solid var(--hover-bg)",
-                animation: isOverAlloc ? "rsOverAllocPulse 2s ease-in-out infinite" : undefined,
-                transition: "border-color 0.2s",
-              }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color }}>{value}</div>
-              </div>
-            );
-          });
-        })()}
-      </div>
+      <HoursSummaryStrip stats={scheduleStats} />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* LEFT PANEL ? Allocation & Unscheduled */}
-        <div
-          style={{
-            width: 260,
-            background: "var(--bg-page)",
-            borderRight: "1px solid var(--border-default)",
-            padding: "12px",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "auto",
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              color: "var(--status-warning)",
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              marginBottom: 12,
-              fontWeight: 700,
-            }}
-          >
-            RESOURCES
-          </div>
-
-          {["Person", "Crew", "Labor", "Equipment", "Subcontractor", "Material", "Bay"].map(type => {
-            // Only show top-level resources in the capacity stack - members
-            // are rolled up into their crew's effective capacity.
-            const typeResources = topLevelResources.filter(r => (r.resource_type || "Person") === type);
-            if (typeResources.length === 0) return null;
-            return (
-              <div key={type}>
-                <div style={{
-                  fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-                    letterSpacing: "0.14em", textTransform: "uppercase", padding: "8px 0 4px",
-                  borderBottom: "1px solid var(--border-default)", marginBottom: 6,
-                }}>
-                  {type} ({typeResources.length})
-                </div>
-                {typeResources.map(res => {
-                  const assignedWPs = scheduledWps.filter(wp => wp.crew === res.name);
-                  const resBudgetHrs = assignedWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-                  const resActualHrs = assignedWPs.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
-                  const resBurnPct = resBudgetHrs > 0 ? Math.round((resActualHrs / resBudgetHrs) * 100) : 0;
-                  const isOverBudget = resActualHrs > resBudgetHrs && resBudgetHrs > 0;
-                  // Effective capacity = own + sum of direct members' capacities
-                  const resBudgetFromEntity = effectiveCapacityById[res.id] || 0;
-                  const isOverAllocated = resBudgetFromEntity > 0 && resBudgetHrs > resBudgetFromEntity;
-                  const resSkills = extractSkillsRS(res);
-                  const memberCount = (membersByParentId[res.id] || []).length;
-                  const heatBg = getRowCapacityBg(resBurnPct, isOverAllocated);
-                  return (
-                    <div key={res.id} style={{
-                      background: isOverAllocated ? "rgba(239,68,68,0.06)" : heatBg !== "transparent" ? heatBg : "var(--bg-surface-low)",
-                      border: isOverAllocated ? "1px solid rgba(239,68,68,0.20)" : "1px solid var(--divider)",
-                      borderRadius: 8, padding: 8, marginBottom: 8,
-                      transition: "background 0.2s, border-color 0.2s",
-                    }}>
-                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 600, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
-                        {res.name}
-                        {memberCount > 0 && (
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em" }}>
-                            · {memberCount} MEMBER{memberCount === 1 ? "" : "S"}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-                        {res.role || "\u2014"}
-                      </div>
-                      {/* Skill tag badges */}
-                      {resSkills.length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
-                          {resSkills.map((sk, si) => (
-                            <span key={si} style={{
-                              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
-                              color: "var(--text-secondary)", background: "var(--hover-bg)",
-                              border: "1px solid var(--bg-surface-high)", borderRadius: 8,
-                              padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
-                            }}>{sk}</span>
-                          ))}
-                        </div>
-                      )}
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, marginTop: 4, color: isOverBudget ? "var(--status-error)" : "var(--text-muted)", letterSpacing: "0.06em" }}>
-                        {resBudgetHrs}h bud {"\u00B7"} {resActualHrs}h act {"\u00B7"} {resBurnPct}%
-                      </div>
-                      <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--border-default)", marginTop: 3 }}>
-                        <div style={{ width: `${Math.min(100, resBurnPct)}%`, height: "100%", borderRadius: 2, background: resBurnPct > 100 ? "var(--status-error)" : resBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
-                      </div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
-                        {assignedWPs.length} WPs {"\u00B7"} {assignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0)}T
-                      </div>
-                      {isOverAllocated && (
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "2px 6px", marginTop: 4, letterSpacing: "0.08em" }}>
-                        {"\u26A0"} OVER-ALLOC ({resBudgetHrs}h / {resBudgetFromEntity}h cap)
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-
-          <UnscheduledTray
-            unscheduledWps={unscheduledWps}
-            onPointerDown={onUnscheduledPointerDown}
-            onOpenContextMenu={setContextMenu}
-          />
-        </div>
+        <ResourcesSidebar
+          topLevelResources={topLevelResources}
+          scheduledWps={scheduledWps}
+          effectiveCapacityById={effectiveCapacityById}
+          membersByParentId={membersByParentId}
+          unscheduledWps={unscheduledWps}
+          onUnscheduledPointerDown={onUnscheduledPointerDown}
+          onOpenContextMenu={setContextMenu}
+        />
 
         {/* RIGHT PANEL ? Timeline Board */}
         <div
@@ -1074,62 +803,8 @@ export default function ResourceScheduling() {
         </div>
       </div>
 
-      {/* Drag Tooltip */}
-      {dragTooltip && (
-        <div
-          style={{
-            position: "fixed",
-            left: dragTooltip.x,
-            top: dragTooltip.y,
-            transform: "translateX(-50%)",
-            background: "var(--bg-surface-low)",
-            border: "1px solid rgba(245,158,11,0.5)",
-            borderRadius: 6,
-            padding: "4px 12px",
-            fontSize: 10,
-            fontFamily: "var(--font-mono)",
-            color: "var(--status-warning)",
-            fontWeight: 700,
-            pointerEvents: "none",
-            zIndex: 10001,
-            whiteSpace: "nowrap",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.7)",
-          }}
-        >
-          {dragTooltip.text}
-          {dragTooltip.subText && (
-            <div style={{ fontSize: 9, fontWeight: 500, color: "var(--text-secondary)", marginTop: 2, letterSpacing: "0.03em" }}>
-              {dragTooltip.subText}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Hover Tooltip */}
-      {hoverTooltip && (
-        <div style={{
-          position: "fixed", left: hoverTooltip.x, top: hoverTooltip.y,
-          transform: "translate(-50%, -100%)", background: "var(--bg-surface-low)",
-          border: "1px solid rgba(var(--accent-rgb, 59,130,246),0.25)", borderRadius: 8,
-          padding: "10px 14px", zIndex: 10001, pointerEvents: "none",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.7)", minWidth: 200,
-        }}>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
-            {hoverTooltip.wp.wp_number} — {hoverTooltip.wp.name}
-          </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-secondary)", lineHeight: 1.8 }}>
-            Phase: {hoverTooltip.wp.phase} {"\u00B7"} Status: {hoverTooltip.wp.status}<br/>
-            Tonnage: {hoverTooltip.wp.tonnage || 0}T {"\u00B7"} Progress: {hoverTooltip.wp.percent_complete || 0}%<br/>
-            Shop: {hoverTooltip.shopAct}h / {hoverTooltip.shopBud}h {"\u00B7"} Field: {hoverTooltip.fieldAct}h / {hoverTooltip.fieldBud}h<br/>
-            <span style={{ color: hoverTooltip.totalAct > hoverTooltip.totalBud ? "var(--status-error-bright)" : "var(--status-success-bright)", fontWeight: 700 }}>
-              Total: {hoverTooltip.totalAct}h / {hoverTooltip.totalBud}h ({hoverTooltip.totalBud > 0 ? Math.round((hoverTooltip.totalAct / hoverTooltip.totalBud) * 100) : 0}%)
-            </span>
-            {hoverTooltip.totalBud > 0 && (
-              <><br/><span style={{ color: "var(--accent)", fontWeight: 600 }}>{"\u2248"} {hoursToWorkdays(hoverTooltip.totalBud)} workdays</span></>
-            )}
-          </div>
-        </div>
-      )}
+      <DragTooltipOverlay tooltip={dragTooltip} />
+      <HoverTooltipOverlay tooltip={hoverTooltip} />
 
       {/* Context Menu */}
       <WPContextMenu
@@ -1143,27 +818,7 @@ export default function ResourceScheduling() {
         }}
       />
 
-      {/* Undo Toast */}
-      {undoToast && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 20,
-            left: 20,
-            background: "var(--bg-surface-low)",
-            border: "1px solid rgba(0,214,143,0.30)",
-            borderRadius: 8,
-            padding: "10px 14px",
-            fontSize: 11,
-            fontFamily: "var(--font-body)",
-            color: "var(--status-success)",
-            zIndex: 9998,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
-          }}
-        >
-          ✓ {undoToast.message}
-        </div>
-      )}
+      <UndoToastBanner toast={undoToast} />
       </>
       )}
     </OperationsPageShell>

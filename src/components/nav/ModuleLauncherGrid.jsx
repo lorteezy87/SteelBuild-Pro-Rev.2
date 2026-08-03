@@ -45,7 +45,7 @@ export default function ModuleLauncherGrid({ open, onClose, onNavigate }) {
         background: "var(--bg-surface-secondary)",
         border: "1px solid color-mix(in srgb, var(--accent) 34%, var(--border-default))",
         borderRadius: "var(--radius-card)",
-        boxShadow: "0 28px 80px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06)",
+        boxShadow: "var(--shadow-lg)",
         zIndex: 3000, overflow: "hidden", display: "flex", flexDirection: "column",
       }}
     >
@@ -111,9 +111,9 @@ function LauncherTile({ module, onNavigate, onClose }) {
       aria-label={`Open ${module.label}`}
       style={{
         position: "relative", aspectRatio: "1 / 1", borderRadius: 10, overflow: "hidden",
-        border: "1px solid rgba(255,255,255,0.12)", cursor: "pointer", padding: 0, color: "#fff",
-        background: "linear-gradient(150deg, #2a3548 0%, #141c26 55%, #0a0e15 100%)",
-        boxShadow: "0 3px 10px rgba(0,0,0,0.35)", transition: "transform 0.12s ease, box-shadow 0.12s ease",
+        border: "1px solid color-mix(in srgb, var(--text-primary) 12%, transparent)", cursor: "pointer", padding: 0, color: "var(--text-primary)",
+        background: "linear-gradient(150deg, var(--bg-surface-high, var(--bg-surface-secondary)) 0%, var(--bg-elevated, var(--bg-surface)) 55%, var(--bg-base) 100%)",
+        boxShadow: "var(--shadow-card)", transition: "transform 0.12s ease, box-shadow 0.12s ease",
       }}
       onMouseDown={(e) => { e.currentTarget.style.transform = "scale(0.97)"; }}
       onMouseUp={(e) => { e.currentTarget.style.transform = ""; }}
@@ -140,12 +140,12 @@ function LauncherTile({ module, onNavigate, onClose }) {
           style={{
             position: "absolute",
             inset: 0,
-            background: "linear-gradient(180deg, rgba(8,12,18,0.12) 0%, rgba(8,12,18,0.45) 100%)",
+            background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-base) 12%, transparent) 0%, color-mix(in srgb, var(--bg-base) 45%, transparent) 100%)",
           }}
         />
       )}
       <span style={{ position: "absolute", top: 6, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
-        <Icon size={20} strokeWidth={1.7} color="#fff" aria-hidden="true" style={{ filter: "drop-shadow(0 1px 4px rgba(0,0,0,1))" }} />
+        <Icon size={20} strokeWidth={1.7} color="var(--text-primary)" aria-hidden="true" style={{ filter: "drop-shadow(0 1px 4px var(--bg-base))" }} />
       </span>
       <span
         style={{
@@ -153,13 +153,13 @@ function LauncherTile({ module, onNavigate, onClose }) {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(9,13,19,0.92)",
-          borderTop: "1px solid rgba(255,255,255,0.14)",
+          background: "color-mix(in srgb, var(--bg-elevated, var(--bg-surface)) 94%, transparent)",
+          borderTop: "1px solid var(--border-default)",
           padding: "4px 5px 5px",
           textAlign: "center",
         }}
       >
-        <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", lineHeight: 1.15 }}>{module.label}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.15 }}>{module.label}</span>
       </span>
     </button>
   );

@@ -33,9 +33,13 @@ export default function SecureDeleteDialog({
   const authCtx = useContext(AuthContext);
   const userEmail = authCtx?.user?.email ?? null;
   const [typed, setTyped] = useState('');
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
-    if (open) setTyped('');
+    if (open) {
+      setTyped('');
+      setConfirming(false);
+    }
   }, [open]);
 
   if (!open) return null;
@@ -44,18 +48,25 @@ export default function SecureDeleteDialog({
   const allowed    = allowedOverride ?? can(permAction);
   const isOwner    = !record?.created_by || record.created_by === userEmail;
   const typeOk     = !requireTyped || typed.trim() === typedValue;
-  const canConfirm = allowed && typeOk;
+  const canConfirm = allowed && typeOk && !confirming;
 
-  const handleConfirm = () => {
-    if (!canConfirm) return;
+  const handleConfirm = async () => {
+    if (!canConfirm || confirming) return;
     logAction(permAction, {
       entityTitle: title,
       recordId:    record?.id,
       recordOwner: record?.created_by,
       typedValue:  requireTyped ? typedValue : undefined,
     });
-    onConfirm();
-    onClose();
+    // Await the mutation so a failed archive cannot close the dialog and look
+    // briefly deleted while the underlying row stays live.
+    setConfirming(true);
+    try {
+      await onConfirm();
+      onClose();
+    } finally {
+      setConfirming(false);
+    }
   };
 
   const handleKey = (e) => {
@@ -219,9 +230,9 @@ export default function SecureDeleteDialog({
             className="sbd-btn"
             style={S.deleteBtn}
             onClick={handleConfirm}
-            disabled={!canConfirm}
+            disabled={!canConfirm || confirming}
           >
-            {confirmLabel}
+            {confirming ? "WORKING…" : confirmLabel}
           </button>
         </div>
 

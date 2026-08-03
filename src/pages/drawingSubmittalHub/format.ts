@@ -11,18 +11,18 @@ import type { CurrentRevisionInfo, Drawing, DrawingRevision, DrawingSet, DueInfo
 // ── Design-system tokens ──────────────────────────────────────────────────
 // Use the SAME CSS custom-property names as the rest of the app (Submittals,
 // Drawings, RFIs, etc.).
-export const accent = "var(--accent)";
-export const surface1 = "var(--bg-surface-low)";
-export const surface2 = "var(--bg-surface-high)";
-export const border = "var(--border-default)";
-export const textPrimary = "var(--text-primary)";
-export const textMuted = "var(--text-muted)";
+export const accent = "var(--cmd-gold)";
+export const surface1 = "var(--cmd-surface)";
+export const surface2 = "var(--cmd-row-hover)";
+export const border = "var(--cmd-border)";
+export const textPrimary = "var(--cmd-text)";
+export const textMuted = "var(--cmd-text-muted)";
 export const mono = "var(--font-mono)";
-export const success = "var(--status-success)";
-export const warning = "var(--status-warning)";
-export const error = "var(--status-error)";
-export const info = "var(--status-info)";
-export const review = "var(--status-review)";
+export const success = "var(--cmd-good)";
+export const warning = "var(--cmd-warn)";
+export const error = "var(--cmd-danger)";
+export const info = "var(--cmd-info)";
+export const review = "var(--cmd-review)";
 
 export const TABS = [
   { key: "overview", label: "Control Board", icon: Gauge },
@@ -35,6 +35,7 @@ export const TABS = [
 ];
 
 // ── Status colors for matrix ───────────────────────────────────────────────
+// semantic submittal workflow hues — allowlisted for status identity in matrix chips.
 export const STATUS_COLORS: Record<string, string> = {
   Draft:                 "#64748b",
   Submitted:             "#3b82f6",
@@ -687,6 +688,7 @@ export function getStatusColor(status: string): string {
 
 // Colors for the coalesced OPERATIONAL state vocabulary (drafting + release
 // states; the submittal stages IFA..Released reuse the canonical STAGE_MAP).
+// semantic detailing/release workflow hues — allowlisted for operational-state identity.
 const OPERATIONAL_STATE_COLORS: Record<string, string> = {
   "Not Started":          "#64748b", // slate
   "In Detailing":         "#64748b", // slate
@@ -739,11 +741,11 @@ export function fmtDate(d: any): string {
  * there is no drawing-date fallback to exclude here. Defaults false so the
  * canonical read model retains calendar-day behavior.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function buildApprovalMatrixRows(drawingSets: any[], submittals: any[], search = "", useWorkdays = false): any[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const activeSubmittals = (submittals || []).filter((s: any) => !s.is_deleted);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const setSubmittalMap: Record<string, any[]> = {};
   for (const sub of activeSubmittals) {
     const setIds = Array.isArray(sub.drawing_set_ids) ? sub.drawing_set_ids : [];
@@ -788,7 +790,7 @@ export interface ApprovalMatrixSummary {
  * Approved as Noted / Released for Fabrication), rejected (Rejected / Revise and
  * Resubmit), else pending; plus no-submittal and overdue/due-soon tallies.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function summarizeApprovalMatrix(matrixRows: any[]): ApprovalMatrixSummary {
   let noSubmittal = 0, pending = 0, approved = 0, rejected = 0, overdue = 0, dueSoon = 0;
   for (const row of matrixRows || []) {

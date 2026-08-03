@@ -95,13 +95,13 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
           // Use an OPAQUE surface token. In .steelbuild-dark, --bg-surface
           // resolves to a translucent value (rgba white ~0.035), which made
           // this modal render see-through over the dialog scrim (appeared
-          // blank/unclickable). --bg-surface-secondary stays opaque (#161B22
-          // dark / #F8FAFC light) — matching the default DialogContent face.
+          // blank/unclickable). --bg-surface-secondary stays opaque in
+          // both themes — matching the default DialogContent face.
           background: 'var(--bg-surface-secondary)',
           color: 'var(--text-primary)',
           borderRadius: 14,
           border: '1px solid var(--accent-border)',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.8)'
+          boxShadow: 'var(--shadow-card)'
         }}>
 
         <DialogHeader>
@@ -183,10 +183,10 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                   appearance: 'none',
                   WebkitAppearance: 'none',
                   MozAppearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%233B82F6'/%3E%3C/svg%3E")`,
+                  backgroundImage: 'linear-gradient(45deg, transparent 50%, var(--accent) 50%), linear-gradient(135deg, var(--accent) 50%, transparent 50%)',
                   backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 10px center',
-                  backgroundSize: '10px 6px',
+                  backgroundPosition: 'calc(100% - 14px) 50%, calc(100% - 9px) 50%',
+                  backgroundSize: '5px 5px, 5px 5px',
                   boxSizing: 'border-box'
                 }}>
 
@@ -383,7 +383,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               border: '1px solid var(--border-default)',
               borderRadius: 8,
               padding: '8px 12px',
-              color: variance > 0 ? '#FF1744' : '#00E676',
+              color: variance > 0 ? 'var(--status-error)' : 'var(--status-success)',
               fontFamily: 'var(--font-body)',
               fontSize: 12
             }}>
@@ -408,7 +408,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               border: '1px solid var(--border-default)',
               borderRadius: 8,
               padding: '8px 12px',
-              color: pctUsed > 100 ? '#FF1744' : 'var(--text-primary)',
+              color: pctUsed > 100 ? 'var(--status-error)' : 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
               fontSize: 12
             }}>

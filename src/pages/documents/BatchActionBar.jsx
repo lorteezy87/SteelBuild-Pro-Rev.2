@@ -33,8 +33,8 @@ export default function BatchActionBar({
       alignItems: "center",
       gap: 10,
       padding: "10px 16px",
-      background: "rgba(16,185,129,0.06)",
-      border: "1px solid rgba(16,185,129,0.20)",
+      background: "var(--success-muted)",
+      border: "1px solid var(--success-border)",
       borderRadius: 10,
       animation: "fadeIn 0.15s ease-out",
     }}>
@@ -57,7 +57,7 @@ export default function BatchActionBar({
         <button
           onClick={() => setStatusOpen((o) => !o)}
           disabled={isSettingStatus}
-          style={batchBtnStyle("rgba(59,130,246,0.10)", "rgba(59,130,246,0.25)", "#3b82f6")}
+          style={batchBtnStyle("var(--info-muted)", "var(--info-border)", "var(--status-info)")}
         >
           SET STATUS <ChevronDown size={10} />
         </button>
@@ -75,7 +75,7 @@ export default function BatchActionBar({
               borderRadius: 8,
               padding: 4,
               minWidth: 180,
-              boxShadow: "0 12px 32px rgba(0,0,0,0.60)",
+              boxShadow: "var(--shadow-lg)",
             }}>
               {BATCH_STATUS_OPTIONS.map((s) => (
                 <button
@@ -104,7 +104,7 @@ export default function BatchActionBar({
         )}
       </div>
 
-      <button onClick={onBulkDownload} style={batchBtnStyle("rgba(13,148,136,0.10)", "rgba(13,148,136,0.25)", "#0d9488")}>
+      <button onClick={onBulkDownload} style={batchBtnStyle("var(--accent-muted)", "var(--accent-border)", "var(--accent)")}>
         <Download size={12} /> DOWNLOAD
       </button>
 
@@ -117,18 +117,18 @@ export default function BatchActionBar({
       )}
 
       {!confirmBulkDelete ? (
-        <button onClick={onBulkDelete} style={batchBtnStyle("rgba(239,68,68,0.08)", "rgba(239,68,68,0.25)", "#ef4444")}>
+        <button onClick={onBulkDelete} style={batchBtnStyle("var(--danger-muted)", "var(--danger-border)", "var(--status-error)")}>
           <Trash2 size={12} /> DELETE
         </button>
       ) : (
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#ef4444", fontWeight: 700 }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-error)", fontWeight: 700 }}>
             DELETE {selectedCount}?
           </span>
           <button
             onClick={onConfirmBulkDelete}
             disabled={isBulkDeleting}
-            style={batchBtnStyle("rgba(239,68,68,0.20)", "rgba(239,68,68,0.40)", "#ef4444")}
+            style={batchBtnStyle("var(--danger-muted)", "var(--danger-border)", "var(--status-error)")}
           >
             {isBulkDeleting ? "..." : "CONFIRM"}
           </button>

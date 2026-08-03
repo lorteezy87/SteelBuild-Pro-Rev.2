@@ -617,7 +617,7 @@ function fmtLbs(v) {
 }
 
 const btnPrimary = {
-  padding: "8px 22px", background: AI, color: "#000",
+  padding: "8px 22px", background: AI, color: "var(--on-accent)",
   border: "none", borderRadius: 2,
   fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
   letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",

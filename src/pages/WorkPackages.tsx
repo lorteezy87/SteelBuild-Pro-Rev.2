@@ -133,6 +133,10 @@ export default function WorkPackages() {
     // Fan out the full work_package family (incl. ["wps-fab", projectId] read by
     // FabRelease) so a WP mutation doesn't leave sibling pages stale.
     void invalidateEntity(qc, "work_package", projectId);
+    // Piece assign UI reads WPs from the relationships snapshot — without these
+    // keys, soft-deleted packages stay in the Target work package dropdown.
+    void qc.invalidateQueries({ queryKey: ["piece-relationships"] });
+    void qc.invalidateQueries({ queryKey: ["piece-register"] });
   };
 
   const updateWPMut = useMutation({
@@ -326,6 +330,7 @@ export default function WorkPackages() {
 
       {(wpModalOpen || editingWP) && (
         <WPFormModal
+          key={editingWP?.id || editingWP?.wp_number || "new"}
           open={wpModalOpen || !!editingWP}
           onClose={() => { setWPModalOpen(false); setEditingWP(null); }}
           onSave={(data: unknown) => {

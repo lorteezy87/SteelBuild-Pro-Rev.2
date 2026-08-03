@@ -26,15 +26,15 @@ export const BIC_CHOICES = [
 // Resubmit / Rejected both red, Draft / Void both gray — which made
 // the badges in the table impossible to distinguish at a glance.
 export const STATUS_CFG: Record<string, { color: string; bg: string }> = {
-  "Draft":               { color: "#64748B", bg: "rgba(100,116,139,0.16)" }, // slate
-  "Submitted":           { color: "#2563EB", bg: "rgba(37,99,235,0.18)"   }, // blue
-  "Under Review":        { color: "#0D9488", bg: "rgba(13,148,136,0.18)"  }, // teal — distinct from blue
-  "Approved":            { color: "#10B981", bg: "rgba(16,185,129,0.18)"  }, // emerald
-  "Approved as Noted":   { color: "#84CC16", bg: "rgba(132,204,22,0.18)"  }, // lime — yellow-green, related to Approved
-  "Revise and Resubmit": { color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // orange — action, warm
-  "Rejected":            { color: "#DC2626", bg: "rgba(220,38,38,0.18)"   }, // red — failure
-  "Released for Fabrication": { color: "#0EA5E9", bg: "rgba(14,165,233,0.18)" }, // sky blue — past approval, into production
-  "Void":                { color: "#94A3B8", bg: "rgba(148,163,184,0.14)" }, // cool gray — distinct from Draft slate
+  "Draft":               { color: "var(--text-muted)", bg: "color-mix(in srgb, var(--text-muted) 16%, transparent)" }, // slate
+  "Submitted":           { color: "var(--status-info)", bg: "var(--info-muted)"   }, // blue
+  "Under Review":        { color: "var(--accent)", bg: "var(--accent-muted)"  }, // teal — distinct from blue
+  "Approved":            { color: "var(--status-success)", bg: "var(--success-muted)"  }, // emerald
+  "Approved as Noted":   { color: "var(--status-success-bright)", bg: "color-mix(in srgb, var(--status-success-bright) 18%, transparent)"  }, // lime — yellow-green, related to Approved
+  "Revise and Resubmit": { color: "var(--status-review)", bg: "var(--status-review-muted)"  }, // orange — action, warm
+  "Rejected":            { color: "var(--status-error)", bg: "var(--danger-muted)"   }, // red — failure
+  "Released for Fabrication": { color: "var(--status-info)", bg: "var(--info-muted)" }, // sky blue — past approval, into production
+  "Void":                { color: "var(--text-muted)", bg: "color-mix(in srgb, var(--text-muted) 14%, transparent)" }, // cool gray — distinct from Draft slate
 };
 
 export function compareSubmittalsByDrawingSet(a: Submittal, b: Submittal, drawingSetsById: DrawingSetsById): number {

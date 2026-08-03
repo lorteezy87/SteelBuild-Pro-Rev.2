@@ -40,7 +40,7 @@ const PALETTE = [
   "var(--status-info)",
   "var(--accent)",
   "var(--status-success)",
-  "#F97316",
+  "var(--status-review)",
   "var(--status-warning)",
   "var(--status-review)",
   "var(--text-muted)",
@@ -204,7 +204,7 @@ export default function RevenueDashboard() {
           label="Retention Held"
           value={formatCurrencyFull(retention)}
           detail="Withheld across SOV"
-          borderColor="#F97316"
+          borderColor="var(--status-review)"
         />
       </div>
 

@@ -118,7 +118,7 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
 }
 
 const btnPrimary = {
-  padding: "7px 18px", background: "var(--accent)", color: "#000",
+  padding: "7px 18px", background: "var(--accent)", color: "var(--on-accent)",
   border: "none", borderRadius: 2,
   fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
   letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",

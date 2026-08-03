@@ -127,3 +127,159 @@ export function injectKeyframes() {
   `;
   document.head.appendChild(style);
 }
+
+// ─── Timeline bar positioning ───────────────────────────────────────
+export function getBarStyle(wp, timelineStart, pxPerDay) {
+  const rawStart = wp.scheduled_start_date || wp.released_date;
+  if (!rawStart || !wp.scheduled_end_date) return null;
+
+  const start = new Date(rawStart);
+  const end = new Date(wp.scheduled_end_date);
+  const left = Math.round(
+    ((+start - +timelineStart) / 86400000) * pxPerDay
+  );
+  const width = Math.max(
+    Math.round(((+end - +start) / 86400000) * pxPerDay),
+    pxPerDay * 2
+  );
+  const duration = Math.round((+end - +start) / 86400000);
+
+  return { left, width, duration };
+}
+
+export function buildTimelineHeaders(zoomMode, timelineStart, timelineEnd, pxPerDay) {
+  const headers = [];
+  let cursor = new Date(timelineStart);
+  cursor.setHours(0, 0, 0, 0);
+
+  if (zoomMode === "week") {
+    while (cursor < timelineEnd) {
+      headers.push({
+        label: cursor.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        subLabel: cursor.toLocaleDateString("en-US", { weekday: "short" }),
+        width: pxPerDay * 7,
+        isToday: isThisWeek(cursor),
+        date: new Date(cursor),
+      });
+      cursor = addDays(cursor, 7);
+    }
+  } else if (zoomMode === "month") {
+    while (cursor < timelineEnd) {
+      headers.push({
+        label: cursor.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        subLabel: cursor.toLocaleDateString("en-US", { year: "numeric" }),
+        width: pxPerDay * 7,
+        isToday: isThisWeek(cursor),
+        month: cursor.getMonth(),
+        date: new Date(cursor),
+      });
+      cursor = addDays(cursor, 7);
+    }
+  } else if (zoomMode === "quarter") {
+    while (cursor < timelineEnd) {
+      headers.push({
+        label: cursor.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        width: pxPerDay * 14,
+        isToday: false,
+        date: new Date(cursor),
+      });
+      cursor = addDays(cursor, 14);
+    }
+  }
+
+  return headers;
+}
+
+export function buildMonthBanners(zoomMode, headers) {
+  if (zoomMode !== "month") return [];
+
+  const banners = [];
+  let currentMonth = -1;
+  let currentWidth = 0;
+  let currentLabel = "";
+
+  headers.forEach((h) => {
+    if (h.month !== currentMonth) {
+      if (currentMonth !== -1) {
+        banners.push({ label: currentLabel, width: currentWidth });
+      }
+      currentMonth = h.month;
+      currentLabel = formatLocalDate(h.date, "en-US", {
+        month: "long",
+        year: "numeric",
+      });
+      currentWidth = h.width;
+    } else {
+      currentWidth += h.width;
+    }
+  });
+
+  if (currentLabel) {
+    banners.push({ label: currentLabel, width: currentWidth });
+  }
+
+  return banners;
+}
+
+export function computeTodayOffset(timelineStart, pxPerDay) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tStart = new Date(timelineStart);
+  tStart.setHours(0, 0, 0, 0);
+  return Math.round(((+today - +tStart) / 86400000) * pxPerDay);
+}
+
+export function computeTimelineWindow(workPackages) {
+  const starts = workPackages
+    .filter((wp) => wp.scheduled_start_date || wp.released_date)
+    .map((wp) => new Date(wp.scheduled_start_date || wp.released_date).getTime())
+    .filter((t) => !isNaN(t));
+  const ends = workPackages
+    .filter((wp) => wp.scheduled_end_date)
+    .map((wp) => new Date(wp.scheduled_end_date).getTime())
+    .filter((t) => !isNaN(t));
+
+  const tStart = starts.length > 0
+    ? subDays(new Date(Math.min.apply(null, starts)), 14)
+    : subDays(new Date(), 14);
+  const tEnd = ends.length > 0
+    ? addDays(new Date(Math.max.apply(null, ends)), 14)
+    : addDays(new Date(), 60);
+
+  const days = Math.ceil((+tEnd - +tStart) / 86400000);
+
+  return {
+    timelineStart: tStart,
+    timelineEnd: tEnd,
+    totalDays: days,
+  };
+}
+
+export function computeCapacityFromWorkPackages(workPackages) {
+  const wps = workPackages;
+  const shopBudget = wps.reduce((s, w) => s + (Number(w.shop_hours_budget) || 0), 0);
+  const shopActual = wps.reduce((s, w) => s + (Number(w.shop_hours_actual) || 0), 0);
+  const shopRemaining = shopBudget - shopActual;
+  const fieldBudget = wps.reduce((s, w) => s + (Number(w.field_hours_budget) || 0), 0);
+  const fieldActual = wps.reduce((s, w) => s + (Number(w.field_hours_actual) || 0), 0);
+  const fieldRemaining = fieldBudget - fieldActual;
+  const totalTons = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const inFabTons = wps.filter(w => w.phase === "Fabrication" && w.status === "In Progress").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const byPhase = {
+    Detailing: wps.filter(w => w.phase === "Detailing" && !["Complete", "On Hold"].includes(w.status)).length,
+    Fabrication: wps.filter(w => w.phase === "Fabrication" && !["Complete", "On Hold"].includes(w.status)).length,
+    Delivery: wps.filter(w => w.phase === "Delivery" && !["Complete", "On Hold"].includes(w.status)).length,
+    Erection: wps.filter(w => w.phase === "Erection" && !["Complete", "On Hold"].includes(w.status)).length,
+  };
+  return { shopBudget, shopActual, shopRemaining, fieldBudget, fieldActual, fieldRemaining, totalTons, inFabTons, byPhase };
+}
+
+export const PHASE_FILTER_OPTIONS = ["all", "Detailing", "Fabrication", "Delivery", "Erection"];
+
+export function phaseFilterColor(phase) {
+  if (phase === "Detailing") return "var(--phase-detailing)";
+  if (phase === "Fabrication") return "var(--phase-fabrication)";
+  if (phase === "Delivery") return "var(--phase-delivery)";
+  if (phase === "Erection") return "var(--phase-erection)";
+  return "var(--accent)";
+}

@@ -8,13 +8,14 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { syncProductionRowsToModelAndPieces } from "./productionToFabBridge";
 
 const TABLE = "piece_production";
 
 // piece_production isn't in the generated Database types — own the cast here.
 // The optional client arg lets listPieceProduction page against an injected
 // mock in tests; every other caller uses the real client by default.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const from = (table: string, client: typeof supabase = supabase): any =>
   (client.from as unknown as (t: string) => any)(table);
 
@@ -86,7 +87,7 @@ export async function listPieceProduction(
     if (batch.length < page) return all;
   }
   // Hit the safety ceiling — surface it rather than silently returning partial.
-  // eslint-disable-next-line no-console
+   
   console.warn(`[piece_production] listPieceProduction stopped at the ${SAFETY_MAX_ROWS}-row safety cap — data may be incomplete.`);
   return all;
 }
@@ -111,10 +112,14 @@ function toFields(row: StagedProductionRow, projectId: string, importedAt: strin
 }
 
 const CHUNK = 200;
+/** Parallelism for per-row updates (each row has a distinct payload). */
+const UPDATE_CONCURRENCY = 25;
 
 /**
  * Commit staged rows: bulk-insert the creates (chunked), update the existing
- * pieces by id. Returns the applied counts.
+ * pieces by id in parallel batches. Returns the applied counts.
+ * After a successful write, best-effort sync into model_elements.fab_status and
+ * (when pilot/live) unique leaf pieces.lifecycle_status so Fab-mode colors update.
  */
 export async function commitProductionRows(
   projectId: string,
@@ -133,10 +138,29 @@ export async function commitProductionRows(
   }
 
   let updated = 0;
-  for (const row of updates) {
-    const { error } = await from(TABLE).update(toFields(row, projectId, importedAt)).eq("id", row.existing_id);
-    if (error) throw error;
-    updated += 1;
+  for (let i = 0; i < updates.length; i += UPDATE_CONCURRENCY) {
+    const slice = updates.slice(i, i + UPDATE_CONCURRENCY);
+    const results = await Promise.all(
+      slice.map((row) =>
+        from(TABLE)
+          .update(toFields(row, projectId, importedAt))
+          .eq("id", row.existing_id)
+          .then(({ error }: { error: unknown }) => {
+            if (error) throw error;
+            return 1;
+          }),
+      ),
+    );
+    updated += results.length;
+  }
+
+  try {
+    await syncProductionRowsToModelAndPieces(projectId, rows);
+  } catch (bridgeError) {
+    console.warn(
+      "[piece_production] production→fab bridge failed after commit:",
+      bridgeError,
+    );
   }
 
   return { created, updated };
