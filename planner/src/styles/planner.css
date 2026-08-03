@@ -1,0 +1,404 @@
+:root {
+  --planner-navy: #0b1721;
+  --planner-rail: #0d1b26;
+  --planner-canvas: #eef3f7;
+  --planner-link: #207798;
+  --planner-warning: #e6a13d;
+  --planner-risk-bg: #fff1f1;
+  --planner-watch-bg: #fff9e9;
+  --planner-surface: #ffffff;
+  --planner-text: #1b2a35;
+  --planner-muted: #637582;
+  --planner-border: #d6e0e6;
+  --planner-border-strong: #b8c9d2;
+  --planner-topbar-height: 3rem;
+  --planner-sidebar-width: 15.5rem;
+  --planner-focus: var(--planner-link);
+  color: var(--planner-text);
+  background: var(--planner-canvas);
+  font-family: Inter, Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.planner-app {
+  min-height: 100vh;
+  background: var(--planner-canvas);
+}
+
+.planner-connectivity-banner {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 20;
+  display: flex;
+  gap: .5rem;
+  padding: .5rem .75rem;
+  border: 1px solid var(--planner-border-strong);
+  border-radius: .375rem;
+  background: var(--planner-surface);
+  color: var(--planner-text);
+  font: 600 .75rem var(--font-mono, monospace);
+}
+
+.planner-connectivity-banner--error { border-color: var(--planner-warning); }
+
+.planner-shell {
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: var(--planner-sidebar-width) minmax(0, 1fr);
+  grid-template-rows: var(--planner-topbar-height) minmax(0, 1fr);
+  background: var(--planner-canvas);
+}
+
+.planner-topbar {
+  grid-column: 1 / -1;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  min-height: var(--planner-topbar-height);
+  padding: 0 0.75rem;
+  background: var(--planner-navy);
+  border-bottom: 1px solid var(--planner-border-strong);
+}
+
+.planner-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--planner-canvas);
+  text-decoration: none;
+}
+
+.planner-brand:focus-visible,
+.planner-nav__link:focus-visible,
+.planner-button:focus-visible,
+.planner-register input:focus-visible,
+.planner-register select:focus-visible,
+.planner-register-toolbar input:focus-visible {
+  outline: 2px solid var(--planner-focus);
+  outline-offset: 2px;
+}
+
+.planner-brand__mark {
+  display: grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border-radius: 0.35rem;
+  background: var(--planner-warning);
+  color: var(--planner-navy);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.planner-brand__identity {
+  display: grid;
+  gap: 0.05rem;
+}
+
+.planner-brand__identity h1 {
+  margin: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+.planner-brand__identity span {
+  color: var(--planner-border-strong);
+  font-size: 0.55rem;
+}
+
+.planner-sidebar {
+  grid-column: 1;
+  grid-row: 2;
+  position: sticky;
+  top: var(--planner-topbar-height);
+  align-self: start;
+  height: calc(100vh - var(--planner-topbar-height));
+  overflow-y: auto;
+  background: var(--planner-rail);
+  border-right: 1px solid var(--planner-border-strong);
+}
+
+.planner-nav {
+  padding: 0.7rem 0.45rem 1rem;
+}
+
+.planner-nav__group + .planner-nav__group {
+  margin-top: 1rem;
+}
+
+.planner-nav__group h2 {
+  margin: 0 0 0.3rem;
+  padding: 0 0.45rem;
+  color: var(--planner-muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.planner-nav__group ul {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.75rem;
+  padding: 0 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  color: var(--planner-border-strong);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.planner-nav__link:hover {
+  color: var(--planner-canvas);
+  background: color-mix(in srgb, var(--planner-link) 18%, transparent);
+}
+
+.planner-nav__link[aria-current="page"] {
+  border-color: var(--planner-link);
+  color: var(--planner-canvas);
+  background: color-mix(in srgb, var(--planner-link) 25%, transparent);
+}
+
+.planner-nav__indicator {
+  width: 0.28rem;
+  height: 0.28rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.planner-main {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  padding: 0.65rem;
+}
+
+.planner-workspace h1,
+.planner-workspace h2 {
+  margin: 0;
+  color: var(--planner-text);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 1.15rem;
+}
+
+.planner-register {
+  min-width: 0;
+}
+
+.planner-register-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.planner-register-toolbar__actions,
+.planner-register-toolbar__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.planner-register-toolbar__filters {
+  flex: 1 1 24rem;
+}
+
+.planner-button,
+.planner-register-toolbar select,
+.planner-register-toolbar input {
+  min-height: 1.8rem;
+  border: 1px solid var(--planner-border-strong);
+  border-radius: 0.25rem;
+  background: var(--planner-surface);
+  color: var(--planner-text);
+  font: inherit;
+  font-size: 0.68rem;
+}
+
+.planner-button {
+  padding: 0 0.55rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.planner-button--primary {
+  border-color: var(--planner-link);
+  background: var(--planner-link);
+  color: var(--planner-surface);
+}
+
+.planner-button:disabled {
+  cursor: not-allowed;
+  color: var(--planner-muted);
+  background: var(--planner-canvas);
+}
+
+.planner-register-toolbar select {
+  padding: 0 0.4rem;
+}
+
+.planner-register-toolbar input {
+  width: min(100%, 18rem);
+  padding: 0 0.5rem;
+}
+
+.planner-register-toolbar__search {
+  flex: 1 1 12rem;
+}
+
+.planner-register-toolbar__search input {
+  width: 100%;
+}
+
+.planner-register-toolbar__selection {
+  color: var(--planner-muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.62rem;
+}
+
+.planner-register__scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--planner-border);
+  border-radius: 0.35rem;
+  background: var(--planner-surface);
+}
+
+.planner-register table {
+  width: 100%;
+  min-width: 100rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.65rem;
+}
+
+.planner-register th,
+.planner-register td {
+  padding: 0.55rem 0.5rem;
+  border-right: 1px solid var(--planner-border);
+  border-bottom: 1px solid var(--planner-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.planner-register th:last-child,
+.planner-register td:last-child {
+  border-right: 0;
+}
+
+.planner-register tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.planner-register th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--planner-navy);
+  color: var(--planner-canvas);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.planner-register__selection-cell {
+  width: 2rem;
+  min-width: 2rem;
+  text-align: center !important;
+}
+
+.planner-register input[type="checkbox"] {
+  accent-color: var(--planner-link);
+}
+
+.planner-register__row--risk td {
+  background: var(--planner-risk-bg);
+}
+
+.planner-register__row--watch td {
+  background: var(--planner-watch-bg);
+}
+
+.planner-register__row--inactive td {
+  color: var(--planner-muted);
+}
+
+.planner-register__cell--action {
+  color: var(--planner-link);
+  font-weight: 700;
+}
+
+.planner-register__cell--status,
+.planner-register__cell--actionDate,
+.planner-register__cell--followUp,
+.planner-register__cell--required,
+.planner-register__cell--impact {
+  font-family: "IBM Plex Mono", monospace;
+  white-space: nowrap;
+}
+
+.planner-register__priority {
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+
+.planner-register__priority--critical {
+  color: var(--planner-warning);
+}
+
+.planner-register__priority--high {
+  color: var(--planner-warning);
+}
+
+.planner-register__priority--normal {
+  color: var(--planner-link);
+}
+
+.planner-register__empty {
+  padding: 2rem !important;
+  color: var(--planner-muted);
+  text-align: center !important;
+}
+
+.planner-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 56rem) {
+  .planner-shell {
+    grid-template-columns: 12rem minmax(0, 1fr);
+  }
+}

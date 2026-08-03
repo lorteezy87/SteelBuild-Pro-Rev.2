@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "SteelBuild Planner",
+  "short_name": "SB Planner",
+  "description": "Construction Action & Lookahead Control",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#eef3f7",
+  "theme_color": "#0b1721",
+  "categories": ["business", "productivity", "construction"],
+  "icons": [
+    { "src": "/planner-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/planner-icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

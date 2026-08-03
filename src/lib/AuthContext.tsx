@@ -6,6 +6,19 @@ import { stripPrivilegeMeta } from '@/lib/authMeta';
 import { queryClientInstance } from '@/lib/query-client';
 import { clearPendingPhotos } from '@/lib/field/blobStore';
 
+type TenantClientStateCleanup = () => void;
+
+const tenantClientStateCleanupCallbacks = new Set<TenantClientStateCleanup>();
+
+/**
+ * Lets independently built SteelBuild surfaces clear tenant-scoped browser
+ * state through the existing identity listener, without owning another one.
+ */
+export function registerTenantClientStateCleanup(callback: TenantClientStateCleanup): () => void {
+  tenantClientStateCleanupCallbacks.add(callback);
+  return () => tenantClientStateCleanupCallbacks.delete(callback);
+}
+
 // Clear every trace of the previous user's tenant data from the browser so it
 // can never render for the next user on a shared device (M38): the React Query
 // cache, the offline field-capture outbox in localStorage, AND the pending
@@ -25,6 +38,13 @@ function clearTenantClientState(): void {
   // Fire-and-forget: async IndexedDB wipe of any offline photo blobs. Best-effort
   // and self-guarding (no-op when IndexedDB is unavailable).
   void clearPendingPhotos();
+  tenantClientStateCleanupCallbacks.forEach((callback) => {
+    try {
+      callback();
+    } catch {
+      // Independent surfaces must not block the signed-out state transition.
+    }
+  });
 }
 
 export type AppUser = {

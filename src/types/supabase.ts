@@ -16,66 +16,103 @@ export type Database = {
     Tables: {
       action_items: {
         Row: {
+          action_date: string | null
+          archived_at: string | null
+          assigned_user_id: string | null
           assigned_to: string | null
           category: string | null
+          completed_at: string | null
           constraint_number: string | null
           constraint_type: string | null
           created_at: string | null
           description: string | null
           due_date: string | null
+          follow_up_date: string | null
           id: string
+          impact_date: string | null
           meeting_reference: string | null
           metadata: Json | null
           priority: string
           project_area: string | null
           project_id: string
           project_name: string | null
+          source_entity_id: string | null
+          source_entity_type: string | null
           status: string
           title: string | null
           updated_at: string | null
+          waiting_on: string | null
+          workstream: string | null
           work_package_id: string | null
         }
         Insert: {
+          action_date?: string | null
+          archived_at?: string | null
+          assigned_user_id?: string | null
           assigned_to?: string | null
           category?: string | null
+          completed_at?: string | null
           constraint_number?: string | null
           constraint_type?: string | null
           created_at?: string | null
           description?: string | null
           due_date?: string | null
+          follow_up_date?: string | null
           id?: string
+          impact_date?: string | null
           meeting_reference?: string | null
           metadata?: Json | null
           priority?: string
           project_area?: string | null
           project_id: string
           project_name?: string | null
+          source_entity_id?: string | null
+          source_entity_type?: string | null
           status?: string
           title?: string | null
           updated_at?: string | null
+          waiting_on?: string | null
+          workstream?: string | null
           work_package_id?: string | null
         }
         Update: {
+          action_date?: string | null
+          archived_at?: string | null
+          assigned_user_id?: string | null
           assigned_to?: string | null
           category?: string | null
+          completed_at?: string | null
           constraint_number?: string | null
           constraint_type?: string | null
           created_at?: string | null
           description?: string | null
           due_date?: string | null
+          follow_up_date?: string | null
           id?: string
+          impact_date?: string | null
           meeting_reference?: string | null
           metadata?: Json | null
           priority?: string
           project_area?: string | null
           project_id?: string
           project_name?: string | null
+          source_entity_id?: string | null
+          source_entity_type?: string | null
           status?: string
           title?: string | null
           updated_at?: string | null
+          waiting_on?: string | null
+          workstream?: string | null
           work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "action_items_assigned_user_id_fkey"
+            columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "action_items_project_id_fkey"
             columns: ["project_id"]
@@ -5335,6 +5372,50 @@ export type Database = {
           },
         ]
       }
+      planner_action_events: {
+        Row: {
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          entity_id: string
+          entity_type: string
+          event_type: string
+          id: string
+          occurred_at: string
+          project_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          entity_id: string
+          entity_type: string
+          event_type: string
+          id?: string
+          occurred_at?: string
+          project_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          entity_id?: string
+          entity_type?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planner_action_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_notes: {
         Row: {
           author: string | null
@@ -7577,6 +7658,10 @@ export type Database = {
               error: true
             } & "Could not choose the best candidate function between: public.add_updated_at_trigger(tbl => text), public.add_updated_at_trigger(tbl => regclass). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
+      apply_planner_offline_operation: {
+        Args: { p_client_op_id: string; p_entity_id: string; p_expected_updated_at: string; p_kind: string; p_patch: Json; p_project_id: string }
+        Returns: Json
+      }
         | {
             Args: { tbl: string }
             Returns: {

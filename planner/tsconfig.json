@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "types": ["node", "vite/client", "@testing-library/jest-dom"],
+    "paths": {
+      "@planner/*": ["src/*"],
+      "@/*": ["../src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
