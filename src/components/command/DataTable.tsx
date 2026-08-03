@@ -41,6 +41,11 @@ export type DataTableProps<Row extends { id?: string }> = {
   virtualizeThreshold?: number | false;
   /** Max height of the virtualized scroll body (px). Default 600. */
   virtualMaxHeight?: number;
+  /** When provided with onToggleRow, prepends a checkbox column. */
+  selectedIds?: ReadonlySet<string>;
+  onToggleRow?: (id: string, next: boolean) => void;
+  onToggleAll?: (selectAll: boolean) => void;
+  getRowId?: (row: Row, index: number) => string;
 };
 
 function defaultGridTrack<Row>(c: Column<Row>): string {
@@ -50,7 +55,12 @@ function defaultGridTrack<Row>(c: Column<Row>): string {
   return "minmax(96px, 1fr)";
 }
 
-function rowKey<Row extends { id?: string }>(row: Row, index: number): string {
+function rowKey<Row extends { id?: string }>(
+  row: Row,
+  index: number,
+  getRowId?: (row: Row, index: number) => string,
+): string {
+  if (getRowId) return getRowId(row, index);
   return row.id != null && String(row.id) !== "" ? String(row.id) : String(index);
 }
 
@@ -66,29 +76,45 @@ function handleRowKeyDown<Row>(
   onRowClick?: (row: Row) => void,
 ) {
   if (!onRowClick) return;
-  // Keyboard parity with onClick: Enter/Space activate the row
-  // (preventDefault on Space so it doesn't scroll the page).
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
     onRowClick(row);
   }
 }
 
-// ── Virtualized branch (>threshold rows) ─────────────────────────────────────
-
 function VirtualDataTable<Row extends { id?: string }>({
   columns,
   rows,
   onRowClick,
   virtualMaxHeight = 600,
+  selectedIds,
+  onToggleRow,
+  onToggleAll,
+  getRowId,
 }: {
   columns: Column<Row>[];
   rows: Row[];
   onRowClick?: (row: Row) => void;
   virtualMaxHeight?: number;
+  selectedIds?: ReadonlySet<string>;
+  onToggleRow?: (id: string, next: boolean) => void;
+  onToggleAll?: (selectAll: boolean) => void;
+  getRowId?: (row: Row, index: number) => string;
 }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const gridCols = columns.map((c) => defaultGridTrack(c)).join(" ");
+  const selectable = Boolean(selectedIds && onToggleRow);
+  const rowIds = rows.map((row, i) => rowKey(row, i, getRowId));
+  const selectedCount = selectable
+    ? rowIds.filter((id) => selectedIds!.has(id)).length
+    : 0;
+  const allSelected = selectable && rows.length > 0 && selectedCount === rows.length;
+  const someSelected = selectedCount > 0 && !allSelected;
+
+  const gridCols = [
+    ...(selectable ? ["36px"] : []),
+    ...columns.map((c) => defaultGridTrack(c)),
+  ].join(" ");
+
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
@@ -105,6 +131,26 @@ function VirtualDataTable<Row extends { id?: string }>({
           borderBottom: "1px solid var(--cmd-border)",
         }}
       >
+        {selectable ? (
+          <div
+            style={{
+              padding: "10px 8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <input
+              type="checkbox"
+              aria-label="Select all rows"
+              checked={allSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = someSelected;
+              }}
+              onChange={() => onToggleAll?.(!allSelected)}
+            />
+          </div>
+        ) : null}
         {columns.map((c) => (
           <div
             key={c.key}
@@ -130,10 +176,12 @@ function VirtualDataTable<Row extends { id?: string }>({
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = rows[virtualRow.index];
+            const id = rowIds[virtualRow.index];
+            const checked = selectable ? selectedIds!.has(id) : false;
             const clickable = Boolean(onRowClick);
             return (
               <div
-                key={rowKey(row, virtualRow.index)}
+                key={id}
                 ref={virtualizer.measureElement}
                 data-index={virtualRow.index}
                 className={clickable ? "is-clickable" : undefined}
@@ -153,6 +201,24 @@ function VirtualDataTable<Row extends { id?: string }>({
                   cursor: clickable ? "pointer" : undefined,
                 }}
               >
+                {selectable ? (
+                  <div
+                    style={{
+                      padding: "11px 8px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`Select row ${id}`}
+                      checked={checked}
+                      onChange={(e) => onToggleRow?.(id, e.target.checked)}
+                    />
+                  </div>
+                ) : null}
                 {columns.map((c) => (
                   <div
                     key={c.key}
@@ -179,8 +245,6 @@ function VirtualDataTable<Row extends { id?: string }>({
   );
 }
 
-// ── Public DataTable ─────────────────────────────────────────────────────────
-
 export function DataTable<Row extends { id?: string }>({
   columns,
   rows,
@@ -188,6 +252,10 @@ export function DataTable<Row extends { id?: string }>({
   emptyMessage = "No rows.",
   virtualizeThreshold,
   virtualMaxHeight,
+  selectedIds,
+  onToggleRow,
+  onToggleAll,
+  getRowId,
 }: DataTableProps<Row>) {
   const threshold =
     virtualizeThreshold === false
@@ -201,15 +269,41 @@ export function DataTable<Row extends { id?: string }>({
         rows={rows}
         onRowClick={onRowClick}
         virtualMaxHeight={virtualMaxHeight}
+        selectedIds={selectedIds}
+        onToggleRow={onToggleRow}
+        onToggleAll={onToggleAll}
+        getRowId={getRowId}
       />
     );
   }
+
+  const selectable = Boolean(selectedIds && onToggleRow);
+  const rowIds = rows.map((row, i) => rowKey(row, i, getRowId));
+  const selectedCount = selectable
+    ? rowIds.filter((id) => selectedIds!.has(id)).length
+    : 0;
+  const allSelected = selectable && rows.length > 0 && selectedCount === rows.length;
+  const someSelected = selectedCount > 0 && !allSelected;
+  const colSpan = columns.length + (selectable ? 1 : 0);
 
   return (
     <div className="cmd-table-wrap">
       <table className="cmd-table">
         <thead>
           <tr>
+            {selectable ? (
+              <th style={{ width: 36 }}>
+                <input
+                  type="checkbox"
+                  aria-label="Select all rows"
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someSelected;
+                  }}
+                  onChange={() => onToggleAll?.(!allSelected)}
+                />
+              </th>
+            ) : null}
             {columns.map((c) => (
               <th key={c.key} style={{ textAlign: c.align || "left" }}>
                 {c.header}
@@ -220,29 +314,43 @@ export function DataTable<Row extends { id?: string }>({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td className="cmd-table__empty" colSpan={columns.length}>
+              <td className="cmd-table__empty" colSpan={colSpan}>
                 {emptyMessage}
               </td>
             </tr>
           ) : (
-            rows.map((row, i) => (
-              <tr
-                key={rowKey(row, i)}
-                className={onRowClick ? "is-clickable" : undefined}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-                role={onRowClick ? "button" : undefined}
-                tabIndex={onRowClick ? 0 : undefined}
-                onKeyDown={
-                  onRowClick ? (e) => handleRowKeyDown(e, row, onRowClick) : undefined
-                }
-              >
-                {columns.map((c) => (
-                  <td key={c.key} style={{ textAlign: c.align || "left" }}>
-                    {c.render(row)}
-                  </td>
-                ))}
-              </tr>
-            ))
+            rows.map((row, i) => {
+              const id = rowIds[i];
+              const checked = selectable ? selectedIds!.has(id) : false;
+              return (
+                <tr
+                  key={id}
+                  className={onRowClick ? "is-clickable" : undefined}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  role={onRowClick ? "button" : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onKeyDown={
+                    onRowClick ? (e) => handleRowKeyDown(e, row, onRowClick) : undefined
+                  }
+                >
+                  {selectable ? (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select row ${id}`}
+                        checked={checked}
+                        onChange={(e) => onToggleRow?.(id, e.target.checked)}
+                      />
+                    </td>
+                  ) : null}
+                  {columns.map((c) => (
+                    <td key={c.key} style={{ textAlign: c.align || "left" }}>
+                      {c.render(row)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>

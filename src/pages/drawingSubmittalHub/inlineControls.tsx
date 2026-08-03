@@ -1,6 +1,6 @@
 // Inline quick-action controls for the Detailing Control Center "Next decision"
 // card — extracted from triageBoard.tsx (behavior-preserving move).
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarDays, ClipboardList, User } from "lucide-react";
 import { DRAFTING_STATES } from "@/lib/detailingPackageState";
 import {
@@ -118,7 +118,27 @@ interface InlineDateControlProps {
 
 export function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled }: InlineDateControlProps) {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(() => toDateInputValue(currentDate));
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasDate = !!currentDate;
+
+  useEffect(() => {
+    if (open) setDraft(toDateInputValue(currentDate));
+  }, [open, currentDate]);
+
+  useEffect(() => () => {
+    if (blurTimer.current) clearTimeout(blurTimer.current);
+  }, []);
+
+  const commit = (value: string) => {
+    if (!value) return;
+    if (blurTimer.current) {
+      clearTimeout(blurTimer.current);
+      blurTimer.current = null;
+    }
+    onSetDate(value);
+    setOpen(false);
+  };
 
   return (
     <div style={{
@@ -168,14 +188,33 @@ export function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled 
           type="date"
           autoFocus
           disabled={disabled}
-          defaultValue={toDateInputValue(currentDate)}
+          value={draft}
           onChange={(e) => {
-            if (e.target.value) {
-              onSetDate(e.target.value);
+            const next = e.target.value;
+            setDraft(next);
+            // Native pickers often fire change once a day is chosen — commit
+            // immediately so a following blur cannot discard the selection.
+            if (next) commit(next);
+          }}
+          onBlur={() => {
+            // Opening the native calendar can blur the input before change
+            // fires. Delay close so the selected day still commits.
+            if (blurTimer.current) clearTimeout(blurTimer.current);
+            blurTimer.current = setTimeout(() => {
+              setOpen(false);
+              blurTimer.current = null;
+            }, 250);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              if (blurTimer.current) clearTimeout(blurTimer.current);
               setOpen(false);
             }
+            if (e.key === "Enter" && draft) {
+              e.preventDefault();
+              commit(draft);
+            }
           }}
-          onBlur={() => setOpen(false)}
           style={{
             width: "100%",
             background: surface2,
@@ -183,6 +222,8 @@ export function InlineDateControl({ currentDate, isOverdue, onSetDate, disabled 
             borderRadius: 6,
             padding: "3px 6px",
             color: textPrimary,
+            // Keep native calendar readable under command dark/light skins.
+            colorScheme: "light dark",
             fontFamily: mono,
             fontSize: 11,
             fontWeight: 700,

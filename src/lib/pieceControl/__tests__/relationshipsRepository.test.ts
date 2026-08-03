@@ -19,6 +19,7 @@ function chainFor(result: { data: unknown; error: unknown }) {
   const chain: Record<string, unknown> = {};
   chain.select = vi.fn(() => chain);
   chain.eq = vi.fn(() => chain);
+  chain.is = vi.fn(() => chain);
   chain.range = vi.fn(async () => result);
   return chain;
 }
@@ -53,6 +54,7 @@ describe("fetchPieceRelationshipSnapshot", () => {
 
   it("soft-fails optional tables so a missing dispositions table still loads core rows", async () => {
     let workPackagesSelect = "";
+    let sawDeletedFilter = false;
     fromMock.mockImplementation((table: string) => {
       if (table === "work_packages") {
         const chain = chainFor({
@@ -80,6 +82,14 @@ describe("fetchPieceRelationshipSnapshot", () => {
           workPackagesSelect = cols;
           return chain;
         });
+        chain.eq = vi.fn((col: string, val: unknown) => {
+          if (col === "is_deleted" && val === false) sawDeletedFilter = true;
+          return chain;
+        });
+        chain.is = vi.fn((col: string, val: unknown) => {
+          if (col === "deleted_at" && val === null) sawDeletedFilter = true;
+          return chain;
+        });
         return chain;
       }
       if (table === "submittal_comment_dispositions") {
@@ -100,12 +110,14 @@ describe("fetchPieceRelationshipSnapshot", () => {
     warn.mockRestore();
 
     expect(snapshot.pieces).toHaveLength(1);
+    // Mock still returns both rows; client defense filter drops deleted.
     expect(snapshot.workPackages).toHaveLength(1);
     expect(snapshot.workPackages[0].id).toBe("wp-1");
     expect(snapshot.commentDispositions).toEqual([]);
     expect(workPackagesSelect).toContain("sequence_number");
     expect(workPackagesSelect).toContain("area");
     expect(workPackagesSelect).not.toMatch(/\bdescription\b/);
+    expect(sawDeletedFilter).toBe(true);
   });
 
   it("fails closed when work_packages cannot load", async () => {
