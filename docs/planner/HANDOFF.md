@@ -1,8 +1,8 @@
 # SteelBuild Planner PWA — Restore and Continuation Handoff
 
-**Checkpoint date:** 2026-08-02  
-**Repository:** `https://github.com/lorteezy87/SteelBuild-Pro-Rev.2.git`  
-**Branch:** `codex/steelbuild-planner-pwa`  
+**Checkpoint date:** 2026-08-02
+**Repository:** `https://github.com/lorteezy87/SteelBuild-Pro-Rev.2.git`
+**Branch:** `codex/steelbuild-planner-pwa`
 **Backup commit:** `efb4745956338211c6e15ce700dc525af6f4887c`
 
 ## Purpose
