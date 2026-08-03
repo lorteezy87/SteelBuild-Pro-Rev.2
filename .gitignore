@@ -79,3 +79,7 @@ test-results/
 
 # Superpowers / SDD agent scratch
 .superpowers/
+
+# Browser verification artifacts
+.playwright-cli/
+output/playwright/

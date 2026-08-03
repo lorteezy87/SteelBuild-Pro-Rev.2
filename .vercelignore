@@ -8,3 +8,15 @@ node_modules
 dist
 dist-ssr
 .claude
+.codex
+.github
+.playwright-cli
+.playwright-mcp
+.superpowers
+docs
+e2e
+output
+playwright-report
+supabase
+test-results
+tests
