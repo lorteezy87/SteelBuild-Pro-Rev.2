@@ -9,11 +9,17 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
-import { latestCertifiedPerLineItem } from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { formatCurrencyFull, exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
+import {
+  billedByProjectMap,
+  groupRevenueByClient,
+  maxBilledFromGroups,
+  totalBilledFromGroups,
+  withSharePct,
+} from "./revenueGroupHelpers";
 
 export default function RevenueByClient() {
   const { data: projects = [] } = useQuery({
@@ -28,37 +34,25 @@ export default function RevenueByClient() {
   // Billed = latest Certified row per (project, line_item). Pre-fix
   // this summed across every row (Drafts + every prior pay app) and
   // tripled the totals on projects with multi-app history.
-  const billedByProject = useMemo(() => {
-    const m = {};
-    for (const r of latestCertifiedPerLineItem(sov)) {
-      const sv = Number(r.scheduled_value) || 0;
-      const pct = Number(r.current_percent_complete) || 0;
-      if (!sv || pct <= 0) continue;
-      m[r.project_id] = (m[r.project_id] || 0) + sv * (pct / 100);
-    }
-    return m;
-  }, [sov]);
+  const billedByProject = useMemo(() => billedByProjectMap(sov), [sov]);
 
   // "Revenue by Client" = who-pays-us. Standardised on
   // `general_contractor || client` across the three revenue reports
   // so the same number doesn't move depending on which page you
   // opened. Previously this fell back the other way (client first).
-  const grouped = useMemo(() => {
-    const m = {};
-    projects.forEach((p) => {
-      const client = p.general_contractor || p.client || "Unspecified";
-      if (!m[client]) m[client] = { client, projectCount: 0, contractValue: 0, billed: 0 };
-      m[client].projectCount += 1;
-      m[client].contractValue += Number(p.original_contract_value) || 0;
-      m[client].billed += billedByProject[p.id] || 0;
-    });
-    return Object.values(m).sort((a, b) => b.billed - a.billed);
-  }, [projects, billedByProject]);
+  const grouped = useMemo(
+    () => groupRevenueByClient({ projects, billedByProject }),
+    [projects, billedByProject],
+  );
 
-  const totalBilled = grouped.reduce((s, r) => s + r.billed, 0);
-  const maxBilled = Math.max(...grouped.map((r) => r.billed), 1);
+  const totalBilled = totalBilledFromGroups(grouped);
+  const maxBilled = maxBilledFromGroups(grouped);
 
-  const tableRows = grouped.map((r, i) => ({ id: r.client, idx: i, ...r, sharePct: totalBilled ? (r.billed / totalBilled) * 100 : 0 }));
+  const tableRows = withSharePct(grouped, totalBilled).map((r, i) => ({
+    id: r.client,
+    idx: i,
+    ...r,
+  }));
   const tableColumns = [
     { key: "client", label: "Client", width: "minmax(220px, 2fr)", render: (r) => <span style={{ ...body, color: "var(--text-primary)", fontWeight: 600 }}>{r.client}</span> },
     { key: "projectCount", label: "Projects", width: "100px", align: "right" },

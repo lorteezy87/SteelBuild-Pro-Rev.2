@@ -16,7 +16,10 @@ import ReportShell from "./ReportShell";
 import { FilterBar, SelectFilter } from "./ReportFilters";
 import { formatDate } from "./utils";
 import { mono, body, CARD } from "./constants";
-import { isSummaryTask, buildParentIdSet } from "@/lib/schedule/summaryTasks";
+import {
+  countKeyActivities,
+  groupUpcomingKeyActivities,
+} from "./upcomingKeyActivitiesHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -41,48 +44,12 @@ export default function UpcomingKeyActivities() {
 
   const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
-  const grouped = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const windowEnd = new Date(today.getTime() + Number(windowDays) * 86400000);
-    // Summary/parent rows are not real "activities" — they only span their
-    // children, which are listed individually. Exclude them so the list shows
-    // actionable leaf work, not redundant parent buckets.
-    const parentIds = buildParentIdSet(tasks);
-    const m = {};
-    tasks.forEach((t) => {
-      if (!t.start_date) return;
-      if (isSummaryTask(t, parentIds)) return;
-      const d = new Date(t.start_date);
-      if (d < today || d > windowEnd) return;
-      if (t.status === "Complete" || t.status === "Cancelled") return;
-      const proj = projectsById.get(t.project_id);
-      const key = t.project_id || "_unknown";
-      if (!m[key]) {
-        m[key] = {
-          project: proj,
-          projectId: t.project_id,
-          projectName: proj?.name || "—",
-          projectNumber: proj?.project_number || "",
-          tasks: [],
-        };
-      }
-      m[key].tasks.push({
-        id: t.id,
-        taskName: t.task_name || "Untitled",
-        type: t.task_type || "Task",
-        phase: t.phase || "",
-        startDate: t.start_date,
-        endDate: t.end_date,
-        status: t.status || "Not Started",
-        daysOut: Math.round((d - today) / 86400000),
-      });
-    });
-    Object.values(m).forEach((g) => g.tasks.sort((a, b) => new Date(a.startDate) - new Date(b.startDate)));
-    return Object.values(m).sort((a, b) => a.projectName.localeCompare(b.projectName));
-  }, [tasks, projectsById, windowDays]);
+  const grouped = useMemo(
+    () => groupUpcomingKeyActivities({ tasks, projectsById, windowDays }),
+    [tasks, projectsById, windowDays],
+  );
 
-  const totalActivities = grouped.reduce((s, g) => s + g.tasks.length, 0);
+  const totalActivities = countKeyActivities(grouped);
 
   return (
     <ReportShell

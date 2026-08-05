@@ -16,6 +16,11 @@ import ReportShell from "./ReportShell";
 import { FilterBar, SearchInput, SelectFilter } from "./ReportFilters";
 import { formatDate } from "./utils";
 import { mono, body, CARD } from "./constants";
+import {
+  filterTaskBoardRows,
+  groupTaskBoardColumns,
+  mapTasksToBoardRows,
+} from "./taskBoardHelpers";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
@@ -79,49 +84,20 @@ export default function TaskBoard() {
 
   const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
-  const allRows = useMemo(() => {
-    return tasks.map((t) => {
-      const proj = projectsById.get(t.project_id);
-      return {
-        id: t.id,
-        taskName: t.task_name || "Untitled",
-        projectId: t.project_id,
-        projectName: proj?.name || "—",
-        projectNumber: proj?.project_number || "",
-        phase: t.phase || "",
-        status: t.status || "Not Started",
-        endDate: t.end_date,
-      };
-    });
-  }, [tasks, projectsById]);
+  const allRows = useMemo(
+    () => mapTasksToBoardRows({ tasks, projectsById }),
+    [tasks, projectsById],
+  );
 
-  const filtered = useMemo(() => {
-    let out = allRows;
-    if (projectFilter !== "all") out = out.filter((r) => r.projectId === projectFilter);
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      out = out.filter((r) =>
-        r.taskName.toLowerCase().includes(q) ||
-        r.projectName.toLowerCase().includes(q)
-      );
-    }
-    return out;
-  }, [allRows, search, projectFilter]);
+  const filtered = useMemo(
+    () => filterTaskBoardRows(allRows, { search, projectFilter }),
+    [allRows, search, projectFilter],
+  );
 
-  const columns = useMemo(() => {
-    const grouped = { "Not Started": [], "In Progress": [], "Complete": [], "Delayed": [] };
-    filtered.forEach((r) => {
-      if (grouped[r.status]) grouped[r.status].push(r);
-    });
-    Object.values(grouped).forEach((arr) => {
-      arr.sort((a, b) => {
-        const da = a.endDate ? new Date(a.endDate).getTime() : Infinity;
-        const db = b.endDate ? new Date(b.endDate).getTime() : Infinity;
-        return da - db;
-      });
-    });
-    return grouped;
-  }, [filtered]);
+  const columns = useMemo(
+    () => groupTaskBoardColumns(filtered),
+    [filtered],
+  );
 
   return (
     <ReportShell

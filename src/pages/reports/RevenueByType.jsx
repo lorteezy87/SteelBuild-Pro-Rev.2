@@ -8,11 +8,17 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { entities } from "@/api/supabaseClient";
-import { latestCertifiedPerLineItem } from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { formatCurrencyFull, exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
+import {
+  billedByProjectMap,
+  groupRevenueByType,
+  maxBilledFromGroups,
+  totalBilledFromGroups,
+  withSharePct,
+} from "./revenueGroupHelpers";
 
 export default function RevenueByType() {
   const { data: projects = [] } = useQuery({
@@ -26,33 +32,17 @@ export default function RevenueByType() {
 
   // Billed = latest Certified row per (project, line_item). See
   // RevenueByClient.jsx / projectMetrics.js for why the dedupe matters.
-  const billedByProject = useMemo(() => {
-    const m = {};
-    for (const r of latestCertifiedPerLineItem(sov)) {
-      const sv = Number(r.scheduled_value) || 0;
-      const pct = Number(r.current_percent_complete) || 0;
-      if (!sv || pct <= 0) continue;
-      m[r.project_id] = (m[r.project_id] || 0) + sv * (pct / 100);
-    }
-    return m;
-  }, [sov]);
+  const billedByProject = useMemo(() => billedByProjectMap(sov), [sov]);
 
-  const grouped = useMemo(() => {
-    const m = {};
-    projects.forEach((p) => {
-      const type = p.contract_type || "Unspecified";
-      if (!m[type]) m[type] = { type, projectCount: 0, contractValue: 0, billed: 0 };
-      m[type].projectCount += 1;
-      m[type].contractValue += Number(p.original_contract_value) || 0;
-      m[type].billed += billedByProject[p.id] || 0;
-    });
-    return Object.values(m).sort((a, b) => b.billed - a.billed);
-  }, [projects, billedByProject]);
+  const grouped = useMemo(
+    () => groupRevenueByType({ projects, billedByProject }),
+    [projects, billedByProject],
+  );
 
-  const totalBilled = grouped.reduce((s, r) => s + r.billed, 0);
-  const maxBilled = Math.max(...grouped.map((r) => r.billed), 1);
+  const totalBilled = totalBilledFromGroups(grouped);
+  const maxBilled = maxBilledFromGroups(grouped);
 
-  const tableRows = grouped.map((r) => ({ id: r.type, ...r, sharePct: totalBilled ? (r.billed / totalBilled) * 100 : 0 }));
+  const tableRows = withSharePct(grouped, totalBilled).map((r) => ({ id: r.type, ...r }));
   const tableColumns = [
     { key: "type", label: "Contract Type", width: "minmax(180px, 2fr)", render: (r) => <span style={{ ...body, color: "var(--text-primary)", fontWeight: 600 }}>{r.type}</span> },
     { key: "projectCount", label: "Projects", width: "100px", align: "right" },

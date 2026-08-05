@@ -12,6 +12,7 @@ import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { exportTableCSV } from "./utils";
 import { mono, body, CARD, CARD_TITLE } from "./constants";
+import { buildWorkloadRows, maxInProgressLoad } from "./workloadHelpers";
 
 export default function Workload() {
   const { data: tasks = [] } = useQuery({
@@ -19,25 +20,9 @@ export default function Workload() {
     queryFn: () => entities.ScheduleTask.list(),
   });
 
-  const rows = useMemo(() => {
-    const m = {};
-    const ensure = (name) => {
-      if (!m[name]) m[name] = { name, inProgress: 0, notStarted: 0, delayed: 0, total: 0 };
-      return m[name];
-    };
-    tasks.forEach((t) => {
-      const name = (t.assigned_to || "").trim();
-      if (!name) return;
-      const r = ensure(name);
-      if (t.status === "In Progress") r.inProgress += 1;
-      if (t.status === "Not Started") r.notStarted += 1;
-      if (t.status === "Delayed") r.delayed += 1;
-      if (t.status !== "Complete" && t.status !== "Cancelled") r.total += 1;
-    });
-    return Object.values(m).sort((a, b) => b.inProgress - a.inProgress);
-  }, [tasks]);
+  const rows = useMemo(() => buildWorkloadRows(tasks), [tasks]);
 
-  const maxLoad = Math.max(1, ...rows.map((r) => r.inProgress));
+  const maxLoad = maxInProgressLoad(rows);
 
   const tableColumns = [
     { key: "name", label: "Assignee", width: "minmax(180px, 2fr)", render: (r) => <span style={{ ...body, color: "var(--text-primary)", fontWeight: 600 }}>{r.name}</span> },
