@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { entities } from "@/api/supabaseClient";
 import { useProjectContext } from "@/components/shared/ProjectContext";
-import { localToday } from "@/utils/dates";
 import { formatMoney } from "@/lib/money";
 import { logActivity } from "@/services/auditLogger";
 import {
@@ -28,40 +27,18 @@ import { PAY_APP_STATUSES, PAY_APP_STATUS_LABELS } from "@/lib/payapp/types";
 import { buildPayAppPdf, suggestPayAppFilename } from "@/lib/payapp/payAppPdf";
 import PayApplicationsControlCenter from "./payApplications/PayApplicationsControlCenter";
 import { buildPayAppContract, findById, toFiniteNumber } from "./payApplications/payApplicationsPageHelpers";
+import {
+  NewAppModal,
+  paMono as mono,
+  paCard as card,
+  paInput as input,
+  paLbl as lbl,
+  paBtn as btn,
+  paBtnPrimary as btnP,
+} from "./payApplications/PayApplicationsUi";
 import { assertProjectId, toUserErrorMessage } from "@/lib/mutations/standardMutation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { Button } from "@/components/design-system";
-
-const mono = { fontFamily: "var(--font-mono, ui-monospace, monospace)" };
-const card = { background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 4, padding: 16 };
-const input = { ...mono, boxSizing: "border-box", fontSize: 12, padding: "6px 8px", borderRadius: 3, background: "var(--bg-input, var(--bg-surface-low))", border: "1px solid var(--border-default)", color: "var(--text-primary)", outline: "none" };
-const lbl = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: 4 };
-const btn = { ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "7px 14px", borderRadius: 3, border: "1px solid var(--border-default)", cursor: "pointer" };
-const btnP = { ...btn, background: "var(--accent-muted)", borderColor: "var(--accent)", color: "var(--accent)" };
-
-function NewAppModal({ open, defaultRetainage, onClose, onCreate, busy }) {
-  const [periodFrom, setFrom] = useState("");
-  const [periodTo, setTo] = useState(localToday());
-  const [retainage, setRetainage] = useState(String(defaultRetainage ?? 10));
-  if (!open) return null;
-  return (
-    <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={onClose}>
-      <div style={{ ...card, width: 440, maxWidth: "92vw" }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: "0 0 14px", fontSize: 16, color: "var(--text-primary)" }}>New Pay Application</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-          <div><span style={lbl}>Period from</span><input style={{ ...input, width: "100%" }} type="date" value={periodFrom} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div><span style={lbl}>Period to</span><input style={{ ...input, width: "100%" }} type="date" value={periodTo} onChange={(e) => setTo(e.target.value)} /></div>
-          <div><span style={lbl}>Retainage %</span><input style={{ ...input, width: "100%" }} type="number" value={retainage} onChange={(e) => setRetainage(e.target.value)} /></div>
-        </div>
-        <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginBottom: 14 }}>Lines are drafted from this project&apos;s Schedule of Values; prior completed work carries forward.</div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button style={{ ...btn, background: "var(--bg-page)", color: "var(--text-muted)" }} onClick={onClose} disabled={busy}>Cancel</button>
-          <button style={btnP} disabled={busy} onClick={() => onCreate({ periodFrom: periodFrom || null, periodTo: periodTo || null, retainagePercent: toFiniteNumber(retainage) })}>{busy ? "Creating…" : "Create"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function PayApplications() {
   const { activeProject } = useProjectContext();
