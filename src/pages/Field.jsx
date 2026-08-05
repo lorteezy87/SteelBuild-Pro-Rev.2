@@ -69,6 +69,8 @@ import {
   buildWeekDays,
   selectRecentLogs,
   selectRecentPhotos,
+  buildFieldTiles,
+  buildFieldFastActions,
 } from "./field/fieldPageHelpers";
 import {
   FieldFastCaptureRail,
@@ -261,111 +263,44 @@ export default function Field() {
 
   const safetyOpen = useMemo(() => countOpenSafety(liveSafety), [liveSafety]);
 
-  const tiles = [
-    {
-      key: "log-today",
-      label: "Daily Log Today",
-      value: todayLog ? "✓" : "—",
-      color: todayLog ? "var(--status-success-bright)" : "var(--text-muted)",
-      icon: ClipboardList,
-      onClick: () => navigate(todayLog ? "/DailyLogs" : "/DailyLogs?new=1"),
-      sub: todayLog ? `${todayLog.headcount || 0} crew` : "log not started",
-    },
-    {
-      key: "photos-week",
-      label: "Photos · Week",
-      value: photosThisWeek,
-      color: "var(--accent)",
-      icon: Camera,
-      onClick: () => navigate("/Photos"),
-    },
-    {
-      key: "open-punch",
-      label: "Open Punch",
-      value: openPunch,
-      color: openPunch > 0 ? "var(--status-warning-bright)" : "var(--status-success-bright)",
-      icon: CheckSquare,
-      onClick: () => navigate("/Punchlist"),
-    },
-    {
-      key: "open-insp",
-      label: "Open Inspections",
-      value: openInspections,
-      color: openInspections > 0 ? "var(--status-info)" : "var(--text-muted)",
-      icon: ShieldCheck,
-      onClick: () => navigate("/Inspections"),
-    },
-    {
-      key: "safety-ytd",
-      label: "Safety · YTD",
-      value: safetyYTD,
-      color: safetyYTD > 0 ? "var(--status-error-bright)" : "var(--status-success-bright)",
-      icon: AlertTriangle,
-      onClick: () => navigate("/Safety"),
-    },
-    {
-      key: "qc-month",
-      label: "QC · Month",
-      value: qcThisMonth,
-      color: "var(--phase-fabrication)",
-      icon: TestTube2,
-      onClick: () => navigate("/QualityControl"),
-    },
-    {
-      key: "delivery-today",
-      label: "Loads Today",
-      value: deliveryMetrics.dueToday.length,
-      color: deliveryMetrics.overdue.length > 0 ? "var(--status-error-bright)" : "var(--phase-delivery)",
-      icon: Truck,
-      onClick: () => navigate("/Deliveries?receive=1"),
-      sub: deliveryMetrics.overdue.length > 0 ? `${deliveryMetrics.overdue.length} late` : `${deliveryMetrics.openCount} open`,
-    },
-  ];
+  const fieldIconMap = {
+    clipboard: ClipboardList,
+    camera: Camera,
+    check: CheckSquare,
+    shield: ShieldCheck,
+    alert: AlertTriangle,
+    testTube: TestTube2,
+    truck: Truck,
+  };
 
-  const fastActions = [
-    {
-      key: "daily-log",
-      label: todayLog ? "Open Log" : "Log Today",
-      sub: todayLog ? `${todayLog.headcount || 0} crew recorded` : "Crew, hours, weather",
-      icon: ClipboardList,
-      color: todayLog ? "var(--status-success-bright)" : "var(--accent)",
-      onClick: () => navigate(todayLog ? "/DailyLogs" : "/DailyLogs?new=1"),
-    },
-    {
-      key: "photo",
-      label: "Add Photo",
-      sub: photosToday ? `${photosToday} today` : "Progress or issue",
-      icon: Camera,
-      color: "var(--accent)",
-      onClick: () => navigate("/Photos?new=1"),
-    },
-    {
-      key: "punch",
-      label: "Punch Item",
-      sub: openPunch ? `${openPunch} open` : "Create close-out item",
-      icon: CheckSquare,
-      color: openPunch ? "var(--status-warning-bright)" : "var(--status-success-bright)",
-      onClick: () => navigate("/Punchlist?new=1"),
-    },
-    {
-      key: "safety",
-      label: "Safety",
-      sub: safetyYTD ? `${safetyYTD} YTD` : "Hazard or incident",
-      icon: AlertTriangle,
-      color: safetyYTD ? "var(--status-error-bright)" : "var(--status-success-bright)",
-      onClick: () => navigate("/Safety?new=1"),
-    },
-    {
-      key: "delivery",
-      label: "Delivery",
-      sub: deliveryMetrics.overdue.length
-        ? `${deliveryMetrics.overdue.length} late`
-        : `${deliveryMetrics.dueToday.length} due today`,
-      icon: Truck,
-      color: deliveryMetrics.overdue.length ? "var(--status-error-bright)" : "var(--phase-delivery)",
-      onClick: () => navigate("/Deliveries?receive=1"),
-    },
-  ];
+  const tiles = buildFieldTiles({
+    todayLog,
+    photosThisWeek,
+    openPunch,
+    openInspections,
+    safetyYTD,
+    qcThisMonth,
+    loadsToday: deliveryMetrics.dueToday.length,
+    overdueLoads: deliveryMetrics.overdue.length,
+    openLoads: deliveryMetrics.openCount,
+  }).map((tile) => ({
+    ...tile,
+    icon: fieldIconMap[tile.iconKey],
+    onClick: () => navigate(tile.path),
+  }));
+
+  const fastActions = buildFieldFastActions({
+    todayLog,
+    photosToday,
+    openPunch,
+    safetyYTD,
+    loadsToday: deliveryMetrics.dueToday.length,
+    overdueLoads: deliveryMetrics.overdue.length,
+  }).map((action) => ({
+    ...action,
+    icon: fieldIconMap[action.iconKey],
+    onClick: () => navigate(action.path),
+  }));
 
   return (
     <div className="sb-dashboard-reference-page field-mobile-console" style={{ display: "flex", flexDirection: "column", gap: 16 }}>

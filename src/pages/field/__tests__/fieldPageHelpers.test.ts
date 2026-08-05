@@ -19,6 +19,8 @@ import {
   buildWeekDays,
   selectRecentLogs,
   selectRecentPhotos,
+  buildFieldTiles,
+  buildFieldFastActions,
 } from "../fieldPageHelpers";
 
 describe("field date anchors", () => {
@@ -205,5 +207,56 @@ describe("buildWeekDays / recent selectors", () => {
     ];
     expect(selectRecentLogs(logs, 2).map((l) => l.id)).toEqual(["b", "c"]);
     expect(selectRecentPhotos([{ id: 1 }, { id: 2 }, { id: 3 }], 2)).toEqual([{ id: 1 }, { id: 2 }]);
+  });
+});
+
+
+describe("buildFieldTiles / buildFieldFastActions", () => {
+  it("builds tile values, colors, and paths from metrics", () => {
+    const tiles = buildFieldTiles({
+      todayLog: { headcount: 6 },
+      photosThisWeek: 3,
+      openPunch: 2,
+      openInspections: 0,
+      safetyYTD: 1,
+      qcThisMonth: 4,
+      loadsToday: 2,
+      overdueLoads: 1,
+      openLoads: 5,
+    });
+    expect(tiles).toHaveLength(7);
+    expect(tiles[0]).toMatchObject({
+      key: "log-today",
+      value: "✓",
+      path: "/DailyLogs",
+      sub: "6 crew",
+      iconKey: "clipboard",
+    });
+    expect(tiles.find((t) => t.key === "open-punch")?.color).toBe("var(--status-warning-bright)");
+    expect(tiles.find((t) => t.key === "delivery-today")?.sub).toBe("1 late");
+  });
+
+  it("builds fast actions with new-entity deep links when empty", () => {
+    const actions = buildFieldFastActions({
+      todayLog: null,
+      photosToday: 0,
+      openPunch: 0,
+      safetyYTD: 0,
+      loadsToday: 0,
+      overdueLoads: 0,
+    });
+    expect(actions.map((a) => a.key)).toEqual([
+      "daily-log",
+      "photo",
+      "punch",
+      "safety",
+      "delivery",
+    ]);
+    expect(actions[0]).toMatchObject({
+      label: "Log Today",
+      path: "/DailyLogs?new=1",
+      color: "var(--accent)",
+    });
+    expect(actions.find((a) => a.key === "punch")?.sub).toBe("Create close-out item");
   });
 });

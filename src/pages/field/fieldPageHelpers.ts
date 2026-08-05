@@ -294,3 +294,157 @@ export function selectRecentLogs<T extends { date?: string | null }>(logs: T[], 
 export function selectRecentPhotos<T>(photos: T[], limit = 12): T[] {
   return photos.slice(0, limit);
 }
+
+
+/** Icon key so the page can map Lucide components without helpers importing React. */
+export type FieldIconKey =
+  | "clipboard"
+  | "camera"
+  | "check"
+  | "shield"
+  | "alert"
+  | "testTube"
+  | "truck";
+
+export type FieldNavItem = {
+  key: string;
+  label: string;
+  value?: string | number;
+  sub?: string;
+  color: string;
+  path: string;
+  iconKey: FieldIconKey;
+};
+
+export type FieldTileMetrics = {
+  todayLog: { headcount?: number | string | null } | null;
+  photosThisWeek: number;
+  openPunch: number;
+  openInspections: number;
+  safetyYTD: number;
+  qcThisMonth: number;
+  loadsToday: number;
+  overdueLoads: number;
+  openLoads: number;
+};
+
+/** Pure KPI tile defs — path only; page attaches onClick + icon. */
+export function buildFieldTiles(m: FieldTileMetrics): FieldNavItem[] {
+  return [
+    {
+      key: "log-today",
+      label: "Daily Log Today",
+      value: m.todayLog ? "✓" : "—",
+      color: m.todayLog ? "var(--status-success-bright)" : "var(--text-muted)",
+      iconKey: "clipboard",
+      path: m.todayLog ? "/DailyLogs" : "/DailyLogs?new=1",
+      sub: m.todayLog ? `${m.todayLog.headcount || 0} crew` : "log not started",
+    },
+    {
+      key: "photos-week",
+      label: "Photos · Week",
+      value: m.photosThisWeek,
+      color: "var(--accent)",
+      iconKey: "camera",
+      path: "/Photos",
+    },
+    {
+      key: "open-punch",
+      label: "Open Punch",
+      value: m.openPunch,
+      color: m.openPunch > 0 ? "var(--status-warning-bright)" : "var(--status-success-bright)",
+      iconKey: "check",
+      path: "/Punchlist",
+    },
+    {
+      key: "open-insp",
+      label: "Open Inspections",
+      value: m.openInspections,
+      color: m.openInspections > 0 ? "var(--status-info)" : "var(--text-muted)",
+      iconKey: "shield",
+      path: "/Inspections",
+    },
+    {
+      key: "safety-ytd",
+      label: "Safety · YTD",
+      value: m.safetyYTD,
+      color: m.safetyYTD > 0 ? "var(--status-error-bright)" : "var(--status-success-bright)",
+      iconKey: "alert",
+      path: "/Safety",
+    },
+    {
+      key: "qc-month",
+      label: "QC · Month",
+      value: m.qcThisMonth,
+      color: "var(--phase-fabrication)",
+      iconKey: "testTube",
+      path: "/QualityControl",
+    },
+    {
+      key: "delivery-today",
+      label: "Loads Today",
+      value: m.loadsToday,
+      color: m.overdueLoads > 0 ? "var(--status-error-bright)" : "var(--phase-delivery)",
+      iconKey: "truck",
+      path: "/Deliveries?receive=1",
+      sub: m.overdueLoads > 0 ? `${m.overdueLoads} late` : `${m.openLoads} open`,
+    },
+  ];
+}
+
+export type FieldFastActionMetrics = {
+  todayLog: { headcount?: number | string | null } | null;
+  photosToday: number;
+  openPunch: number;
+  safetyYTD: number;
+  loadsToday: number;
+  overdueLoads: number;
+};
+
+/** Pure fast-action defs — path only; page attaches onClick + icon. */
+export function buildFieldFastActions(m: FieldFastActionMetrics): FieldNavItem[] {
+  return [
+    {
+      key: "daily-log",
+      label: m.todayLog ? "Open Log" : "Log Today",
+      sub: m.todayLog ? `${m.todayLog.headcount || 0} crew recorded` : "Crew, hours, weather",
+      iconKey: "clipboard",
+      color: m.todayLog ? "var(--status-success-bright)" : "var(--accent)",
+      path: m.todayLog ? "/DailyLogs" : "/DailyLogs?new=1",
+    },
+    {
+      key: "photo",
+      label: "Add Photo",
+      sub: m.photosToday ? `${m.photosToday} today` : "Progress or issue",
+      iconKey: "camera",
+      color: "var(--accent)",
+      path: "/Photos?new=1",
+    },
+    {
+      key: "punch",
+      label: "Punch Item",
+      sub: m.openPunch ? `${m.openPunch} open` : "Create close-out item",
+      iconKey: "check",
+      color: m.openPunch ? "var(--status-warning-bright)" : "var(--status-success-bright)",
+      path: "/Punchlist?new=1",
+    },
+    {
+      key: "safety",
+      label: "Safety",
+      sub: m.safetyYTD ? `${m.safetyYTD} YTD` : "Hazard or incident",
+      iconKey: "alert",
+      color: m.safetyYTD ? "var(--status-error-bright)" : "var(--status-success-bright)",
+      path: "/Safety?new=1",
+    },
+    {
+      key: "delivery",
+      label: "Delivery",
+      sub: m.overdueLoads
+        ? `${m.overdueLoads} late`
+        : `${m.loadsToday} due today`,
+      iconKey: "truck",
+      color: m.overdueLoads ? "var(--status-error-bright)" : "var(--phase-delivery)",
+      path: "/Deliveries?receive=1",
+    },
+  ];
+}
