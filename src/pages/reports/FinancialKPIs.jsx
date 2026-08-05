@@ -14,31 +14,46 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { entities } from "@/api/supabaseClient";
-import { createPageUrl } from "@/utils";
 import {
+  useQuery } from "@tanstack/react-query";,
+  import { useNavigate } from "react-router-dom";,
+  import { entities } from "@/api/supabaseClient";,
+  import { createPageUrl } from "@/utils";,
+  import {,
   calcContractValue,
   calcEVM,
   calcWpProgress,
   calcLaborBurn,
-} from "@/utils/projectKpis";
-import ReportShell from "./ReportShell";
-import { FilterBar, SearchInput } from "./ReportFilters";
-import { mono, body, CARD, CARD_TITLE, LABEL, HEALTH_COLORS } from "./constants";
-import {
+  } from "@/utils/projectKpis";,
+  import ReportShell from "./ReportShell";,
+  import { FilterBar,
+  SearchInput } from "./ReportFilters";,
+  import { mono,
+  body,
+  CARD,
+  CARD_TITLE,
+  LABEL,
+  HEALTH_COLORS } from "./constants";,
+  import {,
   formatCurrency,
   formatCurrencyFull,
   formatPercent,
   exportTableCSV,
-} from "./utils";
-import {
-  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
-  ResponsiveContainer, Cell, BarChart, Bar,
-} from "recharts";
-import { getChartTheme } from "@/components/shared/RechartsThemeConfig";
-import {
+  } from "./utils";,
+  import {,
+  ScatterChart,
+  Scatter,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RTooltip,
+  ResponsiveContainer,
+  Cell,
+  BarChart,
+  Bar,
+  } from "recharts";,
+  import { getChartTheme } from "@/components/shared/RechartsThemeConfig";,
+  import {,
   trafficLight,
   healthColor as healthColorFromMap,
   buildProjectFinancialMetrics,
@@ -51,6 +66,7 @@ import {
   buildArAgingBuckets,
   kpiScatterColors,
   kpiBarColors,
+  chartTooltipStyle,
 } from "./financialKpisHelpers";
 
 /* ─── Presentational helpers ──────────────────────────────────────── */
@@ -108,13 +124,7 @@ export default function FinancialKPIs() {
   const [search, setSearch] = useState("");
   const chartTheme = getChartTheme();
   const chartAxisTick = { ...mono, fontSize: 9, fill: chartTheme.axis.fill };
-  const chartTooltipStyle = {
-    background: chartTheme.tooltip.background,
-    border: chartTheme.tooltip.border,
-    borderRadius: chartTheme.tooltip.borderRadius,
-    boxShadow: "var(--shadow-card)",
-    color: chartTheme.tooltip.color,
-  };
+  const tooltipStyle = chartTooltipStyle(chartTheme);
 
   /* ── Queries ── */
   const { data: projects = [] } = useQuery({
@@ -425,7 +435,7 @@ export default function FinancialKPIs() {
                     if (!payload?.[0]) return null;
                     const d = payload[0].payload;
                     return (
-                      <div style={{ ...chartTooltipStyle, padding: "8px 12px", fontSize: 10 }}>
+                      <div style={{ ...tooltipStyle, padding: "8px 12px", fontSize: 10 }}>
                         <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name} — {d.fullName}</div>
                         <div>CPI: {d.cpi} · SPI: {d.spi}</div>
                       </div>
@@ -465,7 +475,7 @@ export default function FinancialKPIs() {
                   if (!payload?.[0]) return null;
                   const d = payload[0].payload;
                   return (
-                    <div style={{ ...chartTooltipStyle, padding: "8px 12px", fontSize: 10 }}>
+                    <div style={{ ...tooltipStyle, padding: "8px 12px", fontSize: 10 }}>
                       <div style={{ fontWeight: 700 }}>{d.name}</div>
                       <div>{formatCurrencyFull(d.value)}</div>
                     </div>
@@ -505,7 +515,7 @@ export default function FinancialKPIs() {
                     if (!payload?.[0]) return null;
                     const d = payload[0].payload;
                     return (
-                      <div style={{ ...chartTooltipStyle, padding: "8px 12px", fontSize: 10 }}>
+                      <div style={{ ...tooltipStyle, padding: "8px 12px", fontSize: 10 }}>
                         <div style={{ fontWeight: 700 }}>{d.name} — {d.fullName}</div>
                         <div>Margin: {d.margin}%</div>
                       </div>
@@ -542,7 +552,7 @@ export default function FinancialKPIs() {
                   if (!payload?.[0]) return null;
                   const d = payload[0].payload;
                   return (
-                    <div style={{ ...chartTooltipStyle, padding: "8px 12px", fontSize: 10 }}>
+                    <div style={{ ...tooltipStyle, padding: "8px 12px", fontSize: 10 }}>
                       <div style={{ fontWeight: 700 }}>{d.name} days</div>
                       <div>{formatCurrencyFull(d.value)}</div>
                     </div>

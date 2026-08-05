@@ -19,6 +19,8 @@ import {
   parseInviteTokenFromSearch,
   isInviteInvalid,
   canSubmitWorkspaceName,
+  ONBOARDING_H_STYLE as hStyle,
+  ONBOARDING_P_STYLE as pStyle,
 } from "./orgOnboarding/orgOnboardingPageHelpers";
 
 
@@ -130,5 +132,3 @@ export default function OrgOnboarding() {
   );
 }
 
-const hStyle = { fontFamily: "'Space Grotesk', var(--font-display)", fontSize: 24, fontWeight: 600, color: "var(--text-primary)", margin: "10px 0 6px" };
-const pStyle = { color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, margin: "0 0 22px" };

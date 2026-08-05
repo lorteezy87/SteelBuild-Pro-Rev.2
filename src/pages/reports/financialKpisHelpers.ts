@@ -484,3 +484,20 @@ export function kpiBarColors(chartTheme: { colors: Record<string, string> }) {
     risk: chartTheme.colors.error,
   };
 }
+
+export function chartTooltipStyle(chartTheme: {
+  tooltip: {
+    background?: string;
+    border?: string;
+    borderRadius?: string | number;
+    color?: string;
+  };
+}): Record<string, string | number | undefined> {
+  return {
+    background: chartTheme.tooltip.background,
+    border: chartTheme.tooltip.border,
+    borderRadius: chartTheme.tooltip.borderRadius,
+    boxShadow: "var(--shadow-card)",
+    color: chartTheme.tooltip.color,
+  };
+}

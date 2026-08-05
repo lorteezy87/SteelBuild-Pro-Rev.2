@@ -28,3 +28,18 @@ export function isInviteInvalid(invite: InviteLike | null | undefined): boolean 
 export function canSubmitWorkspaceName(name: string, busy: boolean): boolean {
   return Boolean((name || "").trim()) && !busy;
 }
+
+export const ONBOARDING_H_STYLE: Record<string, string | number> = {
+  fontFamily: "'Space Grotesk', var(--font-display)",
+  fontSize: 24,
+  fontWeight: 600,
+  color: "var(--text-primary)",
+  margin: "10px 0 6px",
+};
+
+export const ONBOARDING_P_STYLE: Record<string, string | number> = {
+  color: "var(--text-muted)",
+  fontSize: 13,
+  lineHeight: 1.6,
+  margin: "0 0 22px",
+};
