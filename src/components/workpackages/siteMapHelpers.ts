@@ -1,3 +1,4 @@
+import { GANTT_PHASE_HEX, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
 /**
  * Pure zone derivation and health for SiteMapView.
  */
@@ -113,3 +114,17 @@ export function summarizeZoneHealth(zones: Zone[]) {
     completeZones: zones.filter((z) => zoneHealth(z).label === "Complete").length,
   };
 }
+
+export const PHASE_COLOR: Record<string, string> = {
+  Detailing: GANTT_PHASE_HEX.Detailing,
+  Fabrication: GANTT_PHASE_HEX.Fabrication,
+  Delivery: GANTT_PHASE_HEX.Delivery,
+  Erection: GANTT_PHASE_HEX.Erection,
+};
+
+export const STATUS_COLOR: Record<string, string> = {
+  Complete: GANTT_STATUS_HEX.complete,
+  "In Progress": GANTT_STATUS_HEX.inProgress,
+  "On Hold": GANTT_STATUS_HEX.delayed,
+  "Not Started": GANTT_STATUS_HEX.notStarted,
+};

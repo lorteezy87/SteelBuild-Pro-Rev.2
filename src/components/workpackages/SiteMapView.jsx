@@ -1,21 +1,12 @@
 import React, { useState, useMemo } from "react";
 import { X, AlertTriangle, Pause } from "lucide-react";
-import { GANTT_PHASE_HEX, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
-import { deriveZones, zoneHealth, summarizeZoneHealth } from "./siteMapHelpers";
-
-const PHASE_COLOR = {
-  Detailing: GANTT_PHASE_HEX.Detailing,
-  Fabrication: GANTT_PHASE_HEX.Fabrication,
-  Delivery: GANTT_PHASE_HEX.Delivery,
-  Erection: GANTT_PHASE_HEX.Erection,
-};
-
-const STATUS_COLOR = {
-  "Complete":    GANTT_STATUS_HEX.complete,
-  "In Progress": GANTT_STATUS_HEX.inProgress,
-  "On Hold":     GANTT_STATUS_HEX.delayed,
-  "Not Started": GANTT_STATUS_HEX.notStarted,
-};
+import {
+  deriveZones,
+  zoneHealth,
+  summarizeZoneHealth,
+  PHASE_COLOR,
+  STATUS_COLOR,
+} from "./siteMapHelpers";
 
 function mono(style = {}) {
   return { fontFamily: "var(--font-mono)", ...style };

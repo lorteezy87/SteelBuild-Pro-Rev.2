@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { deriveZones, zoneHealth, summarizeZoneHealth } from "../siteMapHelpers";
+import {
+  deriveZones,
+  zoneHealth,
+  summarizeZoneHealth,
+  PHASE_COLOR,
+  STATUS_COLOR,
+} from "../siteMapHelpers";
 
 describe("deriveZones", () => {
   it("extracts level/bay patterns", () => {
@@ -33,5 +39,12 @@ describe("summarizeZoneHealth", () => {
     const s = summarizeZoneHealth(zones);
     expect(s.blockedZones).toBeGreaterThanOrEqual(1);
     expect(s.completeZones).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("site map chrome colors", () => {
+  it("phase and status colors from gantt theme", () => {
+    expect(PHASE_COLOR.Detailing).toBeTruthy();
+    expect(STATUS_COLOR.Complete).toBeTruthy();
   });
 });
